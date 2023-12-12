@@ -34,7 +34,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -42,6 +42,7 @@ use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimensi
 
 use std::{
     borrow::Cow,
+    cell::UnsafeCell,
     iter,
     num::NonZeroU32,
     sync::{
@@ -3414,25 +3415,30 @@ impl<A: HalApi> Resource<DeviceId> for Device<A> {
 }
 
 pub struct SnatchableMarker;
-use parking_lot::RwLockReadGuard;
-
 pub type SnatchGuard<'a> = RwLockReadGuard<'a, SnatchableMarker>;
+pub type ExclusiveSnatchGuard<'a> = RwLockWriteGuard<'a, SnatchableMarker>;
 
 pub struct Snatchable<T> {
-    value: Option<T>,
+    value: UnsafeCell<Option<T>>,
 }
 
 impl<T> Snatchable<T> {
     pub fn new(val: T) -> Self {
-        Snatchable { value: Some(val) }
+        Snatchable {
+            value: UnsafeCell::new(Some(val)),
+        }
     }
 
     pub fn get(&self, _guard: &SnatchGuard) -> Option<&T> {
-        self.value.as_ref()
+        unsafe { (*self.value.get()).as_ref() }
+    }
+
+    pub fn snatch(&self, _guard: &ExclusiveSnatchGuard) -> Option<T> {
+        unsafe { (*self.value.get()).take() }
     }
 
     pub fn take(&mut self) -> Option<T> {
-        self.value.take()
+        self.value.get_mut().take()
     }
 }
 
@@ -3443,3 +3449,5 @@ impl<T> std::fmt::Debug for Snatchable<T> {
         write!(f, "<snatchable>")
     }
 }
+
+unsafe impl<T> Sync for Snatchable<T> {}
