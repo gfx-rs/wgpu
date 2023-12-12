@@ -280,7 +280,7 @@ fn testUnaryOpMat(a_16: mat3x3<f32>) {
 }
 
 fn testStructConstructor() {
-    var tree: BST = BST(1);
+    var tree: BST = BST(1i);
 
 }
 
@@ -386,7 +386,7 @@ fn testLength() {
 
 fn testConstantLength(a_24: array<f32, 4>) {
     var a_25: array<f32, 4>;
-    var len_1: i32 = 4;
+    var len_1: i32 = 4i;
 
     a_25 = a_24;
 }
