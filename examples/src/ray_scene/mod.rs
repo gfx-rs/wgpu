@@ -554,6 +554,7 @@ pub fn main() {
 #[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+    name: "ray_cube_fragment",
     image_path: "/examples/ray_cube_fragment/screenshot.png",
     width: 1024,
     height: 768,
@@ -566,4 +567,5 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         required_downlevel_caps: <Example as crate::framework::Example>::required_downlevel_capabilities(),
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+    _phantom: std::marker::PhantomData::<Example>,
 };
