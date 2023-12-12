@@ -91,7 +91,7 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
         let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
         inner.poll(cx).map(|error| {
             if let Some(e) = error {
-                panic!("Rendering {e}");
+                panic!("Rendering {}", e);
             }
         })
     }
@@ -110,7 +110,7 @@ struct Example {
     start_inst: Instant,
 }
 
-impl wgpu_example::framework::Example for Example {
+impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
     }
@@ -300,7 +300,6 @@ impl wgpu_example::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &wgpu_example::framework::Spawner,
     ) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -359,7 +358,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -373,32 +372,26 @@ impl wgpu_example::framework::Example for Example {
         }
 
         queue.submit(Some(encoder.finish()));
-
-        // If an error occurs, report it and panic.
-        spawner.spawn_local(ErrorFuture {
-            inner: device.pop_error_scope(),
-        });
     }
 }
 
-fn main() {
-    wgpu_example::framework::run::<Example>("ray-cube");
+pub fn main() {
+    crate::framework::run::<Example>("ray-cube");
 }
 
-#[test]
-fn ray_cube_fragment() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        image_path: "/examples/ray-cube-fragment/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters {
-            required_features: <Example as wgpu_example::framework::Example>::required_features(),
-            required_downlevel_properties:
-                <Example as wgpu_example::framework::Example>::required_downlevel_capabilities(),
-            required_limits: <Example as wgpu_example::framework::Example>::required_limits(),
-            failures: Vec::new(),
-        },
-        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
-    });
-}
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+    image_path: "/examples/ray_cube_fragment/screenshot.png",
+    width: 1024,
+    height: 768,
+    optional_features: wgpu::Features::default(),
+    base_test_parameters: wgpu_test::TestParameters {
+        required_features: <Example as crate::framework::Example>::required_features(),
+        required_limits: <Example as crate::framework::Example>::required_limits(),
+        skips: vec![],
+        failures: Vec::new(),
+        required_downlevel_caps: <Example as crate::framework::Example>::required_downlevel_capabilities(),
+    },
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+};
