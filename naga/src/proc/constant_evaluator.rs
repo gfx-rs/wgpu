@@ -1191,8 +1191,10 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = match self.expressions[expr] {
             Expression::Literal(value) => Expression::Literal(match op {
                 UnaryOperator::Negate => match value {
-                    Literal::I32(v) => Literal::I32(-v),
+                    Literal::I32(v) => Literal::I32(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
+                    Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
+                    Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
                 UnaryOperator::LogicalNot => match value {
@@ -1202,6 +1204,7 @@ impl<'a> ConstantEvaluator<'a> {
                 UnaryOperator::BitwiseNot => match value {
                     Literal::I32(v) => Literal::I32(!v),
                     Literal::U32(v) => Literal::U32(!v),
+                    Literal::AbstractInt(v) => Literal::AbstractInt(!v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
             }),

@@ -4,6 +4,9 @@
 
 using metal::uint;
 
+struct type_3 {
+    uint inner[64];
+};
 constant float plus_fafaf_1 = 3.0;
 constant float plus_fafai_1 = 3.0;
 constant float plus_faf_f_1 = 3.0;
@@ -21,6 +24,12 @@ constant uint plus_uaiai_1 = 3u;
 constant uint plus_uai_u_1 = 3u;
 constant uint plus_u_uai_1 = 3u;
 constant uint plus_u_u_u_1 = 3u;
+constant uint bitflip_u_u = 0u;
+constant uint bitflip_uai = 0u;
+constant int least_i32_ = -2147483648;
+constant float least_f32_ = -340282350000000000000000000000000000000.0;
+constant int wgpu_4492_ = -2147483648;
+constant int wgpu_4492_2_ = -2147483648;
 
 void runtime_values(
 ) {
@@ -70,4 +79,15 @@ void runtime_values(
     uint _e53 = u;
     plus_u_u_u = _e52 + _e53;
     return;
+}
+
+void wgpu_4445_(
+) {
+    return;
+}
+
+void wgpu_4435_(
+    threadgroup type_3& a
+) {
+    uint y = a.inner[1 - 1];
 }

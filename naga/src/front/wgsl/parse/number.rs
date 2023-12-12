@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::lexer::Token;
 
@@ -19,8 +17,6 @@ pub enum Number {
     /// Concrete f64
     F64(f64),
 }
-
-// TODO: when implementing Creation-Time Expressions, remove the ability to match the minus sign
 
 pub(in crate::front::wgsl) fn consume_number(input: &str) -> (Token<'_>, &str) {
     let (result, rest) = parse(input);
@@ -64,7 +60,9 @@ enum FloatKind {
 // | / 0[xX][0-9a-fA-F]+                         [pP][+-]?[0-9]+        [fh]?   /
 
 // You could visualize the regex below via https://debuggex.com to get a rough idea what `parse` is doing
-// -?(?:0[xX](?:([0-9a-fA-F]+\.[0-9a-fA-F]*|[0-9a-fA-F]*\.[0-9a-fA-F]+)(?:([pP][+-]?[0-9]+)([fh]?))?|([0-9a-fA-F]+)([pP][+-]?[0-9]+)([fh]?)|([0-9a-fA-F]+)([iu]?))|((?:[0-9]+[eE][+-]?[0-9]+|(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?))([fh]?)|((?:[0-9]|[1-9][0-9]+))([iufh]?))
+// (?:0[xX](?:([0-9a-fA-F]+\.[0-9a-fA-F]*|[0-9a-fA-F]*\.[0-9a-fA-F]+)(?:([pP][+-]?[0-9]+)([fh]?))?|([0-9a-fA-F]+)([pP][+-]?[0-9]+)([fh]?)|([0-9a-fA-F]+)([iu]?))|((?:[0-9]+[eE][+-]?[0-9]+|(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?))([fh]?)|((?:[0-9]|[1-9][0-9]+))([iufh]?))
+
+// Leading signs are handled as unary operators.
 
 fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
     /// returns `true` and consumes `X` bytes from the given byte buffer
@@ -152,8 +150,6 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
 
     let general_extract = ExtractSubStr::start(input, bytes);
 
-    let is_negative = consume!(bytes, b'-');
-
     if consume!(bytes, b'0', b'x' | b'X') {
         let digits_extract = ExtractSubStr::start(input, bytes);
 
@@ -216,10 +212,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
             } else {
                 let kind = consume_map!(bytes, [b'i' => IntKind::I32, b'u' => IntKind::U32]);
 
-                (
-                    parse_hex_int(is_negative, digits, kind),
-                    rest_to_str!(bytes),
-                )
+                (parse_hex_int(digits, kind), rest_to_str!(bytes))
             }
         }
     } else {
@@ -272,7 +265,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
                     return (Err(NumberError::Invalid), rest_to_str!(bytes));
                 }
 
-                let digits_with_sign = general_extract.end(bytes);
+                let digits = general_extract.end(bytes);
 
                 let kind = consume_map!(bytes, [
                     b'i' => Kind::Int(IntKind::I32),
@@ -282,17 +275,14 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
                     b'l', b'f' => Kind::Float(FloatKind::F64),
                 ]);
 
-                (
-                    parse_dec(is_negative, digits_with_sign, kind),
-                    rest_to_str!(bytes),
-                )
+                (parse_dec(digits, kind), rest_to_str!(bytes))
             }
         }
     }
 }
 
 fn parse_hex_float_missing_exponent(
-    // format: -?0[xX] ( [0-9a-fA-F]+\.[0-9a-fA-F]* | [0-9a-fA-F]*\.[0-9a-fA-F]+ )
+    // format: 0[xX] ( [0-9a-fA-F]+\.[0-9a-fA-F]* | [0-9a-fA-F]*\.[0-9a-fA-F]+ )
     significand: &str,
     kind: Option<FloatKind>,
 ) -> Result<Number, NumberError> {
@@ -301,7 +291,7 @@ fn parse_hex_float_missing_exponent(
 }
 
 fn parse_hex_float_missing_period(
-    // format: -?0[xX] [0-9a-fA-F]+
+    // format: 0[xX] [0-9a-fA-F]+
     significand: &str,
     // format: [pP][+-]?[0-9]+
     exponent: &str,
@@ -312,29 +302,22 @@ fn parse_hex_float_missing_period(
 }
 
 fn parse_hex_int(
-    is_negative: bool,
     // format: [0-9a-fA-F]+
     digits: &str,
     kind: Option<IntKind>,
 ) -> Result<Number, NumberError> {
-    let digits_with_sign = if is_negative {
-        Cow::Owned(format!("-{digits}"))
-    } else {
-        Cow::Borrowed(digits)
-    };
-    parse_int(&digits_with_sign, kind, 16, is_negative)
+    parse_int(digits, kind, 16)
 }
 
 fn parse_dec(
-    is_negative: bool,
-    // format: -? ( [0-9] | [1-9][0-9]+ )
-    digits_with_sign: &str,
+    // format: ( [0-9] | [1-9][0-9]+ )
+    digits: &str,
     kind: Option<Kind>,
 ) -> Result<Number, NumberError> {
     match kind {
-        None => parse_int(digits_with_sign, None, 10, is_negative),
-        Some(Kind::Int(kind)) => parse_int(digits_with_sign, Some(kind), 10, is_negative),
-        Some(Kind::Float(kind)) => parse_dec_float(digits_with_sign, Some(kind)),
+        None => parse_int(digits, None, 10),
+        Some(Kind::Int(kind)) => parse_int(digits, Some(kind), 10),
+        Some(Kind::Float(kind)) => parse_dec_float(digits, Some(kind)),
     }
 }
 
@@ -363,7 +346,7 @@ fn parse_dec(
 
 // Therefore we only check for overflow manually for decimal floating point literals
 
-// input format: -?0[xX] ( [0-9a-fA-F]+\.[0-9a-fA-F]* | [0-9a-fA-F]*\.[0-9a-fA-F]+ ) [pP][+-]?[0-9]+
+// input format: 0[xX] ( [0-9a-fA-F]+\.[0-9a-fA-F]* | [0-9a-fA-F]*\.[0-9a-fA-F]+ ) [pP][+-]?[0-9]+
 fn parse_hex_float(input: &str, kind: Option<FloatKind>) -> Result<Number, NumberError> {
     match kind {
         None => match hexf_parse::parse_hexf64(input, false) {
@@ -385,8 +368,8 @@ fn parse_hex_float(input: &str, kind: Option<FloatKind>) -> Result<Number, Numbe
     }
 }
 
-// input format: -? ( [0-9]+\.[0-9]* | [0-9]*\.[0-9]+ ) ([eE][+-]?[0-9]+)?
-//             | -? [0-9]+ [eE][+-]?[0-9]+
+// input format: ( [0-9]+\.[0-9]* | [0-9]*\.[0-9]+ ) ([eE][+-]?[0-9]+)?
+//             | [0-9]+ [eE][+-]?[0-9]+
 fn parse_dec_float(input: &str, kind: Option<FloatKind>) -> Result<Number, NumberError> {
     match kind {
         None => {
@@ -411,12 +394,7 @@ fn parse_dec_float(input: &str, kind: Option<FloatKind>) -> Result<Number, Numbe
     }
 }
 
-fn parse_int(
-    input: &str,
-    kind: Option<IntKind>,
-    radix: u32,
-    is_negative: bool,
-) -> Result<Number, NumberError> {
+fn parse_int(input: &str, kind: Option<IntKind>, radix: u32) -> Result<Number, NumberError> {
     fn map_err(e: core::num::ParseIntError) -> NumberError {
         match *e.kind() {
             core::num::IntErrorKind::PosOverflow | core::num::IntErrorKind::NegOverflow => {
@@ -434,7 +412,6 @@ fn parse_int(
             Ok(num) => Ok(Number::I32(num)),
             Err(e) => Err(map_err(e)),
         },
-        Some(IntKind::U32) if is_negative => Err(NumberError::NotRepresentable),
         Some(IntKind::U32) => match u32::from_str_radix(input, radix) {
             Ok(num) => Ok(Number::U32(num)),
             Err(e) => Err(map_err(e)),
