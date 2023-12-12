@@ -110,8 +110,8 @@ fn levels_queries() -> @builtin(position) vec4<f32> {
 fn texture_sample() -> @location(0) vec4<f32> {
     var a: vec4<f32>;
 
-    let tc = vec2(0.5);
-    let tc3_ = vec3(0.5);
+    let tc = vec2(0.5f);
+    let tc3_ = vec3(0.5f);
     let _e9 = textureSample(image_1d, sampler_reg, tc.x);
     let _e10 = a;
     a = (_e10 + _e9);
@@ -121,13 +121,13 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e19 = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3i, 1i));
     let _e20 = a;
     a = (_e20 + _e19);
-    let _e24 = textureSampleLevel(image_2d, sampler_reg, tc, 2.3);
+    let _e24 = textureSampleLevel(image_2d, sampler_reg, tc, 2.3f);
     let _e25 = a;
     a = (_e25 + _e24);
-    let _e29 = textureSampleLevel(image_2d, sampler_reg, tc, 2.3, vec2<i32>(3i, 1i));
+    let _e29 = textureSampleLevel(image_2d, sampler_reg, tc, 2.3f, vec2<i32>(3i, 1i));
     let _e30 = a;
     a = (_e30 + _e29);
-    let _e35 = textureSampleBias(image_2d, sampler_reg, tc, 2.0, vec2<i32>(3i, 1i));
+    let _e35 = textureSampleBias(image_2d, sampler_reg, tc, 2f, vec2<i32>(3i, 1i));
     let _e36 = a;
     a = (_e36 + _e35);
     let _e41 = textureSample(image_2d_array, sampler_reg, tc, 0u);
@@ -136,13 +136,13 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e47 = textureSample(image_2d_array, sampler_reg, tc, 0u, vec2<i32>(3i, 1i));
     let _e48 = a;
     a = (_e48 + _e47);
-    let _e53 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.3);
+    let _e53 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.3f);
     let _e54 = a;
     a = (_e54 + _e53);
-    let _e59 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.3, vec2<i32>(3i, 1i));
+    let _e59 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.3f, vec2<i32>(3i, 1i));
     let _e60 = a;
     a = (_e60 + _e59);
-    let _e66 = textureSampleBias(image_2d_array, sampler_reg, tc, 0u, 2.0, vec2<i32>(3i, 1i));
+    let _e66 = textureSampleBias(image_2d_array, sampler_reg, tc, 0u, 2f, vec2<i32>(3i, 1i));
     let _e67 = a;
     a = (_e67 + _e66);
     let _e72 = textureSample(image_2d_array, sampler_reg, tc, 0i);
@@ -151,31 +151,31 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e78 = textureSample(image_2d_array, sampler_reg, tc, 0i, vec2<i32>(3i, 1i));
     let _e79 = a;
     a = (_e79 + _e78);
-    let _e84 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0i, 2.3);
+    let _e84 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0i, 2.3f);
     let _e85 = a;
     a = (_e85 + _e84);
-    let _e90 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0i, 2.3, vec2<i32>(3i, 1i));
+    let _e90 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0i, 2.3f, vec2<i32>(3i, 1i));
     let _e91 = a;
     a = (_e91 + _e90);
-    let _e97 = textureSampleBias(image_2d_array, sampler_reg, tc, 0i, 2.0, vec2<i32>(3i, 1i));
+    let _e97 = textureSampleBias(image_2d_array, sampler_reg, tc, 0i, 2f, vec2<i32>(3i, 1i));
     let _e98 = a;
     a = (_e98 + _e97);
     let _e103 = textureSample(image_cube_array, sampler_reg, tc3_, 0u);
     let _e104 = a;
     a = (_e104 + _e103);
-    let _e109 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0u, 2.3);
+    let _e109 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0u, 2.3f);
     let _e110 = a;
     a = (_e110 + _e109);
-    let _e116 = textureSampleBias(image_cube_array, sampler_reg, tc3_, 0u, 2.0);
+    let _e116 = textureSampleBias(image_cube_array, sampler_reg, tc3_, 0u, 2f);
     let _e117 = a;
     a = (_e117 + _e116);
     let _e122 = textureSample(image_cube_array, sampler_reg, tc3_, 0i);
     let _e123 = a;
     a = (_e123 + _e122);
-    let _e128 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0i, 2.3);
+    let _e128 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0i, 2.3f);
     let _e129 = a;
     a = (_e129 + _e128);
-    let _e135 = textureSampleBias(image_cube_array, sampler_reg, tc3_, 0i, 2.0);
+    let _e135 = textureSampleBias(image_cube_array, sampler_reg, tc3_, 0i, 2f);
     let _e136 = a;
     a = (_e136 + _e135);
     let _e138 = a;
@@ -186,30 +186,30 @@ fn texture_sample() -> @location(0) vec4<f32> {
 fn texture_sample_comparison() -> @location(0) f32 {
     var a_1: f32;
 
-    let tc_1 = vec2(0.5);
-    let tc3_1 = vec3(0.5);
-    let _e8 = textureSampleCompare(image_2d_depth, sampler_cmp, tc_1, 0.5);
+    let tc_1 = vec2(0.5f);
+    let tc3_1 = vec3(0.5f);
+    let _e8 = textureSampleCompare(image_2d_depth, sampler_cmp, tc_1, 0.5f);
     let _e9 = a_1;
     a_1 = (_e9 + _e8);
-    let _e14 = textureSampleCompare(image_2d_array_depth, sampler_cmp, tc_1, 0u, 0.5);
+    let _e14 = textureSampleCompare(image_2d_array_depth, sampler_cmp, tc_1, 0u, 0.5f);
     let _e15 = a_1;
     a_1 = (_e15 + _e14);
-    let _e20 = textureSampleCompare(image_2d_array_depth, sampler_cmp, tc_1, 0i, 0.5);
+    let _e20 = textureSampleCompare(image_2d_array_depth, sampler_cmp, tc_1, 0i, 0.5f);
     let _e21 = a_1;
     a_1 = (_e21 + _e20);
-    let _e25 = textureSampleCompare(image_cube_depth, sampler_cmp, tc3_1, 0.5);
+    let _e25 = textureSampleCompare(image_cube_depth, sampler_cmp, tc3_1, 0.5f);
     let _e26 = a_1;
     a_1 = (_e26 + _e25);
-    let _e30 = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc_1, 0.5);
+    let _e30 = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc_1, 0.5f);
     let _e31 = a_1;
     a_1 = (_e31 + _e30);
-    let _e36 = textureSampleCompareLevel(image_2d_array_depth, sampler_cmp, tc_1, 0u, 0.5);
+    let _e36 = textureSampleCompareLevel(image_2d_array_depth, sampler_cmp, tc_1, 0u, 0.5f);
     let _e37 = a_1;
     a_1 = (_e37 + _e36);
-    let _e42 = textureSampleCompareLevel(image_2d_array_depth, sampler_cmp, tc_1, 0i, 0.5);
+    let _e42 = textureSampleCompareLevel(image_2d_array_depth, sampler_cmp, tc_1, 0i, 0.5f);
     let _e43 = a_1;
     a_1 = (_e43 + _e42);
-    let _e47 = textureSampleCompareLevel(image_cube_depth, sampler_cmp, tc3_1, 0.5);
+    let _e47 = textureSampleCompareLevel(image_cube_depth, sampler_cmp, tc3_1, 0.5f);
     let _e48 = a_1;
     a_1 = (_e48 + _e47);
     let _e50 = a_1;
@@ -218,11 +218,11 @@ fn texture_sample_comparison() -> @location(0) f32 {
 
 @fragment 
 fn gather() -> @location(0) vec4<f32> {
-    let tc_2 = vec2(0.5);
+    let tc_2 = vec2(0.5f);
     let s2d = textureGather(1, image_2d, sampler_reg, tc_2);
     let s2d_offset = textureGather(3, image_2d, sampler_reg, tc_2, vec2<i32>(3i, 1i));
-    let s2d_depth = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5);
-    let s2d_depth_offset = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5, vec2<i32>(3i, 1i));
+    let s2d_depth = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5f);
+    let s2d_depth_offset = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5f, vec2<i32>(3i, 1i));
     let u = textureGather(0, image_2d_u32_, sampler_reg, tc_2);
     let i = textureGather(0, image_2d_i32_, sampler_reg, tc_2);
     let f = (vec4<f32>(u) + vec4<f32>(i));
@@ -231,7 +231,7 @@ fn gather() -> @location(0) vec4<f32> {
 
 @fragment 
 fn depth_no_comparison() -> @location(0) vec4<f32> {
-    let tc_3 = vec2(0.5);
+    let tc_3 = vec2(0.5f);
     let s2d_1 = textureSample(image_2d_depth, sampler_reg, tc_3);
     let s2d_gather = textureGather(image_2d_depth, sampler_reg, tc_3);
     return (vec4(s2d_1) + s2d_gather);

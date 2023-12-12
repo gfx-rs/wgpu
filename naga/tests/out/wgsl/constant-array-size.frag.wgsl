@@ -8,7 +8,7 @@ const NUM_VECS: i32 = 42i;
 var<uniform> global: Data;
 
 fn function() -> vec4<f32> {
-    var sum: vec4<f32> = vec4(0.0);
+    var sum: vec4<f32> = vec4(0f);
     var i: i32 = 0i;
 
     loop {

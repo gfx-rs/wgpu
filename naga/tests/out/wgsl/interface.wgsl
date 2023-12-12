@@ -22,13 +22,13 @@ var<workgroup> output: array<u32, 1>;
 @vertex 
 fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32, @location(10) @interpolate(flat) color: u32) -> VertexOutput {
     let tmp: u32 = ((vertex_index + instance_index) + color);
-    return VertexOutput(vec4(1.0), f32(tmp));
+    return VertexOutput(vec4(1f), f32(tmp));
 }
 
 @fragment 
 fn fragment(in: VertexOutput, @builtin(front_facing) front_facing: bool, @builtin(sample_index) sample_index: u32, @builtin(sample_mask) sample_mask: u32) -> FragmentOutput {
     let mask: u32 = (sample_mask & (1u << sample_index));
-    let color_1: f32 = select(0.0, 1.0, front_facing);
+    let color_1: f32 = select(0f, 1f, front_facing);
     return FragmentOutput(in._varying, mask, color_1);
 }
 
@@ -43,5 +43,5 @@ fn vertex_two_structs(in1_: Input1_, in2_: Input2_) -> @builtin(position) @invar
     var index: u32 = 2u;
 
     let _e8: u32 = index;
-    return vec4<f32>(f32(in1_.index), f32(in2_.index), f32(_e8), 0.0);
+    return vec4<f32>(f32(in1_.index), f32(in2_.index), f32(_e8), 0f);
 }

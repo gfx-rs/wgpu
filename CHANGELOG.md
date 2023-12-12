@@ -158,6 +158,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 - In WGSL output, always include the `i` suffix on `i32` literals. By @jimblandy in [#4863](https://github.com/gfx-rs/wgpu/pull/4863).
 
+- In WGSL output, always include the `f` suffix on `f32` literals. By @jimblandy in [#4869](https://github.com/gfx-rs/wgpu/pull/4869).
+
 ### Bug Fixes
 
 #### General

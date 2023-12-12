@@ -6,9 +6,9 @@ fn main() {
     var u2_: vec2<u32> = vec2(0u);
     var u3_: vec3<u32> = vec3(0u);
     var u4_: vec4<u32> = vec4(0u);
-    var f2_: vec2<f32> = vec2(0.0);
-    var f3_: vec3<f32> = vec3(0.0);
-    var f4_: vec4<f32> = vec4(0.0);
+    var f2_: vec2<f32> = vec2(0f);
+    var f3_: vec3<f32> = vec3(0f);
+    var f4_: vec4<f32> = vec4(0f);
 
     let _e27 = i2_;
     u2_ = bitcast<vec2<u32>>(_e27);

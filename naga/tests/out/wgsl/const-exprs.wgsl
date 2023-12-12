@@ -4,13 +4,13 @@ const FOUR: i32 = 4i;
 const FOUR_ALIAS: i32 = 4i;
 const TEST_CONSTANT_ADDITION: i32 = 8i;
 const TEST_CONSTANT_ALIAS_ADDITION: i32 = 8i;
-const PI: f32 = 3.141;
-const phi_sun: f32 = 6.282;
-const DIV: vec4<f32> = vec4<f32>(0.44444445, 0.0, 0.0, 0.0);
+const PI: f32 = 3.141f;
+const phi_sun: f32 = 6.282f;
+const DIV: vec4<f32> = vec4<f32>(0.44444445f, 0f, 0f, 0f);
 const TEXTURE_KIND_REGULAR: i32 = 0i;
 const TEXTURE_KIND_WARP: i32 = 1i;
 const TEXTURE_KIND_SKY: i32 = 2i;
-const add_vec: vec2<f32> = vec2<f32>(4.0, 5.0);
+const add_vec: vec2<f32> = vec2<f32>(4f, 5f);
 const compare_vec: vec2<bool> = vec2<bool>(true, false);
 
 fn swizzle_of_compose() {
@@ -58,7 +58,7 @@ fn compose_of_constant() {
 }
 
 fn compose_of_splat() {
-    var x_1: vec4<f32> = vec4<f32>(2.0, 1.0, 1.0, 1.0);
+    var x_1: vec4<f32> = vec4<f32>(2f, 1f, 1f, 1f);
 
 }
 
