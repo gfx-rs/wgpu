@@ -3415,9 +3415,17 @@ impl<A: HalApi> Resource<DeviceId> for Device<A> {
 }
 
 pub struct SnatchableMarker;
+/// A guard that provides read access to snatchable data.
 pub type SnatchGuard<'a> = RwLockReadGuard<'a, SnatchableMarker>;
+/// A guard that allows snatching the snatchable data.
 pub type ExclusiveSnatchGuard<'a> = RwLockWriteGuard<'a, SnatchableMarker>;
 
+/// A value that is mostly immutable but can be "snatched" if we need to destroy
+/// it early.
+///
+/// In order to safely access the underlying data, the device's global snatchable
+/// lock must be taken. To guarentee it, methods take a read or write guard of that
+/// special lock.
 pub struct Snatchable<T> {
     value: UnsafeCell<Option<T>>,
 }
@@ -3429,14 +3437,20 @@ impl<T> Snatchable<T> {
         }
     }
 
+    /// Get read access to the value. Requires a the snatchable lock's read guard.
     pub fn get(&self, _guard: &SnatchGuard) -> Option<&T> {
         unsafe { (*self.value.get()).as_ref() }
     }
 
-    pub fn snatch(&self, _guard: &ExclusiveSnatchGuard) -> Option<T> {
+    /// Take the value. Requires a the snatchable lock's write guard.
+    pub fn snatch(&self, _guard: ExclusiveSnatchGuard) -> Option<T> {
         unsafe { (*self.value.get()).take() }
     }
 
+    /// Take the value without a guard. This can only be used with exclusive access
+    /// to self, so it does not require locking.
+    ///
+    /// Typically useful in a drop implementation.
     pub fn take(&mut self) -> Option<T> {
         self.value.get_mut().take()
     }
