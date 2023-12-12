@@ -318,15 +318,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let device_guard = hub.devices.write();
-
         log::info!("Tlas {:?} is destroyed", tlas_id);
         let tlas_guard = hub.tlas_s.write();
         let tlas = tlas_guard
             .get(tlas_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
-        let device = &mut device_guard.get(tlas.device.info.id()).unwrap();
+        let device = &mut tlas.device.clone();
 
         #[cfg(feature = "trace")]
         if let Some(trace) = device.trace.lock().as_mut() {
@@ -375,7 +373,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("tlas {:?} is dropped", tlas_id);
 
         let hub = A::hub(self);
-        let device_guard = hub.devices.write();
 
         let (last_submit_index, device) = {
             let mut tlas_guard = hub.tlas_s.write();
@@ -384,7 +381,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let last_submit_index = tlas.info.submission_index();
                     (
                         last_submit_index,
-                        device_guard.get(tlas.device.info.id()).unwrap(),
+                        tlas.device.clone()
                     )
                 }
                 Err(InvalidId) => {
