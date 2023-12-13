@@ -23,9 +23,11 @@ metal::float4 builtins(
 }
 
 metal::float4 splat(
+    float m,
+    int n
 ) {
-    metal::float2 a_2 = ((metal::float2(1.0) + metal::float2(2.0)) - metal::float2(3.0)) / metal::float2(4.0);
-    metal::int4 b = metal::int4(5) % metal::int4(2);
+    metal::float2 a_2 = ((metal::float2(2.0) + metal::float2(m)) - metal::float2(4.0)) / metal::float2(8.0);
+    metal::int4 b = metal::int4(n) % metal::int4(2);
     return a_2.xyxy + static_cast<metal::float4>(b);
 }
 
@@ -255,11 +257,14 @@ void negation_avoids_prefix_decrement(
     int p7_ = -(-(-(-(-(1)))));
 }
 
+struct main_Input {
+};
 kernel void main_(
+  metal::uint3 id [[threadgroup_position_in_grid]]
 ) {
-    metal::float4 _e0 = builtins();
-    metal::float4 _e1 = splat();
-    metal::float3 _e6 = bool_cast(metal::float3(1.0, 1.0, 1.0));
+    metal::float4 _e1 = builtins();
+    metal::float4 _e6 = splat(static_cast<float>(id.x), static_cast<int>(id.y));
+    metal::float3 _e11 = bool_cast(metal::float3(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();

@@ -16,10 +16,10 @@ float4 builtins()
     return (((((float4(((s1_).xxxx + v_i32_zero)) + s2_) + m1_) + m2_) + (b1_).xxxx) + b2_);
 }
 
-float4 splat()
+float4 splat(float m, int n)
 {
-    float2 a_2 = ((((1.0).xx + (2.0).xx) - (3.0).xx) / (4.0).xx);
-    int4 b = ((5).xxxx % (2).xxxx);
+    float2 a_2 = ((((2.0).xx + (m).xx) - (4.0).xx) / (8.0).xx);
+    int4 b = ((n).xxxx % (2).xxxx);
     return (a_2.xyxy + float4(b));
 }
 
@@ -251,11 +251,11 @@ void negation_avoids_prefix_decrement()
 }
 
 [numthreads(1, 1, 1)]
-void main()
+void main(uint3 id : SV_GroupID)
 {
-    const float4 _e0 = builtins();
-    const float4 _e1 = splat();
-    const float3 _e6 = bool_cast(float3(1.0, 1.0, 1.0));
+    const float4 _e1 = builtins();
+    const float4 _e6 = splat(float(id.x), int(id.y));
+    const float3 _e11 = bool_cast(float3(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();

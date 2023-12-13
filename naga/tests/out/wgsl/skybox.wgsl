@@ -20,11 +20,11 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var tmp1_: i32;
     var tmp2_: i32;
 
-    tmp1_ = (i32(vertex_index) / 2);
-    tmp2_ = (i32(vertex_index) & 1);
+    tmp1_ = (i32(vertex_index) / 2i);
+    tmp2_ = (i32(vertex_index) & 1i);
     let _e9 = tmp1_;
     let _e15 = tmp2_;
-    let pos = vec4<f32>(((f32(_e9) * 4.0) - 1.0), ((f32(_e15) * 4.0) - 1.0), 0.0, 1.0);
+    let pos = vec4<f32>(((f32(_e9) * 4f) - 1f), ((f32(_e15) * 4f) - 1f), 0f, 1f);
     let _e27 = r_data.view[0];
     let _e32 = r_data.view[1];
     let _e37 = r_data.view[2];

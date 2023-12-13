@@ -257,6 +257,18 @@ pub enum Error<'a> {
         source_span: Span,
         source_type: String,
     },
+    AutoConversionLeafScalar {
+        dest_span: Span,
+        dest_scalar: String,
+        source_span: Span,
+        source_type: String,
+    },
+    ConcretizationFailed {
+        expr_span: Span,
+        expr_type: String,
+        scalar: String,
+        inner: ConstantEvaluatorError,
+    },
 }
 
 impl<'a> Error<'a> {
@@ -731,7 +743,33 @@ impl<'a> Error<'a> {
                     )
                 ],
                 notes: vec![],
-            }
+            },
+            Error::AutoConversionLeafScalar { dest_span, ref dest_scalar, source_span, ref source_type } => ParseError {
+                message: format!("automatic conversions cannot convert elements of `{source_type}` to `{dest_scalar}`"),
+                labels: vec![
+                    (
+                        dest_span,
+                        format!("a value with elements of type {dest_scalar} is required here").into(),
+                    ),
+                    (
+                        source_span,
+                        format!("this expression has type {source_type}").into(),
+                    )
+                ],
+                notes: vec![],
+            },
+            Error::ConcretizationFailed { expr_span, ref expr_type, ref scalar, ref inner } => ParseError {
+                message: format!("failed to convert expression to a concrete type: {}", inner),
+                labels: vec![
+                    (
+                        expr_span,
+                        format!("this expression has type {}", expr_type).into(),
+                    )
+                ],
+                notes: vec![
+                    format!("the expression should have been converted to have {} scalar type", scalar),
+                ]
+            },
         }
     }
 }

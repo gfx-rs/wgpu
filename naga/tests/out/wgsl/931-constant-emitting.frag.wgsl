@@ -1,7 +1,7 @@
-const constant: i32 = 10;
+const constant: i32 = 10i;
 
 fn function() -> f32 {
-    return 0.0;
+    return 0f;
 }
 
 fn main_1() {

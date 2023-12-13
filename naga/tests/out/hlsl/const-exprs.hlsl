@@ -10,6 +10,8 @@ static const float4 DIV = float4(0.44444445, 0.0, 0.0, 0.0);
 static const int TEXTURE_KIND_REGULAR = 0;
 static const int TEXTURE_KIND_WARP = 1;
 static const int TEXTURE_KIND_SKY = 2;
+static const float2 add_vec = float2(4.0, 5.0);
+static const bool2 compare_vec = bool2(true, false);
 
 void swizzle_of_compose()
 {

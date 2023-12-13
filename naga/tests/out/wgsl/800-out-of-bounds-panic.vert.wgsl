@@ -25,10 +25,10 @@ fn main_1() {
     let _e9 = global.view_matrix;
     let _e10 = global_1.world_matrix;
     let _e12 = position_1;
-    gl_Position = ((_e9 * _e10) * vec4<f32>(_e12.x, _e12.y, 0.0, 1.0));
+    gl_Position = ((_e9 * _e10) * vec4<f32>(_e12.x, _e12.y, 0f, 1f));
     let _e20 = gl_Position;
     let _e22 = gl_Position;
-    gl_Position.z = ((_e20.z + _e22.w) / 2.0);
+    gl_Position.z = ((_e20.z + _e22.w) / 2f);
     return;
 }
 

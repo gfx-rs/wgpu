@@ -29,13 +29,13 @@ fn testBinOpVecFloat(a: vec4<f32>, b: f32) {
     a_1 = a;
     b_1 = b;
     let _e5 = a_1;
-    v = (_e5 * 2.0);
+    v = (_e5 * 2f);
     let _e8 = a_1;
-    v = (_e8 / vec4(2.0));
+    v = (_e8 / vec4(2f));
     let _e12 = a_1;
-    v = (_e12 + vec4(2.0));
+    v = (_e12 + vec4(2f));
     let _e16 = a_1;
-    v = (_e16 - vec4(2.0));
+    v = (_e16 - vec4(2f));
     return;
 }
 
@@ -268,29 +268,29 @@ fn testUnaryOpMat(a_16: mat3x3<f32>) {
     let _e3 = a_17;
     v_8 = -(_e3);
     let _e5 = a_17;
-    let _e7 = vec3(1.0);
+    let _e7 = vec3(1f);
     let _e9 = (_e5 - mat3x3<f32>(_e7, _e7, _e7));
     a_17 = _e9;
     v_8 = _e9;
     let _e10 = a_17;
-    let _e12 = vec3(1.0);
+    let _e12 = vec3(1f);
     a_17 = (_e10 - mat3x3<f32>(_e12, _e12, _e12));
     v_8 = _e10;
     return;
 }
 
 fn testStructConstructor() {
-    var tree: BST = BST(1);
+    var tree: BST = BST(1i);
 
 }
 
 fn testNonScalarToScalarConstructor() {
-    var f: f32 = 1.0;
+    var f: f32 = 1f;
 
 }
 
 fn testArrayConstructor() {
-    var tree_1: array<f32, 1> = array<f32, 1>(0.0);
+    var tree_1: array<f32, 1> = array<f32, 1>(0f);
 
 }
 
@@ -386,7 +386,7 @@ fn testLength() {
 
 fn testConstantLength(a_24: array<f32, 4>) {
     var a_25: array<f32, 4>;
-    var len_1: i32 = 4;
+    var len_1: i32 = 4i;
 
     a_25 = a_24;
 }
@@ -408,15 +408,15 @@ fn testSwizzleWrites(a_27: vec3<f32>) {
 
     a_28 = a_27;
     let _e6 = a_28;
-    a_28.z = 3.0;
-    a_28.x = 4.0;
+    a_28.z = 3f;
+    a_28.x = 4f;
     let _e14 = a_28;
     let _e16 = a_28;
-    let _e19 = (_e16.xy * 5.0);
+    let _e19 = (_e16.xy * 5f);
     a_28.x = _e19.x;
     a_28.y = _e19.y;
     let _e24 = a_28;
-    let _e28 = (_e24.zy + vec2(1.0));
+    let _e28 = (_e24.zy + vec2(1f));
     a_28.z = _e28.x;
     a_28.y = _e28.y;
     return;
@@ -431,10 +431,10 @@ fn main_1() {
     let _e8 = local_6;
     global = _e8;
     let _e9 = o_color;
-    o_color.x = 1.0;
-    o_color.y = 1.0;
-    o_color.z = 1.0;
-    o_color.w = 1.0;
+    o_color.x = 1f;
+    o_color.y = 1f;
+    o_color.z = 1f;
+    o_color.w = 1f;
     return;
 }
 

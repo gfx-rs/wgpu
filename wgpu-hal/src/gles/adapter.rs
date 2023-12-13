@@ -1136,7 +1136,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Some(crate::SurfaceCapabilities {
                 formats,
                 present_modes: if cfg!(windows) {
-                    vec![wgt::PresentMode::Fifo, wgt::PresentMode::Mailbox]
+                    vec![wgt::PresentMode::Fifo, wgt::PresentMode::Immediate]
                 } else {
                     vec![wgt::PresentMode::Fifo] //TODO
                 },

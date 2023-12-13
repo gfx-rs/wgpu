@@ -21,9 +21,9 @@ fn builtins() -> vec4<f32> {
     return vec4<f32>(vec4<i32>(s1) + v_i32_zero) + s2 + m1 + m2 + b1 + b2;
 }
 
-fn splat() -> vec4<f32> {
-    let a = (1.0 + vec2<f32>(2.0) - 3.0) / 4.0;
-    let b = vec4<i32>(5) % 2;
+fn splat(m: f32, n: i32) -> vec4<f32> {
+    let a = (2.0 + vec2<f32>(m) - 4.0) / 8.0;
+    let b = vec4<i32>(n) % 2;
     return a.xyxy + vec4<f32>(b);
 }
 
@@ -280,9 +280,9 @@ fn assignment() {
 }
 
 @compute @workgroup_size(1)
-fn main() {
+fn main(@builtin(workgroup_id) id: vec3<u32>) {
     builtins();
-    splat();
+    splat(f32(id.x), i32(id.y));
     bool_cast(v_f32_one.xyz);
 
     logical();

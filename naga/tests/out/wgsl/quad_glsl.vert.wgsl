@@ -3,7 +3,7 @@ struct VertexOutput {
     @builtin(position) member: vec4<f32>,
 }
 
-const c_scale: f32 = 1.2;
+const c_scale: f32 = 1.2f;
 
 var<private> a_pos_1: vec2<f32>;
 var<private> a_uv_1: vec2<f32>;
@@ -15,7 +15,7 @@ fn main_1() {
     v_uv = _e4;
     let _e6 = a_pos_1;
     let _e8 = (c_scale * _e6);
-    gl_Position = vec4<f32>(_e8.x, _e8.y, 0.0, 1.0);
+    gl_Position = vec4<f32>(_e8.x, _e8.y, 0f, 1f);
     return;
 }
 

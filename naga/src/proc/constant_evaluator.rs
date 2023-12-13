@@ -141,7 +141,7 @@ pub enum ConstantEvaluatorError {
     InvalidAccessIndexTy,
     #[error("Constants don't support array length expressions")]
     ArrayLength,
-    #[error("Cannot cast type `{from}` to `{to}`")]
+    #[error("Cannot cast scalar components of expression `{from}` to type `{to}`")]
     InvalidCastArg { from: String, to: String },
     #[error("Cannot apply the unary op to the argument")]
     InvalidUnaryOpArg,
@@ -989,15 +989,11 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = self.eval_zero_value(expr, span)?;
 
         let make_error = || -> Result<_, ConstantEvaluatorError> {
-            let ty = self.resolve_type(expr)?;
+            let from = format!("{:?} {:?}", expr, self.expressions[expr]);
 
-            #[cfg(feature = "wgsl-in")]
-            let from = ty.to_wgsl(&self.to_ctx());
             #[cfg(feature = "wgsl-in")]
             let to = target.to_wgsl();
 
-            #[cfg(not(feature = "wgsl-in"))]
-            let from = format!("{ty:?}");
             #[cfg(not(feature = "wgsl-in"))]
             let to = format!("{target:?}");
 
@@ -1325,6 +1321,47 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Modulo => a % b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
+                        (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
+                            Literal::AbstractInt(match op {
+                                BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("addition".into())
+                                })?,
+                                BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("subtraction".into())
+                                })?,
+                                BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("multiplication".into())
+                                })?,
+                                BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
+                                    if b == 0 {
+                                        ConstantEvaluatorError::DivisionByZero
+                                    } else {
+                                        ConstantEvaluatorError::Overflow("division".into())
+                                    }
+                                })?,
+                                BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
+                                    if b == 0 {
+                                        ConstantEvaluatorError::RemainderByZero
+                                    } else {
+                                        ConstantEvaluatorError::Overflow("remainder".into())
+                                    }
+                                })?,
+                                BinaryOperator::And => a & b,
+                                BinaryOperator::ExclusiveOr => a ^ b,
+                                BinaryOperator::InclusiveOr => a | b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
+                        (Literal::AbstractFloat(a), Literal::AbstractFloat(b)) => {
+                            Literal::AbstractFloat(match op {
+                                BinaryOperator::Add => a + b,
+                                BinaryOperator::Subtract => a - b,
+                                BinaryOperator::Multiply => a * b,
+                                BinaryOperator::Divide => a / b,
+                                BinaryOperator::Modulo => a % b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,
                             BinaryOperator::LogicalOr => a || b,
@@ -1361,10 +1398,105 @@ impl<'a> ConstantEvaluator<'a> {
                 }
                 Expression::Compose { ty, components }
             }
+            (
+                &Expression::Compose {
+                    components: ref left_components,
+                    ty: left_ty,
+                },
+                &Expression::Compose {
+                    components: ref right_components,
+                    ty: right_ty,
+                },
+            ) => {
+                // We have to make a copy of the component lists, because the
+                // call to `binary_op_vector` needs `&mut self`, but `self` owns
+                // the component lists.
+                let left_flattened = crate::proc::flatten_compose(
+                    left_ty,
+                    left_components,
+                    self.expressions,
+                    self.types,
+                );
+                let right_flattened = crate::proc::flatten_compose(
+                    right_ty,
+                    right_components,
+                    self.expressions,
+                    self.types,
+                );
+
+                // `flatten_compose` doesn't return an `ExactSizeIterator`, so
+                // make a reasonable guess of the capacity we'll need.
+                let mut flattened = Vec::with_capacity(left_components.len());
+                flattened.extend(left_flattened.zip(right_flattened));
+
+                match (&self.types[left_ty].inner, &self.types[right_ty].inner) {
+                    (
+                        &TypeInner::Vector {
+                            size: left_size, ..
+                        },
+                        &TypeInner::Vector {
+                            size: right_size, ..
+                        },
+                    ) if left_size == right_size => {
+                        self.binary_op_vector(op, left_size, &flattened, left_ty, span)?
+                    }
+                    _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                }
+            }
             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
         };
 
         self.register_evaluated_expr(expr, span)
+    }
+
+    fn binary_op_vector(
+        &mut self,
+        op: BinaryOperator,
+        size: crate::VectorSize,
+        components: &[(Handle<Expression>, Handle<Expression>)],
+        left_ty: Handle<Type>,
+        span: Span,
+    ) -> Result<Expression, ConstantEvaluatorError> {
+        let ty = match op {
+            // Relational operators produce vectors of booleans.
+            BinaryOperator::Equal
+            | BinaryOperator::NotEqual
+            | BinaryOperator::Less
+            | BinaryOperator::LessEqual
+            | BinaryOperator::Greater
+            | BinaryOperator::GreaterEqual => self.types.insert(
+                Type {
+                    name: None,
+                    inner: TypeInner::Vector {
+                        size,
+                        scalar: crate::Scalar::BOOL,
+                    },
+                },
+                span,
+            ),
+
+            // Other operators produce the same type as their left
+            // operand.
+            BinaryOperator::Add
+            | BinaryOperator::Subtract
+            | BinaryOperator::Multiply
+            | BinaryOperator::Divide
+            | BinaryOperator::Modulo
+            | BinaryOperator::And
+            | BinaryOperator::ExclusiveOr
+            | BinaryOperator::InclusiveOr
+            | BinaryOperator::LogicalAnd
+            | BinaryOperator::LogicalOr
+            | BinaryOperator::ShiftLeft
+            | BinaryOperator::ShiftRight => left_ty,
+        };
+
+        let components = components
+            .iter()
+            .map(|&(left, right)| self.binary_op(op, left, right, span))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Expression::Compose { ty, components })
     }
 
     /// Deep copy `expr` from `expressions` into `self.expressions`.
@@ -1455,7 +1587,10 @@ impl<'a> ConstantEvaluator<'a> {
                 };
                 Tr::Value(TypeInner::Vector { scalar, size })
             }
-            _ => return Err(ConstantEvaluatorError::SubexpressionsAreNotConstant),
+            _ => {
+                log::debug!("resolve_type: SubexpressionsAreNotConstant");
+                return Err(ConstantEvaluatorError::SubexpressionsAreNotConstant);
+            }
         };
 
         Ok(resolution)

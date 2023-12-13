@@ -38,8 +38,8 @@ var<private> array_2d: array<array<f32, 2>, 2>;
 var<private> array_toomanyd: array<array<array<array<array<array<array<f32, 2>, 2>, 2>, 2>, 2>, 2>, 2>;
 
 fn main_1() {
-    var positions: array<vec3<f32>, 2> = array<vec3<f32>, 2>(vec3<f32>(-1.0, 1.0, 0.0), vec3<f32>(-1.0, -1.0, 0.0));
-    var strct: TestStruct = TestStruct(1.0, 2.0);
+    var positions: array<vec3<f32>, 2> = array<vec3<f32>, 2>(vec3<f32>(-1f, 1f, 0f), vec3<f32>(-1f, -1f, 0f));
+    var strct: TestStruct = TestStruct(1f, 2f);
     var from_input_array: vec4<f32>;
     var a_1: f32;
     var b: f32;
@@ -50,7 +50,7 @@ fn main_1() {
     a_1 = _e41;
     let _e57 = array_toomanyd[0][0][0][0][0][0][0];
     b = _e57;
-    out_array[0] = vec4(2.0);
+    out_array[0i] = vec4(2f);
     return;
 }
 
