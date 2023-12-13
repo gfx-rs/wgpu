@@ -26,6 +26,7 @@ use crate::{
         TextureViewNotRenderableReason,
     },
     resource_log,
+    snatch::{SnatchGuard, SnatchLock, Snatchable},
     storage::Storage,
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
@@ -34,7 +35,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
-use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -42,7 +43,6 @@ use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimensi
 
 use std::{
     borrow::Cow,
-    cell::UnsafeCell,
     iter,
     num::NonZeroU32,
     sync::{
@@ -95,7 +95,7 @@ pub struct Device<A: HalApi> {
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
     pub(crate) fence: RwLock<Option<A::Fence>>,
-    pub(crate) snatchable_lock: RwLock<SnatchableMarker>,
+    pub(crate) snatchable_lock: SnatchLock,
 
     /// Is this device valid? Valid is closely associated with "lose the device",
     /// which can be triggered by various methods, including at the end of device
@@ -256,7 +256,7 @@ impl<A: HalApi> Device<A> {
             command_allocator: Mutex::new(Some(com_alloc)),
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
-            snatchable_lock: RwLock::new(SnatchableMarker),
+            snatchable_lock: unsafe { SnatchLock::new() },
             valid: AtomicBool::new(true),
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
@@ -1769,7 +1769,7 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         storage: &'a Storage<Buffer<A>, id::BufferId>,
         limits: &wgt::Limits,
-        snatch_guard: &'a RwLockReadGuard<'a, SnatchableMarker>,
+        snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -3413,55 +3413,3 @@ impl<A: HalApi> Resource<DeviceId> for Device<A> {
         &mut self.info
     }
 }
-
-pub struct SnatchableMarker;
-/// A guard that provides read access to snatchable data.
-pub type SnatchGuard<'a> = RwLockReadGuard<'a, SnatchableMarker>;
-/// A guard that allows snatching the snatchable data.
-pub type ExclusiveSnatchGuard<'a> = RwLockWriteGuard<'a, SnatchableMarker>;
-
-/// A value that is mostly immutable but can be "snatched" if we need to destroy
-/// it early.
-///
-/// In order to safely access the underlying data, the device's global snatchable
-/// lock must be taken. To guarentee it, methods take a read or write guard of that
-/// special lock.
-pub struct Snatchable<T> {
-    value: UnsafeCell<Option<T>>,
-}
-
-impl<T> Snatchable<T> {
-    pub fn new(val: T) -> Self {
-        Snatchable {
-            value: UnsafeCell::new(Some(val)),
-        }
-    }
-
-    /// Get read access to the value. Requires a the snatchable lock's read guard.
-    pub fn get(&self, _guard: &SnatchGuard) -> Option<&T> {
-        unsafe { (*self.value.get()).as_ref() }
-    }
-
-    /// Take the value. Requires a the snatchable lock's write guard.
-    pub fn snatch(&self, _guard: ExclusiveSnatchGuard) -> Option<T> {
-        unsafe { (*self.value.get()).take() }
-    }
-
-    /// Take the value without a guard. This can only be used with exclusive access
-    /// to self, so it does not require locking.
-    ///
-    /// Typically useful in a drop implementation.
-    pub fn take(&mut self) -> Option<T> {
-        self.value.get_mut().take()
-    }
-}
-
-// Can't safely print the contents of a snatchable objetc without holding
-// the lock.
-impl<T> std::fmt::Debug for Snatchable<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "<snatchable>")
-    }
-}
-
-unsafe impl<T> Sync for Snatchable<T> {}

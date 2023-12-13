@@ -1,5 +1,5 @@
-use crate::device::resource::SnatchGuard;
 use crate::resource::Resource;
+use crate::snatch::SnatchGuard;
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,

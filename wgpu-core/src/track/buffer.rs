@@ -9,10 +9,10 @@ use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
 use super::{PendingTransition, ResourceTracker};
 use crate::{
-    device::resource::SnatchGuard,
     hal_api::HalApi,
     id::{BufferId, TypedId},
     resource::{Buffer, Resource},
+    snatch::SnatchGuard,
     storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,

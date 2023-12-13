@@ -18,11 +18,11 @@ pub use self::{
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
-use crate::device::resource::SnatchGuard;
 use crate::device::Device;
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::hub::Hub;
 use crate::id::CommandBufferId;
+use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo, ResourceType};

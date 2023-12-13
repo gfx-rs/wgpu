@@ -64,6 +64,7 @@ pub mod pipeline;
 pub mod present;
 pub mod registry;
 pub mod resource;
+mod snatch;
 pub mod storage;
 mod track;
 // This is public for users who pre-compile shaders while still wanting to

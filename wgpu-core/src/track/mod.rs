@@ -103,10 +103,10 @@ mod texture;
 
 use crate::{
     binding_model, command, conv,
-    device::resource::SnatchGuard,
     hal_api::HalApi,
     id::{self, TypedId},
     pipeline, resource,
+    snatch::SnatchGuard,
     storage::Storage,
 };
 

@@ -2,9 +2,7 @@
 use crate::device::trace;
 use crate::{
     device::{
-        queue,
-        resource::{SnatchGuard, Snatchable},
-        BufferMapPendingClosure, Device, DeviceError, HostMap, MissingDownlevelFlags,
+        queue, BufferMapPendingClosure, Device, DeviceError, HostMap, MissingDownlevelFlags,
         MissingFeatures,
     },
     global::Global,
@@ -16,6 +14,7 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, IdentityManager},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
+    snatch::{SnatchGuard, Snatchable},
     track::TextureSelector,
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
