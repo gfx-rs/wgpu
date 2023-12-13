@@ -1317,6 +1317,17 @@ pub struct Blas<A: HalApi> {
     pub(crate) handle: u64,
 }
 
+impl<A: HalApi> Drop for Blas<A> {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(structure) = self.raw.take() {
+                use hal::Device;
+                self.device.raw().destroy_acceleration_structure(structure);
+            }
+        }
+    }
+}
+
 impl<A: HalApi> Resource<BlasId> for Blas<A> {
     const TYPE: &'static str = "Blas";
 
@@ -1341,6 +1352,20 @@ pub struct Tlas<A: HalApi> {
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
     pub(crate) dependencies: RwLock<Vec<BlasId>>,
     pub(crate) instance_buffer: RwLock<Option<A::Buffer>>,
+}
+
+impl<A: HalApi> Drop for Tlas<A> {
+    fn drop(&mut self) {
+        unsafe {
+            use hal::Device;
+            if let Some(structure) = self.raw.take() {
+                self.device.raw().destroy_acceleration_structure(structure);
+            }
+            if let Some(buffer) = self.instance_buffer.write().take() {
+                self.device.raw().destroy_buffer(buffer)
+            }
+        }
+    }
 }
 
 impl<A: HalApi> Resource<TlasId> for Tlas<A> {

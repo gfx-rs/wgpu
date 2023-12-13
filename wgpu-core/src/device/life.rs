@@ -520,6 +520,9 @@ impl<A: HalApi> LifetimeTracker<A> {
             for v in bind_group.used.samplers.drain_resources() {
                 self.suspected_resources.insert(v.as_info().id(), v);
             }
+            for v in bind_group.used.acceleration_structures.drain_resources() {
+                self.suspected_resources.insert(v.as_info().id(), v);
+            }
             //Releasing safely unused resources to decrement refcount
             bind_group.used_buffer_ranges.write().clear();
             bind_group.used_texture_ranges.write().clear();
@@ -737,6 +740,50 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
+    fn triage_suspected_blas(
+        &mut self,
+        trackers: &Mutex<Tracker<A>>,
+        #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
+    ) -> &mut Self {
+        let mut trackers = trackers.lock();
+        let resource_map = self.suspected_resources.map_mut();
+        let _ = Self::triage_resources(
+            resource_map,
+            self.active.as_mut_slice(),
+            &mut self.free_resources,
+            &mut trackers.blas_s,
+            |_blas_id, _blas| {
+                #[cfg(feature = "trace")]
+                if let Some(ref mut t) = *trace {
+                    t.add(trace::Action::DestroyBlas(*_blas_id));
+                }
+            },
+        );
+        self
+    }
+
+    fn triage_suspected_tlas(
+        &mut self,
+        trackers: &Mutex<Tracker<A>>,
+        #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
+    ) -> &mut Self {
+        let mut trackers = trackers.lock();
+        let resource_map = self.suspected_resources.map_mut();
+        let _ = Self::triage_resources(
+            resource_map,
+            self.active.as_mut_slice(),
+            &mut self.free_resources,
+            &mut trackers.tlas_s,
+            |_tlas_id, _tlas| {
+                #[cfg(feature = "trace")]
+                if let Some(ref mut t) = *trace {
+                    t.add(trace::Action::DestroyTlas(*_tlas_id));
+                }
+            },
+        );
+        self
+    }
+
     fn triage_suspected_query_sets(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let resource_map = self.suspected_resources.map_mut();
@@ -855,6 +902,16 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trace,
         );
         self.triage_suspected_buffers(
+            trackers,
+            #[cfg(feature = "trace")]
+            &mut trace,
+        );
+        self.triage_suspected_tlas(
+            trackers,
+            #[cfg(feature = "trace")]
+            &mut trace,
+        );
+        self.triage_suspected_blas(
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,

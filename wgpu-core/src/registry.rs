@@ -82,8 +82,9 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
 
     pub fn assign(self, value: T) -> (I, Arc<T>) {
         let mut data = self.data.write();
-        data.insert(self.id, self.init(value));
-        (self.id, data.get(self.id).unwrap().clone())
+        let inited_val = self.init(value);
+        data.insert(self.id, inited_val.clone());
+        (self.id, inited_val)
     }
 
     pub fn assign_existing(self, value: &Arc<T>) -> I {

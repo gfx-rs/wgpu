@@ -7,9 +7,7 @@ use crate::{
     id::{self, BlasId, TlasId},
     identity::{GlobalIdentityHandlerFactory, Input},
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
-    resource,
-    storage::InvalidId,
-    LabelHelpers,
+    resource, LabelHelpers,
 };
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
@@ -177,6 +175,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.is_valid() {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
                 trace.add(trace::Action::CreateBlas {
@@ -192,12 +194,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let handle = blas.handle;
 
-            let id = fid.assign(blas);
-            log::info!("Created blas {:?} with {:?}", id.0, desc);
+            let (id, resource) = fid.assign(blas);
+            log::info!("Created blas {:?} with {:?}", id, desc);
 
-            device.trackers.lock().blas_s.insert_single(id.0, id.1);
+            device.trackers.lock().blas_s.insert_single(id, resource);
 
-            return (id.0, Some(handle), None);
+            return (id, Some(handle), None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -284,31 +286,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let (last_submit_index, device) = {
-            let mut blas_guard = hub.blas_s.write();
-            match blas_guard.get(blas_id) {
-                Ok(blas) => {
-                    let last_submit_index = blas.info.submission_index();
-                    (last_submit_index, blas.device.clone())
-                }
-                Err(_) => {
-                    hub.blas_s.unregister_locked(blas_id, &mut *blas_guard);
-                    return;
-                }
-            }
-        };
+        if let Some(blas) = hub.blas_s.unregister(blas_id) {
+            let last_submit_index = blas.info.submission_index();
 
-        let blas_guard = hub.blas_s.read();
-        let blas = blas_guard.get(blas_id).unwrap();
-        {
-            let mut life_lock = device.lock_life();
-            life_lock.suspected_resources.insert(blas_id, blas.clone());
-        }
+            blas.device
+                .lock_life()
+                .suspected_resources
+                .insert(blas_id, blas.clone());
 
-        if wait {
-            match device.wait_for_submit(last_submit_index) {
-                Ok(()) => (),
-                Err(e) => log::error!("Failed to wait for blas {:?}: {:?}", blas_id, e),
+            if wait {
+                match blas.device.wait_for_submit(last_submit_index) {
+                    Ok(()) => (),
+                    Err(e) => log::error!("Failed to wait for blas {:?}: {:?}", blas_id, e),
+                }
             }
         }
     }
@@ -374,31 +364,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let (last_submit_index, device) = {
-            let mut tlas_guard = hub.tlas_s.write();
-            match tlas_guard.get(tlas_id) {
-                Ok(tlas) => {
-                    let last_submit_index = tlas.info.submission_index();
-                    (last_submit_index, tlas.device.clone())
-                }
-                Err(InvalidId) => {
-                    hub.tlas_s.unregister_locked(tlas_id, &mut *tlas_guard);
-                    return;
-                }
-            }
-        };
+        if let Some(tlas) = hub.tlas_s.unregister(tlas_id) {
+            let last_submit_index = tlas.info.submission_index();
 
-        let tlas_guard = hub.tlas_s.read();
-        let tlas = tlas_guard.get(tlas_id).unwrap();
-        {
-            let mut life_lock = device.lock_life();
-            life_lock.suspected_resources.insert(tlas_id, tlas.clone());
-        }
+            tlas.device
+                .lock_life()
+                .suspected_resources
+                .insert(tlas_id, tlas.clone());
 
-        if wait {
-            match device.wait_for_submit(last_submit_index) {
-                Ok(()) => (),
-                Err(e) => log::error!("Failed to wait for tlas {:?}: {:?}", tlas_id, e),
+            if wait {
+                match tlas.device.wait_for_submit(last_submit_index) {
+                    Ok(()) => (),
+                    Err(e) => log::error!("Failed to wait for blas {:?}: {:?}", tlas_id, e),
+                }
             }
         }
     }
