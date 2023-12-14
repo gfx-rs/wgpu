@@ -458,6 +458,10 @@ pub enum VectorSize {
     Quad = 4,
 }
 
+impl VectorSize {
+    const MAX: usize = Self::Quad as u8 as usize;
+}
+
 /// Primitive type for a scalar.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
