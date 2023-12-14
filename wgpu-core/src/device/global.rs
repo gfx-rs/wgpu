@@ -239,7 +239,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let stage_fid = hub.buffers.request();
                 let stage = stage_fid.init(stage);
 
-                let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
+                let snatch_guard = device.snatchable_lock.read();
+                let mapping = match unsafe {
+                    device
+                        .raw()
+                        .map_buffer(stage.raw(&snatch_guard), 0..stage.size)
+                } {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         let mut life_lock = device.lock_life();
@@ -380,6 +385,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        let snatch_guard = device.snatchable_lock.read();
         if !device.is_valid() {
             return Err(DeviceError::Lost.into());
         }
@@ -402,7 +408,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let raw_buf = buffer.raw();
+        let raw_buf = buffer.raw(&snatch_guard);
         unsafe {
             let mapping = device
                 .raw()
@@ -443,6 +449,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(DeviceError::Lost.into());
         }
 
+        let snatch_guard = device.snatchable_lock.read();
+
         let buffer = hub
             .buffers
             .get(buffer_id)
@@ -450,7 +458,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer.raw();
+        let raw_buf = buffer.raw(&snatch_guard);
         unsafe {
             let mapping = device
                 .raw()
@@ -2406,7 +2414,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut trackers = buffer.device.as_ref().trackers.lock();
                 trackers.buffers.set_single(&buffer, internal_use);
                 //TODO: Check if draining ALL buffers is correct!
-                let _ = trackers.buffers.drain_transitions();
+                let snatch_guard = device.snatchable_lock.read();
+                let _ = trackers.buffers.drain_transitions(&snatch_guard);
             }
 
             buffer

@@ -1,4 +1,5 @@
 use crate::resource::Resource;
+use crate::snatch::SnatchGuard;
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
@@ -310,6 +311,7 @@ impl<A: HalApi> State<A> {
         base_trackers: &mut Tracker<A>,
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         indirect_buffer: Option<id::BufferId>,
+        snatch_guard: &SnatchGuard,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             unsafe { self.scope.merge_bind_group(&bind_group_guard[id].used)? };
@@ -335,7 +337,7 @@ impl<A: HalApi> State<A> {
 
         log::trace!("Encoding dispatch barriers");
 
-        CommandBuffer::drain_barriers(raw_encoder, base_trackers);
+        CommandBuffer::drain_barriers(raw_encoder, base_trackers, snatch_guard);
         Ok(())
     }
 }
@@ -452,6 +454,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         } else {
             None
         };
+
+        let snatch_guard = device.snatchable_lock.read();
 
         tracker.set_size(
             Some(&*buffer_guard),
@@ -673,7 +677,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state.is_ready().map_pass_err(scope)?;
 
                     state
-                        .flush_states(raw, &mut intermediate_trackers, &*bind_group_guard, None)
+                        .flush_states(
+                            raw,
+                            &mut intermediate_trackers,
+                            &*bind_group_guard,
+                            None,
+                            &snatch_guard,
+                        )
                         .map_pass_err(scope)?;
 
                     let groups_size_limit = cmd_buf.limits.max_compute_workgroups_per_dimension;
@@ -727,7 +737,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let buf_raw = indirect_buffer
                         .raw
-                        .as_ref()
+                        .get(&snatch_guard)
                         .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
 
@@ -747,6 +757,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &mut intermediate_trackers,
                             &*bind_group_guard,
                             Some(buffer_id),
+                            &snatch_guard,
                         )
                         .map_pass_err(scope)?;
                     unsafe {
@@ -860,7 +871,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut tracker.textures,
             device,
         );
-        CommandBuffer::insert_barriers_from_tracker(transit, tracker, &intermediate_trackers);
+        CommandBuffer::insert_barriers_from_tracker(
+            transit,
+            tracker,
+            &intermediate_trackers,
+            &snatch_guard,
+        );
         // Close the command buffer, and swap it with the previous.
         encoder.close_and_swap();
 

@@ -597,6 +597,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
+        let snatch_guard = device.snatchable_lock.read();
+
         let (src_buffer, src_pending) = {
             let buffer_guard = hub.buffers.read();
             let src_buffer = buffer_guard
@@ -610,13 +612,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         let src_raw = src_buffer
             .raw
-            .as_ref()
+            .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(source))?;
         if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
         // expecting only a single barrier
-        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
@@ -631,12 +633,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         let dst_raw = dst_buffer
             .raw
-            .as_ref()
+            .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(destination))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(TransferError::MissingCopyDstUsageFlag(Some(destination), None).into());
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(size).into());
@@ -795,6 +797,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &texture_guard,
         )?;
 
+        let snatch_guard = device.snatchable_lock.read();
+
         let (src_buffer, src_pending) = {
             let buffer_guard = hub.buffers.read();
             let src_buffer = buffer_guard
@@ -807,12 +811,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         let src_raw = src_buffer
             .raw
-            .as_ref()
+            .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(source.buffer))?;
         if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
         let dst_pending = tracker
             .textures
@@ -953,6 +957,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &texture_guard,
         )?;
 
+        let snatch_guard = device.snatchable_lock.read();
+
         let src_pending = tracker
             .textures
             .set_single(src_texture, src_range, hal::TextureUses::COPY_SRC)
@@ -993,14 +999,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         let dst_raw = dst_buffer
             .raw
-            .as_ref()
+            .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(Some(destination.buffer), None).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
         if !src_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
