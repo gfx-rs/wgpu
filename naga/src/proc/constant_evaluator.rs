@@ -850,6 +850,9 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Saturate => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
             }
+            crate::MathFunction::Sin => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
+            }
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
             ))),
