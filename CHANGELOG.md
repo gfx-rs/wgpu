@@ -45,6 +45,7 @@ Bottom level categories:
     - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
         - `abs`
         - `round`
+        - `saturate`
 
 ## v0.19.0 (2024-01-17)
 
