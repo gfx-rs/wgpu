@@ -847,6 +847,9 @@ impl<'a> ConstantEvaluator<'a> {
                     Float::F32([e]) => Ok(Float::F32([(round_ties_even(e as f64) as f32)])),
                 })
             }
+            crate::MathFunction::Saturate => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
+            }
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
             ))),
