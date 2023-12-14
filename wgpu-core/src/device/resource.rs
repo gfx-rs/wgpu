@@ -119,7 +119,7 @@ pub struct Device<A: HalApi> {
     life_tracker: Mutex<LifetimeTracker<A>>,
     /// Temporary storage for resource management functions. Cleared at the end
     /// of every call (unless an error occurs).
-    pub(crate) temp_suspected: Mutex<Option<ResourceMaps>>,
+    pub(crate) temp_suspected: Mutex<Option<ResourceMaps<A>>>,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
@@ -260,7 +260,7 @@ impl<A: HalApi> Device<A> {
             valid: AtomicBool::new(true),
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
-            temp_suspected: Mutex::new(Some(life::ResourceMaps::new::<A>())),
+            temp_suspected: Mutex::new(Some(life::ResourceMaps::new())),
             #[cfg(feature = "trace")]
             trace: Mutex::new(trace_path.and_then(|path| match trace::Trace::new(path) {
                 Ok(mut trace) => {
@@ -324,7 +324,7 @@ impl<A: HalApi> Device<A> {
             let temp_suspected = self
                 .temp_suspected
                 .lock()
-                .replace(ResourceMaps::new::<A>())
+                .replace(ResourceMaps::new())
                 .unwrap();
 
             let mut life_tracker = self.lock_life();
@@ -404,7 +404,7 @@ impl<A: HalApi> Device<A> {
         let mut temp_suspected = self
             .temp_suspected
             .lock()
-            .replace(ResourceMaps::new::<A>())
+            .replace(ResourceMaps::new())
             .unwrap();
         temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
@@ -412,42 +412,58 @@ impl<A: HalApi> Device<A> {
         {
             for resource in trackers.buffers.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .buffers
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.textures.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .textures
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.views.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .texture_views
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.bind_groups.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .bind_groups
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.samplers.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .samplers
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.compute_pipelines.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .compute_pipelines
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.render_pipelines.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .render_pipelines
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.query_sets.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .query_sets
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
         }
