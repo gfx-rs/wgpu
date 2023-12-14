@@ -48,6 +48,7 @@ Bottom level categories:
         - `saturate`
         - `sin`
         - `sinh`
+        - `sqrt`
 
 ## v0.19.0 (2024-01-17)
 
