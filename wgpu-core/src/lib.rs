@@ -222,6 +222,10 @@ define_backend_caller! { gfx_if_vulkan, gfx_if_vulkan_hidden, "vulkan" if all(fe
 define_backend_caller! { gfx_if_metal, gfx_if_metal_hidden, "metal" if all(feature = "metal", any(target_os = "macos", target_os = "ios")) }
 define_backend_caller! { gfx_if_dx12, gfx_if_dx12_hidden, "dx12" if all(feature = "dx12", windows) }
 define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "gles" }
+define_backend_caller! { gfx_if_empty, gfx_if_empty_hidden, "empty" if all(
+    not(any(feature = "metal", feature = "vulkan", feature = "gles")),
+    any(target_os = "macos", target_os = "ios"),
+) }
 
 /// Dispatch on an [`Id`]'s backend to a backend-generic method.
 ///
@@ -276,6 +280,7 @@ macro_rules! gfx_select {
             wgt::Backend::Metal => $crate::gfx_if_metal!($global.$method::<$crate::api::Metal>( $($param),* )),
             wgt::Backend::Dx12 => $crate::gfx_if_dx12!($global.$method::<$crate::api::Dx12>( $($param),* )),
             wgt::Backend::Gl => $crate::gfx_if_gles!($global.$method::<$crate::api::Gles>( $($param),+ )),
+            wgt::Backend::Empty => $crate::gfx_if_empty!($global.$method::<$crate::api::Empty>( $($param),+ )),
             other => panic!("Unexpected backend {:?}", other),
         }
     };

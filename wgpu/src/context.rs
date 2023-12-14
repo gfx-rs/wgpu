@@ -1043,8 +1043,6 @@ impl ObjectId {
         global_id: None,
     };
 
-    // Unused by the dummy backend.
-    #[allow(dead_code)]
     pub fn new(id: NonZeroU64, global_id: NonZeroU64) -> Self {
         Self {
             id: Some(id),
