@@ -49,6 +49,7 @@ Bottom level categories:
         - `sin`
         - `sinh`
         - `sqrt`
+        - `step`
 
 ## v0.19.0 (2024-01-17)
 
