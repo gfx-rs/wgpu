@@ -821,6 +821,32 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::Pow => self.math_pow(arg, arg1.unwrap(), span),
             crate::MathFunction::Clamp => self.math_clamp(arg, arg1.unwrap(), arg2.unwrap(), span),
+            crate::MathFunction::Round => {
+                // TODO: Use `f{32,64}.round_ties_even()` when available on stable. This polyfill
+                // is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
+                // which has licensing compatible with ours. See also
+                // <https://github.com/rust-lang/rust/issues/96710>.
+                //
+                // [polyfill source]: https://github.com/imeka/ndarray-ndimage/blob/8b14b4d6ecfbc96a8a052f802e342a7049c68d8f/src/lib.rs#L98
+                fn round_ties_even(x: f64) -> f64 {
+                    let i = x as i64;
+                    let f = (x - i as f64).abs();
+                    if f == 0.5 {
+                        if i & 1 == 1 {
+                            // -1.5, 1.5, 3.5, ...
+                            (x.abs() + 0.5).copysign(x)
+                        } else {
+                            (x.abs() - 0.5).copysign(x)
+                        }
+                    } else {
+                        x.round()
+                    }
+                }
+                component_wise_float(self, span, [arg], |e| match e {
+                    Float::Abstract([e]) => Ok(Float::Abstract([round_ties_even(e)])),
+                    Float::F32([e]) => Ok(Float::F32([(round_ties_even(e as f64) as f32)])),
+                })
+            }
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
             ))),
