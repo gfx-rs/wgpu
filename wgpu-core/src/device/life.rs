@@ -14,7 +14,10 @@ use crate::{
         TextureViewId,
     },
     pipeline::{ComputePipeline, RenderPipeline},
-    resource::{self, Buffer, QuerySet, Resource, Sampler, StagingBuffer, Texture, TextureView},
+    resource::{
+        self, Buffer, DestroyedBuffer, QuerySet, Resource, Sampler, StagingBuffer, Texture,
+        TextureView,
+    },
     track::{ResourceTracker, Tracker},
     FastHashMap, SubmissionIndex,
 };
@@ -39,6 +42,7 @@ pub(crate) struct ResourceMaps<A: HalApi> {
     pub pipeline_layouts: FastHashMap<PipelineLayoutId, Arc<PipelineLayout<A>>>,
     pub render_bundles: FastHashMap<RenderBundleId, Arc<RenderBundle<A>>>,
     pub query_sets: FastHashMap<QuerySetId, Arc<QuerySet<A>>>,
+    pub destroyed_buffers: FastHashMap<BufferId, Arc<DestroyedBuffer<A>>>,
 }
 
 impl<A: HalApi> ResourceMaps<A> {
@@ -56,6 +60,7 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts: FastHashMap::default(),
             render_bundles: FastHashMap::default(),
             query_sets: FastHashMap::default(),
+            destroyed_buffers: FastHashMap::default(),
         }
     }
 
@@ -73,6 +78,7 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts,
             render_bundles,
             query_sets,
+            destroyed_buffers,
         } = self;
         buffers.clear();
         staging_buffers.clear();
@@ -86,6 +92,7 @@ impl<A: HalApi> ResourceMaps<A> {
         pipeline_layouts.clear();
         render_bundles.clear();
         query_sets.clear();
+        destroyed_buffers.clear();
     }
 
     pub(crate) fn extend(&mut self, mut other: Self) {
@@ -102,6 +109,7 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts,
             render_bundles,
             query_sets,
+            destroyed_buffers,
         } = self;
         buffers.extend(other.buffers.drain());
         staging_buffers.extend(other.staging_buffers.drain());
@@ -115,6 +123,7 @@ impl<A: HalApi> ResourceMaps<A> {
         pipeline_layouts.extend(other.pipeline_layouts.drain());
         render_bundles.extend(other.render_bundles.drain());
         query_sets.extend(other.query_sets.drain());
+        destroyed_buffers.extend(other.destroyed_buffers.drain());
     }
 }
 
@@ -281,6 +290,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .staging_buffers
                         .insert(raw.as_info().id(), raw);
                 }
+                TempResource::DestroyedBuffer(destroyed) => {
+                    last_resources
+                        .destroyed_buffers
+                        .insert(destroyed.id, destroyed);
+                }
                 TempResource::Texture(raw) => {
                     last_resources.textures.insert(raw.as_info().id(), raw);
                 }
@@ -383,6 +397,9 @@ impl<A: HalApi> LifetimeTracker<A> {
             }
             TempResource::StagingBuffer(raw) => {
                 resources.staging_buffers.insert(raw.as_info().id(), raw);
+            }
+            TempResource::DestroyedBuffer(destroyed) => {
+                resources.destroyed_buffers.insert(destroyed.id, destroyed);
             }
             TempResource::Texture(raw) => {
                 resources.textures.insert(raw.as_info().id(), raw);
@@ -646,6 +663,27 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
+    fn triage_suspected_destroyed_buffers(
+        &mut self,
+        #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
+    ) {
+        for (id, buffer) in self.suspected_resources.destroyed_buffers.drain() {
+            let submit_index = buffer.submission_index;
+            if let Some(resources) = self.active.iter_mut().find(|a| a.index == submit_index) {
+                resources
+                    .last_resources
+                    .destroyed_buffers
+                    .insert(id, buffer);
+            } else {
+                self.free_resources.destroyed_buffers.insert(id, buffer);
+            }
+            #[cfg(feature = "trace")]
+            if let Some(ref mut t) = *trace {
+                t.add(trace::Action::DestroyBuffer(id));
+            }
+        }
+    }
+
     fn triage_suspected_compute_pipelines(
         &mut self,
         trackers: &Mutex<Tracker<A>>,
@@ -872,6 +910,10 @@ impl<A: HalApi> LifetimeTracker<A> {
         );
         self.triage_suspected_buffers(
             trackers,
+            #[cfg(feature = "trace")]
+            &mut trace,
+        );
+        self.triage_suspected_destroyed_buffers(
             #[cfg(feature = "trace")]
             &mut trace,
         );
