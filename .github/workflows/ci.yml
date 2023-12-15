@@ -432,7 +432,7 @@ jobs:
       - name: check naga snapshots
         run: git diff --exit-code -- naga/tests/out
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images
