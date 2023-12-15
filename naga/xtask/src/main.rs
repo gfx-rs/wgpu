@@ -76,7 +76,9 @@ fn run(args: Args) -> anyhow::Result<()> {
             EasyCommand::simple("cargo", ["bench"]).success()
         }
         Subcommand::Validate(cmd) => {
-            let ack_visiting = |path: &Path| log::info!("Validating {}", path.display());
+            fn ack_visiting(path: &Path) {
+                log::info!("Validating {}", path.display());
+            }
             let err_status = match cmd {
                 ValidateSubcommand::Spirv => {
                     let spirv_as = "spirv-as";
@@ -207,12 +209,10 @@ fn run(args: Args) -> anyhow::Result<()> {
                                 compute,
                             } = hlsl_snapshots::Config::from_path(path.with_extension("ron"))?;
                             let mut status = ErrorStatus::NoFailuresFound;
-                            [vertex, fragment, compute]
-                                .into_iter()
-                                .flatten()
-                                .for_each(|shader| {
-                                    consume_config_item(path, shader).log_if_err_found(&mut status);
-                                });
+                            for shader in [vertex, fragment, compute].into_iter().flatten() {
+                                consume_config_item(path, shader)
+                                    .log_if_err_found(&mut status);
+                            }
                             match status {
                                 ErrorStatus::NoFailuresFound => Ok(()),
                                 ErrorStatus::OneOrMoreFailuresFound => bail!(
