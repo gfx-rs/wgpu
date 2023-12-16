@@ -55,6 +55,10 @@ Previously, `DeviceExt::create_texture_with_data` only allowed data to be provid
 
 This feature allowed you to call `global_id` on any wgpu opaque handle to get a unique hashable identity for the given resource. This is now available without the feature flag. By @cwfitzgerald in [#4841](https://github.com/gfx-rs/wgpu/pull/4841)
 
+### `dx12` and `metal` backend crate features
+
+Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`) backend. These are enabled by default, but don't do anything when not targetting the corresponding OS. By @daxpedda in [#4815](https://github.com/gfx-rs/wgpu/pull/4815)
+
 ### New Features
 
 #### General

@@ -1786,19 +1786,62 @@ impl Default for Instance {
     /// Creates a new instance of wgpu with default options.
     ///
     /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
+    ///
+    /// # Panics
+    ///
+    /// If no backend feature for the active target platform is enabled,
+    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
     fn default() -> Self {
         Self::new(InstanceDescriptor::default())
     }
 }
 
 impl Instance {
+    /// Returns `true` if any backend feature is enabled for the current build configuration.
+    ///
+    /// Which feature makes this method return true depends on the target platform:
+    /// * MacOS/iOS: `metal`, `vulkan-portability` or `angle`
+    /// * All other: Always returns true
+    ///
+    /// TODO: Right now it's otherwise not possible yet to opt-out of all features on most platforms.
+    /// See <https://github.com/gfx-rs/wgpu/issues/3514>
+    /// * Windows: always enables Vulkan and GLES with no way to opt out
+    /// * Linux: always enables Vulkan and GLES with no way to opt out
+    /// * Web: either targets WebGPU backend or, if `webgl` enabled, WebGL
+    ///   * TODO: Support both WebGPU and WebGL at the same time, see <https://github.com/gfx-rs/wgpu/issues/2804>
+    pub const fn any_backend_feature_enabled() -> bool {
+        // Method intentionally kept verbose to keep it a bit easier to follow!
+
+        // On macOS and iOS, at least one of Metal, Vulkan or GLES backend must be enabled.
+        let is_mac_or_ios = cfg!(target_os = "macos") || cfg!(target_os = "ios");
+        if is_mac_or_ios {
+            cfg!(feature = "metal")
+                || cfg!(feature = "vulkan-portability")
+                || cfg!(feature = "angle")
+        } else {
+            true
+        }
+    }
+
     /// Create an new instance of wgpu.
     ///
     /// # Arguments
     ///
     /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
     ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
+    ///
+    /// # Panics
+    ///
+    /// If no backend feature for the active target platform is enabled,
+    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
     pub fn new(instance_desc: InstanceDescriptor) -> Self {
+        if !Self::any_backend_feature_enabled() {
+            panic!(
+                "No wgpu backend feature that is implemented for the target platform was enabled. \
+                 See `wgpu::Instance::any_backend_feature_enabled()` for more information."
+            );
+        }
+
         Self {
             context: Arc::from(crate::backend::Context::init(instance_desc)),
         }
@@ -2029,7 +2072,7 @@ impl Instance {
     /// # Safety
     ///
     /// - layer must be a valid object to create a surface upon.
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[cfg(all(any(target_os = "ios", target_os = "macos"), feature = "metal"))]
     pub unsafe fn create_surface_from_core_animation_layer(
         &self,
         layer: *mut std::ffi::c_void,
@@ -2055,7 +2098,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_visual(
         &self,
         visual: *mut std::ffi::c_void,
@@ -2081,7 +2124,7 @@ impl Instance {
     /// # Safety
     ///
     /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
@@ -2107,7 +2150,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid SwapChainPanel to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
         swap_chain_panel: *mut std::ffi::c_void,
