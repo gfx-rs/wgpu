@@ -229,7 +229,7 @@ impl Context {
         self.0.generate_report()
     }
 
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[cfg(all(any(target_os = "ios", target_os = "macos"), feature = "metal"))]
     pub unsafe fn create_surface_from_core_animation_layer(
         &self,
         layer: *mut std::ffi::c_void,
@@ -265,7 +265,7 @@ impl Context {
         })
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
         Surface {
@@ -274,7 +274,7 @@ impl Context {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
@@ -289,7 +289,7 @@ impl Context {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
         swap_chain_panel: *mut std::ffi::c_void,

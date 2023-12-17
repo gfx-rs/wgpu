@@ -785,6 +785,8 @@ impl<A: HalApi> RenderBundle<A> {
             }
         }
 
+        let snatch_guard = self.device.snatchable_lock.read();
+
         for command in self.base.commands.iter() {
             match *command {
                 RenderCommand::SetBindGroup {
@@ -818,7 +820,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -833,7 +835,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -912,7 +914,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: false,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
                     unsafe { raw.draw_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -922,7 +924,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: true,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
                     unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect { .. }

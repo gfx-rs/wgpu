@@ -18,6 +18,12 @@ const plus_uai_u: u32 = 1 + 2u;
 const plus_u_uai: u32 = 1u + 2;
 const plus_u_u_u: u32 = 1u + 2u;
 
+const bitflip_u_u: u32 = ~0xffffffffu;
+const bitflip_uai: u32 = ~0xffffffff & (0x100000000 - 1);
+
+const least_i32: i32 = -2147483648;
+const least_f32: f32 = -3.40282347e+38;
+
 fn runtime_values() {
   var f: f32 = 42;
   var i: i32 = 43;
@@ -42,4 +48,22 @@ fn runtime_values() {
   var plus_uai_u: u32 = 1 + u;
   var plus_u_uai: u32 = u + 2;
   var plus_u_u_u: u32 = u + u;
+}
+
+fn wgpu_4445() {
+  // This ok:
+  let a = (3.0*2.0-(1.0)) * 1.0;
+  let b = (3.0*2.0+1.0) * 1.0;
+  // This fails:
+  let c = (3.0*2.0-1.0) * 1.0;
+}
+
+const wgpu_4492 = i32(-0x80000000);
+const wgpu_4492_2 = -2147483648;
+
+var<workgroup> a: array<u32, 64>;
+
+fn wgpu_4435() {
+    let x = 1;
+    let y = a[x-1];
 }

@@ -1308,8 +1308,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
+        let device = &cmd_buf.device;
+        let snatch_guard = device.snatchable_lock.read();
+
         let (scope, pending_discard_init_fixups) = {
-            let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -1324,7 +1327,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let device = &cmd_buf.device;
             if !device.is_valid() {
                 return Err(DeviceError::Lost).map_pass_err(init_scope);
             }
@@ -1657,7 +1659,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
@@ -1719,7 +1721,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
@@ -2009,7 +2011,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
@@ -2081,7 +2083,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
@@ -2098,7 +2100,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let count_raw = count_buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))
                             .map_pass_err(scope)?;
 
@@ -2403,7 +2405,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
-            super::CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope);
+            super::CommandBuffer::insert_barriers_from_scope(
+                transit,
+                tracker,
+                &scope,
+                &snatch_guard,
+            );
         }
 
         *status = CommandEncoderStatus::Recording;

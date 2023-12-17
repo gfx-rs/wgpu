@@ -14,6 +14,7 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, IdentityManager},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
+    snatch::{SnatchGuard, Snatchable},
     track::TextureSelector,
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
@@ -398,7 +399,7 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Buffer<A: HalApi> {
-    pub(crate) raw: Option<A::Buffer>,
+    pub(crate) raw: Snatchable<A::Buffer>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
@@ -421,8 +422,8 @@ impl<A: HalApi> Drop for Buffer<A> {
 }
 
 impl<A: HalApi> Buffer<A> {
-    pub(crate) fn raw(&self) -> &A::Buffer {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self, guard: &SnatchGuard) -> &A::Buffer {
+        self.raw.get(guard).unwrap()
     }
 
     pub(crate) fn buffer_unmap_inner(
@@ -431,6 +432,7 @@ impl<A: HalApi> Buffer<A> {
         use hal::Device;
 
         let device = &self.device;
+        let snatch_guard = device.snatchable_lock.read();
         let buffer_id = self.info.id();
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(&mut *self.map_state.lock(), resource::BufferMapState::Idle) {
@@ -454,13 +456,17 @@ impl<A: HalApi> Buffer<A> {
                 let _ = ptr;
                 if needs_flush {
                     unsafe {
-                        device
-                            .raw()
-                            .flush_mapped_ranges(stage_buffer.raw(), iter::once(0..self.size));
+                        device.raw().flush_mapped_ranges(
+                            stage_buffer.raw(&snatch_guard),
+                            iter::once(0..self.size),
+                        );
                     }
                 }
 
-                let raw_buf = self.raw.as_ref().ok_or(BufferAccessError::Destroyed)?;
+                let raw_buf = self
+                    .raw
+                    .get(&snatch_guard)
+                    .ok_or(BufferAccessError::Destroyed)?;
 
                 self.info
                     .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
@@ -470,7 +476,7 @@ impl<A: HalApi> Buffer<A> {
                     size,
                 });
                 let transition_src = hal::BufferBarrier {
-                    buffer: stage_buffer.raw(),
+                    buffer: stage_buffer.raw(&snatch_guard),
                     usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
@@ -486,7 +492,7 @@ impl<A: HalApi> Buffer<A> {
                     );
                     if self.size > 0 {
                         encoder.copy_buffer_to_buffer(
-                            stage_buffer.raw(),
+                            stage_buffer.raw(&snatch_guard),
                             raw_buf,
                             region.into_iter(),
                         );
@@ -521,7 +527,7 @@ impl<A: HalApi> Buffer<A> {
                 unsafe {
                     device
                         .raw()
-                        .unmap_buffer(self.raw())
+                        .unmap_buffer(self.raw(&snatch_guard))
                         .map_err(DeviceError::from)?
                 };
             }
@@ -542,7 +548,10 @@ impl<A: HalApi> Buffer<A> {
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::FreeBuffer(buffer_id));
             }
-            if self.raw.is_none() {
+            // Note: a future commit will replace this with a read guard
+            // and actually snatch the buffer.
+            let snatch_guard = device.snatchable_lock.read();
+            if self.raw.get(&snatch_guard).is_none() {
                 return Err(resource::DestroyError::AlreadyDestroyed);
             }
 

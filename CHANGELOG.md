@@ -55,6 +55,10 @@ Previously, `DeviceExt::create_texture_with_data` only allowed data to be provid
 
 This feature allowed you to call `global_id` on any wgpu opaque handle to get a unique hashable identity for the given resource. This is now available without the feature flag. By @cwfitzgerald in [#4841](https://github.com/gfx-rs/wgpu/pull/4841)
 
+### `dx12` and `metal` backend crate features
+
+Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`) backend. These are enabled by default, but don't do anything when not targetting the corresponding OS. By @daxpedda in [#4815](https://github.com/gfx-rs/wgpu/pull/4815)
+
 ### New Features
 
 #### General
@@ -68,7 +72,7 @@ This feature allowed you to call `global_id` on any wgpu opaque handle to get a 
 
 #### Naga
 
-- Naga's WGSL front end now allows binary operators to produce values with abstract types, rather than concretizing thir operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850).
+- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing thir operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
 
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
 
