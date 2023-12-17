@@ -105,8 +105,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         let blas_iter = trace_blas.iter().map(|x| {
             let geometries = match &x.geometries {
-                &crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                    ref triangle_geometries,
+                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                    triangle_geometries,
                 ) => {
                     let iter = triangle_geometries.iter().map(|tg| BlasTriangleGeometry {
                         size: &tg.size,
@@ -796,8 +796,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         let blas_iter = trace_blas.iter().map(|x| {
             let geometries = match &x.geometries {
-                &crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                    ref triangle_geometries,
+                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                    triangle_geometries,
                 ) => {
                     let iter = triangle_geometries.iter().map(|tg| BlasTriangleGeometry {
                         size: &tg.size,
