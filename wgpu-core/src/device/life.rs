@@ -27,18 +27,18 @@ use thiserror::Error;
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Default)]
 pub(crate) struct ResourceMaps<A: HalApi> {
-    pub(crate) buffers: FastHashMap<BufferId, Arc<Buffer<A>>>,
-    pub(crate) staging_buffers: FastHashMap<StagingBufferId, Arc<StagingBuffer<A>>>,
-    pub(crate) textures: FastHashMap<TextureId, Arc<Texture<A>>>,
-    pub(crate) texture_views: FastHashMap<TextureViewId, Arc<TextureView<A>>>,
-    pub(crate) samplers: FastHashMap<SamplerId, Arc<Sampler<A>>>,
-    pub(crate) bind_groups: FastHashMap<BindGroupId, Arc<BindGroup<A>>>,
-    pub(crate) bind_group_layouts: FastHashMap<BindGroupLayoutId, Arc<BindGroupLayout<A>>>,
-    pub(crate) render_pipelines: FastHashMap<RenderPipelineId, Arc<RenderPipeline<A>>>,
-    pub(crate) compute_pipelines: FastHashMap<ComputePipelineId, Arc<ComputePipeline<A>>>,
-    pub(crate) pipeline_layouts: FastHashMap<PipelineLayoutId, Arc<PipelineLayout<A>>>,
-    pub(crate) render_bundles: FastHashMap<RenderBundleId, Arc<RenderBundle<A>>>,
-    pub(crate) query_sets: FastHashMap<QuerySetId, Arc<QuerySet<A>>>,
+    pub buffers: FastHashMap<BufferId, Arc<Buffer<A>>>,
+    pub staging_buffers: FastHashMap<StagingBufferId, Arc<StagingBuffer<A>>>,
+    pub textures: FastHashMap<TextureId, Arc<Texture<A>>>,
+    pub texture_views: FastHashMap<TextureViewId, Arc<TextureView<A>>>,
+    pub samplers: FastHashMap<SamplerId, Arc<Sampler<A>>>,
+    pub bind_groups: FastHashMap<BindGroupId, Arc<BindGroup<A>>>,
+    pub bind_group_layouts: FastHashMap<BindGroupLayoutId, Arc<BindGroupLayout<A>>>,
+    pub render_pipelines: FastHashMap<RenderPipelineId, Arc<RenderPipeline<A>>>,
+    pub compute_pipelines: FastHashMap<ComputePipelineId, Arc<ComputePipeline<A>>>,
+    pub pipeline_layouts: FastHashMap<PipelineLayoutId, Arc<PipelineLayout<A>>>,
+    pub render_bundles: FastHashMap<RenderBundleId, Arc<RenderBundle<A>>>,
+    pub query_sets: FastHashMap<QuerySetId, Arc<QuerySet<A>>>,
 }
 
 impl<A: HalApi> ResourceMaps<A> {
@@ -60,35 +60,61 @@ impl<A: HalApi> ResourceMaps<A> {
     }
 
     pub(crate) fn clear(&mut self) {
-        self.buffers.clear();
-        self.staging_buffers.clear();
-        self.textures.clear();
-        self.texture_views.clear();
-        self.samplers.clear();
-        self.bind_groups.clear();
-        self.bind_group_layouts.clear();
-        self.render_pipelines.clear();
-        self.compute_pipelines.clear();
-        self.pipeline_layouts.clear();
-        self.render_bundles.clear();
-        self.query_sets.clear();
+        let ResourceMaps {
+            buffers,
+            staging_buffers,
+            textures,
+            texture_views,
+            samplers,
+            bind_groups,
+            bind_group_layouts,
+            render_pipelines,
+            compute_pipelines,
+            pipeline_layouts,
+            render_bundles,
+            query_sets,
+        } = self;
+        buffers.clear();
+        staging_buffers.clear();
+        textures.clear();
+        texture_views.clear();
+        samplers.clear();
+        bind_groups.clear();
+        bind_group_layouts.clear();
+        render_pipelines.clear();
+        compute_pipelines.clear();
+        pipeline_layouts.clear();
+        render_bundles.clear();
+        query_sets.clear();
     }
 
     pub(crate) fn extend(&mut self, mut other: Self) {
-        self.buffers.extend(other.buffers.drain());
-        self.staging_buffers.extend(other.staging_buffers.drain());
-        self.textures.extend(other.textures.drain());
-        self.texture_views.extend(other.texture_views.drain());
-        self.samplers.extend(other.samplers.drain());
-        self.bind_groups.extend(other.bind_groups.drain());
-        self.bind_group_layouts
-            .extend(other.bind_group_layouts.drain());
-        self.render_pipelines.extend(other.render_pipelines.drain());
-        self.compute_pipelines
-            .extend(other.compute_pipelines.drain());
-        self.pipeline_layouts.extend(other.pipeline_layouts.drain());
-        self.render_bundles.extend(other.render_bundles.drain());
-        self.query_sets.extend(other.query_sets.drain());
+        let ResourceMaps {
+            buffers,
+            staging_buffers,
+            textures,
+            texture_views,
+            samplers,
+            bind_groups,
+            bind_group_layouts,
+            render_pipelines,
+            compute_pipelines,
+            pipeline_layouts,
+            render_bundles,
+            query_sets,
+        } = self;
+        buffers.extend(other.buffers.drain());
+        staging_buffers.extend(other.staging_buffers.drain());
+        textures.extend(other.textures.drain());
+        texture_views.extend(other.texture_views.drain());
+        samplers.extend(other.samplers.drain());
+        bind_groups.extend(other.bind_groups.drain());
+        bind_group_layouts.extend(other.bind_group_layouts.drain());
+        render_pipelines.extend(other.render_pipelines.drain());
+        compute_pipelines.extend(other.compute_pipelines.drain());
+        pipeline_layouts.extend(other.pipeline_layouts.drain());
+        render_bundles.extend(other.render_bundles.drain());
+        query_sets.extend(other.query_sets.drain());
     }
 }
 
