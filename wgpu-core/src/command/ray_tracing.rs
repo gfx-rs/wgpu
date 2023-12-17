@@ -296,11 +296,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let mut triangle_entries = Vec::<hal::AccelerationStructureTriangles<A>>::new();
+        let snatch_guard = device.snatchable_lock.read();
         for buf in &mut buf_storage {
             let mesh = &buf.4;
             let vertex_buffer = {
                 let vertex_buffer = buf.0.as_ref();
-                let vertex_raw = vertex_buffer.raw.as_ref().ok_or(
+                let vertex_raw = vertex_buffer.raw.get(&snatch_guard).ok_or(
                     BuildAccelerationStructureError::InvalidBuffer(mesh.vertex_buffer),
                 )?;
                 if !vertex_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
@@ -308,7 +309,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         mesh.vertex_buffer,
                     ));
                 }
-                if let Some(barrier) = buf.1.take().map(|pending| pending.into_hal(vertex_buffer)) {
+                if let Some(barrier) = buf.1.take().map(|pending| pending.into_hal(vertex_buffer, &snatch_guard)) {
                     input_barriers.push(barrier);
                 }
                 if vertex_buffer.size
@@ -336,7 +337,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let index_id = mesh.index_buffer.as_ref().unwrap();
                 let index_raw = index_buffer
                     .raw
-                    .as_ref()
+                    .get(&snatch_guard)
                     .ok_or(BuildAccelerationStructureError::InvalidBuffer(*index_id))?;
                 if !index_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
                     return Err(BuildAccelerationStructureError::MissingBlasInputUsageFlag(
@@ -345,7 +346,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 if let Some(barrier) = index_pending
                     .take()
-                    .map(|pending| pending.into_hal(index_buffer))
+                    .map(|pending| pending.into_hal(index_buffer, &snatch_guard))
                 {
                     input_barriers.push(barrier);
                 }
@@ -405,7 +406,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             *transform_id,
                         ));
                     }
-                    let transform_raw = transform_buffer.raw.as_ref().ok_or(
+                    let transform_raw = transform_buffer.raw.get(&snatch_guard).ok_or(
                         BuildAccelerationStructureError::InvalidBuffer(*transform_id),
                     )?;
                     if !transform_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
@@ -415,7 +416,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     if let Some(barrier) = transform_pending
                         .take()
-                        .map(|pending| pending.into_hal(transform_buffer))
+                        .map(|pending| pending.into_hal(transform_buffer, &snatch_guard))
                     {
                         input_barriers.push(barrier);
                     }
@@ -519,7 +520,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let entry = &tlas_buf.2;
             let instance_buffer = {
                 let (instance_buffer, instance_pending) = (&mut tlas_buf.0, &mut tlas_buf.1);
-                let instance_raw = instance_buffer.raw.as_ref().ok_or(
+                let instance_raw = instance_buffer.raw.get(&snatch_guard).ok_or(
                     BuildAccelerationStructureError::InvalidBuffer(entry.instance_buffer_id),
                 )?;
                 if !instance_buffer.usage.contains(BufferUsages::TLAS_INPUT) {
@@ -529,7 +530,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 if let Some(barrier) = instance_pending
                     .take()
-                    .map(|pending| pending.into_hal(instance_buffer))
+                    .map(|pending| pending.into_hal(instance_buffer, &snatch_guard))
                 {
                     input_barriers.push(barrier);
                 }
@@ -999,11 +1000,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let mut triangle_entries = Vec::<hal::AccelerationStructureTriangles<A>>::new();
+        let snatch_guard = device.snatchable_lock.read();
         for buf in &mut buf_storage {
             let mesh = &buf.4;
             let vertex_buffer = {
                 let vertex_buffer = buf.0.as_ref();
-                let vertex_raw = vertex_buffer.raw.as_ref().ok_or(
+                let vertex_raw = vertex_buffer.raw.get(&snatch_guard).ok_or(
                     BuildAccelerationStructureError::InvalidBuffer(mesh.vertex_buffer),
                 )?;
                 if !vertex_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
@@ -1011,7 +1013,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         mesh.vertex_buffer,
                     ));
                 }
-                if let Some(barrier) = buf.1.take().map(|pending| pending.into_hal(vertex_buffer)) {
+                if let Some(barrier) = buf.1.take().map(|pending| pending.into_hal(vertex_buffer, &snatch_guard)) {
                     input_barriers.push(barrier);
                 }
                 if vertex_buffer.size
@@ -1039,7 +1041,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let index_id = mesh.index_buffer.as_ref().unwrap();
                 let index_raw = index_buffer
                     .raw
-                    .as_ref()
+                    .get(&snatch_guard)
                     .ok_or(BuildAccelerationStructureError::InvalidBuffer(*index_id))?;
                 if !index_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
                     return Err(BuildAccelerationStructureError::MissingBlasInputUsageFlag(
@@ -1048,7 +1050,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 if let Some(barrier) = index_pending
                     .take()
-                    .map(|pending| pending.into_hal(index_buffer))
+                    .map(|pending| pending.into_hal(index_buffer, &snatch_guard))
                 {
                     input_barriers.push(barrier);
                 }
@@ -1108,7 +1110,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             *transform_id,
                         ));
                     }
-                    let transform_raw = transform_buffer.raw.as_ref().ok_or(
+                    let transform_raw = transform_buffer.raw.get(&snatch_guard).ok_or(
                         BuildAccelerationStructureError::InvalidBuffer(*transform_id),
                     )?;
                     if !transform_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
@@ -1118,7 +1120,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     if let Some(barrier) = transform_pending
                         .take()
-                        .map(|pending| pending.into_hal(transform_buffer))
+                        .map(|pending| pending.into_hal(transform_buffer, &snatch_guard))
                     {
                         input_barriers.push(barrier);
                     }
