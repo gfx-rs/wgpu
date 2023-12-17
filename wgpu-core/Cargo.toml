@@ -64,10 +64,11 @@ wgsl = ["naga/wgsl-in"]
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
 ## WebGL/WebGPU objects can not be shared between threads.
-## However, it can be useful to artificially enforce `Send` and `Sync`
+## However, it can be useful to artificially mark them as `Send` and `Sync`
 ## anyways to make it easier to write cross-platform code.
-## This is technically *very* unsafe, but as long as objects can not be shared
-## with another thread it's fine, thus the restriction on having atomics disabled.
+## This is technically *very* unsafe in a multithreaded environment,
+## but on a wasm binary compiled without atomics we know we are definitely
+## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
     "hal/fragile-send-sync-non-atomic-wasm",
     "wgt/fragile-send-sync-non-atomic-wasm",
@@ -84,7 +85,7 @@ vulkan = ["hal/vulkan"]
 
 ## Enable the `GLES` backend.
 ##
-## This is used for all of GLES, OpenGL and WebGL.
+## This is used for all of GLES, OpenGL, and WebGL.
 gles = ["hal/gles"]
 
 ## Enable the `dx12` backend.

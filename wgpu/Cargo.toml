@@ -38,7 +38,7 @@ dx12 = ["wgc?/dx12"]
 ## Enables the Metal backend on macOS & iOS.
 metal = ["wgc?/metal"]
 
-## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on Windows & macOS using.
+## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
 angle = ["wgc?/gles"]
 
 ## Enables the Vulkan backend on macOS & iOS.
@@ -47,12 +47,11 @@ vulkan-portability = ["wgc?/vulkan"]
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-## * ⚠️ WIP: This automatically disables the WebGPU feature. See [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
+## * ⚠️ WIP: This automatically disables use of WebGPU. See [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
 webgl = ["hal", "wgc/gles"]
 
 #! ### Shading language support
 # --------------------------------------------------------------------
-#! The following features do not have any effect on the WebGPU backend.
 
 ## Enable accepting SPIR-V shaders as input.
 spirv = ["naga/spv-in"]
@@ -88,10 +87,11 @@ replay = ["serde", "wgc/replay"]
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
 ## WebGL/WebGPU objects can not be shared between threads.
-## However, it can be useful to artificially enforce `Send` and `Sync`
+## However, it can be useful to artificially mark them as `Send` and `Sync`
 ## anyways to make it easier to write cross-platform code.
-## This is technically *very* unsafe, but as long as objects can not be shared
-## with another thread it's fine, thus the restriction on having atomics disabled.
+## This is technically *very* unsafe in a multithreaded environment,
+## but on a wasm binary compiled without atomics we know we are definitely
+## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
     "hal/fragile-send-sync-non-atomic-wasm",
     "wgc/fragile-send-sync-non-atomic-wasm",
