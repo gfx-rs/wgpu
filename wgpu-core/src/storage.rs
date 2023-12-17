@@ -134,7 +134,7 @@ where
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
         let (index, _, _) = id.unzip();
         match self.map.get(index as usize) {
-            Some(&Element::Error(_, ref label)) => label,
+            Some(Element::Error(_, label)) => label,
             _ => "",
         }
     }
