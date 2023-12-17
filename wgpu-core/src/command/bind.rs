@@ -54,11 +54,21 @@ mod compat {
             self.expected.is_none() || !self.is_valid()
         }
 
+        // Describe how bind group layouts are incompatible, for validation
+        // error message.
         fn bgl_diff(&self) -> Vec<String> {
             let mut diff = Vec::new();
 
             if let Some(expected_bgl) = self.expected.as_ref() {
+                diff.push(format!(
+                    "Should be compatible with bind group layout with label = `{}`",
+                    expected_bgl.label()
+                ));
                 if let Some(assigned_bgl) = self.assigned.as_ref() {
+                    diff.push(format!(
+                        "Assigned bind group layout with label = `{}`",
+                        assigned_bgl.label()
+                    ));
                     for (id, e_entry) in &expected_bgl.entries {
                         if let Some(a_entry) = assigned_bgl.entries.get(id) {
                             if a_entry.binding != e_entry.binding {
@@ -100,10 +110,18 @@ mod compat {
                         "Assigned bindgroup layout is implicit, expected explicit".to_owned(),
                     );
                 }
-            } else if let Some(_assigned_bgl) = self.assigned.as_ref() {
+            } else if let Some(assigned_bgl) = self.assigned.as_ref() {
+                diff.push(format!(
+                    "Assigned bind group layout = `{}`",
+                    assigned_bgl.label()
+                ));
                 diff.push(
                     "Assigned bindgroup layout is not implicit, expected implicit".to_owned(),
                 );
+            }
+
+            if diff.is_empty() {
+                diff.push("But no differences found? (internal error)".to_owned())
             }
 
             diff
@@ -183,7 +201,7 @@ mod compat {
                     return e.bgl_diff();
                 }
             }
-            vec![String::from("No differences detected?")]
+            vec![String::from("No differences detected? (internal error)")]
         }
     }
 }
