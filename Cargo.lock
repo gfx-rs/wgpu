@@ -1101,6 +1101,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "document-features"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e493c573fce17f00dcab13b6ac057994f3ce17d1af4dc39bfd482b83c6eb6157"
+dependencies = [
+ "litrs",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1938,6 +1947,12 @@ name = "linux-raw-sys"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "969488b55f8ac402214f3f5fd243ebb7206cf82de60d3172994707a4bcc2b829"
+
+[[package]]
+name = "litrs"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9275e0933cf8bb20f008924c0cb07a0692fe54d8064996520bf998de9eb79aa"
 
 [[package]]
 name = "lock_api"
@@ -3994,6 +4009,7 @@ version = "0.18.0"
 dependencies = [
  "arrayvec 0.7.4",
  "cfg-if",
+ "document-features",
  "js-sys",
  "log",
  "naga",
@@ -4019,6 +4035,7 @@ dependencies = [
  "bit-vec",
  "bitflags 2.4.1",
  "codespan-reporting",
+ "document-features",
  "log",
  "naga",
  "parking_lot",
