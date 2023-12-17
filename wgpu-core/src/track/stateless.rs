@@ -42,7 +42,7 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
         let resources = self.resources.lock();
         resources
             .iter()
-            .map(|&(_, ref resource)| resource.clone())
+            .map(|(_, resource)| resource.clone())
             .collect::<Vec<_>>()
             .into_iter()
     }

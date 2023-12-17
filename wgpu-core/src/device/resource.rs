@@ -3073,7 +3073,7 @@ impl<A: HalApi> Device<A> {
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.iter() {
                 match color_targets.get(*i as usize) {
-                    Some(&Some(ref state)) => {
+                    Some(Some(state)) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
                             |pipeline| {
                                 pipeline::CreateRenderPipelineError::ColorState(
