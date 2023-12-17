@@ -46,7 +46,7 @@ vulkan-portability = ["wgc?/vulkan"]
 
 ## Enables the GLES backend on Wasm
 ##
-## * ⚠️ WIP: Currently will also enable GLES dependencies on any other target).
+## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
 ## * ⚠️ WIP: This automatically disables the WebGPU feature. See [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
 webgl = ["hal", "wgc/gles"]
 
