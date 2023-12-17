@@ -46,15 +46,16 @@ vulkan-portability = ["wgc?/vulkan"]
 
 ## Enables the GLES backend on Wasm
 ##
-## ⚠️ WIP: Currently will also enable GLES dependencies on any other target).
-## ⚠️ WIP: This automatically disables the WebGPU feature. See [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
+## * ⚠️ WIP: Currently will also enable GLES dependencies on any other target).
+## * ⚠️ WIP: This automatically disables the WebGPU feature. See [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
 webgl = ["hal", "wgc/gles"]
 
-#! ### Shading language support.
+#! ### Shading language support
 # --------------------------------------------------------------------
 #! Note that these features are only available when targeting native backends:
-#! * When targeting WebGPU, the shading language is always WGSL.
-#! * When targeting WebGL, the shading language is always GLSL.
+#! * On WebGPU, the shading language is always WGSL.
+#! * On WebGL, the shading language is always GLSL.
+#! <!---->
 
 ## Enable accepting SPIR-V shaders as input.
 spirv = ["naga/spv-in"]
@@ -76,12 +77,10 @@ strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
 api_log_info = ["wgc/api_log_info"]
 
 ## Allow writing of trace capture files.
-##
 ## See [`Adapter::request_device`].
 trace = ["serde", "wgc/trace"]
 
 ## Allow deserializing of trace capture files that were written with the `trace` feature.
-##
 ## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
 replay = ["serde", "wgc/replay"]
 
