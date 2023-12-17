@@ -164,7 +164,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
                     for (i, mesh) in triangle_geometries.enumerate() {
                         let size_desc = match &blas.sizes {
-                            &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => desc,
+                            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => desc,
                         };
                         if i >= size_desc.len() {
                             return Err(
@@ -309,7 +309,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         mesh.vertex_buffer,
                     ));
                 }
-                if let Some(barrier) = buf.1.take().map(|pending| pending.into_hal(vertex_buffer, &snatch_guard)) {
+                if let Some(barrier) = buf
+                    .1
+                    .take()
+                    .map(|pending| pending.into_hal(vertex_buffer, &snatch_guard))
+                {
                     input_barriers.push(barrier);
                 }
                 if vertex_buffer.size
@@ -867,7 +871,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
                     for (i, mesh) in triangle_geometries.enumerate() {
                         let size_desc = match &blas.sizes {
-                            &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => desc,
+                            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => desc,
                         };
                         if i >= size_desc.len() {
                             return Err(
@@ -1013,7 +1017,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         mesh.vertex_buffer,
                     ));
                 }
-                if let Some(barrier) = buf.1.take().map(|pending| pending.into_hal(vertex_buffer, &snatch_guard)) {
+                if let Some(barrier) = buf
+                    .1
+                    .take()
+                    .map(|pending| pending.into_hal(vertex_buffer, &snatch_guard))
+                {
                     input_barriers.push(barrier);
                 }
                 if vertex_buffer.size

@@ -25,7 +25,7 @@ impl<A: HalApi> Device<A> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let size_info = match &sizes {
-            &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => {
+            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => {
                 let mut entries =
                     Vec::<hal::AccelerationStructureTriangles<A>>::with_capacity(desc.len());
                 for x in desc {
