@@ -52,10 +52,7 @@ webgl = ["hal", "wgc/gles"]
 
 #! ### Shading language support
 # --------------------------------------------------------------------
-#! Note that these features are only available when targeting native backends:
-#! * On WebGPU, the shading language is always WGSL.
-#! * On WebGL, the shading language is always GLSL.
-#! <!---->
+#! The following features do not have any effect on the WebGPU backend.
 
 ## Enable accepting SPIR-V shaders as input.
 spirv = ["naga/spv-in"]
@@ -68,6 +65,7 @@ wgsl = ["wgc?/wgsl"]
 
 #! ### Logging & Tracing
 # --------------------------------------------------------------------
+#! The following features do not have any effect on the WebGPU backend.
 
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
