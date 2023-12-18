@@ -318,10 +318,10 @@ impl RenderBundleEncoder {
                     next_dynamic_offset = offsets_range.end;
                     let offsets = &base.dynamic_offsets[offsets_range.clone()];
 
-                    if bind_group.dynamic_binding_info.read().len() != offsets.len() {
+                    if bind_group.dynamic_binding_info.len() != offsets.len() {
                         return Err(RenderCommandError::InvalidDynamicOffsetCount {
                             actual: offsets.len(),
-                            expected: bind_group.dynamic_binding_info.read().len(),
+                            expected: bind_group.dynamic_binding_info.len(),
                         })
                         .map_pass_err(scope);
                     }
@@ -330,7 +330,7 @@ impl RenderBundleEncoder {
                     for (offset, info) in offsets
                         .iter()
                         .map(|offset| *offset as wgt::BufferAddress)
-                        .zip(bind_group.dynamic_binding_info.read().iter())
+                        .zip(bind_group.dynamic_binding_info.iter())
                     {
                         let (alignment, limit_name) =
                             buffer_binding_type_alignment(&device.limits, info.binding_type);
@@ -342,8 +342,8 @@ impl RenderBundleEncoder {
                         }
                     }
 
-                    buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges.read());
-                    texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges.read());
+                    buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
+                    texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges);
 
                     state.set_bind_group(index, bind_group_guard.get(bind_group_id).as_ref().unwrap(), &bind_group.layout, offsets_range);
                     unsafe {

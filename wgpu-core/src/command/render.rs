@@ -1462,19 +1462,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // is held to the bind group itself.
 
                         buffer_memory_init_actions.extend(
-                            bind_group
-                                .used_buffer_ranges
-                                .read()
-                                .iter()
-                                .filter_map(|action| {
-                                    action
-                                        .buffer
-                                        .initialization_status
-                                        .read()
-                                        .check_action(action)
-                                }),
+                            bind_group.used_buffer_ranges.iter().filter_map(|action| {
+                                action
+                                    .buffer
+                                    .initialization_status
+                                    .read()
+                                    .check_action(action)
+                            }),
                         );
-                        for action in bind_group.used_texture_ranges.read().iter() {
+                        for action in bind_group.used_texture_ranges.iter() {
                             info.pending_discard_init_fixups
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
