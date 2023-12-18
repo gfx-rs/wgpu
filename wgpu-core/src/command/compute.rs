@@ -173,12 +173,8 @@ pub struct ComputePassDescriptor<'a> {
 pub enum DispatchError {
     #[error("Compute pipeline must be set")]
     MissingPipeline,
-    #[error("The pipeline layout, associated with the current compute pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
-    IncompatibleBindGroup {
-        index: u32,
-        //expected: BindGroupLayoutId,
-        //provided: Option<(BindGroupLayoutId, BindGroupId)>,
-    },
+    #[error("Incompatible bind group at index {index} in the current compute pipeline")]
+    IncompatibleBindGroup { index: u32, diff: Vec<String> },
     #[error(
         "Each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
     )]
@@ -245,6 +241,11 @@ impl PrettyError for ComputePassErrorInner {
             Self::InvalidIndirectBuffer(id) => {
                 fmt.buffer_label(&id);
             }
+            Self::Dispatch(DispatchError::IncompatibleBindGroup { ref diff, .. }) => {
+                for d in diff {
+                    fmt.note(&d);
+                }
+            }
             _ => {}
         };
     }
@@ -291,8 +292,11 @@ impl<A: HalApi> State<A> {
         let bind_mask = self.binder.invalid_mask();
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
+            let index = bind_mask.trailing_zeros();
+
             return Err(DispatchError::IncompatibleBindGroup {
-                index: bind_mask.trailing_zeros(),
+                index,
+                diff: self.binder.bgl_diff(),
             });
         }
         if self.pipeline.is_none() {

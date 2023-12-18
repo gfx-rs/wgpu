@@ -1103,20 +1103,32 @@ impl crate::context::Context for Context {
         _display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let canvas_attribute = match window_handle {
-            raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
+        let canvas_element: web_sys::HtmlCanvasElement = match window_handle {
+            raw_window_handle::RawWindowHandle::Web(handle) => {
+                let canvas_node: wasm_bindgen::JsValue = web_sys::window()
+                    .and_then(|win| win.document())
+                    .and_then(|doc| {
+                        doc.query_selector_all(&format!("[data-raw-handle=\"{}\"]", handle.id))
+                            .ok()
+                    })
+                    .and_then(|nodes| nodes.get(0))
+                    .expect("expected to find single canvas")
+                    .into();
+                canvas_node.into()
+            }
+            raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
+                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                value.clone().unchecked_into()
+            }
+            raw_window_handle::RawWindowHandle::WebOffscreenCanvas(handle) => {
+                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                let canvas: web_sys::OffscreenCanvas = value.clone().unchecked_into();
+
+                return self.instance_create_surface_from_offscreen_canvas(canvas);
+            }
             _ => panic!("expected valid handle for canvas"),
         };
-        let canvas_node: wasm_bindgen::JsValue = web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                doc.query_selector_all(&format!("[data-raw-handle=\"{canvas_attribute}\"]"))
-                    .ok()
-            })
-            .and_then(|nodes| nodes.get(0))
-            .expect("expected to find single canvas")
-            .into();
-        let canvas_element: web_sys::HtmlCanvasElement = canvas_node.into();
+
         self.instance_create_surface_from_canvas(canvas_element)
     }
 
