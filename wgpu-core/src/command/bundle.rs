@@ -820,7 +820,10 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
+                    let buffer: &A::Buffer = buffers.get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -835,7 +838,10 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
+                    let buffer = buffers.get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -914,7 +920,10 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: false,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
+                    let buffer = buffers.get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     unsafe { raw.draw_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -924,7 +933,10 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: true,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw(&snatch_guard);
+                    let buffer = buffers.get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect { .. }
