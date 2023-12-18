@@ -188,8 +188,8 @@ pub enum DispatchError {
 pub enum ComputePassErrorInner {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
-    #[error("Bind group {0:?} is invalid")]
-    InvalidBindGroup(id::BindGroupId),
+    #[error("Bind group at index {0:?} is invalid")]
+    InvalidBindGroup(usize),
     #[error("Device {0:?} is invalid")]
     InvalidDevice(DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
@@ -232,9 +232,6 @@ impl PrettyError for ComputePassErrorInner {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
         match *self {
-            Self::InvalidBindGroup(id) => {
-                fmt.bind_group_label(&id);
-            }
             Self::InvalidPipeline(id) => {
                 fmt.compute_pipeline_label(&id);
             }
@@ -520,7 +517,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let bind_group = tracker
                         .bind_groups
                         .add_single(&*bind_group_guard, bind_group_id)
-                        .ok_or(ComputePassErrorInner::InvalidBindGroup(bind_group_id))
+                        .ok_or(ComputePassErrorInner::InvalidBindGroup(index as usize))
                         .map_pass_err(scope)?;
                     bind_group
                         .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
@@ -552,9 +549,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             if let Some(group) = e.group.as_ref() {
                                 let raw_bg = group
                                     .raw(&snatch_guard)
-                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(
-                                        group.as_info().id(),
-                                    ))
+                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(i))
                                     .map_pass_err(scope)?;
                                 unsafe {
                                     raw.set_bind_group(
@@ -601,9 +596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 if let Some(group) = e.group.as_ref() {
                                     let raw_bg = group
                                         .raw(&snatch_guard)
-                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(
-                                            group.as_info().id(),
-                                        ))
+                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(i))
                                         .map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(
