@@ -427,9 +427,18 @@ impl<A: HalApi> Buffer<A> {
         self.raw.get(guard).unwrap()
     }
 
-    pub(crate) fn buffer_unmap_inner(
-        self: &Arc<Self>,
-    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    // Note: This must not be called while holding a lock.
+    pub(crate) fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        if let Some((mut operation, status)) = self.unmap_inner()? {
+            if let Some(callback) = operation.callback.take() {
+                callback.call(status);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         use hal::Device;
 
         let device = &self.device;
@@ -537,43 +546,30 @@ impl<A: HalApi> Buffer<A> {
     }
 
     pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
-        let map_closure;
-        // Restrict the locks to this scope.
-        {
-            let device = &self.device;
-            let buffer_id = self.info.id();
+        let device = &self.device;
+        let buffer_id = self.info.id();
 
-            map_closure = self.buffer_unmap_inner().unwrap_or(None);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::FreeBuffer(buffer_id));
-            }
-            // Note: a future commit will replace this with a read guard
-            // and actually snatch the buffer.
-            let snatch_guard = device.snatchable_lock.read();
-            if self.raw.get(&snatch_guard).is_none() {
-                return Err(resource::DestroyError::AlreadyDestroyed);
-            }
-
-            let temp = queue::TempResource::Buffer(self.clone());
-            let mut pending_writes = device.pending_writes.lock();
-            let pending_writes = pending_writes.as_mut().unwrap();
-            if pending_writes.dst_buffers.contains_key(&buffer_id) {
-                pending_writes.temp_resources.push(temp);
-            } else {
-                let last_submit_index = self.info.submission_index();
-                device
-                    .lock_life()
-                    .schedule_resource_destruction(temp, last_submit_index);
-            }
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::FreeBuffer(buffer_id));
+        }
+        // Note: a future commit will replace this with a read guard
+        // and actually snatch the buffer.
+        let snatch_guard = device.snatchable_lock.read();
+        if self.raw.get(&snatch_guard).is_none() {
+            return Err(resource::DestroyError::AlreadyDestroyed);
         }
 
-        // Note: outside the scope where locks are held when calling the callback
-        if let Some((mut operation, status)) = map_closure {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(status);
-            }
+        let temp = queue::TempResource::Buffer(self.clone());
+        let mut pending_writes = device.pending_writes.lock();
+        let pending_writes = pending_writes.as_mut().unwrap();
+        if pending_writes.dst_buffers.contains_key(&buffer_id) {
+            pending_writes.temp_resources.push(temp);
+        } else {
+            let last_submit_index = self.info.submission_index();
+            device
+                .lock_life()
+                .schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())

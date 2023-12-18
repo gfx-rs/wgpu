@@ -486,10 +486,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let mut buffer_guard = hub.buffers.write();
-        let buffer = buffer_guard
-            .get_and_mark_destroyed(buffer_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+        let buffer = {
+            let mut buffer_guard = hub.buffers.write();
+            buffer_guard
+                .get_and_mark_destroyed(buffer_id)
+                .map_err(|_| resource::DestroyError::Invalid)?
+        };
+
+        let _ = buffer.unmap();
+
         buffer.destroy()
     }
 
@@ -499,37 +504,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        if let Some(buffer) = hub.buffers.unregister(buffer_id) {
-            if buffer.ref_count() == 1 {
-                buffer.destroy().ok();
+        let buffer = match hub.buffers.unregister(buffer_id) {
+            Some(buffer) => buffer,
+            None => {
+                return;
             }
+        };
 
-            let last_submit_index = buffer.info.submission_index();
+        let _ = buffer.unmap();
 
-            let device = buffer.device.clone();
+        let last_submit_index = buffer.info.submission_index();
 
-            if device
-                .pending_writes
-                .lock()
-                .as_ref()
-                .unwrap()
-                .dst_buffers
-                .contains_key(&buffer_id)
-            {
-                device.lock_life().future_suspected_buffers.push(buffer);
-            } else {
-                device
-                    .lock_life()
-                    .suspected_resources
-                    .buffers
-                    .insert(buffer_id, buffer);
-            }
+        let device = buffer.device.clone();
 
-            if wait {
-                match device.wait_for_submit(last_submit_index) {
-                    Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
-                }
+        if device
+            .pending_writes
+            .lock()
+            .as_ref()
+            .unwrap()
+            .dst_buffers
+            .contains_key(&buffer_id)
+        {
+            device.lock_life().future_suspected_buffers.push(buffer);
+        } else {
+            device
+                .lock_life()
+                .suspected_resources
+                .buffers
+                .insert(buffer_id, buffer);
+        }
+
+        if wait {
+            match device.wait_for_submit(last_submit_index) {
+                Ok(()) => (),
+                Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
             }
         }
     }
@@ -2503,27 +2511,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {buffer_id:?}");
 
-        let closure;
-        {
-            // Restrict the locks to this scope.
-            let hub = A::hub(self);
+        let hub = A::hub(self);
 
-            let buffer = hub
-                .buffers
-                .get(buffer_id)
-                .map_err(|_| BufferAccessError::Invalid)?;
-            if !buffer.device.is_valid() {
-                return Err(DeviceError::Lost.into());
-            }
-            closure = buffer.buffer_unmap_inner()
+        let buffer = hub
+            .buffers
+            .get(buffer_id)
+            .map_err(|_| BufferAccessError::Invalid)?;
+
+        if !buffer.device.is_valid() {
+            return Err(DeviceError::Lost.into());
         }
 
-        // Note: outside the scope where locks are held when calling the callback
-        if let Some((mut operation, status)) = closure? {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(status);
-            }
-        }
-        Ok(())
+        buffer.unmap()
     }
 }
