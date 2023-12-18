@@ -229,11 +229,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 let snatch_guard = device.snatchable_lock.read();
                 let stage_raw = stage.raw(&snatch_guard).unwrap();
-                let mapping = match unsafe {
-                    device
-                        .raw()
-                        .map_buffer(stage_raw, 0..stage.size)
-                } {
+                let mapping = match unsafe { device.raw().map_buffer(stage_raw, 0..stage.size) } {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         to_destroy.push(buffer);
@@ -402,7 +398,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let raw_buf = buffer.raw(&snatch_guard).ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -452,7 +450,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer.raw(&snatch_guard).ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()

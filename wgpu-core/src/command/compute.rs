@@ -550,8 +550,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
                             if let Some(group) = e.group.as_ref() {
-                                let raw_bg = group.raw(&snatch_guard)
-                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(group.as_info().id()))
+                                let raw_bg = group
+                                    .raw(&snatch_guard)
+                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(
+                                        group.as_info().id(),
+                                    ))
                                     .map_pass_err(scope)?;
                                 unsafe {
                                     raw.set_bind_group(
@@ -596,8 +599,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {
                                 if let Some(group) = e.group.as_ref() {
-                                    let raw_bg = group.raw(&snatch_guard)
-                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(group.as_info().id()))
+                                    let raw_bg = group
+                                        .raw(&snatch_guard)
+                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(
+                                            group.as_info().id(),
+                                        ))
                                         .map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(

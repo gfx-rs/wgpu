@@ -434,7 +434,9 @@ impl<A: HalApi> Buffer<A> {
 
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
-        let raw_buf = self.raw(&snatch_guard).ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = self
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         let buffer_id = self.info.id();
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(&mut *self.map_state.lock(), resource::BufferMapState::Idle) {

@@ -479,7 +479,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
-        let raw_dst_buffer = dst_buffer.raw(&snatch_guard)
+        let raw_dst_buffer = dst_buffer
+            .raw(&snatch_guard)
             .ok_or(QueryError::InvalidBuffer(destination))?;
 
         unsafe {

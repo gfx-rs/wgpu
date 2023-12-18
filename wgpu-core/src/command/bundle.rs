@@ -801,7 +801,9 @@ impl<A: HalApi> RenderBundle<A> {
                 } => {
                     let bind_groups = trackers.bind_groups.read();
                     let bind_group = bind_groups.get(bind_group_id).unwrap();
-                    let raw_bg = bind_group.raw(&snatch_guard).ok_or(ExecutionError::InvalidBindGroup(bind_group_id))?;
+                    let raw_bg = bind_group
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::InvalidBindGroup(bind_group_id))?;
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
@@ -826,7 +828,8 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer: &A::Buffer = buffers.get(buffer_id)
+                    let buffer: &A::Buffer = buffers
+                        .get(buffer_id)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
                         .raw(&snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
@@ -844,7 +847,8 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id)
+                    let buffer = buffers
+                        .get(buffer_id)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
                         .raw(&snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
@@ -926,7 +930,8 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: false,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id)
+                    let buffer = buffers
+                        .get(buffer_id)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
                         .raw(&snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
@@ -939,7 +944,8 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: true,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id)
+                    let buffer = buffers
+                        .get(buffer_id)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
                         .raw(&snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
