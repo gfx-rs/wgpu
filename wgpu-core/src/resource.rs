@@ -94,15 +94,19 @@ impl<Id: TypedId> ResourceInfo<Id> {
         }
     }
 
-    pub(crate) fn label(&self) -> String
+    pub(crate) fn label(&self) -> &dyn Debug
     where
         Id: Debug,
     {
-        if let Some(id) = self.id.as_ref() {
-            format!("[{}] {:?}", self.label, id)
-        } else {
-            format!("[{}]", self.label)
+        if !self.label.is_empty() {
+            return &self.label;
         }
+
+        if let Some(id) = &self.id {
+            return id;
+        }
+
+        &""
     }
 
     pub(crate) fn id(&self) -> Id {
@@ -409,7 +413,7 @@ pub struct Buffer<A: HalApi> {
 impl<A: HalApi> Drop for Buffer<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw Buffer {}", self.info.label());
+            resource_log!("Destroy raw Buffer {:?}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -638,7 +642,7 @@ pub struct StagingBuffer<A: HalApi> {
 impl<A: HalApi> Drop for StagingBuffer<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.lock().take() {
-            resource_log!("Destroy raw StagingBuffer {}", self.info.label());
+            resource_log!("Destroy raw StagingBuffer {:?}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -720,7 +724,7 @@ pub struct Texture<A: HalApi> {
 
 impl<A: HalApi> Drop for Texture<A> {
     fn drop(&mut self) {
-        resource_log!("Destroy raw Texture {}", self.info.label());
+        resource_log!("Destroy raw Texture {:?}", self.info.label());
         use hal::Device;
         let mut clear_mode = self.clear_mode.write();
         let clear_mode = &mut *clear_mode;
@@ -1052,7 +1056,7 @@ pub struct TextureView<A: HalApi> {
 impl<A: HalApi> Drop for TextureView<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw TextureView {}", self.info.label());
+            resource_log!("Destroy raw TextureView {:?}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_texture_view(raw);
@@ -1173,7 +1177,7 @@ pub struct Sampler<A: HalApi> {
 
 impl<A: HalApi> Drop for Sampler<A> {
     fn drop(&mut self) {
-        resource_log!("Destroy raw Sampler {}", self.info.label());
+        resource_log!("Destroy raw Sampler {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
@@ -1270,7 +1274,7 @@ pub struct QuerySet<A: HalApi> {
 
 impl<A: HalApi> Drop for QuerySet<A> {
     fn drop(&mut self) {
-        resource_log!("Destroy raw QuerySet {}", self.info.label());
+        resource_log!("Destroy raw QuerySet {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
