@@ -712,6 +712,8 @@ pub enum CreateRenderBundleError {
 pub enum ExecutionError {
     #[error("Buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
+    #[error("BindGroup {0:?} is invalid")]
+    InvalidBindGroup(id::BindGroupId),
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
 }
@@ -721,6 +723,9 @@ impl PrettyError for ExecutionError {
         match *self {
             Self::DestroyedBuffer(id) => {
                 fmt.buffer_label(&id);
+            }
+            Self::InvalidBindGroup(id) => {
+                fmt.bind_group_label(&id);
             }
             Self::Unimplemented(_reason) => {}
         };
@@ -796,11 +801,12 @@ impl<A: HalApi> RenderBundle<A> {
                 } => {
                     let bind_groups = trackers.bind_groups.read();
                     let bind_group = bind_groups.get(bind_group_id).unwrap();
+                    let raw_bg = bind_group.raw(&snatch_guard).ok_or(ExecutionError::InvalidBindGroup(bind_group_id))?;
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
                             index,
-                            bind_group.raw(),
+                            raw_bg,
                             &offsets[..num_dynamic_offsets as usize],
                         )
                     };
