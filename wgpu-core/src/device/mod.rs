@@ -211,7 +211,7 @@ impl UserClosures {
         not(target_feature = "atomics")
     )
 ))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
 #[cfg(not(any(
     not(target_arch = "wasm32"),
     all(
@@ -219,13 +219,26 @@ pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 
         not(target_feature = "atomics")
     )
 )))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
+
+pub struct DeviceLostClosureRust {
+    pub callback: DeviceLostCallback,
+    called: bool,
+}
+
+impl Drop for DeviceLostClosureRust {
+    fn drop(&mut self) {
+        if !self.called {
+            panic!("DeviceLostClosureRust must be called before it is dropped.");
+        }
+    }
+}
 
 #[repr(C)]
 pub struct DeviceLostClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
     pub user_data: *mut u8,
-    pub called: bool,
+    called: bool,
 }
 
 #[cfg(any(
@@ -239,18 +252,8 @@ unsafe impl Send for DeviceLostClosureC {}
 
 impl Drop for DeviceLostClosureC {
     fn drop(&mut self) {
-        unsafe {
-            if !self.called {
-                self.called = true;
-                // Invoke the closure with reason Destroyed so embedder can recover
-                // the memory.
-                let message = std::ffi::CString::new("Dropped").unwrap();
-                (self.callback)(
-                    self.user_data,
-                    DeviceLostReason::Destroyed as u8,
-                    message.as_ptr(),
-                )
-            }
+        if !self.called {
+            panic!("DeviceLostClosureC must be called before it is dropped.");
         }
     }
 }
@@ -268,14 +271,18 @@ pub struct DeviceLostInvocation {
 }
 
 enum DeviceLostClosureInner {
-    Rust { callback: DeviceLostCallback },
+    Rust { inner: DeviceLostClosureRust },
     C { inner: DeviceLostClosureC },
 }
 
 impl DeviceLostClosure {
     pub fn from_rust(callback: DeviceLostCallback) -> Self {
+        let inner = DeviceLostClosureRust {
+            callback,
+            called: false,
+        };
         Self {
-            inner: DeviceLostClosureInner::Rust { callback },
+            inner: DeviceLostClosureInner::Rust { inner },
         }
     }
 
@@ -301,16 +308,25 @@ impl DeviceLostClosure {
 
     pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
         match self.inner {
-            DeviceLostClosureInner::Rust { callback } => callback(reason, message),
+            DeviceLostClosureInner::Rust { mut inner } => {
+                if inner.called {
+                    panic!("DeviceLostClosureRust must only be called once.");
+                }
+                inner.called = true;
+
+                (inner.callback)(reason, message)
+            }
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
             DeviceLostClosureInner::C { mut inner } => unsafe {
-                if !inner.called {
-                    inner.called = true;
-                    // Ensure message is structured as a null-terminated C string. It only
-                    // needs to live as long as the callback invocation.
-                    let message = std::ffi::CString::new(message).unwrap();
-                    (inner.callback)(inner.user_data, reason as u8, message.as_ptr())
+                if inner.called {
+                    panic!("DeviceLostClosureC must only be called once.");
                 }
+                inner.called = true;
+
+                // Ensure message is structured as a null-terminated C string. It only
+                // needs to live as long as the callback invocation.
+                let message = std::ffi::CString::new(message).unwrap();
+                (inner.callback)(inner.user_data, reason as u8, message.as_ptr())
             },
         }
     }
