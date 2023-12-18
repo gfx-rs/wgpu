@@ -20,6 +20,8 @@ use crate::{
 };
 use smallvec::SmallVec;
 
+use crate::id::{BlasId, TlasId};
+use crate::resource::{Blas, Tlas};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use thiserror::Error;
@@ -39,6 +41,8 @@ pub(crate) struct ResourceMaps<A: HalApi> {
     pub pipeline_layouts: FastHashMap<PipelineLayoutId, Arc<PipelineLayout<A>>>,
     pub render_bundles: FastHashMap<RenderBundleId, Arc<RenderBundle<A>>>,
     pub query_sets: FastHashMap<QuerySetId, Arc<QuerySet<A>>>,
+    pub blas_s: FastHashMap<BlasId, Arc<Blas<A>>>,
+    pub tlas_s: FastHashMap<TlasId, Arc<Tlas<A>>>,
 }
 
 impl<A: HalApi> ResourceMaps<A> {
@@ -56,6 +60,8 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts: FastHashMap::default(),
             render_bundles: FastHashMap::default(),
             query_sets: FastHashMap::default(),
+            blas_s: FastHashMap::default(),
+            tlas_s: FastHashMap::default(),
         }
     }
 
@@ -73,6 +79,8 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts,
             render_bundles,
             query_sets,
+            tlas_s,
+            blas_s,
         } = self;
         buffers.clear();
         staging_buffers.clear();
@@ -86,6 +94,8 @@ impl<A: HalApi> ResourceMaps<A> {
         pipeline_layouts.clear();
         render_bundles.clear();
         query_sets.clear();
+        blas_s.clear();
+        tlas_s.clear();
     }
 
     pub(crate) fn extend(&mut self, mut other: Self) {
@@ -102,6 +112,8 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts,
             render_bundles,
             query_sets,
+            tlas_s,
+            blas_s,
         } = self;
         buffers.extend(other.buffers.drain());
         staging_buffers.extend(other.staging_buffers.drain());
@@ -115,6 +127,8 @@ impl<A: HalApi> ResourceMaps<A> {
         pipeline_layouts.extend(other.pipeline_layouts.drain());
         render_bundles.extend(other.render_bundles.drain());
         query_sets.extend(other.query_sets.drain());
+        tlas_s.extend(other.tlas_s.drain());
+        blas_s.extend(other.blas_s.drain());
     }
 }
 
@@ -285,10 +299,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                     last_resources.textures.insert(raw.as_info().id(), raw);
                 }
                 TempResource::Tlas(raw) => {
-                    last_resources.insert(raw.as_info().id(), raw);
+                    last_resources.tlas_s.insert(raw.as_info().id(), raw);
                 }
                 TempResource::Blas(raw) => {
-                    last_resources.insert(raw.as_info().id(), raw);
+                    last_resources.blas_s.insert(raw.as_info().id(), raw);
                 }
             }
         }
@@ -394,10 +408,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                 resources.textures.insert(raw.as_info().id(), raw);
             }
             TempResource::Tlas(raw) => {
-                resources.insert(raw.as_info().id(), raw);
+                resources.tlas_s.insert(raw.as_info().id(), raw);
             }
             TempResource::Blas(raw) => {
-                resources.insert(raw.as_info().id(), raw);
+                resources.blas_s.insert(raw.as_info().id(), raw);
             }
         }
     }
@@ -537,7 +551,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     .insert(v.as_info().id(), v);
             }
             for v in bind_group.used.acceleration_structures.drain_resources() {
-                self.suspected_resources.insert(v.as_info().id(), v);
+                self.suspected_resources.tlas_s.insert(v.as_info().id(), v);
             }
             //Releasing safely unused resources to decrement refcount
             bind_group.used_buffer_ranges.write().clear();
@@ -773,12 +787,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
         let mut trackers = trackers.lock();
-        let resource_map = self.suspected_resources.map_mut();
+        let resource_map = &mut self.suspected_resources.blas_s;
         let _ = Self::triage_resources(
             resource_map,
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.blas_s,
+            |maps| &mut maps.blas_s,
             |_blas_id, _blas| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -795,12 +810,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
         let mut trackers = trackers.lock();
-        let resource_map = self.suspected_resources.map_mut();
+        let resource_map = &mut self.suspected_resources.tlas_s;
         let _ = Self::triage_resources(
             resource_map,
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.tlas_s,
+            |maps| &mut maps.tlas_s,
             |_tlas_id, _tlas| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {

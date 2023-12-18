@@ -292,6 +292,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             blas.device
                 .lock_life()
                 .suspected_resources
+                .blas_s
                 .insert(blas_id, blas.clone());
 
             if wait {
@@ -370,6 +371,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             tlas.device
                 .lock_life()
                 .suspected_resources
+                .tlas_s
                 .insert(tlas_id, tlas.clone());
 
             if wait {

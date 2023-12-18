@@ -470,12 +470,16 @@ impl<A: HalApi> Device<A> {
             }
             for resource in trackers.blas_s.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .blas_s
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.tlas_s.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.insert(resource.as_info().id(), resource.clone());
+                    temp_suspected
+                        .tlas_s
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
         }

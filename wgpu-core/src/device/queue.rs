@@ -1361,6 +1361,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .blas_s
                                         .insert(blas.as_info().id(), blas.clone());
                                 }
                             }
@@ -1370,6 +1371,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .tlas_s
                                         .insert(tlas.as_info().id(), tlas.clone());
                                 }
                             }
