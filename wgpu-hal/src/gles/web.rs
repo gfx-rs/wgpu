@@ -1,6 +1,6 @@
 use glow::HasContext;
 use parking_lot::{Mutex, RwLock};
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, JsValue};
 
 use super::TextureFormatDesc;
 
@@ -55,7 +55,7 @@ impl Instance {
     fn create_surface_from_context(
         &self,
         canvas: Canvas,
-        context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
+        context_result: Result<Option<js_sys::Object>, JsValue>,
     ) -> Result<Surface, crate::InstanceError> {
         let context_object: js_sys::Object = match context_result {
             Ok(Some(context)) => context,
@@ -147,22 +147,33 @@ impl crate::Instance<super::Api> for Instance {
         _display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        if let raw_window_handle::RawWindowHandle::Web(handle) = window_handle {
-            let canvas: web_sys::HtmlCanvasElement = web_sys::window()
+        let canvas: web_sys::HtmlCanvasElement = match window_handle {
+            raw_window_handle::RawWindowHandle::Web(handle) => web_sys::window()
                 .and_then(|win| win.document())
                 .expect("Cannot get document")
                 .query_selector(&format!("canvas[data-raw-handle=\"{}\"]", handle.id))
                 .expect("Cannot query for canvas")
                 .expect("Canvas is not found")
                 .dyn_into()
-                .expect("Failed to downcast to canvas type");
+                .expect("Failed to downcast to canvas type"),
+            raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
+                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                value.clone().unchecked_into()
+            }
+            raw_window_handle::RawWindowHandle::WebOffscreenCanvas(handle) => {
+                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                let canvas: web_sys::OffscreenCanvas = value.clone().unchecked_into();
 
-            self.create_surface_from_canvas(canvas)
-        } else {
-            Err(crate::InstanceError::new(format!(
-                "window handle {window_handle:?} is not a web handle"
-            )))
-        }
+                return self.create_surface_from_offscreen_canvas(canvas);
+            }
+            _ => {
+                return Err(crate::InstanceError::new(format!(
+                    "window handle {window_handle:?} is not a web handle"
+                )))
+            }
+        };
+
+        self.create_surface_from_canvas(canvas)
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
