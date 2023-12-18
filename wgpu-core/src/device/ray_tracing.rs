@@ -237,7 +237,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(tlas);
-            log::info!("Created blas {:?} with {:?}", id.0, desc);
+            log::info!("Created tlas {:?} with {:?}", id.0, desc);
 
             device.trackers.lock().tlas_s.insert_single(id.0, id.1);
 
