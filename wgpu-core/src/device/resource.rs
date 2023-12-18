@@ -143,7 +143,7 @@ impl<A: HalApi> std::fmt::Debug for Device<A> {
 
 impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
-        resource_log!("Destroy raw Device {}", self.info.label());
+        resource_log!("Destroy raw Device {:?}", self.info.label());
         let raw = self.raw.take().unwrap();
         let pending_writes = self.pending_writes.lock().take().unwrap();
         pending_writes.dispose(&raw);
