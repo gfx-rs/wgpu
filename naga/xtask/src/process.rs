@@ -35,13 +35,15 @@ impl EasyCommand {
     pub fn success(&mut self) -> anyhow::Result<()> {
         let Self { inner } = self;
         log::debug!("running {inner:?}");
-        let status = inner
-            .status()
+        let output = inner
+            .output()
             .with_context(|| format!("failed to run {self}"))?;
         ensure!(
-            status.success(),
-            "{self} failed to run; exit code: {:?}",
-            status.code()
+            output.status.success(),
+            "{self} failed to run; exit code: {:?}\nstdout:\n{}\nstderr:\n{}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
         );
         Ok(())
     }
