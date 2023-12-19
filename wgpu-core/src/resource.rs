@@ -855,6 +855,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     /// # Safety
+    ///
+    /// - The raw fence handle must not be manually destroyed
+    pub unsafe fn device_fence_as_hal<A: HalApi, F: FnOnce(Option<&A::Fence>) -> R, R>(
+        &self,
+        id: DeviceId,
+        hal_fence_callback: F,
+    ) -> R {
+        profiling::scope!("Device::fence_as_hal");
+
+        let hub = A::hub(self);
+        let device = hub.devices.try_get(id).ok().flatten();
+        let hal_fence = device.as_ref().map(|device| device.fence.read());
+
+        hal_fence_callback(hal_fence.as_deref().unwrap().as_ref())
+    }
+
+    /// # Safety
     /// - The raw surface handle must not be manually destroyed
     pub unsafe fn surface_as_hal<A: HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
         &self,
