@@ -524,10 +524,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                     .samplers
                     .insert(v.as_info().id(), v);
             }
-            //Releasing safely unused resources to decrement refcount
-            bind_group.used_buffer_ranges.write().clear();
-            bind_group.used_texture_ranges.write().clear();
-            bind_group.dynamic_binding_info.write().clear();
 
             self.suspected_resources
                 .bind_group_layouts
