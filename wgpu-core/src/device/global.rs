@@ -1991,7 +1991,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                let num_frames = present::DESIRED_NUM_FRAMES
+                let num_frames = config
+                    .desired_swap_chain_size
                     .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
                 let mut hal_config = hal::SurfaceConfiguration {
                     swap_chain_size: num_frames,

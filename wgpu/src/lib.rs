@@ -5057,6 +5057,7 @@ impl Surface<'_> {
             format: *caps.formats.get(0)?,
             width,
             height,
+            desired_swap_chain_size: 3,
             present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
             view_formats: vec![],

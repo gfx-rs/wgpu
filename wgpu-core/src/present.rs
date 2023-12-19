@@ -36,7 +36,6 @@ use thiserror::Error;
 use wgt::SurfaceStatus as Status;
 
 const FRAME_TIMEOUT_MS: u32 = 1000;
-pub const DESIRED_NUM_FRAMES: u32 = 3;
 
 #[derive(Debug)]
 pub(crate) struct Presentation {

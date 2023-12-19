@@ -5107,6 +5107,15 @@ pub struct SurfaceConfiguration<V> {
     /// AutoNoVsync will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
+    /// Desired number of buffers in the swap chain.
+    ///
+    /// Defaults to 3 when created via [`Surface::get_default_config`].
+    ///
+    /// Recommended to use 3 (or higher) for high throughput, 2 for low latency.
+    /// This is a hint to the backend implementation and will be clamped to the supported range.
+    /// A number of one (which is rarely supported) would means that CPU and GPU will be fighting over the same texture,
+    /// this never executing work in parallel.
+    pub desired_swap_chain_size: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
     /// Specifies what view formats will be allowed when calling create_view() on texture returned by get_current_texture().
@@ -5126,6 +5135,7 @@ impl<V: Clone> SurfaceConfiguration<V> {
             width: self.width,
             height: self.height,
             present_mode: self.present_mode,
+            desired_swap_chain_size: self.desired_swap_chain_size,
             alpha_mode: self.alpha_mode,
             view_formats: fun(self.view_formats.clone()),
         }
