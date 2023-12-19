@@ -571,6 +571,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                         format,
                         width: params.width,
                         height: params.height,
+                        desired_swap_chain_size: 3,
                         present_mode: wgpu::PresentMode::Fifo,
                         alpha_mode: wgpu::CompositeAlphaMode::Auto,
                         view_formats: vec![format],
