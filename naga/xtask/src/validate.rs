@@ -13,15 +13,37 @@ use crate::{
     process::{which, EasyCommand},
 };
 
+type Job = Box<dyn FnOnce() -> anyhow::Result<()> + Send + std::panic::UnwindSafe + 'static>;
+
 pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
     let mut jobs = vec![];
     collect_validation_jobs(&mut jobs, cmd)?;
 
     let progress_bar = indicatif::ProgressBar::new(jobs.len() as u64);
 
+    let (tx_results, rx_results) = std::sync::mpsc::channel();
+    let enqueuing_thread = std::thread::spawn(move || -> anyhow::Result<()> {
+        for job in jobs {
+            let tx_results = tx_results.clone();
+            crate::jobserver::start_job_thread(move || {
+                let result = match std::panic::catch_unwind(|| job()) {
+                    Ok(result) => result,
+                    Err(payload) => Err(match payload.downcast_ref::<&str>() {
+                        Some(message) => {
+                            anyhow::anyhow!("Validation job thread panicked: {}", message)
+                        }
+                        None => anyhow::anyhow!("Validation job thread panicked"),
+                    }),
+                };
+                tx_results.send(result).unwrap();
+            })?;
+        }
+        Ok(())
+    });
+
     let mut all_good = true;
-    for job in jobs {
-        if let Err(error) = job() {
+    for result in rx_results {
+        if let Err(error) = result {
             all_good = false;
             progress_bar.suspend(|| {
                 eprintln!("{:#}", error);
@@ -35,29 +57,12 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
     if !all_good {
         bail!("failed to validate one or more files, see above output for more details")
     }
-    Ok(())
-}
 
-type Job = Box<dyn FnOnce() -> anyhow::Result<()>>;
-
-fn push_job_for_each_file(
-    top_dir: impl AsRef<Path>,
-    pattern: impl AsRef<Path>,
-    jobs: &mut Vec<Job>,
-    f: impl FnOnce(std::path::PathBuf) -> anyhow::Result<()> + Clone + 'static,
-) {
-    crate::glob::for_each_file(top_dir, pattern, move |path_result| {
-        // Let each job closure stand on its own.
-        let f = f.clone();
-        jobs.push(Box::new(|| f(path_result?)));
-    });
-}
-
-/// Call `f` to extend `jobs`, but if `f` itself fails, push a job that reports that.
-fn try_push_job(jobs: &mut Vec<Job>, f: impl FnOnce(&mut Vec<Job>) -> anyhow::Result<()>) {
-    if let Err(error) = f(jobs) {
-        jobs.push(Box::new(|| Err(error)));
+    if let Err(error) = enqueuing_thread.join().unwrap() {
+        bail!("Error enqueuing jobs:\n{:#}", error);
     }
+
+    Ok(())
 }
 
 fn collect_validation_jobs(jobs: &mut Vec<Job>, cmd: ValidateSubcommand) -> anyhow::Result<()> {
@@ -140,6 +145,30 @@ fn collect_validation_jobs(jobs: &mut Vec<Job>, cmd: ValidateSubcommand) -> anyh
     };
 
     Ok(())
+}
+
+fn push_job_for_each_file(
+    top_dir: impl AsRef<Path>,
+    pattern: impl AsRef<Path>,
+    jobs: &mut Vec<Job>,
+    f: impl FnOnce(std::path::PathBuf) -> anyhow::Result<()>
+        + Clone
+        + Send
+        + std::panic::UnwindSafe
+        + 'static,
+) {
+    crate::glob::for_each_file(top_dir, pattern, move |path_result| {
+        // Let each job closure stand on its own.
+        let f = f.clone();
+        jobs.push(Box::new(|| f(path_result?)));
+    });
+}
+
+/// Call `f` to extend `jobs`, but if `f` itself fails, push a job that reports that.
+fn try_push_job(jobs: &mut Vec<Job>, f: impl FnOnce(&mut Vec<Job>) -> anyhow::Result<()>) {
+    if let Err(error) = f(jobs) {
+        jobs.push(Box::new(|| Err(error)));
+    }
 }
 
 fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Result<()> {
@@ -233,6 +262,8 @@ fn push_job_for_each_hlsl_config_item(
     jobs: &mut Vec<Job>,
     validator: impl FnMut(&Path, hlsl_snapshots::ConfigItem, &str) -> anyhow::Result<()>
         + Clone
+        + Send
+        + std::panic::UnwindSafe
         + 'static,
 ) -> anyhow::Result<()> {
     let hlsl_snapshots::Config {
