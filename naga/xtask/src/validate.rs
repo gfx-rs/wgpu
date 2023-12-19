@@ -17,13 +17,20 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
     let mut jobs = vec![];
     collect_validation_jobs(&mut jobs, cmd)?;
 
+    let progress_bar = indicatif::ProgressBar::new(jobs.len() as u64);
+
     let mut all_good = true;
     for job in jobs {
         if let Err(error) = job() {
             all_good = false;
-            eprintln!("{:#}", error);
+            progress_bar.suspend(|| {
+                eprintln!("{:#}", error);
+            });
         }
+        progress_bar.inc(1);
     }
+
+    progress_bar.finish_and_clear();
 
     if !all_good {
         bail!("failed to validate one or more files, see above output for more details")
