@@ -13,10 +13,6 @@ use crate::{
     process::{which, EasyCommand},
 };
 
-fn ack_visiting(path: &Path) {
-    log::info!("Validating {}", path.display());
-}
-
 pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
     let mut jobs = vec![];
     collect_validation_jobs(&mut jobs, cmd)?;
@@ -140,7 +136,6 @@ fn collect_validation_jobs(jobs: &mut Vec<Job>, cmd: ValidateSubcommand) -> anyh
 }
 
 fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Result<()> {
-    ack_visiting(path);
     let second_line = {
         let mut file = BufReader::new(open_file(path)?);
         let mut buf = String::new();
@@ -173,7 +168,6 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
 }
 
 fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
-    ack_visiting(path);
     let first_line = {
         let mut file = BufReader::new(open_file(path)?);
         let mut buf = String::new();
@@ -201,7 +195,6 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
 }
 
 fn validate_glsl(path: &Path, type_arg: &str, glslang_validator: &str) -> anyhow::Result<()> {
-    ack_visiting(path);
     let file = open_file(path)?;
     EasyCommand::new(glslang_validator, |cmd| {
         cmd.stdin(Stdio::from(file))
@@ -212,7 +205,6 @@ fn validate_glsl(path: &Path, type_arg: &str, glslang_validator: &str) -> anyhow
 }
 
 fn validate_dot(path: &Path, dot: &str) -> anyhow::Result<()> {
-    ack_visiting(path);
     let file = open_file(path)?;
     EasyCommand::new(dot, |cmd| {
         cmd.stdin(Stdio::from(file)).stdout(Stdio::null())
@@ -236,7 +228,6 @@ fn push_job_for_each_hlsl_config_item(
         + Clone
         + 'static,
 ) -> anyhow::Result<()> {
-    ack_visiting(path);
     let hlsl_snapshots::Config {
         vertex,
         fragment,
