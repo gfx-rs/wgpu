@@ -13,6 +13,7 @@ use crate::{
 mod cli;
 mod fs;
 mod glob;
+mod jobserver;
 mod path;
 mod process;
 mod result;
@@ -24,6 +25,8 @@ fn main() -> ExitCode {
         .parse_default_env()
         .format_indent(Some(0))
         .init();
+
+    jobserver::init();
 
     let args = Args::parse();
 
