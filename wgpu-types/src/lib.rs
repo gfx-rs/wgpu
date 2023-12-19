@@ -5109,12 +5109,10 @@ pub struct SurfaceConfiguration<V> {
     pub present_mode: PresentMode,
     /// Desired number of buffers in the swap chain.
     ///
-    /// Defaults to 3 when created via [`Surface::get_default_config`].
+    /// Defaults to 3 when created via `wgpu::Surface::get_default_config`.
     ///
     /// Recommended to use 3 (or higher) for high throughput, 2 for low latency.
     /// This is a hint to the backend implementation and will be clamped to the supported range.
-    /// A number of one (which is rarely supported) would means that CPU and GPU will be fighting over the same texture,
-    /// this never executing work in parallel.
     pub desired_swap_chain_size: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
