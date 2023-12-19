@@ -77,6 +77,8 @@ impl Subcommand {
     }
 }
 
+// If you add a new validation subcommand, be sure to update the code
+// that processes `All`.
 #[derive(Debug)]
 pub(crate) enum ValidateSubcommand {
     Spirv,
@@ -85,6 +87,7 @@ pub(crate) enum ValidateSubcommand {
     Dot,
     Wgsl,
     Hlsl(ValidateHlslCommand),
+    All,
 }
 
 impl ValidateSubcommand {
@@ -114,7 +117,11 @@ impl ValidateSubcommand {
                 ensure_remaining_args_empty(args)?;
                 Ok(Self::Wgsl)
             }
-            "hlsl" => return Ok(Self::Hlsl(ValidateHlslCommand::parse(args)?)),
+            "hlsl" => Ok(Self::Hlsl(ValidateHlslCommand::parse(args)?)),
+            "all" => {
+                ensure_remaining_args_empty(args)?;
+                Ok(Self::All)
+            }
             other => {
                 bail!("unrecognized `validate` subcommand {other:?}; see `--help` for more details")
             }
