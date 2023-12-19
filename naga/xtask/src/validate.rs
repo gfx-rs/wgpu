@@ -9,10 +9,8 @@ use anyhow::{bail, Context};
 use crate::{
     cli::{ValidateHlslCommand, ValidateSubcommand},
     fs::open_file,
-    glob::visit_files,
     path::join_path,
     process::{which, EasyCommand},
-    result::{ErrorStatus, LogIfError},
 };
 
 fn ack_visiting(path: &Path) {
@@ -20,8 +18,48 @@ fn ack_visiting(path: &Path) {
 }
 
 pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
+    let mut jobs = vec![];
+    collect_validation_jobs(&mut jobs, cmd)?;
+
+    let mut all_good = true;
+    for job in jobs {
+        if let Err(error) = job() {
+            all_good = false;
+            eprintln!("{:#}", error);
+        }
+    }
+
+    if !all_good {
+        bail!("failed to validate one or more files, see above output for more details")
+    }
+    Ok(())
+}
+
+type Job = Box<dyn FnOnce() -> anyhow::Result<()>>;
+
+fn push_job_for_each_file(
+    top_dir: impl AsRef<Path>,
+    pattern: impl AsRef<Path>,
+    jobs: &mut Vec<Job>,
+    f: impl FnOnce(std::path::PathBuf) -> anyhow::Result<()> + Clone + 'static,
+) {
+    crate::glob::for_each_file(top_dir, pattern, move |path_result| {
+        // Let each job closure stand on its own.
+        let f = f.clone();
+        jobs.push(Box::new(|| f(path_result?)));
+    });
+}
+
+/// Call `f` to extend `jobs`, but if `f` itself fails, push a job that reports that.
+fn try_push_job(jobs: &mut Vec<Job>, f: impl FnOnce(&mut Vec<Job>) -> anyhow::Result<()>) {
+    if let Err(error) = f(jobs) {
+        jobs.push(Box::new(|| Err(error)));
+    }
+}
+
+fn collect_validation_jobs(jobs: &mut Vec<Job>, cmd: ValidateSubcommand) -> anyhow::Result<()> {
     let snapshots_base_out = join_path(["tests", "out"]);
-    let err_status = match cmd {
+    match cmd {
         ValidateSubcommand::Spirv => {
             let spirv_as = "spirv-as";
             which(spirv_as)?;
@@ -29,72 +67,76 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
             let spirv_val = "spirv-val";
             which(spirv_val)?;
 
-            visit_files(snapshots_base_out, "spv/*.spvasm", |path| {
-                validate_spirv(path, spirv_as, spirv_val)
-            })
+            push_job_for_each_file(snapshots_base_out, "spv/*.spvasm", jobs, |path| {
+                validate_spirv(&path, spirv_as, spirv_val)
+            });
         }
         ValidateSubcommand::Metal => {
             let xcrun = "xcrun";
             which(xcrun)?;
-            visit_files(snapshots_base_out, "msl/*.msl", |path| {
-                validate_metal(path, xcrun)
-            })
+            push_job_for_each_file(snapshots_base_out, "msl/*.msl", jobs, |path| {
+                validate_metal(&path, xcrun)
+            });
         }
         ValidateSubcommand::Glsl => {
             let glslang_validator = "glslangValidator";
             which(glslang_validator)?;
-            let mut err_status = ErrorStatus::NoFailuresFound;
             for (glob, type_arg) in [
                 ("glsl/*.Vertex.glsl", "vert"),
                 ("glsl/*.Fragment.glsl", "frag"),
                 ("glsl/*.Compute.glsl", "comp"),
             ] {
-                let type_err_status = visit_files(&snapshots_base_out, glob, |path| {
-                    validate_glsl(path, type_arg, glslang_validator)
+                push_job_for_each_file(&snapshots_base_out, glob, jobs, |path| {
+                    validate_glsl(&path, type_arg, glslang_validator)
                 });
-                err_status = err_status.merge(type_err_status);
             }
-            err_status
         }
         ValidateSubcommand::Dot => {
             let dot = "dot";
             which(dot)?;
-            visit_files(snapshots_base_out, "dot/*.dot", |path| {
-                validate_dot(path, dot)
-            })
+            push_job_for_each_file(snapshots_base_out, "dot/*.dot", jobs, |path| {
+                validate_dot(&path, dot)
+            });
         }
         ValidateSubcommand::Wgsl => {
             let mut paths = vec![];
-            let mut error_status = visit_files(snapshots_base_out, "wgsl/*.wgsl", |path| {
-                paths.push(path.to_owned());
-                Ok(())
+            crate::glob::for_each_file(snapshots_base_out, "wgsl/*.wgsl", |path_result| {
+                try_push_job(jobs, |_| {
+                    paths.push(path_result?.to_owned());
+                    Ok(())
+                })
             });
-            validate_wgsl(&paths).log_if_err_found(&mut error_status);
-            error_status
+            if !paths.is_empty() {
+                jobs.push(Box::new(move || validate_wgsl(&paths)));
+            }
         }
-        ValidateSubcommand::Hlsl(cmd) => match cmd {
-            ValidateHlslCommand::Dxc => {
-                let bin = "dxc";
-                which(bin)?;
-                visit_files(snapshots_base_out, "hlsl/*.hlsl", |path| {
-                    visit_hlsl_shaders(path, bin, validate_hlsl_with_dxc)
-                })
+        ValidateSubcommand::Hlsl(cmd) => {
+            let bin;
+            let validator: fn(&Path, hlsl_snapshots::ConfigItem, &str) -> anyhow::Result<()>;
+            match cmd {
+                ValidateHlslCommand::Dxc => {
+                    bin = "dxc";
+                    which(bin)?;
+                    validator = validate_hlsl_with_dxc;
+                }
+                ValidateHlslCommand::Fxc => {
+                    bin = "fxc";
+                    which(bin)?;
+                    validator = validate_hlsl_with_fxc;
+                }
             }
-            ValidateHlslCommand::Fxc => {
-                let bin = "fxc";
-                which(bin)?;
-                visit_files(snapshots_base_out, "hlsl/*.hlsl", |path| {
-                    visit_hlsl_shaders(path, bin, validate_hlsl_with_fxc)
+
+            crate::glob::for_each_file(snapshots_base_out, "hlsl/*.hlsl", |path_result| {
+                try_push_job(jobs, |jobs| {
+                    let path = path_result?;
+                    push_job_for_each_hlsl_config_item(&path, bin, jobs, validator)?;
+                    Ok(())
                 })
-            }
-        },
+            });
+        }
     };
-    match err_status {
-        ErrorStatus::NoFailuresFound => Ok(()),
-        ErrorStatus::OneOrMoreFailuresFound => {
-            bail!("failed to validate one or more files, see above output for more details")
-        }
-    }
+
+    Ok(())
 }
 
 fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Result<()> {
@@ -186,10 +228,13 @@ fn validate_wgsl(paths: &[std::path::PathBuf]) -> anyhow::Result<()> {
     .success()
 }
 
-fn visit_hlsl_shaders(
+fn push_job_for_each_hlsl_config_item(
     path: &Path,
     bin: &str,
-    mut consume_config_item: impl FnMut(&Path, hlsl_snapshots::ConfigItem, &str) -> anyhow::Result<()>,
+    jobs: &mut Vec<Job>,
+    validator: impl FnMut(&Path, hlsl_snapshots::ConfigItem, &str) -> anyhow::Result<()>
+        + Clone
+        + 'static,
 ) -> anyhow::Result<()> {
     ack_visiting(path);
     let hlsl_snapshots::Config {
@@ -197,17 +242,14 @@ fn visit_hlsl_shaders(
         fragment,
         compute,
     } = hlsl_snapshots::Config::from_path(path.with_extension("ron"))?;
-    let mut status = ErrorStatus::NoFailuresFound;
     for shader in [vertex, fragment, compute].into_iter().flatten() {
-        consume_config_item(path, shader, bin).log_if_err_found(&mut status);
+        // Let each job closure stand on its own.
+        let mut validator = validator.clone();
+        let path = path.to_owned();
+        let bin = bin.to_owned();
+        jobs.push(Box::new(move || validator(&path, shader, &bin)));
     }
-    match status {
-        ErrorStatus::NoFailuresFound => Ok(()),
-        ErrorStatus::OneOrMoreFailuresFound => bail!(
-            "one or more shader HLSL shader tests failed for {}",
-            path.display()
-        ),
-    }
+    Ok(())
 }
 
 fn validate_hlsl_with_dxc(
