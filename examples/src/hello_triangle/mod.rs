@@ -72,7 +72,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         multiview: None,
     });
 
-    let mut config = surface.get_default_config(&adapter, size.width, size.height).unwrap();
+    let mut config = surface
+        .get_default_config(&adapter, size.width, size.height)
+        .unwrap();
     surface.configure(&device, &config);
 
     let window = &window;
