@@ -3,8 +3,8 @@ use crate::device::trace;
 use crate::{
     api_log, binding_model, command, conv,
     device::{
-        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
-        IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
+        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, DeviceLostReason,
+        HostMap, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
     hal_api::HalApi,
@@ -14,17 +14,24 @@ use crate::{
     instance::{self, Adapter, Surface},
     pipeline, present,
     resource::{self, BufferAccessResult},
-    resource::{BufferAccessError, BufferMapOperation, Resource},
+    resource::{BufferAccessError, BufferMapOperation, CreateBufferError, Resource},
     validation::check_buffer_usage,
     FastHashMap, Label, LabelHelpers as _,
 };
 
+use arrayvec::ArrayVec;
 use hal::Device as _;
 use parking_lot::RwLock;
 
 use wgt::{BufferAddress, TextureFormat};
 
-use std::{borrow::Cow, iter, ops::Range, ptr, sync::atomic::Ordering};
+use std::{
+    borrow::Cow,
+    iter,
+    ops::Range,
+    ptr,
+    sync::{atomic::Ordering, Arc},
+};
 
 use super::{ImplicitPipelineIds, InvalidDevice, UserClosures};
 
@@ -140,12 +147,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
-    ) -> (id::BufferId, Option<resource::CreateBufferError>) {
+    ) -> (id::BufferId, Option<CreateBufferError>) {
         profiling::scope!("Device::create_buffer");
 
         let hub = A::hub(self);
         let fid = hub.buffers.prepare::<G>(id_in);
 
+        let mut to_destroy: ArrayVec<resource::Buffer<A>, 2> = ArrayVec::new();
         let error = loop {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
@@ -159,11 +167,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             if desc.usage.is_empty() {
                 // Per spec, `usage` must not be zero.
-                let id = fid.assign_error(desc.label.borrow_or_default());
-                return (
-                    id,
-                    Some(resource::CreateBufferError::InvalidUsage(desc.usage)),
-                );
+                break CreateBufferError::InvalidUsage(desc.usage);
             }
 
             #[cfg(feature = "trace")]
@@ -179,36 +183,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let buffer = match device.create_buffer(desc, false) {
                 Ok(buffer) => buffer,
                 Err(e) => {
-                    let id = fid.assign_error(desc.label.borrow_or_default());
-                    return (id, Some(e));
+                    break e;
                 }
             };
-
-            let (id, resource) = fid.assign(buffer);
-            api_log!("Device::create_buffer({desc:?}) -> {id:?}");
 
             let buffer_use = if !desc.mapped_at_creation {
                 hal::BufferUses::empty()
             } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // buffer is mappable, so we are just doing that at start
-                let map_size = resource.size;
+                let map_size = buffer.size;
                 let ptr = if map_size == 0 {
                     std::ptr::NonNull::dangling()
                 } else {
-                    match map_buffer(device.raw(), &resource, 0, map_size, HostMap::Write) {
+                    match map_buffer(device.raw(), &buffer, 0, map_size, HostMap::Write) {
                         Ok(ptr) => ptr,
                         Err(e) => {
-                            device.lock_life().schedule_resource_destruction(
-                                queue::TempResource::Buffer(resource),
-                                !0,
-                            );
-                            hub.buffers
-                                .force_replace_with_error(id, desc.label.borrow_or_default());
-                            return (id, Some(e.into()));
+                            to_destroy.push(buffer);
+                            break e.into();
                         }
                     }
                 };
-                *resource.map_state.lock() = resource::BufferMapState::Active {
+                *buffer.map_state.lock() = resource::BufferMapState::Active {
                     ptr,
                     range: 0..map_size,
                     host: HostMap::Write,
@@ -227,51 +222,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let stage = match device.create_buffer(&stage_desc, true) {
                     Ok(stage) => stage,
                     Err(e) => {
-                        device.lock_life().schedule_resource_destruction(
-                            queue::TempResource::Buffer(resource),
-                            !0,
-                        );
-                        hub.buffers
-                            .force_replace_with_error(id, desc.label.borrow_or_default());
-                        return (id, Some(e));
+                        to_destroy.push(buffer);
+                        break e;
                     }
                 };
+
+                let snatch_guard = device.snatchable_lock.read();
+                let stage_raw = stage.raw(&snatch_guard).unwrap();
+                let mapping = match unsafe { device.raw().map_buffer(stage_raw, 0..stage.size) } {
+                    Ok(mapping) => mapping,
+                    Err(e) => {
+                        to_destroy.push(buffer);
+                        to_destroy.push(stage);
+                        break CreateBufferError::Device(e.into());
+                    }
+                };
+
                 let stage_fid = hub.buffers.request();
                 let stage = stage_fid.init(stage);
 
-                let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
-                    Ok(mapping) => mapping,
-                    Err(e) => {
-                        let mut life_lock = device.lock_life();
-                        life_lock.schedule_resource_destruction(
-                            queue::TempResource::Buffer(resource),
-                            !0,
-                        );
-                        life_lock
-                            .schedule_resource_destruction(queue::TempResource::Buffer(stage), !0);
-                        hub.buffers
-                            .force_replace_with_error(id, desc.label.borrow_or_default());
-                        return (id, Some(DeviceError::from(e).into()));
-                    }
-                };
-
-                assert_eq!(resource.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
+                assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
                 // Zero initialize memory and then mark both staging and buffer as initialized
                 // (it's guaranteed that this is the case by the time the buffer is usable)
-                unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, resource.size as usize) };
-                resource
-                    .initialization_status
-                    .write()
-                    .drain(0..resource.size);
-                stage.initialization_status.write().drain(0..resource.size);
+                unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
+                buffer.initialization_status.write().drain(0..buffer.size);
+                stage.initialization_status.write().drain(0..buffer.size);
 
-                *resource.map_state.lock() = resource::BufferMapState::Init {
+                *buffer.map_state.lock() = resource::BufferMapState::Init {
                     ptr: mapping.ptr,
                     needs_flush: !mapping.is_coherent,
                     stage_buffer: stage,
                 };
                 hal::BufferUses::COPY_DST
             };
+
+            let (id, resource) = fid.assign(buffer);
+            api_log!("Device::create_buffer({desc:?}) -> {id:?}");
 
             device
                 .trackers
@@ -281,6 +267,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             return (id, None);
         };
+
+        // Error path
+
+        for buffer in to_destroy {
+            let device = Arc::clone(&buffer.device);
+            device
+                .lock_life()
+                .schedule_resource_destruction(queue::TempResource::Buffer(Arc::new(buffer)), !0);
+        }
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -380,6 +375,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        let snatch_guard = device.snatchable_lock.read();
         if !device.is_valid() {
             return Err(DeviceError::Lost.into());
         }
@@ -402,7 +398,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let raw_buf = buffer.raw();
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -443,6 +441,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(DeviceError::Lost.into());
         }
 
+        let snatch_guard = device.snatchable_lock.read();
+
         let buffer = hub
             .buffers
             .get(buffer_id)
@@ -450,7 +450,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer.raw();
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -485,10 +487,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let mut buffer_guard = hub.buffers.write();
-        let buffer = buffer_guard
-            .get_and_mark_destroyed(buffer_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+        let buffer = {
+            let mut buffer_guard = hub.buffers.write();
+            buffer_guard
+                .get_and_mark_destroyed(buffer_id)
+                .map_err(|_| resource::DestroyError::Invalid)?
+        };
+
+        let _ = buffer.unmap();
+
         buffer.destroy()
     }
 
@@ -498,36 +505,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        if let Some(buffer) = hub.buffers.unregister(buffer_id) {
-            if buffer.ref_count() == 1 {
-                buffer.destroy().ok();
+        let buffer = match hub.buffers.unregister(buffer_id) {
+            Some(buffer) => buffer,
+            None => {
+                return;
             }
+        };
 
-            let last_submit_index = buffer.info.submission_index();
+        let _ = buffer.unmap();
 
-            let device = buffer.device.clone();
+        let last_submit_index = buffer.info.submission_index();
 
-            if device
-                .pending_writes
-                .lock()
-                .as_ref()
-                .unwrap()
-                .dst_buffers
-                .contains_key(&buffer_id)
-            {
-                device.lock_life().future_suspected_buffers.push(buffer);
-            } else {
-                device
-                    .lock_life()
-                    .suspected_resources
-                    .insert(buffer_id, buffer);
-            }
+        let device = buffer.device.clone();
 
-            if wait {
-                match device.wait_for_submit(last_submit_index) {
-                    Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
-                }
+        if device
+            .pending_writes
+            .lock()
+            .as_ref()
+            .unwrap()
+            .dst_buffers
+            .contains_key(&buffer_id)
+        {
+            device.lock_life().future_suspected_buffers.push(buffer);
+        } else {
+            device
+                .lock_life()
+                .suspected_resources
+                .buffers
+                .insert(buffer_id, buffer);
+        }
+
+        if wait {
+            match device.wait_for_submit(last_submit_index) {
+                Ok(()) => (),
+                Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
             }
         }
     }
@@ -665,7 +676,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
-    ) -> (id::BufferId, Option<resource::CreateBufferError>) {
+    ) -> (id::BufferId, Option<CreateBufferError>) {
         profiling::scope!("Device::create_buffer");
 
         let hub = A::hub(self);
@@ -783,6 +794,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     device
                         .lock_life()
                         .suspected_resources
+                        .textures
                         .insert(texture_id, texture.clone());
                 }
             }
@@ -860,6 +872,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             view.device
                 .lock_life()
                 .suspected_resources
+                .texture_views
                 .insert(texture_view_id, view.clone());
 
             if wait {
@@ -930,6 +943,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
+                .samplers
                 .insert(sampler_id, sampler.clone());
         }
     }
@@ -1016,6 +1030,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
+                .bind_group_layouts
                 .insert(bind_group_layout_id, layout.clone());
         }
     }
@@ -1079,6 +1094,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
+                .pipeline_layouts
                 .insert(pipeline_layout_id, layout.clone());
         }
     }
@@ -1153,6 +1169,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
+                .bind_groups
                 .insert(bind_group_id, bind_group.clone());
         }
     }
@@ -1447,6 +1464,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
+                .render_bundles
                 .insert(render_bundle_id, bundle.clone());
         }
     }
@@ -1516,6 +1534,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device
                 .lock_life()
                 .suspected_resources
+                .query_sets
                 .insert(query_set_id, query_set.clone());
         }
     }
@@ -1652,10 +1671,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
+                .render_pipelines
                 .insert(render_pipeline_id, pipeline.clone());
 
             life_lock
                 .suspected_resources
+                .pipeline_layouts
                 .insert(layout_id, pipeline.layout.clone());
         }
     }
@@ -1787,9 +1808,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
+                .compute_pipelines
                 .insert(compute_pipeline_id, pipeline.clone());
             life_lock
                 .suspected_resources
+                .pipeline_layouts
                 .insert(layout_id, pipeline.layout.clone());
         }
     }
@@ -2225,6 +2248,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         if let Some(device) = hub.devices.unregister(device_id) {
+            let device_lost_closure = device.lock_life().device_lost_closure.take();
+            if let Some(closure) = device_lost_closure {
+                closure.call(DeviceLostReason::Unknown, String::from("Device dropped."));
+            }
+
             // The things `Device::prepare_to_die` takes care are mostly
             // unnecessary here. We know our queue is empty, so we don't
             // need to wait for submissions or triage them. We know we were
@@ -2240,6 +2268,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    // This closure will be called exactly once during "lose the device"
+    // or when the device is dropped, if it was never lost.
     pub fn device_set_device_lost_closure<A: HalApi>(
         &self,
         device_id: DeviceId,
@@ -2406,7 +2436,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut trackers = buffer.device.as_ref().trackers.lock();
                 trackers.buffers.set_single(&buffer, internal_use);
                 //TODO: Check if draining ALL buffers is correct!
-                let _ = trackers.buffers.drain_transitions();
+                let snatch_guard = device.snatchable_lock.read();
+                let _ = trackers.buffers.drain_transitions(&snatch_guard);
             }
 
             buffer
@@ -2488,27 +2519,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {buffer_id:?}");
 
-        let closure;
-        {
-            // Restrict the locks to this scope.
-            let hub = A::hub(self);
+        let hub = A::hub(self);
 
-            let buffer = hub
-                .buffers
-                .get(buffer_id)
-                .map_err(|_| BufferAccessError::Invalid)?;
-            if !buffer.device.is_valid() {
-                return Err(DeviceError::Lost.into());
-            }
-            closure = buffer.buffer_unmap_inner()
+        let buffer = hub
+            .buffers
+            .get(buffer_id)
+            .map_err(|_| BufferAccessError::Invalid)?;
+
+        if !buffer.device.is_valid() {
+            return Err(DeviceError::Lost.into());
         }
 
-        // Note: outside the scope where locks are held when calling the callback
-        if let Some((mut operation, status)) = closure? {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(status);
-            }
-        }
-        Ok(())
+        buffer.unmap()
     }
 }

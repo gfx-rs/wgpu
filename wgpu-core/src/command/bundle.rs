@@ -318,10 +318,10 @@ impl RenderBundleEncoder {
                     next_dynamic_offset = offsets_range.end;
                     let offsets = &base.dynamic_offsets[offsets_range.clone()];
 
-                    if bind_group.dynamic_binding_info.read().len() != offsets.len() {
+                    if bind_group.dynamic_binding_info.len() != offsets.len() {
                         return Err(RenderCommandError::InvalidDynamicOffsetCount {
                             actual: offsets.len(),
-                            expected: bind_group.dynamic_binding_info.read().len(),
+                            expected: bind_group.dynamic_binding_info.len(),
                         })
                         .map_pass_err(scope);
                     }
@@ -330,7 +330,7 @@ impl RenderBundleEncoder {
                     for (offset, info) in offsets
                         .iter()
                         .map(|offset| *offset as wgt::BufferAddress)
-                        .zip(bind_group.dynamic_binding_info.read().iter())
+                        .zip(bind_group.dynamic_binding_info.iter())
                     {
                         let (alignment, limit_name) =
                             buffer_binding_type_alignment(&device.limits, info.binding_type);
@@ -342,8 +342,8 @@ impl RenderBundleEncoder {
                         }
                     }
 
-                    buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges.read());
-                    texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges.read());
+                    buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
+                    texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges);
 
                     state.set_bind_group(index, bind_group_guard.get(bind_group_id).as_ref().unwrap(), &bind_group.layout, offsets_range);
                     unsafe {
@@ -712,6 +712,8 @@ pub enum CreateRenderBundleError {
 pub enum ExecutionError {
     #[error("Buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
+    #[error("BindGroup {0:?} is invalid")]
+    InvalidBindGroup(id::BindGroupId),
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
 }
@@ -721,6 +723,9 @@ impl PrettyError for ExecutionError {
         match *self {
             Self::DestroyedBuffer(id) => {
                 fmt.buffer_label(&id);
+            }
+            Self::InvalidBindGroup(id) => {
+                fmt.bind_group_label(&id);
             }
             Self::Unimplemented(_reason) => {}
         };
@@ -785,6 +790,8 @@ impl<A: HalApi> RenderBundle<A> {
             }
         }
 
+        let snatch_guard = self.device.snatchable_lock.read();
+
         for command in self.base.commands.iter() {
             match *command {
                 RenderCommand::SetBindGroup {
@@ -794,11 +801,14 @@ impl<A: HalApi> RenderBundle<A> {
                 } => {
                     let bind_groups = trackers.bind_groups.read();
                     let bind_group = bind_groups.get(bind_group_id).unwrap();
+                    let raw_bg = bind_group
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::InvalidBindGroup(bind_group_id))?;
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
                             index,
-                            bind_group.raw(),
+                            raw_bg,
                             &offsets[..num_dynamic_offsets as usize],
                         )
                     };
@@ -818,7 +828,11 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer: &A::Buffer = buffers
+                        .get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -833,7 +847,11 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer = buffers
+                        .get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -912,7 +930,11 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: false,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer = buffers
+                        .get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     unsafe { raw.draw_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -922,7 +944,11 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: true,
                 } => {
                     let buffers = trackers.buffers.read();
-                    let buffer = buffers.get(buffer_id).unwrap().raw();
+                    let buffer = buffers
+                        .get(buffer_id)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?
+                        .raw(&snatch_guard)
+                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect { .. }

@@ -102,9 +102,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .set_single(dst_buffer, hal::BufferUses::COPY_DST)
                 .ok_or(ClearError::InvalidBuffer(dst))?
         };
+        let snatch_guard = dst_buffer.device.snatchable_lock.read();
         let dst_raw = dst_buffer
             .raw
-            .as_ref()
+            .get(&snatch_guard)
             .ok_or(ClearError::InvalidBuffer(dst))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None));
@@ -145,8 +146,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 MemoryInitKind::ImplicitlyInitialized,
             ),
         );
+
         // actual hal barrier & operation
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
         let cmd_buf_raw = cmd_buf_data.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());

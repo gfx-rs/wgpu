@@ -13,14 +13,14 @@ struct FragmentInput {
 fn vert_main() -> FragmentInput {
     var out: FragmentInput;
 
-    out.position = vec4<f32>(2.0, 4.0, 5.0, 6.0);
+    out.position = vec4<f32>(2f, 4f, 5f, 6f);
     out._flat = 8u;
-    out._linear = 27.0;
-    out.linear_centroid = vec2<f32>(64.0, 125.0);
-    out.linear_sample = vec3<f32>(216.0, 343.0, 512.0);
-    out.perspective = vec4<f32>(729.0, 1000.0, 1331.0, 1728.0);
-    out.perspective_centroid = 2197.0;
-    out.perspective_sample = 2744.0;
+    out._linear = 27f;
+    out.linear_centroid = vec2<f32>(64f, 125f);
+    out.linear_sample = vec3<f32>(216f, 343f, 512f);
+    out.perspective = vec4<f32>(729f, 1000f, 1331f, 1728f);
+    out.perspective_centroid = 2197f;
+    out.perspective_sample = 2744f;
     let _e30 = out;
     return _e30;
 }

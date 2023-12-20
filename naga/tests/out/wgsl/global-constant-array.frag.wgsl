@@ -1,4 +1,4 @@
-const array_: array<f32, 2> = array<f32, 2>(1.0, 2.0);
+const array_: array<f32, 2> = array<f32, 2>(1f, 2f);
 
 var<private> i: u32;
 

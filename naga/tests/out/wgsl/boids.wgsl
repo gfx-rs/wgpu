@@ -30,11 +30,11 @@ var<storage, read_write> particlesDst: Particles;
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     var vPos: vec2<f32>;
     var vVel: vec2<f32>;
-    var cMass: vec2<f32> = vec2<f32>(0.0, 0.0);
-    var cVel: vec2<f32> = vec2<f32>(0.0, 0.0);
-    var colVel: vec2<f32> = vec2<f32>(0.0, 0.0);
-    var cMassCount: i32 = 0;
-    var cVelCount: i32 = 0;
+    var cMass: vec2<f32> = vec2<f32>(0f, 0f);
+    var cVel: vec2<f32> = vec2<f32>(0f, 0f);
+    var colVel: vec2<f32> = vec2<f32>(0f, 0f);
+    var cMassCount: i32 = 0i;
+    var cVelCount: i32 = 0i;
     var pos: vec2<f32>;
     var vel: vec2<f32>;
     var i: u32 = 0u;
@@ -70,7 +70,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             let _e61 = pos;
             cMass = (_e60 + _e61);
             let _e63 = cMassCount;
-            cMassCount = (_e63 + 1);
+            cMassCount = (_e63 + 1i);
         }
         let _e66 = pos;
         let _e67 = vPos;
@@ -89,7 +89,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             let _e86 = vel;
             cVel = (_e85 + _e86);
             let _e88 = cVelCount;
-            cVelCount = (_e88 + 1);
+            cVelCount = (_e88 + 1i);
         }
         continuing {
             let _e91 = i;
@@ -97,14 +97,14 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         }
     }
     let _e94 = cMassCount;
-    if (_e94 > 0) {
+    if (_e94 > 0i) {
         let _e97 = cMass;
         let _e98 = cMassCount;
         let _e102 = vPos;
         cMass = ((_e97 / vec2(f32(_e98))) - _e102);
     }
     let _e104 = cVelCount;
-    if (_e104 > 0) {
+    if (_e104 > 0i) {
         let _e107 = cVel;
         let _e108 = cVelCount;
         cVel = (_e107 / vec2(f32(_e108)));
@@ -119,26 +119,26 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     vVel = (((_e112 + (_e113 * _e116)) + (_e119 * _e122)) + (_e125 * _e128));
     let _e131 = vVel;
     let _e133 = vVel;
-    vVel = (normalize(_e131) * clamp(length(_e133), 0.0, 0.1));
+    vVel = (normalize(_e131) * clamp(length(_e133), 0f, 0.1f));
     let _e139 = vPos;
     let _e140 = vVel;
     let _e143 = params.deltaT;
     vPos = (_e139 + (_e140 * _e143));
     let _e147 = vPos.x;
-    if (_e147 < -1.0) {
-        vPos.x = 1.0;
+    if (_e147 < -1f) {
+        vPos.x = 1f;
     }
     let _e153 = vPos.x;
-    if (_e153 > 1.0) {
-        vPos.x = -1.0;
+    if (_e153 > 1f) {
+        vPos.x = -1f;
     }
     let _e159 = vPos.y;
-    if (_e159 < -1.0) {
-        vPos.y = 1.0;
+    if (_e159 < -1f) {
+        vPos.y = 1f;
     }
     let _e165 = vPos.y;
-    if (_e165 > 1.0) {
-        vPos.y = -1.0;
+    if (_e165 > 1f) {
+        vPos.y = -1f;
     }
     let _e174 = vPos;
     particlesDst.particles[index].pos = _e174;

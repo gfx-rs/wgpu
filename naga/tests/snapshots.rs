@@ -798,6 +798,10 @@ fn convert_wgsl() {
             "abstract-types-var",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        (
+            "abstract-types-operators",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

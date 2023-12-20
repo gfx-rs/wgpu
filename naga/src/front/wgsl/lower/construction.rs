@@ -5,7 +5,6 @@ use crate::{Handle, Span};
 
 use crate::front::wgsl::error::Error;
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
-use crate::front::wgsl::Scalar;
 
 /// A cooked form of `ast::ConstructorType` that uses Naga types whenever
 /// possible.
@@ -300,7 +299,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 },
                 Constructor::Type((_, &crate::TypeInner::Vector { size, scalar })),
             ) => {
-                ctx.convert_slice_to_common_scalar(std::slice::from_mut(&mut component), scalar)?;
+                ctx.convert_slice_to_common_leaf_scalar(
+                    std::slice::from_mut(&mut component),
+                    scalar,
+                )?;
                 expr = crate::Expression::Splat {
                     size,
                     value: component,
@@ -316,10 +318,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Constructor::PartialVector { size },
             ) => {
                 let consensus_scalar =
-                    automatic_conversion_consensus(&components, ctx).map_err(|index| {
-                        Error::InvalidConstructorComponentType(spans[index], index as i32)
-                    })?;
-                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                    ctx.automatic_conversion_consensus(&components)
+                        .map_err(|index| {
+                            Error::InvalidConstructorComponentType(spans[index], index as i32)
+                        })?;
+                ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let inner = consensus_scalar.to_inner_vector(size);
                 let ty = ctx.ensure_type_exists(inner);
                 expr = crate::Expression::Compose { ty, components };
@@ -343,14 +346,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Constructor::PartialMatrix { columns, rows },
             ) if components.len() == columns as usize * rows as usize => {
                 let consensus_scalar =
-                    automatic_conversion_consensus(&components, ctx).map_err(|index| {
-                        Error::InvalidConstructorComponentType(spans[index], index as i32)
-                    })?;
+                    ctx.automatic_conversion_consensus(&components)
+                        .map_err(|index| {
+                            Error::InvalidConstructorComponentType(spans[index], index as i32)
+                        })?;
                 // We actually only accept floating-point elements.
                 let consensus_scalar = consensus_scalar
                     .automatic_conversion_combine(crate::Scalar::ABSTRACT_FLOAT)
                     .unwrap_or(consensus_scalar);
-                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let vec_ty = ctx.ensure_type_exists(consensus_scalar.to_inner_vector(rows));
 
                 let components = components
@@ -420,10 +424,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Constructor::PartialMatrix { columns, rows },
             ) => {
                 let consensus_scalar =
-                    automatic_conversion_consensus(&components, ctx).map_err(|index| {
-                        Error::InvalidConstructorComponentType(spans[index], index as i32)
-                    })?;
-                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                    ctx.automatic_conversion_consensus(&components)
+                        .map_err(|index| {
+                            Error::InvalidConstructorComponentType(spans[index], index as i32)
+                        })?;
+                ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
                     columns,
                     rows,
@@ -456,10 +461,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             // Array constructor - infer type
             (components, Constructor::PartialArray) => {
                 let mut components = components.into_components_vec();
-                if let Ok(consensus_scalar) = automatic_conversion_consensus(&components, ctx) {
+                if let Ok(consensus_scalar) = ctx.automatic_conversion_consensus(&components) {
                     // Note that this will *not* necessarily convert all the
                     // components to the same type! The `automatic_conversion_consensus`
-                    // function only considers the parameters' leaf scalar
+                    // method only considers the parameters' leaf scalar
                     // types; the parameters themselves could be any mix of
                     // vectors, matrices, and scalars.
                     //
@@ -471,7 +476,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // do. And if this array construction is not well-typed,
                     // these conversions will not make it so, and we can let
                     // validation catch the error.
-                    ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                    ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 } else {
                     // There's no consensus scalar. Emit the `Compose`
                     // expression anyway, and let validation catch the problem.
@@ -608,51 +613,4 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         Ok(handle)
     }
-}
-
-/// Find the consensus scalar of `components` under WGSL's automatic
-/// conversions.
-///
-/// If `components` can all be converted to any common scalar via
-/// WGSL's automatic conversions, return the best such scalar.
-///
-/// The `components` slice must not be empty. All elements' types must
-/// have been resolved.
-///
-/// If `components` are definitely not acceptable as arguments to such
-/// constructors, return `Err(i)`, where `i` is the index in
-/// `components` of some problematic argument.
-///
-/// This function doesn't fully type-check the arguments - it only
-/// considers their leaf scalar types. This means it may return `Ok`
-/// even when the Naga validator will reject the resulting
-/// construction expression later.
-fn automatic_conversion_consensus(
-    components: &[Handle<crate::Expression>],
-    ctx: &ExpressionContext<'_, '_, '_>,
-) -> Result<Scalar, usize> {
-    let types = &ctx.module.types;
-    let mut inners = components
-        .iter()
-        .map(|&c| ctx.typifier()[c].inner_with(types));
-    log::debug!(
-        "wgsl automatic_conversion_consensus: {:?}",
-        inners
-            .clone()
-            .map(|inner| inner.to_wgsl(&ctx.module.to_ctx()))
-            .collect::<Vec<String>>()
-    );
-    let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
-    for (inner, i) in inners.zip(1..) {
-        let scalar = inner.scalar().ok_or(i)?;
-        match best.automatic_conversion_combine(scalar) {
-            Some(new_best) => {
-                best = new_best;
-            }
-            None => return Err(i),
-        }
-    }
-
-    log::debug!("    consensus: {:?}", best.to_wgsl());
-    Ok(best)
 }

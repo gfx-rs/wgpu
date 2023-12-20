@@ -430,7 +430,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .set_single(dst_buffer, hal::BufferUses::COPY_DST)
                 .ok_or(QueryError::InvalidBuffer(destination))?
         };
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
+
+        let snatch_guard = dst_buffer.device.snatchable_lock.read();
+
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
         if !dst_buffer.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
             return Err(ResolveError::MissingBufferUsage.into());
@@ -476,12 +479,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
+        let raw_dst_buffer = dst_buffer
+            .raw(&snatch_guard)
+            .ok_or(QueryError::InvalidBuffer(destination))?;
+
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.into_iter());
             raw_encoder.copy_query_results(
                 query_set.raw(),
                 start_query..end_query,
-                dst_buffer.raw(),
+                raw_dst_buffer,
                 destination_offset,
                 wgt::BufferSize::new_unchecked(stride as u64),
             );

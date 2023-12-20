@@ -51,21 +51,80 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
                 }
             };
 
-        let converted = if let crate::TypeInner::Array { .. } = *goal_inner {
-            let span = self.get_expression_span(expr);
+        self.convert_leaf_scalar(expr, expr_span, goal_scalar)
+    }
+
+    /// Try to convert `expr`'s leaf scalar to `goal` using automatic conversions.
+    ///
+    /// If no conversions are necessary, return `expr` unchanged.
+    ///
+    /// If automatic conversions cannot convert `expr` to `goal_scalar`, return
+    /// an [`AutoConversionLeafScalar`] error.
+    ///
+    /// Although the Load Rule is one of the automatic conversions, this
+    /// function assumes it has already been applied if appropriate, as
+    /// indicated by the fact that the Rust type of `expr` is not `Typed<_>`.
+    ///
+    /// [`AutoConversionLeafScalar`]: super::Error::AutoConversionLeafScalar
+    pub fn try_automatic_conversion_for_leaf_scalar(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        goal_scalar: crate::Scalar,
+        goal_span: Span,
+    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+        let expr_span = self.get_expression_span(expr);
+        let expr_resolution = super::resolve!(self, expr);
+        let types = &self.module.types;
+        let expr_inner = expr_resolution.inner_with(types);
+
+        let make_error = || {
+            let gctx = &self.module.to_ctx();
+            let source_type = expr_resolution.to_wgsl(gctx);
+            super::Error::AutoConversionLeafScalar {
+                dest_span: goal_span,
+                dest_scalar: goal_scalar.to_wgsl(),
+                source_span: expr_span,
+                source_type,
+            }
+        };
+
+        let expr_scalar = match expr_inner.scalar() {
+            Some(scalar) => scalar,
+            None => return Err(make_error()),
+        };
+
+        if expr_scalar == goal_scalar {
+            return Ok(expr);
+        }
+
+        if !expr_scalar.automatically_converts_to(goal_scalar) {
+            return Err(make_error());
+        }
+
+        assert!(expr_scalar.is_abstract());
+
+        self.convert_leaf_scalar(expr, expr_span, goal_scalar)
+    }
+
+    fn convert_leaf_scalar(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        expr_span: Span,
+        goal_scalar: crate::Scalar,
+    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+        let expr_inner = super::resolve_inner!(self, expr);
+        if let crate::TypeInner::Array { .. } = *expr_inner {
             self.as_const_evaluator()
-                .cast_array(expr, goal_scalar, span)
-                .map_err(|err| super::Error::ConstantEvaluatorError(err, span))?
+                .cast_array(expr, goal_scalar, expr_span)
+                .map_err(|err| super::Error::ConstantEvaluatorError(err, expr_span))
         } else {
             let cast = crate::Expression::As {
                 expr,
                 kind: goal_scalar.kind,
                 convert: Some(goal_scalar.width),
             };
-            self.append_expression(cast, expr_span)?
-        };
-
-        Ok(converted)
+            self.append_expression(cast, expr_span)
+        }
     }
 
     /// Try to convert `exprs` to `goal_ty` using WGSL's automatic conversions.
@@ -130,6 +189,28 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
         Ok(())
     }
 
+    /// Convert `expr` to the leaf scalar type `scalar`.
+    pub fn convert_to_leaf_scalar(
+        &mut self,
+        expr: &mut Handle<crate::Expression>,
+        goal: crate::Scalar,
+    ) -> Result<(), super::Error<'source>> {
+        let inner = super::resolve_inner!(self, *expr);
+        // Do nothing if `inner` doesn't even have leaf scalars;
+        // it's a type error that validation will catch.
+        if inner.scalar() != Some(goal) {
+            let cast = crate::Expression::As {
+                expr: *expr,
+                kind: goal.kind,
+                convert: Some(goal.width),
+            };
+            let expr_span = self.get_expression_span(*expr);
+            *expr = self.append_expression(cast, expr_span)?;
+        }
+
+        Ok(())
+    }
+
     /// Convert all expressions in `exprs` to a common scalar type.
     ///
     /// Note that the caller is responsible for making sure these
@@ -140,24 +221,13 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
     /// themselves whether the casts we we generate are justified,
     /// perhaps by calling `TypeInner::automatically_converts_to` or
     /// `Scalar::automatic_conversion_combine`.
-    pub fn convert_slice_to_common_scalar(
+    pub fn convert_slice_to_common_leaf_scalar(
         &mut self,
         exprs: &mut [Handle<crate::Expression>],
         goal: crate::Scalar,
     ) -> Result<(), super::Error<'source>> {
         for expr in exprs.iter_mut() {
-            let inner = super::resolve_inner!(self, *expr);
-            // Do nothing if `inner` doesn't even have leaf scalars;
-            // it's a type error that validation will catch.
-            if inner.scalar() != Some(goal) {
-                let cast = crate::Expression::As {
-                    expr: *expr,
-                    kind: goal.kind,
-                    convert: Some(goal.width),
-                };
-                let expr_span = self.get_expression_span(*expr);
-                *expr = self.append_expression(cast, expr_span)?;
-            }
+            self.convert_to_leaf_scalar(expr, goal)?;
         }
 
         Ok(())
@@ -174,15 +244,78 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
         if let Some(scalar) = inner.automatically_convertible_scalar(&self.module.types) {
             let concretized = scalar.concretize();
             if concretized != scalar {
-                let span = self.get_expression_span(expr);
+                assert!(scalar.is_abstract());
+                let expr_span = self.get_expression_span(expr);
                 expr = self
                     .as_const_evaluator()
-                    .cast_array(expr, concretized, span)
-                    .map_err(|err| super::Error::ConstantEvaluatorError(err, span))?;
+                    .cast_array(expr, concretized, expr_span)
+                    .map_err(|err| {
+                        // A `TypeResolution` includes the type's full name, if
+                        // it has one. Also, avoid holding the borrow of `inner`
+                        // across the call to `cast_array`.
+                        let expr_type = &self.typifier()[expr];
+                        super::Error::ConcretizationFailed {
+                            expr_span,
+                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()),
+                            scalar: concretized.to_wgsl(),
+                            inner: err,
+                        }
+                    })?;
             }
         }
 
         Ok(expr)
+    }
+
+    /// Find the consensus scalar of `components` under WGSL's automatic
+    /// conversions.
+    ///
+    /// If `components` can all be converted to any common scalar via
+    /// WGSL's automatic conversions, return the best such scalar.
+    ///
+    /// The `components` slice must not be empty. All elements' types must
+    /// have been resolved.
+    ///
+    /// If `components` are definitely not acceptable as arguments to such
+    /// constructors, return `Err(i)`, where `i` is the index in
+    /// `components` of some problematic argument.
+    ///
+    /// This function doesn't fully type-check the arguments - it only
+    /// considers their leaf scalar types. This means it may return `Ok`
+    /// even when the Naga validator will reject the resulting
+    /// construction expression later.
+    pub fn automatic_conversion_consensus<'handle, I>(
+        &self,
+        components: I,
+    ) -> Result<crate::Scalar, usize>
+    where
+        I: IntoIterator<Item = &'handle Handle<crate::Expression>>,
+        I::IntoIter: Clone, // for debugging
+    {
+        let types = &self.module.types;
+        let mut inners = components
+            .into_iter()
+            .map(|&c| self.typifier()[c].inner_with(types));
+        log::debug!(
+            "wgsl automatic_conversion_consensus: {:?}",
+            inners
+                .clone()
+                .map(|inner| inner.to_wgsl(&self.module.to_ctx()))
+                .collect::<Vec<String>>()
+        );
+        let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
+        for (inner, i) in inners.zip(1..) {
+            let scalar = inner.scalar().ok_or(i)?;
+            match best.automatic_conversion_combine(scalar) {
+                Some(new_best) => {
+                    best = new_best;
+                }
+                None => return Err(i),
+            }
+        }
+
+        log::debug!("    consensus: {:?}", best.to_wgsl());
+        Ok(best)
     }
 }
 
@@ -352,6 +485,11 @@ impl crate::Scalar {
             // Different concrete types cannot be reconciled.
             (Sk::Sint | Sk::Uint | Sk::Float, Sk::Sint | Sk::Uint | Sk::Float) => None,
         }
+    }
+
+    /// Return `true` if automatic conversions will covert `self` to `goal`.
+    pub fn automatically_converts_to(self, goal: Self) -> bool {
+        self.automatic_conversion_combine(goal) == Some(goal)
     }
 
     const fn concretize(self) -> Self {

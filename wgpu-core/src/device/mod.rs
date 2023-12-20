@@ -211,7 +211,7 @@ impl UserClosures {
         not(target_feature = "atomics")
     )
 ))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
 #[cfg(not(any(
     not(target_arch = "wasm32"),
     all(
@@ -219,12 +219,26 @@ pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 
         not(target_feature = "atomics")
     )
 )))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
+
+pub struct DeviceLostClosureRust {
+    pub callback: DeviceLostCallback,
+    called: bool,
+}
+
+impl Drop for DeviceLostClosureRust {
+    fn drop(&mut self) {
+        if !self.called {
+            panic!("DeviceLostClosureRust must be called before it is dropped.");
+        }
+    }
+}
 
 #[repr(C)]
 pub struct DeviceLostClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
     pub user_data: *mut u8,
+    called: bool,
 }
 
 #[cfg(any(
@@ -235,6 +249,14 @@ pub struct DeviceLostClosureC {
     )
 ))]
 unsafe impl Send for DeviceLostClosureC {}
+
+impl Drop for DeviceLostClosureC {
+    fn drop(&mut self) {
+        if !self.called {
+            panic!("DeviceLostClosureC must be called before it is dropped.");
+        }
+    }
+}
 
 pub struct DeviceLostClosure {
     // We wrap this so creating the enum in the C variant can be unsafe,
@@ -249,14 +271,18 @@ pub struct DeviceLostInvocation {
 }
 
 enum DeviceLostClosureInner {
-    Rust { callback: DeviceLostCallback },
+    Rust { inner: DeviceLostClosureRust },
     C { inner: DeviceLostClosureC },
 }
 
 impl DeviceLostClosure {
     pub fn from_rust(callback: DeviceLostCallback) -> Self {
+        let inner = DeviceLostClosureRust {
+            callback,
+            called: false,
+        };
         Self {
-            inner: DeviceLostClosureInner::Rust { callback },
+            inner: DeviceLostClosureInner::Rust { inner },
         }
     }
 
@@ -267,7 +293,14 @@ impl DeviceLostClosure {
     ///
     /// - Both pointers must point to `'static` data, as the callback may happen at
     ///   an unspecified time.
-    pub unsafe fn from_c(inner: DeviceLostClosureC) -> Self {
+    pub unsafe fn from_c(closure: DeviceLostClosureC) -> Self {
+        // Build an inner with the values from closure, ensuring that
+        // inner.called is false.
+        let inner = DeviceLostClosureC {
+            callback: closure.callback,
+            user_data: closure.user_data,
+            called: false,
+        };
         Self {
             inner: DeviceLostClosureInner::C { inner },
         }
@@ -275,9 +308,21 @@ impl DeviceLostClosure {
 
     pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
         match self.inner {
-            DeviceLostClosureInner::Rust { callback } => callback(reason, message),
+            DeviceLostClosureInner::Rust { mut inner } => {
+                if inner.called {
+                    panic!("DeviceLostClosureRust must only be called once.");
+                }
+                inner.called = true;
+
+                (inner.callback)(reason, message)
+            }
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            DeviceLostClosureInner::C { inner } => unsafe {
+            DeviceLostClosureInner::C { mut inner } => unsafe {
+                if inner.called {
+                    panic!("DeviceLostClosureC must only be called once.");
+                }
+                inner.called = true;
+
                 // Ensure message is structured as a null-terminated C string. It only
                 // needs to live as long as the callback invocation.
                 let message = std::ffi::CString::new(message).unwrap();
@@ -294,14 +339,18 @@ fn map_buffer<A: HalApi>(
     size: BufferAddress,
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
+    let snatch_guard = buffer.device.snatchable_lock.read();
+    let raw_buffer = buffer
+        .raw(&snatch_guard)
+        .ok_or(BufferAccessError::Destroyed)?;
     let mapping = unsafe {
-        raw.map_buffer(buffer.raw(), offset..offset + size)
+        raw.map_buffer(raw_buffer, offset..offset + size)
             .map_err(DeviceError::from)?
     };
 
     *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
-            raw.invalidate_mapped_ranges(buffer.raw(), iter::once(offset..offset + size));
+            raw.invalidate_mapped_ranges(raw_buffer, iter::once(offset..offset + size));
             None
         },
         HostMap::Write if !mapping.is_coherent => Some(offset..offset + size),
@@ -341,7 +390,7 @@ fn map_buffer<A: HalApi>(
         mapped[fill_range].fill(0);
 
         if zero_init_needs_flush_now {
-            unsafe { raw.flush_mapped_ranges(buffer.raw(), iter::once(uninitialized)) };
+            unsafe { raw.flush_mapped_ranges(raw_buffer, iter::once(uninitialized)) };
         }
     }
 

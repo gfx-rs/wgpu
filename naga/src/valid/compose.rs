@@ -32,7 +32,12 @@ pub fn validate_compose(
                         scalar: comp_scalar,
                     } if comp_scalar == scalar => comp_size as u32,
                     ref other => {
-                        log::error!("Vector component[{}] type {:?}", index, other);
+                        log::error!(
+                            "Vector component[{}] type {:?}, building {:?}",
+                            index,
+                            other,
+                            scalar
+                        );
                         return Err(ComposeError::ComponentType {
                             index: index as u32,
                         });

@@ -744,7 +744,7 @@ impl crate::Surface<super::Api> for Surface {
         }
 
         let vsync = match config.present_mode {
-            wgt::PresentMode::Mailbox => false,
+            wgt::PresentMode::Immediate => false,
             wgt::PresentMode::Fifo => true,
             _ => {
                 log::error!("unsupported present mode: {:?}", config.present_mode);

@@ -30,7 +30,7 @@ fn test_atomic_compare_exchange_i32_() {
                 }
                 {
                     let _e14 = old;
-                    let new_ = bitcast<i32>((bitcast<f32>(_e14) + 1.0));
+                    let new_ = bitcast<i32>((bitcast<f32>(_e14) + 1f));
                     let _e20 = i;
                     let _e22 = old;
                     let _e23 = atomicCompareExchangeWeak((&arr_i32_[_e20]), _e22, new_);
@@ -72,7 +72,7 @@ fn test_atomic_compare_exchange_u32_() {
                 }
                 {
                     let _e14 = old_1;
-                    let new_1 = bitcast<u32>((bitcast<f32>(_e14) + 1.0));
+                    let new_1 = bitcast<u32>((bitcast<f32>(_e14) + 1f));
                     let _e20 = i_1;
                     let _e22 = old_1;
                     let _e23 = atomicCompareExchangeWeak((&arr_u32_[_e20]), _e22, new_1);

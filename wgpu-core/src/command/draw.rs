@@ -25,12 +25,8 @@ pub enum DrawError {
     MissingVertexBuffer { index: u32 },
     #[error("Index buffer must be set")]
     MissingIndexBuffer,
-    #[error("The pipeline layout, associated with the current render pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
-    IncompatibleBindGroup {
-        index: u32,
-        //expected: BindGroupLayoutId,
-        //provided: Option<(BindGroupLayoutId, BindGroupId)>,
-    },
+    #[error("Incompatible bind group at index {index} in the current render pipeline")]
+    IncompatibleBindGroup { index: u32, diff: Vec<String> },
     #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {
         last_vertex: u32,

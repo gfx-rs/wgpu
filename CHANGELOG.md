@@ -55,13 +55,19 @@ Previously, `DeviceExt::create_texture_with_data` only allowed data to be provid
 
 This feature allowed you to call `global_id` on any wgpu opaque handle to get a unique hashable identity for the given resource. This is now available without the feature flag. By @cwfitzgerald in [#4841](https://github.com/gfx-rs/wgpu/pull/4841)
 
+### `dx12` and `metal` backend crate features
+
+Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`) backend. These are enabled by default, but don't do anything when not targetting the corresponding OS. By @daxpedda in [#4815](https://github.com/gfx-rs/wgpu/pull/4815)
+
 ### New Features
 
 #### General
 - Added `DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW` to know if `@builtin(vertex_index)` and `@builtin(instance_index)` will respect the `first_vertex` / `first_instance` in indirect calls. If this is not present, both will always start counting from 0. Currently enabled on all backends except DX12. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722)
-- No longer validate surfaces against their allowed extent range on configure. This caused warnings that were almost impossible to avoid. As before, the resulting behavior depends on the compositor. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+- No longer validate surfaces against their allowed extent range on configure. This caused warnings that were almost impossible to avoid. As before, the resulting behavior depends on the compositor. By @wumpf in [#4796](https://github.com/gfx-rs/wgpu/pull/4796)
 - Added support for the float32-filterable feature. By @almarklein in [#4759](https://github.com/gfx-rs/wgpu/pull/4759)
 - GPU buffer memory is released during "lose the device". By @bradwerth in [#4851](https://github.com/gfx-rs/wgpu/pull/4851)
+- wgpu and wgpu-core features are now documented on docs.rs. By @wumpf in [#4886](https://github.com/gfx-rs/wgpu/pull/4886)
+- DeviceLostClosure is guaranteed to be invoked exactly once. By @bradwerth in [#4862](https://github.com/gfx-rs/wgpu/pull/4862)
 
 #### OpenGL
 - `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
@@ -69,7 +75,11 @@ This feature allowed you to call `global_id` on any wgpu opaque handle to get a 
 
 #### Naga
 
+- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing thir operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
+
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
+
+- Naga constant evaluation can now process binary operators whose operands are both vectors. By @jimblandy in [#4861](https://github.com/gfx-rs/wgpu/pull/4861).
 
 ### Changes
 
@@ -156,7 +166,15 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 - Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
 
+- In WGSL output, always include the `i` suffix on `i32` literals. By @jimblandy in [#4863](https://github.com/gfx-rs/wgpu/pull/4863).
+
+- In WGSL output, always include the `f` suffix on `f32` literals. By @jimblandy in [#4869](https://github.com/gfx-rs/wgpu/pull/4869).
+
 ### Bug Fixes
+
+#### General
+
+- `BufferMappedRange` trait is now `WasmNotSendSync`, i.e. it is `Send`/`Sync` if not on wasm or `fragile-send-sync-non-atomic-wasm` is enabled. By @wumpf in [#4818](https://github.com/gfx-rs/wgpu/pull/4818)
 
 #### Vulkan
 
@@ -185,6 +203,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).
 
 - Record the names of WGSL `alias` declarations in Naga IR `Type`s. By @jimblandy in [#4733](https://github.com/gfx-rs/wgpu/pull/4733).
+
+#### Metal
+
+- Allow the `COPY_SRC` usage flag in surface configuration. By @Toqozz in [#4852](https://github.com/gfx-rs/wgpu/pull/4852).
 
 ### Examples
 

@@ -53,6 +53,79 @@ mod compat {
         fn is_incompatible(&self) -> bool {
             self.expected.is_none() || !self.is_valid()
         }
+
+        // Describe how bind group layouts are incompatible, for validation
+        // error message.
+        fn bgl_diff(&self) -> Vec<String> {
+            let mut diff = Vec::new();
+
+            if let Some(expected_bgl) = self.expected.as_ref() {
+                diff.push(format!(
+                    "Should be compatible with bind group layout with label = `{}`",
+                    expected_bgl.label()
+                ));
+                if let Some(assigned_bgl) = self.assigned.as_ref() {
+                    diff.push(format!(
+                        "Assigned bind group layout with label = `{}`",
+                        assigned_bgl.label()
+                    ));
+                    for (id, e_entry) in &expected_bgl.entries {
+                        if let Some(a_entry) = assigned_bgl.entries.get(id) {
+                            if a_entry.binding != e_entry.binding {
+                                diff.push(format!(
+                                    "Entry {id} binding expected {}, got {}",
+                                    e_entry.binding, a_entry.binding
+                                ));
+                            }
+                            if a_entry.count != e_entry.count {
+                                diff.push(format!(
+                                    "Entry {id} count expected {:?}, got {:?}",
+                                    e_entry.count, a_entry.count
+                                ));
+                            }
+                            if a_entry.ty != e_entry.ty {
+                                diff.push(format!(
+                                    "Entry {id} type expected {:?}, got {:?}",
+                                    e_entry.ty, a_entry.ty
+                                ));
+                            }
+                            if a_entry.visibility != e_entry.visibility {
+                                diff.push(format!(
+                                    "Entry {id} visibility expected {:?}, got {:?}",
+                                    e_entry.visibility, a_entry.visibility
+                                ));
+                            }
+                        } else {
+                            diff.push(format!("Entry {id} not found in assigned bindgroup layout"))
+                        }
+                    }
+
+                    assigned_bgl.entries.iter().for_each(|(id, _e_entry)| {
+                        if !expected_bgl.entries.contains_key(id) {
+                            diff.push(format!("Entry {id} not found in expected bindgroup layout"))
+                        }
+                    });
+                } else {
+                    diff.push(
+                        "Assigned bindgroup layout is implicit, expected explicit".to_owned(),
+                    );
+                }
+            } else if let Some(assigned_bgl) = self.assigned.as_ref() {
+                diff.push(format!(
+                    "Assigned bind group layout = `{}`",
+                    assigned_bgl.label()
+                ));
+                diff.push(
+                    "Assigned bindgroup layout is not implicit, expected implicit".to_owned(),
+                );
+            }
+
+            if diff.is_empty() {
+                diff.push("But no differences found? (internal error)".to_owned())
+            }
+
+            diff
+        }
     }
 
     #[derive(Debug, Default)]
@@ -120,6 +193,15 @@ mod compat {
                     mask | 1u8 << i
                 }
             })
+        }
+
+        pub fn bgl_diff(&self) -> Vec<String> {
+            for e in &self.entries {
+                if !e.is_valid() {
+                    return e.bgl_diff();
+                }
+            }
+            vec![String::from("No differences detected? (internal error)")]
         }
     }
 }
@@ -272,6 +354,10 @@ impl<A: HalApi> Binder<A> {
 
     pub(super) fn invalid_mask(&self) -> BindGroupMask {
         self.manager.invalid_mask()
+    }
+
+    pub(super) fn bgl_diff(&self) -> Vec<String> {
+        self.manager.bgl_diff()
     }
 
     /// Scan active buffer bindings corresponding to layouts without `min_binding_size` specified.
