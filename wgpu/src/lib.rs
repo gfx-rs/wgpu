@@ -2939,7 +2939,7 @@ impl Device {
     /// Set a DeviceLostCallback on this device.
     pub fn set_device_lost_callback(
         &self,
-        callback: impl FnOnce(DeviceLostReason, String) + Send + 'static,
+        callback: impl Fn(DeviceLostReason, String) + Send + 'static,
     ) {
         DynContext::device_set_device_lost_callback(
             &*self.context,

@@ -426,17 +426,29 @@ impl<A: HalApi> Drop for Buffer<A> {
 }
 
 impl<A: HalApi> Buffer<A> {
-    pub(crate) fn raw(&self, guard: &SnatchGuard) -> &A::Buffer {
-        self.raw.get(guard).unwrap()
+    pub(crate) fn raw(&self, guard: &SnatchGuard) -> Option<&A::Buffer> {
+        self.raw.get(guard)
     }
 
-    pub(crate) fn buffer_unmap_inner(
-        self: &Arc<Self>,
-    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    // Note: This must not be called while holding a lock.
+    pub(crate) fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        if let Some((mut operation, status)) = self.unmap_inner()? {
+            if let Some(callback) = operation.callback.take() {
+                callback.call(status);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         use hal::Device;
 
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
+        let raw_buf = self
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         let buffer_id = self.info.id();
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(&mut *self.map_state.lock(), resource::BufferMapState::Idle) {
@@ -461,16 +473,11 @@ impl<A: HalApi> Buffer<A> {
                 if needs_flush {
                     unsafe {
                         device.raw().flush_mapped_ranges(
-                            stage_buffer.raw(&snatch_guard),
+                            stage_buffer.raw(&snatch_guard).unwrap(),
                             iter::once(0..self.size),
                         );
                     }
                 }
-
-                let raw_buf = self
-                    .raw
-                    .get(&snatch_guard)
-                    .ok_or(BufferAccessError::Destroyed)?;
 
                 self.info
                     .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
@@ -480,7 +487,7 @@ impl<A: HalApi> Buffer<A> {
                     size,
                 });
                 let transition_src = hal::BufferBarrier {
-                    buffer: stage_buffer.raw(&snatch_guard),
+                    buffer: stage_buffer.raw(&snatch_guard).unwrap(),
                     usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
@@ -496,7 +503,7 @@ impl<A: HalApi> Buffer<A> {
                     );
                     if self.size > 0 {
                         encoder.copy_buffer_to_buffer(
-                            stage_buffer.raw(&snatch_guard),
+                            stage_buffer.raw(&snatch_guard).unwrap(),
                             raw_buf,
                             region.into_iter(),
                         );
@@ -531,7 +538,7 @@ impl<A: HalApi> Buffer<A> {
                 unsafe {
                     device
                         .raw()
-                        .unmap_buffer(self.raw(&snatch_guard))
+                        .unmap_buffer(raw_buf)
                         .map_err(DeviceError::from)?
                 };
             }
@@ -540,43 +547,30 @@ impl<A: HalApi> Buffer<A> {
     }
 
     pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
-        let map_closure;
-        // Restrict the locks to this scope.
-        {
-            let device = &self.device;
-            let buffer_id = self.info.id();
+        let device = &self.device;
+        let buffer_id = self.info.id();
 
-            map_closure = self.buffer_unmap_inner().unwrap_or(None);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::FreeBuffer(buffer_id));
-            }
-            // Note: a future commit will replace this with a read guard
-            // and actually snatch the buffer.
-            let snatch_guard = device.snatchable_lock.read();
-            if self.raw.get(&snatch_guard).is_none() {
-                return Err(resource::DestroyError::AlreadyDestroyed);
-            }
-
-            let temp = queue::TempResource::Buffer(self.clone());
-            let mut pending_writes = device.pending_writes.lock();
-            let pending_writes = pending_writes.as_mut().unwrap();
-            if pending_writes.dst_buffers.contains_key(&buffer_id) {
-                pending_writes.temp_resources.push(temp);
-            } else {
-                let last_submit_index = self.info.submission_index();
-                device
-                    .lock_life()
-                    .schedule_resource_destruction(temp, last_submit_index);
-            }
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::FreeBuffer(buffer_id));
+        }
+        // Note: a future commit will replace this with a read guard
+        // and actually snatch the buffer.
+        let snatch_guard = device.snatchable_lock.read();
+        if self.raw.get(&snatch_guard).is_none() {
+            return Err(resource::DestroyError::AlreadyDestroyed);
         }
 
-        // Note: outside the scope where locks are held when calling the callback
-        if let Some((mut operation, status)) = map_closure {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(status);
-            }
+        let temp = queue::TempResource::Buffer(self.clone());
+        let mut pending_writes = device.pending_writes.lock();
+        let pending_writes = pending_writes.as_mut().unwrap();
+        if pending_writes.dst_buffers.contains_key(&buffer_id) {
+            pending_writes.temp_resources.push(temp);
+        } else {
+            let last_submit_index = self.info.submission_index();
+            device
+                .lock_life()
+                .schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
@@ -855,6 +849,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hal_device = device.as_ref().map(|device| device.raw());
 
         hal_device_callback(hal_device)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw fence handle must not be manually destroyed
+    pub unsafe fn device_fence_as_hal<A: HalApi, F: FnOnce(Option<&A::Fence>) -> R, R>(
+        &self,
+        id: DeviceId,
+        hal_fence_callback: F,
+    ) -> R {
+        profiling::scope!("Device::fence_as_hal");
+
+        let hub = A::hub(self);
+        let device = hub.devices.try_get(id).ok().flatten();
+        let hal_fence = device.as_ref().map(|device| device.fence.read());
+
+        hal_fence_callback(hal_fence.as_deref().unwrap().as_ref())
     }
 
     /// # Safety

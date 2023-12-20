@@ -576,6 +576,8 @@ pub enum RenderPassErrorInner {
     SurfaceTextureDropped,
     #[error("Not enough memory left for render pass")]
     OutOfMemory,
+    #[error("The bind group at index {0:?} is invalid")]
+    InvalidBindGroup(usize),
     #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,
     #[error("Unable to clear non-present/read-only stencil")]
@@ -1465,19 +1467,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // is held to the bind group itself.
 
                         buffer_memory_init_actions.extend(
-                            bind_group
-                                .used_buffer_ranges
-                                .read()
-                                .iter()
-                                .filter_map(|action| {
-                                    action
-                                        .buffer
-                                        .initialization_status
-                                        .read()
-                                        .check_action(action)
-                                }),
+                            bind_group.used_buffer_ranges.iter().filter_map(|action| {
+                                action
+                                    .buffer
+                                    .initialization_status
+                                    .read()
+                                    .check_action(action)
+                            }),
                         );
-                        for action in bind_group.used_texture_ranges.read().iter() {
+                        for action in bind_group.used_texture_ranges.iter() {
                             info.pending_discard_init_fixups
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
@@ -1506,7 +1504,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {
                                 if let Some(group) = e.group.as_ref() {
-                                    let raw_bg = group.raw();
+                                    let raw_bg = group
+                                        .raw(&snatch_guard)
+                                        .ok_or(RenderPassErrorInner::InvalidBindGroup(i))
+                                        .map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(
                                             pipeline_layout,
@@ -1584,7 +1585,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
                                     if let Some(group) = e.group.as_ref() {
-                                        let raw_bg = group.raw();
+                                        let raw_bg = group
+                                            .raw(&snatch_guard)
+                                            .ok_or(RenderPassErrorInner::InvalidBindGroup(i))
+                                            .map_pass_err(scope)?;
                                         unsafe {
                                             raw.set_bind_group(
                                                 pipeline.layout.raw(),
@@ -2353,6 +2357,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_err(|e| match e {
                                 ExecutionError::DestroyedBuffer(id) => {
                                     RenderCommandError::DestroyedBuffer(id)
+                                }
+                                ExecutionError::InvalidBindGroup(id) => {
+                                    RenderCommandError::InvalidBindGroup(id)
                                 }
                                 ExecutionError::Unimplemented(what) => {
                                     RenderCommandError::Unimplemented(what)

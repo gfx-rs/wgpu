@@ -479,12 +479,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
+        let raw_dst_buffer = dst_buffer
+            .raw(&snatch_guard)
+            .ok_or(QueryError::InvalidBuffer(destination))?;
+
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.into_iter());
             raw_encoder.copy_query_results(
                 query_set.raw(),
                 start_query..end_query,
-                dst_buffer.raw(&snatch_guard),
+                raw_dst_buffer,
                 destination_offset,
                 wgt::BufferSize::new_unchecked(stride as u64),
             );

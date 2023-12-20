@@ -3,8 +3,8 @@ use crate::device::trace;
 use crate::{
     api_log, binding_model, command, conv,
     device::{
-        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
-        IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
+        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, DeviceLostReason,
+        HostMap, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
     hal_api::HalApi,
@@ -228,11 +228,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 let snatch_guard = device.snatchable_lock.read();
-                let mapping = match unsafe {
-                    device
-                        .raw()
-                        .map_buffer(stage.raw(&snatch_guard), 0..stage.size)
-                } {
+                let stage_raw = stage.raw(&snatch_guard).unwrap();
+                let mapping = match unsafe { device.raw().map_buffer(stage_raw, 0..stage.size) } {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         to_destroy.push(buffer);
@@ -401,7 +398,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let raw_buf = buffer.raw(&snatch_guard);
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -451,7 +450,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer.raw(&snatch_guard);
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -486,10 +487,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let mut buffer_guard = hub.buffers.write();
-        let buffer = buffer_guard
-            .get_and_mark_destroyed(buffer_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+        let buffer = {
+            let mut buffer_guard = hub.buffers.write();
+            buffer_guard
+                .get_and_mark_destroyed(buffer_id)
+                .map_err(|_| resource::DestroyError::Invalid)?
+        };
+
+        let _ = buffer.unmap();
+
         buffer.destroy()
     }
 
@@ -499,37 +505,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        if let Some(buffer) = hub.buffers.unregister(buffer_id) {
-            if buffer.ref_count() == 1 {
-                buffer.destroy().ok();
+        let buffer = match hub.buffers.unregister(buffer_id) {
+            Some(buffer) => buffer,
+            None => {
+                return;
             }
+        };
 
-            let last_submit_index = buffer.info.submission_index();
+        let _ = buffer.unmap();
 
-            let device = buffer.device.clone();
+        let last_submit_index = buffer.info.submission_index();
 
-            if device
-                .pending_writes
-                .lock()
-                .as_ref()
-                .unwrap()
-                .dst_buffers
-                .contains_key(&buffer_id)
-            {
-                device.lock_life().future_suspected_buffers.push(buffer);
-            } else {
-                device
-                    .lock_life()
-                    .suspected_resources
-                    .buffers
-                    .insert(buffer_id, buffer);
-            }
+        let device = buffer.device.clone();
 
-            if wait {
-                match device.wait_for_submit(last_submit_index) {
-                    Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
-                }
+        if device
+            .pending_writes
+            .lock()
+            .as_ref()
+            .unwrap()
+            .dst_buffers
+            .contains_key(&buffer_id)
+        {
+            device.lock_life().future_suspected_buffers.push(buffer);
+        } else {
+            device
+                .lock_life()
+                .suspected_resources
+                .buffers
+                .insert(buffer_id, buffer);
+        }
+
+        if wait {
+            match device.wait_for_submit(last_submit_index) {
+                Ok(()) => (),
+                Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
             }
         }
     }
@@ -2239,6 +2248,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         if let Some(device) = hub.devices.unregister(device_id) {
+            let device_lost_closure = device.lock_life().device_lost_closure.take();
+            if let Some(closure) = device_lost_closure {
+                closure.call(DeviceLostReason::Unknown, String::from("Device dropped."));
+            }
+
             // The things `Device::prepare_to_die` takes care are mostly
             // unnecessary here. We know our queue is empty, so we don't
             // need to wait for submissions or triage them. We know we were
@@ -2254,6 +2268,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    // This closure will be called exactly once during "lose the device"
+    // or when the device is dropped, if it was never lost.
     pub fn device_set_device_lost_closure<A: HalApi>(
         &self,
         device_id: DeviceId,
@@ -2503,27 +2519,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {buffer_id:?}");
 
-        let closure;
-        {
-            // Restrict the locks to this scope.
-            let hub = A::hub(self);
+        let hub = A::hub(self);
 
-            let buffer = hub
-                .buffers
-                .get(buffer_id)
-                .map_err(|_| BufferAccessError::Invalid)?;
-            if !buffer.device.is_valid() {
-                return Err(DeviceError::Lost.into());
-            }
-            closure = buffer.buffer_unmap_inner()
+        let buffer = hub
+            .buffers
+            .get(buffer_id)
+            .map_err(|_| BufferAccessError::Invalid)?;
+
+        if !buffer.device.is_valid() {
+            return Err(DeviceError::Lost.into());
         }
 
-        // Note: outside the scope where locks are held when calling the callback
-        if let Some((mut operation, status)) = closure? {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(status);
-            }
-        }
-        Ok(())
+        buffer.unmap()
     }
 }

@@ -66,6 +66,7 @@ Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`
 - No longer validate surfaces against their allowed extent range on configure. This caused warnings that were almost impossible to avoid. As before, the resulting behavior depends on the compositor. By @wumpf in [#4796](https://github.com/gfx-rs/wgpu/pull/4796)
 - Added support for the float32-filterable feature. By @almarklein in [#4759](https://github.com/gfx-rs/wgpu/pull/4759)
 - wgpu and wgpu-core features are now documented on docs.rs. By @wumpf in [#4886](https://github.com/gfx-rs/wgpu/pull/4886)
+- DeviceLostClosure is guaranteed to be invoked exactly once. By @bradwerth in [#4862](https://github.com/gfx-rs/wgpu/pull/4862)
 
 #### OpenGL
 - `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
@@ -757,7 +758,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 
 - Implemented basic ray-tracing api for acceleration structures, and ray-queries @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
 
-#### Hal 
+#### Hal
 
 - Added basic ray-tracing api for acceleration structures, and ray-queries @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
 
