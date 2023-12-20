@@ -1,4 +1,4 @@
-pub use pp_rs::token::{Float, Integer, Location, PreprocessorError, Token as PPToken};
+pub use pp_rs::token::{Float, Integer, Location, Token as PPToken};
 
 use super::ast::Precision;
 use crate::{Interpolation, Sampling, Span, Type};
