@@ -174,6 +174,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 #### General
 
 - `BufferMappedRange` trait is now `WasmNotSendSync`, i.e. it is `Send`/`Sync` if not on wasm or `fragile-send-sync-non-atomic-wasm` is enabled. By @wumpf in [#4818](https://github.com/gfx-rs/wgpu/pull/4818)
+- `wgpu_render_pass_set_bind_group` and `wgpu_compute_pass_set_bind_group` clamp the number of dynamic offsets to fit within limits. By @bradwerth in [#4918](https://github.com/gfx-rs/wgpu/pull/4918)
 
 #### Vulkan
 

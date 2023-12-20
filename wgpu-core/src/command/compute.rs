@@ -919,9 +919,17 @@ pub mod compute_ffi {
             return;
         }
 
+        // Clamp the number of dynamic offsets to the maximum value that the
+        // SetBindGroup structure supports.
+        let num_dynamic_offsets = if offset_length as u64 > std::u8::MAX.into() {
+            std::u8::MAX
+        } else {
+            offset_length as u8
+        };
+
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index,
-            num_dynamic_offsets: offset_length.try_into().unwrap(),
+            num_dynamic_offsets,
             bind_group_id,
         });
     }
