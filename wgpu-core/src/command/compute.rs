@@ -188,8 +188,8 @@ pub enum DispatchError {
 pub enum ComputePassErrorInner {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
-    #[error("Bind group {0:?} is invalid")]
-    InvalidBindGroup(id::BindGroupId),
+    #[error("Bind group at index {0:?} is invalid")]
+    InvalidBindGroup(usize),
     #[error("Device {0:?} is invalid")]
     InvalidDevice(DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
@@ -232,9 +232,6 @@ impl PrettyError for ComputePassErrorInner {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
         match *self {
-            Self::InvalidBindGroup(id) => {
-                fmt.bind_group_label(&id);
-            }
             Self::InvalidPipeline(id) => {
                 fmt.compute_pipeline_label(&id);
             }
@@ -520,27 +517,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let bind_group = tracker
                         .bind_groups
                         .add_single(&*bind_group_guard, bind_group_id)
-                        .ok_or(ComputePassErrorInner::InvalidBindGroup(bind_group_id))
+                        .ok_or(ComputePassErrorInner::InvalidBindGroup(index as usize))
                         .map_pass_err(scope)?;
                     bind_group
                         .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(
-                        bind_group
-                            .used_buffer_ranges
-                            .read()
-                            .iter()
-                            .filter_map(|action| {
-                                action
-                                    .buffer
-                                    .initialization_status
-                                    .read()
-                                    .check_action(action)
-                            }),
+                        bind_group.used_buffer_ranges.iter().filter_map(|action| {
+                            action
+                                .buffer
+                                .initialization_status
+                                .read()
+                                .check_action(action)
+                        }),
                     );
 
-                    for action in bind_group.used_texture_ranges.read().iter() {
+                    for action in bind_group.used_texture_ranges.iter() {
                         pending_discard_init_fixups
                             .extend(texture_memory_actions.register_init_action(action));
                     }
@@ -554,7 +547,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
                             if let Some(group) = e.group.as_ref() {
-                                let raw_bg = group.raw();
+                                let raw_bg = group
+                                    .raw(&snatch_guard)
+                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(i))
+                                    .map_pass_err(scope)?;
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
@@ -598,7 +594,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {
                                 if let Some(group) = e.group.as_ref() {
-                                    let raw_bg = group.raw();
+                                    let raw_bg = group
+                                        .raw(&snatch_guard)
+                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(i))
+                                        .map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(
                                             pipeline.layout.raw(),

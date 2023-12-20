@@ -3,8 +3,8 @@ use crate::device::trace;
 use crate::{
     api_log, binding_model, command, conv,
     device::{
-        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
-        IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
+        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, DeviceLostReason,
+        HostMap, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
     hal_api::HalApi,
@@ -228,11 +228,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 let snatch_guard = device.snatchable_lock.read();
-                let mapping = match unsafe {
-                    device
-                        .raw()
-                        .map_buffer(stage.raw(&snatch_guard), 0..stage.size)
-                } {
+                let stage_raw = stage.raw(&snatch_guard).unwrap();
+                let mapping = match unsafe { device.raw().map_buffer(stage_raw, 0..stage.size) } {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         to_destroy.push(buffer);
@@ -401,7 +398,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let raw_buf = buffer.raw(&snatch_guard);
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -451,7 +450,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer.raw(&snatch_guard);
+        let raw_buf = buffer
+            .raw(&snatch_guard)
+            .ok_or(BufferAccessError::Destroyed)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -2247,6 +2248,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         if let Some(device) = hub.devices.unregister(device_id) {
+            let device_lost_closure = device.lock_life().device_lost_closure.take();
+            if let Some(closure) = device_lost_closure {
+                closure.call(DeviceLostReason::Unknown, String::from("Device dropped."));
+            }
+
             // The things `Device::prepare_to_die` takes care are mostly
             // unnecessary here. We know our queue is empty, so we don't
             // need to wait for submissions or triage them. We know we were
@@ -2262,6 +2268,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    // This closure will be called exactly once during "lose the device"
+    // or when the device is dropped, if it was never lost.
     pub fn device_set_device_lost_closure<A: HalApi>(
         &self,
         device_id: DeviceId,

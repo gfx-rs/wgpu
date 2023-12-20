@@ -9,6 +9,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log,
+    snatch::SnatchGuard,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label,
@@ -16,7 +17,6 @@ use crate::{
 
 use arrayvec::ArrayVec;
 
-use parking_lot::RwLock;
 #[cfg(feature = "replay")]
 use serde::Deserialize;
 #[cfg(feature = "trace")]
@@ -815,9 +815,9 @@ pub struct BindGroup<A: HalApi> {
     pub(crate) layout: Arc<BindGroupLayout<A>>,
     pub(crate) info: ResourceInfo<BindGroupId>,
     pub(crate) used: BindGroupStates<A>,
-    pub(crate) used_buffer_ranges: RwLock<Vec<BufferInitTrackerAction<A>>>,
-    pub(crate) used_texture_ranges: RwLock<Vec<TextureInitTrackerAction<A>>>,
-    pub(crate) dynamic_binding_info: RwLock<Vec<BindGroupDynamicBindingData>>,
+    pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction<A>>,
+    pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction<A>>,
+    pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
     /// Actual binding sizes for buffers that don't have `min_binding_size`
     /// specified in BGL. Listed in the order of iteration of `BGL.entries`.
     pub(crate) late_buffer_binding_sizes: Vec<wgt::BufferSize>,
@@ -836,8 +836,13 @@ impl<A: HalApi> Drop for BindGroup<A> {
 }
 
 impl<A: HalApi> BindGroup<A> {
-    pub(crate) fn raw(&self) -> &A::BindGroup {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self, guard: &SnatchGuard) -> Option<&A::BindGroup> {
+        for buffer in &self.used_buffer_ranges {
+            // Clippy insist on writing it this way. The idea is to return None
+            // if any of the raw buffer is not valid anymore.
+            let _ = buffer.buffer.raw(guard)?;
+        }
+        self.raw.as_ref()
     }
     pub(crate) fn validate_dynamic_bindings(
         &self,
@@ -845,17 +850,16 @@ impl<A: HalApi> BindGroup<A> {
         offsets: &[wgt::DynamicOffset],
         limits: &wgt::Limits,
     ) -> Result<(), BindError> {
-        if self.dynamic_binding_info.read().len() != offsets.len() {
+        if self.dynamic_binding_info.len() != offsets.len() {
             return Err(BindError::MismatchedDynamicOffsetCount {
                 group: bind_group_index,
-                expected: self.dynamic_binding_info.read().len(),
+                expected: self.dynamic_binding_info.len(),
                 actual: offsets.len(),
             });
         }
 
         for (idx, (info, &offset)) in self
             .dynamic_binding_info
-            .read()
             .iter()
             .zip(offsets.iter())
             .enumerate()
