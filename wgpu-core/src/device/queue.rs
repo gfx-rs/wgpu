@@ -16,8 +16,8 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, ResourceType,
-        StagingBuffer, Texture, TextureInner,
+        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, Resource, ResourceInfo,
+        ResourceType, StagingBuffer, Texture, TextureInner,
     },
     resource_log, track, FastHashMap, SubmissionIndex,
 };
@@ -163,6 +163,7 @@ pub struct WrappedSubmissionIndex {
 pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
     StagingBuffer(Arc<StagingBuffer<A>>),
+    DestroyedBuffer(Arc<DestroyedBuffer<A>>),
     Texture(Arc<Texture<A>>),
 }
 
