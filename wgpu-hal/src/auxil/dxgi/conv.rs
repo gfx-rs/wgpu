@@ -140,9 +140,11 @@ pub fn map_texture_format_for_srv_uav(
             crate::FormatAspects::STENCIL,
         ) => dxgiformat::DXGI_FORMAT_X24_TYPELESS_G8_UINT,
 
-        (format, crate::FormatAspects::COLOR) => map_texture_format(format),
+        (_, crate::FormatAspects::DEPTH)
+        | (_, crate::FormatAspects::STENCIL)
+        | (_, crate::FormatAspects::DEPTH_STENCIL) => return None,
 
-        _ => return None,
+        _ => map_texture_format(format),
     })
 }
 

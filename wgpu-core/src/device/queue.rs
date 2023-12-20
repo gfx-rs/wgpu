@@ -16,8 +16,8 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, ResourceType,
-        StagingBuffer, Texture, TextureInner,
+        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, Resource, ResourceInfo,
+        ResourceType, StagingBuffer, Texture, TextureInner,
     },
     resource_log, track, FastHashMap, SubmissionIndex,
 };
@@ -163,6 +163,7 @@ pub struct WrappedSubmissionIndex {
 pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
     StagingBuffer(Arc<StagingBuffer<A>>),
+    DestroyedBuffer(Arc<DestroyedBuffer<A>>),
     Texture(Arc<Texture<A>>),
 }
 
@@ -593,9 +594,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .set_single(dst, hal::BufferUses::COPY_DST)
                 .ok_or(TransferError::InvalidBuffer(buffer_id))?
         };
+        let snatch_guard = device.snatchable_lock.read();
         let dst_raw = dst
             .raw
-            .as_ref()
+            .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
 
         if dst.device.as_info().id() != device.as_info().id() {
@@ -618,7 +620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer: inner_buffer.as_ref().unwrap(),
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
-        .chain(transition.map(|pending| pending.into_hal(&dst)));
+        .chain(transition.map(|pending| pending.into_hal(&dst, &snatch_guard)));
         let encoder = pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
@@ -1139,6 +1141,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut active_executions = Vec::new();
             let mut used_surface_textures = track::TextureUsageScope::new();
 
+            let snatch_guard = device.snatchable_lock.read();
+
             {
                 let mut command_buffer_guard = hub.command_buffers.write();
 
@@ -1150,8 +1154,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // a temporary one, since the chains are not finished.
                     let mut temp_suspected = device.temp_suspected.lock();
                     {
-                        let mut suspected =
-                            temp_suspected.replace(ResourceMaps::new::<A>()).unwrap();
+                        let mut suspected = temp_suspected.replace(ResourceMaps::new()).unwrap();
                         suspected.clear();
                     }
 
@@ -1207,8 +1210,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             // update submission IDs
                             for buffer in cmd_buf_trackers.buffers.used_resources() {
                                 let id = buffer.info.id();
-                                let raw_buf = match buffer.raw {
-                                    Some(ref raw) => raw,
+                                let raw_buf = match buffer.raw.get(&snatch_guard) {
+                                    Some(raw) => raw,
                                     None => {
                                         return Err(QueueSubmitError::DestroyedBuffer(id));
                                     }
@@ -1221,7 +1224,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         unsafe { device.raw().unmap_buffer(raw_buf) }
                                             .map_err(DeviceError::from)?;
                                     }
-                                    temp_suspected.as_mut().unwrap().insert(id, buffer.clone());
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .buffers
+                                        .insert(id, buffer.clone());
                                 } else {
                                     match *buffer.map_state.lock() {
                                         BufferMapState::Idle => (),
@@ -1243,7 +1250,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 };
                                 texture.info.use_at(submit_index);
                                 if texture.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(id, texture.clone());
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .textures
+                                        .insert(id, texture.clone());
                                 }
                                 if should_extend {
                                     unsafe {
@@ -1259,6 +1270,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .texture_views
                                         .insert(texture_view.as_info().id(), texture_view.clone());
                                 }
                             }
@@ -1278,6 +1290,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         temp_suspected
                                             .as_mut()
                                             .unwrap()
+                                            .bind_groups
                                             .insert(bg.as_info().id(), bg.clone());
                                     }
                                 }
@@ -1288,7 +1301,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 compute_pipeline.info.use_at(submit_index);
                                 if compute_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(
+                                    temp_suspected.as_mut().unwrap().compute_pipelines.insert(
                                         compute_pipeline.as_info().id(),
                                         compute_pipeline.clone(),
                                     );
@@ -1299,7 +1312,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 render_pipeline.info.use_at(submit_index);
                                 if render_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(
+                                    temp_suspected.as_mut().unwrap().render_pipelines.insert(
                                         render_pipeline.as_info().id(),
                                         render_pipeline.clone(),
                                     );
@@ -1311,6 +1324,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .query_sets
                                         .insert(query_set.as_info().id(), query_set.clone());
                                 }
                             }
@@ -1331,6 +1345,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .render_bundles
                                         .insert(bundle.as_info().id(), bundle.clone());
                                 }
                             }
@@ -1362,6 +1377,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &mut baked.encoder,
                             &mut *trackers,
                             &baked.trackers,
+                            &snatch_guard,
                         );
 
                         let transit = unsafe { baked.encoder.end_encoding().unwrap() };

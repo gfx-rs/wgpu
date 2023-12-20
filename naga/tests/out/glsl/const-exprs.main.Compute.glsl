@@ -17,6 +17,8 @@ const vec4 DIV = vec4(0.44444445, 0.0, 0.0, 0.0);
 const int TEXTURE_KIND_REGULAR = 0;
 const int TEXTURE_KIND_WARP = 1;
 const int TEXTURE_KIND_SKY = 2;
+const vec2 add_vec = vec2(4.0, 5.0);
+const bvec2 compare_vec = bvec2(true, false);
 
 
 void swizzle_of_compose() {

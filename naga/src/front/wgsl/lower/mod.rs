@@ -1574,7 +1574,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(Typed::Plain(handle));
             }
             ast::Expression::Unary { op, expr } => {
-                let expr = self.expression(expr, ctx)?;
+                let expr = self.expression_for_abstract(expr, ctx)?;
                 Typed::Plain(crate::Expression::Unary { op, expr })
             }
             ast::Expression::AddrOf(expr) => {
@@ -1602,11 +1602,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(Typed::Reference(pointer));
             }
             ast::Expression::Binary { op, left, right } => {
-                // Load both operands.
-                let mut left = self.expression(left, ctx)?;
-                let mut right = self.expression(right, ctx)?;
-                ctx.binary_op_splat(op, &mut left, &mut right)?;
-                Typed::Plain(crate::Expression::Binary { op, left, right })
+                self.binary(op, left, right, span, ctx)?
             }
             ast::Expression::Call {
                 ref function,
@@ -1735,6 +1731,52 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         };
 
         expr.try_map(|handle| ctx.append_expression(handle, span))
+    }
+
+    fn binary(
+        &mut self,
+        op: crate::BinaryOperator,
+        left: Handle<ast::Expression<'source>>,
+        right: Handle<ast::Expression<'source>>,
+        span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<Typed<crate::Expression>, Error<'source>> {
+        // Load both operands.
+        let mut left = self.expression_for_abstract(left, ctx)?;
+        let mut right = self.expression_for_abstract(right, ctx)?;
+
+        // Convert `scalar op vector` to `vector op vector` by introducing
+        // `Splat` expressions.
+        ctx.binary_op_splat(op, &mut left, &mut right)?;
+
+        // Apply automatic conversions.
+        match op {
+            // Shift operators require the right operand to be `u32` or
+            // `vecN<u32>`. We can let the validator sort out vector length
+            // issues, but the right operand must be, or convert to, a u32 leaf
+            // scalar.
+            crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight => {
+                right =
+                    ctx.try_automatic_conversion_for_leaf_scalar(right, crate::Scalar::U32, span)?;
+            }
+
+            // All other operators follow the same pattern: reconcile the
+            // scalar leaf types. If there's no reconciliation possible,
+            // leave the expressions as they are: validation will report the
+            // problem.
+            _ => {
+                ctx.grow_types(left)?;
+                ctx.grow_types(right)?;
+                if let Ok(consensus_scalar) =
+                    ctx.automatic_conversion_consensus([left, right].iter())
+                {
+                    ctx.convert_to_leaf_scalar(&mut left, consensus_scalar)?;
+                    ctx.convert_to_leaf_scalar(&mut right, consensus_scalar)?;
+                }
+            }
+        }
+
+        Ok(Typed::Plain(crate::Expression::Binary { op, left, right }))
     }
 
     /// Generate Naga IR for call expressions and statements, and type

@@ -243,6 +243,10 @@ fn draw_test_with_reports(
 
     ctx.device
         .poll(wgpu::Maintain::WaitForSubmissionIndex(submit_index));
+    // Because of dependency between resources, A resource being destroyed during poll
+    // can cause another resource to be ready for destruction next time poll is called.
+    // Call poll twice to ensure all destroyable resources are destroyed.
+    ctx.device.poll(wgpu::Maintain::Poll);
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report(ctx.adapter_info.backend);

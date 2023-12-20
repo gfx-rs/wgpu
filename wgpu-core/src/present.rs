@@ -202,7 +202,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     dimension: wgt::TextureViewDimension::D2,
                     usage: hal::TextureUses::COLOR_TARGET,
                     range: wgt::ImageSubresourceRange::default(),
-                    plane: None,
                 };
                 let clear_view = unsafe {
                     hal::Device::create_texture_view(

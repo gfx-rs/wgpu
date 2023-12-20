@@ -29,47 +29,74 @@ targets = [
 
 [features]
 default = ["link"]
-# Log all API entry points at info instead of trace level.
+
+## Log all API entry points at info instead of trace level.
 api_log_info = []
-# Log resource lifecycle management at info instead of trace level.
+
+## Log resource lifecycle management at info instead of trace level.
 resource_log_info = []
 
-# Backends, passed through to wgpu-hal
-metal = ["hal/metal"]
-vulkan = ["hal/vulkan"]
-gles = ["hal/gles"]
-dx12 = ["hal/dx12"]
-
-# Use static linking for libraries. Disale to manually link. Enabled by default.
+## Use static linking for libraries. Disale to manually link. Enabled by default.
 link = ["hal/link"]
 
-# Support the Renderdoc graphics debugger:
-# https://renderdoc.org/
+## Support the Renderdoc graphics debugger:
+## <https://renderdoc.org/>
 renderdoc = ["hal/renderdoc"]
 
-# Apply run-time checks, even in release builds. These are in addition
-# to the validation carried out at public APIs in all builds.
+## Apply run-time checks, even in release builds. These are in addition
+## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
-# Enable API tracing
+
+## Enable API tracing.
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
-# Enable API replaying
+
+## Enable API replaying
 replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
-# Enable serializable compute/render passes, and bundle encoders.
+
+## Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
+
 id32 = []
-# Enable `ShaderModuleSource::Wgsl`
+
+## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
-# Implement `Send` and `Sync` on Wasm.
+
+## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
+##
+## WebGL/WebGPU objects can not be shared between threads.
+## However, it can be useful to artificially mark them as `Send` and `Sync`
+## anyways to make it easier to write cross-platform code.
+## This is technically *very* unsafe in a multithreaded environment,
+## but on a wasm binary compiled without atomics we know we are definitely
+## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
     "hal/fragile-send-sync-non-atomic-wasm",
     "wgt/fragile-send-sync-non-atomic-wasm",
 ]
+
+#! ### Backends, passed through to wgpu-hal
+# --------------------------------------------------------------------
+
+## Enable the `metal` backend.
+metal = ["hal/metal"]
+
+## Enable the `vulkan` backend.
+vulkan = ["hal/vulkan"]
+
+## Enable the `GLES` backend.
+##
+## This is used for all of GLES, OpenGL, and WebGL.
+gles = ["hal/gles"]
+
+## Enable the `dx12` backend.
+dx12 = ["hal/dx12"]
 
 [dependencies]
 arrayvec = "0.7"
 bit-vec = "0.6"
 bitflags = "2"
 codespan-reporting = "0.11"
+document-features.workspace = true
 indexmap = "1"
 log = "0.4"
 once_cell = "1"

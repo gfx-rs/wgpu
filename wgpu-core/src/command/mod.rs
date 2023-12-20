@@ -22,6 +22,7 @@ use crate::device::Device;
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::hub::Hub;
 use crate::id::CommandBufferId;
+use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo, ResourceType};
@@ -138,7 +139,7 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
         if self.data.lock().is_none() {
             return;
         }
-        resource_log!("resource::CommandBuffer::drop {}", self.info.label());
+        resource_log!("resource::CommandBuffer::drop {:?}", self.info.label());
         let mut baked = self.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list.into_iter());
@@ -193,32 +194,38 @@ impl<A: HalApi> CommandBuffer<A> {
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &Tracker<A>,
+        snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("insert_barriers");
 
         base.buffers.set_from_tracker(&head.buffers);
         base.textures.set_from_tracker(&head.textures);
 
-        Self::drain_barriers(raw, base);
+        Self::drain_barriers(raw, base, snatch_guard);
     }
 
     pub(crate) fn insert_barriers_from_scope(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &UsageScope<A>,
+        snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("insert_barriers");
 
         base.buffers.set_from_usage_scope(&head.buffers);
         base.textures.set_from_usage_scope(&head.textures);
 
-        Self::drain_barriers(raw, base);
+        Self::drain_barriers(raw, base, snatch_guard);
     }
 
-    pub(crate) fn drain_barriers(raw: &mut A::CommandEncoder, base: &mut Tracker<A>) {
+    pub(crate) fn drain_barriers(
+        raw: &mut A::CommandEncoder,
+        base: &mut Tracker<A>,
+        snatch_guard: &SnatchGuard,
+    ) {
         profiling::scope!("drain_barriers");
 
-        let buffer_barriers = base.buffers.drain_transitions();
+        let buffer_barriers = base.buffers.drain_transitions(snatch_guard);
         let (transitions, textures) = base.textures.drain_transitions();
         let texture_barriers = transitions
             .into_iter()

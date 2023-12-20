@@ -2411,9 +2411,9 @@ pub enum TextureFormat {
     /// - 0: Single 8 bit channel luminance.
     /// - 1: Dual 8 bit channel chrominance at half width and half height.
     ///
-    /// Valid view formats for luminance are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
+    /// Valid view formats for luminance are [`TextureFormat::R8Unorm`].
     ///
-    /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
+    /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`].
     ///
     /// Width and height must be even.
     ///
@@ -2835,6 +2835,18 @@ impl Serialize for TextureFormat {
     }
 }
 
+impl TextureAspect {
+    /// Returns the texture aspect for a given plane.
+    pub fn from_plane(plane: u32) -> Option<Self> {
+        Some(match plane {
+            0 => Self::Plane0,
+            1 => Self::Plane1,
+            2 => Self::Plane2,
+            _ => return None,
+        })
+    }
+}
+
 impl TextureFormat {
     /// Returns the aspect-specific format of the original format
     ///
@@ -2852,7 +2864,10 @@ impl TextureFormat {
             ) => Some(Self::Stencil8),
             (Self::Depth24PlusStencil8, TextureAspect::DepthOnly) => Some(Self::Depth24Plus),
             (Self::Depth32FloatStencil8, TextureAspect::DepthOnly) => Some(Self::Depth32Float),
-            (format, TextureAspect::All) => Some(format),
+            (Self::NV12, TextureAspect::Plane0) => Some(Self::R8Unorm),
+            (Self::NV12, TextureAspect::Plane1) => Some(Self::Rg8Unorm),
+            // views to multi-planar formats must specify the plane
+            (format, TextureAspect::All) if !format.is_multi_planar_format() => Some(format),
             _ => None,
         }
     }
@@ -2894,7 +2909,15 @@ impl TextureFormat {
 
     /// Returns `true` if the format is a multi-planar format
     pub fn is_multi_planar_format(&self) -> bool {
-        matches!(*self, Self::NV12)
+        self.planes().is_some()
+    }
+
+    /// Returns the number of planes a multi-planar format has.
+    pub fn planes(&self) -> Option<u32> {
+        match *self {
+            Self::NV12 => Some(2),
+            _ => None,
+        }
     }
 
     /// Returns `true` if the format has a color aspect
@@ -2919,6 +2942,14 @@ impl TextureFormat {
         match *self {
             Self::Stencil8 | Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
             _ => false,
+        }
+    }
+
+    /// Returns the size multiple requirement for a texture using this format.
+    pub fn size_multiple_requirement(&self) -> (u32, u32) {
+        match *self {
+            Self::NV12 => (2, 2),
+            _ => self.block_dimensions(),
         }
     }
 
@@ -2975,9 +3006,8 @@ impl TextureFormat {
             | Self::Depth24Plus
             | Self::Depth24PlusStencil8
             | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => (1, 1),
-
-            Self::NV12 => (2, 2),
+            | Self::Depth32FloatStencil8
+            | Self::NV12 => (1, 1),
 
             Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
@@ -3253,16 +3283,17 @@ impl TextureFormat {
         }
     }
 
-    /// Returns the sample type compatible with this format and aspect
+    /// Returns the sample type compatible with this format and aspect.
     ///
-    /// Returns `None` only if the format is combined depth-stencil
-    /// and `TextureAspect::All` or no `aspect` was provided
+    /// Returns `None` only if this is a combined depth-stencil format or a multi-planar format
+    /// and `TextureAspect::All` or no `aspect` was provided.
     pub fn sample_type(
         &self,
         aspect: Option<TextureAspect>,
         device_features: Option<Features>,
     ) -> Option<TextureSampleType> {
         let float = TextureSampleType::Float { filterable: true };
+        let unfilterable_float = TextureSampleType::Float { filterable: false };
         let float32_sample_type = TextureSampleType::Float {
             filterable: device_features
                 .unwrap_or(Features::empty())
@@ -3314,12 +3345,17 @@ impl TextureFormat {
             Self::Stencil8 => Some(uint),
             Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => Some(depth),
             Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
-                None | Some(TextureAspect::All) => None,
                 Some(TextureAspect::DepthOnly) => Some(depth),
                 Some(TextureAspect::StencilOnly) => Some(uint),
+                _ => None,
             },
 
-            Self::NV12 => None,
+            Self::NV12 => match aspect {
+                Some(TextureAspect::Plane0) | Some(TextureAspect::Plane1) => {
+                    Some(unfilterable_float)
+                }
+                _ => None,
+            },
 
             Self::R16Unorm
             | Self::R16Snorm
@@ -3368,7 +3404,8 @@ impl TextureFormat {
     /// since uncompressed formats have a block size of 1x1.
     ///
     /// Returns `None` if any of the following are true:
-    ///  - the format is combined depth-stencil and no `aspect` was provided
+    ///  - the format is a combined depth-stencil and no `aspect` was provided
+    ///  - the format is a multi-planar format and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
     #[deprecated(since = "0.19.0", note = "Use `block_copy_size` instead.")]
@@ -3384,7 +3421,8 @@ impl TextureFormat {
     /// since uncompressed formats have a block size of 1x1.
     ///
     /// Returns `None` if any of the following are true:
-    ///  - the format is combined depth-stencil and no `aspect` was provided
+    ///  - the format is a combined depth-stencil and no `aspect` was provided
+    ///  - the format is a multi-planar format and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
     pub fn block_copy_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
@@ -3427,17 +3465,21 @@ impl TextureFormat {
             Self::Depth32Float => Some(4),
             Self::Depth24Plus => None,
             Self::Depth24PlusStencil8 => match aspect {
-                None | Some(TextureAspect::All) => None,
                 Some(TextureAspect::DepthOnly) => None,
                 Some(TextureAspect::StencilOnly) => Some(1),
+                _ => None,
             },
             Self::Depth32FloatStencil8 => match aspect {
-                None | Some(TextureAspect::All) => None,
                 Some(TextureAspect::DepthOnly) => Some(4),
                 Some(TextureAspect::StencilOnly) => Some(1),
+                _ => None,
             },
 
-            Self::NV12 => None,
+            Self::NV12 => match aspect {
+                Some(TextureAspect::Plane0) => Some(1),
+                Some(TextureAspect::Plane1) => Some(2),
+                _ => None,
+            },
 
             Self::Bc1RgbaUnorm | Self::Bc1RgbaUnormSrgb | Self::Bc4RUnorm | Self::Bc4RSnorm => {
                 Some(8)
@@ -3475,7 +3517,7 @@ impl TextureFormat {
 
     /// Returns the number of components this format has taking into account the `aspect`.
     ///
-    /// The `aspect` is only relevant for combined depth-stencil formats.
+    /// The `aspect` is only relevant for combined depth-stencil formats and multi-planar formats.
     pub fn components_with_aspect(&self, aspect: TextureAspect) -> u8 {
         match *self {
             Self::R8Unorm
@@ -3526,11 +3568,15 @@ impl TextureFormat {
             Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
 
             Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
-                TextureAspect::All => 2,
                 TextureAspect::DepthOnly | TextureAspect::StencilOnly => 1,
+                _ => 2,
             },
 
-            Self::NV12 => 3,
+            Self::NV12 => match aspect {
+                TextureAspect::Plane0 => 1,
+                TextureAspect::Plane1 => 2,
+                _ => 3,
+            },
 
             Self::Bc4RUnorm | Self::Bc4RSnorm => 1,
             Self::Bc5RgUnorm | Self::Bc5RgSnorm => 2,
@@ -5228,7 +5274,7 @@ pub enum TextureDimension {
 /// Corresponds to [WebGPU `GPUOrigin2D`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin2ddict).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -5253,12 +5299,18 @@ impl Origin2d {
     }
 }
 
+impl std::fmt::Debug for Origin2d {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self.x, self.y).fmt(f)
+    }
+}
+
 /// Origin of a copy to/from a texture.
 ///
 /// Corresponds to [WebGPU `GPUOrigin3D`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin3ddict).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -5290,12 +5342,18 @@ impl Default for Origin3d {
     }
 }
 
+impl std::fmt::Debug for Origin3d {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self.x, self.y, self.z).fmt(f)
+    }
+}
+
 /// Extent of a texture related operation.
 ///
 /// Corresponds to [WebGPU `GPUExtent3D`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuextent3ddict).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -5307,6 +5365,12 @@ pub struct Extent3d {
     /// The depth of the extent or the number of array layers
     #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
+}
+
+impl std::fmt::Debug for Extent3d {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self.width, self.height, self.depth_or_array_layers).fmt(f)
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -5633,6 +5697,12 @@ pub enum TextureAspect {
     StencilOnly,
     /// Depth.
     DepthOnly,
+    /// Plane 0.
+    Plane0,
+    /// Plane 1.
+    Plane1,
+    /// Plane 2.
+    Plane2,
 }
 
 /// How edges should be handled in texture addressing.

@@ -39,9 +39,9 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin wgpu-examples <example>`. See the [list of examples](examples).
 
-To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin wgpu-example`. Then connect to `http://localhost:8000` in your WebGPU-enabled browser, and you can choose an example to run.
+To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin wgpu-examples`. Then connect to `http://localhost:8000` in your WebGPU-enabled browser, and you can choose an example to run.
 
-To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin wgpu-example --features webgl`. Then connect to `http://localhost:8000` in your WebGL-enabled browser, and you can choose an example to run.
+To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin wgpu-examples --features webgl`. Then connect to `http://localhost:8000` in your WebGL-enabled browser, and you can choose an example to run.
 
 If you are looking for a wgpu tutorial, look at the following:
 
@@ -74,13 +74,13 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-| API         | Windows                        | Linux/Android      | macOS/iOS                 | Web (wasm)                |
-| ----------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
-| Vulkan      | :white_check_mark:             | :white_check_mark: | :volcano:                 |                           |
-| Metal       |                                |                    | :white_check_mark:        |                           |
-| DX12        | :white_check_mark:             |                    |                           |                           |
-| OpenGL      | :ok: (GL 3.3+)                 | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
-| WebGPU      |                                |                    |                           | :white_check_mark:        |
+| API    | Windows            | Linux/Android      | macOS/iOS          | Web (wasm)         |
+| ------ | ------------------ | ------------------ | ------------------ | ------------------ |
+| Vulkan | :white_check_mark: | :white_check_mark: | :volcano:          |                    |
+| Metal  |                    |                    | :white_check_mark: |                    |
+| DX12   | :white_check_mark: |                    |                    |                    |
+| OpenGL | :ok: (GL 3.3+)     | :ok: (GL ES 3.0+)  | :triangular_ruler: | :ok: (WebGL2)      |
+| WebGPU |                    |                    |                    | :white_check_mark: |
 
 :white_check_mark: = First Class Support  
 :ok: = Downlevel/Best Effort Support  
@@ -149,15 +149,15 @@ When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU
 
 We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI. The current state of CI testing:
 
-| Platform/Backend | Tests              | Notes                                 |
-| ---------------- | ------------------ | ------------------------------------- |
-| Windows/DX12     | :heavy_check_mark: | using WARP                            |
-| Windows/OpenGL   | :heavy_check_mark: | using llvmpipe                        |
-| MacOS/Metal      | :heavy_check_mark: | using hardware runner                 |
-| Linux/Vulkan     | :heavy_check_mark: | using lavapipe                        |
-| Linux/OpenGL ES  | :heavy_check_mark: | using llvmpipe                        |
-| Chrome/WebGL     | :heavy_check_mark: | using swiftshader                     |
-| Chrome/WebGPU    | :x:                | not set up                            |
+| Platform/Backend | Tests              | Notes                 |
+| ---------------- | ------------------ | --------------------- |
+| Windows/DX12     | :heavy_check_mark: | using WARP            |
+| Windows/OpenGL   | :heavy_check_mark: | using llvmpipe        |
+| MacOS/Metal      | :heavy_check_mark: | using hardware runner |
+| Linux/Vulkan     | :heavy_check_mark: | using lavapipe        |
+| Linux/OpenGL ES  | :heavy_check_mark: | using llvmpipe        |
+| Chrome/WebGL     | :heavy_check_mark: | using swiftshader     |
+| Chrome/WebGPU    | :x:                | not set up            |
 
 ### Core Test Infrastructure
 
