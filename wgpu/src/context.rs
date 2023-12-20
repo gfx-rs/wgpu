@@ -1210,7 +1210,7 @@ pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
         not(target_feature = "atomics")
     )
 ))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
 #[cfg(not(any(
     not(target_arch = "wasm32"),
     all(
@@ -1218,7 +1218,7 @@ pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 
         not(target_feature = "atomics")
     )
 )))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
 pub(crate) trait DynContext: Debug + WasmNotSendSync {
