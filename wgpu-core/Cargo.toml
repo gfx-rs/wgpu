@@ -56,8 +56,6 @@ replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
 ## Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 
-id32 = []
-
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
