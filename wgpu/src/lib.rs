@@ -5170,6 +5170,14 @@ impl Surface<'_> {
 #[repr(transparent)]
 pub struct Id<T>(NonZeroU64, PhantomData<*mut T>);
 
+impl<T> Id<T> {
+    /// For testing use only. We provide no guarentees about the actual value of the ids.
+    #[doc(hidden)]
+    pub fn inner(&self) -> u64 {
+        self.0.get()
+    }
+}
+
 // SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
 // returned for different types , so `Id` can safely implement Send and Sync.
 unsafe impl<T> Send for Id<T> {}
