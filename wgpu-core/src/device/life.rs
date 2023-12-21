@@ -14,7 +14,10 @@ use crate::{
         TextureViewId,
     },
     pipeline::{ComputePipeline, RenderPipeline},
-    resource::{self, Buffer, QuerySet, Resource, Sampler, StagingBuffer, Texture, TextureView},
+    resource::{
+        self, Buffer, DestroyedBuffer, QuerySet, Resource, Sampler, StagingBuffer, Texture,
+        TextureView,
+    },
     track::{ResourceTracker, Tracker},
     FastHashMap, SubmissionIndex,
 };
@@ -43,6 +46,7 @@ pub(crate) struct ResourceMaps<A: HalApi> {
     pub query_sets: FastHashMap<QuerySetId, Arc<QuerySet<A>>>,
     pub blas_s: FastHashMap<BlasId, Arc<Blas<A>>>,
     pub tlas_s: FastHashMap<TlasId, Arc<Tlas<A>>>,
+    pub destroyed_buffers: FastHashMap<BufferId, Arc<DestroyedBuffer<A>>>,
 }
 
 impl<A: HalApi> ResourceMaps<A> {
@@ -62,6 +66,7 @@ impl<A: HalApi> ResourceMaps<A> {
             query_sets: FastHashMap::default(),
             blas_s: FastHashMap::default(),
             tlas_s: FastHashMap::default(),
+            destroyed_buffers: FastHashMap::default(),
         }
     }
 
@@ -79,6 +84,7 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts,
             render_bundles,
             query_sets,
+            destroyed_buffers,
             tlas_s,
             blas_s,
         } = self;
@@ -96,6 +102,7 @@ impl<A: HalApi> ResourceMaps<A> {
         query_sets.clear();
         blas_s.clear();
         tlas_s.clear();
+        destroyed_buffers.clear();
     }
 
     pub(crate) fn extend(&mut self, mut other: Self) {
@@ -114,6 +121,7 @@ impl<A: HalApi> ResourceMaps<A> {
             query_sets,
             tlas_s,
             blas_s,
+            destroyed_buffers,
         } = self;
         buffers.extend(other.buffers.drain());
         staging_buffers.extend(other.staging_buffers.drain());
@@ -129,6 +137,7 @@ impl<A: HalApi> ResourceMaps<A> {
         query_sets.extend(other.query_sets.drain());
         tlas_s.extend(other.tlas_s.drain());
         blas_s.extend(other.blas_s.drain());
+        destroyed_buffers.extend(other.destroyed_buffers.drain());
     }
 }
 
@@ -246,7 +255,7 @@ pub(crate) struct LifetimeTracker<A: HalApi> {
     ready_to_map: Vec<Arc<Buffer<A>>>,
 
     /// Queue "on_submitted_work_done" closures that were initiated for while there is no
-    /// currently pending submissions. These cannot be immeidately invoked as they
+    /// currently pending submissions. These cannot be immediately invoked as they
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
     /// here until the next time the device is maintained.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
@@ -294,6 +303,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                     last_resources
                         .staging_buffers
                         .insert(raw.as_info().id(), raw);
+                }
+                TempResource::DestroyedBuffer(destroyed) => {
+                    last_resources
+                        .destroyed_buffers
+                        .insert(destroyed.id, destroyed);
                 }
                 TempResource::Texture(raw) => {
                     last_resources.textures.insert(raw.as_info().id(), raw);
@@ -403,6 +417,9 @@ impl<A: HalApi> LifetimeTracker<A> {
             }
             TempResource::StagingBuffer(raw) => {
                 resources.staging_buffers.insert(raw.as_info().id(), raw);
+            }
+            TempResource::DestroyedBuffer(destroyed) => {
+                resources.destroyed_buffers.insert(destroyed.id, destroyed);
             }
             TempResource::Texture(raw) => {
                 resources.textures.insert(raw.as_info().id(), raw);
@@ -669,6 +686,27 @@ impl<A: HalApi> LifetimeTracker<A> {
             }
         });
         self
+    }
+
+    fn triage_suspected_destroyed_buffers(
+        &mut self,
+        #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
+    ) {
+        for (id, buffer) in self.suspected_resources.destroyed_buffers.drain() {
+            let submit_index = buffer.submission_index;
+            if let Some(resources) = self.active.iter_mut().find(|a| a.index == submit_index) {
+                resources
+                    .last_resources
+                    .destroyed_buffers
+                    .insert(id, buffer);
+            } else {
+                self.free_resources.destroyed_buffers.insert(id, buffer);
+            }
+            #[cfg(feature = "trace")]
+            if let Some(ref mut t) = *trace {
+                t.add(trace::Action::DestroyBuffer(id));
+            }
+        }
     }
 
     fn triage_suspected_compute_pipelines(
@@ -957,6 +995,10 @@ impl<A: HalApi> LifetimeTracker<A> {
             #[cfg(feature = "trace")]
             &mut trace,
         );
+        self.triage_suspected_destroyed_buffers(
+            #[cfg(feature = "trace")]
+            &mut trace,
+        );
     }
 
     /// Determine which buffers are ready to map, and which must wait for the
@@ -1060,5 +1102,48 @@ impl<A: HalApi> LifetimeTracker<A> {
             }
         }
         pending_callbacks
+    }
+
+    pub(crate) fn release_gpu_resources(&mut self) {
+        // This is called when the device is lost, which makes every associated
+        // resource invalid and unusable. This is an opportunity to release all of
+        // the underlying gpu resources, even though the objects remain visible to
+        // the user agent. We purge this memory naturally when resources have been
+        // moved into the appropriate buckets, so this function just needs to
+        // initiate movement into those buckets, and it can do that by calling
+        // "destroy" on all the resources we know about which aren't already marked
+        // for cleanup.
+
+        // During these iterations, we discard all errors. We don't care!
+
+        // Destroy all the mapped buffers.
+        for buffer in &self.mapped {
+            let _ = buffer.destroy();
+        }
+
+        // Destroy all the unmapped buffers.
+        for buffer in &self.ready_to_map {
+            let _ = buffer.destroy();
+        }
+
+        // Destroy all the future_suspected_buffers.
+        for buffer in &self.future_suspected_buffers {
+            let _ = buffer.destroy();
+        }
+
+        // Destroy the buffers in all active submissions.
+        for submission in &self.active {
+            for buffer in &submission.mapped {
+                let _ = buffer.destroy();
+            }
+        }
+
+        // Destroy all the future_suspected_textures.
+        // TODO: texture.destroy is not implemented
+        /*
+        for texture in &self.future_suspected_textures {
+            let _ = texture.destroy();
+        }
+        */
     }
 }

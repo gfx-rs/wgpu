@@ -416,7 +416,7 @@ pub struct Buffer<A: HalApi> {
 impl<A: HalApi> Drop for Buffer<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw Buffer {:?}", self.info.label());
+            resource_log!("Deallocate raw Buffer (dropped) {:?}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -554,14 +554,25 @@ impl<A: HalApi> Buffer<A> {
         if let Some(ref mut trace) = *device.trace.lock() {
             trace.add(trace::Action::FreeBuffer(buffer_id));
         }
-        // Note: a future commit will replace this with a read guard
-        // and actually snatch the buffer.
-        let snatch_guard = device.snatchable_lock.read();
-        if self.raw.get(&snatch_guard).is_none() {
-            return Err(resource::DestroyError::AlreadyDestroyed);
-        }
 
-        let temp = queue::TempResource::Buffer(self.clone());
+        let temp = {
+            let snatch_guard = device.snatchable_lock.write();
+            let raw = match self.raw.snatch(snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    return Err(resource::DestroyError::AlreadyDestroyed);
+                }
+            };
+
+            queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
+                raw: Some(raw),
+                device: Arc::clone(&self.device),
+                submission_index: self.info.submission_index(),
+                id: self.info.id.unwrap(),
+                label: self.info.label.clone(),
+            }))
+        };
+
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
         if pending_writes.dst_buffers.contains_key(&buffer_id) {
@@ -605,6 +616,38 @@ impl<A: HalApi> Resource<BufferId> for Buffer<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<BufferId> {
         &mut self.info
+    }
+}
+
+/// A buffer that has been marked as destroyed and is staged for actual deletion soon.
+#[derive(Debug)]
+pub struct DestroyedBuffer<A: HalApi> {
+    raw: Option<A::Buffer>,
+    device: Arc<Device<A>>,
+    label: String,
+    pub(crate) id: BufferId,
+    pub(crate) submission_index: u64,
+}
+
+impl<A: HalApi> DestroyedBuffer<A> {
+    pub fn label(&self) -> &dyn Debug {
+        if !self.label.is_empty() {
+            return &self.label;
+        }
+
+        &self.id
+    }
+}
+
+impl<A: HalApi> Drop for DestroyedBuffer<A> {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.take() {
+            resource_log!("Deallocate raw Buffer (destroyed) {:?}", self.label());
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_buffer(raw);
+            }
+        }
     }
 }
 
