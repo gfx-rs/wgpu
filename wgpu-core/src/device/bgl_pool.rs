@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
 /// A HashMap-like structure that stores a BindGroupLayouts [`wgt::BindGroupLayoutEntry`]s.
 ///
 /// It is hashable, so bind group layouts can be deduplicated.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindGroupLayoutEntryMap {
     /// We use a IndexMap here so that we can sort the entries by their binding index,
     /// guarenteeing that the hash of equivilant layouts will be the same.
@@ -91,8 +92,8 @@ impl BindGroupLayoutEntryMap {
     }
 }
 
-type SlotInner<A> = Option<Weak<BindGroupLayout<A>>>;
-type BindGroupLayoutPoolSlot<A> = Arc<Mutex<SlotInner<A>>>;
+type SlotInner<A> = Weak<BindGroupLayout<A>>;
+type BindGroupLayoutPoolSlot<A> = Arc<OnceCell<SlotInner<A>>>;
 
 pub struct BindGroupLayoutPool<A: HalApi> {
     inner: Mutex<FastHashMap<BindGroupLayoutEntryMap, BindGroupLayoutPoolSlot<A>>>,
@@ -101,11 +102,13 @@ pub struct BindGroupLayoutPool<A: HalApi> {
 impl<A: HalApi> BindGroupLayoutPool<A> {
     pub fn new() -> Self {
         Self {
-            inner: FastHashMap::default(),
+            inner: Mutex::new(FastHashMap::default()),
         }
     }
 
     /// Get a [`BindGroupLayout`] from the pool with the given entry map, or create a new one if it doesn't exist.
+    ///
+    /// Behaves such that only one [`BindGroupLayout`] will be created for each unique entry map at any one time.
     ///
     /// Calls `f` to create a new [`BindGroupLayout`] if one doesn't exist.
     pub fn get_or_init<F, E>(
@@ -116,55 +119,70 @@ impl<A: HalApi> BindGroupLayoutPool<A> {
     where
         F: FnMut() -> Result<Arc<BindGroupLayout<A>>, E>,
     {
-        // We have 4 potential race states
-        // - There is no entry in the map
-        // - There is no entry in the map, and another thread is creating one
-        // - There is an entry in the map.
-        // - There is an entry in the map, but it is actively being dropped.
+        'race: loop {
+            let mut map_guard = self.inner.lock();
 
-        let mut map_guard = self.inner.lock();
+            let mut entry = match map_guard.get(entry_map) {
+                // An entry exists for this BGL.
+                //
+                // We know that either:
+                // - The BGL is still alive, and Weak::upgrade will succeed.
+                // - The BGL is in the process of being dropped, and Weak::upgrade will fail.
+                //
+                // The entry will never be empty while the BGL is still alive.
+                Some(entry) => Arc::clone(&entry),
+                // No entry exists for this BGL.
+                //
+                // We know that the BGL is not alive, so we can create a new entry.
+                None => {
+                    let entry = Arc::new(OnceCell::new());
+                    map_guard.insert(entry_map.clone(), Arc::clone(&entry));
+                    entry
+                }
+            };
 
-        let mut entry_guard = match map_guard.get(entry_map) {
-            // An entry exists for this BGL. This entry cannot be removed, however the strong refs might
-            // die while we're processing.
-            Some(entry) => Mutex::lock_arc(&entry),
-            None => {
-                let entry = Arc::new(Mutex::new(None));
-                let locked = Mutex::lock_arc(&entry);
-                map_guard.insert(entry_map.clone(), entry);
+            drop(map_guard);
+
+            // Some other thread may beat us to initializing the entry, but OnceCell guarentees that only one thread
+            // will actually initialize the entry.
+            //
+            // We pass the strong reference outside of the closure to keep it alive while we're the only one keeping a reference to it.
+            let mut strong = None;
+            let weak = entry.get_or_try_init(|| {
+                let strong_inner = f()?;
+                let weak = Arc::downgrade(&strong_inner);
+                strong = Some(strong_inner);
+                Ok(weak)
+            })?;
+
+            // If strong is Some, that means we just initialized the entry, so we can just return it.
+            if let Some(strong) = strong {
+                return Ok(strong);
             }
-        };
 
-        drop(map_guard);
-
-        let entry: &mut SlotInner<A> = &mut *entry_guard;
-        
-        if let Some(entry) = entry {
-            // Try to upgrade the weak ref. If it succeeds, we directly return the BGL.
-            if let Some(bgl) = Weak::upgrade(entry) {
-                return Ok(bgl);
+            // The entry was already initialized by someone else, so we need to try to upgrade it.
+            if let Some(strong) = weak.upgrade() {
+                // We succeed, the BGL is still alive, just return that.
+                return Ok(strong);
             }
 
-            // The upgrade fails, the BGL is trying to drop itself on another thread. However we have the 
-            // entry guard, which will block the other thread from removing its entry from the map.
+            // The BGL is in the process of being dropped, because9 upgrade failed. The entry still exists in the map, but it points to nothing.
+            //
+            // We're in a race with the drop implementation of the BGL, so lets just go around again. When we go around again:
+            // - If the entry exists, we might need to go around a few more times.
+            // - If the entry doesn't exist, we'll create a new one.
+            continue 'race;
         }
-
-        
     }
 
-    fn remove(&self, entry_map: &BindGroupLayoutEntryMap) {
-        let map_guard = self.inner.lock();
+    /// Remove the given entry map from the pool.
+    ///
+    /// Must *only* be called in the Drop impl of [`BindGroupLayout`].
+    pub fn remove(&self, entry_map: &BindGroupLayoutEntryMap) {
+        let mut map_guard = self.inner.lock();
 
-        if let Some(entry) = map_guard.get(entry_map) {
-            // Before we can remove the entry, we need to make sure that it isn't in the process of being re-created.
-            //
-            // At this point, we are in the drop implementation of the BGL, so Weak::upgrade will have previously started fail, meaning
-            // another thread could be starting the re-creation process. That thread always calls upgrade inside the entry guard, so
-            // once we get access to the entry guard, we know that no threads are trying to re-create the BGL.
-            let entry_guard = Mutex::lock_arc(&entry);
-            if entry_guard.is_none() {
-                map_guard.remove(entry_map);
-            }
-        }
+        // Weak::upgrade will be failing long before this code is called. All threads trying to access the BGL will be spinning,
+        // waiting for the entry to be removed. It is safe to remove the entry from the map.
+        map_guard.remove(&entry_map);
     }
 }

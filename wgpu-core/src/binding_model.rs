@@ -1,5 +1,7 @@
 use crate::{
-    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT, bgl_pool},
+    device::{
+        bgl_pool, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
+    },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
     id::{

@@ -19,9 +19,9 @@ use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 use std::{iter, num::NonZeroU32, ptr};
 
 pub mod any_device;
+pub(crate) mod bgl_pool;
 pub mod global;
 mod life;
-pub(crate) mod bgl_pool;
 pub mod queue;
 pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]

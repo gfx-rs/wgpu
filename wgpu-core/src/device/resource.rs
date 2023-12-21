@@ -1513,22 +1513,9 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn deduplicate_bind_group_layout<'a>(
-        self: &Arc<Self>,
-        entry_map: &'a binding_model::BindEntryMap,
-        guard: &'a Storage<BindGroupLayout<A>, id::BindGroupLayoutId>,
-    ) -> Option<(id::BindGroupLayoutId, Arc<BindGroupLayout<A>>)> {
-        guard
-            .iter(self.as_info().id().backend())
-            .find(|&(_, bgl)| {
-                bgl.device.info.id() == self.as_info().id() && bgl.entries == *entry_map
-            })
-            .map(|(id, resource)| (id, resource.clone()))
-    }
-
     pub(crate) fn get_introspection_bind_group_layouts<'a>(
         pipeline_layout: &'a binding_model::PipelineLayout<A>,
-    ) -> ArrayVec<&'a binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }> {
+    ) -> ArrayVec<&'a bgl_pool::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }> {
         pipeline_layout
             .bind_group_layouts
             .iter()

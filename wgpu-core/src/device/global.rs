@@ -984,20 +984,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            if let Some((id, layout)) = {
-                let bgl_guard = hub.bind_group_layouts.read();
-                device.deduplicate_bind_group_layout(&entry_map, &*bgl_guard)
-            } {
-                api_log!("Reusing BindGroupLayout {layout:?} -> {:?}", id);
-                let id = fid.assign_existing(&layout);
-                return (id, None);
-            }
+            let bgl_result = device.bgl_pool.get_or_init(&entry_map, || {
+                device
+                    .create_bind_group_layout(&desc.label, entry_map)
+                    .map(Arc::new)
+            });
 
-            let layout = match device.create_bind_group_layout(&desc.label, entry_map) {
+            let layout = match bgl_result {
                 Ok(layout) => layout,
                 Err(e) => break e,
             };
 
+            // Todo: assign vs assign_existing
             let (id, _layout) = fid.assign(layout);
             api_log!("Device::create_bind_group_layout -> {id:?}");
             return (id, None);
