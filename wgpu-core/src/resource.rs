@@ -24,7 +24,7 @@ use hal::CommandEncoder;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::WasmNotSendSync;
+use wgt::{strict_assert_eq, WasmNotSendSync};
 
 use std::{
     borrow::Borrow,
@@ -59,7 +59,7 @@ use std::{
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
 pub struct ResourceInfo<Id: TypedId> {
-    id: Option<Id>,
+    id: Vec<Id>,
     identity: Option<Arc<IdentityManager<Id>>>,
     /// The index of the last queue submission in which the resource
     /// was used.
@@ -77,8 +77,9 @@ pub struct ResourceInfo<Id: TypedId> {
 impl<Id: TypedId> Drop for ResourceInfo<Id> {
     fn drop(&mut self) {
         if let Some(identity) = self.identity.as_ref() {
-            let id = self.id.as_ref().unwrap();
-            identity.free(*id);
+            for id in self.id.drain(..) {
+                identity.free(id);
+            }
         }
     }
 }
@@ -87,7 +88,7 @@ impl<Id: TypedId> ResourceInfo<Id> {
     #[allow(unused_variables)]
     pub(crate) fn new(label: &str) -> Self {
         Self {
-            id: None,
+            id: vec![],
             identity: None,
             submission_index: AtomicUsize::new(0),
             label: label.to_string(),
@@ -102,7 +103,7 @@ impl<Id: TypedId> ResourceInfo<Id> {
             return &self.label;
         }
 
-        if let Some(id) = &self.id {
+        if let Some(id) = self.id.get(0) {
             return id;
         }
 
@@ -110,12 +111,17 @@ impl<Id: TypedId> ResourceInfo<Id> {
     }
 
     pub(crate) fn id(&self) -> Id {
-        self.id.unwrap()
+        strict_assert_eq!(self.id.len(), 1);
+        self.id[0]
     }
 
-    pub(crate) fn set_id(&mut self, id: Id, identity: &Arc<IdentityManager<Id>>) {
-        self.id = Some(id);
-        self.identity = Some(identity.clone());
+    pub(crate) fn add_id(&mut self, id: Id, identity: &Arc<IdentityManager<Id>>) {
+        self.id.push(id);
+        if let Some(ref old_identity) = self.identity {
+            assert!(Arc::ptr_eq(old_identity, identity));
+        } else {
+            self.identity = Some(Arc::clone(identity));
+        }
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -565,7 +571,7 @@ impl<A: HalApi> Buffer<A> {
                 raw: Some(raw),
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
-                id: self.info.id.unwrap(),
+                id: self.info.id(),
                 label: self.info.label.clone(),
             }))
         };

@@ -1,4 +1,4 @@
-use crate::{binding_model::BindEntryMap, FastHashMap, FastHashSet};
+use crate::{device::bgl_pool, FastHashMap, FastHashSet};
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -933,8 +933,8 @@ impl Interface {
 
     pub fn check_stage(
         &self,
-        given_layouts: Option<&[&BindEntryMap]>,
-        derived_layouts: &mut [BindEntryMap],
+        given_layouts: Option<&[&bgl_pool::BindGroupLayoutEntryMap]>,
+        derived_layouts: &mut [bgl_pool::BindGroupLayoutEntryMap],
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
@@ -973,7 +973,7 @@ impl Interface {
                     }
                     layouts
                         .get(res.bind.group as usize)
-                        .and_then(|map| map.get(&res.bind.binding))
+                        .and_then(|map| map.get(res.bind.binding))
                         .ok_or(BindingError::Missing)
                         .and_then(|entry| {
                             if entry.visibility.contains(stage_bit) {
@@ -990,13 +990,13 @@ impl Interface {
                     .and_then(|set| {
                         let ty = res.derive_binding_type()?;
                         match set.entry(res.bind.binding) {
-                            Entry::Occupied(e) if e.get().ty != ty => {
+                            indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
                             }
-                            Entry::Occupied(e) => {
+                            indexmap::map::Entry::Occupied(e) => {
                                 e.into_mut().visibility |= stage_bit;
                             }
-                            Entry::Vacant(e) => {
+                            indexmap::map::Entry::Vacant(e) => {
                                 e.insert(BindGroupLayoutEntry {
                                     binding: res.bind.binding,
                                     ty,
@@ -1018,8 +1018,12 @@ impl Interface {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
-                let texture_layout = &layouts[texture_bind.group as usize][&texture_bind.binding];
-                let sampler_layout = &layouts[sampler_bind.group as usize][&sampler_bind.binding];
+                let texture_layout = &layouts[texture_bind.group as usize]
+                    .get(texture_bind.binding)
+                    .unwrap();
+                let sampler_layout = &layouts[sampler_bind.group as usize]
+                    .get(sampler_bind.binding)
+                    .unwrap();
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
 

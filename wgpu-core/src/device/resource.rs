@@ -1543,7 +1543,7 @@ impl<A: HalApi> Device<A> {
             .map(|(group_index, bgl)| pipeline::LateSizedBufferGroup {
                 shader_sizes: bgl
                     .entries
-                    .entries()
+                    .values()
                     .filter_map(|entry| match entry.ty {
                         wgt::BindingType::Buffer {
                             min_binding_size: None,
@@ -1575,7 +1575,7 @@ impl<A: HalApi> Device<A> {
             No,
         }
 
-        for entry in entry_map.entries() {
+        for entry in entry_map.values() {
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
@@ -1730,7 +1730,7 @@ impl<A: HalApi> Device<A> {
 
         let bgl_flags = conv::bind_group_layout_flags(self.features);
 
-        let mut hal_bindings = entry_map.entries().copied().collect::<Vec<_>>();
+        let hal_bindings = entry_map.values().copied().collect::<Vec<_>>();
         let label = label.to_hal(self.instance_flags);
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label,
@@ -1746,7 +1746,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
-        for entry in entry_map.entries() {
+        for entry in entry_map.values() {
             count_validator.add_binding(entry);
         }
         // If a single bind group layout violates limits, the pipeline layout is
@@ -2472,7 +2472,10 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn derive_pipeline_layout(
         self: &Arc<Self>,
         implicit_context: Option<ImplicitPipelineContext>,
-        mut derived_group_layouts: ArrayVec<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>,
+        mut derived_group_layouts: ArrayVec<
+            bgl_pool::BindGroupLayoutEntryMap,
+            { hal::MAX_BIND_GROUPS },
+        >,
         bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
         pipeline_layout_registry: &Registry<id::PipelineLayoutId, binding_model::PipelineLayout<A>>,
     ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
@@ -2494,16 +2497,8 @@ impl<A: HalApi> Device<A> {
         }
 
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
-            let bgl = match self.deduplicate_bind_group_layout(&map, &bgl_registry.read()) {
-                Some((dedup_id, _)) => {
-                    *bgl_id = dedup_id;
-                    None
-                }
-                None => Some(self.create_bind_group_layout(&None, map)?),
-            };
-            if let Some(bgl) = bgl {
-                bgl_registry.force_replace(*bgl_id, bgl);
-            }
+            let bgl = self.create_bind_group_layout(&None, map)?;
+            bgl_registry.force_replace(*bgl_id, bgl);
         }
 
         let layout_desc = binding_model::PipelineLayoutDescriptor {
@@ -2536,7 +2531,7 @@ impl<A: HalApi> Device<A> {
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
         let mut derived_group_layouts =
-            ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
+            ArrayVec::<bgl_pool::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
 
         let io = validation::StageIo::default();
@@ -2561,7 +2556,7 @@ impl<A: HalApi> Device<A> {
                 )),
                 None => {
                     for _ in 0..self.limits.max_bind_groups {
-                        derived_group_layouts.push(binding_model::BindEntryMap::default());
+                        derived_group_layouts.push(bgl_pool::BindGroupLayoutEntryMap::default());
                     }
                     None
                 }
@@ -2662,7 +2657,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let mut derived_group_layouts =
-            ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
+            ArrayVec::<bgl_pool::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
 
         let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
@@ -2932,7 +2927,7 @@ impl<A: HalApi> Device<A> {
 
         if desc.layout.is_none() {
             for _ in 0..self.limits.max_bind_groups {
-                derived_group_layouts.push(binding_model::BindEntryMap::default());
+                derived_group_layouts.push(bgl_pool::BindGroupLayoutEntryMap::default());
             }
         }
 

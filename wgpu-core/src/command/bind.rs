@@ -69,8 +69,8 @@ mod compat {
                         "Assigned bind group layout with label = `{}`",
                         assigned_bgl.label()
                     ));
-                    for (id, e_entry) in &expected_bgl.entries {
-                        if let Some(a_entry) = assigned_bgl.entries.get(id) {
+                    for (id, e_entry) in expected_bgl.entries.iter() {
+                        if let Some(a_entry) = assigned_bgl.entries.get(*id) {
                             if a_entry.binding != e_entry.binding {
                                 diff.push(format!(
                                     "Entry {id} binding expected {}, got {}",
@@ -101,7 +101,7 @@ mod compat {
                     }
 
                     assigned_bgl.entries.iter().for_each(|(id, _e_entry)| {
-                        if !expected_bgl.entries.contains_key(id) {
+                        if !expected_bgl.entries.contains_key(*id) {
                             diff.push(format!("Entry {id} not found in expected bindgroup layout"))
                         }
                     });

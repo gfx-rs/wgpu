@@ -15,7 +15,7 @@ use crate::{
 /// A HashMap-like structure that stores a BindGroupLayouts [`wgt::BindGroupLayoutEntry`]s.
 ///
 /// It is hashable, so bind group layouts can be deduplicated.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BindGroupLayoutEntryMap {
     /// We use a IndexMap here so that we can sort the entries by their binding index,
     /// guarenteeing that the hash of equivilant layouts will be the same.
@@ -87,8 +87,27 @@ impl BindGroupLayoutEntryMap {
     /// Iterator over all the [`wgt::BindGroupLayoutEntry`]s in this map.
     ///
     /// They will be in sorted order by binding index.
-    pub fn entries(&self) -> impl ExactSizeIterator<Item = &wgt::BindGroupLayoutEntry> + '_ {
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &wgt::BindGroupLayoutEntry> + '_ {
         self.inner.values()
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&u32, &wgt::BindGroupLayoutEntry)> + '_ {
+        self.inner.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn entry(
+        &mut self,
+        binding: u32,
+    ) -> indexmap::map::Entry<'_, u32, wgt::BindGroupLayoutEntry> {
+        self.inner.entry(binding)
+    }
+
+    pub fn contains_key(&self, id: u32) -> bool {
+        self.inner.contains_key(&id)
     }
 }
 
@@ -122,7 +141,7 @@ impl<A: HalApi> BindGroupLayoutPool<A> {
         'race: loop {
             let mut map_guard = self.inner.lock();
 
-            let mut entry = match map_guard.get(entry_map) {
+            let entry = match map_guard.get(entry_map) {
                 // An entry exists for this BGL.
                 //
                 // We know that either:

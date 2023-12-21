@@ -76,25 +76,32 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     }
 
     pub fn init(&self, mut value: T) -> Arc<T> {
-        value.as_info_mut().set_id(self.id, &self.identity);
+        value.as_info_mut().add_id(self.id, &self.identity);
         Arc::new(value)
     }
 
-    pub fn assign(self, value: T) -> (I, Arc<T>) {
-        let mut data = self.data.write();
-        data.insert(self.id, self.init(value));
-        (self.id, data.get(self.id).unwrap().clone())
+    pub fn assign(self, mut value: T) -> (I, Arc<T>) {
+        // Assign the ID
+        value.as_info_mut().add_id(self.id, &self.identity);
+
+        let arc = Arc::new(value);
+
+        self.data.write().insert(self.id, Arc::clone(&arc));
+        (self.id, arc)
     }
 
-    pub fn assign_existing(self, value: &Arc<T>) -> I {
-        let mut data = self.data.write();
-        debug_assert!(!data.contains(self.id));
-        data.insert(self.id, value.clone());
+    pub fn assign_arc(self, value: &Arc<T>) -> I {
+        // Assign the ID
+        value.as_info_mut().add_id(self.id, &self.identity);
+
+        self.data.write().insert(self.id, Arc::clone(value));
+
         self.id
     }
 
     pub fn assign_error(self, label: &str) -> I {
         self.data.write().insert_error(self.id, label);
+
         self.id
     }
 }
@@ -138,7 +145,7 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
     }
     pub fn force_replace(&self, id: I, mut value: T) {
         let mut storage = self.storage.write();
-        value.as_info_mut().set_id(id, &self.identity);
+        value.as_info_mut().add_id(id, &self.identity);
         storage.force_replace(id, value)
     }
     pub fn force_replace_with_error(&self, id: I, label: &str) {

@@ -985,8 +985,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let bgl_result = device.bgl_pool.get_or_init(&entry_map, || {
+                // TODO: Remove clone
                 device
-                    .create_bind_group_layout(&desc.label, entry_map)
+                    .create_bind_group_layout(&desc.label, entry_map.clone())
                     .map(Arc::new)
             });
 
@@ -996,7 +997,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             // Todo: assign vs assign_existing
-            let (id, _layout) = fid.assign(layout);
+            let id = fid.assign_arc(&layout);
             api_log!("Device::create_bind_group_layout -> {id:?}");
             return (id, None);
         };
@@ -1630,10 +1631,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub
-                    .bind_group_layouts
-                    .prepare::<G>(id_in)
-                    .assign_existing(bg),
+                Some(bg) => hub.bind_group_layouts.prepare::<G>(id_in).assign_arc(bg),
                 None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
             return (id, None);
@@ -1766,10 +1764,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub
-                    .bind_group_layouts
-                    .prepare::<G>(id_in)
-                    .assign_existing(bg),
+                Some(bg) => hub.bind_group_layouts.prepare::<G>(id_in).assign_arc(bg),
                 None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
 
