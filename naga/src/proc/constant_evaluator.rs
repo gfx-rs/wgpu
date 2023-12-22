@@ -831,6 +831,9 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Asinh => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
             }
+            crate::MathFunction::Atan => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
+            }
             crate::MathFunction::Pow => self.math_pow(arg, arg1.unwrap(), span),
             crate::MathFunction::Clamp => {
                 component_wise_scalar!(
