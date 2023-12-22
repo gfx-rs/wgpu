@@ -48,7 +48,24 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
         let config = term::Config::default();
         let mut writer = termcolor::NoColor::new(Vec::new());
 
-        let diagnostic = Diagnostic::error().with_labels(
+        let err_chain = {
+            use std::fmt::Write;
+
+            let mut msg_buf = String::new();
+            write!(msg_buf, "{}", self.inner).unwrap();
+
+            let mut source = self.inner.source();
+            while let Some(next) = source {
+                // NOTE: The spacing here matters for presentation as a `Diagnostic`. Formula used:
+                //
+                // * 7 spaces to offset `error: `
+                // * 2 more spaces for "compact" indentation of the original error
+                writeln!(msg_buf, "         {next}").unwrap();
+                source = next.source();
+            }
+            msg_buf
+        };
+        let diagnostic = Diagnostic::error().with_message(err_chain).with_labels(
             self.inner
                 .spans()
                 .map(|&(span, ref desc)| {
