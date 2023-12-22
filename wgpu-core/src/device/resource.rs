@@ -6,8 +6,7 @@ use crate::{
     device::life::{LifetimeTracker, WaitIdleError},
     device::queue::PendingWrites,
     device::{
-        bgl_pool::{self, BindGroupLayoutPool},
-        AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
+        bgl_pool, AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
@@ -20,6 +19,7 @@ use crate::{
     },
     instance::Adapter,
     pipeline,
+    pool::ResourcePool,
     registry::Registry,
     resource::ResourceInfo,
     resource::{
@@ -122,7 +122,7 @@ pub struct Device<A: HalApi> {
     /// of every call (unless an error occurs).
     pub(crate) temp_suspected: Mutex<Option<ResourceMaps<A>>>,
     /// Pool of bind group layouts, allowing deduplication.
-    pub(super) bgl_pool: BindGroupLayoutPool<A>,
+    pub(crate) bgl_pool: ResourcePool<bgl_pool::BindGroupLayoutEntryMap, BindGroupLayout<A>>,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
@@ -264,7 +264,7 @@ impl<A: HalApi> Device<A> {
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(Some(life::ResourceMaps::new())),
-            bgl_pool: bgl_pool::BindGroupLayoutPool::new(),
+            bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(trace_path.and_then(|path| match trace::Trace::new(path) {
                 Ok(mut trace) => {

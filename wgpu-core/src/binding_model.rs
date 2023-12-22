@@ -14,7 +14,7 @@ use crate::{
     snatch::SnatchGuard,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label,
+    Label,
 };
 
 use arrayvec::ArrayVec;
@@ -347,10 +347,6 @@ impl BindingTypeMaxCountValidator {
         }
     }
 
-    pub(crate) fn dynamic_binding_count(&self) -> u32 {
-        self.dynamic_uniform_buffers + self.dynamic_storage_buffers
-    }
-
     pub(crate) fn merge(&mut self, other: &Self) {
         self.dynamic_uniform_buffers += other.dynamic_uniform_buffers;
         self.dynamic_storage_buffers += other.dynamic_storage_buffers;
@@ -446,8 +442,6 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
-pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
-
 pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindGroupLayoutId>;
 
 /// Bind group layout.
@@ -471,6 +465,7 @@ pub struct BindGroupLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
     fn drop(&mut self) {
+        self.device.bgl_pool.remove(&self.entries);
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw BindGroupLayout {:?}", self.info.label());
             unsafe {
