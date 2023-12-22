@@ -46,6 +46,7 @@ Bottom level categories:
         - `abs`
         - `acos`
         - `acosh`
+        - `asin`
         - `cos`
         - `cosh`
         - `round`
