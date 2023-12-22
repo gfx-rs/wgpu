@@ -1991,11 +1991,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                let num_frames = config
-                    .desired_swap_chain_size
-                    .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
+                let num_frames = config.desired_maximum_frame_latency.clamp(
+                    *caps.maximum_frame_latency.start(),
+                    *caps.maximum_frame_latency.end(),
+                );
                 let mut hal_config = hal::SurfaceConfiguration {
-                    swap_chain_size: num_frames,
+                    maximum_frame_latency: num_frames,
                     present_mode: config.present_mode,
                     composite_alpha_mode: config.alpha_mode,
                     format: config.format,
