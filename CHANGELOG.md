@@ -48,6 +48,7 @@ Bottom level categories:
         - `acosh`
         - `asin`
         - `asinh`
+        - `atan`
         - `cos`
         - `cosh`
         - `round`
