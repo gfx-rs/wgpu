@@ -819,6 +819,9 @@ impl<'a> ConstantEvaluator<'a> {
                     Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
                 })
             }
+            crate::MathFunction::Acos => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.acos()]) })
+            }
             crate::MathFunction::Pow => self.math_pow(arg, arg1.unwrap(), span),
             crate::MathFunction::Clamp => {
                 component_wise_scalar!(
