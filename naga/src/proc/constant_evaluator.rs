@@ -837,7 +837,11 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Atanh => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.atanh()]) })
             }
-            crate::MathFunction::Pow => self.math_pow(arg, arg1.unwrap(), span),
+            crate::MathFunction::Pow => {
+                component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.powf(e2)])
+                })
+            }
             crate::MathFunction::Clamp => {
                 component_wise_scalar!(
                     self,
@@ -911,15 +915,6 @@ impl<'a> ConstantEvaluator<'a> {
                 "{fun:?} built-in function"
             ))),
         }
-    }
-
-    fn math_pow(
-        &mut self,
-        e1: Handle<Expression>,
-        e2: Handle<Expression>,
-        span: Span,
-    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        component_wise_float!(self, span, [e1, e2], |e1, e2| { Ok([e1.powf(e2)]) })
     }
 
     fn array_length(
