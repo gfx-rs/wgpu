@@ -41,8 +41,6 @@ const FRAME_TIMEOUT_MS: u32 = 1000;
 pub(crate) struct Presentation {
     pub(crate) device: AnyDevice,
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
-    #[allow(unused)]
-    pub(crate) num_frames: u32,
     pub(crate) acquired_texture: Option<TextureId>,
 }
 
