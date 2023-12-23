@@ -56,8 +56,6 @@ replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
 ## Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 
-id32 = []
-
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
@@ -96,7 +94,6 @@ arrayvec = "0.7"
 bit-vec = "0.6"
 bitflags = "2"
 codespan-reporting = "0.11"
-document-features.workspace = true
 log = "0.4"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"

@@ -8,17 +8,8 @@ use std::{
 };
 use wgt::{Backend, WasmNotSendSync};
 
-#[cfg(feature = "id32")]
-type IdType = u32;
-#[cfg(not(feature = "id32"))]
 type IdType = u64;
-#[cfg(feature = "id32")]
-type NonZeroId = std::num::NonZeroU32;
-#[cfg(not(feature = "id32"))]
 type NonZeroId = std::num::NonZeroU64;
-#[cfg(feature = "id32")]
-type ZippedIndex = u16;
-#[cfg(not(feature = "id32"))]
 type ZippedIndex = Index;
 
 const INDEX_BITS: usize = std::mem::size_of::<ZippedIndex>() * 8;

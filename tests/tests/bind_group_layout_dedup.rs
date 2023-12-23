@@ -1,21 +1,25 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
 
 #[gpu_test]
-static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
-    .run_sync(|ctx| {
-        let entries_1 = &[];
+static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(bgl_dedupe);
 
-        let entries_2 = &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }];
+fn bgl_dedupe(ctx: TestingContext) {
+    let entries_1 = &[];
 
+    let entries_2 = &[wgpu::BindGroupLayoutEntry {
+        binding: 0,
+        visibility: wgpu::ShaderStages::VERTEX,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }];
+
+    // Block so we can force all resource to die.
+    {
         let bgl_1a = ctx
             .device
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -23,7 +27,7 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
                 entries: entries_1,
             });
 
-        let _bgl_2 = ctx
+        let bgl_2 = ctx
             .device
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
@@ -135,7 +139,43 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
         }
 
         ctx.queue.submit(Some(encoder.finish()));
-    });
+
+        // Abuse the fact that global_id is really just the bitpacked ids when targeting wgpu-core.
+        if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
+            let bgl_1a_idx = bgl_1a.global_id().inner() & 0xFFFF_FFFF;
+            assert_eq!(bgl_1a_idx, 0);
+            let bgl_2_idx = bgl_2.global_id().inner() & 0xFFFF_FFFF;
+            assert_eq!(bgl_2_idx, 1);
+            let bgl_1b_idx = bgl_1b.global_id().inner() & 0xFFFF_FFFF;
+            assert_eq!(bgl_1b_idx, 2);
+        }
+    }
+
+    ctx.device.poll(wgpu::Maintain::Wait);
+
+    if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
+        // Now all of the BGL ids should be dead, so we should get the same ids again.
+        for i in 0..=2 {
+            let test_bgl = ctx
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: entries_1,
+                });
+
+            let test_bgl_idx = test_bgl.global_id().inner() & 0xFFFF_FFFF;
+
+            // https://github.com/gfx-rs/wgpu/issues/4912
+            //
+            // ID 2 is the deduplicated ID, which is never properly recycled.
+            if i == 2 {
+                assert_eq!(test_bgl_idx, 3);
+            } else {
+                assert_eq!(test_bgl_idx, i);
+            }
+        }
+    }
+}
 
 const SHADER_SRC: &str = "
 @vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(1.0); }

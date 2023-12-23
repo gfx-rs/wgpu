@@ -511,3 +511,36 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
             "Device lost callback should have been called."
         );
     });
+
+#[gpu_test]
+static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|ctx| {
+        // This test checks that when the device is dropped (such as in a GC),
+        // the provided DeviceLostClosure is called with reason DeviceLostReason::Unknown.
+        // Fails on webgl because webgl doesn't implement drop.
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+
+        // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
+        let callback = Box::new(move |reason, message| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                matches!(reason, wgt::DeviceLostReason::Unknown),
+                "Device lost info reason should match DeviceLostReason::Unknown."
+            );
+            assert!(
+                message == "Device dropped.",
+                "Device lost info message should be \"Device dropped.\"."
+            );
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        // Drop the device.
+        drop(ctx.device);
+
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });

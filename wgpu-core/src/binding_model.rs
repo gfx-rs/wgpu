@@ -9,6 +9,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log,
+    snatch::SnatchGuard,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label,
@@ -835,8 +836,13 @@ impl<A: HalApi> Drop for BindGroup<A> {
 }
 
 impl<A: HalApi> BindGroup<A> {
-    pub(crate) fn raw(&self) -> &A::BindGroup {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self, guard: &SnatchGuard) -> Option<&A::BindGroup> {
+        for buffer in &self.used_buffer_ranges {
+            // Clippy insist on writing it this way. The idea is to return None
+            // if any of the raw buffer is not valid anymore.
+            let _ = buffer.buffer.raw(guard)?;
+        }
+        self.raw.as_ref()
     }
     pub(crate) fn validate_dynamic_bindings(
         &self,

@@ -1514,7 +1514,7 @@ impl crate::Device<super::Api> for super::Device {
         let hr = unsafe {
             self.raw.CreateFence(
                 0,
-                d3d12_ty::D3D12_FENCE_FLAG_NONE,
+                d3d12_ty::D3D12_FENCE_FLAG_SHARED,
                 &d3d12_ty::ID3D12Fence::uuidof(),
                 raw.mut_void(),
             )
