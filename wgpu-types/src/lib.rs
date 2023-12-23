@@ -5109,21 +5109,24 @@ pub struct SurfaceConfiguration<V> {
     pub present_mode: PresentMode,
     /// Desired maximum number of frames that the presentation engine should queue in advance.
     ///
-    /// Defaults to 2 when created via `wgpu::Surface::get_default_config`.
-    ///
-    /// Typical values are either 2 or 1, but higher values are possible.
-    /// Choose 1 for low latency from frame recording to frame display.
-    /// Choose 2 or higher for potentially smoother frame display - by having more frames in flight, it's more
-    /// likely that the next refresh interval of the display will be able to display a new frame
-    /// under varying GPU & CPU frame timings.
-    /// A value of 0 is typically not supported (i.e. clamped to a higher value) and would mean that GPU and CPU
-    /// won't be able to work in parallel, use this only if you expect the combined GPU & CPU workload
-    /// to be below below your screen refresh rate.
-    ///
     /// This is a hint to the backend implementation and will always be clamped to the supported range.
     /// As a consequence either the maximum frame latency is set directly on the swap chain,
-    /// or waits on present to avoid exceeding the maximum frame latency,
+    /// or waits on present to avoid exceeding the maximum frame latency if supported,
     /// or the swap chain size is set to max-latency + 1.
+    ///
+    /// Defaults to 2 when created via `wgpu::Surface::get_default_config`.
+    ///
+    /// Typical values range from 3 to 1, but higher values are possible.
+    /// Choose 1 for low latency from frame recording to frame display.
+    /// If the backend does not support waiting on present, this will cause the CPU to wait for the GPU
+    /// to finish all work related to the previous frame when calling `wgpu::Surface::get_current_texture`,
+    /// causing CPU-GPU serialization (i.e. when `wgpu::Surface::get_current_texture` returns, the GPU might be idle).
+    /// Choose 2 or higher for potentially smoother frame display, as it allows to be at least one frame
+    /// to be queued up. This typically avoids starving the GPU's work queue.
+    /// Higher values are useful for achieving a constant flow of frames to the display under varying load.
+    /// A value of 0 is typically not supported (i.e. clamped to a higher value) and would mean that GPU and CPU
+    /// won't be able to work in parallel at all, use this only if you expect the combined GPU & CPU workload
+    /// to be below below your screen refresh rate.
     pub desired_maximum_frame_latency: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
