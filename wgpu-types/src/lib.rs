@@ -5110,9 +5110,17 @@ pub struct SurfaceConfiguration<V> {
     /// Desired maximum number of frames that the presentation engine should queue in advance.
     ///
     /// Defaults to 2 when created via `wgpu::Surface::get_default_config`.
-    /// Recommended to use 2 (or higher) for high throughput, 1 for low latency.
     ///
-    /// This is a hint to the backend implementation and will be clamped to the supported range.
+    /// Typical values are either 2 or 1, but higher values are possible.
+    /// Choose 1 for low latency from frame recording to frame display.
+    /// Choose 2 or higher for potentially smoother frame display - by having more frames in flight, it's more
+    /// likely that the next refresh interval of the display will be able to display a new frame
+    /// under varying GPU & CPU frame timings.
+    /// A value of 0 is typically not supported (i.e. clamped to a higher value) and would mean that GPU and CPU
+    /// won't be able to work in parallel, use this only if you expect the combined GPU & CPU workload
+    /// to be below below your screen refresh rate.
+    ///
+    /// This is a hint to the backend implementation and will always be clamped to the supported range.
     /// As a consequence either the maximum frame latency is set directly on the swap chain,
     /// or waits on present to avoid exceeding the maximum frame latency,
     /// or the swap chain size is set to max-latency + 1.

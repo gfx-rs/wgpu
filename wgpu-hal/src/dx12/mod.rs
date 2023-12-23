@@ -698,8 +698,6 @@ impl crate::Surface<Api> for Surface {
                         quality: 0,
                     },
                     buffer_usage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                    // Nvidia recommends to use 1-2 more buffers than the maximum latency
-                    // https://developer.nvidia.com/blog/advanced-api-performance-swap-chains/
                     buffer_count: swap_chain_buffer,
                     scaling: d3d12::Scaling::Stretch,
                     swap_effect: d3d12::SwapEffect::FlipDiscard,
