@@ -99,3 +99,207 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
         map_guard.remove(key);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        atomic::{AtomicU32, Ordering},
+        Barrier,
+    };
+
+    use super::*;
+
+    #[test]
+    fn deduplication() {
+        let pool = ResourcePool::<u32, u32>::new();
+
+        let mut counter = 0_u32;
+
+        let arc1 = pool
+            .get_or_init::<_, ()>(0, |key| {
+                counter += 1;
+                Ok(Arc::new(key))
+            })
+            .unwrap();
+
+        assert_eq!(*arc1, 0);
+        assert_eq!(counter, 1);
+
+        let arc2 = pool
+            .get_or_init::<_, ()>(0, |key| {
+                counter += 1;
+                Ok(Arc::new(key))
+            })
+            .unwrap();
+
+        assert!(Arc::ptr_eq(&arc1, &arc2));
+        assert_eq!(*arc2, 0);
+        assert_eq!(counter, 1);
+
+        drop(arc1);
+        drop(arc2);
+        pool.remove(&0);
+
+        let arc3 = pool
+            .get_or_init::<_, ()>(0, |key| {
+                counter += 1;
+                Ok(Arc::new(key))
+            })
+            .unwrap();
+
+        assert_eq!(*arc3, 0);
+        assert_eq!(counter, 2);
+    }
+
+    // Test name has "2_threads" in the name so nextest reserves two threads for it.
+    #[test]
+    fn concurrent_creation_2_threads() {
+        struct Resources {
+            pool: ResourcePool<u32, u32>,
+            counter: AtomicU32,
+            barrier: Barrier,
+        }
+
+        let resources = Arc::new(Resources {
+            pool: ResourcePool::<u32, u32>::new(),
+            counter: AtomicU32::new(0),
+            barrier: Barrier::new(2),
+        });
+
+        // Like all races, this is not inherently guaranteed to work, but in practice it should work fine.
+        //
+        // To validate the expected order of events, we've put print statements in the code, indicating when each thread is at a certain point.
+        // The output will look something like this if the test is working as expected:
+        //
+        // ```
+        // 0: prewait
+        // 1: prewait
+        // 1: postwait
+        // 0: postwait
+        // 1: init
+        // 1: postget
+        // 0: postget
+        // ```
+        fn thread_inner(idx: u8, resources: &Resources) -> Arc<u32> {
+            eprintln!("{idx}: prewait");
+
+            // Once this returns, both threads should hit get_or_init at about the same time,
+            // allowing us to actually test concurrent creation.
+            //
+            // Like all races, this is not inherently guaranteed to work, but in practice it should work fine.
+            resources.barrier.wait();
+
+            eprintln!("{idx}: postwait");
+
+            let ret = resources
+                .pool
+                .get_or_init::<_, ()>(0, |key| {
+                    eprintln!("{idx}: init");
+
+                    // Simulate long running constructor, ensuring that both threads will be in get_or_init.
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+
+                    resources.counter.fetch_add(1, Ordering::SeqCst);
+
+                    Ok(Arc::new(key))
+                })
+                .unwrap();
+
+            eprintln!("{idx}: postget");
+
+            ret
+        }
+
+        let thread1 = std::thread::spawn({
+            let resource_clone = Arc::clone(&resources);
+            move || thread_inner(1, &resource_clone)
+        });
+
+        let arc0 = thread_inner(0, &resources);
+
+        assert_eq!(resources.counter.load(Ordering::Acquire), 1);
+
+        let arc1 = thread1.join().unwrap();
+
+        assert!(Arc::ptr_eq(&arc0, &arc1));
+    }
+
+    // Test name has "2_threads" in the name so nextest reserves two threads for it.
+    #[test]
+    fn create_while_drop_2_threads() {
+        struct Resources {
+            pool: ResourcePool<u32, u32>,
+            barrier: Barrier,
+        }
+
+        let resources = Arc::new(Resources {
+            pool: ResourcePool::<u32, u32>::new(),
+            barrier: Barrier::new(2),
+        });
+
+        // Like all races, this is not inherently guaranteed to work, but in practice it should work fine.
+        //
+        // To validate the expected order of events, we've put print statements in the code, indicating when each thread is at a certain point.
+        // The output will look something like this if the test is working as expected:
+        //
+        // ```
+        // 0: prewait
+        // 1: prewait
+        // 1: postwait
+        // 0: postwait
+        // 1: postsleep
+        // 1: removal
+        // 0: postget
+        // ```
+        //
+        // The last two _may_ be flipped.
+
+        let existing_entry = resources
+            .pool
+            .get_or_init::<_, ()>(0, |key| Ok(Arc::new(key)))
+            .unwrap();
+
+        // Drop the entry, but do _not_ remove it from the pool.
+        // This simulates the situation where the resource arc has been dropped, but the Drop implementation
+        // has not yet run, which calls remove.
+        drop(existing_entry);
+
+        fn thread0_inner(resources: &Resources) {
+            eprintln!("0: prewait");
+            resources.barrier.wait();
+
+            eprintln!("0: postwait");
+            // We try to create a new entry, but the entry already exists.
+            //
+            // As Arc::upgrade is failing, we will just keep spinning until remove is called.
+            resources
+                .pool
+                .get_or_init::<_, ()>(0, |key| Ok(Arc::new(key)))
+                .unwrap();
+            eprintln!("0: postget");
+        }
+
+        fn thread1_inner(resources: &Resources) {
+            eprintln!("1: prewait");
+            resources.barrier.wait();
+
+            eprintln!("1: postwait");
+            // We wait a little bit, making sure that thread0_inner has started spinning.
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            eprintln!("1: postsleep");
+
+            // We remove the entry from the pool, allowing thread0_inner to re-create.
+            resources.pool.remove(&0);
+            eprintln!("1: removal");
+        }
+
+        let thread1 = std::thread::spawn({
+            let resource_clone = Arc::clone(&resources);
+            move || thread1_inner(&resource_clone)
+        });
+
+        thread0_inner(&resources);
+
+        thread1.join().unwrap();
+    }
+}
