@@ -3,7 +3,7 @@ use crate::device::trace;
 use crate::{
     api_log, binding_model, command, conv,
     device::{
-        bgl_pool, life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure,
+        bgl, life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure,
         DeviceLostReason, HostMap, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
@@ -976,7 +976,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
             }
 
-            let entry_map = match bgl_pool::BindGroupLayoutEntryMap::from_entries(
+            let entry_map = match bgl::BindGroupLayoutEntryMap::from_entries(
                 &device.limits,
                 &desc.entries,
             ) {

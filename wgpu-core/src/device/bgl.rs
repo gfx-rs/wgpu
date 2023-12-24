@@ -92,13 +92,6 @@ impl BindGroupLayoutEntryMap {
         self.inner.is_empty()
     }
 
-    pub fn entry(
-        &mut self,
-        binding: u32,
-    ) -> indexmap::map::Entry<'_, u32, wgt::BindGroupLayoutEntry> {
-        self.inner.entry(binding)
-    }
-
     pub fn contains_key(&self, id: u32) -> bool {
         self.inner.contains_key(&id)
     }

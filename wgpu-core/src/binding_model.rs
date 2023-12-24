@@ -1,6 +1,6 @@
 use crate::{
     device::{
-        bgl_pool, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
+        bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
@@ -456,7 +456,7 @@ pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindG
 pub struct BindGroupLayout<A: HalApi> {
     pub(crate) raw: Option<A::BindGroupLayout>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) entries: bgl_pool::BindGroupLayoutEntryMap,
+    pub(crate) entries: bgl::BindGroupLayoutEntryMap,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     pub(crate) info: ResourceInfo<BindGroupLayoutId>,
@@ -618,6 +618,14 @@ impl<A: HalApi> PipelineLayout<A> {
     pub(crate) fn raw(&self) -> &A::PipelineLayout {
         self.raw.as_ref().unwrap()
     }
+
+    pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }> {
+        self.bind_group_layouts
+            .iter()
+            .map(|bgl| &bgl.entries)
+            .collect()
+    }
+
     /// Validate push constants match up with expected ranges.
     pub(crate) fn validate_push_constant_ranges(
         &self,

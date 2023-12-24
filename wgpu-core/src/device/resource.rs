@@ -6,7 +6,7 @@ use crate::{
     device::life::{LifetimeTracker, WaitIdleError},
     device::queue::PendingWrites,
     device::{
-        bgl_pool, AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
+        bgl, AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
@@ -122,7 +122,7 @@ pub struct Device<A: HalApi> {
     /// of every call (unless an error occurs).
     pub(crate) temp_suspected: Mutex<Option<ResourceMaps<A>>>,
     /// Pool of bind group layouts, allowing deduplication.
-    pub(crate) bgl_pool: ResourcePool<bgl_pool::BindGroupLayoutEntryMap, BindGroupLayout<A>>,
+    pub(crate) bgl_pool: ResourcePool<bgl::BindGroupLayoutEntryMap, BindGroupLayout<A>>,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
@@ -1517,16 +1517,6 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn get_introspection_bind_group_layouts<'a>(
-        pipeline_layout: &'a binding_model::PipelineLayout<A>,
-    ) -> ArrayVec<&'a bgl_pool::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }> {
-        pipeline_layout
-            .bind_group_layouts
-            .iter()
-            .map(|layout| &layout.entries)
-            .collect()
-    }
-
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
     pub(crate) fn make_late_sized_buffer_groups(
@@ -1567,7 +1557,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_bind_group_layout(
         self: &Arc<Self>,
         label: &crate::Label,
-        entry_map: bgl_pool::BindGroupLayoutEntryMap,
+        entry_map: bgl::BindGroupLayoutEntryMap,
     ) -> Result<BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
         enum WritableStorage {
@@ -2472,10 +2462,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn derive_pipeline_layout(
         self: &Arc<Self>,
         implicit_context: Option<ImplicitPipelineContext>,
-        mut derived_group_layouts: ArrayVec<
-            bgl_pool::BindGroupLayoutEntryMap,
-            { hal::MAX_BIND_GROUPS },
-        >,
+        mut derived_group_layouts: ArrayVec<bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>,
         bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
         pipeline_layout_registry: &Registry<id::PipelineLayoutId, binding_model::PipelineLayout<A>>,
     ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
@@ -2531,7 +2518,7 @@ impl<A: HalApi> Device<A> {
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
         let mut derived_group_layouts =
-            ArrayVec::<bgl_pool::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>::new();
+            ArrayVec::<bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
 
         let io = validation::StageIo::default();
@@ -2556,7 +2543,7 @@ impl<A: HalApi> Device<A> {
                 )),
                 None => {
                     for _ in 0..self.limits.max_bind_groups {
-                        derived_group_layouts.push(bgl_pool::BindGroupLayoutEntryMap::default());
+                        derived_group_layouts.push(bgl::BindGroupLayoutEntryMap::default());
                     }
                     None
                 }
@@ -2656,8 +2643,6 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        let mut derived_group_layouts =
-            ArrayVec::<bgl_pool::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
 
         let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
@@ -2925,11 +2910,30 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        if desc.layout.is_none() {
-            for _ in 0..self.limits.max_bind_groups {
-                derived_group_layouts.push(bgl_pool::BindGroupLayoutEntryMap::default());
+        // Get the pipeline layout from the desc if it is provided.
+        let pipeline_layout = match desc.layout {
+            Some(pipeline_layout_id) => {
+                let pipeline_layout = hub
+                    .pipeline_layouts
+                    .read()
+                    .get_owned(pipeline_layout_id)
+                    .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+
+                if pipeline_layout.device.as_info().id() != self.as_info().id() {
+                    return Err(DeviceError::WrongDevice.into());
+                }
+
+                Some(pipeline_layout)
             }
-        }
+            None => None,
+        };
+
+        let mut binding_layout_source = match pipeline_layout {
+            Some(ref pipeline_layout) => {
+                validation::BindingLayoutSource::Provided(pipeline_layout.get_binding_maps())
+            }
+            None => validation::BindingLayoutSource::Derived(ArrayVec::new()),
+        };
 
         let samples = {
             let sc = desc.multisample.count;
@@ -2942,12 +2946,12 @@ impl<A: HalApi> Device<A> {
         let shader_module_guard = hub.shader_modules.read();
 
         let vertex_stage = {
-            let stage = &desc.vertex.stage;
-            let flag = wgt::ShaderStages::VERTEX;
+            let stage_desc = &desc.vertex.stage;
+            let stage = wgt::ShaderStages::VERTEX;
 
-            let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
+            let shader_module = shader_module_guard.get(stage_desc.module).map_err(|_| {
                 pipeline::CreateRenderPipelineError::Stage {
-                    stage: flag,
+                    stage,
                     error: validation::StageError::InvalidModule,
                 }
             })?;
@@ -2956,60 +2960,36 @@ impl<A: HalApi> Device<A> {
             }
             shader_modules.push(shader_module.clone());
 
-            let pipeline_layout_guard = hub.pipeline_layouts.read();
-
-            let provided_layouts = match desc.layout {
-                Some(pipeline_layout_id) => {
-                    let pipeline_layout = pipeline_layout_guard
-                        .get(pipeline_layout_id)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
-
-                    if pipeline_layout.device.as_info().id() != self.as_info().id() {
-                        return Err(DeviceError::WrongDevice.into());
-                    }
-
-                    Some(Device::get_introspection_bind_group_layouts(
-                        pipeline_layout,
-                    ))
-                }
-                None => None,
-            };
-
             if let Some(ref interface) = shader_module.interface {
                 io = interface
                     .check_stage(
-                        provided_layouts.as_ref().map(|p| p.as_slice()),
-                        &mut derived_group_layouts,
+                        &mut binding_layout_source,
                         &mut shader_binding_sizes,
-                        &stage.entry_point,
-                        flag,
+                        &stage_desc.entry_point,
+                        stage,
                         io,
                         desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                     )
-                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                        stage: flag,
-                        error,
-                    })?;
-                validated_stages |= flag;
+                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage { stage, error })?;
+                validated_stages |= stage;
             }
 
             hal::ProgrammableStage {
                 module: shader_module.raw(),
-                entry_point: stage.entry_point.as_ref(),
+                entry_point: stage_desc.entry_point.as_ref(),
             }
         };
 
         let fragment_stage = match desc.fragment {
-            Some(ref fragment) => {
-                let flag = wgt::ShaderStages::FRAGMENT;
+            Some(ref fragment_state) => {
+                let stage = wgt::ShaderStages::FRAGMENT;
 
-                let shader_module =
-                    shader_module_guard
-                        .get(fragment.stage.module)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
-                            stage: flag,
-                            error: validation::StageError::InvalidModule,
-                        })?;
+                let shader_module = shader_module_guard
+                    .get(fragment_state.stage.module)
+                    .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
+                        stage,
+                        error: validation::StageError::InvalidModule,
+                    })?;
                 shader_modules.push(shader_module.clone());
 
                 let pipeline_layout_guard = hub.pipeline_layouts.read();
@@ -3027,34 +3007,33 @@ impl<A: HalApi> Device<A> {
                     if let Some(ref interface) = shader_module.interface {
                         io = interface
                             .check_stage(
-                                provided_layouts.as_ref().map(|p| p.as_slice()),
-                                &mut derived_group_layouts,
+                                &mut binding_layout_source,
                                 &mut shader_binding_sizes,
-                                &fragment.stage.entry_point,
-                                flag,
+                                &fragment_state.stage.entry_point,
+                                stage,
                                 io,
                                 desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                                stage: flag,
+                                stage,
                                 error,
                             })?;
-                        validated_stages |= flag;
+                        validated_stages |= stage;
                     }
                 }
 
                 if let Some(ref interface) = shader_module.interface {
                     shader_expects_dual_source_blending = interface
-                        .fragment_uses_dual_source_blending(&fragment.stage.entry_point)
+                        .fragment_uses_dual_source_blending(&fragment_state.stage.entry_point)
                         .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                            stage: flag,
+                            stage,
                             error,
                         })?;
                 }
 
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
-                    entry_point: fragment.stage.entry_point.as_ref(),
+                    entry_point: fragment_state.stage.entry_point.as_ref(),
                 })
             }
             None => None,

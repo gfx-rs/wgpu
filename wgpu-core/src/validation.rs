@@ -1,5 +1,6 @@
-use crate::{device::bgl_pool, FastHashMap, FastHashSet};
+use crate::{device::bgl, FastHashMap, FastHashSet};
 use std::{collections::hash_map::Entry, fmt};
+use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -774,6 +775,17 @@ pub fn check_texture_format(
     }
 }
 
+pub enum BindingLayoutSource<'a> {
+    /// The binding layout is derived from the pipeline layout.
+    ///
+    /// This will be filled in by the shader binding validation, as it iterates the shader's interfaces.
+    Derived(ArrayVec<bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>),
+    /// The binding layout is provided by the user in BGLs.
+    ///
+    /// This will be validated against the shader's interfaces.
+    Provided(ArrayVec<&'a bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>),
+}
+
 pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
 
 impl Interface {
@@ -933,8 +945,7 @@ impl Interface {
 
     pub fn check_stage(
         &self,
-        given_layouts: Option<&[&bgl_pool::BindGroupLayoutEntryMap]>,
-        derived_layouts: &mut [bgl_pool::BindGroupLayoutEntryMap],
+        layouts: &mut BindingLayoutSource<'_>,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
@@ -958,38 +969,46 @@ impl Interface {
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
-            let result = match given_layouts {
-                Some(layouts) => {
-                    // update the required binding size for this buffer
-                    if let ResourceType::Buffer { size } = res.ty {
-                        match shader_binding_sizes.entry(res.bind.clone()) {
-                            Entry::Occupied(e) => {
-                                *e.into_mut() = size.max(*e.get());
-                            }
-                            Entry::Vacant(e) => {
-                                e.insert(size);
+            let result = 'err: {
+                match layouts {
+                    BindingLayoutSource::Provided(layouts) => {
+                        // update the required binding size for this buffer
+                        if let ResourceType::Buffer { size } = res.ty {
+                            match shader_binding_sizes.entry(res.bind.clone()) {
+                                Entry::Occupied(e) => {
+                                    *e.into_mut() = size.max(*e.get());
+                                }
+                                Entry::Vacant(e) => {
+                                    e.insert(size);
+                                }
                             }
                         }
+
+                        let Some(map) = layouts.get(res.bind.group as usize) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        let Some(entry) = map.get(res.bind.binding) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        if !entry.visibility.contains(stage_bit) {
+                            break 'err Err(BindingError::Invisible);
+                        }
+
+                        res.check_binding_use(entry)
                     }
-                    layouts
-                        .get(res.bind.group as usize)
-                        .and_then(|map| map.get(res.bind.binding))
-                        .ok_or(BindingError::Missing)
-                        .and_then(|entry| {
-                            if entry.visibility.contains(stage_bit) {
-                                Ok(entry)
-                            } else {
-                                Err(BindingError::Invisible)
-                            }
-                        })
-                        .and_then(|entry| res.check_binding_use(entry))
-                }
-                None => derived_layouts
-                    .get_mut(res.bind.group as usize)
-                    .ok_or(BindingError::Missing)
-                    .and_then(|set| {
-                        let ty = res.derive_binding_type()?;
-                        match set.entry(res.bind.binding) {
+                    BindingLayoutSource::Derived(layouts) => {
+                        let Some(map) = layouts.get_mut(res.bind.group as usize) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        let ty = match res.derive_binding_type() {
+                            Ok(ty) => ty,
+                            Err(error) => break 'err Err(error),
+                        };
+
+                        match map.entry(res.bind.binding) {
                             indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
                             }
@@ -1006,22 +1025,26 @@ impl Interface {
                             }
                         }
                         Ok(())
-                    }),
+                    }
+                }
             };
             if let Err(error) = result {
                 return Err(StageError::Binding(res.bind.clone(), error));
             }
         }
 
-        // check the compatibility between textures and samplers
-        if let Some(layouts) = given_layouts {
+        // Check the compatibility between textures and samplers
+        //
+        // We only need to do this if the binding layout is provided by the user, as derived
+        // layouts will inherently be correctly tagged.
+        if let BindingLayoutSource::Provided(layouts) = layouts {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
-                let texture_layout = &layouts[texture_bind.group as usize]
+                let texture_layout = layouts[texture_bind.group as usize]
                     .get(texture_bind.binding)
                     .unwrap();
-                let sampler_layout = &layouts[sampler_bind.group as usize]
+                let sampler_layout = layouts[sampler_bind.group as usize]
                     .get(sampler_bind.binding)
                     .unwrap();
                 assert!(texture_layout.visibility.contains(stage_bit));
