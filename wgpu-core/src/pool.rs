@@ -1,22 +1,28 @@
-use std::hash::Hash;
-use std::sync::{Arc, Weak};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    hash::Hash,
+    sync::{Arc, Weak},
+};
 
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 
-use crate::FastHashMap;
+use crate::{PreHashedKey, PreHashedMap};
 
 type SlotInner<V> = Weak<V>;
 type ResourcePoolSlot<V> = Arc<OnceCell<SlotInner<V>>>;
 
 pub struct ResourcePool<K, V> {
-    inner: Mutex<FastHashMap<K, ResourcePoolSlot<V>>>,
+    // We use a pre-hashed map as we never actually need to read the keys.
+    //
+    // This additionally allows us to not need to hash more than once on get_or_init.
+    inner: Mutex<PreHashedMap<K, ResourcePoolSlot<V>>>,
 }
 
 impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(FastHashMap::default()),
+            inner: Mutex::new(HashMap::default()),
         }
     }
 
@@ -27,6 +33,9 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
     where
         F: FnOnce(K) -> Result<Arc<V>, E>,
     {
+        // Hash the key outside of the lock.
+        let hashed_key = PreHashedKey::from_key(&key);
+
         // We can't prove at compile time that these will only ever be consumed once,
         // so we need to do the check at runtime.
         let mut key = Some(key);
@@ -35,7 +44,7 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
         'race: loop {
             let mut map_guard = self.inner.lock();
 
-            let entry = match map_guard.get(key.as_ref().unwrap()) {
+            let entry = match map_guard.entry(hashed_key) {
                 // An entry exists for this resource.
                 //
                 // We know that either:
@@ -43,15 +52,11 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
                 // - The resource is in the process of being dropped, and Weak::upgrade will fail.
                 //
                 // The entry will never be empty while the BGL is still alive.
-                Some(entry) => Arc::clone(entry),
+                Entry::Occupied(entry) => Arc::clone(entry.get()),
                 // No entry exists for this resource.
                 //
                 // We know that the resource is not alive, so we can create a new entry.
-                None => {
-                    let entry = Arc::new(OnceCell::new());
-                    map_guard.insert(key.clone().unwrap(), Arc::clone(&entry));
-                    entry
-                }
+                Entry::Vacant(entry) => Arc::clone(entry.insert(Arc::new(OnceCell::new()))),
             };
 
             drop(map_guard);
@@ -92,11 +97,13 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
     ///
     /// Must *only* be called in the Drop impl of [`BindGroupLayout`].
     pub fn remove(&self, key: &K) {
+        let hashed_key = PreHashedKey::from_key(key);
+
         let mut map_guard = self.inner.lock();
 
         // Weak::upgrade will be failing long before this code is called. All threads trying to access the resource will be spinning,
         // waiting for the entry to be removed. It is safe to remove the entry from the map.
-        map_guard.remove(key);
+        map_guard.remove(&hashed_key);
     }
 }
 
