@@ -1,6 +1,6 @@
 use crate::{device::bgl, FastHashMap, FastHashSet};
-use std::{collections::hash_map::Entry, fmt};
 use arrayvec::ArrayVec;
+use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -779,11 +779,21 @@ pub enum BindingLayoutSource<'a> {
     /// The binding layout is derived from the pipeline layout.
     ///
     /// This will be filled in by the shader binding validation, as it iterates the shader's interfaces.
-    Derived(ArrayVec<bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>),
+    Derived(ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
     /// The binding layout is provided by the user in BGLs.
     ///
     /// This will be validated against the shader's interfaces.
-    Provided(ArrayVec<&'a bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }>),
+    Provided(ArrayVec<&'a bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+}
+
+impl<'a> BindingLayoutSource<'a> {
+    pub fn new_derived(limits: &wgt::Limits) -> Self {
+        let mut array = ArrayVec::new();
+        for _ in 0..limits.max_bind_groups {
+            array.push(Default::default());
+        }
+        BindingLayoutSource::Derived(array)
+    }
 }
 
 pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
@@ -1010,7 +1020,7 @@ impl Interface {
 
                         match map.entry(res.bind.binding) {
                             indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
-                                return Err(BindingError::InconsistentlyDerivedType)
+                                break 'err Err(BindingError::InconsistentlyDerivedType)
                             }
                             indexmap::map::Entry::Occupied(e) => {
                                 e.into_mut().visibility |= stage_bit;

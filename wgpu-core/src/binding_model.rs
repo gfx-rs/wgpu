@@ -445,18 +445,18 @@ pub struct BindGroupLayoutDescriptor<'a> {
 pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindGroupLayoutId>;
 
 /// Bind group layout.
-///
-/// The lifetime of BGLs is a bit special. They are only referenced on CPU
-/// without considering GPU operations. And on CPU they get manual
-/// inc-refs and dec-refs. In particular, the following objects depend on them:
-///  - produced bind groups
-///  - produced pipeline layouts
-///  - pipelines with implicit layouts
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {
     pub(crate) raw: Option<A::BindGroupLayout>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) entries: bgl::BindGroupLayoutEntryMap,
+    pub(crate) entries: bgl::EntryMap,
+    /// It is very important that we know if the bind group comes from the BGL pool.
+    ///
+    /// If it does, then we need to remove it from the pool when we drop it.
+    ///
+    /// We cannot unconditionally remove from the pool, as BGLs that don't come from the pool
+    /// (derived BGLs) must not be removed.
+    pub(crate) origin: bgl::Origin,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     pub(crate) info: ResourceInfo<BindGroupLayoutId>,
@@ -465,7 +465,9 @@ pub struct BindGroupLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
     fn drop(&mut self) {
-        self.device.bgl_pool.remove(&self.entries);
+        if matches!(self.origin, bgl::Origin::Pool) {
+            self.device.bgl_pool.remove(&self.entries);
+        }
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw BindGroupLayout {:?}", self.info.label());
             unsafe {
@@ -619,7 +621,7 @@ impl<A: HalApi> PipelineLayout<A> {
         self.raw.as_ref().unwrap()
     }
 
-    pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::BindGroupLayoutEntryMap, { hal::MAX_BIND_GROUPS }> {
+    pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::EntryMap, { hal::MAX_BIND_GROUPS }> {
         self.bind_group_layouts
             .iter()
             .map(|bgl| &bgl.entries)

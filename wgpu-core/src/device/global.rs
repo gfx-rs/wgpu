@@ -976,10 +976,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
             }
 
-            let entry_map = match bgl::BindGroupLayoutEntryMap::from_entries(
-                &device.limits,
-                &desc.entries,
-            ) {
+            let entry_map = match bgl::EntryMap::from_entries(&device.limits, &desc.entries) {
                 Ok(map) => map,
                 Err(e) => break e,
             };
@@ -999,7 +996,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut id = None;
 
             let bgl_result = device.bgl_pool.get_or_init(entry_map, |entry_map| {
-                let bgl = device.create_bind_group_layout(&desc.label, entry_map)?;
+                let bgl =
+                    device.create_bind_group_layout(&desc.label, entry_map, bgl::Origin::Pool)?;
 
                 let (id_inner, arc) = fid.take().unwrap().assign(bgl);
                 id = Some(id_inner);

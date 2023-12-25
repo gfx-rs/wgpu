@@ -5,21 +5,44 @@ use crate::{
     FastIndexMap,
 };
 
+/// Where a given BGL came from.
+#[derive(Debug, Copy, Clone)]
+pub enum Origin {
+    /// The bind group layout was created by the user and is present in the BGL resource pool.
+    Pool,
+    /// The bind group layout was derived and is not present in the BGL resource pool.
+    Derived,
+}
+
 /// A HashMap-like structure that stores a BindGroupLayouts [`wgt::BindGroupLayoutEntry`]s.
 ///
 /// It is hashable, so bind group layouts can be deduplicated.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct BindGroupLayoutEntryMap {
+#[derive(Debug, Default, Clone, Eq)]
+pub struct EntryMap {
     /// We use a IndexMap here so that we can sort the entries by their binding index,
     /// guarenteeing that the hash of equivilant layouts will be the same.
-    ///
-    /// Once this type is created by [`BindGroupLayoutEntryMap::from_entries`], this map
-    /// will in sorted order by binding index. This allows the Hash implementation to be stable.
     inner: FastIndexMap<u32, wgt::BindGroupLayoutEntry>,
+    /// We keep track of whether the map is sorted or not, so that we can assert that
+    /// it is sorted, so that PartialEq and Hash will be stable.
+    ///
+    /// We only need sorted if it is used in a Hash or PartialEq, so we never need
+    /// to actively sort it.
+    sorted: bool,
 }
 
-impl Hash for BindGroupLayoutEntryMap {
+impl PartialEq for EntryMap {
+    fn eq(&self, other: &Self) -> bool {
+        self.assert_sorted();
+        other.assert_sorted();
+
+        self.inner == other.inner
+    }
+}
+
+impl Hash for EntryMap {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        self.assert_sorted();
+
         // We don't need to hash the keys, since they are just extracted from the values.
         //
         // We know this is stable and will match the behavior of PartialEq as we ensure
@@ -30,7 +53,11 @@ impl Hash for BindGroupLayoutEntryMap {
     }
 }
 
-impl BindGroupLayoutEntryMap {
+impl EntryMap {
+    fn assert_sorted(&self) {
+        assert!(self.sorted);
+    }
+
     /// Create a new [`BindGroupLayoutEntryMap`] from a slice of [`wgt::BindGroupLayoutEntry`]s.
     ///
     /// Errors if there are duplicate bindings or if any binding index is greater than
@@ -57,7 +84,10 @@ impl BindGroupLayoutEntryMap {
         }
         inner.sort_unstable_keys();
 
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            sorted: true,
+        })
     }
 
     /// Get the count of [`wgt::BindGroupLayoutEntry`]s in this map.
@@ -71,15 +101,11 @@ impl BindGroupLayoutEntryMap {
     }
 
     /// Iterator over all the binding indices in this map.
-    ///
-    /// They will be in sorted order.
     pub fn indices(&self) -> impl ExactSizeIterator<Item = u32> + '_ {
         self.inner.keys().copied()
     }
 
     /// Iterator over all the [`wgt::BindGroupLayoutEntry`]s in this map.
-    ///
-    /// They will be in sorted order by binding index.
     pub fn values(&self) -> impl ExactSizeIterator<Item = &wgt::BindGroupLayoutEntry> + '_ {
         self.inner.values()
     }
@@ -92,7 +118,12 @@ impl BindGroupLayoutEntryMap {
         self.inner.is_empty()
     }
 
-    pub fn contains_key(&self, id: u32) -> bool {
-        self.inner.contains_key(&id)
+    pub fn contains_key(&self, key: u32) -> bool {
+        self.inner.contains_key(&key)
+    }
+
+    pub fn entry(&mut self, key: u32) -> indexmap::map::Entry<'_, u32, wgt::BindGroupLayoutEntry> {
+        self.sorted = false;
+        self.inner.entry(key)
     }
 }

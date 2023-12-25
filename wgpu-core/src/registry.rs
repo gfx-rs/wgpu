@@ -134,7 +134,7 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
         self.read().try_get(id).map(|o| o.cloned())
     }
     pub(crate) fn get(&self, id: I) -> Result<Arc<T>, InvalidId> {
-        self.read().get(id).map(|v| v.clone())
+        self.read().get_owned(id)
     }
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T, I>> {
         self.storage.read()

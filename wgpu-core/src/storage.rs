@@ -134,7 +134,7 @@ where
     /// Get an owned reference to an item behind a potentially invalid ID.
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get_owned(&self, id: I) -> Result<Arc<T>, InvalidId> {
-        Ok(Arc::clone(&self.get(id)?))
+        Ok(Arc::clone(self.get(id)?))
     }
 
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
