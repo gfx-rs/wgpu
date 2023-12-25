@@ -1,22 +1,42 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
+use std::num::NonZeroU64;
+
+use wgpu_test::{
+    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+};
+use wgt::Backends;
+
+const SHADER_SRC: &str = "
+@group(0) @binding(0)
+var<uniform> buffer : f32;
+
+@compute @workgroup_size(1, 1, 1) fn no_resources() {}
+@compute @workgroup_size(1, 1, 1) fn resources() {
+    // Just need a static use.
+    let _value = buffer;
+}
+";
+
+const ENTRY: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+    binding: 0,
+    visibility: wgpu::ShaderStages::COMPUTE,
+    ty: wgpu::BindingType::Buffer {
+        ty: wgpu::BufferBindingType::Uniform,
+        has_dynamic_offset: false,
+        // Should be Some(.unwrap()) but unwrap is not const.
+        min_binding_size: NonZeroU64::new(4),
+    },
+    count: None,
+};
 
 #[gpu_test]
-static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(bgl_dedupe);
+static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(bgl_dedupe);
 
 fn bgl_dedupe(ctx: TestingContext) {
     let entries_1 = &[];
 
-    let entries_2 = &[wgpu::BindGroupLayoutEntry {
-        binding: 0,
-        visibility: wgpu::ShaderStages::VERTEX,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }];
+    let entries_2 = &[ENTRY];
 
     // Block so we can force all resource to die.
     {
@@ -68,75 +88,30 @@ fn bgl_dedupe(ctx: TestingContext) {
                 source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
             });
 
-        let targets = &[Some(wgpu::ColorTargetState {
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            blend: None,
-            write_mask: Default::default(),
-        })];
-
-        let desc = wgpu::RenderPipelineDescriptor {
+        let desc = wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &module,
-                entry_point: "vs_main",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &module,
-                entry_point: "fs_main",
-                targets,
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multiview: None,
-            multisample: wgpu::MultisampleState::default(),
+            module: &module,
+            entry_point: "no_resources",
         };
 
-        let pipeline = ctx.device.create_render_pipeline(&desc);
-
-        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size: wgpu::Extent3d {
-                width: 32,
-                height: 32,
-                depth_or_array_layers: 1,
-            },
-            sample_count: 1,
-            mip_level_count: 1,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-
-        let texture_view = texture.create_view(&Default::default());
+        let pipeline = ctx.device.create_compute_pipeline(&desc);
 
         let mut encoder = ctx.device.create_command_encoder(&Default::default());
 
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_view,
-                    resolve_target: None,
-                    ops: Default::default(),
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
 
-            pass.set_bind_group(0, &bg_1b, &[]);
+        pass.set_bind_group(0, &bg_1b, &[]);
+        pass.set_pipeline(&pipeline);
+        pass.dispatch_workgroups(1, 1, 1);
 
-            pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bg_1a, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
 
-            pass.draw(0..6, 0..1);
-
-            pass.set_bind_group(0, &bg_1a, &[]);
-
-            pass.draw(0..6, 0..1);
-        }
+        drop(pass);
 
         ctx.queue.submit(Some(encoder.finish()));
 
@@ -177,7 +152,291 @@ fn bgl_dedupe(ctx: TestingContext) {
     }
 }
 
-const SHADER_SRC: &str = "
-@vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(1.0); }
-@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }
-";
+#[gpu_test]
+static BIND_GROUP_LAYOUT_DEDUPLICATION_WITH_DROPPED_USER_HANDLE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().test_features_limits())
+        .run_sync(bgl_dedupe_with_dropped_user_handle);
+
+// https://github.com/gfx-rs/wgpu/issues/4824
+fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
+    let bgl_1 = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[ENTRY],
+        });
+
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bgl_1],
+            push_constant_ranges: &[],
+        });
+
+    // We drop bgl_1 here. As bgl_1 is still alive, referenced by the pipeline layout,
+    // the deduplication should work as expected. Previously this did not work.
+    drop(bgl_1);
+
+    let bgl_2 = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[ENTRY],
+        });
+
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 4,
+        usage: wgpu::BufferUsages::UNIFORM,
+        mapped_at_creation: false,
+    });
+
+    let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bgl_2,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+        });
+
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &module,
+            entry_point: "no_resources",
+        });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
+
+    pass.set_bind_group(0, &bg, &[]);
+    pass.set_pipeline(&pipeline);
+    pass.dispatch_workgroups(1, 1, 1);
+
+    drop(pass);
+
+    ctx.queue.submit(Some(encoder.finish()));
+}
+
+#[gpu_test]
+static BIND_GROUP_LAYOUT_DEDUPLICATION_DERIVED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(bgl_dedupe_derived);
+
+fn bgl_dedupe_derived(ctx: TestingContext) {
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 4,
+        usage: wgpu::BufferUsages::UNIFORM,
+        mapped_at_creation: false,
+    });
+
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+        });
+
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &module,
+            entry_point: "resources",
+        });
+
+    // We create two bind groups, pulling the bind_group_layout from the pipeline each time.
+    //
+    // This ensures a derived BGLs are properly deduplicated despite multiple external
+    // references.
+    let bg1 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+
+    let bg2 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
+
+    pass.set_pipeline(&pipeline);
+
+    pass.set_bind_group(0, &bg1, &[]);
+    pass.dispatch_workgroups(1, 1, 1);
+
+    pass.set_bind_group(0, &bg2, &[]);
+    pass.dispatch_workgroups(1, 1, 1);
+
+    drop(pass);
+
+    ctx.queue.submit(Some(encoder.finish()));
+}
+
+const DX12_VALIDATION_ERROR: &str = "The command allocator cannot be reset because a command list is currently being recorded with the allocator.";
+
+#[gpu_test]
+static SEPARATE_PROGRAMS_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .expect_fail(
+                    FailureCase::backend(Backends::DX12).validation_error(DX12_VALIDATION_ERROR),
+                ),
+        )
+        .run_sync(separate_programs_have_incompatible_derived_bgls);
+
+fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 4,
+        usage: wgpu::BufferUsages::UNIFORM,
+        mapped_at_creation: false,
+    });
+
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+        });
+
+    let desc = wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: None,
+        module: &module,
+        entry_point: "resources",
+    };
+    // Create two pipelines, creating a BG from the second.
+    let pipeline1 = ctx.device.create_compute_pipeline(&desc);
+    let pipeline2 = ctx.device.create_compute_pipeline(&desc);
+
+    let bg2 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline2.get_bind_group_layout(0),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
+
+    pass.set_pipeline(&pipeline1);
+
+    // We use the wrong bind group for this pipeline here. This should fail.
+    pass.set_bind_group(0, &bg2, &[]);
+    pass.dispatch_workgroups(1, 1, 1);
+
+    fail(&ctx.device, || {
+        drop(pass);
+    });
+}
+
+#[gpu_test]
+static DERIVED_BGLS_INCOMPATIBLE_WITH_REGULAR_BGLS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .expect_fail(
+                    FailureCase::backend(Backends::DX12).validation_error(DX12_VALIDATION_ERROR),
+                ),
+        )
+        .run_sync(derived_bgls_incompatible_with_regular_bgls);
+
+fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 4,
+        usage: wgpu::BufferUsages::UNIFORM,
+        mapped_at_creation: false,
+    });
+
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+        });
+
+    // Create a pipeline.
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &module,
+            entry_point: "resources",
+        });
+
+    // Create a matching BGL
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[ENTRY],
+        });
+
+    // Create a bind group from the explicit BGL. This should be incompatible with the derived BGL used by the pipeline.
+    let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+    });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
+
+    pass.set_pipeline(&pipeline);
+
+    pass.set_bind_group(0, &bg, &[]);
+    pass.dispatch_workgroups(1, 1, 1);
+
+    drop(pass);
+}

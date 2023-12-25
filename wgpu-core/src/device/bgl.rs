@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Where a given BGL came from.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Origin {
     /// The bind group layout was created by the user and is present in the BGL resource pool.
     Pool,

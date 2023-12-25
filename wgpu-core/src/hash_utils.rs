@@ -66,14 +66,9 @@ impl<K: std::hash::Hash> PreHashedKey<K> {
 ///
 /// When hashing with this hasher, you must provide exactly 8 bytes. Multiple calls to `write`
 /// will overwrite the previous value.
+#[derive(Default)]
 pub struct IdentityHasher {
     hash: u64,
-}
-
-impl Default for IdentityHasher {
-    fn default() -> Self {
-        Self { hash: 0 }
-    }
 }
 
 impl std::hash::Hasher for IdentityHasher {
