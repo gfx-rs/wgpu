@@ -54,9 +54,10 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
 
     progress_bar.finish_and_clear();
 
-    if !all_good {
-        bail!("failed to validate one or more files, see above output for more details")
-    }
+    anyhow::ensure!(
+        all_good,
+        "failed to validate one or more files, see above output for more details"
+    );
 
     if let Err(error) = enqueuing_thread.join().unwrap() {
         bail!("Error enqueuing jobs:\n{:#}", error);
