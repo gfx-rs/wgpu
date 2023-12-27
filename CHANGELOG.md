@@ -215,6 +215,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 ### Examples
 
 - remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
+- hello-compute example fix failure with "wgpu error: Validation Error" if arguments are missing by @vilcans in [#4939](https://github.com/gfx-rs/wgpu/pull/4939)
 
 ## v0.18.1 (2023-11-15)
 
