@@ -144,24 +144,27 @@ fn collect_validation_jobs(jobs: &mut Vec<Job>, cmd: ValidateSubcommand) -> anyh
             });
         }
         ValidateSubcommand::All => {
-            collect_validation_jobs(jobs, ValidateSubcommand::Wgsl)?;
-            collect_validation_jobs(jobs, ValidateSubcommand::Spirv)?;
-            collect_validation_jobs(jobs, ValidateSubcommand::Glsl)?;
-            collect_validation_jobs(jobs, ValidateSubcommand::Dot)?;
-
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
-            collect_validation_jobs(jobs, ValidateSubcommand::Metal)?;
-
-            // The FXC compiler is only available on Windows.
-            //
-            // The DXC compiler can be built and run on any platform,
-            // but they don't make Linux releases and it's not clear
-            // what Git commit actually works on Linux, so restrict
-            // that to Windows as well.
-            #[cfg(windows)]
-            {
-                collect_validation_jobs(jobs, ValidateSubcommand::Hlsl(ValidateHlslCommand::Dxc))?;
-                collect_validation_jobs(jobs, ValidateSubcommand::Hlsl(ValidateHlslCommand::Fxc))?;
+            for subcmd in ValidateSubcommand::all() {
+                let should_validate = match &subcmd {
+                    ValidateSubcommand::Wgsl
+                    | ValidateSubcommand::Spirv
+                    | ValidateSubcommand::Glsl
+                    | ValidateSubcommand::Dot => true,
+                    ValidateSubcommand::Metal => cfg!(any(target_os = "macos", target_os = "ios")),
+                    // The FXC compiler is only available on Windows.
+                    //
+                    // The DXC compiler can be built and run on any platform,
+                    // but they don't make Linux releases and it's not clear
+                    // what Git commit actually works on Linux, so restrict
+                    // that to Windows as well.
+                    ValidateSubcommand::Hlsl(
+                        ValidateHlslCommand::Dxc | ValidateHlslCommand::Fxc,
+                    ) => cfg!(os = "windows"),
+                    ValidateSubcommand::All => continue,
+                };
+                if should_validate {
+                    collect_validation_jobs(jobs, subcmd)?;
+                }
             }
         }
     };
