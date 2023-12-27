@@ -127,6 +127,19 @@ impl ValidateSubcommand {
             }
         }
     }
+
+    pub(crate) fn all() -> impl Iterator<Item = Self> {
+        [
+            Self::Spirv,
+            Self::Metal,
+            Self::Glsl,
+            Self::Dot,
+            Self::Wgsl,
+            Self::Hlsl(ValidateHlslCommand::Dxc),
+            Self::Hlsl(ValidateHlslCommand::Fxc),
+        ]
+        .into_iter()
+    }
 }
 
 #[derive(Debug)]
