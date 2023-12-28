@@ -40,15 +40,19 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             "GLSL.std.450" => self.parse_ext_inst_glsl_std(
                 ext_name, inst, ext_inst, span, ctx, emitter, block, block_id, body_idx,
             ),
-            "NonSemantic.DebugPrintf" if ext_inst.inst_id == 1 => {
-                self.parse_ext_inst_debug_printf(inst, span, ctx, emitter, block, body_idx)
-            }
+            "NonSemantic.DebugPrintf" => self.parse_ext_inst_debug_printf(
+                ext_name, inst, ext_inst, span, ctx, emitter, block, body_idx,
+            ),
+
             _ => Err(Error::UnsupportedExtInst(ext_inst.inst_id, ext_name)),
         }
     }
+    #[allow(clippy::too_many_arguments)]
     fn parse_ext_inst_debug_printf(
         &mut self,
+        ext_name: &'static str,
         inst: super::Instruction,
+        ext_inst: ExtInst,
         span: crate::Span,
         ctx: &mut super::BlockContext,
         emitter: &mut crate::proc::Emitter,
@@ -56,6 +60,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         body_idx: usize,
     ) -> Result<(), Error> {
         let base_wc = 5;
+
+        if ext_inst.inst_id != 1 {
+            return Err(Error::UnsupportedExtInst(ext_inst.inst_id, ext_name));
+        }
+
         inst.expect_at_least(base_wc + 1)?;
         let format_id = self.next()?;
         let format = self.strings.lookup(format_id)?.clone();
@@ -77,7 +86,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
     #[allow(clippy::too_many_arguments)]
     fn parse_ext_inst_glsl_std(
         &mut self,
-        set_name: &'static str,
+        ext_name: &'static str,
         inst: super::Instruction,
         ext_inst: ExtInst,
         span: crate::Span,
@@ -93,7 +102,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let base_wc = 5;
 
         let gl_op = Glo::from_u32(ext_inst.inst_id)
-            .ok_or(Error::UnsupportedExtInst(ext_inst.inst_id, set_name))?;
+            .ok_or(Error::UnsupportedExtInst(ext_inst.inst_id, ext_name))?;
 
         let fun = match gl_op {
             Glo::Round => Mf::Round,
@@ -159,7 +168,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             Glo::FindUMsb | Glo::FindSMsb => Mf::FindMsb,
             // TODO: https://github.com/gfx-rs/naga/issues/2526
             Glo::Modf | Glo::Frexp => {
-                return Err(Error::UnsupportedExtInst(ext_inst.inst_id, set_name))
+                return Err(Error::UnsupportedExtInst(ext_inst.inst_id, ext_name))
             }
             Glo::IMix
             | Glo::PackDouble2x32
@@ -167,7 +176,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             | Glo::InterpolateAtCentroid
             | Glo::InterpolateAtSample
             | Glo::InterpolateAtOffset => {
-                return Err(Error::UnsupportedExtInst(ext_inst.inst_id, set_name))
+                return Err(Error::UnsupportedExtInst(ext_inst.inst_id, ext_name))
             }
         };
 
