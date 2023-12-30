@@ -3,6 +3,7 @@ use wgt::{Backends, PowerPreference, RequestAdapterOptions};
 use crate::{Adapter, Instance, Surface};
 
 #[cfg(not(webgpu))]
+#[cfg_attr(docsrs, doc(cfg(all())))]
 pub use wgc::instance::parse_backends_from_comma_list;
 /// Always returns WEBGPU on wasm over webgpu.
 #[cfg(webgpu)]

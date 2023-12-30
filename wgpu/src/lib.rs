@@ -5036,18 +5036,22 @@ pub enum Error {
     OutOfMemory {
         /// Lower level source of the error.
         #[cfg(send_sync)]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + Send + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + 'static>,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
         /// Lower level source of the error.
         #[cfg(send_sync)]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + Send + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + 'static>,
         /// Description of the validation error.
         description: String,
