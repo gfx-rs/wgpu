@@ -4112,19 +4112,16 @@ impl<'a> RenderPass<'a> {
     ///
     /// Commands in the bundle do not inherit this render pass's current render state, and after the
     /// bundle has executed, the state is **cleared** (reset to defaults, not the previous state).
-    pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle> + 'a>(
-        &mut self,
-        render_bundles: I,
-    ) {
+    pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
+        let mut render_bundles = render_bundles
+            .into_iter()
+            .map(|rb| (&rb.id, rb.data.as_ref()));
+
         DynContext::render_pass_execute_bundles(
             &*self.parent.context,
             &mut self.id,
             self.data.as_mut(),
-            Box::new(
-                render_bundles
-                    .into_iter()
-                    .map(|rb| (&rb.id, rb.data.as_ref())),
-            ),
+            &mut render_bundles,
         )
     }
 }
@@ -4998,15 +4995,15 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
+        let mut command_buffers = command_buffers
+            .into_iter()
+            .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap()));
+
         let (raw, data) = DynContext::queue_submit(
             &*self.context,
             &self.id,
             self.data.as_ref(),
-            Box::new(
-                command_buffers
-                    .into_iter()
-                    .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap())),
-            ),
+            &mut command_buffers,
         );
 
         SubmissionIndex(raw, data)

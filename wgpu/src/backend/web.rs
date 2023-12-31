@@ -3451,13 +3451,11 @@ impl crate::context::Context for Context {
         // Not available in gecko yet
     }
 
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<
-            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
-        >,
+        render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let mapped = render_bundles
             .map(|(_, bundle_data)| &bundle_data.0)
