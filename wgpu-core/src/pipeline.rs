@@ -479,7 +479,8 @@ pub struct RenderPipeline<A: HalApi> {
     pub(crate) raw: Option<A::RenderPipeline>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<PipelineLayout<A>>,
-    pub(crate) _shader_modules: Vec<Arc<ShaderModule<A>>>,
+    pub(crate) _shader_modules:
+        ArrayVec<Arc<ShaderModule<A>>, { hal::MAX_CONCURRENT_SHADER_STAGES }>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,

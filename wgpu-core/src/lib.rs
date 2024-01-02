@@ -84,12 +84,14 @@ pub mod device;
 pub mod error;
 pub mod global;
 pub mod hal_api;
+mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
 mod init_tracker;
 pub mod instance;
 pub mod pipeline;
+mod pool;
 pub mod present;
 pub mod registry;
 pub mod resource;
@@ -105,6 +107,8 @@ pub mod validation;
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 
 use std::{borrow::Cow, os::raw::c_char};
+
+pub(crate) use hash_utils::*;
 
 /// The index of a queue submission.
 ///
@@ -334,13 +338,6 @@ macro_rules! resource_log {
     ($($arg:tt)+) => (log::trace!($($arg)+))
 }
 pub(crate) use resource_log;
-
-/// Fast hash map used internally.
-type FastHashMap<K, V> =
-    std::collections::HashMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
-/// Fast hash set used internally.
-type FastHashSet<K> =
-    std::collections::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 #[inline]
 pub(crate) fn get_lowest_common_denom(a: u32, b: u32) -> u32 {
