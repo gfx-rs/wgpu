@@ -3994,6 +3994,7 @@ version = "0.18.0"
 dependencies = [
  "arrayvec 0.7.4",
  "cfg-if",
+ "cfg_aliases",
  "js-sys",
  "log",
  "naga",

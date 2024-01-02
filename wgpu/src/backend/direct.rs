@@ -1,3 +1,5 @@
+#![allow(clippy::mismatched_target_os)]
+
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
@@ -229,7 +231,7 @@ impl Context {
         self.0.generate_report()
     }
 
-    #[cfg(all(any(target_os = "ios", target_os = "macos"), feature = "metal"))]
+    #[cfg(metal)]
     pub unsafe fn create_surface_from_core_animation_layer(
         &self,
         layer: *mut std::ffi::c_void,
@@ -241,7 +243,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(any(webgpu, webgl))]
     pub fn instance_create_surface_from_canvas(
         &self,
         canvas: web_sys::HtmlCanvasElement,
@@ -253,7 +255,7 @@ impl Context {
         })
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(any(webgpu, webgl))]
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
         canvas: web_sys::OffscreenCanvas,
@@ -265,7 +267,7 @@ impl Context {
         })
     }
 
-    #[cfg(all(target_os = "windows", feature = "dx12"))]
+    #[cfg(dx12)]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
         Surface {
@@ -274,7 +276,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(target_os = "windows", feature = "dx12"))]
+    #[cfg(dx12)]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
@@ -289,7 +291,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(target_os = "windows", feature = "dx12"))]
+    #[cfg(dx12)]
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
         swap_chain_panel: *mut std::ffi::c_void,
@@ -1444,9 +1446,9 @@ impl crate::Context for Context {
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
     }
-    #[cfg_attr(target_arch = "wasm32", allow(unused))]
+    #[cfg_attr(not(any(native, emscripten)), allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+        #[cfg(any(native, emscripten))]
         {
             let global = &self.0;
             match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::Wait)) {
@@ -2310,7 +2312,7 @@ impl crate::Context for Context {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(any(webgpu, webgl))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,
@@ -3167,21 +3169,9 @@ pub struct BufferMappedRange {
     size: usize,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Send for BufferMappedRange {}
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for BufferMappedRange {}
 
 impl crate::context::BufferMappedRange for BufferMappedRange {
