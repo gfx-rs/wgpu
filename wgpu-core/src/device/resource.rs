@@ -587,9 +587,7 @@ impl<A: HalApi> Device<A> {
         debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
 
         Texture {
-            inner: RwLock::new(Some(resource::TextureInner::Native {
-                raw: Some(hal_texture),
-            })),
+            inner: Snatchable::new(resource::TextureInner::Native { raw: hal_texture }),
             device: self.clone(),
             desc: desc.map_label(|_| ()),
             hal_usage,
@@ -907,15 +905,14 @@ impl<A: HalApi> Device<A> {
         texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
-        let inner = texture.inner();
-        let texture_raw = inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let snatch_guard = texture.device.snatchable_lock.read();
+
+        let texture_raw = texture
+            .as_raw(&snatch_guard)
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
+
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
-
         let resolved_format = desc.format.unwrap_or_else(|| {
             texture
                 .desc
