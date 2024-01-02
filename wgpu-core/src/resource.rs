@@ -14,14 +14,14 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, IdentityManager},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
-    snatch::{SnatchGuard, Snatchable},
+    snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::TextureSelector,
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
 };
 
 use hal::CommandEncoder;
-use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
@@ -709,7 +709,7 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::Text
 #[derive(Debug)]
 pub(crate) enum TextureInner<A: HalApi> {
     Native {
-        raw: Option<A::Texture>,
+        raw: A::Texture,
     },
     Surface {
         raw: Option<A::SurfaceTexture>,
@@ -720,11 +720,9 @@ pub(crate) enum TextureInner<A: HalApi> {
 
 impl<A: HalApi> TextureInner<A> {
     pub fn as_raw(&self) -> Option<&A::Texture> {
-        match *self {
-            Self::Native { raw: Some(ref tex) } => Some(tex),
-            Self::Surface {
-                raw: Some(ref tex), ..
-            } => Some(tex.borrow()),
+        match self {
+            Self::Native { raw } => Some(raw),
+            Self::Surface { raw: Some(tex), .. } => Some(tex.borrow()),
             _ => None,
         }
     }
@@ -748,7 +746,7 @@ pub enum TextureClearMode<A: HalApi> {
 
 #[derive(Debug)]
 pub struct Texture<A: HalApi> {
-    pub(crate) inner: RwLock<Option<TextureInner<A>>>,
+    pub(crate) inner: Snatchable<TextureInner<A>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     pub(crate) hal_usage: hal::TextureUses,
@@ -789,11 +787,8 @@ impl<A: HalApi> Drop for Texture<A> {
             }
             _ => {}
         };
-        if self.inner.read().is_none() {
-            return;
-        }
-        let inner = self.inner.write().take().unwrap();
-        if let TextureInner::Native { raw: Some(raw) } = inner {
+
+        if let Some(TextureInner::Native { raw }) = self.inner.take() {
             unsafe {
                 self.device.raw().destroy_texture(raw);
             }
@@ -802,11 +797,15 @@ impl<A: HalApi> Drop for Texture<A> {
 }
 
 impl<A: HalApi> Texture<A> {
-    pub(crate) fn inner<'a>(&'a self) -> RwLockReadGuard<'a, Option<TextureInner<A>>> {
-        self.inner.read()
+    pub(crate) fn as_raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::Texture> {
+        self.inner.get(snatch_guard)?.as_raw()
     }
-    pub(crate) fn inner_mut<'a>(&'a self) -> RwLockWriteGuard<'a, Option<TextureInner<A>>> {
-        self.inner.write()
+
+    pub(crate) fn inner_mut<'a>(
+        &'a self,
+        guard: &mut ExclusiveSnatchGuard,
+    ) -> Option<&'a mut TextureInner<A>> {
+        self.inner.get_mut(guard)
     }
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode<A>,
@@ -850,9 +849,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
-        let texture = { hub.textures.try_get(id).ok().flatten() };
-        let inner = texture.as_ref().unwrap().inner();
-        let hal_texture = inner.as_ref().unwrap().as_raw();
+        let texture_opt = { hub.textures.try_get(id).ok().flatten() };
+        let texture = texture_opt.as_ref().unwrap();
+        let snatch_guard = texture.device.snatchable_lock.read();
+        let hal_texture = texture.as_raw(&snatch_guard);
 
         hal_texture_callback(hal_texture);
     }

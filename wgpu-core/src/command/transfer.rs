@@ -811,18 +811,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
-        let dst_inner = dst_texture.inner();
-        let dst_raw = dst_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let dst_raw = dst_texture
+            .as_raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap()));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_raw));
 
         if !dst_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
@@ -951,11 +948,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
-        let src_inner = src_texture.inner();
-        let src_raw = src_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let src_raw = src_texture
+            .as_raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
@@ -973,7 +967,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             .into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_inner.as_ref().unwrap()));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(src_raw));
 
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
@@ -1077,6 +1071,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
         }
 
+        let snatch_guard = device.snatchable_lock.read();
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -1101,12 +1097,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .get(source.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
-        let src_inner = src_texture.inner();
         let dst_texture = hub
             .textures
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
-        let dst_inner = dst_texture.inner();
 
         // src and dst texture format must be copy-compatible
         // https://gpuweb.github.io/gpuweb/#copy-compatible
@@ -1168,10 +1162,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
-        let src_raw = src_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let src_raw = src_texture
+            .as_raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
@@ -1180,7 +1172,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
-            .map(|pending| pending.into_hal(src_inner.as_ref().unwrap()))
+            .map(|pending| pending.into_hal(src_raw))
             .collect();
 
         let dst_pending = cmd_buf_data
@@ -1188,10 +1180,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
-        let dst_raw = dst_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let dst_raw = dst_texture
+            .as_raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(
@@ -1199,7 +1189,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())));
+        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_raw)));
 
         let hal_copy_size = hal::CopyExtent {
             width: src_copy_size.width.min(dst_copy_size.width),

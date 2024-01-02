@@ -745,21 +745,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let last_submit_index = texture.info.submission_index();
 
-        if let resource::TextureInner::Native { ref raw } = *texture.inner().as_ref().unwrap() {
-            if !raw.is_none() {
-                let temp = queue::TempResource::Texture(texture.clone());
-                let mut guard = device.pending_writes.lock();
-                let pending_writes = guard.as_mut().unwrap();
-                if pending_writes.dst_textures.contains_key(&texture_id) {
-                    pending_writes.temp_resources.push(temp);
-                } else {
-                    drop(guard);
-                    device
-                        .lock_life()
-                        .schedule_resource_destruction(temp, last_submit_index);
-                }
+        let snatch_guard = texture.device.snatchable_lock.read();
+
+        if let Some(resource::TextureInner::Native { .. }) = texture.inner.get(&snatch_guard) {
+            let temp = queue::TempResource::Texture(texture.clone());
+            let mut guard = device.pending_writes.lock();
+            let pending_writes = guard.as_mut().unwrap();
+            if pending_writes.dst_textures.contains_key(&texture_id) {
+                pending_writes.temp_resources.push(temp);
             } else {
-                return Err(resource::DestroyError::AlreadyDestroyed);
+                drop(guard);
+                device
+                    .lock_life()
+                    .schedule_resource_destruction(temp, last_submit_index);
             }
         }
 

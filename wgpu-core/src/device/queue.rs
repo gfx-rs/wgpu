@@ -802,6 +802,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+        let snatch_guard = device.snatchable_lock.read();
+
         // Re-get `dst` immutably here, so that the mutable borrow of the
         // `texture_guard.get` above ends in time for the `clear_texture`
         // call above. Since we've held `texture_guard` the whole time, we know
@@ -810,11 +812,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let dst_inner = dst.inner();
-        let dst_raw = dst_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let dst_raw = dst
+            .as_raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let bytes_per_row = data_layout
@@ -897,9 +896,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
             unsafe {
-                encoder.transition_textures(
-                    transition.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())),
-                );
+                encoder.transition_textures(transition.map(|pending| pending.into_hal(dst_raw)));
                 encoder.transition_buffers(iter::once(barrier));
                 encoder.copy_buffer_to_texture(inner_buffer.as_ref().unwrap(), dst_raw, regions);
             }
@@ -1076,11 +1073,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let dst_inner = dst.inner();
-        let dst_raw = dst_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let snatch_guard = device.snatchable_lock.read();
+        let dst_raw = dst
+            .as_raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let regions = hal::TextureCopy {
@@ -1100,9 +1095,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .textures
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
-            encoder.transition_textures(
-                transitions.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())),
-            );
+            encoder.transition_textures(transitions.map(|pending| pending.into_hal(dst_raw)));
             encoder.copy_external_image_to_texture(
                 source,
                 dst_raw,
@@ -1238,12 +1231,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             for texture in cmd_buf_trackers.textures.used_resources() {
                                 let id = texture.info.id();
-                                let should_extend = match *texture.inner().as_ref().unwrap() {
-                                    TextureInner::Native { raw: None } => {
+                                let should_extend = match texture.inner.get(&snatch_guard) {
+                                    None => {
                                         return Err(QueueSubmitError::DestroyedTexture(id));
                                     }
-                                    TextureInner::Native { raw: Some(_) } => false,
-                                    TextureInner::Surface { ref has_work, .. } => {
+                                    Some(TextureInner::Native { .. }) => false,
+                                    Some(TextureInner::Surface { ref has_work, .. }) => {
                                         has_work.store(true, Ordering::Relaxed);
                                         true
                                     }
@@ -1399,11 +1392,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             trackers
                                 .textures
                                 .set_from_usage_scope(&used_surface_textures);
-                            let (transitions, textures) = trackers.textures.drain_transitions();
+                            let (transitions, textures) =
+                                trackers.textures.drain_transitions(&snatch_guard);
                             let texture_barriers = transitions
                                 .into_iter()
                                 .enumerate()
-                                .map(|(i, p)| p.into_hal(textures[i].as_ref().unwrap()));
+                                .map(|(i, p)| p.into_hal(textures[i].unwrap().as_raw().unwrap()));
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
@@ -1429,12 +1423,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             {
                 used_surface_textures.set_size(hub.textures.read().len());
                 for (&id, texture) in pending_writes.dst_textures.iter() {
-                    match *texture.inner().as_ref().unwrap() {
-                        TextureInner::Native { raw: None } => {
+                    match texture.inner.get(&snatch_guard) {
+                        None => {
                             return Err(QueueSubmitError::DestroyedTexture(id));
                         }
-                        TextureInner::Native { raw: Some(_) } => {}
-                        TextureInner::Surface { ref has_work, .. } => {
+                        Some(TextureInner::Native { .. }) => {}
+                        Some(TextureInner::Surface { ref has_work, .. }) => {
                             has_work.store(true, Ordering::Relaxed);
                             unsafe {
                                 used_surface_textures
@@ -1451,11 +1445,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     trackers
                         .textures
                         .set_from_usage_scope(&used_surface_textures);
-                    let (transitions, textures) = trackers.textures.drain_transitions();
+                    let (transitions, textures) =
+                        trackers.textures.drain_transitions(&snatch_guard);
                     let texture_barriers = transitions
                         .into_iter()
                         .enumerate()
-                        .map(|(i, p)| p.into_hal(textures[i].as_ref().unwrap()));
+                        .map(|(i, p)| p.into_hal(textures[i].unwrap().as_raw().unwrap()));
                     unsafe {
                         pending_writes
                             .command_encoder

@@ -252,11 +252,9 @@ pub(crate) fn clear_texture<A: HalApi>(
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
 ) -> Result<(), ClearError> {
-    let dst_inner = dst_texture.inner();
-    let dst_raw = dst_inner
-        .as_ref()
-        .unwrap()
-        .as_raw()
+    let snatch_guard = dst_texture.device.snatchable_lock.read();
+    let dst_raw = dst_texture
+        .as_raw(&snatch_guard)
         .ok_or_else(|| ClearError::InvalidTexture(dst_texture.as_info().id()))?;
 
     // Issue the right barrier.
@@ -296,7 +294,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     let dst_barrier = texture_tracker
         .set_single(dst_texture, selector, clear_usage)
         .unwrap()
-        .map(|pending| pending.into_hal(dst_inner.as_ref().unwrap()));
+        .map(|pending| pending.into_hal(dst_raw));
     unsafe {
         encoder.transition_textures(dst_barrier.into_iter());
     }
