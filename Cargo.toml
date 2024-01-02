@@ -83,7 +83,7 @@ fern = "0.6"
 flume = "0.11"
 futures-lite = "2"
 getrandom = "0.2"
-glam = "0.24.2"
+glam = "0.25.0"
 heck = "0.4.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 ktx2 = "0.3"
