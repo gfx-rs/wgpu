@@ -1,0 +1,4 @@
+# Use two threads for tests with "2_threads" in their name
+[[profile.default.overrides]]
+filter = 'test(~2_threads)'
+threads-required = 2
