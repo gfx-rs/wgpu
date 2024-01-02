@@ -80,12 +80,21 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
         Arc::new(value)
     }
 
+    /// Assign a new resource to this ID.
+    ///
+    /// Registers it with the registry, and fills out the resource info.
     pub fn assign(self, value: T) -> (I, Arc<T>) {
         let mut data = self.data.write();
         data.insert(self.id, self.init(value));
         (self.id, data.get(self.id).unwrap().clone())
     }
 
+    /// Assign an existing resource to a new ID.
+    ///
+    /// Registers it with the registry.
+    ///
+    /// This _will_ leak the ID, and it will not be recycled again.
+    /// See https://github.com/gfx-rs/wgpu/issues/4912.
     pub fn assign_existing(self, value: &Arc<T>) -> I {
         let mut data = self.data.write();
         debug_assert!(!data.contains(self.id));
@@ -125,7 +134,7 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
         self.read().try_get(id).map(|o| o.cloned())
     }
     pub(crate) fn get(&self, id: I) -> Result<Arc<T>, InvalidId> {
-        self.read().get(id).map(|v| v.clone())
+        self.read().get_owned(id)
     }
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T, I>> {
         self.storage.read()
