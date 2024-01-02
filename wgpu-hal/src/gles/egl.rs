@@ -716,17 +716,17 @@ impl crate::Instance<super::Api> for Instance {
             client_ext_str.split_whitespace().collect::<Vec<_>>()
         );
 
-        let wayland_library = if client_ext_str.contains("EGL_EXT_platform_wayland") {
+        let wayland_library = if false && client_ext_str.contains("EGL_EXT_platform_wayland") {
             test_wayland_display()
         } else {
             None
         };
-        let x11_display_library = if false && client_ext_str.contains("EGL_EXT_platform_x11") {
+        let x11_display_library = if client_ext_str.contains("EGL_EXT_platform_x11") {
             open_x_display()
         } else {
             None
         };
-        let angle_x11_display_library = if false && client_ext_str.contains("EGL_ANGLE_platform_angle") {
+        let angle_x11_display_library = if client_ext_str.contains("EGL_ANGLE_platform_angle") {
             open_x_display()
         } else {
             None
