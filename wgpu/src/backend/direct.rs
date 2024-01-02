@@ -3064,9 +3064,7 @@ where
     T: 'static + WasmNotSendSync,
 {
     fn from(id: ObjectId) -> Self {
-        // If the id32 feature is enabled in wgpu-core, this will make sure that the id fits in a NonZeroU32.
-        #[allow(clippy::useless_conversion)]
-        let id = id.id().try_into().expect("Id exceeded 32-bits");
+        let id = id.id();
         // SAFETY: The id was created via the impl below
         unsafe { Self::from_raw(id) }
     }
@@ -3077,9 +3075,7 @@ where
     T: 'static + WasmNotSendSync,
 {
     fn from(id: wgc::id::Id<T>) -> Self {
-        // If the id32 feature is enabled in wgpu-core, the conversion is not useless
-        #[allow(clippy::useless_conversion)]
-        let id = id.into_raw().into();
+        let id = id.into_raw();
         Self::from_global_id(id)
     }
 }

@@ -93,6 +93,10 @@ struct Args {
     #[argh(option)]
     before_compaction: Option<String>,
 
+    /// bulk validation mode: all filenames are inputs to read and validate.
+    #[argh(switch)]
+    bulk_validate: bool,
+
     /// show version
     #[argh(switch)]
     version: bool,
@@ -105,6 +109,8 @@ struct Args {
     ///
     /// The rest arguments are the output files. If not specified, only
     /// validation will be performed.
+    ///
+    /// In bulk validation mode, these are all input files to be validated.
     #[argh(positional)]
     files: Vec<String>,
 }
@@ -236,27 +242,16 @@ impl std::error::Error for CliError {}
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    // Initialize default parameters
-    //TODO: read the parameters from RON?
-    let mut params = Parameters::default();
-
     // Parse commandline arguments
     let args: Args = argh::from_env();
     if args.version {
         println!("{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
-    let (input_path, input) = if let Some(path) = args.files.first() {
-        let path = Path::new(path);
-        (path, fs::read(path)?)
-    } else if let Some(path) = &args.stdin_file_path {
-        let mut input = vec![];
-        std::io::stdin().lock().read_to_end(&mut input)?;
-        (Path::new(path), input)
-    } else {
-        return Err(CliError("Input file path is not specified").into());
-    };
-    let output_paths = args.files.get(1..).unwrap_or(&[]);
+
+    // Initialize default parameters
+    //TODO: read the parameters from RON?
+    let mut params = Parameters::default();
 
     // Update parameters from commandline arguments
     if let Some(bits) = args.validate {
@@ -282,14 +277,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
-        block_ctx_dump_prefix: args.block_ctx_dir.map(std::path::PathBuf::from),
+        block_ctx_dump_prefix: args.block_ctx_dir.clone().map(std::path::PathBuf::from),
     };
 
-    params.entry_point = args.entry_point;
-    if let Some(version) = args.profile {
+    params.entry_point = args.entry_point.clone();
+    if let Some(ref version) = args.profile {
         params.glsl.version = version.0;
     }
-    if let Some(model) = args.shader_model {
+    if let Some(ref model) = args.shader_model {
         params.hlsl.shader_model = model.0;
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
@@ -302,67 +297,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         !params.keep_coordinate_space,
     );
 
-    let (mut module, input_text) = match Path::new(&input_path)
-        .extension()
-        .ok_or(CliError("Input filename has no extension"))?
-        .to_str()
-        .ok_or(CliError("Input filename not valid unicode"))?
-    {
-        "bin" => (bincode::deserialize(&input)?, None),
-        "spv" => naga::front::spv::parse_u8_slice(&input, &params.spv_in).map(|m| (m, None))?,
-        "wgsl" => {
-            let input = String::from_utf8(input)?;
-            let result = naga::front::wgsl::parse_str(&input);
-            match result {
-                Ok(v) => (v, Some(input)),
-                Err(ref e) => {
-                    e.emit_to_stderr_with_path(&input, input_path);
-                    return Err(CliError("Could not parse WGSL").into());
-                }
-            }
-        }
-        ext @ ("vert" | "frag" | "comp" | "glsl") => {
-            let input = String::from_utf8(input)?;
-            let mut parser = naga::front::glsl::Frontend::default();
+    if args.bulk_validate {
+        return bulk_validate(args, &params);
+    }
 
-            (
-                parser
-                    .parse(
-                        &naga::front::glsl::Options {
-                            stage: match ext {
-                                "vert" => naga::ShaderStage::Vertex,
-                                "frag" => naga::ShaderStage::Fragment,
-                                "comp" => naga::ShaderStage::Compute,
-                                "glsl" => {
-                                    let internal_name = input_path.to_string_lossy();
-                                    match Path::new(&internal_name[..internal_name.len()-5])
-                                        .extension()
-                                        .ok_or(CliError("Input filename ending with .glsl has no internal extension"))?
-                                        .to_str()
-                                        .ok_or(CliError("Input filename not valid unicode"))?
-                                    {
-                                        "vert" => naga::ShaderStage::Vertex,
-                                        "frag" => naga::ShaderStage::Fragment,
-                                        "comp" => naga::ShaderStage::Compute,
-                                        _ => unreachable!(),
-                                    }
-                                },
-                                _ => unreachable!(),
-                            },
-                            defines: Default::default(),
-                        },
-                        &input,
-                    )
-                    .unwrap_or_else(|errors| {
-                        let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                        emit_glsl_parser_error(errors, filename.unwrap_or("glsl"), &input);
-                        std::process::exit(1);
-                    }),
-                Some(input),
-            )
-        }
-        _ => return Err(CliError("Unknown input file extension").into()),
+    let (input_path, input) = if let Some(path) = args.files.first() {
+        let path = Path::new(path);
+        (path, fs::read(path)?)
+    } else if let Some(path) = &args.stdin_file_path {
+        let mut input = vec![];
+        std::io::stdin().lock().read_to_end(&mut input)?;
+        (Path::new(path), input)
+    } else {
+        return Err(CliError("Input file path is not specified").into());
     };
+
+    let Parsed {
+        mut module,
+        input_text,
+    } = parse_input(input_path, input, &params)?;
 
     // Include debugging information if requested.
     if args.generate_debug_symbols {
@@ -383,6 +336,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     }
+
+    let output_paths = args.files.get(1..).unwrap_or(&[]);
 
     // Decide which capabilities our output formats can support.
     let validation_caps =
@@ -467,6 +422,84 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+struct Parsed {
+    module: naga::Module,
+    input_text: Option<String>,
+}
+
+fn parse_input(
+    input_path: &Path,
+    input: Vec<u8>,
+    params: &Parameters,
+) -> Result<Parsed, Box<dyn std::error::Error>> {
+    let (module, input_text) = match Path::new(&input_path)
+        .extension()
+        .ok_or(CliError("Input filename has no extension"))?
+        .to_str()
+        .ok_or(CliError("Input filename not valid unicode"))?
+    {
+        "bin" => (bincode::deserialize(&input)?, None),
+        "spv" => naga::front::spv::parse_u8_slice(&input, &params.spv_in).map(|m| (m, None))?,
+        "wgsl" => {
+            let input = String::from_utf8(input)?;
+            let result = naga::front::wgsl::parse_str(&input);
+            match result {
+                Ok(v) => (v, Some(input)),
+                Err(ref e) => {
+                    let message = format!(
+                        "Could not parse WGSL:\n{}",
+                        e.emit_to_string_with_path(&input, input_path)
+                    );
+                    return Err(message.into());
+                }
+            }
+        }
+        ext @ ("vert" | "frag" | "comp" | "glsl") => {
+            let input = String::from_utf8(input)?;
+            let mut parser = naga::front::glsl::Frontend::default();
+
+            (
+                parser
+                    .parse(
+                        &naga::front::glsl::Options {
+                            stage: match ext {
+                                "vert" => naga::ShaderStage::Vertex,
+                                "frag" => naga::ShaderStage::Fragment,
+                                "comp" => naga::ShaderStage::Compute,
+                                "glsl" => {
+                                    let internal_name = input_path.to_string_lossy();
+                                    match Path::new(&internal_name[..internal_name.len()-5])
+                                        .extension()
+                                        .ok_or(CliError("Input filename ending with .glsl has no internal extension"))?
+                                        .to_str()
+                                        .ok_or(CliError("Input filename not valid unicode"))?
+                                    {
+                                        "vert" => naga::ShaderStage::Vertex,
+                                        "frag" => naga::ShaderStage::Fragment,
+                                        "comp" => naga::ShaderStage::Compute,
+                                        _ => unreachable!(),
+                                    }
+                                },
+                                _ => unreachable!(),
+                            },
+                            defines: Default::default(),
+                        },
+                        &input,
+                    )
+                    .unwrap_or_else(|errors| {
+                        let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                        emit_glsl_parser_error(errors, filename.unwrap_or("glsl"), &input);
+                        std::process::exit(1);
+                    }),
+                Some(input),
+            )
+        }
+        _ => return Err(CliError("Unknown input file extension").into()),
+    };
+
+    Ok(Parsed { module, input_text })
 }
 
 fn write_output(
@@ -624,6 +657,53 @@ fn write_output(
         other => {
             println!("Unknown output extension: {other}");
         }
+    }
+
+    Ok(())
+}
+
+fn bulk_validate(args: Args, params: &Parameters) -> Result<(), Box<dyn std::error::Error>> {
+    let mut invalid = vec![];
+    for input_path in args.files {
+        let path = Path::new(&input_path);
+        let input = fs::read(path)?;
+
+        let Parsed { module, input_text } = match parse_input(path, input, params) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                invalid.push(input_path.clone());
+                eprintln!("Error validating {}:", input_path);
+                eprintln!("{error}");
+                continue;
+            }
+        };
+
+        let mut validator =
+            naga::valid::Validator::new(params.validation_flags, naga::valid::Capabilities::all());
+
+        if let Err(error) = validator.validate(&module) {
+            invalid.push(input_path.clone());
+            eprintln!("Error validating {}:", input_path);
+            if let Some(input) = &input_text {
+                let filename = path.file_name().and_then(std::ffi::OsStr::to_str);
+                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+            }
+            print_err(&error);
+        }
+    }
+
+    if !invalid.is_empty() {
+        use std::fmt::Write;
+        let mut formatted = String::new();
+        writeln!(
+            &mut formatted,
+            "Validation failed for the following inputs:"
+        )
+        .unwrap();
+        for path in invalid {
+            writeln!(&mut formatted, "  {path}").unwrap();
+        }
+        return Err(formatted.into());
     }
 
     Ok(())

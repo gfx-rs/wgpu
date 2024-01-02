@@ -252,7 +252,7 @@ pub enum StageError {
     TooManyVaryings { used: u32, limit: u32 },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
-    #[error("Shader global {0:?} is not available in the layout pipeline layout")]
+    #[error("Shader global {0:?} is not available in the pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
     #[error("Unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
     Filtering {

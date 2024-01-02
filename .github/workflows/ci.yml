@@ -106,6 +106,12 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      # Use nightly for rustdoc, see https://github.com/gfx-rs/wgpu/issues/4905
+      - name: Install Nightly toolchain
+        run: |
+          rustup toolchain install nightly --no-self-update --profile=minimal --component rust-docs --target ${{ matrix.target }}
+          cargo +nightly -V
+
       - name: disable debug
         shell: bash
         run: |
@@ -146,11 +152,11 @@ jobs:
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
-          cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
+          cargo +nightly doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
           # all features
           cargo clippy --target ${{ matrix.target }} --tests --all-features
-          cargo doc --target ${{ matrix.target }} --no-deps --all-features
+          cargo +nightly doc --target ${{ matrix.target }} --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -180,7 +186,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} --tests --all-features
 
           # build docs
-          cargo doc --target ${{ matrix.target }} --all-features --no-deps
+          cargo +nightly doc --target ${{ matrix.target }} --all-features --no-deps
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.

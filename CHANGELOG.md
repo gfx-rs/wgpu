@@ -65,6 +65,7 @@ Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`
 - Added `DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW` to know if `@builtin(vertex_index)` and `@builtin(instance_index)` will respect the `first_vertex` / `first_instance` in indirect calls. If this is not present, both will always start counting from 0. Currently enabled on all backends except DX12. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722)
 - No longer validate surfaces against their allowed extent range on configure. This caused warnings that were almost impossible to avoid. As before, the resulting behavior depends on the compositor. By @wumpf in [#4796](https://github.com/gfx-rs/wgpu/pull/4796)
 - Added support for the float32-filterable feature. By @almarklein in [#4759](https://github.com/gfx-rs/wgpu/pull/4759)
+- GPU buffer memory is released during "lose the device". By @bradwerth in [#4851](https://github.com/gfx-rs/wgpu/pull/4851)
 - wgpu and wgpu-core features are now documented on docs.rs. By @wumpf in [#4886](https://github.com/gfx-rs/wgpu/pull/4886)
 - DeviceLostClosure is guaranteed to be invoked exactly once. By @bradwerth in [#4862](https://github.com/gfx-rs/wgpu/pull/4862)
 
@@ -79,6 +80,10 @@ Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
 
 - Naga constant evaluation can now process binary operators whose operands are both vectors. By @jimblandy in [#4861](https://github.com/gfx-rs/wgpu/pull/4861).
+
+- Add `--bulk-validate` option to Naga CLI. By @jimblandy in [#4871](https://github.com/gfx-rs/wgpu/pull/4871).
+
+- Naga's `cargo xtask validate` now runs validation jobs in parallel, using the [jobserver](https://crates.io/crates/jobserver) protocol to limit concurrency, and offers a `validate all` subcommand, which runs all available validation types. By @jimblandy in [#4902](https://github.com/gfx-rs/wgpu/pull/4902).
 
 ### Changes
 
@@ -174,6 +179,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 #### General
 
 - `BufferMappedRange` trait is now `WasmNotSendSync`, i.e. it is `Send`/`Sync` if not on wasm or `fragile-send-sync-non-atomic-wasm` is enabled. By @wumpf in [#4818](https://github.com/gfx-rs/wgpu/pull/4818)
+- Align `wgpu_types::CompositeAlphaMode` serde serialization to spec. By @littledivy in [#4940](https://github.com/gfx-rs/wgpu/pull/4940)
 - `wgpu_render_pass_set_bind_group` and `wgpu_compute_pass_set_bind_group` clamp the number of dynamic offsets to fit within limits. By @bradwerth in [#4918](https://github.com/gfx-rs/wgpu/pull/4918)
 
 #### Vulkan
