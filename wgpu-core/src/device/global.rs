@@ -3,8 +3,8 @@ use crate::device::trace;
 use crate::{
     api_log, binding_model, command, conv,
     device::{
-        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, DeviceLostReason,
-        HostMap, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
+        bgl, life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure,
+        DeviceLostReason, HostMap, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
     hal_api::HalApi,
@@ -16,7 +16,7 @@ use crate::{
     resource::{self, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation, CreateBufferError, Resource},
     validation::check_buffer_usage,
-    FastHashMap, Label, LabelHelpers as _,
+    Label, LabelHelpers as _,
 };
 
 use arrayvec::ArrayVec;
@@ -962,7 +962,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let fid = hub.bind_group_layouts.prepare::<G>(id_in);
 
-        let error = 'outer: loop {
+        let error = loop {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -976,38 +976,50 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
             }
 
-            let mut entry_map = FastHashMap::default();
-            for entry in desc.entries.iter() {
-                if entry.binding > device.limits.max_bindings_per_bind_group {
-                    break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
-                        binding: entry.binding,
-                        maximum: device.limits.max_bindings_per_bind_group,
-                    };
-                }
-                if entry_map.insert(entry.binding, *entry).is_some() {
-                    break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
-                        entry.binding,
-                    );
-                }
-            }
+            let entry_map = match bgl::EntryMap::from_entries(&device.limits, &desc.entries) {
+                Ok(map) => map,
+                Err(e) => break e,
+            };
 
-            if let Some((id, layout)) = {
-                let bgl_guard = hub.bind_group_layouts.read();
-                device.deduplicate_bind_group_layout(&entry_map, &*bgl_guard)
-            } {
-                api_log!("Reusing BindGroupLayout {layout:?} -> {:?}", id);
-                let id = fid.assign_existing(&layout);
-                return (id, None);
-            }
+            // Currently we make a distinction between fid.assign and fid.assign_existing. This distinction is incorrect,
+            // but see https://github.com/gfx-rs/wgpu/issues/4912.
+            //
+            // `assign` also registers the ID with the resource info, so it can be automatically reclaimed. This needs to
+            // happen with a mutable reference, which means it can only happen on creation.
+            //
+            // Because we need to call `assign` inside the closure (to get mut access), we need to "move" the future id into the closure.
+            // Rust cannot figure out at compile time that we only ever consume the ID once, so we need to move the check
+            // to runtime using an Option.
+            let mut fid = Some(fid);
 
-            let layout = match device.create_bind_group_layout(&desc.label, entry_map) {
+            // The closure might get called, and it might give us an ID. Side channel it out of the closure.
+            let mut id = None;
+
+            let bgl_result = device.bgl_pool.get_or_init(entry_map, |entry_map| {
+                let bgl =
+                    device.create_bind_group_layout(&desc.label, entry_map, bgl::Origin::Pool)?;
+
+                let (id_inner, arc) = fid.take().unwrap().assign(bgl);
+                id = Some(id_inner);
+
+                Ok(arc)
+            });
+
+            let layout = match bgl_result {
                 Ok(layout) => layout,
                 Err(e) => break e,
             };
 
-            let (id, _layout) = fid.assign(layout);
+            // If the ID was not assigned, and we survived the above check,
+            // it means that the bind group layout already existed and we need to call `assign_existing`.
+            //
+            // Calling this function _will_ leak the ID. See https://github.com/gfx-rs/wgpu/issues/4912.
+            if id.is_none() {
+                id = Some(fid.take().unwrap().assign_existing(&layout))
+            }
+
             api_log!("Device::create_bind_group_layout -> {id:?}");
-            return (id, None);
+            return (id.unwrap(), None);
         };
 
         let fid = hub.bind_group_layouts.prepare::<G>(id_in);
