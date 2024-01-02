@@ -3,7 +3,52 @@
 //! To start using the API, create an [`Instance`].
 //!
 //! ## Feature flags
-#![doc = document_features::document_features!()]
+// NOTE: feature docs. below should be kept in sync. with `Cargo.toml`!
+//!
+//! ### Backends
+//!
+//! ⚠️ WIP: Not all backends can be manually configured today. On Windows & Linux the Vulkan & GLES
+//! backends are always enabled. See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more
+//! details.
+//!
+//! - **`dx12`** _(enabled by default)_ ---   Enables the DX12 backend on Windows.
+//! - **`metal`** _(enabled by default)_ --- Enables the Metal backend on macOS & iOS.
+//! - **`angle`** --- Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS
+//!   using.
+//! - **`vulkan-portability`** --- Enables the Vulkan backend on macOS & iOS.
+//! - **`webgl`** --- Enables the GLES backend on Wasm
+//!
+//!     - ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
+//!     - ⚠️ WIP: This automatically disables use of WebGPU. See
+//!       [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
+//!
+//! ### Shading language support
+//!
+//! - **`spirv`** --- Enable accepting SPIR-V shaders as input.
+//! - **`glsl`** --- Enable accepting GLSL shaders as input.
+//! - **`wgsl`** _(enabled by default)_ --- Enable accepting WGSL shaders as input.
+//!
+//! ### Logging & Tracing
+//!
+//! The following features do not have any effect on the WebGPU backend.
+//!
+//! - **`strict_asserts`** --- Apply run-time checks, even in release builds. These are in addition
+//!   to the validation carried out at public APIs in all builds.
+//! - **`api_log_info`** --- Log all API entry points at info instead of trace level.
+//! - **`trace`** --- Allow writing of trace capture files. See [`Adapter::request_device`].
+//! - **`replay`** --- Allow deserializing of trace capture files that were written with the `trace`
+//!   feature. To replay a trace file use the [wgpu
+//!   player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
+//!
+//! ### Other
+//!
+//! - **`fragile-send-sync-non-atomic-wasm`** --- Implement `Send` and `Sync` on Wasm, but only if
+//!   atomics are not enabled.
+//!
+//!   WebGL/WebGPU objects can not be shared between threads. However, it can be useful to
+//!   artificially mark them as `Send` and `Sync` anyways to make it easier to write cross-platform
+//!   code. This is technically _very_ unsafe in a multithreaded environment, but on a wasm binary
+//!   compiled without atomics we know we are definitely not in a multithreaded environment.
 //!
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
