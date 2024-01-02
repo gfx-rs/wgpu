@@ -1,5 +1,7 @@
 use crate::{
-    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
+    device::{
+        bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
+    },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
     id::{
@@ -12,7 +14,7 @@ use crate::{
     snatch::SnatchGuard,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label,
+    Label,
 };
 
 use arrayvec::ArrayVec;
@@ -440,32 +442,32 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
-pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
-
 pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindGroupLayoutId>;
 
 /// Bind group layout.
-///
-/// The lifetime of BGLs is a bit special. They are only referenced on CPU
-/// without considering GPU operations. And on CPU they get manual
-/// inc-refs and dec-refs. In particular, the following objects depend on them:
-///  - produced bind groups
-///  - produced pipeline layouts
-///  - pipelines with implicit layouts
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {
     pub(crate) raw: Option<A::BindGroupLayout>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) entries: BindEntryMap,
+    pub(crate) entries: bgl::EntryMap,
+    /// It is very important that we know if the bind group comes from the BGL pool.
+    ///
+    /// If it does, then we need to remove it from the pool when we drop it.
+    ///
+    /// We cannot unconditionally remove from the pool, as BGLs that don't come from the pool
+    /// (derived BGLs) must not be removed.
+    pub(crate) origin: bgl::Origin,
     #[allow(unused)]
-    pub(crate) dynamic_count: usize,
-    pub(crate) count_validator: BindingTypeMaxCountValidator,
+    pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     pub(crate) info: ResourceInfo<BindGroupLayoutId>,
     pub(crate) label: String,
 }
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
     fn drop(&mut self) {
+        if matches!(self.origin, bgl::Origin::Pool) {
+            self.device.bgl_pool.remove(&self.entries);
+        }
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw BindGroupLayout {:?}", self.info.label());
             unsafe {
@@ -618,6 +620,14 @@ impl<A: HalApi> PipelineLayout<A> {
     pub(crate) fn raw(&self) -> &A::PipelineLayout {
         self.raw.as_ref().unwrap()
     }
+
+    pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::EntryMap, { hal::MAX_BIND_GROUPS }> {
+        self.bind_group_layouts
+            .iter()
+            .map(|bgl| &bgl.entries)
+            .collect()
+    }
+
     /// Validate push constants match up with expected ranges.
     pub(crate) fn validate_push_constant_ranges(
         &self,
