@@ -835,6 +835,50 @@ impl<A: HalApi> Texture<A> {
             }
         }
     }
+
+    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+        let device = &self.device;
+        let texture_id = self.info.id();
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::FreeTexture(texture_id));
+        }
+
+        let temp = {
+            let snatch_guard = device.snatchable_lock.write();
+            let raw = match self.inner.snatch(snatch_guard) {
+                Some(TextureInner::Native { raw }) => raw,
+                Some(TextureInner::Surface { .. }) => {
+                    return Ok(());
+                }
+                None => {
+                    return Err(resource::DestroyError::AlreadyDestroyed);
+                }
+            };
+
+            queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {
+                raw: Some(raw),
+                device: Arc::clone(&self.device),
+                submission_index: self.info.submission_index(),
+                id: self.info.id.unwrap(),
+                label: self.info.label.clone(),
+            }))
+        };
+
+        let mut pending_writes = device.pending_writes.lock();
+        let pending_writes = pending_writes.as_mut().unwrap();
+        if pending_writes.dst_textures.contains_key(&texture_id) {
+            pending_writes.temp_resources.push(temp);
+        } else {
+            let last_submit_index = self.info.submission_index();
+            device
+                .lock_life()
+                .schedule_resource_destruction(temp, last_submit_index);
+        }
+
+        Ok(())
+    }
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -924,6 +968,38 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map(|surface| &*surface.raw);
 
         hal_surface_callback(hal_surface)
+    }
+}
+
+/// A texture that has been marked as destroyed and is staged for actual deletion soon.
+#[derive(Debug)]
+pub struct DestroyedTexture<A: HalApi> {
+    raw: Option<A::Texture>,
+    device: Arc<Device<A>>,
+    label: String,
+    pub(crate) id: TextureId,
+    pub(crate) submission_index: u64,
+}
+
+impl<A: HalApi> DestroyedTexture<A> {
+    pub fn label(&self) -> &dyn Debug {
+        if !self.label.is_empty() {
+            return &self.label;
+        }
+
+        &self.id
+    }
+}
+
+impl<A: HalApi> Drop for DestroyedTexture<A> {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.take() {
+            resource_log!("Deallocate raw Texture (destroyed) {:?}", self.label());
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_texture(raw);
+            }
+        }
     }
 }
 

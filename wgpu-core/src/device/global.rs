@@ -736,32 +736,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get_and_mark_destroyed(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
-        let device = &texture.device;
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::FreeTexture(texture_id));
-        }
-
-        let last_submit_index = texture.info.submission_index();
-
-        let snatch_guard = texture.device.snatchable_lock.read();
-
-        if let Some(resource::TextureInner::Native { .. }) = texture.inner.get(&snatch_guard) {
-            let temp = queue::TempResource::Texture(texture.clone());
-            let mut guard = device.pending_writes.lock();
-            let pending_writes = guard.as_mut().unwrap();
-            if pending_writes.dst_textures.contains_key(&texture_id) {
-                pending_writes.temp_resources.push(temp);
-            } else {
-                drop(guard);
-                device
-                    .lock_life()
-                    .schedule_resource_destruction(temp, last_submit_index);
-            }
-        }
-
-        Ok(())
+        texture.destroy()
     }
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
