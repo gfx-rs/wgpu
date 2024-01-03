@@ -908,7 +908,7 @@ impl<A: HalApi> Device<A> {
         let snatch_guard = texture.device.snatchable_lock.read();
 
         let texture_raw = texture
-            .as_raw(&snatch_guard)
+            .raw(&snatch_guard)
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
 
         // resolve TextureViewDescriptor defaults

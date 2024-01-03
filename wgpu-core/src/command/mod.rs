@@ -230,7 +230,7 @@ impl<A: HalApi> CommandBuffer<A> {
         let texture_barriers = transitions
             .into_iter()
             .enumerate()
-            .map(|(i, p)| p.into_hal(textures[i].unwrap().as_raw().unwrap()));
+            .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
 
         unsafe {
             raw.transition_buffers(buffer_barriers);
