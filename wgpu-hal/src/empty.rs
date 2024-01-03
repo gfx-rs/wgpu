@@ -37,6 +37,7 @@ impl crate::Api for Api {
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
+    type SubmitSurfaceTextureSet = ();
 }
 
 impl crate::Instance<Api> for Context {
@@ -104,6 +105,7 @@ impl crate::Queue<Api> for Context {
     unsafe fn submit(
         &self,
         command_buffers: &[&Resource],
+        surface_textures: &(),
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())

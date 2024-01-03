@@ -1,7 +1,8 @@
 extern crate wgpu_hal as hal;
 
 use hal::{
-    Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
+    Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, RawSet as _,
+    Surface as _,
 };
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
@@ -754,8 +755,13 @@ impl<A: hal::Api> Example<A> {
         let fence = unsafe {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
+            let surface_textures = A::SubmitSurfaceTextureSet::new();
             queue
-                .submit(&[&init_cmd], Some((&mut fence, init_fence_value)))
+                .submit(
+                    &[&init_cmd],
+                    &surface_textures,
+                    Some((&mut fence, init_fence_value)),
+                )
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
             cmd_encoder.reset_all(iter::once(init_cmd));
@@ -960,7 +966,11 @@ impl<A: hal::Api> Example<A> {
             } else {
                 None
             };
-            self.queue.submit(&[&cmd_buf], fence_param).unwrap();
+            let mut surface_textures = A::SubmitSurfaceTextureSet::new();
+            surface_textures.insert(&surface_tex);
+            self.queue
+                .submit(&[&cmd_buf], &surface_textures, fence_param)
+                .unwrap();
             self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
@@ -998,8 +1008,13 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             {
                 let ctx = &mut self.contexts[self.context_index];
+                let surface_textures = A::SubmitSurfaceTextureSet::new();
                 self.queue
-                    .submit(&[], Some((&mut ctx.fence, ctx.fence_value)))
+                    .submit(
+                        &[],
+                        &surface_textures,
+                        Some((&mut ctx.fence, ctx.fence_value)),
+                    )
                     .unwrap();
             }
 

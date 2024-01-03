@@ -22,7 +22,7 @@ use crate::{
     resource_log, track, FastHashMap, SubmissionIndex,
 };
 
-use hal::{CommandEncoder as _, Device as _, Queue as _};
+use hal::{CommandEncoder as _, Device as _, Queue as _, RawSet as _};
 use parking_lot::Mutex;
 
 use std::{
@@ -1115,6 +1115,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .fetch_add(1, Ordering::Relaxed)
                 + 1;
             let mut active_executions = Vec::new();
+
+            // SAFETY: We're constructing this during the submission phase,
+            // where all resources it uses are guaranteed to outlive this
+            // short-lived set.
+            let mut submit_surface_textures = A::SubmitSurfaceTextureSet::new();
+
             let mut used_surface_textures = track::TextureUsageScope::new();
 
             let snatch_guard = device.snatchable_lock.read();
@@ -1217,8 +1223,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         return Err(QueueSubmitError::DestroyedTexture(id));
                                     }
                                     Some(TextureInner::Native { .. }) => false,
-                                    Some(TextureInner::Surface { ref has_work, .. }) => {
+                                    Some(TextureInner::Surface {
+                                        ref has_work,
+                                        ref raw,
+                                        ..
+                                    }) => {
                                         has_work.store(true, Ordering::Relaxed);
+
+                                        if let Some(raw) = raw {
+                                            unsafe {
+                                                submit_surface_textures.insert(raw);
+                                            }
+                                        }
+
                                         true
                                     }
                                 };
@@ -1409,8 +1426,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             return Err(QueueSubmitError::DestroyedTexture(id));
                         }
                         Some(TextureInner::Native { .. }) => {}
-                        Some(TextureInner::Surface { ref has_work, .. }) => {
+                        Some(TextureInner::Surface {
+                            ref has_work,
+                            ref raw,
+                            ..
+                        }) => {
                             has_work.store(true, Ordering::Relaxed);
+
+                            if let Some(raw) = raw {
+                                unsafe {
+                                    submit_surface_textures.insert(raw);
+                                }
+                            }
+
                             unsafe {
                                 used_surface_textures
                                     .merge_single(texture, None, hal::TextureUses::PRESENT)
@@ -1449,12 +1477,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
                 )
                 .collect::<Vec<_>>();
+
             unsafe {
                 queue
                     .raw
                     .as_ref()
                     .unwrap()
-                    .submit(&refs, Some((fence, submit_index)))
+                    .submit(&refs, &submit_surface_textures, Some((fence, submit_index)))
                     .map_err(DeviceError::from)?;
             }
 

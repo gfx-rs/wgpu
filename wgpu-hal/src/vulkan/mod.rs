@@ -48,6 +48,9 @@ use ash::{
     vk,
 };
 use parking_lot::{Mutex, RwLock};
+use smallvec::SmallVec;
+
+use crate::RawSet;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -80,6 +83,23 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type SubmitSurfaceTextureSet = SubmitSurfaceTextureSet;
+}
+
+pub struct SubmitSurfaceTextureSet {
+    semaphores: SmallVec<[vk::Semaphore; 2]>,
+}
+
+impl RawSet<SurfaceTexture> for SubmitSurfaceTextureSet {
+    fn new() -> Self {
+        Self {
+            semaphores: SmallVec::new(),
+        }
+    }
+
+    unsafe fn insert(&mut self, texture: &SurfaceTexture) {
+        self.semaphores.push(texture.wait_semaphore);
+    }
 }
 
 struct DebugUtils {
@@ -146,10 +166,14 @@ struct Swapchain {
     raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::Swapchain,
     device: Arc<DeviceShared>,
-    fence: vk::Fence,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
     view_formats: Vec<wgt::TextureFormat>,
+    /// One wait semaphore per swapchain image. This will be associated with the
+    /// surface texture, and later collected during submission.
+    surface_semaphores: Vec<vk::Semaphore>,
+    /// Current semaphore index to use when acquiring a surface.
+    next_surface_index: usize,
 }
 
 pub struct Surface {
@@ -163,6 +187,7 @@ pub struct Surface {
 pub struct SurfaceTexture {
     index: u32,
     texture: Texture,
+    wait_semaphore: vk::Semaphore,
 }
 
 impl Borrow<Texture> for SurfaceTexture {
@@ -585,29 +610,43 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
+        surface_textures: &SubmitSurfaceTextureSet,
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
-        let vk_cmd_buffers = command_buffers
-            .iter()
-            .map(|cmd| cmd.raw)
-            .collect::<Vec<_>>();
-
-        let mut vk_info = vk::SubmitInfo::builder().command_buffers(&vk_cmd_buffers);
-
         let mut fence_raw = vk::Fence::null();
-        let mut vk_timeline_info;
-        let mut signal_semaphores = [vk::Semaphore::null(), vk::Semaphore::null()];
-        let signal_values;
+
+        let mut wait_stage_masks = Vec::new();
+        let mut wait_semaphores = Vec::new();
+        let mut signal_semaphores = ArrayVec::<_, 2>::new();
+        let mut signal_values = ArrayVec::<_, 2>::new();
+
+        for &wait in &surface_textures.semaphores {
+            wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
+            wait_semaphores.push(wait);
+        }
+
+        let old_index = self.relay_index.load(Ordering::Relaxed);
+
+        let sem_index = if old_index >= 0 {
+            wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
+            wait_semaphores.push(self.relay_semaphores[old_index as usize]);
+            (old_index as usize + 1) % self.relay_semaphores.len()
+        } else {
+            0
+        };
+
+        signal_semaphores.push(self.relay_semaphores[sem_index]);
+
+        self.relay_index
+            .store(sem_index as isize, Ordering::Relaxed);
 
         if let Some((fence, value)) = signal_fence {
             fence.maintain(&self.device.raw)?;
             match *fence {
                 Fence::TimelineSemaphore(raw) => {
-                    signal_values = [!0, value];
-                    signal_semaphores[1] = raw;
-                    vk_timeline_info = vk::TimelineSemaphoreSubmitInfo::builder()
-                        .signal_semaphore_values(&signal_values);
-                    vk_info = vk_info.push_next(&mut vk_timeline_info);
+                    signal_semaphores.push(raw);
+                    signal_values.push(!0);
+                    signal_values.push(value);
                 }
                 Fence::FencePool {
                     ref mut active,
@@ -627,26 +666,25 @@ impl crate::Queue<Api> for Queue {
             }
         }
 
-        let wait_stage_mask = [vk::PipelineStageFlags::TOP_OF_PIPE];
-        let old_index = self.relay_index.load(Ordering::Relaxed);
-        let sem_index = if old_index >= 0 {
-            vk_info = vk_info
-                .wait_semaphores(&self.relay_semaphores[old_index as usize..old_index as usize + 1])
-                .wait_dst_stage_mask(&wait_stage_mask);
-            (old_index as usize + 1) % self.relay_semaphores.len()
-        } else {
-            0
-        };
-        self.relay_index
-            .store(sem_index as isize, Ordering::Relaxed);
-        signal_semaphores[0] = self.relay_semaphores[sem_index];
+        let vk_cmd_buffers = command_buffers
+            .iter()
+            .map(|cmd| cmd.raw)
+            .collect::<Vec<_>>();
 
-        let signal_count = if signal_semaphores[1] == vk::Semaphore::null() {
-            1
-        } else {
-            2
-        };
-        vk_info = vk_info.signal_semaphores(&signal_semaphores[..signal_count]);
+        let mut vk_info = vk::SubmitInfo::builder().command_buffers(&vk_cmd_buffers);
+
+        vk_info = vk_info
+            .wait_semaphores(&wait_semaphores)
+            .wait_dst_stage_mask(&wait_stage_masks)
+            .signal_semaphores(&signal_semaphores);
+
+        let mut vk_timeline_info;
+
+        if !signal_values.is_empty() {
+            vk_timeline_info =
+                vk::TimelineSemaphoreSubmitInfo::builder().signal_semaphore_values(&signal_values);
+            vk_info = vk_info.push_next(&mut vk_timeline_info);
+        }
 
         profiling::scope!("vkQueueSubmit");
         unsafe {

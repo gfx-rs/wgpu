@@ -214,6 +214,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ComputePipeline: fmt::Debug + WasmNotSendSync;
 
     type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
+    type SubmitSurfaceTextureSet: RawSet<Self::SurfaceTexture>;
 }
 
 pub trait Instance<A: Api>: Sized + WasmNotSendSync {
@@ -413,9 +414,12 @@ pub trait Queue<A: Api>: WasmNotSendSync {
     /// - all of the command buffers were created from command pools
     ///   that are associated with this queue.
     /// - all of the command buffers had `CommadBuffer::finish()` called.
+    /// - all surface textures that the command buffers write to must be
+    ///   passed to the surface_textures argument.
     unsafe fn submit(
         &self,
         command_buffers: &[&A::CommandBuffer],
+        surface_textures: &A::SubmitSurfaceTextureSet,
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
     ) -> Result<(), DeviceError>;
     unsafe fn present(
@@ -717,6 +721,25 @@ bitflags!(
         const COPY_DST = 1 << 15;
     }
 );
+
+pub trait RawSet<T> {
+    /// Construct a new set unsafely.
+    fn new() -> Self;
+
+    /// Insert a value into the raw set.
+    ///
+    /// The caller is responsible for ensuring that the set doesn't outlive the
+    /// values it contains. The exact requirements depends on which set is being
+    /// constructed.
+    unsafe fn insert(&mut self, value: &T);
+}
+
+/// Provide a default implementation for () for backends which do not need to
+/// track any raw resources so they can easily be stubbed out.
+impl<T> RawSet<T> for () {
+    fn new() -> Self {}
+    unsafe fn insert(&mut self, _: &T) {}
+}
 
 bitflags!(
     /// Texture format capability flags.

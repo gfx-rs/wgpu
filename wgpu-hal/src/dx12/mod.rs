@@ -84,6 +84,7 @@ impl crate::Api for Api {
     type ComputePipeline = ComputePipeline;
 
     type AccelerationStructure = AccelerationStructure;
+    type SubmitSurfaceTextureSet = ();
 }
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
@@ -882,6 +883,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
+        _surface_textures: &(),
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         let mut temp_lists = self.temp_lists.lock();
