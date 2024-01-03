@@ -610,7 +610,7 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::DEBUG_FNS,
-            supported((3, 2), (4, 3)) && !web_gl,
+            gl.supports_debug(),
         );
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
