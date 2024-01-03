@@ -1478,7 +1478,11 @@ impl Index<Handle<Expression>> for Context<'_> {
     type Output = Expression;
 
     fn index(&self, index: Handle<Expression>) -> &Self::Output {
-        &self.expressions[index]
+        if self.is_const {
+            &self.module.const_expressions[index]
+        } else {
+            &self.expressions[index]
+        }
     }
 }
 
