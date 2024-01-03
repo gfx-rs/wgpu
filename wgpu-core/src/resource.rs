@@ -719,7 +719,7 @@ pub(crate) enum TextureInner<A: HalApi> {
 }
 
 impl<A: HalApi> TextureInner<A> {
-    pub fn as_raw(&self) -> Option<&A::Texture> {
+    pub fn raw(&self) -> Option<&A::Texture> {
         match self {
             Self::Native { raw } => Some(raw),
             Self::Surface { raw: Some(tex), .. } => Some(tex.borrow()),
@@ -797,8 +797,8 @@ impl<A: HalApi> Drop for Texture<A> {
 }
 
 impl<A: HalApi> Texture<A> {
-    pub(crate) fn as_raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::Texture> {
-        self.inner.get(snatch_guard)?.as_raw()
+    pub(crate) fn raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::Texture> {
+        self.inner.get(snatch_guard)?.raw()
     }
 
     pub(crate) fn inner_mut<'a>(
@@ -852,7 +852,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let texture_opt = { hub.textures.try_get(id).ok().flatten() };
         let texture = texture_opt.as_ref().unwrap();
         let snatch_guard = texture.device.snatchable_lock.read();
-        let hal_texture = texture.as_raw(&snatch_guard);
+        let hal_texture = texture.raw(&snatch_guard);
 
         hal_texture_callback(hal_texture);
     }

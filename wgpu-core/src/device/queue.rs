@@ -813,7 +813,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let dst_raw = dst
-            .as_raw(&snatch_guard)
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let bytes_per_row = data_layout
@@ -1075,7 +1075,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let snatch_guard = device.snatchable_lock.read();
         let dst_raw = dst
-            .as_raw(&snatch_guard)
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let regions = hal::TextureCopy {
@@ -1397,7 +1397,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let texture_barriers = transitions
                                 .into_iter()
                                 .enumerate()
-                                .map(|(i, p)| p.into_hal(textures[i].unwrap().as_raw().unwrap()));
+                                .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
@@ -1450,7 +1450,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let texture_barriers = transitions
                         .into_iter()
                         .enumerate()
-                        .map(|(i, p)| p.into_hal(textures[i].unwrap().as_raw().unwrap()));
+                        .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
                     unsafe {
                         pending_writes
                             .command_encoder

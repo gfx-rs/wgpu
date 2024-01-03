@@ -812,7 +812,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
-            .as_raw(&snatch_guard)
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(
@@ -949,7 +949,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
-            .as_raw(&snatch_guard)
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
@@ -1163,7 +1163,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
-            .as_raw(&snatch_guard)
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
@@ -1181,7 +1181,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
-            .as_raw(&snatch_guard)
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(
