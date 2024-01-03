@@ -2370,11 +2370,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (trackers, pending_discard_init_fixups)
         };
 
-        let query_set_guard = hub.query_sets.read();
-
         let cmd_buf = hub.command_buffers.get(encoder_id).unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+
+        let query_set_guard = hub.query_sets.read();
 
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;

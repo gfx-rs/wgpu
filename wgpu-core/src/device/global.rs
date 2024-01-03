@@ -487,12 +487,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let buffer = {
-            let mut buffer_guard = hub.buffers.write();
-            buffer_guard
-                .get_and_mark_destroyed(buffer_id)
-                .map_err(|_| resource::DestroyError::Invalid)?
-        };
+        let buffer = hub
+            .buffers
+            .write()
+            .get_and_mark_destroyed(buffer_id)
+            .map_err(|_| resource::DestroyError::Invalid)?;
 
         let _ = buffer.unmap();
 
@@ -683,8 +682,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let fid = hub.buffers.prepare::<G>(id_in);
 
         let error = loop {
-            let device_guard = hub.devices.read();
-            let device = match device_guard.get(device_id) {
+            let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
@@ -732,8 +730,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let mut texture_guard = hub.textures.write();
-        let texture = texture_guard
+        let texture = hub
+            .textures
+            .write()
             .get_and_mark_destroyed(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
@@ -1075,12 +1074,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
             }
 
-            let layout = {
-                let bgl_guard = hub.bind_group_layouts.read();
-                match device.create_pipeline_layout(desc, &*bgl_guard) {
-                    Ok(layout) => layout,
-                    Err(e) => break e,
-                }
+            let layout = match device.create_pipeline_layout(desc, &hub.bind_group_layouts) {
+                Ok(layout) => layout,
+                Err(e) => break e,
             };
 
             let (id, _) = fid.assign(layout);
