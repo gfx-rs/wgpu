@@ -1015,13 +1015,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     );
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<
-            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
-        >,
+        render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     );
 }
 
@@ -1576,11 +1574,11 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         dest: crate::ImageCopyTextureTagged<'_>,
         size: wgt::Extent3d,
     );
-    fn queue_submit<'a>(
+    fn queue_submit(
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
+        command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
     ) -> (ObjectId, Arc<crate::Data>);
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32;
     fn queue_on_submitted_work_done(
@@ -1984,11 +1982,11 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
     );
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
+        render_bundles: &mut dyn Iterator<Item = (&ObjectId, &crate::Data)>,
     );
 }
 
@@ -3025,15 +3023,15 @@ where
         Context::queue_copy_external_image_to_texture(self, &queue, queue_data, source, dest, size)
     }
 
-    fn queue_submit<'a>(
+    fn queue_submit(
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
+        command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
     ) -> (ObjectId, Arc<crate::Data>) {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
-        let command_buffers = command_buffers.into_iter().map(|(id, data)| {
+        let command_buffers = command_buffers.map(|(id, data)| {
             let command_buffer_data: <T as Context>::CommandBufferData = *data.downcast().unwrap();
             (<T::CommandBufferId>::from(id), command_buffer_data)
         });
@@ -3986,19 +3984,19 @@ where
         Context::render_pass_end_pipeline_statistics_query(self, &mut pass, pass_data)
     }
 
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
+        render_bundles: &mut dyn Iterator<Item = (&ObjectId, &crate::Data)>,
     ) {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let render_bundles = Box::new(render_bundles.into_iter().map(|(id, data)| {
+        let mut render_bundles = render_bundles.map(|(id, data)| {
             let render_bundle_data: &<T as Context>::RenderBundleData = downcast_ref(data);
             (<T::RenderBundleId>::from(*id), render_bundle_data)
-        }));
-        Context::render_pass_execute_bundles(self, &mut pass, pass_data, render_bundles)
+        });
+        Context::render_pass_execute_bundles(self, &mut pass, pass_data, &mut render_bundles)
     }
 }
 
