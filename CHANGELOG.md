@@ -47,6 +47,7 @@ Bottom level categories:
 #### Vulkan
 
 - Fix x11 hang while resizing on vulkan. @Azorlogh in [#4184](https://github.com/gfx-rs/wgpu/pull/4184).
+- Backport fix to ensure that limit requests and reporting is done correctly. (By @OptimisticPeach in [#4107](https://github.com/gfx-rs/wgpu/pull/4107)), @cshenton in  [#4964](https://github.com/gfx-rs/wgpu/pull/4964)
 
 ## v0.17.1 (2023-09-27)
 
