@@ -608,10 +608,7 @@ impl super::Adapter {
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
         );
-        private_caps.set(
-            super::PrivateCapabilities::DEBUG_FNS,
-            gl.supports_debug(),
-        );
+        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, gl.supports_debug());
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),

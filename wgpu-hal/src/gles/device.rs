@@ -593,7 +593,11 @@ impl crate::Device<super::Api> for super::Device {
 
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = desc.label {
-            if self.shared.private_caps.contains(PrivateCapabilities::DEBUG_FNS) {
+            if self
+                .shared
+                .private_caps
+                .contains(PrivateCapabilities::DEBUG_FNS)
+            {
                 let name = unsafe { mem::transmute(raw) };
                 unsafe { gl.object_label(glow::BUFFER, name, Some(label)) };
             }
@@ -732,7 +736,11 @@ impl crate::Device<super::Api> for super::Device {
 
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(label) = desc.label {
-                if self.shared.private_caps.contains(PrivateCapabilities::DEBUG_FNS) {
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+                {
                     let name = unsafe { mem::transmute(raw) };
                     unsafe { gl.object_label(glow::RENDERBUFFER, name, Some(label)) };
                 }
@@ -896,7 +904,11 @@ impl crate::Device<super::Api> for super::Device {
 
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(label) = desc.label {
-                if self.shared.private_caps.contains(PrivateCapabilities::DEBUG_FNS) {
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+                {
                     let name = unsafe { mem::transmute(raw) };
                     unsafe { gl.object_label(glow::TEXTURE, name, Some(label)) };
                 }
@@ -1035,7 +1047,11 @@ impl crate::Device<super::Api> for super::Device {
 
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = desc.label {
-            if self.shared.private_caps.contains(PrivateCapabilities::DEBUG_FNS) {
+            if self
+                .shared
+                .private_caps
+                .contains(PrivateCapabilities::DEBUG_FNS)
+            {
                 let name = unsafe { mem::transmute(raw) };
                 unsafe { gl.object_label(glow::SAMPLER, name, Some(label)) };
             }
