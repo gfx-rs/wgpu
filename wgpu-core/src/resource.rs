@@ -433,6 +433,10 @@ impl<A: HalApi> Buffer<A> {
         self.raw.get(guard)
     }
 
+    pub(crate) fn is_destroyed(&self, guard: &SnatchGuard) -> bool {
+        self.raw.get(guard).is_none()
+    }
+
     // Note: This must not be called while holding a lock.
     pub(crate) fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
         if let Some((mut operation, status)) = self.unmap_inner()? {
@@ -816,6 +820,10 @@ impl<A: HalApi> Drop for Texture<A> {
 impl<A: HalApi> Texture<A> {
     pub(crate) fn raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::Texture> {
         self.inner.get(snatch_guard)?.raw()
+    }
+
+    pub(crate) fn is_destroyed(&self, guard: &SnatchGuard) -> bool {
+        self.inner.get(guard).is_none()
     }
 
     pub(crate) fn inner_mut<'a>(

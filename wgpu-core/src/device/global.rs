@@ -797,6 +797,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break resource::CreateTextureViewError::InvalidTexture,
             };
             let device = &texture.device;
+            {
+                let snatch_guard = device.snatchable_lock.read();
+                if texture.is_destroyed(&snatch_guard) {
+                    break resource::CreateTextureViewError::InvalidTexture;
+                }
+            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateTextureView {
@@ -2384,6 +2390,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     },
                 ));
             }
+
+            let snatch_guard = device.snatchable_lock.read();
+            if buffer.is_destroyed(&snatch_guard) {
+                return Err((op, BufferAccessError::Destroyed));
+            }
+
             {
                 let map_state = &mut *buffer.map_state.lock();
                 *map_state = match *map_state {
@@ -2408,9 +2420,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut trackers = buffer.device.as_ref().trackers.lock();
                 trackers.buffers.set_single(&buffer, internal_use);
                 //TODO: Check if draining ALL buffers is correct!
-                let snatch_guard = device.snatchable_lock.read();
                 let _ = trackers.buffers.drain_transitions(&snatch_guard);
             }
+
+            drop(snatch_guard);
 
             buffer
         };
@@ -2435,6 +2448,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
+
+        {
+            let snatch_guard = buffer.device.snatchable_lock.read();
+            if buffer.is_destroyed(&snatch_guard) {
+                return Err(BufferAccessError::Destroyed);
+            }
+        }
 
         let range_size = if let Some(size) = size {
             size
@@ -2497,6 +2517,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
+
+        let snatch_guard = buffer.device.snatchable_lock.read();
+        if buffer.is_destroyed(&snatch_guard) {
+            return Err(BufferAccessError::Destroyed);
+        }
+        drop(snatch_guard);
 
         if !buffer.device.is_valid() {
             return Err(DeviceError::Lost.into());
