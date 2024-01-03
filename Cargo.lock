@@ -1526,7 +1526,8 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.13.0"
-source = "git+https://github.com/gfx-rs/naga?rev=bac2d82a430fbfcf100ee22b7c3bc12f3d593079#bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1ceaaa4eedaece7e4ec08c55c640ba03dbb73fb812a6570a59bcf1930d0f70e"
 dependencies = [
  "bit-set",
  "bitflags 2.3.3",
@@ -1537,6 +1538,25 @@ dependencies = [
  "num-traits 0.2.16",
  "petgraph",
  "pp-rs",
+ "rustc-hash",
+ "spirv",
+ "termcolor",
+ "thiserror",
+ "unicode-xid",
+]
+
+[[package]]
+name = "naga"
+version = "0.13.0"
+source = "git+https://github.com/gfx-rs/naga?rev=bac2d82a430fbfcf100ee22b7c3bc12f3d593079#bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+dependencies = [
+ "bit-set",
+ "bitflags 2.3.3",
+ "codespan-reporting",
+ "hexf-parse",
+ "indexmap 1.9.3",
+ "log",
+ "num-traits 0.2.16",
  "rustc-hash",
  "serde",
  "spirv",
@@ -2940,7 +2960,7 @@ dependencies = [
  "cfg-if",
  "js-sys",
  "log",
- "naga",
+ "naga 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot",
  "profiling",
  "raw-window-handle 0.5.2",
@@ -3021,7 +3041,7 @@ dependencies = [
  "bitflags 2.3.3",
  "codespan-reporting",
  "log",
- "naga",
+ "naga 0.13.0 (git+https://github.com/gfx-rs/naga?rev=bac2d82a430fbfcf100ee22b7c3bc12f3d593079)",
  "parking_lot",
  "profiling",
  "raw-window-handle 0.5.2",
@@ -3095,7 +3115,7 @@ dependencies = [
  "libloading 0.8.0",
  "log",
  "metal",
- "naga",
+ "naga 0.13.0 (git+https://github.com/gfx-rs/naga?rev=bac2d82a430fbfcf100ee22b7c3bc12f3d593079)",
  "objc",
  "parking_lot",
  "profiling",
@@ -3266,7 +3286,7 @@ dependencies = [
  "image",
  "js-sys",
  "log",
- "naga",
+ "naga 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nv-flip",
  "png",
  "pollster",
