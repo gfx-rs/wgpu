@@ -489,8 +489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let buffer = hub
             .buffers
-            .write()
-            .get_and_mark_destroyed(buffer_id)
+            .get(buffer_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         let _ = buffer.unmap();
@@ -732,8 +731,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let texture = hub
             .textures
-            .write()
-            .get_and_mark_destroyed(texture_id)
+            .get(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         texture.destroy()
