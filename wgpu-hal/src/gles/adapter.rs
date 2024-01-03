@@ -220,7 +220,6 @@ impl super::Adapter {
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
-        let web_gl = cfg!(target_arch = "wasm32");
 
         if let Some(full_ver) = full_ver {
             let core_profile = (full_ver >= (3, 2)).then_some(unsafe {
