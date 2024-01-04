@@ -34,7 +34,7 @@ jobs:
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
           
-          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
+          echo `cygpath --windows "$PWD/dxc"` >> "$GITHUB_PATH"
 
       - name: Setup FXC
         run: |
