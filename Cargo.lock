@@ -2081,7 +2081,7 @@ dependencies = [
  "rspirv",
  "rustc-hash",
  "serde",
- "spirv 0.2.0+1.5.4",
+ "spirv 0.3.0+sdk-1.3.268.0",
  "termcolor",
  "thiserror",
  "unicode-xid",
@@ -3230,21 +3230,20 @@ dependencies = [
 
 [[package]]
 name = "spirv"
-version = "0.2.0+1.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "246bfa38fe3db3f1dfc8ca5a2cdeb7348c78be2112740cc0ec8ef18b6d94f830"
-dependencies = [
- "bitflags 1.3.2",
- "num-traits",
- "serde",
-]
-
-[[package]]
-name = "spirv"
 version = "0.2.0+sdk-1.2.198"
 source = "git+https://github.com/gfx-rs/rspirv?rev=b969f175d5663258b4891e44b76c1544da9661ab#b969f175d5663258b4891e44b76c1544da9661ab"
 dependencies = [
  "bitflags 1.3.2",
+]
+
+[[package]]
+name = "spirv"
+version = "0.3.0+sdk-1.3.268.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eda41003dc44290527a59b13432d4a0379379fa074b70174882adfbdfd917844"
+dependencies = [
+ "bitflags 2.4.1",
+ "serde",
 ]
 
 [[package]]
