@@ -419,7 +419,7 @@ jobs:
 
           curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
           mkdir mesa
-          tar xf mesa.tar.xz -C mesa
+          tar xpf mesa.tar.xz -C mesa
 
           cat <<- EOF > icd.json
           {
