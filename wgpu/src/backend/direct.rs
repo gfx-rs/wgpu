@@ -543,6 +543,7 @@ impl crate::Context for Context {
                 }
             }
 
+            #[cfg(metal)]
             SurfaceTarget::CoreAnimationLayer(layer) => unsafe {
                 self.0.instance_create_surface_metal(*layer, ())
             },
@@ -565,12 +566,14 @@ impl crate::Context for Context {
             },
 
             #[cfg(any(webgpu, webgl))]
-            SurfaceTarget::Canvas(canvas) => self.0.create_surface_webgl_canvas(*canvas, ())?,
+            SurfaceTarget::Canvas(canvas) => {
+                self.0.create_surface_webgl_canvas(canvas.clone(), ())?
+            }
 
             #[cfg(any(webgpu, webgl))]
-            SurfaceTarget::OffscreenCanvas(canvas) => {
-                self.0.create_surface_webgl_offscreen_canvas(*canvas, ())?
-            }
+            SurfaceTarget::OffscreenCanvas(canvas) => self
+                .0
+                .create_surface_webgl_offscreen_canvas(canvas.clone(), ())?,
         };
 
         Ok((
