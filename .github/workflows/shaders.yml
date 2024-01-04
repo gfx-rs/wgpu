@@ -8,6 +8,9 @@ on:
   merge_group:
 
 env:
+  # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
+  # 
+  # Must also be changed in ci.yaml
   DXC_RELEASE: "v1.7.2308"
   DXC_FILENAME: "dxc_2023_08_14.zip"
 

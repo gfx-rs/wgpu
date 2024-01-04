@@ -8,21 +8,42 @@ on:
   merge_group:
 
 env:
+  #
+  # Dependency versioning
+  # 
+
+  # Sourced from https://vulkan.lunarg.com/sdk/home#linux
+  VULKAN_SDK_VERSION: "1.3.268"
+  # Sourced from https://www.nuget.org/packages/Microsoft.Direct3D.WARP
+  WARP_VERSION: "1.0.8"
+
+  # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
+  # 
+  # Must also be changed in shaders.yaml
   DXC_RELEASE: "v1.7.2308"
   DXC_FILENAME: "dxc_2023_08_14.zip"
+
+  # Sourced from https://archive.mesa3d.org/. Bumping this requires
+  # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
   MESA_VERSION: "23.3.1"
+  # Corresponds to https://github.com/gfx-rs/ci-build/releases
   CI_BINARY_BUILD: "build18"
+  
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.71"
+  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
+  # to ensure that they can be used with firefox.
+  CORE_MSRV: "1.65"
+
+  #
+  # Environment variables
+  #
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   WGPU_DX12_COMPILER: dxc
   RUST_LOG: info
   RUST_BACKTRACE: full
-  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.71"
-  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
-  # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.65"
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -382,7 +403,7 @@ jobs:
         run: |
           set -e
 
-          curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
+          curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
 
           mkdir -p target/llvm-cov-target/debug/deps
@@ -415,7 +436,7 @@ jobs:
 
           # vulkan sdk
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list
 
           sudo apt-get update
           sudo apt install -y vulkan-sdk
@@ -430,6 +451,9 @@ jobs:
           mkdir mesa
           tar xpf mesa.tar.xz -C mesa
 
+          # The ICD provided by the mesa build is hardcoded to the build environment.
+          #
+          # We write out our own ICD file to point to the mesa vulkan
           cat <<- EOF > icd.json
           {
             "ICD": {
