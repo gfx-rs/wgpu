@@ -220,7 +220,6 @@ impl super::Adapter {
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
-        let web_gl = cfg!(target_arch = "wasm32");
 
         if let Some(full_ver) = full_ver {
             let core_profile = (full_ver >= (3, 2)).then_some(unsafe {
@@ -608,10 +607,7 @@ impl super::Adapter {
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
         );
-        private_caps.set(
-            super::PrivateCapabilities::DEBUG_FNS,
-            supported((3, 2), (4, 3)) && !web_gl,
-        );
+        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, gl.supports_debug());
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),
