@@ -50,6 +50,7 @@ jobs:
           cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
 
       - name: Validate
+        shell: bash
         run: |
           set -e
 
