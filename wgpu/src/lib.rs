@@ -1849,6 +1849,8 @@ impl Instance {
         let target = target.into();
 
         let (id, data) = self.context.instance_create_surface(&target)?;
+
+        #[allow(irrefutable_let_patterns)]
         let _surface = if let SurfaceTarget::WindowHandle(window) = target {
             Some(window)
         } else {
