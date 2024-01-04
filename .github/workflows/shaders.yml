@@ -26,6 +26,9 @@ jobs:
           workspaces: |
             naga/xtask -> naga/xtask/target
 
+      # We must have the FXC job before the DXC job, so the DXC PATH has priority
+      # over the FXC PATH. This is because the windows kits also include an older
+      # version of DXC, which we don't want to use.
       - name: Setup FXC
         run: |
           Get-Childitem -Path "C:\Program Files (x86)\Windows Kits\10\bin\**\x64\fxc.exe" `
@@ -43,34 +46,19 @@ jobs:
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
           
-          echo `cygpath --windows "$PWD/dxc"` >> "$GITHUB_PATH"
+          # We need to use cygpath to convert PWD to a windows path as we're using bash.
+          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
+
       - name: Validate
-        shell: bash
         run: |
           set -e
 
-          echo "$PATH"
-
           dxc --version
-          ./dxc/dxc.exe --version
-          ls ./dxc
-
-          export PATH="`cygpath --windows "$PWD/dxc"`:$PATH"
-
-          echo "$PATH"
-
-          dxc --version
-          ./dxc/dxc.exe --version
-          ls ./dxc
 
           cd naga
           cargo xtask validate hlsl dxc
           cargo xtask validate hlsl fxc
-    
-      - name: Add DXC to Path
-        shell: bash
-        run: |
-          cygpath --windows "$PWD/dxc"
+
   naga-validate-macos:
     name: "Validate: MSL"
     runs-on: macos-latest

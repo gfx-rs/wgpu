@@ -395,7 +395,8 @@ jobs:
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
 
-          echo `cygpath --windows "$PWD/dxc"` >> "$GITHUB_PATH"
+          # We need to use cygpath to convert PWD to a windows path as we're using bash.
+          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
 
       - name: (windows) install warp
         if: matrix.os == 'windows-2022'
@@ -403,8 +404,8 @@ jobs:
         run: |
           set -e
 
+          # Make sure dxc is in path.
           dxc --version
-          ls dxc
 
           curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
@@ -426,6 +427,7 @@ jobs:
           cp -v mesa/* target/llvm-cov-target/debug/
           cp -v mesa/* target/llvm-cov-target/debug/deps
 
+          # We need to use cygpath to convert PWD to a windows path as we're using bash.
           echo "VK_DRIVER_FILES=`cygpath --windows $PWD/mesa/lvp_icd.x86_64.json`" >> "$GITHUB_ENV"
           echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
 
