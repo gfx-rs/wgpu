@@ -65,7 +65,7 @@ Previously, there were various specialized surface creation functions for variou
 Now, `wgpu::Instance::create_surface` instead always take a value that can be converted to the unified `wgpu::SurfaceTarget` enum.
 Conversion is automatic for anything implementing `raw-window-handle`'s `HasWindowHandle` & `HasDisplayHandle` traits,
 meaning that you can continue to e.g. pass references to winit windows as before.
-By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+By @wumpf in [#4984](https://github.com/gfx-rs/wgpu/pull/4984)
 
 ### New Features
 
