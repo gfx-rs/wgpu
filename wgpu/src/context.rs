@@ -14,7 +14,7 @@ use crate::{
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
+    ShaderModuleDescriptorSpirV, SurfaceTarget, Texture, TextureDescriptor, TextureViewDescriptor,
     UncapturedErrorHandler,
 };
 
@@ -98,8 +98,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     unsafe fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: &SurfaceTarget<'_>,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError>;
     fn instance_request_adapter(
         &self,
@@ -1141,10 +1140,9 @@ pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
 pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn as_any(&self) -> &dyn Any;
 
-    unsafe fn instance_create_surface(
+    fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: &SurfaceTarget<'_>,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError>;
     #[allow(clippy::type_complexity)]
     fn instance_request_adapter(
@@ -1999,13 +1997,11 @@ where
         self
     }
 
-    unsafe fn instance_create_surface(
+    fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: &SurfaceTarget<'_>,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError> {
-        let (surface, data) =
-            unsafe { Context::instance_create_surface(self, display_handle, window_handle) }?;
+        let (surface, data) = unsafe { Context::instance_create_surface(self, target) }?;
         Ok((surface.into(), Box::new(data) as _))
     }
 

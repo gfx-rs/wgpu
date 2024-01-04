@@ -4,10 +4,11 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
-    SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
+    CreateSurfaceError, CreateSurfaceErrorKind, DownlevelCapabilities, Features, Label, Limits,
+    LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderModuleDescriptorSpirV, ShaderSource, StoreOp, SurfaceStatus, SurfaceTarget,
+    TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -229,81 +230,6 @@ impl Context {
 
     pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.0.generate_report()
-    }
-
-    #[cfg(metal)]
-    pub unsafe fn create_surface_from_core_animation_layer(
-        &self,
-        layer: *mut std::ffi::c_void,
-    ) -> Surface {
-        let id = unsafe { self.0.instance_create_surface_metal(layer, ()) };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
-    }
-
-    #[cfg(any(webgpu, webgl))]
-    pub fn instance_create_surface_from_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-    ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self.0.create_surface_webgl_canvas(canvas, ())?;
-        Ok(Surface {
-            id,
-            configured_device: Mutex::default(),
-        })
-    }
-
-    #[cfg(any(webgpu, webgl))]
-    pub fn instance_create_surface_from_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-    ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, ())?;
-        Ok(Surface {
-            id,
-            configured_device: Mutex::default(),
-        })
-    }
-
-    #[cfg(dx12)]
-    pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
-        let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
-    }
-
-    #[cfg(dx12)]
-    pub unsafe fn create_surface_from_surface_handle(
-        &self,
-        surface_handle: *mut std::ffi::c_void,
-    ) -> Surface {
-        let id = unsafe {
-            self.0
-                .instance_create_surface_from_surface_handle(surface_handle, ())
-        };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
-    }
-
-    #[cfg(dx12)]
-    pub unsafe fn create_surface_from_swap_chain_panel(
-        &self,
-        swap_chain_panel: *mut std::ffi::c_void,
-    ) -> Surface {
-        let id = unsafe {
-            self.0
-                .instance_create_surface_from_swap_chain_panel(swap_chain_panel, ())
-        };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
     }
 
     fn handle_error(
@@ -594,19 +520,64 @@ impl crate::Context for Context {
 
     unsafe fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: &SurfaceTarget<'_>,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let id = unsafe {
-            self.0
-                .instance_create_surface(display_handle, window_handle, ())
+        let id = match target {
+            SurfaceTarget::WindowHandle(window) => {
+                let raw_display_handle = window
+                    .display_handle()
+                    .map_err(|e| CreateSurfaceError {
+                        inner: CreateSurfaceErrorKind::RawHandle(e),
+                    })?
+                    .as_raw();
+                let raw_window_handle = window
+                    .window_handle()
+                    .map_err(|e| CreateSurfaceError {
+                        inner: CreateSurfaceErrorKind::RawHandle(e),
+                    })?
+                    .as_raw();
+
+                unsafe {
+                    self.0
+                        .instance_create_surface(raw_display_handle, raw_window_handle, ())
+                }
+            }
+
+            SurfaceTarget::CoreAnimationLayer(layer) => unsafe {
+                self.0.instance_create_surface_metal(*layer, ())
+            },
+
+            #[cfg(dx12)]
+            SurfaceTarget::CompositionVisual(visual) => unsafe {
+                self.0.instance_create_surface_from_visual(*visual, ())
+            },
+
+            #[cfg(dx12)]
+            SurfaceTarget::SurfaceHandle(surface_handle) => unsafe {
+                self.0
+                    .instance_create_surface_from_surface_handle(*surface_handle, ())
+            },
+
+            #[cfg(dx12)]
+            SurfaceTarget::SwapChainPanel(swap_chain_panel) => unsafe {
+                self.0
+                    .instance_create_surface_from_swap_chain_panel(*swap_chain_panel, ())
+            },
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::Canvas(canvas) => self.0.create_surface_webgl_canvas(*canvas, ())?,
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::OffscreenCanvas(canvas) => {
+                self.0.create_surface_webgl_offscreen_canvas(*canvas, ())?
+            }
         };
 
         Ok((
             id,
             Surface {
                 id,
-                configured_device: Mutex::new(None),
+                configured_device: Mutex::default(),
             },
         ))
     }

@@ -435,6 +435,8 @@ pub enum SurfaceTarget<'window> {
     /// - On macOS/Metal: surface creation will panic if not called on the main thread.
     /// - On web: surface creation will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
+    /// - the window handle must remain valid until after the [`Surface`] returned on creation is
+    ///   dropped.
     WindowHandle(Box<dyn WindowHandle + 'window>),
 
     /// Surface from `CoreAnimationLayer`.
@@ -1842,179 +1844,18 @@ impl Instance {
         &self,
         target: impl Into<SurfaceTarget<'window>>,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
-        match target.into() {
-            SurfaceTarget::WindowHandle(window) => {
-                let mut surface = unsafe { self.create_surface_from_raw(&window) }?;
-                surface._surface = Some(window);
-                Ok(surface)
-            }
+        let target = target.into();
 
-            #[cfg(metal)]
-            SurfaceTarget::CoreAnimationLayer(layer) => {
-                let surface = unsafe {
-                    self.context
-                        .as_any()
-                        .downcast_ref::<crate::backend::Context>()
-                        .unwrap()
-                        .create_surface_from_core_animation_layer(layer)
-                };
-                Ok(Surface {
-                    context: Arc::clone(&self.context),
-                    _surface: None,
-                    id: ObjectId::from(surface.id()),
-                    data: Box::new(surface),
-                    config: Mutex::new(None),
-                })
-            }
+        let (id, data) = self.context.instance_create_surface(&target)?;
+        let _surface = if let SurfaceTarget::WindowHandle(window) = target {
+            Some(window)
+        } else {
+            None
+        };
 
-            #[cfg(dx12)]
-            SurfaceTarget::CompositionVisual(visual) => {
-                let surface = unsafe {
-                    self.context
-                        .as_any()
-                        .downcast_ref::<crate::backend::Context>()
-                        .unwrap()
-                        .create_surface_from_visual(visual)
-                };
-                Ok(Surface {
-                    context: Arc::clone(&self.context),
-                    _surface: None,
-                    id: ObjectId::from(surface.id()),
-                    data: Box::new(surface),
-                    config: Mutex::new(None),
-                })
-            }
-
-            #[cfg(dx12)]
-            SurfaceTarget::SurfaceHandle(surface_handle) => {
-                let surface = unsafe {
-                    self.context
-                        .as_any()
-                        .downcast_ref::<crate::backend::Context>()
-                        .unwrap()
-                        .create_surface_from_surface_handle(surface_handle)
-                };
-                Ok(Surface {
-                    context: Arc::clone(&self.context),
-                    _surface: None,
-                    id: ObjectId::from(surface.id()),
-                    data: Box::new(surface),
-                    config: Mutex::new(None),
-                })
-            }
-
-            #[cfg(dx12)]
-            SurfaceTarget::SwapChainPanel(swap_chain_panel) => {
-                let surface = unsafe {
-                    self.context
-                        .as_any()
-                        .downcast_ref::<crate::backend::Context>()
-                        .unwrap()
-                        .create_surface_from_swap_chain_panel(swap_chain_panel)
-                };
-                Ok(Surface {
-                    context: Arc::clone(&self.context),
-                    _surface: None,
-                    id: ObjectId::from(surface.id()),
-                    data: Box::new(surface),
-                    config: Mutex::new(None),
-                })
-            }
-
-            #[cfg(any(webgpu, webgl))]
-            SurfaceTarget::Canvas(canvas) => {
-                let surface = self
-                    .context
-                    .as_any()
-                    .downcast_ref::<crate::backend::Context>()
-                    .unwrap()
-                    .instance_create_surface_from_canvas(canvas)?;
-
-                // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
-                Ok(Surface {
-                    context: Arc::clone(&self.context),
-                    _surface: None,
-                    #[cfg(webgl)]
-                    id: ObjectId::from(surface.id()),
-                    #[cfg(webgl)]
-                    data: Box::new(surface),
-                    #[cfg(webgpu)]
-                    id: ObjectId::UNUSED,
-                    #[cfg(webgpu)]
-                    data: Box::new(surface.1),
-                    config: Mutex::new(None),
-                })
-            }
-
-            #[cfg(any(webgpu, webgl))]
-            SurfaceTarget::OffscreenCanvas(canvas) => {
-                let surface = self
-                    .context
-                    .as_any()
-                    .downcast_ref::<crate::backend::Context>()
-                    .unwrap()
-                    .instance_create_surface_from_offscreen_canvas(canvas)?;
-
-                // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
-                Ok(Surface {
-                    context: Arc::clone(&self.context),
-                    _surface: None,
-                    #[cfg(webgl)]
-                    id: ObjectId::from(surface.id()),
-                    #[cfg(webgl)]
-                    data: Box::new(surface),
-                    #[cfg(webgpu)]
-                    id: ObjectId::UNUSED,
-                    #[cfg(webgpu)]
-                    data: Box::new(surface.1),
-                    config: Mutex::new(None),
-                })
-            }
-        }
-    }
-
-    /// An alternative version to [`create_surface()`](Self::create_surface)
-    /// with [`SurfaceTargetCanvas::WindowHandle`]
-    /// which has no lifetime requirements to `window` and doesn't require
-    /// [`Send`] or [`Sync`] (on non-Wasm targets). This makes it `unsafe`
-    /// instead and always returns a [`Surface<'static>`].
-    ///
-    /// See [`create_surface()`](Self::create_surface) for more details.
-    ///
-    /// # Safety
-    ///
-    /// - `raw_window_handle` must be a valid object to create a surface upon.
-    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
-    ///   dropped.
-    pub unsafe fn create_surface_from_raw<W>(
-        &self,
-        window: &W,
-    ) -> Result<Surface<'static>, CreateSurfaceError>
-    where
-        W: HasWindowHandle + HasDisplayHandle,
-    {
-        let raw_display_handle = window
-            .display_handle()
-            .map_err(|e| CreateSurfaceError {
-                inner: CreateSurfaceErrorKind::RawHandle(e),
-            })?
-            .as_raw();
-        let raw_window_handle = window
-            .window_handle()
-            .map_err(|e| CreateSurfaceError {
-                inner: CreateSurfaceErrorKind::RawHandle(e),
-            })?
-            .as_raw();
-        let (id, data) = unsafe {
-            DynContext::instance_create_surface(
-                &*self.context,
-                raw_display_handle,
-                raw_window_handle,
-            )
-        }?;
         Ok(Surface {
             context: Arc::clone(&self.context),
-            _surface: None,
+            _surface,
             id,
             data,
             config: Mutex::new(None),
