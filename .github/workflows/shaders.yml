@@ -47,10 +47,10 @@ jobs:
 
       - name: Validate
         run: |
-          fxc /?
+          fxc
           dxc --version
 
-          echo "$env:GITHUB_PATH"
+          echo "$env:PATH"
 
           cd naga
           cargo xtask validate hlsl dxc
