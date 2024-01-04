@@ -740,7 +740,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // doesn't really matter because we need this only if we copy
             // more than one layer, and then we validate for this being not
             // None
-            size.height,
+            height_blocks,
         );
 
         let block_size = dst
