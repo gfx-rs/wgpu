@@ -1144,7 +1144,12 @@ impl<'a> ConstantEvaluator<'a> {
             return self.cast(expr, target, span);
         };
 
-        let crate::TypeInner::Array { base: _, size, stride: _ } = self.types[ty].inner else {
+        let crate::TypeInner::Array {
+            base: _,
+            size,
+            stride: _,
+        } = self.types[ty].inner
+        else {
             return self.cast(expr, target, span);
         };
 
