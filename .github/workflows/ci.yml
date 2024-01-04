@@ -351,8 +351,8 @@ jobs:
             os: windows-2022
 
           # Mac
-          - name: Mac aarch64
-            os: [self-hosted, macOS]
+          # - name: Mac aarch64
+          #   os: macos-12
 
           # Linux
           - name: Linux x86_64
@@ -379,7 +379,6 @@ jobs:
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: caching
         uses: Swatinem/rust-cache@v2
-        if: matrix.os[0] != 'self-hosted'
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           workspaces: |
