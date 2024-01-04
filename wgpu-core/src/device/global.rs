@@ -1132,8 +1132,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let bind_group_layout_guard = hub.bind_group_layouts.read();
-            let bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
+            let bind_group_layout = match hub.bind_group_layouts.get(desc.layout) {
                 Ok(layout) => layout,
                 Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
@@ -1142,7 +1141,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 break DeviceError::WrongDevice.into();
             }
 
-            let bind_group = match device.create_bind_group(bind_group_layout, desc, hub) {
+            let bind_group = match device.create_bind_group(&bind_group_layout, desc, hub) {
                 Ok(bind_group) => bind_group,
                 Err(e) => break e,
             };
@@ -1775,9 +1774,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let error = loop {
-            let pipeline_guard = hub.compute_pipelines.read();
-
-            let pipeline = match pipeline_guard.get(pipeline_id) {
+            let pipeline = match hub.compute_pipelines.get(pipeline_id) {
                 Ok(pipeline) => pipeline,
                 Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
