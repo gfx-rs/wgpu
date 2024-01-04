@@ -59,6 +59,14 @@ This feature allowed you to call `global_id` on any wgpu opaque handle to get a 
 
 Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`) backend. These are enabled by default, but don't do anything when not targetting the corresponding OS. By @daxpedda in [#4815](https://github.com/gfx-rs/wgpu/pull/4815)
 
+### Unified surface creation
+
+Previously, there were various specialized surface creation functions for various platform specific handles.
+Now, `wgpu::Instance::create_surface` instead always take a value that can be converted to the unified `wgpu::SurfaceTarget` enum.
+Conversion is automatic for anything implementing `raw-window-handle`'s `HasWindowHandle` & `HasDisplayHandle` traits,
+meaning that you can continue to e.g. pass references to winit windows as before.
+By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+
 ### New Features
 
 #### General
