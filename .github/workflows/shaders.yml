@@ -48,7 +48,8 @@ jobs:
       - name: Validate
         shell: bash
         run: |
-          fxc
+          set -e
+
           dxc --version
           ./dxc/dxc.exe --version
           ls ./dxc
