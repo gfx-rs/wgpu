@@ -376,8 +376,6 @@ jobs:
 
           echo "$PWD/dxc/" >> $GITHUB_PATH
 
-          dxc.exe --version
-
       - name: (windows) install warp
         if: matrix.os == 'windows-2022'
         shell: bash
