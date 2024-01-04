@@ -486,9 +486,6 @@ jobs:
 
           export RUST_LOG=trace
 
-          dxc --version
-          ls dxc
-
           # This needs to match the command in xtask/tests.rs
           cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info
 

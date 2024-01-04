@@ -46,6 +46,7 @@ jobs:
         shell: powershell
 
       - name: Validate
+        shell: bash
         run: |
           fxc
           dxc --version
