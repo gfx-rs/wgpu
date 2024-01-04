@@ -34,7 +34,7 @@ jobs:
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
           
-          echo `cygpath --windows "$PWD/dxc"` >> "$GITHUB_PATH"
+          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
 
       - name: Setup FXC
         run: |
@@ -50,11 +50,19 @@ jobs:
         run: |
           set -e
 
+          echo "$PATH"
+
           dxc --version
           ./dxc/dxc.exe --version
           ls ./dxc
 
-          echo "$env:PATH"
+          export PATH="`cygpath --windows "$PWD/dxc"`:$PATH"
+
+          echo "$PATH"
+
+          dxc --version
+          ./dxc/dxc.exe --version
+          ls ./dxc
 
           cd naga
           cargo xtask validate hlsl dxc
