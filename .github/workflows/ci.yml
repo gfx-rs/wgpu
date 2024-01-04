@@ -332,9 +332,8 @@ jobs:
             os: [self-hosted, macOS]
 
           # Linux
-          # https://github.com/gfx-rs/wgpu/issues/4961
-          # - name: Linux x86_64
-          #   os: ubuntu-22.04
+          - name: Linux x86_64
+            os: ubuntu-22.04
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
