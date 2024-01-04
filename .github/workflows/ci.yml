@@ -403,6 +403,8 @@ jobs:
         run: |
           set -e
 
+          dxc --version
+
           curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
 
