@@ -1427,9 +1427,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let pending_writes = pending_writes.as_mut().unwrap();
 
             {
-                let texture_guard = hub.textures.read();
-
-                used_surface_textures.set_size(texture_guard.len());
+                used_surface_textures.set_size(hub.textures.read().len());
                 for (&id, texture) in pending_writes.dst_textures.iter() {
                     match *texture.inner().as_ref().unwrap() {
                         TextureInner::Native { raw: None } => {
