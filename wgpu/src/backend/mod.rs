@@ -1,23 +1,9 @@
-#[cfg(all(
-    target_arch = "wasm32",
-    not(any(target_os = "emscripten", feature = "webgl"))
-))]
+#[cfg(webgpu)]
 mod web;
-#[cfg(all(
-    target_arch = "wasm32",
-    not(any(target_os = "emscripten", feature = "webgl"))
-))]
+#[cfg(webgpu)]
 pub(crate) use web::Context;
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    target_os = "emscripten",
-    feature = "webgl"
-))]
+#[cfg(not(webgpu))]
 mod direct;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    target_os = "emscripten",
-    feature = "webgl"
-))]
+#[cfg(not(webgpu))]
 pub(crate) use direct::Context;

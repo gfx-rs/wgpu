@@ -3230,7 +3230,10 @@ impl<A: HalApi> Device<A> {
             .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
         // If we're running downlevel, we need to manually ask the backend what
         // we can use as we can't trust WebGPU.
-        let downlevel = !self.downlevel.is_webgpu_compliant();
+        let downlevel = !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT);
 
         if using_device_features || downlevel {
             Ok(self.get_texture_format_features(adapter, format))

@@ -1046,9 +1046,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg16Unorm => empty,
             Tf::Rg16Snorm => empty,
             Tf::Rg16Float => filterable | half_float_renderable,
-            Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filterable_renderable | storage,
+            Tf::Rgba8Unorm => filterable_renderable | storage,
+            Tf::Rgba8UnormSrgb => filterable_renderable,
             Tf::Bgra8Unorm | Tf::Bgra8UnormSrgb => filterable_renderable,
-            Tf::Rgba8Snorm => filterable,
+            Tf::Rgba8Snorm => filterable | storage,
             Tf::Rgba8Uint => renderable | storage,
             Tf::Rgba8Sint => renderable | storage,
             Tf::Rgb10a2Uint => renderable,
@@ -1071,7 +1072,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8 => depth,
-            Tf::NV12 => unreachable!(),
+            Tf::NV12 => empty,
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb

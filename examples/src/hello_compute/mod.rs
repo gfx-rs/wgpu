@@ -6,7 +6,7 @@ const OVERFLOW: u32 = 0xffffffff;
 
 #[cfg_attr(test, allow(dead_code))]
 async fn run() {
-    let numbers = if std::env::args().len() <= 1 {
+    let numbers = if std::env::args().len() <= 2 {
         let default = vec![1, 2, 3, 4];
         println!("No numbers were provided, defaulting to {default:?}");
         default

@@ -8,6 +8,9 @@ on:
   merge_group:
 
 env:
+  MESA_VERSION: "23.3.1"
+  CI_BINARY_BUILD: "build18"
+
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   WGPU_DX12_COMPILER: dxc
@@ -329,9 +332,8 @@ jobs:
             os: [self-hosted, macOS]
 
           # Linux
-          # https://github.com/gfx-rs/wgpu/issues/4961
-          # - name: Linux x86_64
-          #   os: ubuntu-22.04
+          - name: Linux x86_64
+            os: ubuntu-22.04
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -385,7 +387,7 @@ jobs:
         run: |
           set -e
 
-          curl.exe -L https://github.com/pal1000/mesa-dist-win/releases/download/23.2.1/mesa3d-23.2.1-release-msvc.7z -o mesa.7z
+          curl.exe -L --retry 5 https://github.com/pal1000/mesa-dist-win/releases/download/$MESA_VERSION/mesa3d-$MESA_VERSION-release-msvc.7z -o mesa.7z
           7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
 
           cp -v mesa/* target/llvm-cov-target/debug/
@@ -394,7 +396,7 @@ jobs:
           echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
           echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
 
-      - name: (linux) install llvmpipe, lavapipe, vulkan sdk
+      - name: (linux) install vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
@@ -406,10 +408,32 @@ jobs:
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
 
-          # sudo add-apt-repository ppa:oibaf/graphics-drivers
-
           sudo apt-get update
-          sudo apt install -y libegl-mesa0 libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk mesa-vulkan-drivers
+          sudo apt install -y vulkan-sdk
+
+      - name: (linux) install mesa
+        if: matrix.os == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -e
+
+          curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
+          mkdir mesa
+          tar xpf mesa.tar.xz -C mesa
+
+          cat <<- EOF > icd.json
+          {
+            "ICD": {
+                "api_version": "1.1.255",
+                "library_path": "$PWD/mesa/lib/x86_64-linux-gnu/libvulkan_lvp.so"
+            },
+            "file_format_version": "1.0.0"
+          }
+          EOF
+
+          echo "VK_DRIVER_FILES=$PWD/icd.json" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+          echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
 
       - name: disable debug
         shell: bash
