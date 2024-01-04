@@ -37,7 +37,7 @@ jobs:
       - name: Add DXC to Path
         shell: powershell
         run: |
-          Add-Content $env:GITHUB_PATH "$pwd/dxc"
+          Add-Content $env:GITHUB_PATH "$pwd\dxc"
 
       - name: Setup FXC
         run: |
@@ -59,6 +59,10 @@ jobs:
           cargo xtask validate hlsl dxc
           cargo xtask validate hlsl fxc
     
+      - name: Add DXC to Path
+        shell: bash
+        run: |
+          cygpath --windows "$PWD/dxc"
   naga-validate-macos:
     name: "Validate: MSL"
     runs-on: macos-latest
