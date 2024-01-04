@@ -28,7 +28,7 @@ env:
   MESA_VERSION: "23.3.1"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
   CI_BINARY_BUILD: "build18"
-  
+
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.71"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
@@ -395,6 +395,8 @@ jobs:
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
 
+          ls dxc
+
           echo "$PWD/dxc/" >> $GITHUB_PATH
 
       - name: (windows) install warp
@@ -402,6 +404,8 @@ jobs:
         shell: bash
         run: |
           set -e
+
+          dxc.exe --version
 
           curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
