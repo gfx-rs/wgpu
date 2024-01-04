@@ -1836,7 +1836,9 @@ impl Instance {
         }
     }
 
-    /// Creates a new surface drawing to the target specified via the [`SurfaceTarget`] enum.
+    /// Creates a new surface targeting a given window/canvas/surface/etc..
+    ///
+    /// See [`SurfaceTarget`] for what targets for surface are supported.
     ///
     /// Most commonly used are window handles (or provider of windows handles)
     /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
