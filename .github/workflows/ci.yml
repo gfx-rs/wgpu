@@ -8,6 +8,8 @@ on:
   merge_group:
 
 env:
+  DXC_RELEASE: "v1.7.2308"
+  DXC_FILENAME: "dxc_2023_08_14.zip"
   MESA_VERSION: "23.3.1"
   CI_BINARY_BUILD: "build18"
 
@@ -365,7 +367,16 @@ jobs:
 
       - name: (windows) install dxc
         if: matrix.os == 'windows-2022'
-        uses: napokue/setup-dxc@v1.1.0
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
+          7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
+
+          echo "$PWD/dxc/" >> $GITHUB_PATH
+
+          dxc.exe --version
 
       - name: (windows) install warp
         if: matrix.os == 'windows-2022'
@@ -373,7 +384,7 @@ jobs:
         run: |
           set -e
 
-          curl.exe -L https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
+          curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
 
           mkdir -p target/llvm-cov-target/debug/deps

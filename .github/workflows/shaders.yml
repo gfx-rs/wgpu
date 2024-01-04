@@ -15,7 +15,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup DXC
-        uses: napokue/setup-dxc@v1.1.0
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
+          7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
+
+          echo "$PWD/dxc/" >> $GITHUB_PATH
+
+          dxc.exe --version
 
       - name: Setup FXC
         run: |
