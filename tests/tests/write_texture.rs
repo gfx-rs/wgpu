@@ -1,17 +1,10 @@
 //! Tests for texture copy
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
-static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            // This just totally removes the device due to invalid api call.
-            //
-            // https://github.com/gfx-rs/wgpu/issues/3072
-            .expect_fail(FailureCase::backend(wgpu::Backends::DX12)),
-    )
-    .run_sync(|ctx| {
+static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         let size = 256;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
