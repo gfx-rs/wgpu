@@ -433,6 +433,7 @@ jobs:
 
           echo "VK_DRIVER_FILES=$PWD/icd.json" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+          echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
 
       - name: disable debug
         shell: bash
