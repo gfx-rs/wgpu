@@ -33,11 +33,8 @@ jobs:
 
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
-
-      - name: Add DXC to Path
-        shell: powershell
-        run: |
-          Add-Content $env:GITHUB_PATH "$pwd\dxc"
+          
+          echo `cygpath --windows "$PWD/dxc"` >> "$GITHUB_PATH"
 
       - name: Setup FXC
         run: |
@@ -52,6 +49,8 @@ jobs:
         run: |
           fxc
           dxc --version
+          ./dxc/dxc.exe --version
+          ls ./dxc
 
           echo "$env:PATH"
 
