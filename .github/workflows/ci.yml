@@ -395,17 +395,13 @@ jobs:
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
 
-          ls dxc
-
-          echo "$PWD/dxc/" >> $GITHUB_PATH
+          echo "$PWD/dxc" >> $GITHUB_PATH
 
       - name: (windows) install warp
         if: matrix.os == 'windows-2022'
         shell: bash
         run: |
           set -e
-
-          dxc.exe --version
 
           curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
