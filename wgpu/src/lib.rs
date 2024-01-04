@@ -409,7 +409,7 @@ impl Drop for Surface<'_> {
     }
 }
 
-/// Super trait for window handles as used in [`SurfaceTargetCanvas`].
+/// Super trait for window handles as used in [`SurfaceTarget`].
 pub trait WindowHandle: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
 
 impl<T> WindowHandle for T where T: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
