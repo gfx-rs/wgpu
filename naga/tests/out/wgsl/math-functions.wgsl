@@ -28,10 +28,8 @@ fn main() {
     let ctz_f = countTrailingZeros(vec2(0i));
     let ctz_g = countTrailingZeros(vec2(1u));
     let ctz_h = countTrailingZeros(vec2(1i));
-    let clz_a = countLeadingZeros(-1i);
-    let clz_b = countLeadingZeros(1u);
-    let clz_c = countLeadingZeros(vec2(-1i));
-    let clz_d = countLeadingZeros(vec2(1u));
+    let clz_c = vec2<i32>(0i, 0i);
+    let clz_d = vec2<u32>(31u, 31u);
     let lde_a = ldexp(1f, 2i);
     let lde_b = ldexp(vec2<f32>(1f, 2f), vec2<i32>(3i, 4i));
     let modf_a = modf(1.5f);

@@ -222,6 +222,18 @@ gen_component_wise_extractor! {
     ],
 }
 
+gen_component_wise_extractor! {
+    component_wise_concrete_int -> ConcreteInt,
+    literals: [
+        U32 => U32: u32,
+        I32 => I32: i32,
+    ],
+    scalar_kinds: [
+        Sint,
+        Uint,
+    ],
+}
+
 #[derive(Debug)]
 enum Behavior {
     Wgsl,
@@ -864,6 +876,15 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::Cosh => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.cosh()]) })
+            }
+            crate::MathFunction::CountLeadingZeros => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .leading_zeros()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
             }
             crate::MathFunction::Floor => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })

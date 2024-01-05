@@ -83,11 +83,8 @@ void main() {
     ivec2 ctz_f = ivec2(min(uvec2(findLSB(ivec2(0))), uvec2(32u)));
     uvec2 ctz_g = min(uvec2(findLSB(uvec2(1u))), uvec2(32u));
     ivec2 ctz_h = ivec2(min(uvec2(findLSB(ivec2(1))), uvec2(32u)));
-    int clz_a = (-1 < 0 ? 0 : 31 - findMSB(-1));
-    uint clz_b = uint(31 - findMSB(1u));
-    ivec2 _e67 = ivec2(-1);
-    ivec2 clz_c = mix(ivec2(31) - findMSB(_e67), ivec2(0), lessThan(_e67, ivec2(0)));
-    uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
+    ivec2 clz_c = ivec2(0, 0);
+    uvec2 clz_d = uvec2(31u, 31u);
     float lde_a = ldexp(1.0, 2);
     vec2 lde_b = ldexp(vec2(1.0, 2.0), ivec2(3, 4));
     _modf_result_f32_ modf_a = naga_modf(1.5);
