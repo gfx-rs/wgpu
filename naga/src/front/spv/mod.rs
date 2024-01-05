@@ -43,7 +43,6 @@ use crate::{
     FastHashMap, FastHashSet, FastIndexMap,
 };
 
-use num_traits::cast::FromPrimitive;
 use petgraph::graphmap::GraphMap;
 use std::{convert::TryInto, mem, num::NonZeroU32, path::PathBuf};
 
@@ -661,7 +660,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         if wc == 0 {
             return Err(Error::InvalidWordCount);
         }
-        let op = spirv::Op::from_u16(opcode).ok_or(Error::UnknownInstruction(opcode))?;
+        let op = spirv::Op::from_u32(opcode as u32).ok_or(Error::UnknownInstruction(opcode))?;
 
         Ok(Instruction { op, wc })
     }
