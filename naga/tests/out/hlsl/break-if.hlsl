@@ -54,6 +54,25 @@ void breakIf(bool a_1)
     return;
 }
 
+void breakIfSeparateVariable()
+{
+    uint counter = 0u;
+
+    bool loop_init_3 = true;
+    while(true) {
+        if (!loop_init_3) {
+            uint _expr5 = counter;
+            if ((_expr5 == 5u)) {
+                break;
+            }
+        }
+        loop_init_3 = false;
+        uint _expr3 = counter;
+        counter = (_expr3 + 1u);
+    }
+    return;
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
