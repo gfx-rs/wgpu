@@ -904,6 +904,9 @@ impl<'a> ConstantEvaluator<'a> {
                         .expect("bit count overflowed 32 bits, somehow!?")])
                 })
             }
+            crate::MathFunction::Exp => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
+            }
             crate::MathFunction::Floor => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
