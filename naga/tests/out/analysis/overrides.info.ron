@@ -4,7 +4,22 @@
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
     ],
     functions: [],
-    entry_points: [],
+    entry_points: [
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [],
+            expressions: [],
+            sampling: [],
+            dual_source_blending: false,
+        ),
+    ],
     const_expression_types: [
         Value(Scalar((
             kind: Bool,
