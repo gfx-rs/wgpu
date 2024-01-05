@@ -53,9 +53,29 @@ trait FlagsExt: Flags {
 
 impl<T> FlagsExt for T where T: Flags {}
 
+fn print_empty_string(input: &str) -> &str {
+    if input.is_empty() {
+        "<empty>"
+    } else {
+        input
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PrintingVerbosity {
+    /// Corresponds to the `-q` flag
+    NameOnly,
+    /// Corresponds to no flag.
+    Information,
+    /// Corresponds to the `-v` flag
+    InformationFeaturesLimits,
+    /// Corresponds to the `-vv` flag
+    InformationFeaturesLimitsTexture,
+}
+
 // Lets keep these print statements on one line
 #[rustfmt::skip]
-fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize) -> io::Result<()> {
+fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize, verbosity: PrintingVerbosity) -> io::Result<()> {
     let AdapterReport { 
         info,
         features,
@@ -69,15 +89,24 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     // Adapter Info //
     //////////////////
 
+    if matches!(verbosity, PrintingVerbosity::NameOnly) {
+        writeln!(output, "Adapter {idx}: {} ({:?})", info.name, info.backend)?;
+        return Ok(());
+    }
+
     writeln!(output, "Adapter {idx}:")?;
-    writeln!(output, "\t   Backend: {:?}", info.backend)?;
-    writeln!(output, "\t      Name: {:?}", info.name)?;
-    writeln!(output, "\t  VendorID: {:?}", info.vendor)?;
-    writeln!(output, "\t  DeviceID: {:?}", info.device)?;
-    writeln!(output, "\t      Type: {:?}", info.device_type)?;
-    writeln!(output, "\t    Driver: {:?}", info.driver)?;
-    writeln!(output, "\tDriverInfo: {:?}", info.driver_info)?;
-    writeln!(output, "\t Compliant: {:?}", downlevel.is_webgpu_compliant())?;
+    writeln!(output, "\t         Backend: {:?}", info.backend)?;
+    writeln!(output, "\t            Name: {}", info.name)?;
+    writeln!(output, "\t        VendorID: {:#X?}", info.vendor)?;
+    writeln!(output, "\t        DeviceID: {:#X?}", info.device)?;
+    writeln!(output, "\t            Type: {:?}", info.device_type)?;
+    writeln!(output, "\t          Driver: {}", print_empty_string(&info.driver))?;
+    writeln!(output, "\t      DriverInfo: {}", print_empty_string(&info.driver_info))?;
+    writeln!(output, "\tWebGPU Compliant: {:?}", downlevel.is_webgpu_compliant())?;
+
+    if matches!(verbosity, PrintingVerbosity::Information) {
+        return Ok(());
+    }
 
     //////////////
     // Features //
@@ -166,15 +195,18 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
 
     writeln!(output, "\tDownlevel Properties:")?;
     let wgpu::DownlevelCapabilities {
-        shader_model,
+        shader_model: _,
         limits: _,
         flags,
     } = downlevel;
-    writeln!(output, "\t\t                       Shader Model: {shader_model:?}")?;
     let max_downlevel_flag_width = wgpu::DownlevelFlags::max_debug_print_width();
     for bit in wgpu::DownlevelFlags::all().iter() {
         writeln!(output, "\t\t{:>width$}: {}", bit.name(), flags.contains(bit), width = max_downlevel_flag_width)?;
     };
+
+    if matches!(verbosity, PrintingVerbosity::InformationFeaturesLimits) {
+        return Ok(());
+    }
 
     ////////////////////
     // Texture Usages //
@@ -237,9 +269,13 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     Ok(())
 }
 
-pub fn print_adapters(output: &mut impl io::Write, report: &GpuReport) -> io::Result<()> {
+pub fn print_adapters(
+    output: &mut impl io::Write,
+    report: &GpuReport,
+    verbosity: PrintingVerbosity,
+) -> io::Result<()> {
     for (idx, adapter) in report.devices.iter().enumerate() {
-        print_adapter(output, adapter, idx)?;
+        print_adapter(output, adapter, idx, verbosity)?;
     }
     Ok(())
 }
