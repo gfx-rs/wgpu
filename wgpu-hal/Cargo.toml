@@ -158,7 +158,6 @@ android_system_properties = "0.1.1"
 [dependencies.naga]
 path = "../naga"
 version = "0.19.0"
-features = ["clone"]
 
 [build-dependencies]
 cfg_aliases.workspace = true
