@@ -182,6 +182,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Align `wgpu_types::CompositeAlphaMode` serde serialization to spec. By @littledivy in [#4940](https://github.com/gfx-rs/wgpu/pull/4940)
 - Fix error message of `ConfigureSurfaceError::TooLarge`. By @Dinnerbone in [#4960](https://github.com/gfx-rs/wgpu/pull/4960)
 
+#### DX12
+
+- Fixed D3D12_SUBRESOURCE_FOOTPRINT calculation for block compressed textures which caused a crash with `Queue::write_texture` on DX12. By @DTZxPorter in [#4990](https://github.com/gfx-rs/wgpu/pull/4990)
+
 #### Vulkan
 
 - Use `VK_EXT_robustness2` only when not using an outdated intel iGPU driver. By @TheoDulka in [#4602](https://github.com/gfx-rs/wgpu/pull/4602).
