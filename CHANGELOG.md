@@ -50,6 +50,7 @@ Bottom level categories:
         - `sinh`
         - `sqrt`
         - `step`
+        - `tan`
 
 ## v0.19.0 (2024-01-17)
 
