@@ -93,11 +93,8 @@ void main()
     int2 ctz_f = asint(min((32u).xx, firstbitlow((0).xx)));
     uint2 ctz_g = min((32u).xx, firstbitlow((1u).xx));
     int2 ctz_h = asint(min((32u).xx, firstbitlow((1).xx)));
-    int clz_a = (-1 < 0 ? 0 : 31 - asint(firstbithigh(-1)));
-    uint clz_b = (31u - firstbithigh(1u));
-    int2 _expr67 = (-1).xx;
-    int2 clz_c = (_expr67 < (0).xx ? (0).xx : (31).xx - asint(firstbithigh(_expr67)));
-    uint2 clz_d = ((31u).xx - firstbithigh((1u).xx));
+    int2 clz_c = int2(0, 0);
+    uint2 clz_d = uint2(31u, 31u);
     float lde_a = ldexp(1.0, 2);
     float2 lde_b = ldexp(float2(1.0, 2.0), int2(3, 4));
     _modf_result_f32_ modf_a = naga_modf(1.5);

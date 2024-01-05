@@ -1,145 +1,138 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 125
+; Bound: 118
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %15 "main"
-OpExecutionMode %15 OriginUpperLeft
-OpMemberDecorate %8 0 Offset 0
-OpMemberDecorate %8 1 Offset 4
-OpMemberDecorate %9 0 Offset 0
-OpMemberDecorate %9 1 Offset 8
+OpEntryPoint Fragment %17 "main"
+OpExecutionMode %17 OriginUpperLeft
 OpMemberDecorate %10 0 Offset 0
-OpMemberDecorate %10 1 Offset 16
+OpMemberDecorate %10 1 Offset 4
 OpMemberDecorate %11 0 Offset 0
-OpMemberDecorate %11 1 Offset 4
+OpMemberDecorate %11 1 Offset 8
+OpMemberDecorate %12 0 Offset 0
+OpMemberDecorate %12 1 Offset 16
 OpMemberDecorate %13 0 Offset 0
-OpMemberDecorate %13 1 Offset 16
+OpMemberDecorate %13 1 Offset 4
+OpMemberDecorate %15 0 Offset 0
+OpMemberDecorate %15 1 Offset 16
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeVector %4 4
 %6 = OpTypeInt 32 1
 %5 = OpTypeVector %6 2
-%7 = OpTypeVector %4 2
-%8 = OpTypeStruct %4 %4
-%9 = OpTypeStruct %7 %7
-%10 = OpTypeStruct %3 %3
-%11 = OpTypeStruct %4 %6
-%12 = OpTypeVector %6 4
-%13 = OpTypeStruct %3 %12
-%16 = OpTypeFunction %2
-%17 = OpConstant  %4  1.0
-%18 = OpConstant  %4  0.0
-%19 = OpConstantComposite  %3  %18 %18 %18 %18
-%20 = OpConstant  %6  -1
-%21 = OpConstantComposite  %12  %20 %20 %20 %20
-%22 = OpConstant  %4  -1.0
-%23 = OpConstantComposite  %3  %22 %22 %22 %22
-%24 = OpConstantNull  %5
-%25 = OpTypeInt 32 0
-%26 = OpConstant  %25  0
-%27 = OpConstantComposite  %5  %20 %20
-%28 = OpConstant  %25  1
-%29 = OpTypeVector %25 2
-%30 = OpConstantComposite  %29  %28 %28
+%8 = OpTypeInt 32 0
+%7 = OpTypeVector %8 2
+%9 = OpTypeVector %4 2
+%10 = OpTypeStruct %4 %4
+%11 = OpTypeStruct %9 %9
+%12 = OpTypeStruct %3 %3
+%13 = OpTypeStruct %4 %6
+%14 = OpTypeVector %6 4
+%15 = OpTypeStruct %3 %14
+%18 = OpTypeFunction %2
+%19 = OpConstant  %4  1.0
+%20 = OpConstant  %4  0.0
+%21 = OpConstantComposite  %3  %20 %20 %20 %20
+%22 = OpConstant  %6  -1
+%23 = OpConstantComposite  %14  %22 %22 %22 %22
+%24 = OpConstant  %4  -1.0
+%25 = OpConstantComposite  %3  %24 %24 %24 %24
+%26 = OpConstantNull  %5
+%27 = OpConstant  %8  0
+%28 = OpConstantComposite  %5  %22 %22
+%29 = OpConstant  %8  1
+%30 = OpConstantComposite  %7  %29 %29
 %31 = OpConstant  %6  0
-%32 = OpConstant  %25  4294967295
-%33 = OpConstantComposite  %29  %26 %26
+%32 = OpConstant  %8  4294967295
+%33 = OpConstantComposite  %7  %27 %27
 %34 = OpConstantComposite  %5  %31 %31
 %35 = OpConstant  %6  1
 %36 = OpConstantComposite  %5  %35 %35
-%37 = OpConstant  %6  2
-%38 = OpConstant  %4  2.0
-%39 = OpConstantComposite  %7  %17 %38
-%40 = OpConstant  %6  3
-%41 = OpConstant  %6  4
-%42 = OpConstantComposite  %5  %40 %41
-%43 = OpConstant  %4  1.5
-%44 = OpConstantComposite  %7  %43 %43
-%45 = OpConstantComposite  %3  %43 %43 %43 %43
-%52 = OpConstantComposite  %3  %17 %17 %17 %17
-%59 = OpConstantNull  %6
-%76 = OpConstant  %25  32
-%85 = OpConstantComposite  %29  %76 %76
-%94 = OpConstant  %6  31
-%99 = OpConstantComposite  %5  %94 %94
-%15 = OpFunction  %2  None %16
-%14 = OpLabel
-OpBranch %46
-%46 = OpLabel
-%47 = OpExtInst  %4  %1 Degrees %17
-%48 = OpExtInst  %4  %1 Radians %17
-%49 = OpExtInst  %3  %1 Degrees %19
-%50 = OpExtInst  %3  %1 Radians %19
-%51 = OpExtInst  %3  %1 FClamp %19 %19 %52
-%53 = OpExtInst  %3  %1 Refract %19 %19 %17
-%54 = OpExtInst  %6  %1 SSign %20
-%55 = OpExtInst  %12  %1 SSign %21
-%56 = OpExtInst  %4  %1 FSign %22
-%57 = OpExtInst  %3  %1 FSign %23
-%60 = OpCompositeExtract  %6  %24 0
-%61 = OpCompositeExtract  %6  %24 0
-%62 = OpIMul  %6  %60 %61
-%63 = OpIAdd  %6  %59 %62
-%64 = OpCompositeExtract  %6  %24 1
-%65 = OpCompositeExtract  %6  %24 1
-%66 = OpIMul  %6  %64 %65
-%58 = OpIAdd  %6  %63 %66
-%67 = OpExtInst  %25  %1 FindUMsb %26
-%68 = OpExtInst  %6  %1 FindSMsb %20
-%69 = OpExtInst  %5  %1 FindSMsb %27
-%70 = OpExtInst  %29  %1 FindUMsb %30
-%71 = OpExtInst  %6  %1 FindILsb %20
-%72 = OpExtInst  %25  %1 FindILsb %28
-%73 = OpExtInst  %5  %1 FindILsb %27
-%74 = OpExtInst  %29  %1 FindILsb %30
-%77 = OpExtInst  %25  %1 FindILsb %26
-%75 = OpExtInst  %25  %1 UMin %76 %77
-%79 = OpExtInst  %6  %1 FindILsb %31
-%78 = OpExtInst  %6  %1 UMin %76 %79
-%81 = OpExtInst  %25  %1 FindILsb %32
-%80 = OpExtInst  %25  %1 UMin %76 %81
-%83 = OpExtInst  %6  %1 FindILsb %20
-%82 = OpExtInst  %6  %1 UMin %76 %83
-%86 = OpExtInst  %29  %1 FindILsb %33
-%84 = OpExtInst  %29  %1 UMin %85 %86
-%88 = OpExtInst  %5  %1 FindILsb %34
-%87 = OpExtInst  %5  %1 UMin %85 %88
-%90 = OpExtInst  %29  %1 FindILsb %30
-%89 = OpExtInst  %29  %1 UMin %85 %90
-%92 = OpExtInst  %5  %1 FindILsb %36
-%91 = OpExtInst  %5  %1 UMin %85 %92
-%95 = OpExtInst  %6  %1 FindUMsb %20
-%93 = OpISub  %6  %94 %95
-%97 = OpExtInst  %6  %1 FindUMsb %28
-%96 = OpISub  %25  %94 %97
-%100 = OpExtInst  %5  %1 FindUMsb %27
-%98 = OpISub  %5  %99 %100
-%102 = OpExtInst  %5  %1 FindUMsb %30
-%101 = OpISub  %29  %99 %102
-%103 = OpExtInst  %4  %1 Ldexp %17 %37
-%104 = OpExtInst  %7  %1 Ldexp %39 %42
-%105 = OpExtInst  %8  %1 ModfStruct %43
-%106 = OpExtInst  %8  %1 ModfStruct %43
-%107 = OpCompositeExtract  %4  %106 0
-%108 = OpExtInst  %8  %1 ModfStruct %43
+%37 = OpConstant  %8  31
+%38 = OpConstantComposite  %5  %31 %31
+%39 = OpConstantComposite  %7  %37 %37
+%40 = OpConstant  %6  2
+%41 = OpConstant  %4  2.0
+%42 = OpConstantComposite  %9  %19 %41
+%43 = OpConstant  %6  3
+%44 = OpConstant  %6  4
+%45 = OpConstantComposite  %5  %43 %44
+%46 = OpConstant  %4  1.5
+%47 = OpConstantComposite  %9  %46 %46
+%48 = OpConstantComposite  %3  %46 %46 %46 %46
+%55 = OpConstantComposite  %3  %19 %19 %19 %19
+%62 = OpConstantNull  %6
+%79 = OpConstant  %8  32
+%88 = OpConstantComposite  %7  %79 %79
+%17 = OpFunction  %2  None %18
+%16 = OpLabel
+OpBranch %49
+%49 = OpLabel
+%50 = OpExtInst  %4  %1 Degrees %19
+%51 = OpExtInst  %4  %1 Radians %19
+%52 = OpExtInst  %3  %1 Degrees %21
+%53 = OpExtInst  %3  %1 Radians %21
+%54 = OpExtInst  %3  %1 FClamp %21 %21 %55
+%56 = OpExtInst  %3  %1 Refract %21 %21 %19
+%57 = OpExtInst  %6  %1 SSign %22
+%58 = OpExtInst  %14  %1 SSign %23
+%59 = OpExtInst  %4  %1 FSign %24
+%60 = OpExtInst  %3  %1 FSign %25
+%63 = OpCompositeExtract  %6  %26 0
+%64 = OpCompositeExtract  %6  %26 0
+%65 = OpIMul  %6  %63 %64
+%66 = OpIAdd  %6  %62 %65
+%67 = OpCompositeExtract  %6  %26 1
+%68 = OpCompositeExtract  %6  %26 1
+%69 = OpIMul  %6  %67 %68
+%61 = OpIAdd  %6  %66 %69
+%70 = OpExtInst  %8  %1 FindUMsb %27
+%71 = OpExtInst  %6  %1 FindSMsb %22
+%72 = OpExtInst  %5  %1 FindSMsb %28
+%73 = OpExtInst  %7  %1 FindUMsb %30
+%74 = OpExtInst  %6  %1 FindILsb %22
+%75 = OpExtInst  %8  %1 FindILsb %29
+%76 = OpExtInst  %5  %1 FindILsb %28
+%77 = OpExtInst  %7  %1 FindILsb %30
+%80 = OpExtInst  %8  %1 FindILsb %27
+%78 = OpExtInst  %8  %1 UMin %79 %80
+%82 = OpExtInst  %6  %1 FindILsb %31
+%81 = OpExtInst  %6  %1 UMin %79 %82
+%84 = OpExtInst  %8  %1 FindILsb %32
+%83 = OpExtInst  %8  %1 UMin %79 %84
+%86 = OpExtInst  %6  %1 FindILsb %22
+%85 = OpExtInst  %6  %1 UMin %79 %86
+%89 = OpExtInst  %7  %1 FindILsb %33
+%87 = OpExtInst  %7  %1 UMin %88 %89
+%91 = OpExtInst  %5  %1 FindILsb %34
+%90 = OpExtInst  %5  %1 UMin %88 %91
+%93 = OpExtInst  %7  %1 FindILsb %30
+%92 = OpExtInst  %7  %1 UMin %88 %93
+%95 = OpExtInst  %5  %1 FindILsb %36
+%94 = OpExtInst  %5  %1 UMin %88 %95
+%96 = OpExtInst  %4  %1 Ldexp %19 %40
+%97 = OpExtInst  %9  %1 Ldexp %42 %45
+%98 = OpExtInst  %10  %1 ModfStruct %46
+%99 = OpExtInst  %10  %1 ModfStruct %46
+%100 = OpCompositeExtract  %4  %99 0
+%101 = OpExtInst  %10  %1 ModfStruct %46
+%102 = OpCompositeExtract  %4  %101 1
+%103 = OpExtInst  %11  %1 ModfStruct %47
+%104 = OpExtInst  %12  %1 ModfStruct %48
+%105 = OpCompositeExtract  %3  %104 1
+%106 = OpCompositeExtract  %4  %105 0
+%107 = OpExtInst  %11  %1 ModfStruct %47
+%108 = OpCompositeExtract  %9  %107 0
 %109 = OpCompositeExtract  %4  %108 1
-%110 = OpExtInst  %9  %1 ModfStruct %44
-%111 = OpExtInst  %10  %1 ModfStruct %45
-%112 = OpCompositeExtract  %3  %111 1
-%113 = OpCompositeExtract  %4  %112 0
-%114 = OpExtInst  %9  %1 ModfStruct %44
-%115 = OpCompositeExtract  %7  %114 0
-%116 = OpCompositeExtract  %4  %115 1
-%117 = OpExtInst  %11  %1 FrexpStruct %43
-%118 = OpExtInst  %11  %1 FrexpStruct %43
-%119 = OpCompositeExtract  %4  %118 0
-%120 = OpExtInst  %11  %1 FrexpStruct %43
-%121 = OpCompositeExtract  %6  %120 1
-%122 = OpExtInst  %13  %1 FrexpStruct %45
-%123 = OpCompositeExtract  %12  %122 1
-%124 = OpCompositeExtract  %6  %123 0
+%110 = OpExtInst  %13  %1 FrexpStruct %46
+%111 = OpExtInst  %13  %1 FrexpStruct %46
+%112 = OpCompositeExtract  %4  %111 0
+%113 = OpExtInst  %13  %1 FrexpStruct %46
+%114 = OpCompositeExtract  %6  %113 1
+%115 = OpExtInst  %15  %1 FrexpStruct %48
+%116 = OpCompositeExtract  %14  %115 1
+%117 = OpCompositeExtract  %6  %116 0
 OpReturn
 OpFunctionEnd
