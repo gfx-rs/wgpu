@@ -51,6 +51,7 @@ Bottom level categories:
         - `sqrt`
         - `step`
         - `tan`
+        - `tanh`
 
 ## v0.19.0 (2024-01-17)
 
