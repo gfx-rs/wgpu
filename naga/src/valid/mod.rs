@@ -184,6 +184,8 @@ pub enum ConstantError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum OverrideError {
+    #[error("Override name and ID are missing")]
+    MissingNameAndID,
     #[error("The type doesn't match the override")]
     InvalidType,
     #[error("The type is not constructible")]
@@ -351,6 +353,10 @@ impl Validator {
     ) -> Result<(), OverrideError> {
         let o = &gctx.overrides[handle];
 
+        if o.name.is_none() && o.id.is_none() {
+            return Err(OverrideError::MissingNameAndID);
+        }
+
         let type_info = &self.types[o.ty.index()];
         if !type_info.flags.contains(TypeFlags::CONSTRUCTIBLE) {
             return Err(OverrideError::NonConstructibleType);
@@ -358,7 +364,14 @@ impl Validator {
 
         let decl_ty = &gctx.types[o.ty].inner;
         match decl_ty {
-            &crate::TypeInner::Scalar(_) => {}
+            &crate::TypeInner::Scalar(scalar) => match scalar {
+                crate::Scalar::BOOL
+                | crate::Scalar::I32
+                | crate::Scalar::U32
+                | crate::Scalar::F32
+                | crate::Scalar::F64 => {}
+                _ => return Err(OverrideError::TypeNotScalar),
+            },
             _ => return Err(OverrideError::TypeNotScalar),
         }
 

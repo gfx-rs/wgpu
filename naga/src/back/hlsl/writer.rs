@@ -183,8 +183,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         module_info: &valid::ModuleInfo,
-        _pipeline_options: &PipelineOptions,
+        pipeline_options: &PipelineOptions,
     ) -> Result<super::ReflectionInfo, Error> {
+        let module =
+            back::pipeline_constants::process_overrides(module, &pipeline_options.constants)?;
+        let module = module.as_ref();
+
         self.reset(module);
 
         // Write special constants, if needed

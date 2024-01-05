@@ -143,6 +143,8 @@ pub enum Error {
     UnsupportedArrayOfType(Handle<crate::Type>),
     #[error("ray tracing is not supported prior to MSL 2.3")]
     UnsupportedRayTracing,
+    #[error(transparent)]
+    PipelineConstant(#[from] crate::back::pipeline_constants::PipelineConstantError),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

@@ -255,6 +255,8 @@ pub enum Error {
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]
     Custom(String),
+    #[error(transparent)]
+    PipelineConstant(#[from] back::pipeline_constants::PipelineConstantError),
 }
 
 #[derive(Default)]

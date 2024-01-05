@@ -297,6 +297,17 @@ impl<T> Arena<T> {
             .map(|(i, v)| unsafe { (Handle::from_usize_unchecked(i), v) })
     }
 
+    /// Drains the arena, returning an iterator over the items stored.
+    pub fn drain(&mut self) -> impl DoubleEndedIterator<Item = (Handle<T>, T, Span)> {
+        let arena = std::mem::take(self);
+        arena
+            .data
+            .into_iter()
+            .zip(arena.span_info.into_iter())
+            .enumerate()
+            .map(|(i, (v, span))| unsafe { (Handle::from_usize_unchecked(i), v, span) })
+    }
+
     /// Returns a iterator over the items stored in this arena,
     /// returning both the item's handle and a mutable reference to it.
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (Handle<T>, &mut T)> {
