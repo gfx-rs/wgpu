@@ -179,7 +179,6 @@ ndk-sys = { version = "0.5.0", optional = true }
 [dependencies.naga]
 path = "../naga"
 version = "0.19.0"
-features = ["clone"]
 
 [build-dependencies]
 cfg_aliases.workspace = true
