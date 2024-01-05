@@ -869,6 +869,9 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Sinh => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.sinh()]) })
             }
+            crate::MathFunction::Tan => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.tan()]) })
+            }
             crate::MathFunction::Sqrt => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
             }
