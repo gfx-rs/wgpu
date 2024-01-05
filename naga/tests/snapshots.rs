@@ -87,6 +87,17 @@ struct Parameters {
     #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
     #[serde(default)]
     glsl_multiview: Option<std::num::NonZeroU32>,
+    #[cfg(all(
+        feature = "deserialize",
+        any(
+            feature = "hlsl-out",
+            feature = "msl-out",
+            feature = "spv-out",
+            feature = "glsl-out"
+        )
+    ))]
+    #[serde(default)]
+    pipeline_constants: naga::back::PipelineConstants,
 }
 
 /// Information about a shader input file.
@@ -331,18 +342,25 @@ fn check_targets(
                 debug_info,
                 &params.spv,
                 params.bounds_check_policies,
+                &params.pipeline_constants,
             );
         }
     }
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     {
         if targets.contains(Targets::METAL) {
+            if !params.msl_pipeline.constants.is_empty() {
+                panic!("Supply pipeline constants via pipeline_constants instead of msl_pipeline.constants!");
+            }
+            let mut pipeline_options = params.msl_pipeline.clone();
+            pipeline_options.constants = params.pipeline_constants.clone();
+
             write_output_msl(
                 input,
                 module,
                 &info,
                 &params.msl,
-                &params.msl_pipeline,
+                &pipeline_options,
                 params.bounds_check_policies,
             );
         }
@@ -363,6 +381,7 @@ fn check_targets(
                     &params.glsl,
                     params.bounds_check_policies,
                     params.glsl_multiview,
+                    &params.pipeline_constants,
                 );
             }
         }
@@ -377,7 +396,13 @@ fn check_targets(
     #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
     {
         if targets.contains(Targets::HLSL) {
-            write_output_hlsl(input, module, &info, &params.hlsl);
+            write_output_hlsl(
+                input,
+                module,
+                &info,
+                &params.hlsl,
+                &params.pipeline_constants,
+            );
         }
     }
     #[cfg(all(feature = "deserialize", feature = "wgsl-out"))]
@@ -396,6 +421,7 @@ fn write_output_spv(
     debug_info: Option<naga::back::spv::DebugInfo>,
     params: &SpirvOutParameters,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
@@ -428,7 +454,7 @@ fn write_output_spv(
             let pipeline_options = spv::PipelineOptions {
                 entry_point: ep.name.clone(),
                 shader_stage: ep.stage,
-                constants: naga::back::PipelineConstants::default(),
+                constants: pipeline_constants.clone(),
             };
             write_output_spv_inner(
                 input,
@@ -508,6 +534,7 @@ fn write_output_glsl(
     options: &naga::back::glsl::Options,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     multiview: Option<std::num::NonZeroU32>,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::glsl;
 
@@ -517,7 +544,7 @@ fn write_output_glsl(
         shader_stage: stage,
         entry_point: ep_name.to_string(),
         multiview,
-        constants: naga::back::PipelineConstants::default(),
+        constants: pipeline_constants.clone(),
     };
 
     let mut buffer = String::new();
@@ -542,6 +569,7 @@ fn write_output_hlsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
     options: &naga::back::hlsl::Options,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::hlsl;
     use std::fmt::Write as _;
@@ -551,7 +579,13 @@ fn write_output_hlsl(
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
     let reflection_info = writer
-        .write(module, info, &hlsl::PipelineOptions::default())
+        .write(
+            module,
+            info,
+            &hlsl::PipelineOptions {
+                constants: pipeline_constants.clone(),
+            },
+        )
         .expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer);
@@ -808,11 +842,7 @@ fn convert_wgsl() {
         ),
         (
             "overrides",
-            Targets::IR | Targets::ANALYSIS, // | Targets::SPIRV
-                                             // | Targets::METAL
-                                             // | Targets::GLSL
-                                             // | Targets::HLSL
-                                             // | Targets::WGSL,
+            Targets::IR | Targets::ANALYSIS | Targets::SPIRV | Targets::METAL | Targets::HLSL,
         ),
     ];
 

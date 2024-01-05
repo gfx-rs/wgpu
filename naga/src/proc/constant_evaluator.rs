@@ -111,6 +111,7 @@ impl ExpressionConstnessTracker {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ConstantEvaluatorError {
     #[error("Constants cannot access function arguments")]
     FunctionArg,

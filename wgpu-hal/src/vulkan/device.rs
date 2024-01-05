@@ -1577,6 +1577,7 @@ impl crate::Device<super::Api> for super::Device {
                     .shared
                     .workarounds
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
+                    || !naga_shader.module.overrides.is_empty()
                 {
                     return Ok(super::ShaderModule::Intermediate {
                         naga_shader,
