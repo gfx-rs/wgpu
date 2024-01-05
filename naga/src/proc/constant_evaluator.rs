@@ -895,6 +895,15 @@ impl<'a> ConstantEvaluator<'a> {
                         .expect("bit count overflowed 32 bits, somehow!?")])
                 })
             }
+            crate::MathFunction::CountTrailingZeros => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .trailing_zeros()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
+            }
             crate::MathFunction::Floor => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
