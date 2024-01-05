@@ -39,6 +39,20 @@ fn breakIf(a_1: bool) {
     return;
 }
 
+fn breakIfSeparateVariable() {
+    var counter: u32 = 0u;
+
+    loop {
+        let _e3 = counter;
+        counter = (_e3 + 1u);
+        continuing {
+            let _e5 = counter;
+            break if (_e5 == 5u);
+        }
+    }
+    return;
+}
+
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
     return;

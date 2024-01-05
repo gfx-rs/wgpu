@@ -57,6 +57,23 @@ void breakIf(bool a_1) {
     return;
 }
 
+void breakIfSeparateVariable() {
+    uint counter = 0u;
+    bool loop_init_3 = true;
+    while(true) {
+        if (!loop_init_3) {
+            uint _e5 = counter;
+            if ((_e5 == 5u)) {
+                break;
+            }
+        }
+        loop_init_3 = false;
+        uint _e3 = counter;
+        counter = (_e3 + 1u);
+    }
+    return;
+}
+
 void main() {
     return;
 }
