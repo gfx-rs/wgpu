@@ -910,6 +910,9 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Exp => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
             }
+            crate::MathFunction::Exp2 => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.exp2()]) })
+            }
             crate::MathFunction::Floor => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
