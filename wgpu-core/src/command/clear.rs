@@ -5,6 +5,7 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
     command::CommandBuffer,
+    device::DeviceError,
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
@@ -66,6 +67,8 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
         subresource_base_array_layer: u32,
         subresource_array_layer_count: Option<u32>,
     },
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -149,7 +152,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
-        let cmd_buf_raw = cmd_buf_data.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end);
@@ -228,7 +231,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !device.is_valid() {
             return Err(ClearError::InvalidDevice(cmd_buf.device.as_info().id()));
         }
-        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker();
+        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
         clear_texture(
             &dst_texture,
