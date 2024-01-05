@@ -165,7 +165,6 @@ static_assertions.workspace = true
 
 [dependencies.naga]
 workspace = true
-features = ["clone"]
 optional = true
 
 [build-dependencies]

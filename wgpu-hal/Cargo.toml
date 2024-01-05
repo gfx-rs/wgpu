@@ -158,7 +158,6 @@ android_system_properties = "0.1.1"
 [dependencies.naga]
 path = "../naga"
 version = "0.14.0"
-features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
