@@ -70,6 +70,8 @@ pub enum Error {
     FeatureNotImplemented(&'static str),
     #[error("module is not validated properly: {0}")]
     Validation(&'static str),
+    #[error(transparent)]
+    PipelineConstant(#[from] crate::back::pipeline_constants::PipelineConstantError),
 }
 
 #[derive(Default)]

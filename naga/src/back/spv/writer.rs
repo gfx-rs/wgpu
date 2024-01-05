@@ -2029,6 +2029,16 @@ impl Writer {
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
+        let ir_module = if let Some(pipeline_options) = pipeline_options {
+            crate::back::pipeline_constants::process_overrides(
+                ir_module,
+                &pipeline_options.constants,
+            )?
+        } else {
+            std::borrow::Cow::Borrowed(ir_module)
+        };
+        let ir_module = ir_module.as_ref();
+
         self.reset();
 
         // Try to find the entry point and corresponding index

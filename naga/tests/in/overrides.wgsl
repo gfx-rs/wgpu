@@ -12,3 +12,6 @@
                                                   // overridable constant.
 
 override inferred_f32 = 2.718;
+
+@compute @workgroup_size(1)
+fn main() {}
