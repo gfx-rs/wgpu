@@ -488,7 +488,7 @@ jobs:
           export RUST_LOG=trace
 
           # This needs to match the command in xtask/tests.rs
-          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info
+          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info -- -vv
 
       - name: run tests
         shell: bash
