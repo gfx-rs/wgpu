@@ -1,6 +1,9 @@
 name: Publish
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/publish.yml'
   push:
     branches:
       - trunk
