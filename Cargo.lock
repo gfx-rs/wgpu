@@ -2587,7 +2587,7 @@ dependencies = [
  "serde",
  "wgpu-core",
  "wgpu-types",
- "winit 0.29.8",
+ "winit 0.29.9",
 ]
 
 [[package]]
@@ -4061,7 +4061,7 @@ dependencies = [
  "wgpu",
  "wgpu-hal",
  "wgpu-test",
- "winit 0.29.8",
+ "winit 0.29.9",
 ]
 
 [[package]]
@@ -4107,7 +4107,7 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winapi",
- "winit 0.29.8",
+ "winit 0.29.9",
 ]
 
 [[package]]
@@ -4524,9 +4524,9 @@ dependencies = [
 
 [[package]]
 name = "winit"
-version = "0.29.8"
+version = "0.29.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dc1a7ae1076890701c7dd71ea35b2aebaf9aeb7b8868ac2d33b1c7e8ef93c00"
+checksum = "c2376dab13e09c01ad8b679f0dbc7038af4ec43d9a91344338e37bd686481550"
 dependencies = [
  "ahash",
  "android-activity",
