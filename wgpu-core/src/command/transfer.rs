@@ -4,7 +4,7 @@ use crate::{
     api_log,
     command::{clear_texture, CommandBuffer, CommandEncoderError},
     conv,
-    device::{Device, MissingDownlevelFlags},
+    device::{Device, DeviceError, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
@@ -25,7 +25,7 @@ use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
 
 use std::{iter, sync::Arc};
 
-use super::{memory_init::CommandBufferTextureMemoryActions, CommandEncoder};
+use super::{memory_init::CommandBufferTextureMemoryActions, ClearError, CommandEncoder};
 
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
@@ -135,7 +135,7 @@ pub enum TransferError {
         dst_format: wgt::TextureFormat,
     },
     #[error(transparent)]
-    MemoryInitFailure(#[from] super::ClearError),
+    MemoryInitFailure(#[from] ClearError),
     #[error("Cannot encode this copy because of a missing downelevel flag")]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Source texture sample count must be 1, got {sample_count}")]
@@ -184,6 +184,12 @@ pub enum CopyError {
     Encoder(#[from] CommandEncoderError),
     #[error("Copy error")]
     Transfer(#[from] TransferError),
+}
+
+impl From<DeviceError> for CopyError {
+    fn from(err: DeviceError) -> Self {
+        CopyError::Encoder(CommandEncoderError::Device(err))
+    }
 }
 
 pub(crate) fn extract_texture_selector<A: HalApi>(
@@ -447,7 +453,7 @@ fn handle_texture_init<A: HalApi>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Arc<Texture<A>>,
-) {
+) -> Result<(), ClearError> {
     let init_action = TextureInitTrackerAction {
         texture: texture.clone(),
         range: TextureInitRange {
@@ -463,7 +469,7 @@ fn handle_texture_init<A: HalApi>(
 
     // In rare cases we may need to insert an init operation immediately onto the command buffer.
     if !immediate_inits.is_empty() {
-        let cmd_buf_raw = encoder.open();
+        let cmd_buf_raw = encoder.open()?;
         for init in immediate_inits {
             clear_texture(
                 &init.texture,
@@ -475,10 +481,11 @@ fn handle_texture_init<A: HalApi>(
                 &mut trackers.textures,
                 &device.alignments,
                 device.zero_buffer.as_ref().unwrap(),
-            )
-            .unwrap();
+            )?;
         }
     }
+
+    Ok(())
 }
 
 /// Prepare a transfer's source texture.
@@ -503,7 +510,7 @@ fn handle_src_texture_init<A: HalApi>(
         source,
         copy_size,
         texture,
-    );
+    )?;
     Ok(())
 }
 
@@ -543,7 +550,7 @@ fn handle_dst_texture_init<A: HalApi>(
         destination,
         copy_size,
         texture,
-    );
+    )?;
     Ok(())
 }
 
@@ -707,7 +714,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_offset: destination_offset,
             size: wgt::BufferSize::new(size).unwrap(),
         };
-        let cmd_buf_raw = cmd_buf_data.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_buffers(src_barrier.into_iter().chain(dst_barrier));
             cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, iter::once(region));
@@ -867,7 +874,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         });
 
-        let cmd_buf_raw = encoder.open();
+        let cmd_buf_raw = encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_textures(dst_barrier.into_iter());
             cmd_buf_raw.transition_buffers(src_barrier.into_iter());
@@ -1035,7 +1042,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: hal_copy_size,
             }
         });
-        let cmd_buf_raw = encoder.open();
+        let cmd_buf_raw = encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
             cmd_buf_raw.transition_textures(src_barrier.into_iter());
@@ -1207,7 +1214,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: hal_copy_size,
             }
         });
-        let cmd_buf_raw = cmd_buf_data.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_textures(barriers.into_iter());
             cmd_buf_raw.copy_texture_to_texture(
