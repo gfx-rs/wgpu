@@ -207,6 +207,7 @@ fn print_examples() {
 
             let item = document.create_element("div").unwrap();
             item.append_child(&link).unwrap();
+            item.set_class_name("example-item");
             ul.append_child(&item).unwrap();
         }
     }

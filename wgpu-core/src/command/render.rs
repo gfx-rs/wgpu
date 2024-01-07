@@ -1312,11 +1312,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
         let label = hal_label(base.label, self.instance.flags);
 
-        let init_scope = PassErrorScope::Pass(encoder_id);
+        let pass_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
         let device = &cmd_buf.device;
         let snatch_guard = device.snatchable_lock.read();
 
@@ -1336,7 +1336,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             if !device.is_valid() {
-                return Err(DeviceError::Lost).map_pass_err(init_scope);
+                return Err(DeviceError::Lost).map_pass_err(pass_scope);
             }
 
             let encoder = &mut cmd_buf_data.encoder;
@@ -1349,10 +1349,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // We automatically keep extending command buffers over time, and because
             // we want to insert a command buffer _before_ what we're about to record,
             // we need to make sure to close the previous one.
-            encoder.close();
+            encoder.close().map_pass_err(pass_scope)?;
             // We will reset this to `Recording` if we succeed, acts as a fail-safe.
             *status = CommandEncoderStatus::Error;
-            encoder.open_pass(label);
+            encoder.open_pass(label).map_pass_err(pass_scope)?;
 
             let bundle_guard = hub.render_bundles.read();
             let bind_group_guard = hub.bind_groups.read();
@@ -1384,7 +1384,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*texture_guard,
                 &*query_set_guard,
             )
-            .map_pass_err(init_scope)?;
+            .map_pass_err(pass_scope)?;
 
             tracker.set_size(
                 Some(&*buffer_guard),
@@ -2382,24 +2382,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Merging renderpass into cmd_buf {:?}", encoder_id);
             let (trackers, pending_discard_init_fixups) =
-                info.finish(raw).map_pass_err(init_scope)?;
+                info.finish(raw).map_pass_err(pass_scope)?;
 
-            encoder.close();
+            encoder.close().map_pass_err(pass_scope)?;
             (trackers, pending_discard_init_fixups)
         };
-
-        let query_set_guard = hub.query_sets.read();
 
         let cmd_buf = hub.command_buffers.get(encoder_id).unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+
+        let query_set_guard = hub.query_sets.read();
 
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;
         let tracker = &mut cmd_buf_data.trackers;
 
         {
-            let transit = encoder.open();
+            let transit = encoder.open().map_pass_err(pass_scope)?;
 
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
@@ -2427,7 +2427,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         *status = CommandEncoderStatus::Recording;
-        encoder.close_and_swap();
+        encoder.close_and_swap().map_pass_err(pass_scope)?;
 
         Ok(())
     }

@@ -326,10 +326,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         buffer_data: &Self::BufferData,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(any(target_os = "emscripten", feature = "webgl"))
-    ))]
+    #[cfg(webgpu)]
     fn buffer_get_mapped_range_as_array_buffer(
         &self,
         buffer: &Self::BufferId,
@@ -590,7 +587,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         data_layout: ImageDataLayout,
         size: Extent3d,
     );
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(any(webgl, webgpu))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,
@@ -1023,13 +1020,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     );
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<
-            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
-        >,
+        render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     );
 
     fn device_create_blas(
@@ -1105,13 +1100,7 @@ impl ObjectId {
     }
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(ObjectId: Send, Sync);
 
 pub(crate) fn downcast_ref<T: Debug + WasmNotSendSync + 'static>(data: &crate::Data) -> &T {
@@ -1152,109 +1141,37 @@ pub(crate) struct DeviceRequest {
     pub queue_data: Box<crate::Data>,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + Send + 'static>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + 'static>;
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 pub(crate) type AdapterRequestDeviceFuture =
     Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>> + Send>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 pub(crate) type AdapterRequestDeviceFuture =
     Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>>>;
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 pub type InstanceRequestAdapterFuture =
     Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>> + Send>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 pub type InstanceRequestAdapterFuture =
     Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>>>;
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>> + Send>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>>>;
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
@@ -1464,10 +1381,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         buffer_data: &crate::Data,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(any(target_os = "emscripten", feature = "webgl"))
-    ))]
+    #[cfg(webgpu)]
     fn buffer_get_mapped_range_as_array_buffer(
         &self,
         buffer: &ObjectId,
@@ -1688,7 +1602,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         data_layout: ImageDataLayout,
         size: Extent3d,
     );
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(any(webgpu, webgl))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &ObjectId,
@@ -1697,11 +1611,11 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         dest: crate::ImageCopyTextureTagged<'_>,
         size: wgt::Extent3d,
     );
-    fn queue_submit<'a>(
+    fn queue_submit(
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
+        command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
     ) -> (ObjectId, Arc<crate::Data>);
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32;
     fn queue_on_submitted_work_done(
@@ -2105,11 +2019,11 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
     );
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
+        render_bundles: &mut dyn Iterator<Item = (&ObjectId, &crate::Data)>,
     );
     fn device_create_blas(
         &self,
@@ -2619,10 +2533,7 @@ where
         Context::buffer_get_mapped_range(self, &buffer, buffer_data, sub_range)
     }
 
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(any(target_os = "emscripten", feature = "webgl"))
-    ))]
+    #[cfg(webgpu)]
     fn buffer_get_mapped_range_as_array_buffer(
         &self,
         buffer: &ObjectId,
@@ -3166,7 +3077,7 @@ where
         Context::queue_write_texture(self, &queue, queue_data, texture, data, data_layout, size)
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(any(webgpu, webgl))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &ObjectId,
@@ -3180,15 +3091,15 @@ where
         Context::queue_copy_external_image_to_texture(self, &queue, queue_data, source, dest, size)
     }
 
-    fn queue_submit<'a>(
+    fn queue_submit(
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
+        command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
     ) -> (ObjectId, Arc<crate::Data>) {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
-        let command_buffers = command_buffers.into_iter().map(|(id, data)| {
+        let command_buffers = command_buffers.map(|(id, data)| {
             let command_buffer_data: <T as Context>::CommandBufferData = *data.downcast().unwrap();
             (<T::CommandBufferId>::from(id), command_buffer_data)
         });
@@ -4141,19 +4052,19 @@ where
         Context::render_pass_end_pipeline_statistics_query(self, &mut pass, pass_data)
     }
 
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
+        render_bundles: &mut dyn Iterator<Item = (&ObjectId, &crate::Data)>,
     ) {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let render_bundles = Box::new(render_bundles.into_iter().map(|(id, data)| {
+        let mut render_bundles = render_bundles.map(|(id, data)| {
             let render_bundle_data: &<T as Context>::RenderBundleData = downcast_ref(data);
             (<T::RenderBundleId>::from(*id), render_bundle_data)
-        }));
-        Context::render_pass_execute_bundles(self, &mut pass, pass_data, render_bundles)
+        });
+        Context::render_pass_execute_bundles(self, &mut pass, pass_data, &mut render_bundles)
     }
 
     fn device_create_blas(

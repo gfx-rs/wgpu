@@ -77,13 +77,13 @@ cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ctor = "0.2"
-encase = "0.6"
+encase = "0.7"
 env_logger = "0.10"
 fern = "0.6"
 flume = "0.11"
 futures-lite = "2"
 getrandom = "0.2"
-glam = "0.24.2"
+glam = "0.25"
 heck = "0.4.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 ktx2 = "0.3"
@@ -113,7 +113,7 @@ renderdoc-sys = "1.0.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.108"
+serde_json = "1.0.111"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
@@ -139,7 +139,7 @@ gpu-descriptor = "0.2"
 
 # DX dependencies
 bit-set = "0.5"
-gpu-allocator = { version = "0.24", default_features = false, features = [
+gpu-allocator = { version = "0.25", default_features = false, features = [
     "d3d12",
     "public-winapi",
 ] }

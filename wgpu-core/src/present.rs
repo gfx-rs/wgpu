@@ -27,6 +27,7 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
     resource::{self, ResourceInfo},
+    snatch::Snatchable,
     track,
 };
 
@@ -77,7 +78,7 @@ pub enum ConfigureSurfaceError {
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
     ZeroArea,
-    #[error("`Surface` width and height must be within the maximum supported texture size. Requested was ({width}, height), maximum extent is {max_texture_dimension_2d}.")]
+    #[error("`Surface` width and height must be within the maximum supported texture size. Requested was ({width}, {height}), maximum extent is {max_texture_dimension_2d}.")]
     TooLarge {
         width: u32,
         height: u32,
@@ -215,11 +216,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut presentation = surface.presentation.lock();
                 let present = presentation.as_mut().unwrap();
                 let texture = resource::Texture {
-                    inner: RwLock::new(Some(resource::TextureInner::Surface {
+                    inner: Snatchable::new(resource::TextureInner::Surface {
                         raw: Some(ast.texture),
                         parent_id: surface_id,
                         has_work: AtomicBool::new(false),
-                    })),
+                    }),
                     device: device.clone(),
                     desc: texture_desc,
                     hal_usage,
@@ -325,8 +326,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
+                let mut exclusive_snatch_guard = device.snatchable_lock.write();
                 let suf = A::get_surface(&surface);
-                let mut inner = texture.inner_mut();
+                let mut inner = texture.inner_mut(&mut exclusive_snatch_guard);
                 let inner = inner.as_mut().unwrap();
 
                 match *inner {
@@ -420,13 +422,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 let suf = A::get_surface(&surface);
-                match *texture.inner_mut().as_mut().take().as_mut().unwrap() {
-                    &mut resource::TextureInner::Surface {
-                        ref mut raw,
-                        ref parent_id,
+                let exclusive_snatch_guard = device.snatchable_lock.write();
+                match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
+                    resource::TextureInner::Surface {
+                        mut raw,
+                        parent_id,
                         has_work: _,
                     } => {
-                        if surface_id == *parent_id {
+                        if surface_id == parent_id {
                             unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
                         } else {
                             log::warn!("Surface texture is outdated");

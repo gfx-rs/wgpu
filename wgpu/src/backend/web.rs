@@ -57,50 +57,26 @@ impl<T> From<Identified<T>> for ObjectId {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<T> Send for Sendable<T> {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
 pub(crate) struct Identified<T>(std::num::NonZeroU64, PhantomData<T>);
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<T> Send for Identified<T> {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<T> Sync for Identified<T> {}
 
 pub(crate) struct Context(web_sys::Gpu);
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for Context {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for Context {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for BufferMappedRange {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for BufferMappedRange {}
 
 impl fmt::Debug for Context {
@@ -157,10 +133,7 @@ impl<F, M> MakeSendFuture<F, M> {
     }
 }
 
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
 fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTextureFormat {
@@ -3459,13 +3432,11 @@ impl crate::context::Context for Context {
         // Not available in gecko yet
     }
 
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<
-            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
-        >,
+        render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let mapped = render_bundles
             .map(|(_, bundle_data)| &bundle_data.0)

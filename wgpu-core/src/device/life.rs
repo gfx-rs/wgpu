@@ -15,8 +15,8 @@ use crate::{
     },
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
-        self, Buffer, DestroyedBuffer, QuerySet, Resource, Sampler, StagingBuffer, Texture,
-        TextureView,
+        self, Buffer, DestroyedBuffer, DestroyedTexture, QuerySet, Resource, Sampler,
+        StagingBuffer, Texture, TextureView,
     },
     track::{ResourceTracker, Tracker},
     FastHashMap, SubmissionIndex,
@@ -47,6 +47,7 @@ pub(crate) struct ResourceMaps<A: HalApi> {
     pub blas_s: FastHashMap<BlasId, Arc<Blas<A>>>,
     pub tlas_s: FastHashMap<TlasId, Arc<Tlas<A>>>,
     pub destroyed_buffers: FastHashMap<BufferId, Arc<DestroyedBuffer<A>>>,
+    pub destroyed_textures: FastHashMap<TextureId, Arc<DestroyedTexture<A>>>,
 }
 
 impl<A: HalApi> ResourceMaps<A> {
@@ -67,6 +68,7 @@ impl<A: HalApi> ResourceMaps<A> {
             blas_s: FastHashMap::default(),
             tlas_s: FastHashMap::default(),
             destroyed_buffers: FastHashMap::default(),
+            destroyed_textures: FastHashMap::default(),
         }
     }
 
@@ -87,6 +89,7 @@ impl<A: HalApi> ResourceMaps<A> {
             destroyed_buffers,
             tlas_s,
             blas_s,
+            destroyed_textures,
         } = self;
         buffers.clear();
         staging_buffers.clear();
@@ -103,6 +106,7 @@ impl<A: HalApi> ResourceMaps<A> {
         blas_s.clear();
         tlas_s.clear();
         destroyed_buffers.clear();
+        destroyed_textures.clear();
     }
 
     pub(crate) fn extend(&mut self, mut other: Self) {
@@ -122,6 +126,7 @@ impl<A: HalApi> ResourceMaps<A> {
             tlas_s,
             blas_s,
             destroyed_buffers,
+            destroyed_textures,
         } = self;
         buffers.extend(other.buffers.drain());
         staging_buffers.extend(other.staging_buffers.drain());
@@ -138,6 +143,7 @@ impl<A: HalApi> ResourceMaps<A> {
         tlas_s.extend(other.tlas_s.drain());
         blas_s.extend(other.blas_s.drain());
         destroyed_buffers.extend(other.destroyed_buffers.drain());
+        destroyed_textures.extend(other.destroyed_textures.drain());
     }
 }
 
@@ -312,6 +318,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                 TempResource::Texture(raw) => {
                     last_resources.textures.insert(raw.as_info().id(), raw);
                 }
+                TempResource::DestroyedTexture(destroyed) => {
+                    last_resources
+                        .destroyed_textures
+                        .insert(destroyed.id, destroyed);
+                }
                 TempResource::Tlas(raw) => {
                     last_resources.tlas_s.insert(raw.as_info().id(), raw);
                 }
@@ -423,6 +434,9 @@ impl<A: HalApi> LifetimeTracker<A> {
             }
             TempResource::Texture(raw) => {
                 resources.textures.insert(raw.as_info().id(), raw);
+            }
+            TempResource::DestroyedTexture(destroyed) => {
+                resources.destroyed_textures.insert(destroyed.id, destroyed);
             }
             TempResource::Tlas(raw) => {
                 resources.tlas_s.insert(raw.as_info().id(), raw);
@@ -705,6 +719,27 @@ impl<A: HalApi> LifetimeTracker<A> {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = *trace {
                 t.add(trace::Action::DestroyBuffer(id));
+            }
+        }
+    }
+
+    fn triage_suspected_destroyed_textures(
+        &mut self,
+        #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
+    ) {
+        for (id, texture) in self.suspected_resources.destroyed_textures.drain() {
+            let submit_index = texture.submission_index;
+            if let Some(resources) = self.active.iter_mut().find(|a| a.index == submit_index) {
+                resources
+                    .last_resources
+                    .destroyed_textures
+                    .insert(id, texture);
+            } else {
+                self.free_resources.destroyed_textures.insert(id, texture);
+            }
+            #[cfg(feature = "trace")]
+            if let Some(ref mut t) = *trace {
+                t.add(trace::Action::DestroyTexture(id));
             }
         }
     }
@@ -996,6 +1031,10 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trace,
         );
         self.triage_suspected_destroyed_buffers(
+            #[cfg(feature = "trace")]
+            &mut trace,
+        );
+        self.triage_suspected_destroyed_textures(
             #[cfg(feature = "trace")]
             &mut trace,
         );
