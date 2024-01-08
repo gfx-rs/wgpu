@@ -1,3 +1,4 @@
+use crate::device::DeviceError;
 use crate::resource::Resource;
 use crate::snatch::SnatchGuard;
 use crate::{
@@ -187,6 +188,8 @@ pub enum DispatchError {
 #[derive(Clone, Debug, Error)]
 pub enum ComputePassErrorInner {
     #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
     #[error("Bind group at index {0:?} is invalid")]
     InvalidBindGroup(usize),
@@ -366,17 +369,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         timestamp_writes: Option<&ComputePassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
-        let init_scope = PassErrorScope::Pass(encoder_id);
+        let pass_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
         let device = &cmd_buf.device;
         if !device.is_valid() {
             return Err(ComputePassErrorInner::InvalidDevice(
                 cmd_buf.device.as_info().id(),
             ))
-            .map_pass_err(init_scope);
+            .map_pass_err(pass_scope);
         }
 
         let mut cmd_buf_data = cmd_buf.data.lock();
@@ -399,10 +402,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // We automatically keep extending command buffers over time, and because
         // we want to insert a command buffer _before_ what we're about to record,
         // we need to make sure to close the previous one.
-        encoder.close();
+        encoder.close().map_pass_err(pass_scope)?;
         // will be reset to true if recording is done without errors
         *status = CommandEncoderStatus::Error;
-        let raw = encoder.open();
+        let raw = encoder.open().map_pass_err(pass_scope)?;
 
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.compute_pipelines.read();
@@ -426,7 +429,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .query_sets
                 .add_single(&*query_set_guard, tw.query_set)
                 .ok_or(ComputePassErrorInner::InvalidQuerySet(tw.query_set))
-                .map_pass_err(init_scope)?;
+                .map_pass_err(pass_scope)?;
 
             // Unlike in render passes we can't delay resetting the query sets since
             // there is no auxillary pass.
@@ -862,12 +865,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         *status = CommandEncoderStatus::Recording;
 
         // Stop the current command buffer.
-        encoder.close();
+        encoder.close().map_pass_err(pass_scope)?;
 
         // Create a new command buffer, which we will insert _before_ the body of the compute pass.
         //
         // Use that buffer to insert barriers and clear discarded images.
-        let transit = encoder.open();
+        let transit = encoder.open().map_pass_err(pass_scope)?;
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             transit,
@@ -881,7 +884,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &snatch_guard,
         );
         // Close the command buffer, and swap it with the previous.
-        encoder.close_and_swap();
+        encoder.close_and_swap().map_pass_err(pass_scope)?;
 
         Ok(())
     }

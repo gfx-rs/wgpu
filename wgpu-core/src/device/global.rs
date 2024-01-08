@@ -487,12 +487,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let buffer = {
-            let mut buffer_guard = hub.buffers.write();
-            buffer_guard
-                .get_and_mark_destroyed(buffer_id)
-                .map_err(|_| resource::DestroyError::Invalid)?
-        };
+        let buffer = hub
+            .buffers
+            .write()
+            .get_and_mark_destroyed(buffer_id)
+            .map_err(|_| resource::DestroyError::Invalid)?;
 
         let _ = buffer.unmap();
 
@@ -683,8 +682,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let fid = hub.buffers.prepare::<G>(id_in);
 
         let error = loop {
-            let device_guard = hub.devices.read();
-            let device = match device_guard.get(device_id) {
+            let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
@@ -732,39 +730,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let mut texture_guard = hub.textures.write();
-        let texture = texture_guard
+        let texture = hub
+            .textures
+            .write()
             .get_and_mark_destroyed(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
-        let device = &texture.device;
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::FreeTexture(texture_id));
-        }
-
-        let last_submit_index = texture.info.submission_index();
-
-        if let resource::TextureInner::Native { ref raw } = *texture.inner().as_ref().unwrap() {
-            if !raw.is_none() {
-                let temp = queue::TempResource::Texture(texture.clone());
-                let mut guard = device.pending_writes.lock();
-                let pending_writes = guard.as_mut().unwrap();
-                if pending_writes.dst_textures.contains_key(&texture_id) {
-                    pending_writes.temp_resources.push(temp);
-                } else {
-                    drop(guard);
-                    device
-                        .lock_life()
-                        .schedule_resource_destruction(temp, last_submit_index);
-                }
-            } else {
-                return Err(resource::DestroyError::AlreadyDestroyed);
-            }
-        }
-
-        Ok(())
+        texture.destroy()
     }
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
@@ -1075,12 +1047,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
             }
 
-            let layout = {
-                let bgl_guard = hub.bind_group_layouts.read();
-                match device.create_pipeline_layout(desc, &*bgl_guard) {
-                    Ok(layout) => layout,
-                    Err(e) => break e,
-                }
+            let layout = match device.create_pipeline_layout(desc, &hub.bind_group_layouts) {
+                Ok(layout) => layout,
+                Err(e) => break e,
             };
 
             let (id, _) = fid.assign(layout);
@@ -1136,8 +1105,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let bind_group_layout_guard = hub.bind_group_layouts.read();
-            let bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
+            let bind_group_layout = match hub.bind_group_layouts.get(desc.layout) {
                 Ok(layout) => layout,
                 Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
@@ -1146,7 +1114,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 break DeviceError::WrongDevice.into();
             }
 
-            let bind_group = match device.create_bind_group(bind_group_layout, desc, hub) {
+            let bind_group = match device.create_bind_group(&bind_group_layout, desc, hub) {
                 Ok(bind_group) => bind_group,
                 Err(e) => break e,
             };
@@ -1779,9 +1747,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let error = loop {
-            let pipeline_guard = hub.compute_pipelines.read();
-
-            let pipeline = match pipeline_guard.get(pipeline_id) {
+            let pipeline = match hub.compute_pipelines.get(pipeline_id) {
                 Ok(pipeline) => pipeline,
                 Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };

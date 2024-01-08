@@ -2,12 +2,23 @@ use std::{io, process::exit};
 
 use anyhow::Context;
 
+use crate::human::PrintingVerbosity;
+
 const HELP: &str = "\
-Usage: wgpu-info [--input <PATH>] [--output <PATH>] [--json]
+Usage: wgpu-info [--input <PATH>] [--output <PATH>] [-q/-v/-vv/--json]
+
+Information Density:
+  These settings have no effect on the JSON output. The highest verbosity
+  provided will be used if multiple are passed.
+
+  -q                  Quiet mode, only print the names and backends of the adapters.
+  [default]           Print the adapter info.
+  -v                  Additionally print all features, limits, and downlevel capabilities.
+  -vv                 Additionally print all texture capabilities and flags.
 
 Options:
   -h, --help          Print this help message.
-  -i, --input <PATH>  Source to read JSON report from. (\"-\" reads from stdin)
+  -i, --input <PATH>  Read a json report to make it human readable. (\"-\" reads from stdin)
   -o, --output <PATH> Destination to write output to. (\"-\" writes to stdout)
   -j, --json          Output JSON information instead of human-readable text.
 ";
@@ -30,6 +41,23 @@ pub fn main() -> anyhow::Result<()> {
     let input_path: Option<String> = args.opt_value_from_str(["-i", "--input"]).unwrap();
     let output_path: Option<String> = args.opt_value_from_str(["-o", "--output"]).unwrap();
     let json = args.contains(["-j", "--json"]);
+
+    let verbosity = if args.contains("-vv") {
+        PrintingVerbosity::InformationFeaturesLimitsTexture
+    } else if args.contains("-v") {
+        PrintingVerbosity::InformationFeaturesLimits
+    } else if args.contains("-q") {
+        PrintingVerbosity::NameOnly
+    } else {
+        PrintingVerbosity::Information
+    };
+
+    // Binary OR is intentional, we want all flags to be consumed every iteration.
+    while args.contains("-vv") | args.contains("-v") | args.contains("-q") {
+        eprintln!(
+            "Warning: More than one verbosity flag was passed. Using the most verbose option."
+        );
+    }
 
     let remaining = args.finish();
     if !remaining.is_empty() {
@@ -82,7 +110,7 @@ pub fn main() -> anyhow::Result<()> {
             .into_json(output)
             .with_context(|| format!("Failed to write to output: {output_name}"))?;
     } else {
-        crate::human::print_adapters(&mut output, &report)
+        crate::human::print_adapters(&mut output, &report, verbosity)
             .with_context(|| format!("Failed to write to output: {output_name}"))?;
     }
 

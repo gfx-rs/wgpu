@@ -1711,7 +1711,17 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            match format.sample_type(None, None).unwrap() {
+            let first_aspect = format_aspect
+                .iter()
+                .next()
+                .expect("All texture should at least one aspect")
+                .map();
+
+            // We should never get depth or stencil out of this, due to the above.
+            assert_ne!(first_aspect, wgt::TextureAspect::DepthOnly);
+            assert_ne!(first_aspect, wgt::TextureAspect::StencilOnly);
+
+            match format.sample_type(Some(first_aspect), None).unwrap() {
                 wgt::TextureSampleType::Float { .. } => limits
                     .framebuffer_color_sample_counts
                     .min(limits.sampled_image_color_sample_counts),

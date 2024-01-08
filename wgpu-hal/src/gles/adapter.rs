@@ -220,10 +220,9 @@ impl super::Adapter {
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
-        let web_gl = cfg!(target_arch = "wasm32");
 
         if let Some(full_ver) = full_ver {
-            let core_profile = (full_ver >= (3, 2)).then_some(unsafe {
+            let core_profile = (full_ver >= (3, 2)).then(|| unsafe {
                 gl.get_parameter_i32(glow::CONTEXT_PROFILE_MASK)
                     & glow::CONTEXT_CORE_PROFILE_BIT as i32
                     != 0
@@ -608,10 +607,7 @@ impl super::Adapter {
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
         );
-        private_caps.set(
-            super::PrivateCapabilities::DEBUG_FNS,
-            supported((3, 2), (4, 3)) && !web_gl,
-        );
+        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, gl.supports_debug());
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),
@@ -1046,9 +1042,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg16Unorm => empty,
             Tf::Rg16Snorm => empty,
             Tf::Rg16Float => filterable | half_float_renderable,
-            Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filterable_renderable | storage,
+            Tf::Rgba8Unorm => filterable_renderable | storage,
+            Tf::Rgba8UnormSrgb => filterable_renderable,
             Tf::Bgra8Unorm | Tf::Bgra8UnormSrgb => filterable_renderable,
-            Tf::Rgba8Snorm => filterable,
+            Tf::Rgba8Snorm => filterable | storage,
             Tf::Rgba8Uint => renderable | storage,
             Tf::Rgba8Sint => renderable | storage,
             Tf::Rgb10a2Uint => renderable,
@@ -1071,7 +1068,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8 => depth,
-            Tf::NV12 => unreachable!(),
+            Tf::NV12 => empty,
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb

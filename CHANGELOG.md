@@ -181,6 +181,11 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - `BufferMappedRange` trait is now `WasmNotSendSync`, i.e. it is `Send`/`Sync` if not on wasm or `fragile-send-sync-non-atomic-wasm` is enabled. By @wumpf in [#4818](https://github.com/gfx-rs/wgpu/pull/4818)
 - Align `wgpu_types::CompositeAlphaMode` serde serialization to spec. By @littledivy in [#4940](https://github.com/gfx-rs/wgpu/pull/4940)
 - `wgpu_render_pass_set_bind_group` and `wgpu_compute_pass_set_bind_group` clamp the number of dynamic offsets to fit within limits. By @bradwerth in [#4918](https://github.com/gfx-rs/wgpu/pull/4918)
+- Fix error message of `ConfigureSurfaceError::TooLarge`. By @Dinnerbone in [#4960](https://github.com/gfx-rs/wgpu/pull/4960)
+
+#### DX12
+
+- Fixed D3D12_SUBRESOURCE_FOOTPRINT calculation for block compressed textures which caused a crash with `Queue::write_texture` on DX12. By @DTZxPorter in [#4990](https://github.com/gfx-rs/wgpu/pull/4990)
 
 #### Vulkan
 
@@ -217,6 +222,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 ### Examples
 
 - remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
+- hello-compute example fix failure with "wgpu error: Validation Error" if arguments are missing by @vilcans in [#4939](https://github.com/gfx-rs/wgpu/pull/4939)
 - Made the examples page not crash on Chrome on Android, and responsive to screen sizes by @Dinnerbone in [#4958](https://github.com/gfx-rs/wgpu/pull/4958)
 
 ## v0.18.1 (2023-11-15)

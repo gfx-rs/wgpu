@@ -569,7 +569,7 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
-            initialization_status: RwLock::new(BufferInitTracker::new(desc.size)),
+            initialization_status: RwLock::new(BufferInitTracker::new(aligned_size)),
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
@@ -587,9 +587,7 @@ impl<A: HalApi> Device<A> {
         debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
 
         Texture {
-            inner: RwLock::new(Some(resource::TextureInner::Native {
-                raw: Some(hal_texture),
-            })),
+            inner: Snatchable::new(resource::TextureInner::Native { raw: hal_texture }),
             device: self.clone(),
             desc: desc.map_label(|_| ()),
             hal_usage,
@@ -907,15 +905,14 @@ impl<A: HalApi> Device<A> {
         texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
-        let inner = texture.inner();
-        let texture_raw = inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let snatch_guard = texture.device.snatchable_lock.read();
+
+        let texture_raw = texture
+            .raw(&snatch_guard)
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
+
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
-
         let resolved_format = desc.format.unwrap_or_else(|| {
             texture
                 .desc
@@ -2357,7 +2354,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::PipelineLayoutDescriptor,
-        bgl_guard: &Storage<BindGroupLayout<A>, id::BindGroupLayoutId>,
+        bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
     ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
@@ -2410,31 +2407,38 @@ impl<A: HalApi> Device<A> {
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
 
-        // validate total resource counts
+        // Collect references to the BGLs
+        let mut bind_group_layouts = ArrayVec::new();
         for &id in desc.bind_group_layouts.iter() {
-            let Ok(bind_group_layout) = bgl_guard.get(id) else {
+            let Ok(bgl) = bgl_registry.get(id) else {
                 return Err(Error::InvalidBindGroupLayout(id));
             };
 
-            if bind_group_layout.device.as_info().id() != self.as_info().id() {
+            bind_group_layouts.push(bgl);
+        }
+
+        // Validate total resource counts and check for a matching device
+        for bgl in &bind_group_layouts {
+            if bgl.device.as_info().id() != self.as_info().id() {
                 return Err(DeviceError::WrongDevice.into());
             }
 
-            count_validator.merge(&bind_group_layout.binding_count_validator);
+            count_validator.merge(&bgl.binding_count_validator);
         }
+
         count_validator
             .validate(&self.limits)
             .map_err(Error::TooManyBindings)?;
 
-        let bgl_vec = desc
-            .bind_group_layouts
+        let raw_bind_group_layouts = bind_group_layouts
             .iter()
-            .map(|&id| bgl_guard.get(id).unwrap().raw())
-            .collect::<Vec<_>>();
+            .map(|bgl| bgl.raw())
+            .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
+
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             flags: hal::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE,
-            bind_group_layouts: &bgl_vec,
+            bind_group_layouts: &raw_bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.as_ref(),
         };
 
@@ -2446,15 +2450,13 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
+        drop(raw_bind_group_layouts);
+
         Ok(binding_model::PipelineLayout {
             raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
-            bind_group_layouts: desc
-                .bind_group_layouts
-                .iter()
-                .map(|&id| bgl_guard.get(id).unwrap().clone())
-                .collect(),
+            bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
         })
     }
@@ -2495,7 +2497,7 @@ impl<A: HalApi> Device<A> {
             bind_group_layouts: Cow::Borrowed(&ids.group_ids[..group_count]),
             push_constant_ranges: Cow::Borrowed(&[]), //TODO?
         };
-        let layout = self.create_pipeline_layout(&layout_desc, &bgl_registry.read())?;
+        let layout = self.create_pipeline_layout(&layout_desc, bgl_registry)?;
         pipeline_layout_registry.force_replace(ids.root_id, layout);
         Ok(pipeline_layout_registry.get(ids.root_id).unwrap())
     }
@@ -3230,7 +3232,10 @@ impl<A: HalApi> Device<A> {
             .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
         // If we're running downlevel, we need to manually ask the backend what
         // we can use as we can't trust WebGPU.
-        let downlevel = !self.downlevel.is_webgpu_compliant();
+        let downlevel = !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT);
 
         if using_device_features || downlevel {
             Ok(self.get_texture_format_features(adapter, format))

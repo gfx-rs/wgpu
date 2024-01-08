@@ -168,6 +168,9 @@ workspace = true
 features = ["clone"]
 optional = true
 
+[build-dependencies]
+cfg_aliases.workspace = true
+
 # used to test all the example shaders
 [dev-dependencies.naga]
 workspace = true
