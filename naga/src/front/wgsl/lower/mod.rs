@@ -1328,7 +1328,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
                 let break_if = break_if
-                    .map(|expr| self.expression(expr, &mut ctx.as_expression(block, &mut emitter)))
+                    .map(|expr| {
+                        self.expression(expr, &mut ctx.as_expression(&mut continuing, &mut emitter))
+                    })
                     .transpose()?;
                 continuing.extend(emitter.finish(&ctx.function.expressions));
 
