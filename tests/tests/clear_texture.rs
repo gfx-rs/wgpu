@@ -362,6 +362,8 @@ static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
                 wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
                     | wgpu::DownlevelFlags::COMPUTE_SHADERS,
             )
+            // https://github.com/gfx-rs/wgpu/issues/5016
+            .skip(FailureCase::adapter("Apple Paravirtual device"))
             .skip(FailureCase::webgl2())
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::CLEAR_TEXTURE),
@@ -374,7 +376,9 @@ static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
 static CLEAR_TEXTURE_DEPTH32_STENCIL8: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8),
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8)
+            // https://github.com/gfx-rs/wgpu/issues/5016
+            .skip(FailureCase::adapter("Apple Paravirtual device")),
     )
     .run_sync(|ctx| {
         clear_texture_tests(&ctx, &[wgpu::TextureFormat::Depth32FloatStencil8]);
