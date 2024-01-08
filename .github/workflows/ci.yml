@@ -362,8 +362,8 @@ jobs:
             os: windows-2022
 
           # Mac
-          # - name: Mac aarch64
-          #   os: macos-12
+          - name: Mac aarch64
+            os: macos-13-xlarge
 
           # Linux
           - name: Linux x86_64
