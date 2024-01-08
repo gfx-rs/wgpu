@@ -569,7 +569,7 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
-            initialization_status: RwLock::new(BufferInitTracker::new(desc.size)),
+            initialization_status: RwLock::new(BufferInitTracker::new(aligned_size)),
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
