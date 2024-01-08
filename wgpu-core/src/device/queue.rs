@@ -1185,7 +1185,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ));
                         }
                         if !cmdbuf.is_finished() {
-                            if let Ok(cmdbuf) = Arc::try_unwrap(cmdbuf) {
+                            if let Some(cmdbuf) = Arc::into_inner(cmdbuf) {
                                 device.destroy_command_buffer(cmdbuf);
                             } else {
                                 panic!(
