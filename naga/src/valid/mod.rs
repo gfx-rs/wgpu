@@ -174,6 +174,7 @@ pub struct Validator {
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
+    override_ids: FastHashSet<u16>,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -188,6 +189,8 @@ pub enum ConstantError {
 pub enum OverrideError {
     #[error("Override name and ID are missing")]
     MissingNameAndID,
+    #[error("Override ID must be unique")]
+    DuplicateID,
     #[error("The type doesn't match the override")]
     InvalidType,
     #[error("The type is not constructible")]
@@ -311,6 +314,7 @@ impl Validator {
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
             valid_expression_set: BitSet::new(),
+            override_ids: FastHashSet::default(),
         }
     }
 
@@ -323,6 +327,7 @@ impl Validator {
         self.switch_values.clear();
         self.valid_expression_list.clear();
         self.valid_expression_set.clear();
+        self.override_ids.clear();
     }
 
     fn validate_constant(
@@ -348,7 +353,7 @@ impl Validator {
     }
 
     fn validate_override(
-        &self,
+        &mut self,
         handle: Handle<crate::Override>,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
@@ -357,6 +362,12 @@ impl Validator {
 
         if o.name.is_none() && o.id.is_none() {
             return Err(OverrideError::MissingNameAndID);
+        }
+
+        if let Some(id) = o.id {
+            if !self.override_ids.insert(id) {
+                return Err(OverrideError::DuplicateID);
+            }
         }
 
         let type_info = &self.types[o.ty.index()];
