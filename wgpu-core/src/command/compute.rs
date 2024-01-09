@@ -51,7 +51,7 @@ use std::{fmt, mem, str};
 pub enum ComputeCommand {
     SetBindGroup {
         index: u32,
-        num_dynamic_offsets: u8,
+        num_dynamic_offsets: usize,
         bind_group_id: id::BindGroupId,
     },
     SetPipeline(id::ComputePipelineId),
@@ -512,10 +512,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     temp_offsets.clear();
                     temp_offsets.extend_from_slice(
-                        &base.dynamic_offsets[dynamic_offset_count
-                            ..dynamic_offset_count + (num_dynamic_offsets as usize)],
+                        &base.dynamic_offsets
+                            [dynamic_offset_count..dynamic_offset_count + num_dynamic_offsets],
                     );
-                    dynamic_offset_count += num_dynamic_offsets as usize;
+                    dynamic_offset_count += num_dynamic_offsets;
 
                     let bind_group = tracker
                         .bind_groups
@@ -924,7 +924,7 @@ pub mod compute_ffi {
 
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index,
-            num_dynamic_offsets: offset_length.try_into().unwrap(),
+            num_dynamic_offsets: offset_length,
             bind_group_id,
         });
     }

@@ -312,7 +312,7 @@ impl RenderBundleEncoder {
                     }
 
                     // Identify the next `num_dynamic_offsets` entries from `base.dynamic_offsets`.
-                    let num_dynamic_offsets = num_dynamic_offsets as usize;
+                    let num_dynamic_offsets = num_dynamic_offsets;
                     let offsets_range =
                         next_dynamic_offset..next_dynamic_offset + num_dynamic_offsets;
                     next_dynamic_offset = offsets_range.end;
@@ -819,10 +819,10 @@ impl<A: HalApi> RenderBundle<A> {
                             pipeline_layout.as_ref().unwrap().raw(),
                             index,
                             raw_bg,
-                            &offsets[..num_dynamic_offsets as usize],
+                            &offsets[..num_dynamic_offsets],
                         )
                     };
-                    offsets = &offsets[num_dynamic_offsets as usize..];
+                    offsets = &offsets[num_dynamic_offsets..];
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let render_pipelines = trackers.render_pipelines.read();
@@ -1404,7 +1404,7 @@ impl<A: HalApi> State<A> {
                         return Some(RenderCommand::SetBindGroup {
                             index: i.try_into().unwrap(),
                             bind_group_id: contents.bind_group.as_info().id(),
-                            num_dynamic_offsets: (offsets.end - offsets.start) as u8,
+                            num_dynamic_offsets: offsets.end - offsets.start,
                         });
                     }
                 }
@@ -1507,7 +1507,7 @@ pub mod bundle_ffi {
 
         bundle.base.commands.push(RenderCommand::SetBindGroup {
             index,
-            num_dynamic_offsets: offset_length.try_into().unwrap(),
+            num_dynamic_offsets: offset_length,
             bind_group_id,
         });
     }
