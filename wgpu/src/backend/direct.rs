@@ -538,19 +538,19 @@ impl crate::Context for Context {
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::CompositionVisual(visual) => unsafe {
-                self.0.instance_create_surface_from_visual(*visual, ())
+                self.0.instance_create_surface_from_visual(visual, ())
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::SurfaceHandle(surface_handle) => unsafe {
                 self.0
-                    .instance_create_surface_from_surface_handle(*surface_handle, ())
+                    .instance_create_surface_from_surface_handle(surface_handle, ())
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::SwapChainPanel(swap_chain_panel) => unsafe {
                 self.0
-                    .instance_create_surface_from_swap_chain_panel(*swap_chain_panel, ())
+                    .instance_create_surface_from_swap_chain_panel(swap_chain_panel, ())
             },
         };
 
