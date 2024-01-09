@@ -414,30 +414,92 @@ pub trait WindowHandle: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
 
 impl<T> WindowHandle for T where T: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
 
-/// The window/canvas/surface/swap-chain/etc. a surface is attached to.
+/// The window/canvas/surface/swap-chain/etc. a surface is attached to, for use with safe surface creation.
 ///
 /// This is either a window or an actual web canvas depending on the platform and
 /// enabled features.
 /// Refer to the individual variants for more information.
+///
+/// See also [`SurfaceTargetUnsafe`] for unsafe variants.
+#[non_exhaustive]
 pub enum SurfaceTarget<'window> {
-    /// Raw window handle.
+    /// Window handle producer.
     ///
     /// If the specified display and window handle are not supported by any of the backends, then the surface
     /// will not be supported by any adapters.
     ///
     /// # Errors
     ///
-    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
+    /// - On WebGL2: surface creation returns an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
     ///
     /// # Panics
     ///
-    /// - On macOS/Metal: surface creation will panic if not called on the main thread.
-    /// - On web: surface creation will panic if the `raw_window_handle` does not properly refer to a
+    /// - On macOS/Metal: will panic if not called on the main thread.
+    /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
-    /// - the window handle must remain valid until after the [`Surface`] returned on creation is
-    ///   dropped.
-    WindowHandle(Box<dyn WindowHandle + 'window>),
+    Window(Box<dyn WindowHandle + 'window>),
+
+    /// Surface from a `web_sys::HtmlCanvasElement`.
+    ///
+    /// The `canvas` argument must be a valid `<canvas>` element to
+    /// create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    #[cfg(any(webgpu, webgl))]
+    Canvas(web_sys::HtmlCanvasElement),
+
+    /// Surface from a `web_sys::OffscreenCanvas`.
+    ///
+    /// The `canvas` argument must be a valid `OffscreenCanvas` object
+    /// to create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    #[cfg(any(webgpu, webgl))]
+    OffscreenCanvas(web_sys::OffscreenCanvas),
+}
+
+impl<'a, T> From<T> for SurfaceTarget<'a>
+where
+    T: WindowHandle + 'a,
+{
+    fn from(window: T) -> Self {
+        Self::Window(Box::new(window))
+    }
+}
+
+/// The window/canvas/surface/swap-chain/etc. a surface is attached to, for use with unsafe surface creation.
+///
+/// This is either a window or an actual web canvas depending on the platform and
+/// enabled features.
+/// Refer to the individual variants for more information.
+///
+/// See also [`SurfaceTarget`] for safe variants.
+#[non_exhaustive]
+pub enum SurfaceTargetUnsafe {
+    /// Raw window & display handle.
+    ///
+    /// If the specified display and window handle are not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
+    /// # Safety
+    ///
+    /// - `raw_window_handle` & `raw_display_handle` must be valid objects to create a surface upon.
+    /// - `raw_window_handle` & `raw_display_handle` must remain valid until after the returned
+    ///    [`Surface`] is  dropped.
+    RawHandle {
+        /// Raw display handle, underlying display must outlive the surface created from this.
+        raw_display_handle: raw_window_handle::RawDisplayHandle,
+
+        /// Raw display handle, underlying window must outlive the surface created from this.
+        raw_window_handle: raw_window_handle::RawWindowHandle,
+    },
 
     /// Surface from `CoreAnimationLayer`.
     ///
@@ -470,39 +532,6 @@ pub enum SurfaceTarget<'window> {
     /// - visual must be a valid SwapChainPanel to create a surface upon.
     #[cfg(dx12)]
     SwapChainPanel(*mut std::ffi::c_void),
-
-    /// Surface from a `web_sys::HtmlCanvasElement`.
-    ///
-    /// The `canvas` argument must be a valid `<canvas>` element to
-    /// create a surface upon.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
-    Canvas(web_sys::HtmlCanvasElement),
-
-    /// Surface from a `web_sys::OffscreenCanvas`.
-    ///
-    /// The `canvas` argument must be a valid `OffscreenCanvas` object
-    /// to create a surface upon.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
-    OffscreenCanvas(web_sys::OffscreenCanvas),
-}
-
-impl<'a, T> From<T> for SurfaceTarget<'a>
-where
-    T: WindowHandle + 'a,
-{
-    fn from(handle: T) -> Self {
-        Self::WindowHandle(Box::new(handle))
-    }
 }
 
 /// Handle to a binding group layout.
@@ -1838,7 +1867,8 @@ impl Instance {
 
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
-    /// See [`SurfaceTarget`] for what targets for surface are supported.
+    /// See [`SurfaceTarget`] for what targets are supported.
+    /// See [`Instance::create_surface`] for surface creation with unsafe target variants.
     ///
     /// Most commonly used are window handles (or provider of windows handles)
     /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
@@ -1846,20 +1876,88 @@ impl Instance {
         &self,
         target: impl Into<SurfaceTarget<'window>>,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
+        // Handle origin (i.e. window) to optionally take ownership of to make the surface outlast the window.
+        let handle_origin;
+
         let target = target.into();
+        let unsafe_target = match target {
+            SurfaceTarget::Window(window) => {
+                let raw_display_handle = window
+                    .display_handle()
+                    .map_err(|e| CreateSurfaceError {
+                        inner: CreateSurfaceErrorKind::RawHandle(e),
+                    })?
+                    .as_raw();
+                let raw_window_handle = window
+                    .window_handle()
+                    .map_err(|e| CreateSurfaceError {
+                        inner: CreateSurfaceErrorKind::RawHandle(e),
+                    })?
+                    .as_raw();
 
-        let (id, data) = self.context.instance_create_surface(&target)?;
+                handle_origin = Some(window);
 
-        #[allow(irrefutable_let_patterns)]
-        let _surface = if let SurfaceTarget::WindowHandle(window) = target {
-            Some(window)
-        } else {
-            None
+                SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle,
+                    raw_window_handle,
+                }
+            }
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::Canvas(canvas) => {
+                handle_origin = None;
+
+                let value: &wasm_bindgen::JsValue = &canvas;
+                let obj = std::ptr::NonNull::from(value).cast();
+                let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
+
+                SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle,
+                    raw_window_handle,
+                }
+            }
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::OffscreenCanvas(canvas) => {
+                handle_origin = None;
+
+                let value: &wasm_bindgen::JsValue = &canvas;
+                let obj = std::ptr::NonNull::from(value).cast();
+                let raw_window_handle =
+                    raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
+
+                SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle,
+                    raw_window_handle,
+                }
+            }
         };
+
+        let mut surface = unsafe { self.create_surface_unsafe(unsafe_target) }?;
+        surface._surface = handle_origin;
+
+        Ok(surface)
+    }
+
+    /// Creates a new surface targeting a given window/canvas/surface/etc. using an unsafe target.
+    ///
+    /// See [`SurfaceTargetUnsafe`] for what targets are supported.
+    /// See [`Instance::create_surface`] for surface creation with safe target variants.
+    ///
+    /// # Safety
+    ///
+    /// - See respective [`SurfaceTargetUnsafe`] variants for safety requirements.
+    pub unsafe fn create_surface_unsafe<'window>(
+        &self,
+        target: SurfaceTargetUnsafe,
+    ) -> Result<Surface<'window>, CreateSurfaceError> {
+        let (id, data) = unsafe { self.context.instance_create_surface(target) }?;
 
         Ok(Surface {
             context: Arc::clone(&self.context),
-            _surface,
+            _surface: None,
             id,
             data,
             config: Mutex::new(None),

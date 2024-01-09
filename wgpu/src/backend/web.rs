@@ -18,7 +18,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     context::{downcast_ref, ObjectId, QueueWriteBuffer, Unused},
-    CreateSurfaceError, CreateSurfaceErrorKind, SurfaceTarget, UncapturedErrorHandler,
+    SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
 
 fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
@@ -1040,17 +1040,13 @@ impl crate::context::Context for Context {
 
     unsafe fn instance_create_surface(
         &self,
-        target: &SurfaceTarget<'_>,
+        target: SurfaceTargetUnsafe,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
         match target {
-            SurfaceTarget::WindowHandle(window) => {
-                let raw_window_handle = window
-                    .window_handle()
-                    .map_err(|e| CreateSurfaceError {
-                        inner: CreateSurfaceErrorKind::RawHandle(e),
-                    })?
-                    .as_raw();
-
+            SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: _,
+                raw_window_handle,
+            } => {
                 let canvas_element: web_sys::HtmlCanvasElement = match raw_window_handle {
                     raw_window_handle::RawWindowHandle::Web(handle) => {
                         let canvas_node: wasm_bindgen::JsValue = web_sys::window()
@@ -1086,16 +1082,6 @@ impl crate::context::Context for Context {
 
                 let context_result = canvas_element.get_context("webgpu");
                 self.create_surface_from_context(Canvas::Canvas(canvas_element), context_result)
-            }
-
-            SurfaceTarget::Canvas(canvas) => {
-                let context_result = canvas.get_context("webgpu");
-                self.create_surface_from_context(Canvas::Canvas(canvas.clone()), context_result)
-            }
-
-            SurfaceTarget::OffscreenCanvas(canvas) => {
-                let context_result = canvas.get_context("webgpu");
-                self.create_surface_from_context(Canvas::Offscreen(canvas.clone()), context_result)
             }
         }
     }

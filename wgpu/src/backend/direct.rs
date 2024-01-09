@@ -4,11 +4,11 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    CreateSurfaceError, CreateSurfaceErrorKind, DownlevelCapabilities, Features, Label, Limits,
-    LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, ShaderSource, StoreOp, SurfaceStatus, SurfaceTarget,
-    TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
+    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
+    SurfaceStatus, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
+    UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -520,60 +520,38 @@ impl crate::Context for Context {
 
     unsafe fn instance_create_surface(
         &self,
-        target: &SurfaceTarget<'_>,
+        target: SurfaceTargetUnsafe,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
         let id = match target {
-            SurfaceTarget::WindowHandle(window) => {
-                let raw_display_handle = window
-                    .display_handle()
-                    .map_err(|e| CreateSurfaceError {
-                        inner: CreateSurfaceErrorKind::RawHandle(e),
-                    })?
-                    .as_raw();
-                let raw_window_handle = window
-                    .window_handle()
-                    .map_err(|e| CreateSurfaceError {
-                        inner: CreateSurfaceErrorKind::RawHandle(e),
-                    })?
-                    .as_raw();
-
-                unsafe {
-                    self.0
-                        .instance_create_surface(raw_display_handle, raw_window_handle, ())
-                }
-            }
+            SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle,
+                raw_window_handle,
+            } => unsafe {
+                self.0
+                    .instance_create_surface(raw_display_handle, raw_window_handle, ())
+            },
 
             #[cfg(metal)]
-            SurfaceTarget::CoreAnimationLayer(layer) => unsafe {
-                self.0.instance_create_surface_metal(*layer, ())
+            SurfaceTargetUnsafe::CoreAnimationLayer(layer) => unsafe {
+                self.0.instance_create_surface_metal(layer, ())
             },
 
             #[cfg(dx12)]
-            SurfaceTarget::CompositionVisual(visual) => unsafe {
+            SurfaceTargetUnsafe::CompositionVisual(visual) => unsafe {
                 self.0.instance_create_surface_from_visual(*visual, ())
             },
 
             #[cfg(dx12)]
-            SurfaceTarget::SurfaceHandle(surface_handle) => unsafe {
+            SurfaceTargetUnsafe::SurfaceHandle(surface_handle) => unsafe {
                 self.0
                     .instance_create_surface_from_surface_handle(*surface_handle, ())
             },
 
             #[cfg(dx12)]
-            SurfaceTarget::SwapChainPanel(swap_chain_panel) => unsafe {
+            SurfaceTargetUnsafe::SwapChainPanel(swap_chain_panel) => unsafe {
                 self.0
                     .instance_create_surface_from_swap_chain_panel(*swap_chain_panel, ())
             },
-
-            #[cfg(any(webgpu, webgl))]
-            SurfaceTarget::Canvas(canvas) => {
-                self.0.create_surface_webgl_canvas(canvas.clone(), ())?
-            }
-
-            #[cfg(any(webgpu, webgl))]
-            SurfaceTarget::OffscreenCanvas(canvas) => self
-                .0
-                .create_surface_webgl_offscreen_canvas(canvas.clone(), ())?,
         };
 
         Ok((
