@@ -430,6 +430,16 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer(buffer_id);
+
+                    let max_vertex_buffers = device.limits.max_vertex_buffers;
+                    if slot >= max_vertex_buffers {
+                        return Err(RenderCommandError::VertexBufferIndexOutOfRange {
+                            index: slot,
+                            max: max_vertex_buffers,
+                        })
+                        .map_pass_err(scope);
+                    }
+
                     let buffer = state
                         .trackers
                         .buffers
