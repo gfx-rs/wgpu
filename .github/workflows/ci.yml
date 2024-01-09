@@ -43,7 +43,7 @@ env:
   REPO_MSRV: "1.71"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.65"
+  CORE_MSRV: "1.70"
 
   #
   # Environment variables
