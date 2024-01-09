@@ -62,8 +62,8 @@ Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`
 ### Unified surface creation
 
 Previously, there were various specialized surface creation functions for various platform specific handles.
-Now, `wgpu::Instance::create_surface` instead always take a value that can be converted to the unified `wgpu::SurfaceTarget` enum.
-Conversion is automatic for anything implementing `raw-window-handle`'s `HasWindowHandle` & `HasDisplayHandle` traits,
+Now, `wgpu::Instance::create_surface` & `wgpu::Instance::create_surface_unsafe` instead each take a value that can be converted to the unified `wgpu::SurfaceTarget`/`wgpu::SurfaceTargetUnsafe` enums.
+Conversion to `wgpu::SurfaceTarget` is automatic for anything implementing `raw-window-handle`'s `HasWindowHandle` & `HasDisplayHandle` traits,
 meaning that you can continue to e.g. pass references to winit windows as before.
 By @wumpf in [#4984](https://github.com/gfx-rs/wgpu/pull/4984)
 
