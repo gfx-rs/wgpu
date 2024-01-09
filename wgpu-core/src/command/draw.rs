@@ -147,7 +147,7 @@ pub struct Rect<T> {
 pub enum RenderCommand {
     SetBindGroup {
         index: u32,
-        num_dynamic_offsets: u8,
+        num_dynamic_offsets: usize,
         bind_group_id: id::BindGroupId,
     },
     SetPipeline(id::RenderPipelineId),
