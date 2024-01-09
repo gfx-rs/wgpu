@@ -11,6 +11,10 @@ license = "MIT OR Apache-2.0"
 [[bin]]
 name = "naga"
 path = "src/bin/naga.rs"
+# This _must_ be false, as this conflicts with `naga`'s docs.
+#
+# See https://github.com/gfx-rs/wgpu/issues/4997
+doc = false
 test = false
 
 [dependencies]

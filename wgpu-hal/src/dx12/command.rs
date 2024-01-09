@@ -20,7 +20,7 @@ impl crate::BufferTextureCopy {
         &self,
         format: wgt::TextureFormat,
     ) -> d3d12_ty::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-        let (block_width, block_height) = format.block_dimensions();
+        let (block_width, _) = format.block_dimensions();
         d3d12_ty::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
             Offset: self.buffer_layout.offset,
             Footprint: d3d12_ty::D3D12_SUBRESOURCE_FOOTPRINT {
@@ -30,10 +30,7 @@ impl crate::BufferTextureCopy {
                 )
                 .unwrap(),
                 Width: self.size.width,
-                Height: self
-                    .buffer_layout
-                    .rows_per_image
-                    .map_or(self.size.height, |count| count * block_height),
+                Height: self.size.height,
                 Depth: self.size.depth,
                 RowPitch: {
                     let actual = self.buffer_layout.bytes_per_row.unwrap_or_else(|| {

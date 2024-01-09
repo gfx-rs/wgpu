@@ -24,6 +24,7 @@ use crate::{
     hal_api::HalApi,
     id::{TextureId, TypedId},
     resource::{Resource, Texture, TextureInner},
+    snatch::SnatchGuard,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUses, UsageConflict,
@@ -34,7 +35,7 @@ use hal::TextureUses;
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
 
-use parking_lot::{Mutex, RwLockReadGuard};
+use parking_lot::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
@@ -497,17 +498,15 @@ impl<A: HalApi> TextureTracker<A> {
     /// Drain all currently pending transitions.
     pub fn drain_transitions<'a>(
         &'a mut self,
-    ) -> (
-        PendingTransitionList,
-        Vec<RwLockReadGuard<'a, Option<TextureInner<A>>>>,
-    ) {
+        snatch_guard: &'a SnatchGuard<'a>,
+    ) -> (PendingTransitionList, Vec<Option<&'a TextureInner<A>>>) {
         let mut textures = Vec::new();
         let transitions = self
             .temp
             .drain(..)
             .map(|pending| {
                 let tex = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
-                textures.push(tex.inner());
+                textures.push(tex.inner.get(snatch_guard));
                 pending
             })
             .collect();

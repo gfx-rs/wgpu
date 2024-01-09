@@ -569,7 +569,7 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
-            initialization_status: RwLock::new(BufferInitTracker::new(desc.size)),
+            initialization_status: RwLock::new(BufferInitTracker::new(aligned_size)),
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
@@ -587,9 +587,7 @@ impl<A: HalApi> Device<A> {
         debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
 
         Texture {
-            inner: RwLock::new(Some(resource::TextureInner::Native {
-                raw: Some(hal_texture),
-            })),
+            inner: Snatchable::new(resource::TextureInner::Native { raw: hal_texture }),
             device: self.clone(),
             desc: desc.map_label(|_| ()),
             hal_usage,
@@ -907,15 +905,14 @@ impl<A: HalApi> Device<A> {
         texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
-        let inner = texture.inner();
-        let texture_raw = inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let snatch_guard = texture.device.snatchable_lock.read();
+
+        let texture_raw = texture
+            .raw(&snatch_guard)
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
+
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
-
         let resolved_format = desc.format.unwrap_or_else(|| {
             texture
                 .desc
@@ -1835,7 +1832,16 @@ impl<A: HalApi> Device<A> {
                 }
                 (size.get(), end)
             }
-            None => (buffer.size - bb.offset, buffer.size),
+            None => {
+                if buffer.size < bb.offset {
+                    return Err(Error::BindingRangeTooLarge {
+                        buffer: bb.buffer_id,
+                        range: bb.offset..bb.offset,
+                        size: buffer.size,
+                    });
+                }
+                (buffer.size - bb.offset, buffer.size)
+            }
         };
 
         if bind_size > range_limit as u64 {

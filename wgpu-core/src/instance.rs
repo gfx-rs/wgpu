@@ -121,8 +121,8 @@ impl Instance {
         fn destroy<A: HalApi>(_: A, instance: &Option<A::Instance>, surface: AnySurface) {
             unsafe {
                 if let Some(surface) = surface.take::<A>() {
-                    if let Ok(suf) = Arc::try_unwrap(surface) {
-                        if let Ok(raw) = Arc::try_unwrap(suf.raw) {
+                    if let Some(suf) = Arc::into_inner(surface) {
+                        if let Some(raw) = Arc::into_inner(suf.raw) {
                             instance.as_ref().unwrap().destroy_surface(raw);
                         } else {
                             panic!("Surface cannot be destroyed because is still in use");
@@ -694,7 +694,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let surface = self.surfaces.unregister(id);
-        if let Ok(surface) = Arc::try_unwrap(surface.unwrap()) {
+        if let Some(surface) = Arc::into_inner(surface.unwrap()) {
             if let Some(present) = surface.presentation.lock().take() {
                 #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
                 unconfigure::<_, hal::api::Vulkan>(self, &surface.raw, &present);
