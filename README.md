@@ -174,7 +174,7 @@ To run the test suite on WebGL (currently incomplete):
 
 ```
 cd wgpu
-wasm-pack test --headless --chrome --features webgl --workspace
+wasm-pack test --headless --chrome --no-default-features --features webgl --workspace
 ```
 
 This will automatically run the tests using a packaged browser. Remove `--headless` to run the tests with whatever browser you wish at `http://localhost:8000`.

@@ -1720,8 +1720,6 @@ impl Instance {
     /// See <https://github.com/gfx-rs/wgpu/issues/3514>
     /// * Windows: always enables Vulkan and GLES with no way to opt out
     /// * Linux: always enables Vulkan and GLES with no way to opt out
-    /// * Web: either targets WebGPU backend or, if `webgl` enabled, WebGL
-    ///   * TODO: Support both WebGPU and WebGL at the same time, see <https://github.com/gfx-rs/wgpu/issues/2804>
     pub const fn any_backend_feature_enabled() -> bool {
         // Method intentionally kept verbose to keep it a bit easier to follow!
 
@@ -1731,6 +1729,9 @@ impl Instance {
             cfg!(feature = "metal")
                 || cfg!(feature = "vulkan-portability")
                 || cfg!(feature = "angle")
+        // On the web, either WebGPU or WebGL must be enabled.
+        } else if cfg!(target_arch = "wasm32") {
+            cfg!(feature = "webgpu") || cfg!(feature = "webgl")
         } else {
             true
         }
