@@ -354,7 +354,7 @@ jobs:
       - name: execute tests
         run: |
           cd wgpu
-          wasm-pack test --headless --chrome --features webgl --workspace
+          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl --workspace
 
   gpu-test:
     strategy:
