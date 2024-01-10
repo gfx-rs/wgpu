@@ -2021,10 +2021,19 @@ impl Instance {
 
     /// Generates memory report.
     ///
+    /// Like `try_generate_report` but panics if the active backend is WebGPU.
+    // TODO: We should instead create an empty report that indicates that this is WebGPU.
+    #[cfg(wgpu_core)]
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
+        self.try_generate_report().unwrap()
+    }
+
+    /// Generates memory report.
+    ///
     /// Returns `None` if the feature is not supported by the backend
     /// which happens only when WebGPU is pre-selected by the instance creation.
     #[cfg(wgpu_core)]
-    pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
+    pub fn try_generate_report(&self) -> Option<wgc::global::GlobalReport> {
         self.context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
