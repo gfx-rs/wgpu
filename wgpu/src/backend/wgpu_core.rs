@@ -31,21 +31,23 @@ use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
 
-pub struct Context(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
+pub struct ContextWgpuCore(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
 
-impl Drop for Context {
+impl Drop for ContextWgpuCore {
     fn drop(&mut self) {
         //nothing
     }
 }
 
-impl fmt::Debug for Context {
+impl fmt::Debug for ContextWgpuCore {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Context").field("type", &"Native").finish()
+        f.debug_struct("ContextWgpuCore")
+            .field("type", &"Native")
+            .finish()
     }
 }
 
-impl Context {
+impl ContextWgpuCore {
     pub unsafe fn from_hal_instance<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
             wgc::global::Global::from_hal_instance::<A>(
@@ -445,7 +447,7 @@ pub struct CommandEncoder {
     open: bool,
 }
 
-impl crate::Context for Context {
+impl crate::Context for ContextWgpuCore {
     type AdapterId = wgc::id::AdapterId;
     type AdapterData = ();
     type DeviceId = wgc::id::DeviceId;
