@@ -528,7 +528,7 @@ impl crate::Context for Context {
                 raw_window_handle,
             } => unsafe {
                 self.0
-                    .instance_create_surface(raw_display_handle, raw_window_handle, ())
+                    .instance_create_surface(raw_display_handle, raw_window_handle, ())?
             },
 
             #[cfg(metal)]
