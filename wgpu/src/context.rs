@@ -320,7 +320,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         buffer_data: &Self::BufferData,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(webgpu)]
+    #[cfg(any(webgpu, webgl))]
     fn buffer_get_mapped_range_as_array_buffer(
         &self,
         buffer: &Self::BufferId,
@@ -1342,7 +1342,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         buffer_data: &crate::Data,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(webgpu)]
+    #[cfg(any(webgpu, webgl))]
     fn buffer_get_mapped_range_as_array_buffer(
         &self,
         buffer: &ObjectId,
@@ -2461,7 +2461,7 @@ where
         Context::buffer_get_mapped_range(self, &buffer, buffer_data, sub_range)
     }
 
-    #[cfg(webgpu)]
+    #[cfg(any(webgpu, webgl))]
     fn buffer_get_mapped_range_as_array_buffer(
         &self,
         buffer: &ObjectId,

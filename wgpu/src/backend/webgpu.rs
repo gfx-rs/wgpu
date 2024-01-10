@@ -824,7 +824,7 @@ fn future_request_device(
             (device_id, device_data, queue_id, queue_data)
         })
         .map_err(|error_value| crate::RequestDeviceError {
-            inner: crate::RequestDeviceErrorKind::Web(error_value),
+            inner: crate::RequestDeviceErrorKind::WebGpu(error_value),
         })
 }
 
