@@ -67,7 +67,7 @@ void main() {
     float sign_c = sign(-1.0);
     vec4 sign_d = sign(vec4(-1.0));
     int const_dot = ( + ivec2(0).x * ivec2(0).x + ivec2(0).y * ivec2(0).y);
-    uint first_leading_bit_abs = uint(findMSB(uint(abs(int(0u)))));
+    uint first_leading_bit_abs = uint(findMSB(0u));
     int flb_a = findMSB(-1);
     ivec2 flb_b = findMSB(ivec2(-1));
     uvec2 flb_c = uvec2(findMSB(uvec2(1u)));
@@ -85,8 +85,8 @@ void main() {
     ivec2 ctz_h = ivec2(min(uvec2(findLSB(ivec2(1))), uvec2(32u)));
     int clz_a = (-1 < 0 ? 0 : 31 - findMSB(-1));
     uint clz_b = uint(31 - findMSB(1u));
-    ivec2 _e68 = ivec2(-1);
-    ivec2 clz_c = mix(ivec2(31) - findMSB(_e68), ivec2(0), lessThan(_e68, ivec2(0)));
+    ivec2 _e67 = ivec2(-1);
+    ivec2 clz_c = mix(ivec2(31) - findMSB(_e67), ivec2(0), lessThan(_e67, ivec2(0)));
     uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
     float lde_a = ldexp(1.0, 2);
     vec2 lde_b = ldexp(vec2(1.0, 2.0), ivec2(3, 4));

@@ -37,6 +37,14 @@ Bottom level categories:
 - Hal
 -->
 
+## Unreleased
+
+### New features
+
+- Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
+    - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
+        - `abs`
+
 ## v0.19.0 (2024-01-17)
 
 This release includes:

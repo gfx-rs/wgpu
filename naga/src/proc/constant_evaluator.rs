@@ -193,6 +193,24 @@ macro_rules! gen_component_wise_extractor {
 }
 
 gen_component_wise_extractor! {
+    component_wise_scalar -> Scalar,
+    literals: [
+        AbstractFloat => AbstractFloat: f64,
+        F32 => F32: f32,
+        AbstractInt => AbstractInt: i64,
+        U32 => U32: u32,
+        I32 => I32: i32,
+    ],
+    scalar_kinds: [
+        Float,
+        AbstractFloat,
+        Sint,
+        Uint,
+        AbstractInt,
+    ],
+}
+
+gen_component_wise_extractor! {
     component_wise_float -> Float,
     literals: [
         AbstractFloat => Abstract: f64,
@@ -792,6 +810,15 @@ impl<'a> ConstantEvaluator<'a> {
         }
 
         match fun {
+            crate::MathFunction::Abs => {
+                component_wise_scalar(self, span, [arg], |args| match args {
+                    Scalar::AbstractFloat([e]) => Ok(Scalar::AbstractFloat([e.abs()])),
+                    Scalar::F32([e]) => Ok(Scalar::F32([e.abs()])),
+                    Scalar::AbstractInt([e]) => Ok(Scalar::AbstractInt([e.abs()])),
+                    Scalar::I32([e]) => Ok(Scalar::I32([e.wrapping_abs()])),
+                    Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
+                })
+            }
             crate::MathFunction::Pow => self.math_pow(arg, arg1.unwrap(), span),
             crate::MathFunction::Clamp => self.math_clamp(arg, arg1.unwrap(), arg2.unwrap(), span),
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(

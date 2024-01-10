@@ -70,13 +70,12 @@ fragment void main_(
     float sign_c = metal::sign(-1.0);
     metal::float4 sign_d = metal::sign(metal::float4(-1.0));
     int const_dot = ( + metal::int2 {}.x * metal::int2 {}.x + metal::int2 {}.y * metal::int2 {}.y);
-    uint _e23 = metal::abs(0u);
-    uint first_leading_bit_abs = metal::select(31 - metal::clz(_e23), uint(-1), _e23 == 0 || _e23 == -1);
+    uint first_leading_bit_abs = metal::select(31 - metal::clz(0u), uint(-1), 0u == 0 || 0u == -1);
     int flb_a = metal::select(31 - metal::clz(metal::select(-1, ~-1, -1 < 0)), int(-1), -1 == 0 || -1 == -1);
-    metal::int2 _e28 = metal::int2(-1);
-    metal::int2 flb_b = metal::select(31 - metal::clz(metal::select(_e28, ~_e28, _e28 < 0)), int2(-1), _e28 == 0 || _e28 == -1);
-    metal::uint2 _e31 = metal::uint2(1u);
-    metal::uint2 flb_c = metal::select(31 - metal::clz(_e31), uint2(-1), _e31 == 0 || _e31 == -1);
+    metal::int2 _e27 = metal::int2(-1);
+    metal::int2 flb_b = metal::select(31 - metal::clz(metal::select(_e27, ~_e27, _e27 < 0)), int2(-1), _e27 == 0 || _e27 == -1);
+    metal::uint2 _e30 = metal::uint2(1u);
+    metal::uint2 flb_c = metal::select(31 - metal::clz(_e30), uint2(-1), _e30 == 0 || _e30 == -1);
     int ftb_a = (((metal::ctz(-1) + 1) % 33) - 1);
     uint ftb_b = (((metal::ctz(1u) + 1) % 33) - 1);
     metal::int2 ftb_c = (((metal::ctz(metal::int2(-1)) + 1) % 33) - 1);
