@@ -413,7 +413,13 @@ pub struct Buffer<A: HalApi> {
 impl<A: HalApi> Drop for Buffer<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Deallocate raw Buffer (dropped) {:?}", self.info.label());
+            resource_log!("Destroy raw Buffer (dropped) {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBuffer(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -639,7 +645,13 @@ impl<A: HalApi> DestroyedBuffer<A> {
 impl<A: HalApi> Drop for DestroyedBuffer<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Deallocate raw Buffer (destroyed) {:?}", self.label());
+            resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBuffer(self.id));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -789,6 +801,11 @@ impl<A: HalApi> Drop for Texture<A> {
         };
 
         if let Some(TextureInner::Native { raw }) = self.inner.take() {
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyTexture(self.info.id()));
+            }
+
             unsafe {
                 self.device.raw().destroy_texture(raw);
             }
@@ -994,7 +1011,13 @@ impl<A: HalApi> DestroyedTexture<A> {
 impl<A: HalApi> Drop for DestroyedTexture<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Deallocate raw Texture (destroyed) {:?}", self.label());
+            resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyTexture(self.id));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_texture(raw);
@@ -1187,6 +1210,12 @@ impl<A: HalApi> Drop for TextureView<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw TextureView {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyTextureView(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_texture_view(raw);
@@ -1309,6 +1338,11 @@ impl<A: HalApi> Drop for Sampler<A> {
     fn drop(&mut self) {
         resource_log!("Destroy raw Sampler {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroySampler(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_sampler(raw);
@@ -1406,6 +1440,11 @@ impl<A: HalApi> Drop for QuerySet<A> {
     fn drop(&mut self) {
         resource_log!("Destroy raw QuerySet {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyQuerySet(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_query_set(raw);

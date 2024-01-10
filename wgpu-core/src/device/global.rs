@@ -2074,11 +2074,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !device.is_valid() {
             return Err(InvalidDevice);
         }
-        device.lock_life().triage_suspected(
-            &device.trackers,
-            #[cfg(feature = "trace")]
-            None,
-        );
+        device.lock_life().triage_suspected(&device.trackers);
         Ok(())
     }
 
