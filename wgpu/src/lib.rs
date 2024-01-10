@@ -1880,7 +1880,7 @@ impl Instance {
         let handle_origin;
 
         let target = target.into();
-        let unsafe_target = match target {
+        let mut surface = match target {
             SurfaceTarget::Window(window) => {
                 let raw_display_handle = window
                     .display_handle()
@@ -1897,10 +1897,12 @@ impl Instance {
 
                 handle_origin = Some(window);
 
-                SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle,
-                    raw_window_handle,
-                }
+                unsafe {
+                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                }?
             }
 
             #[cfg(any(webgpu, webgl))]
@@ -1912,10 +1914,14 @@ impl Instance {
                 let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
                 let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
-                SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle,
-                    raw_window_handle,
-                }
+                // Note that we need to call this while we still have `value` around.
+                // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
+                unsafe {
+                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                }?
             }
 
             #[cfg(any(webgpu, webgl))]
@@ -1928,14 +1934,17 @@ impl Instance {
                     raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
                 let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
-                SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle,
-                    raw_window_handle,
-                }
+                // Note that we need to call this while we still have `value` around.
+                // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
+                unsafe {
+                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                }?
             }
         };
 
-        let mut surface = unsafe { self.create_surface_unsafe(unsafe_target) }?;
         surface._surface = handle_origin;
 
         Ok(surface)
