@@ -332,6 +332,8 @@ jobs:
   wasm-test:
     name: Test WebAssembly
     runs-on: ubuntu-latest
+    needs: [check]
+    
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
@@ -371,6 +373,7 @@ jobs:
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    needs: [check]
 
     steps:
       - name: checkout repo
