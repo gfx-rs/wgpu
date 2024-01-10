@@ -1,9 +1,9 @@
 #[cfg(webgpu)]
 mod webgpu;
 #[cfg(webgpu)]
-pub(crate) type Context = webgpu::ContextWebGpu;
+pub(crate) use webgpu::ContextWebGpu;
 
-#[cfg(not(webgpu))]
+#[cfg(wgpu_core)]
 mod wgpu_core;
-#[cfg(not(webgpu))]
-pub(crate) type Context = wgpu_core::ContextWgpuCore;
+#[cfg(wgpu_core)]
+pub(crate) use wgpu_core::ContextWgpuCore;

@@ -16,11 +16,10 @@
 //! - **`angle`** --- Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS
 //!   using.
 //! - **`vulkan-portability`** --- Enables the Vulkan backend on macOS & iOS.
+//! - **`webgpu`** --- Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 //! - **`webgl`** --- Enables the GLES backend on Wasm
 //!
 //!     - ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-//!     - ⚠️ WIP: This automatically disables use of WebGPU. See
-//!       [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
 //!
 //! ### Shading language support
 //!
@@ -1748,6 +1747,7 @@ impl Instance {
     ///
     /// If no backend feature for the active target platform is enabled,
     /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
+    #[allow(unreachable_code)]
     pub fn new(instance_desc: InstanceDescriptor) -> Self {
         if !Self::any_backend_feature_enabled() {
             panic!(
@@ -1756,9 +1756,25 @@ impl Instance {
             );
         }
 
-        Self {
-            context: Arc::from(crate::backend::Context::init(instance_desc)),
+        #[cfg(webgpu)]
+        {
+            // TODO: If both webgpu and webgl are enabled, check if browser supports WebGPU and fall through
+            // to wgpucore otherwise.
+            return Self {
+                context: Arc::from(crate::backend::ContextWebGpu::init(instance_desc)),
+            };
         }
+
+        #[cfg(wgpu_core)]
+        {
+            return Self {
+                context: Arc::from(crate::backend::ContextWgpuCore::init(instance_desc)),
+            };
+        }
+
+        unreachable!(
+            "Earlier check of `any_backend_feature_enabled` should have prevented getting here!"
+        );
     }
 
     /// Create an new instance of wgpu from a wgpu-hal instance.
@@ -1770,11 +1786,11 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
-                crate::backend::Context::from_hal_instance::<A>(hal_instance)
+                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance)
             }),
         }
     }
@@ -1789,15 +1805,13 @@ impl Instance {
     /// - The raw instance handle returned must not be manually destroyed.
     ///
     /// [`Instance`]: hal::Api::Instance
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .instance_as_hal::<A>()
-        }
+        self.context
+            .as_any()
+            // If we don't have a wgpu-core instance, we don't have a hal instance either.
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
     }
 
     /// Create an new instance of wgpu from a wgpu-core instance.
@@ -1809,34 +1823,40 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-core Instance.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
-                crate::backend::Context::from_core_instance(core_instance)
+                crate::backend::ContextWgpuCore::from_core_instance(core_instance)
             }),
         }
     }
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
+    /// Always returns an empty iterator if the instance decided upon creation to
+    /// target WebGPU since adapter creation is always async on WebGPU.
+    ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(not(webgpu))]
-    pub fn enumerate_adapters(&self, backends: Backends) -> impl ExactSizeIterator<Item = Adapter> {
+    #[cfg(wgpu_core)]
+    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .enumerate_adapters(backends)
-            .into_iter()
-            .map(move |id| crate::Adapter {
-                context: Arc::clone(&context),
-                id: ObjectId::from(id),
-                data: Box::new(()),
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| {
+                ctx.enumerate_adapters(backends)
+                    .into_iter()
+                    .map(move |id| crate::Adapter {
+                        context: Arc::clone(&context),
+                        id: ObjectId::from(id),
+                        data: Box::new(()),
+                    })
+                    .collect()
             })
+            .unwrap_or_default()
     }
 
     /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].
@@ -1862,7 +1882,7 @@ impl Instance {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this instance internal handle.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -1871,7 +1891,7 @@ impl Instance {
         let id = unsafe {
             context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
                 .unwrap()
                 .create_adapter_from_hal(hal_adapter)
                 .into()
@@ -1999,13 +2019,15 @@ impl Instance {
     }
 
     /// Generates memory report.
-    #[cfg(not(webgpu))]
-    pub fn generate_report(&self) -> wgc::global::GlobalReport {
+    ///
+    /// Returns `None` if the feature is not supported by the backend
+    /// which happens only when WebGPU is pre-selected by the instance creation.
+    #[cfg(wgpu_core)]
+    pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
         self.context
             .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .generate_report()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| ctx.generate_report())
     }
 }
 
@@ -2070,7 +2092,7 @@ impl Adapter {
     ///
     /// - `hal_device` must be created from this adapter internal handle.
     /// - `desc.features` must be a subset of `hal_device` features.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
@@ -2081,7 +2103,9 @@ impl Adapter {
         unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the device was generated from the same adapter.
+                // Therefore, unwrap is fine here since only WgpuCoreContext based adapters have the ability to create hal devices.
                 .unwrap()
                 .create_device_from_hal(&self.id.into(), hal_device, desc, trace_path)
         }
@@ -2120,17 +2144,19 @@ impl Adapter {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Adapter`]: hal::Api::Adapter
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
     ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback)
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback) }
+        } else {
+            hal_adapter_callback(None)
         }
     }
 
@@ -2462,7 +2488,7 @@ impl Device {
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -2471,7 +2497,9 @@ impl Device {
         let texture = unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the texture was generated from the same hal device.
+                // Therefore, unwrap is fine here since only WgpuCoreContext has the ability to create hal textures.
                 .unwrap()
                 .create_texture_from_hal::<A>(
                     hal_texture,
@@ -2499,7 +2527,7 @@ impl Device {
     /// - `hal_buffer` must be created from this device internal handle
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,
@@ -2513,7 +2541,9 @@ impl Device {
         let (id, buffer) = unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the buffer was generated from the same hal device.
+                // Therefore, unwrap is fine here since only WgpuCoreContext has the ability to create hal buffers.
                 .unwrap()
                 .create_buffer_from_hal::<A>(
                     hal_buffer,
@@ -2603,21 +2633,20 @@ impl Device {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Device`]: hal::Api::Device
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
-    ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .device_as_hal::<A, F, R>(
+    ) -> Option<R> {
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.device_as_hal::<A, F, R>(
                     self.data.as_ref().downcast_ref().unwrap(),
                     hal_device_callback,
                 )
-        }
+            })
     }
 
     /// Destroy this device.
@@ -2656,8 +2685,8 @@ pub struct RequestDeviceError {
 enum RequestDeviceErrorKind {
     /// Error from [`wgpu_core`].
     // must match dependency cfg
-    #[cfg(not(webgpu))]
-    Core(core::instance::RequestDeviceError),
+    #[cfg(wgpu_core)]
+    Core(wgc::instance::RequestDeviceError),
 
     /// Error from web API that was called by `wgpu` to request a device.
     ///
@@ -2677,9 +2706,9 @@ static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 impl fmt::Display for RequestDeviceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
-            #[cfg(not(webgpu))]
+            #[cfg(wgpu_core)]
             RequestDeviceErrorKind::Core(error) => error.fmt(f),
-            #[cfg(webgpu)]
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
             RequestDeviceErrorKind::Web(error_js_value) => {
                 // wasm-bindgen provides a reasonable error stringification via `Debug` impl
                 write!(f, "{error_js_value:?}")
@@ -2691,7 +2720,7 @@ impl fmt::Display for RequestDeviceError {
 impl error::Error for RequestDeviceError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match &self.inner {
-            #[cfg(not(webgpu))]
+            #[cfg(wgpu_core)]
             RequestDeviceErrorKind::Core(error) => error.source(),
             #[cfg(webgpu)]
             RequestDeviceErrorKind::Web(_) => None,
@@ -2699,9 +2728,9 @@ impl error::Error for RequestDeviceError {
     }
 }
 
-#[cfg(not(webgpu))]
-impl From<core::instance::RequestDeviceError> for RequestDeviceError {
-    fn from(error: core::instance::RequestDeviceError) -> Self {
+#[cfg(wgpu_core)]
+impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
+    fn from(error: wgc::instance::RequestDeviceError) -> Self {
         Self {
             inner: RequestDeviceErrorKind::Core(error),
         }
@@ -2717,7 +2746,7 @@ pub struct CreateSurfaceError {
 #[derive(Clone, Debug)]
 enum CreateSurfaceErrorKind {
     /// Error from [`wgpu_hal`].
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     Hal(hal::InstanceError),
 
     /// Error from WebGPU surface creation.
@@ -2733,7 +2762,7 @@ static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 impl fmt::Display for CreateSurfaceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
-            #[cfg(not(webgpu))]
+            #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
             CreateSurfaceErrorKind::Web(e) => e.fmt(f),
             CreateSurfaceErrorKind::RawHandle(e) => e.fmt(f),
@@ -2744,7 +2773,7 @@ impl fmt::Display for CreateSurfaceError {
 impl error::Error for CreateSurfaceError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match &self.inner {
-            #[cfg(not(webgpu))]
+            #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
@@ -2752,7 +2781,7 @@ impl error::Error for CreateSurfaceError {
     }
 }
 
-#[cfg(not(webgpu))]
+#[cfg(wgpu_core)]
 impl From<hal::InstanceError> for CreateSurfaceError {
     fn from(e: hal::InstanceError) -> Self {
         Self {
@@ -2987,10 +3016,13 @@ impl<'a> BufferSlice<'a> {
     /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     ///
-    /// This is useful in wasm builds when you want to pass mapped data directly to js. Unlike `get_mapped_range`
-    /// which unconditionally copies mapped data into the wasm heap, this function directly hands you the
-    /// ArrayBuffer that we mapped the data into in js.
-    #[cfg(webgpu)]
+    /// This is useful when targeting WebGPU and you want to pass mapped data directly to js.
+    /// Unlike `get_mapped_range` which unconditionally copies mapped data into the wasm heap,
+    /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
+    ///
+    /// If you are not targeting WebGPU, this function will perform an additional copy from the wasm heap to
+    /// the returned array buffer.
+    #[cfg(all(not(native), not(target_os = "emscripten")))]
     pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         DynContext::buffer_get_mapped_range_as_array_buffer(
@@ -3034,18 +3066,21 @@ impl Texture {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
     ) {
         let texture = self.data.as_ref().downcast_ref().unwrap();
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .texture_as_hal::<A, F>(texture, hal_texture_callback)
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.texture_as_hal::<A, F>(texture, hal_texture_callback) }
+        } else {
+            hal_texture_callback(None)
         }
     }
 
@@ -4782,18 +4817,20 @@ impl Surface<'_> {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Surface must not be manually destroyed
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
         &mut self,
         hal_surface_callback: F,
-    ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .surface_as_hal::<A, F, R>(self.data.downcast_ref().unwrap(), hal_surface_callback)
-        }
+    ) -> Option<R> {
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.surface_as_hal::<A, F, R>(
+                    self.data.downcast_ref().unwrap(),
+                    hal_surface_callback,
+                )
+            })
     }
 }
 

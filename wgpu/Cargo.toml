@@ -24,7 +24,7 @@ targets = [
 [lib]
 
 [features]
-default = ["wgsl", "dx12", "metal"]
+default = ["wgsl", "dx12", "metal", "webgpu"]
 
 #! ### Backends
 # --------------------------------------------------------------------
@@ -44,10 +44,12 @@ angle = ["wgc?/gles"]
 ## Enables the Vulkan backend on macOS & iOS.
 vulkan-portability = ["wgc?/vulkan"]
 
+## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
+webgpu = []
+
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-## * ⚠️ WIP: This automatically disables use of WebGPU. See [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
 webgl = ["hal", "wgc/gles"]
 
 #! ### Shading language support
