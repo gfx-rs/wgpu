@@ -2098,7 +2098,7 @@ impl crate::context::Context for Context {
     }
 
     fn buffer_drop(&self, _buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
-        // Dropped automatically
+        buffer_data.0.buffer.destroy();
     }
 
     fn texture_destroy(&self, _texture: &Self::TextureId, texture_data: &Self::TextureData) {
@@ -2106,7 +2106,7 @@ impl crate::context::Context for Context {
     }
 
     fn texture_drop(&self, _texture: &Self::TextureId, _texture_data: &Self::TextureData) {
-        // Dropped automatically
+        texture_data.0.destroy();
     }
 
     fn texture_view_drop(
