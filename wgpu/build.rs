@@ -3,8 +3,8 @@ fn main() {
         native: { not(target_arch = "wasm32") },
         webgl: { all(target_arch = "wasm32", not(target_os = "emscripten"), feature = "webgl") },
         webgpu: { all(target_arch = "wasm32", not(target_os = "emscripten"), feature = "webgpu") },
-        wgpu_core: { any(native, webgl) },
         emscripten: { all(target_arch = "wasm32", target_os = "emscripten") },
+        wgpu_core: { any(native, webgl, emscripten) },
         send_sync: { any(
             not(target_arch = "wasm32"),
             all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
