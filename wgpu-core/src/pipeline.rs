@@ -56,8 +56,8 @@ impl<A: HalApi> Drop for ShaderModule<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw ShaderModule {:?}", self.info.label());
             #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *self.device.trace.lock() {
-                trace.add(trace::Action::DestroyShaderModule(self.info.id()));
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyShaderModule(self.info.id()));
             }
             unsafe {
                 use hal::Device;
@@ -251,6 +251,12 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw ComputePipeline {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyComputePipeline(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_compute_pipeline(raw);
@@ -493,6 +499,12 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw RenderPipeline {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyRenderPipeline(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_render_pipeline(raw);

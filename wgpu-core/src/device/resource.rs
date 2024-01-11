@@ -334,11 +334,7 @@ impl<A: HalApi> Device<A> {
             let mut life_tracker = self.lock_life();
             life_tracker.suspected_resources.extend(temp_suspected);
 
-            life_tracker.triage_suspected(
-                &self.trackers,
-                #[cfg(feature = "trace")]
-                self.trace.lock().as_mut(),
-            );
+            life_tracker.triage_suspected(&self.trackers);
             life_tracker.triage_mapped();
         }
 

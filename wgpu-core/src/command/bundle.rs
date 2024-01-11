@@ -78,6 +78,8 @@ index format changes.
 
 #![allow(clippy::reversed_empty_ranges)]
 
+#[cfg(feature = "trace")]
+use crate::device::trace;
 use crate::{
     binding_model::{buffer_binding_type_alignment, BindGroup, BindGroupLayout, PipelineLayout},
     command::{
@@ -96,6 +98,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags, RenderPipeline},
     resource::{Resource, ResourceInfo, ResourceType},
+    resource_log,
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers,
@@ -761,6 +764,17 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) context: RenderPassContext,
     pub(crate) info: ResourceInfo<RenderBundleId>,
     discard_hal_labels: bool,
+}
+
+impl<A: HalApi> Drop for RenderBundle<A> {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw RenderBundle {:?}", self.info.label());
+
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyRenderBundle(self.info.id()));
+        }
+    }
 }
 
 #[cfg(any(
