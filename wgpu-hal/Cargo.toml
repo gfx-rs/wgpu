@@ -169,7 +169,7 @@ features = ["wgsl-in"]
 [dev-dependencies]
 cfg-if = "1"
 env_logger = "0.10"
-glam = "0.24.2" # for ray-traced-triangle example
+glam = "0.25.0" # for ray-traced-triangle example
 winit = { version = "0.29.9", features = [
     "android-native-activity",
 ] } # for "halmark" example
