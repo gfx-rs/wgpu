@@ -26,6 +26,9 @@ impl crate::Instance<super::Api> for super::Instance {
                 Ok(pair) => match pair.into_result() {
                     Ok(debug_controller) => {
                         debug_controller.enable_layer();
+                        if !debug_controller.enable_gpu_based_validation() {
+                            log::warn!("Failed to enable GPU-based validation");
+                        }
                     }
                     Err(err) => {
                         log::warn!("Unable to enable D3D12 debug interface: {}", err);
