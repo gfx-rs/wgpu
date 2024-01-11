@@ -155,7 +155,12 @@ bitflags::bitflags! {
         const METAL = 1 << Backend::Metal as u32;
         /// Supported on Windows 10
         const DX12 = 1 << Backend::Dx12 as u32;
-        /// Supported when targeting the web through webassembly
+        /// Supported when targeting the web through webassembly with the `webgpu` feature enabled.
+        ///
+        /// The WebGPU backend is special in several ways:
+        /// It is not not implemented by `wgpu_core` and instead by the higher level `wgpu` crate.
+        /// Whether WebGPU is targeted is decided upon the creation of the `wgpu::Instance`,
+        /// *not* upon adapter creation. See `wgpu::Instance::new`.
         const BROWSER_WEBGPU = 1 << Backend::BrowserWebGpu as u32;
         /// All the apis that wgpu offers first tier of support for.
         ///

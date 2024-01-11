@@ -955,6 +955,30 @@ pub enum Canvas {
     Offscreen(web_sys::OffscreenCanvas),
 }
 
+/// Returns the browsers gpu object or `None` if the current context is neither the main thread nor a dedicated worker.
+///
+/// If WebGPU is not supported, the Gpu property is `undefined` (but *not* necessarily `None`).
+///
+/// See:
+/// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>
+/// * <https://developer.mozilla.org/en-US/docs/Web/API/WorkerNavigator/gpu>
+pub fn get_browser_gpu_property() -> Option<web_sys::Gpu> {
+    let global: Global = js_sys::global().unchecked_into();
+
+    if !global.window().is_undefined() {
+        Some(global.unchecked_into::<web_sys::Window>().navigator().gpu())
+    } else if !global.worker().is_undefined() {
+        Some(
+            global
+                .unchecked_into::<web_sys::WorkerGlobalScope>()
+                .navigator()
+                .gpu(),
+        )
+    } else {
+        None
+    }
+}
+
 impl crate::context::Context for ContextWebGpu {
     type AdapterId = Identified<web_sys::GpuAdapter>;
     type AdapterData = Sendable<web_sys::GpuAdapter>;
@@ -1025,15 +1049,7 @@ impl crate::context::Context for ContextWebGpu {
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
-        let global: Global = js_sys::global().unchecked_into();
-        let gpu = if !global.window().is_undefined() {
-            global.unchecked_into::<web_sys::Window>().navigator().gpu()
-        } else if !global.worker().is_undefined() {
-            global
-                .unchecked_into::<web_sys::WorkerGlobalScope>()
-                .navigator()
-                .gpu()
-        } else {
+        let Some(gpu) = get_browser_gpu_property() else {
             panic!(
                 "Accessing the GPU is only supported on the main thread or from a dedicated worker"
             );

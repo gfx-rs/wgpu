@@ -1744,6 +1744,15 @@ impl Instance {
     /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
     ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
     ///
+    ///   [`Backends::BROWSER_WEBGPU`] takes a special role:
+    ///   If it is set and WebGPU support is detected, this instance will *only* be able to create
+    ///   WebGPU adapters. If you instead want to force use of WebGL, either
+    ///   disable the `webgpu` compile-time feature or do add the [`Backends::BROWSER_WEBGPU`]
+    ///   flag to the the `instance_desc`'s `backends` field.
+    ///   If it is set and WebGPU support is *not* detected, the instance will use wgpu-core
+    ///   to create adapters. Meaning that if the `webgl` feature is enabled, it is able to create
+    ///   a WebGL adapter.
+    ///
     /// # Panics
     ///
     /// If no backend feature for the active target platform is enabled,
@@ -1758,9 +1767,9 @@ impl Instance {
         }
 
         #[cfg(webgpu)]
+        if instance_desc.backends.contains(Backends::BROWSER_WEBGPU)
+            && crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined())
         {
-            // TODO: If both webgpu and webgl are enabled, check if browser supports WebGPU and fall through
-            // to wgpucore otherwise.
             return Self {
                 context: Arc::from(crate::backend::ContextWebGpu::init(instance_desc)),
             };
