@@ -67,6 +67,15 @@ Conversion to `wgpu::SurfaceTarget` is automatic for anything implementing `raw-
 meaning that you can continue to e.g. pass references to winit windows as before.
 By @wumpf in [#4984](https://github.com/gfx-rs/wgpu/pull/4984)
 
+### WebGPU & WebGL in the same binary
+
+Enabling `webgl` no longer removes the `webgpu` backend.
+Instead, there's a new (default enabled) `webgpu` feature that allows to explicitly opt-out of `webgpu` if so desired.
+If both `webgl` & `webgpu` are enabled, `wgpu::Instance` decides upon creation whether to target wgpu-core/WebGL or WebGPU.
+This means that adapter selection is not handled as with regular adapters, but still allows to decide at runtime whether
+`webgpu` or the `webgl` backend should be used using a single wasm binary.
+By @wumpf in [#5044](https://github.com/gfx-rs/wgpu/pull/5044)
+
 ### New Features
 
 #### General
