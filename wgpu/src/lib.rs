@@ -534,6 +534,24 @@ pub enum SurfaceTargetUnsafe {
     SwapChainPanel(*mut std::ffi::c_void),
 }
 
+impl SurfaceTargetUnsafe {
+    /// Creates a [`SurfaceTargetUnsafe::RawHandle`] from a window.
+    ///
+    /// # Safety
+    ///
+    /// - `window` must outlive the resulting surface target
+    ///   (and subsequently the surface created for this target).
+    pub unsafe fn from_window<T>(window: &T) -> Result<Self, raw_window_handle::HandleError>
+    where
+        T: HasDisplayHandle + HasWindowHandle,
+    {
+        Ok(Self::RawHandle {
+            raw_display_handle: window.display_handle()?.as_raw(),
+            raw_window_handle: window.window_handle()?.as_raw(),
+        })
+    }
+}
+
 /// Handle to a binding group layout.
 ///
 /// A `BindGroupLayout` is a handle to the GPU-side layout of a binding group. It can be used to
@@ -1881,29 +1899,16 @@ impl Instance {
 
         let target = target.into();
         let mut surface = match target {
-            SurfaceTarget::Window(window) => {
-                let raw_display_handle = window
-                    .display_handle()
-                    .map_err(|e| CreateSurfaceError {
+            SurfaceTarget::Window(window) => unsafe {
+                let surface = self.create_surface_unsafe(
+                    SurfaceTargetUnsafe::from_window(&window).map_err(|e| CreateSurfaceError {
                         inner: CreateSurfaceErrorKind::RawHandle(e),
-                    })?
-                    .as_raw();
-                let raw_window_handle = window
-                    .window_handle()
-                    .map_err(|e| CreateSurfaceError {
-                        inner: CreateSurfaceErrorKind::RawHandle(e),
-                    })?
-                    .as_raw();
-
+                    })?,
+                );
                 handle_origin = Some(window);
 
-                unsafe {
-                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                        raw_display_handle,
-                        raw_window_handle,
-                    })
-                }?
-            }
+                surface
+            }?,
 
             #[cfg(any(webgpu, webgl))]
             SurfaceTarget::Canvas(canvas) => {
