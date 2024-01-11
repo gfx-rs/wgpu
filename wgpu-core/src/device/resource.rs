@@ -372,9 +372,6 @@ impl<A: HalApi> Device<A> {
         );
         let mapping_closures = life_tracker.handle_mapping(self.raw(), &self.trackers);
 
-        //Cleaning up resources and released all unused suspected ones
-        life_tracker.cleanup();
-
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
         // and we have a DeviceLostClosure, return the closure to be called by
@@ -3383,7 +3380,6 @@ impl<A: HalApi> Device<A> {
             current_index,
             self.command_allocator.lock().as_mut().unwrap(),
         );
-        life_tracker.cleanup();
         #[cfg(feature = "trace")]
         {
             *self.trace.lock() = None;
