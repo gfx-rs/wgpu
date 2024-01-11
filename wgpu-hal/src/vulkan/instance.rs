@@ -653,6 +653,26 @@ impl crate::Instance<super::Api> for super::Instance {
         let validation_layer_name =
             CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
         let validation_layer_properties = find_layer(&instance_layers, validation_layer_name);
+        let validation_features_are_enabled = || {
+            validation_layer_properties.is_some().then(|| {
+                let exts = Self::enumerate_instance_extension_properties(
+                    &entry,
+                    Some(validation_layer_name),
+                )?;
+                let mut ext_names = exts
+                    .iter()
+                    .filter_map(|ext| cstr_from_bytes_until_nul(&ext.extension_name));
+                let found =
+                    ext_names.any(|ext_name| ext_name == vk::ExtValidationFeaturesFn::name());
+                Ok(found)
+            })
+        };
+        let should_enable_gpu_based_validation = desc
+            .flags
+            .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
+            && validation_features_are_enabled()
+                .transpose()?
+                .unwrap_or(false);
 
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
         let has_nv_optimus = find_layer(&instance_layers, nv_optimus_layer).is_some();
@@ -664,7 +684,9 @@ impl crate::Instance<super::Api> for super::Instance {
 
         // Request validation layer if asked.
         let mut debug_utils = None;
-        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
+        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION)
+            || should_enable_gpu_based_validation
+        {
             if let Some(layer_properties) = validation_layer_properties {
                 layers.push(validation_layer_name);
 
@@ -763,6 +785,16 @@ impl crate::Instance<super::Api> for super::Instance {
 
             if let Some(&mut (_, ref mut vk_create_info)) = debug_utils.as_mut() {
                 create_info = create_info.push_next(vk_create_info);
+            }
+
+            let mut gpu_assisted_validation = vk::ValidationFeaturesEXT::builder()
+                .enabled_validation_features(&[
+                    vk::ValidationFeatureEnableEXT::GPU_ASSISTED,
+                    vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT,
+                    vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION,
+                ]);
+            if should_enable_gpu_based_validation {
+                create_info = create_info.push_next(&mut gpu_assisted_validation);
             }
 
             unsafe {

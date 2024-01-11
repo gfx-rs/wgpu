@@ -904,13 +904,15 @@ bitflags::bitflags! {
         /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
         /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
         const ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER = 1 << 3;
-        /// Enable GPU-based validation. Currently, this only changes behavior on the DX12
-        /// backend.
+        /// Enable GPU-based validation. Currently, this only changes behavior on the DX12 and
+        /// Vulkan backends.
         ///
         /// Supported platforms:
         ///
         /// - D3D12; called ["GPU-based validation", or
         ///   "GBV"](https://web.archive.org/web/20230206120404/https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-d3d12-debug-layer-gpu-based-validation)
+        /// - Vulkan, via the `VK_LAYER_KHRONOS_validation` layer; called ["GPU-Assisted
+        ///   Validation"](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/e45aeb85079e0835694cb8f03e6681fd18ae72c9/docs/gpu_validation.md#gpu-assisted-validation)
         const GPU_BASED_VALIDATION = 1 << 4;
     }
 }
