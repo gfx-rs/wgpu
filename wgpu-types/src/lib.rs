@@ -913,7 +913,7 @@ impl Default for InstanceFlags {
 }
 
 impl InstanceFlags {
-    /// Enable debugging and validation flags.
+    /// Enable recommended debugging and validation flags.
     pub fn debugging() -> Self {
         InstanceFlags::DEBUG | InstanceFlags::VALIDATION | InstanceFlags::GPU_BASED_VALIDATION
     }
