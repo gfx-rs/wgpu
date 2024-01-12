@@ -496,7 +496,7 @@ impl RenderBundleEncoder {
                     let pipeline = state.pipeline(scope)?;
                     let used_bind_groups = pipeline.used_bind_groups;
                     let vertex_limits = state.vertex_limits(pipeline);
-                    let last_vertex = first_vertex + vertex_count;
+                    let last_vertex = first_vertex as u64 + vertex_count as u64;
                     if last_vertex > vertex_limits.vertex_limit {
                         return Err(DrawError::VertexBeyondLimit {
                             last_vertex,
@@ -505,7 +505,7 @@ impl RenderBundleEncoder {
                         })
                         .map_pass_err(scope);
                     }
-                    let last_instance = first_instance + instance_count;
+                    let last_instance = first_instance as u64 + instance_count as u64;
                     if last_instance > vertex_limits.instance_limit {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
@@ -539,7 +539,7 @@ impl RenderBundleEncoder {
                     //TODO: validate that base_vertex + max_index() is within the provided range
                     let vertex_limits = state.vertex_limits(pipeline);
                     let index_limit = index.limit();
-                    let last_index = first_index + index_count;
+                    let last_index = first_index as u64 + index_count as u64;
                     if last_index > index_limit {
                         return Err(DrawError::IndexBeyondLimit {
                             last_index,
@@ -547,7 +547,7 @@ impl RenderBundleEncoder {
                         })
                         .map_pass_err(scope);
                     }
-                    let last_instance = first_instance + instance_count;
+                    let last_instance = first_instance as u64 + instance_count as u64;
                     if last_instance > vertex_limits.instance_limit {
                         return Err(DrawError::InstanceBeyondLimit {
                             last_instance,
@@ -1038,12 +1038,13 @@ impl IndexState {
     /// Return the number of entries in the current index buffer.
     ///
     /// Panic if no index buffer has been set.
-    fn limit(&self) -> u32 {
+    fn limit(&self) -> u64 {
         let bytes_per_index = match self.format {
             wgt::IndexFormat::Uint16 => 2,
             wgt::IndexFormat::Uint32 => 4,
         };
-        ((self.range.end - self.range.start) / bytes_per_index) as u32
+
+        (self.range.end - self.range.start) / bytes_per_index
     }
 
     /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
@@ -1127,11 +1128,11 @@ struct BindState<A: HalApi> {
 #[derive(Debug)]
 struct VertexLimitState {
     /// Length of the shortest vertex rate vertex buffer
-    vertex_limit: u32,
+    vertex_limit: u64,
     /// Buffer slot which the shortest vertex rate vertex buffer is bound to
     vertex_limit_slot: u32,
     /// Length of the shortest instance rate vertex buffer
-    instance_limit: u32,
+    instance_limit: u64,
     /// Buffer slot which the shortest instance rate vertex buffer is bound to
     instance_limit_slot: u32,
 }
@@ -1230,14 +1231,14 @@ struct State<A: HalApi> {
 impl<A: HalApi> State<A> {
     fn vertex_limits(&self, pipeline: &PipelineState<A>) -> VertexLimitState {
         let mut vert_state = VertexLimitState {
-            vertex_limit: u32::MAX,
+            vertex_limit: u32::MAX as u64,
             vertex_limit_slot: 0,
-            instance_limit: u32::MAX,
+            instance_limit: u32::MAX as u64,
             instance_limit_slot: 0,
         };
         for (idx, (vbs, step)) in self.vertex.iter().zip(&pipeline.steps).enumerate() {
             if let Some(ref vbs) = *vbs {
-                let limit = ((vbs.range.end - vbs.range.start) / step.stride) as u32;
+                let limit = (vbs.range.end - vbs.range.start) / step.stride;
                 match step.mode {
                     wgt::VertexStepMode::Vertex => {
                         if limit < vert_state.vertex_limit {
