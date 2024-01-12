@@ -31,7 +31,7 @@ impl HalApi for hal::api::Empty {
     }
 }
 
-#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+#[cfg(vulkan)]
 impl HalApi for hal::api::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -52,7 +52,7 @@ impl HalApi for hal::api::Vulkan {
     }
 }
 
-#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+#[cfg(metal)]
 impl HalApi for hal::api::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -73,7 +73,7 @@ impl HalApi for hal::api::Metal {
     }
 }
 
-#[cfg(all(feature = "dx12", windows))]
+#[cfg(dx12)]
 impl HalApi for hal::api::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -94,7 +94,7 @@ impl HalApi for hal::api::Dx12 {
     }
 }
 
-#[cfg(feature = "gles")]
+#[cfg(gles)]
 impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {

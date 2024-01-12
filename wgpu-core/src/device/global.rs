@@ -2164,22 +2164,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut closures = UserClosures::default();
         let mut all_queue_empty = true;
 
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        #[cfg(vulkan)]
         {
             all_queue_empty =
                 self.poll_device::<hal::api::Vulkan>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+        #[cfg(metal)]
         {
             all_queue_empty =
                 self.poll_device::<hal::api::Metal>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(all(feature = "dx12", windows))]
+        #[cfg(dx12)]
         {
             all_queue_empty =
                 self.poll_device::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(feature = "gles")]
+        #[cfg(gles)]
         {
             all_queue_empty =
                 self.poll_device::<hal::api::Gles>(force_wait, &mut closures)? && all_queue_empty;
