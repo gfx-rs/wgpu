@@ -399,8 +399,8 @@ pub enum CreateRenderPipelineError {
     InvalidSampleCount(u32),
     #[error("The number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
-    #[error("The total number of vertex attributes {given} exceeds the limit {limit}")]
-    TooManyVertexAttributes { given: u32, limit: u32 },
+    #[error("A vertex attribute location {given} exceeds the limit {limit}")]
+    InvalidVertexAttributeLocation { given: u32, limit: u32 },
     #[error("Vertex buffer {index} stride {given} exceeds the limit {limit}")]
     VertexStrideTooLarge { index: u32, given: u32, limit: u32 },
     #[error("Vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
