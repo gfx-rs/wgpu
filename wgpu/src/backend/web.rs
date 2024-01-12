@@ -18,7 +18,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     context::{downcast_ref, ObjectId, QueueWriteBuffer, Unused},
-    UncapturedErrorHandler,
+    SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
 
 fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
@@ -878,35 +878,7 @@ where
 }
 
 impl Context {
-    pub fn instance_create_surface_from_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-    ) -> Result<
-        (
-            <Self as crate::Context>::SurfaceId,
-            <Self as crate::Context>::SurfaceData,
-        ),
-        crate::CreateSurfaceError,
-    > {
-        let result = canvas.get_context("webgpu");
-        self.create_surface_from_context(Canvas::Canvas(canvas), result)
-    }
-
-    pub fn instance_create_surface_from_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-    ) -> Result<
-        (
-            <Self as crate::Context>::SurfaceId,
-            <Self as crate::Context>::SurfaceData,
-        ),
-        crate::CreateSurfaceError,
-    > {
-        let result = canvas.get_context("webgpu");
-        self.create_surface_from_context(Canvas::Offscreen(canvas), result)
-    }
-
-    /// Common portion of public `instance_create_surface_from_*` functions.
+    /// Common portion of the internal branches of the public `instance_create_surface` function.
     ///
     /// Note: Analogous code also exists in the WebGL2 backend at
     /// `wgpu_hal::gles::web::Instance`.
@@ -1068,36 +1040,50 @@ impl crate::context::Context for Context {
 
     unsafe fn instance_create_surface(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: SurfaceTargetUnsafe,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let canvas_element: web_sys::HtmlCanvasElement = match window_handle {
-            raw_window_handle::RawWindowHandle::Web(handle) => {
-                let canvas_node: wasm_bindgen::JsValue = web_sys::window()
-                    .and_then(|win| win.document())
-                    .and_then(|doc| {
-                        doc.query_selector_all(&format!("[data-raw-handle=\"{}\"]", handle.id))
-                            .ok()
-                    })
-                    .and_then(|nodes| nodes.get(0))
-                    .expect("expected to find single canvas")
-                    .into();
-                canvas_node.into()
-            }
-            raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
-                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
-                value.clone().unchecked_into()
-            }
-            raw_window_handle::RawWindowHandle::WebOffscreenCanvas(handle) => {
-                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
-                let canvas: web_sys::OffscreenCanvas = value.clone().unchecked_into();
+        match target {
+            SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: _,
+                raw_window_handle,
+            } => {
+                let canvas_element: web_sys::HtmlCanvasElement = match raw_window_handle {
+                    raw_window_handle::RawWindowHandle::Web(handle) => {
+                        let canvas_node: wasm_bindgen::JsValue = web_sys::window()
+                            .and_then(|win| win.document())
+                            .and_then(|doc| {
+                                doc.query_selector_all(&format!(
+                                    "[data-raw-handle=\"{}\"]",
+                                    handle.id
+                                ))
+                                .ok()
+                            })
+                            .and_then(|nodes| nodes.get(0))
+                            .expect("expected to find single canvas")
+                            .into();
+                        canvas_node.into()
+                    }
+                    raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
+                        let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                        value.clone().unchecked_into()
+                    }
+                    raw_window_handle::RawWindowHandle::WebOffscreenCanvas(handle) => {
+                        let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                        let canvas: web_sys::OffscreenCanvas = value.clone().unchecked_into();
+                        let context_result = canvas.get_context("webgpu");
 
-                return self.instance_create_surface_from_offscreen_canvas(canvas);
-            }
-            _ => panic!("expected valid handle for canvas"),
-        };
+                        return self.create_surface_from_context(
+                            Canvas::Offscreen(canvas),
+                            context_result,
+                        );
+                    }
+                    _ => panic!("expected valid handle for canvas"),
+                };
 
-        self.instance_create_surface_from_canvas(canvas_element)
+                let context_result = canvas_element.get_context("webgpu");
+                self.create_surface_from_context(Canvas::Canvas(canvas_element), context_result)
+            }
+        }
     }
 
     fn instance_request_adapter(
@@ -2146,7 +2132,7 @@ impl crate::context::Context for Context {
         _pipeline_layout: &Self::PipelineLayoutId,
         _pipeline_layout_data: &Self::PipelineLayoutData,
     ) {
-        // Dropped automatically
+        // Dropped automaticaly
     }
 
     fn shader_module_drop(

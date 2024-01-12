@@ -63,7 +63,8 @@ fn main() {
             window.window_handle().unwrap().into(),
             wgc::id::TypedId::zip(0, 1, wgt::Backend::Empty),
         )
-    };
+    }
+    .unwrap();
 
     let device = match actions.pop() {
         Some(trace::Action::Init { desc, backend }) => {

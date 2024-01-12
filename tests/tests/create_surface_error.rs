@@ -1,6 +1,6 @@
 //! Test that `create_surface_*()` accurately reports those errors we can provoke.
 
-/// This test applies to those cfgs that have a `create_surface_from_canvas` method, which
+/// This test applies to those cfgs that can create a surface from a canvas, which
 /// include WebGL and WebGPU, but *not* Emscripten GLES.
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 #[wasm_bindgen_test::wasm_bindgen_test]
@@ -15,7 +15,7 @@ fn canvas_get_context_returned_null() {
 
     #[allow(clippy::redundant_clone)] // false positive — can't and shouldn't move out.
     let error = instance
-        .create_surface_from_canvas(canvas.clone())
+        .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
         .unwrap_err();
 
     assert!(
