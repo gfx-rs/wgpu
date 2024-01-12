@@ -4064,6 +4064,7 @@ dependencies = [
  "bitflags 2.4.1",
  "block",
  "cfg-if",
+ "cfg_aliases",
  "core-graphics-types",
  "d3d12",
  "env_logger",
