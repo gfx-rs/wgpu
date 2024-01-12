@@ -5,7 +5,13 @@ use crate::{
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, sync::Arc};
+use std::{
+    ffi, mem,
+    num::NonZeroU32,
+    ptr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
     um::{d3d12 as d3d12_ty, synchapi, winbase},
@@ -1535,19 +1541,80 @@ impl crate::Device<super::Api> for super::Device {
         value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if unsafe { fence.raw.GetCompletedValue() } >= value {
+        let timeout_duration = Duration::from_millis(timeout_ms as u64);
+
+        // We first check if the fence has already reached the value we're waiting for.
+        let mut fence_value = unsafe { fence.raw.GetCompletedValue() };
+        if fence_value >= value {
             return Ok(true);
         }
-        let hr = fence.raw.set_event_on_completion(self.idler.event, value);
-        hr.into_device_result("Set event")?;
 
-        match unsafe { synchapi::WaitForSingleObject(self.idler.event.0, timeout_ms) } {
-            winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::DeviceError::Lost),
-            winbase::WAIT_OBJECT_0 => Ok(true),
-            winerror::WAIT_TIMEOUT => Ok(false),
-            other => {
-                log::error!("Unexpected wait status: 0x{:x}", other);
-                Err(crate::DeviceError::Lost)
+        fence
+            .raw
+            .set_event_on_completion(self.idler.event, value)
+            .into_device_result("Set event")?;
+
+        let start_time = Instant::now();
+
+        // We need to loop to get correct behavior when timeouts are involved.
+        //
+        // wait(0):
+        //   - We set the event from the fence value 0.
+        //   - WaitForSingleObject times out, we return false.
+        //
+        // wait(1):
+        //   - We set the event from the fence value 1.
+        //   - WaitForSingleObject returns. However we do not know if the fence value is 0 or 1,
+        //     just that _something_ triggered the event. We check the fence value, and if it is
+        //     1, we return true. Otherwise, we loop and wait again.
+        loop {
+            let elapsed = start_time.elapsed();
+
+            // We need to explicitly use checked_sub. Overflow with duration panics, and if the
+            // timing works out just right, we can get a negative remaining wait duration.
+            //
+            // This happens when a previous iteration WaitForSingleObject succeeded with a previous fence value,
+            // right before the timeout would have been hit.
+            let remaining_wait_duration = match timeout_duration.checked_sub(elapsed) {
+                Some(remaining) => remaining,
+                None => {
+                    log::trace!("Timeout elapsed inbetween waits!");
+                    break Ok(false);
+                }
+            };
+
+            log::trace!(
+                "Waiting for fence value {} for {:?}",
+                value,
+                remaining_wait_duration
+            );
+
+            match unsafe {
+                synchapi::WaitForSingleObject(
+                    self.idler.event.0,
+                    remaining_wait_duration.as_millis().try_into().unwrap(),
+                )
+            } {
+                winbase::WAIT_OBJECT_0 => {}
+                winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => {
+                    log::error!("Wait failed!");
+                    break Err(crate::DeviceError::Lost);
+                }
+                winerror::WAIT_TIMEOUT => {
+                    log::trace!("Wait timed out!");
+                    break Ok(false);
+                }
+                other => {
+                    log::error!("Unexpected wait status: 0x{:x}", other);
+                    break Err(crate::DeviceError::Lost);
+                }
+            };
+
+            fence_value = unsafe { fence.raw.GetCompletedValue() };
+            log::trace!("Wait complete! Fence actual value: {}", fence_value);
+
+            if fence_value >= value {
+                break Ok(true);
             }
         }
     }
