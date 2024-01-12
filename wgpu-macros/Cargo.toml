@@ -12,6 +12,7 @@ exclude = ["Cargo.lock"]
 publish = false
 
 [lib]
+test = false
 proc-macro = true
 
 [dependencies]

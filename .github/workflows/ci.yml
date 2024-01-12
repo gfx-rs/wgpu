@@ -55,7 +55,7 @@ env:
   RUST_LOG: info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
+  RUSTFLAGS: '--cfg=web_sys_unstable_apis -D warnings -C llvm-args=-enable-name-compression=false'
   RUSTDOCFLAGS: -Dwarnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
@@ -369,9 +369,9 @@ jobs:
           cd wgpu
           wasm-pack test --headless --chrome --features webgl --workspace
 
-  gpu-test:
-    # runtime is normally 5-15 minutes
-    timeout-minutes: 30
+  gpu-build:
+    # runtime is normally 5-10 minutes
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -380,18 +380,23 @@ jobs:
           # Windows
           - name: Windows x86_64
             os: windows-2022
+            target: x86_64-pc-windows-msvc
+            suffix: .exe
 
           # Mac
           - name: Mac aarch64
-            os: macos-13-xlarge
+            os: macos-12
+            target: aarch64-apple-darwin
+            suffix: ""
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            suffix: ""
 
-    name: Test ${{ matrix.name }}
+    name: Build Tests ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [check]
 
     steps:
       - name: checkout repo
@@ -399,7 +404,7 @@ jobs:
 
       - name: Install Repo MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools --target ${{ matrix.target }}
           cargo -V
 
       - name: Install cargo-nextest and cargo-llvm-cov
@@ -417,6 +422,86 @@ jobs:
           workspaces: |
             . -> target
             xtask -> xtask/target
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = 1" >> .cargo/config.toml
+
+      - name: build wgpu-info
+        shell: bash
+        run: |
+          echo "$PATH"
+
+          source <(cargo llvm-cov show-env --export-prefix --no-cfg-coverage)
+
+          # This needs to match the command in xtask/tests.rs
+          cargo build --bin wgpu-info --target ${{ matrix.target }}
+
+      - name: build tests
+        shell: bash
+        run: |
+          set -e
+
+          cargo llvm-cov nextest-archive --all-features --no-cfg-coverage --archive-file tests.tar.zst --target ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/debug/wgpu-info${{ matrix.suffix }}
+            tests.tar.zst
+
+  gpu-test:
+    # runtime is normally 1-3 minutes
+    timeout-minutes: 5
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            suffix: .exe
+
+          # Mac
+          - name: Mac aarch64
+            os: macos-13-xlarge
+            target: aarch64-apple-darwin
+            suffix: ""
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            suffix: ""
+
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    needs: [gpu-build]
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
+          cargo -V
+
+      - name: Install cargo-nextest and cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
 
       - name: (windows) install dxc
         if: matrix.os == 'windows-2022'
@@ -442,10 +527,10 @@ jobs:
           curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
 
-          mkdir -p target/llvm-cov-target/debug/deps
+          mkdir -p target/${{ matrix.target }}/debug/ target/llvm-cov-target/target/${{ matrix.target }}/debug/deps
 
-          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/
-          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/deps
+          cp -v warp/d3d10warp.dll target/${{ matrix.target }}/debug/
+          cp -v warp/d3d10warp.dll target/llvm-cov-target/target/${{ matrix.target }}/debug/deps
 
       - name: (windows) install mesa
         if: matrix.os == 'windows-2022'
@@ -456,8 +541,8 @@ jobs:
           curl.exe -L --retry 5 https://github.com/pal1000/mesa-dist-win/releases/download/$MESA_VERSION/mesa3d-$MESA_VERSION-release-msvc.7z -o mesa.7z
           7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
 
-          cp -v mesa/* target/llvm-cov-target/debug/
-          cp -v mesa/* target/llvm-cov-target/debug/deps
+          cp -v mesa/* target/${{ matrix.target }}/debug/
+          cp -v mesa/* target/llvm-cov-target/target/${{ matrix.target }}/debug/deps
 
           # We need to use cygpath to convert PWD to a windows path as we're using bash.
           echo "VK_DRIVER_FILES=`cygpath --windows $PWD/mesa/lvp_icd.x86_64.json`" >> "$GITHUB_ENV"
@@ -505,30 +590,25 @@ jobs:
           echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
           echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
 
-      - name: disable debug
-        shell: bash
-        run: |
-          mkdir -p .cargo
-          echo """
-          [profile.dev]
-          debug = 1" >> .cargo/config.toml
-
       - name: run wgpu-info
         shell: bash
         run: |
           echo "$PATH"
 
-          export RUST_LOG=trace
+          source <(cargo llvm-cov show-env --export-prefix --no-cfg-coverage)
 
           # This needs to match the command in xtask/tests.rs
-          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info -- -vv
+          chmod +x ./target/${{ matrix.target }}/debug/wgpu-info${{ matrix.suffix }}
+          ./target/${{ matrix.target }}/debug/wgpu-info${{ matrix.suffix }} -vv
+          ./target/${{ matrix.target }}/debug/wgpu-info${{ matrix.suffix }} --json -o .gpuconfig
+
 
       - name: run tests
         shell: bash
         run: |
           set -e
 
-          cargo xtask test --llvm-cov
+          cargo llvm-cov --no-report nextest --archive-file tests.tar.zst --extract-overwrite --no-fail-fast --retries 2 --target ${{ matrix.target }}
 
       - name: check naga snapshots
         run: git diff --exit-code -- naga/tests/out
@@ -548,13 +628,12 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo llvm-cov report --target ${{ matrix.target }} --lcov --output-path lcov.info
 
       - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
-        if: steps.coverage.outcome == 'success'
         with:
-          files: lcov.info
+          files: "lcov.info"
 
   doctest:
     # runtime is normally 2 minutes
