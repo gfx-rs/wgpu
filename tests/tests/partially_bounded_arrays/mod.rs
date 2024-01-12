@@ -14,7 +14,7 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             )
             .limits(wgpu::Limits::downlevel_defaults()),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         let device = &ctx.device;
 
         let texture_extent = wgpu::Extent3d {
@@ -98,5 +98,6 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
         ctx.queue.submit(Some(encoder.finish()));
 
         readback_buffers
-            .assert_buffer_contents(device, bytemuck::bytes_of(&[4.0f32, 3.0, 2.0, 1.0]));
+            .assert_buffer_contents(&ctx, bytemuck::bytes_of(&[4.0f32, 3.0, 2.0, 1.0]))
+            .await;
     });

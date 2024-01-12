@@ -85,16 +85,17 @@ pub use wgt::{
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
-    InstanceFlags, Limits, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes,
-    PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp,
-    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
-    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
-    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
-    SurfaceStatus, TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
-    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
-    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    InstanceFlags, Limits, MaintainResult, MultisampleState, Origin2d, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
+    PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
+    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
+    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
+    SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend,
+    WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
+    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 #[cfg(not(webgpu))]
@@ -2205,7 +2206,7 @@ impl Adapter {
 }
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks.
+    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -2213,8 +2214,8 @@ impl Device {
     /// the caller receives it. `Queue`s can be shared between threads, so
     /// other threads could submit new work at any time.)
     ///
-    /// On the web, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> bool {
+    /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
+    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
         DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
     }
 

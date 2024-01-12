@@ -4,7 +4,7 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 #[gpu_test]
 static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         // Create depth texture
         let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Depth texture"),
@@ -117,7 +117,9 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         mapping_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        ctx.device.poll(wgpu::Maintain::Wait);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
         let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
