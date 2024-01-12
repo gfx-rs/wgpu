@@ -1844,7 +1844,7 @@ impl Instance {
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
-    /// Always returns an empty iterator if the instance decided upon creation to
+    /// Always returns an empty vector if the instance decided upon creation to
     /// target WebGPU since adapter creation is always async on WebGPU.
     ///
     /// # Arguments
@@ -3041,7 +3041,7 @@ impl<'a> BufferSlice<'a> {
     ///
     /// If you are not targeting WebGPU, this function will perform an additional copy from the wasm heap to
     /// the returned array buffer.
-    #[cfg(all(not(native), not(target_os = "emscripten")))]
+    #[cfg(any(webgpu, webgl))]
     pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         DynContext::buffer_get_mapped_range_as_array_buffer(
