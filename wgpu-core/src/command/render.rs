@@ -321,7 +321,7 @@ struct IndexState {
     bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
     format: Option<IndexFormat>,
     pipeline_format: Option<IndexFormat>,
-    limit: u32,
+    limit: u64,
 }
 
 impl IndexState {
@@ -335,10 +335,8 @@ impl IndexState {
                     IndexFormat::Uint16 => 1,
                     IndexFormat::Uint32 => 2,
                 };
-                // Ensure that the limit is always smaller than u32::MAX so that we can
-                // use saturating additions to catch case that would have caused integers
-                // overflow later.
-                ((range.end - range.start) >> shift).min(u32::MAX as u64 - 1) as u32
+
+                (range.end - range.start) >> shift
             }
             None => 0,
         }
@@ -372,11 +370,11 @@ impl VertexBufferState {
 struct VertexState {
     inputs: ArrayVec<VertexBufferState, { hal::MAX_VERTEX_BUFFERS }>,
     /// Length of the shortest vertex rate vertex buffer
-    vertex_limit: u32,
+    vertex_limit: u64,
     /// Buffer slot which the shortest vertex rate vertex buffer is bound to
     vertex_limit_slot: u32,
     /// Length of the shortest instance rate vertex buffer
-    instance_limit: u32,
+    instance_limit: u64,
     /// Buffer slot which the shortest instance rate vertex buffer is bound to
     instance_limit_slot: u32,
     /// Total amount of buffers required by the pipeline.
@@ -387,14 +385,14 @@ impl VertexState {
     fn update_limits(&mut self) {
         // Ensure that the limits are always smaller than u32::MAX so that
         // interger overlows can be prevented via saturating additions.
-        let max = u32::MAX - 1;
+        let max = u32::MAX as u64;
         self.vertex_limit = max;
         self.instance_limit = max;
         for (idx, vbs) in self.inputs.iter().enumerate() {
             if vbs.step.stride == 0 || !vbs.bound {
                 continue;
             }
-            let limit = (vbs.total_size / vbs.step.stride).min(max as u64) as u32;
+            let limit = vbs.total_size / vbs.step.stride;
             match vbs.step.mode {
                 VertexStepMode::Vertex => {
                     if limit < self.vertex_limit {
@@ -1897,7 +1895,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
-                        let last_vertex = first_vertex.saturating_add(vertex_count);
+                        let last_vertex = first_vertex as u64 + vertex_count as u64;
                         let vertex_limit = state.vertex.vertex_limit;
                         if last_vertex > vertex_limit {
                             return Err(DrawError::VertexBeyondLimit {
@@ -1907,7 +1905,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        let last_instance = first_instance.saturating_add(instance_count);
+                        let last_instance = first_instance as u64 + instance_count as u64;
                         let instance_limit = state.vertex.instance_limit;
                         if last_instance > instance_limit {
                             return Err(DrawError::InstanceBeyondLimit {
@@ -1939,8 +1937,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
-                        // limit is always inferior to u32::MAX.
-                        let last_index = first_index.saturating_add(index_count);
+                        let last_index = first_index as u64 + index_count as u64;
                         let index_limit = state.index.limit;
                         if last_index > index_limit {
                             return Err(DrawError::IndexBeyondLimit {
@@ -1949,7 +1946,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        let last_instance = first_instance.saturating_add(instance_count);
+                        let last_instance = first_instance as u64 + instance_count as u64;
                         let instance_limit = state.vertex.instance_limit;
                         if last_instance > instance_limit {
                             return Err(DrawError::InstanceBeyondLimit {
