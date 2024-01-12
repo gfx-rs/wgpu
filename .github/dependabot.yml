@@ -4,9 +4,24 @@ updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+    # This allows dependabot to update _all_ lockfile packages.
+    #
+    # These will be grouped into the existing group update PRs, so shoudn't generate additional jobs.
+    allow:
+      # Allow both direct and indirect updates for all packages
+      - dependency-type: "all"
+    # Waiting on https://github.com/dependabot/dependabot-core/issues/4009 to be resolved, shouldn't be long.
+    # versioning-strategy: increase-if-necessary
+    groups:
+      patch-updates:
+        patterns:
+          - "*"       
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
+      interval: weekly

@@ -51,7 +51,7 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Opt
         let canvas = initialize_html_canvas();
 
         _surface = instance
-            .create_surface_from_canvas(canvas.clone())
+            .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
             .expect("could not create surface from canvas");
 
         surface_guard = Some(SurfaceGuard { canvas });

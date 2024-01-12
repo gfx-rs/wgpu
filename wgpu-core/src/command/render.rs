@@ -321,7 +321,7 @@ struct IndexState {
     bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
     format: Option<IndexFormat>,
     pipeline_format: Option<IndexFormat>,
-    limit: u32,
+    limit: u64,
 }
 
 impl IndexState {
@@ -335,7 +335,8 @@ impl IndexState {
                     IndexFormat::Uint16 => 1,
                     IndexFormat::Uint32 => 2,
                 };
-                ((range.end - range.start) >> shift) as u32
+
+                (range.end - range.start) >> shift
             }
             None => 0,
         }
@@ -369,11 +370,11 @@ impl VertexBufferState {
 struct VertexState {
     inputs: ArrayVec<VertexBufferState, { hal::MAX_VERTEX_BUFFERS }>,
     /// Length of the shortest vertex rate vertex buffer
-    vertex_limit: u32,
+    vertex_limit: u64,
     /// Buffer slot which the shortest vertex rate vertex buffer is bound to
     vertex_limit_slot: u32,
     /// Length of the shortest instance rate vertex buffer
-    instance_limit: u32,
+    instance_limit: u64,
     /// Buffer slot which the shortest instance rate vertex buffer is bound to
     instance_limit_slot: u32,
     /// Total amount of buffers required by the pipeline.
@@ -382,13 +383,16 @@ struct VertexState {
 
 impl VertexState {
     fn update_limits(&mut self) {
-        self.vertex_limit = u32::MAX;
-        self.instance_limit = u32::MAX;
+        // Ensure that the limits are always smaller than u32::MAX so that
+        // interger overlows can be prevented via saturating additions.
+        let max = u32::MAX as u64;
+        self.vertex_limit = max;
+        self.instance_limit = max;
         for (idx, vbs) in self.inputs.iter().enumerate() {
             if vbs.step.stride == 0 || !vbs.bound {
                 continue;
             }
-            let limit = (vbs.total_size / vbs.step.stride) as u32;
+            let limit = vbs.total_size / vbs.step.stride;
             match vbs.step.mode {
                 VertexStepMode::Vertex => {
                     if limit < self.vertex_limit {
@@ -1435,10 +1439,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         temp_offsets.clear();
                         temp_offsets.extend_from_slice(
-                            &base.dynamic_offsets[dynamic_offset_count
-                                ..dynamic_offset_count + (num_dynamic_offsets as usize)],
+                            &base.dynamic_offsets
+                                [dynamic_offset_count..dynamic_offset_count + num_dynamic_offsets],
                         );
-                        dynamic_offset_count += num_dynamic_offsets as usize;
+                        dynamic_offset_count += num_dynamic_offsets;
 
                         let bind_group = tracker
                             .bind_groups
@@ -1891,7 +1895,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
-                        let last_vertex = first_vertex + vertex_count;
+                        let last_vertex = first_vertex as u64 + vertex_count as u64;
                         let vertex_limit = state.vertex.vertex_limit;
                         if last_vertex > vertex_limit {
                             return Err(DrawError::VertexBeyondLimit {
@@ -1901,7 +1905,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        let last_instance = first_instance + instance_count;
+                        let last_instance = first_instance as u64 + instance_count as u64;
                         let instance_limit = state.vertex.instance_limit;
                         if last_instance > instance_limit {
                             return Err(DrawError::InstanceBeyondLimit {
@@ -1933,9 +1937,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
-                        //TODO: validate that base_vertex + max_index() is
-                        // within the provided range
-                        let last_index = first_index + index_count;
+                        let last_index = first_index as u64 + index_count as u64;
                         let index_limit = state.index.limit;
                         if last_index > index_limit {
                             return Err(DrawError::IndexBeyondLimit {
@@ -1944,7 +1946,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        let last_instance = first_instance + instance_count;
+                        let last_instance = first_instance as u64 + instance_count as u64;
                         let instance_limit = state.vertex.instance_limit;
                         if last_instance > instance_limit {
                             return Err(DrawError::InstanceBeyondLimit {
@@ -2452,7 +2454,7 @@ pub mod render_ffi {
 
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index,
-            num_dynamic_offsets: offset_length.try_into().unwrap(),
+            num_dynamic_offsets: offset_length,
             bind_group_id,
         });
     }

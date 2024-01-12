@@ -88,7 +88,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
     fn remove_abandoned(&mut self, id: Id) -> bool {
         let index = id.unzip().0 as usize;
 
-        if index > self.metadata.size() {
+        if index >= self.metadata.size() {
             return false;
         }
 

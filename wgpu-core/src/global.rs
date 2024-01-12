@@ -165,7 +165,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         // destroy surfaces
         for element in surfaces_locked.map.drain(..) {
             if let Element::Occupied(arc_surface, _) = element {
-                if let Ok(surface) = Arc::try_unwrap(arc_surface) {
+                if let Some(surface) = Arc::into_inner(arc_surface) {
                     self.instance.destroy_surface(surface);
                 } else {
                     panic!("Surface cannot be destroyed because is still in use");

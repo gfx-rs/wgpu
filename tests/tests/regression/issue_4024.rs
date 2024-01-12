@@ -77,7 +77,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         ctx.device.poll(MaintainBase::Poll);
 
         // Extract the ordering out of the arc.
-        let ordering = Arc::try_unwrap(ordering).unwrap().into_inner();
+        let ordering = Arc::into_inner(ordering).unwrap().into_inner();
 
         // There were two callbacks invoked
         assert_eq!(ordering.counter, 2);

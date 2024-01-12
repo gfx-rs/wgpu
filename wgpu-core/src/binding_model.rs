@@ -1,3 +1,5 @@
+#[cfg(feature = "trace")]
+use crate::device::trace;
 use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
@@ -469,6 +471,11 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
             self.device.bgl_pool.remove(&self.entries);
         }
         if let Some(raw) = self.raw.take() {
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBindGroupLayout(self.info.id()));
+            }
+
             resource_log!("Destroy raw BindGroupLayout {:?}", self.info.label());
             unsafe {
                 use hal::Device;
@@ -608,6 +615,12 @@ impl<A: HalApi> Drop for PipelineLayout<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw PipelineLayout {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyPipelineLayout(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_pipeline_layout(raw);
@@ -837,6 +850,12 @@ impl<A: HalApi> Drop for BindGroup<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw BindGroup {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBindGroup(self.info.id()));
+            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_bind_group(raw);

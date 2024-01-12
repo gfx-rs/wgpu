@@ -288,7 +288,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn from_arc_into_baked(self: Arc<Self>) -> BakedCommands<A> {
-        if let Ok(mut command_buffer) = Arc::try_unwrap(self) {
+        if let Some(mut command_buffer) = Arc::into_inner(self) {
             command_buffer.extract_baked_commands()
         } else {
             panic!("CommandBuffer cannot be destroyed because is still in use");

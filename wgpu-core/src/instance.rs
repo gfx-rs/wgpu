@@ -121,8 +121,8 @@ impl Instance {
         fn destroy<A: HalApi>(_: A, instance: &Option<A::Instance>, surface: AnySurface) {
             unsafe {
                 if let Some(surface) = surface.take::<A>() {
-                    if let Ok(suf) = Arc::try_unwrap(surface) {
-                        if let Ok(raw) = Arc::try_unwrap(suf.raw) {
+                    if let Some(suf) = Arc::into_inner(surface) {
+                        if let Some(raw) = Arc::into_inner(suf.raw) {
                             instance.as_ref().unwrap().destroy_surface(raw);
                         } else {
                             panic!("Surface cannot be destroyed because is still in use");
@@ -479,68 +479,55 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
         id_in: Input<G, SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface");
 
         fn init<A: HalApi>(
-            any_surface: &mut Option<AnySurface>,
             inst: &Option<A::Instance>,
             display_handle: raw_window_handle::RawDisplayHandle,
             window_handle: raw_window_handle::RawWindowHandle,
-        ) {
-            if any_surface.is_none() {
-                if let Some(surface) = inst.as_ref().and_then(|inst| unsafe {
-                    match inst.create_surface(display_handle, window_handle) {
-                        Ok(raw) => Some(HalSurface::<A> { raw: Arc::new(raw) }),
-                        Err(e) => {
-                            log::warn!("Error: {:?}", e);
-                            None
-                        }
-                    }
-                }) {
-                    *any_surface = Some(AnySurface::new(surface));
+        ) -> Option<Result<AnySurface, hal::InstanceError>> {
+            inst.as_ref().map(|inst| unsafe {
+                match inst.create_surface(display_handle, window_handle) {
+                    Ok(raw) => Ok(AnySurface::new(HalSurface::<A> { raw: Arc::new(raw) })),
+                    Err(e) => Err(e),
                 }
-            }
+            })
         }
 
-        let mut hal_surface = None;
+        let mut hal_surface: Option<Result<AnySurface, hal::InstanceError>> = None;
+
         #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-        init::<hal::api::Vulkan>(
-            &mut hal_surface,
-            &self.instance.vulkan,
-            display_handle,
-            window_handle,
-        );
+        if hal_surface.is_none() {
+            hal_surface =
+                init::<hal::api::Vulkan>(&self.instance.vulkan, display_handle, window_handle);
+        }
         #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-        init::<hal::api::Metal>(
-            &mut hal_surface,
-            &self.instance.metal,
-            display_handle,
-            window_handle,
-        );
+        if hal_surface.is_none() {
+            hal_surface =
+                init::<hal::api::Metal>(&self.instance.metal, display_handle, window_handle);
+        }
         #[cfg(all(feature = "dx12", windows))]
-        init::<hal::api::Dx12>(
-            &mut hal_surface,
-            &self.instance.dx12,
-            display_handle,
-            window_handle,
-        );
+        if hal_surface.is_none() {
+            hal_surface =
+                init::<hal::api::Dx12>(&self.instance.dx12, display_handle, window_handle);
+        }
         #[cfg(feature = "gles")]
-        init::<hal::api::Gles>(
-            &mut hal_surface,
-            &self.instance.gl,
-            display_handle,
-            window_handle,
-        );
+        if hal_surface.is_none() {
+            hal_surface = init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle);
+        }
+
+        //  This is only None if there's no instance at all.
+        let hal_surface = hal_surface.unwrap()?;
 
         let surface = Surface {
             presentation: Mutex::new(None),
             info: ResourceInfo::new("<Surface>"),
-            raw: hal_surface.unwrap(),
+            raw: hal_surface,
         };
 
         let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
-        id
+        Ok(id)
     }
 
     /// # Safety
@@ -576,78 +563,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
         id
-    }
-
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(target_os = "emscripten"),
-        feature = "gles"
-    ))]
-    pub fn create_surface_webgl_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-        id_in: Input<G, SurfaceId>,
-    ) -> Result<SurfaceId, hal::InstanceError> {
-        profiling::scope!("Instance::create_surface_webgl_canvas");
-
-        let surface = Surface {
-            presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
-            raw: {
-                let hal_surface: HalSurface<hal::api::Gles> = self
-                    .instance
-                    .gl
-                    .as_ref()
-                    .map(|inst| {
-                        let raw_surface = inst.create_surface_from_canvas(canvas)?;
-                        Ok(HalSurface {
-                            raw: Arc::new(raw_surface),
-                        })
-                    })
-                    .transpose()?
-                    .unwrap();
-                AnySurface::new(hal_surface)
-            },
-        };
-
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
-        Ok(id)
-    }
-
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(target_os = "emscripten"),
-        feature = "gles"
-    ))]
-    pub fn create_surface_webgl_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-        id_in: Input<G, SurfaceId>,
-    ) -> Result<SurfaceId, hal::InstanceError> {
-        profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
-
-        let surface = Surface {
-            presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
-            raw: {
-                let hal_surface: HalSurface<hal::api::Gles> = self
-                    .instance
-                    .gl
-                    .as_ref()
-                    .map(|inst| {
-                        let raw_surface = inst.create_surface_from_offscreen_canvas(canvas)?;
-                        Ok(HalSurface {
-                            raw: Arc::new(raw_surface),
-                        })
-                    })
-                    .transpose()?
-                    .unwrap();
-                AnySurface::new(hal_surface)
-            },
-        };
-
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
-        Ok(id)
     }
 
     #[cfg(all(feature = "dx12", windows))]
@@ -766,7 +681,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let surface = self.surfaces.unregister(id);
-        if let Ok(surface) = Arc::try_unwrap(surface.unwrap()) {
+        if let Some(surface) = Arc::into_inner(surface.unwrap()) {
             if let Some(present) = surface.presentation.lock().take() {
                 #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
                 unconfigure::<_, hal::api::Vulkan>(self, &surface.raw, &present);
