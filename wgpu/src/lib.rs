@@ -3024,23 +3024,24 @@ impl<'a> BufferSlice<'a> {
     }
 
     /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will fail.
     ///
     /// This is useful when targeting WebGPU and you want to pass mapped data directly to js.
     /// Unlike `get_mapped_range` which unconditionally copies mapped data into the wasm heap,
     /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
     ///
-    /// If you are not targeting WebGPU, this function will perform an additional copy from the wasm heap to
-    /// the returned array buffer.
-    #[cfg(any(webgpu, webgl))]
-    pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        DynContext::buffer_get_mapped_range_as_array_buffer(
-            &*self.buffer.context,
-            &self.buffer.id,
-            self.buffer.data.as_ref(),
-            self.offset..end,
-        )
+    /// This is only available on WebGPU, on any other backends this will return `None`.
+    #[cfg(webgpu)]
+    pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
+        self.buffer
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWebGpu>()
+            .map(|ctx| {
+                let buffer_data = crate::context::downcast_ref(self.buffer.data.as_ref());
+                let end = self.buffer.map_context.lock().add(self.offset, self.size);
+                ctx.buffer_get_mapped_range_as_array_buffer(buffer_data, self.offset..end)
+            })
     }
 
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable

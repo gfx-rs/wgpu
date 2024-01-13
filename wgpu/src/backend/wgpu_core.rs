@@ -1539,19 +1539,6 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
-    #[cfg(webgl)]
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        buffer: &Self::BufferId,
-        buffer_data: &Self::BufferData,
-        sub_range: Range<wgt::BufferAddress>,
-    ) -> js_sys::ArrayBuffer {
-        let mapped_range = self.buffer_get_mapped_range(buffer, buffer_data, sub_range);
-        let array_buffer = js_sys::Uint8Array::new_with_length(mapped_range.slice().len() as u32);
-        array_buffer.copy_from(mapped_range.slice());
-        array_buffer.buffer()
-    }
-
     fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
         let global = &self.0;
         match wgc::gfx_select!(buffer => global.buffer_unmap(*buffer)) {

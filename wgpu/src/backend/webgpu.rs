@@ -932,6 +932,15 @@ impl ContextWebGpu {
 
         Ok(create_identified((canvas, context)))
     }
+
+    /// Get mapped buffer range directly as a `js_sys::ArrayBuffer`.
+    pub fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        buffer_data: &<ContextWebGpu as crate::Context>::BufferData,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        buffer_data.0.get_mapped_array_buffer(sub_range)
+    }
 }
 
 // Represents the global object in the JavaScript context.
@@ -2046,15 +2055,6 @@ impl crate::context::Context for ContextWebGpu {
             actual_mapping,
             temporary_mapping,
         })
-    }
-
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        _buffer: &Self::BufferId,
-        buffer_data: &Self::BufferData,
-        sub_range: Range<wgt::BufferAddress>,
-    ) -> js_sys::ArrayBuffer {
-        buffer_data.0.get_mapped_array_buffer(sub_range)
     }
 
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
