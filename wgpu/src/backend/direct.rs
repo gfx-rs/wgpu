@@ -1403,8 +1403,8 @@ impl crate::Context for Context {
         #[cfg(any(native, emscripten))]
         {
             let global = &self.0;
-            match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::Wait)) {
-                Ok(_) => (),
+            match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::wait())) {
+                Ok(_) => {}
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
             wgc::gfx_select!(device => global.device_drop(*device));
@@ -1445,14 +1445,17 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
         maintain: crate::Maintain,
-    ) -> bool {
+    ) -> wgt::MaintainResult {
         let global = &self.0;
         let maintain_inner = maintain.map_index(|i| *i.1.as_ref().downcast_ref().unwrap());
         match wgc::gfx_select!(device => global.device_poll(
             *device,
             maintain_inner
         )) {
-            Ok(queue_empty) => queue_empty,
+            Ok(done) => match done {
+                true => wgt::MaintainResult::SubmissionQueueEmpty,
+                false => wgt::MaintainResult::Ok,
+            },
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
         }
     }

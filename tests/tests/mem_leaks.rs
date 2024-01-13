@@ -3,7 +3,7 @@
     target_os = "emscripten",
     feature = "webgl"
 ))]
-fn draw_test_with_reports(
+async fn draw_test_with_reports(
     ctx: wgpu_test::TestingContext,
     expected: &[u32],
     function: impl FnOnce(&mut wgpu::RenderPass<'_>),
@@ -241,8 +241,9 @@ fn draw_test_with_reports(
     let report = global_report.hub_report(ctx.adapter_info.backend);
     assert_eq!(report.command_buffers.num_allocated, 0);
 
-    ctx.device
-        .poll(wgpu::Maintain::WaitForSubmissionIndex(submit_index));
+    ctx.async_poll(wgpu::Maintain::wait_for(submit_index))
+        .await
+        .panic_on_timeout();
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report(ctx.adapter_info.backend);
@@ -285,7 +286,7 @@ static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
                 .test_features_limits()
                 .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
         )
-        .run_sync(|ctx| {
+        .run_async(|ctx| {
             draw_test_with_reports(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
                 cmb.draw(0..6, 0..1);
             })

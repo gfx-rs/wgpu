@@ -32,9 +32,9 @@ static MULTI_STAGE_DATA_BINDING: GpuTestConfiguration = GpuTestConfiguration::ne
                 ..Default::default()
             }),
     )
-    .run_sync(multi_stage_data_binding_test);
+    .run_async(multi_stage_data_binding_test);
 
-fn multi_stage_data_binding_test(ctx: TestingContext) {
+async fn multi_stage_data_binding_test(ctx: TestingContext) {
     // We use different shader modules to allow us to use different
     // types for the uniform and push constant blocks between stages.
     let vs_sm = ctx
@@ -174,5 +174,5 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
     ctx.queue.submit([encoder.finish()]);
 
     let result = input_as_unorm.repeat(4);
-    buffers.assert_buffer_contents(&ctx.device, &result);
+    buffers.assert_buffer_contents(&ctx, &result).await;
 }

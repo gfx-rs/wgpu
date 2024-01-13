@@ -114,7 +114,7 @@ fn main() {
         }
 
         gfx_select!(device => global.device_stop_capture(device));
-        gfx_select!(device => global.device_poll(device, wgt::Maintain::Wait)).unwrap();
+        gfx_select!(device => global.device_poll(device, wgt::Maintain::wait())).unwrap();
     }
     #[cfg(feature = "winit")]
     {
@@ -196,7 +196,7 @@ fn main() {
                 },
                 Event::LoopExiting => {
                     log::info!("Closing");
-                    gfx_select!(device => global.device_poll(device, wgt::Maintain::Wait)).unwrap();
+                    gfx_select!(device => global.device_poll(device, wgt::Maintain::wait())).unwrap();
                 }
                 _ => {}
             }

@@ -23,7 +23,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             })
             .features(wgpu::Features::BGRA8UNORM_STORAGE),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         let device = &ctx.device;
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -139,7 +139,9 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let buffer_slice = readback_buffer.slice(..);
         buffer_slice.map_async(wgpu::MapMode::Read, Result::unwrap);
-        device.poll(wgpu::Maintain::Wait);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
 
         {
             let texels = buffer_slice.get_mapped_range();

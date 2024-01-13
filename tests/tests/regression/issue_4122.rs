@@ -1,8 +1,8 @@
 use std::ops::Range;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
-fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
+async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("gpu_buffer"),
         size,
@@ -32,7 +32,9 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
 
     ctx.queue.submit(Some(encoder.finish()));
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
-    ctx.device.poll(wgpu::Maintain::Wait);
+    ctx.async_poll(wgpu::Maintain::wait())
+        .await
+        .panic_on_timeout();
 
     let buffer_slice = cpu_buffer.slice(..);
     let buffer_data = buffer_slice.get_mapped_range();
@@ -84,8 +86,9 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
 ///
 /// This test will fail on nvidia if the bug is not properly worked around.
 #[gpu_test]
-static CLEAR_BUFFER_RANGE_RESPECTED: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+static CLEAR_BUFFER_RANGE_RESPECTED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_async(|ctx| async move {
         // This hits most of the cases in nvidia's clear buffer bug
         let mut succeeded = true;
         for power in 4..14 {
@@ -93,7 +96,7 @@ static CLEAR_BUFFER_RANGE_RESPECTED: GpuTestConfiguration =
             for start_offset in (0..=36).step_by(4) {
                 for size_offset in (0..=36).step_by(4) {
                     let range = start_offset..size + size_offset + start_offset;
-                    let result = fill_test(&ctx, range, 1 << 16);
+                    let result = fill_test(&ctx, range, 1 << 16).await;
 
                     succeeded &= result;
                 }
