@@ -57,6 +57,7 @@ env:
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
+  WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
 
 # We distinguish the following kinds of builds:
@@ -74,6 +75,9 @@ env:
 
 jobs:
   check:
+    # runtime is normally 2-8 minutes
+    timeout-minutes: 15
+
     strategy:
       fail-fast: false
       matrix:
@@ -230,6 +234,9 @@ jobs:
   #
   # We don't test all platforms, just ones with different dependency stacks.
   check-core-msrv:
+    # runtime is normally 1-3 minutes
+    timeout-minutes: 10
+
     strategy:
       fail-fast: false
       matrix:
@@ -285,6 +292,9 @@ jobs:
           cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
   naga-minimal-versions:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
     name: MSRV naga Minimal Versions
     runs-on: ubuntu-22.04
 
@@ -332,6 +342,9 @@ jobs:
           cargo clippy --all-features -p naga -p naga-cli
 
   wasm-test:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+    
     name: Test WebAssembly
     runs-on: ubuntu-latest
     needs: [check]
@@ -357,6 +370,9 @@ jobs:
           wasm-pack test --headless --chrome --features webgl --workspace
 
   gpu-test:
+    # runtime is normally 5-15 minutes
+    timeout-minutes: 30
+
     strategy:
       fail-fast: false
       matrix:
@@ -541,6 +557,9 @@ jobs:
           files: lcov.info
 
   doctest:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
     name: Doctest
     runs-on: ubuntu-latest
 
@@ -576,6 +595,9 @@ jobs:
           cargo test --doc
 
   fmt:
+    # runtime is normally 15 seconds
+    timeout-minutes: 2
+
     name: Format
     runs-on: ubuntu-latest
     steps:
@@ -594,6 +616,9 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
   check-cts-runner:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
     name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
@@ -628,6 +653,9 @@ jobs:
   #
   # This job is not required to pass for PRs to be merged.
   cargo-deny-check-advisories:
+    # runtime is normally 1 minute
+    timeout-minutes: 5
+
     name: "cargo-deny advisories"
     runs-on: ubuntu-latest
     steps:
@@ -642,6 +670,9 @@ jobs:
           rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
+    # runtime is normally 1 minute
+    timeout-minutes: 5
+    
     name: "cargo-deny"
     runs-on: ubuntu-latest
     steps:
