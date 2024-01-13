@@ -1,5 +1,3 @@
-#![allow(clippy::mismatched_target_os)]
-
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
@@ -1398,9 +1396,9 @@ impl crate::Context for Context {
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
     }
-    #[cfg_attr(not(any(native, emscripten)), allow(unused))]
+    #[cfg_attr(not(any(native, Emscripten)), allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        #[cfg(any(native, emscripten))]
+        #[cfg(any(native, Emscripten))]
         {
             let global = &self.0;
             match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::Wait)) {

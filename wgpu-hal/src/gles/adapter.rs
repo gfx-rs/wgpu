@@ -1,5 +1,3 @@
-#![allow(clippy::mismatched_target_os)]
-
 use glow::HasContext;
 use parking_lot::Mutex;
 use std::sync::{atomic::AtomicU8, Arc};
@@ -200,14 +198,14 @@ impl super::Adapter {
         let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
             // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
             // See https://github.com/gfx-rs/wgpu/issues/3245 for context
-            #[cfg(emscripten)]
+            #[cfg(Emscripten)]
             if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
             }
             // glow already enables WEBGL_debug_renderer_info on wasm32-unknown-unknown target by default.
-            #[cfg(not(emscripten))]
+            #[cfg(not(Emscripten))]
             (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
         } else {
             (glow::VENDOR, glow::RENDERER)
@@ -284,7 +282,7 @@ impl super::Adapter {
                 let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
                 naga::back::glsl::Version::Embedded {
                     version: value,
-                    is_webgl: cfg!(any(webgl, emscripten)),
+                    is_webgl: cfg!(any(webgl, Emscripten)),
                 }
             }
         };
@@ -409,16 +407,16 @@ impl super::Adapter {
         }
         downlevel_flags.set(
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
-            !(cfg!(any(webgl, emscripten)) || is_angle),
+            !(cfg!(any(webgl, Emscripten)) || is_angle),
         );
         // see https://registry.khronos.org/webgl/specs/latest/2.0/#BUFFER_OBJECT_BINDING
         downlevel_flags.set(
             wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
-            !cfg!(any(webgl, emscripten)),
+            !cfg!(any(webgl, Emscripten)),
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES,
-            !cfg!(any(webgl, emscripten)),
+            !cfg!(any(webgl, Emscripten)),
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32,
@@ -492,7 +490,7 @@ impl super::Adapter {
             "EXT_texture_compression_rgtc",
             "EXT_texture_compression_bptc",
         ];
-        let bcn_exts = if cfg!(any(webgl, emscripten)) {
+        let bcn_exts = if cfg!(any(webgl, Emscripten)) {
             &webgl_bcn_exts[..]
         } else if es_ver.is_some() {
             &gles_bcn_exts[..]
@@ -503,7 +501,7 @@ impl super::Adapter {
             wgt::Features::TEXTURE_COMPRESSION_BC,
             bcn_exts.iter().all(|&ext| extensions.contains(ext)),
         );
-        let has_etc = if cfg!(any(webgl, emscripten)) {
+        let has_etc = if cfg!(any(webgl, Emscripten)) {
             extensions.contains("WEBGL_compressed_texture_etc")
         } else {
             // This is a required part of GLES3, but not part of Desktop GL at all.
@@ -531,7 +529,7 @@ impl super::Adapter {
                 }
             }
 
-            #[cfg(any(native, emscripten))]
+            #[cfg(any(native, Emscripten))]
             {
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
@@ -584,11 +582,11 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
-            !cfg!(any(webgl, emscripten)),
+            !cfg!(any(webgl, Emscripten)),
         );
         private_caps.set(
             super::PrivateCapabilities::GET_BUFFER_SUB_DATA,
-            cfg!(any(webgl, emscripten)) || full_ver.is_some(),
+            cfg!(any(webgl, Emscripten)) || full_ver.is_some(),
         );
         let color_buffer_float = extensions.contains("GL_EXT_color_buffer_float")
             || extensions.contains("GL_ARB_color_buffer_float")
@@ -761,7 +759,7 @@ impl super::Adapter {
 
         workarounds.set(
             super::Workarounds::EMULATE_BUFFER_MAP,
-            cfg!(any(webgl, emscripten)),
+            cfg!(any(webgl, Emscripten)),
         );
 
         let r = renderer.to_lowercase();

@@ -84,8 +84,7 @@ we don't bother with that combination.
 ///cbindgen:ignore
 #[cfg(not(any(windows, webgl)))]
 mod egl;
-#[allow(clippy::mismatched_target_os)]
-#[cfg(emscripten)]
+#[cfg(Emscripten)]
 mod emscripten;
 #[cfg(webgl)]
 mod web;

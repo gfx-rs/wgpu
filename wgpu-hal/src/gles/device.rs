@@ -1,5 +1,3 @@
-#![allow(clippy::mismatched_target_os)]
-
 use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
@@ -117,7 +115,7 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the texture. If `drop_guard` is
     ///   [`Some`], the texture must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(native, emscripten))]
+    #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw(
         &self,
         name: std::num::NonZeroU32,
@@ -145,7 +143,7 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the renderbuffer. If `drop_guard` is
     ///   [`Some`], the renderbuffer must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(native, emscripten))]
+    #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
         name: std::num::NonZeroU32,
@@ -1434,7 +1432,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<bool, crate::DeviceError> {
         if fence.last_completed < wait_value {
             let gl = &self.shared.context.lock();
-            let timeout_ns = if cfg!(any(webgl, emscripten)) {
+            let timeout_ns = if cfg!(any(webgl, Emscripten)) {
                 0
             } else {
                 (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
@@ -1448,7 +1446,7 @@ impl crate::Device<super::Api> for super::Device {
                     gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
                 } {
                     // for some reason firefox returns WAIT_FAILED, to investigate
-                    #[cfg(any(webgl, emscripten))]
+                    #[cfg(any(webgl, Emscripten))]
                     glow::WAIT_FAILED => {
                         log::warn!("wait failed!");
                         Ok(false)
