@@ -23,19 +23,19 @@ impl AnySurface {
     }
 
     pub fn backend(&self) -> Backend {
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        #[cfg(vulkan)]
         if self.downcast_ref::<hal::api::Vulkan>().is_some() {
             return Backend::Vulkan;
         }
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+        #[cfg(metal)]
         if self.downcast_ref::<hal::api::Metal>().is_some() {
             return Backend::Metal;
         }
-        #[cfg(all(feature = "dx12", windows))]
+        #[cfg(dx12)]
         if self.downcast_ref::<hal::api::Dx12>().is_some() {
             return Backend::Dx12;
         }
-        #[cfg(feature = "gles")]
+        #[cfg(gles)]
         if self.downcast_ref::<hal::api::Gles>().is_some() {
             return Backend::Gl;
         }
@@ -90,19 +90,7 @@ impl fmt::Debug for AnySurface {
     }
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Send for AnySurface {}
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for AnySurface {}

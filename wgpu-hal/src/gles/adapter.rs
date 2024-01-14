@@ -198,14 +198,14 @@ impl super::Adapter {
         let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
             // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
             // See https://github.com/gfx-rs/wgpu/issues/3245 for context
-            #[cfg(target_os = "emscripten")]
+            #[cfg(Emscripten)]
             if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
             }
             // glow already enables WEBGL_debug_renderer_info on wasm32-unknown-unknown target by default.
-            #[cfg(not(target_os = "emscripten"))]
+            #[cfg(not(Emscripten))]
             (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
         } else {
             (glow::VENDOR, glow::RENDERER)
@@ -282,7 +282,7 @@ impl super::Adapter {
                 let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
                 naga::back::glsl::Version::Embedded {
                     version: value,
-                    is_webgl: cfg!(target_arch = "wasm32"),
+                    is_webgl: cfg!(any(webgl, Emscripten)),
                 }
             }
         };
@@ -407,16 +407,16 @@ impl super::Adapter {
         }
         downlevel_flags.set(
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
-            !(cfg!(target_arch = "wasm32") || is_angle),
+            !(cfg!(any(webgl, Emscripten)) || is_angle),
         );
         // see https://registry.khronos.org/webgl/specs/latest/2.0/#BUFFER_OBJECT_BINDING
         downlevel_flags.set(
             wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
-            !cfg!(target_arch = "wasm32"),
+            !cfg!(any(webgl, Emscripten)),
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES,
-            !cfg!(target_arch = "wasm32"),
+            !cfg!(any(webgl, Emscripten)),
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32,
@@ -490,7 +490,7 @@ impl super::Adapter {
             "EXT_texture_compression_rgtc",
             "EXT_texture_compression_bptc",
         ];
-        let bcn_exts = if cfg!(target_arch = "wasm32") {
+        let bcn_exts = if cfg!(any(webgl, Emscripten)) {
             &webgl_bcn_exts[..]
         } else if es_ver.is_some() {
             &gles_bcn_exts[..]
@@ -501,7 +501,7 @@ impl super::Adapter {
             wgt::Features::TEXTURE_COMPRESSION_BC,
             bcn_exts.iter().all(|&ext| extensions.contains(ext)),
         );
-        let has_etc = if cfg!(target_arch = "wasm32") {
+        let has_etc = if cfg!(any(webgl, Emscripten)) {
             extensions.contains("WEBGL_compressed_texture_etc")
         } else {
             // This is a required part of GLES3, but not part of Desktop GL at all.
@@ -513,7 +513,7 @@ impl super::Adapter {
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
         {
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             {
                 if context
                     .glow_context
@@ -529,7 +529,7 @@ impl super::Adapter {
                 }
             }
 
-            #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+            #[cfg(any(native, Emscripten))]
             {
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
@@ -582,11 +582,11 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
-            !cfg!(target_arch = "wasm32"),
+            !cfg!(any(webgl, Emscripten)),
         );
         private_caps.set(
             super::PrivateCapabilities::GET_BUFFER_SUB_DATA,
-            cfg!(target_arch = "wasm32") || full_ver.is_some(),
+            cfg!(any(webgl, Emscripten)) || full_ver.is_some(),
         );
         let color_buffer_float = extensions.contains("GL_EXT_color_buffer_float")
             || extensions.contains("GL_ARB_color_buffer_float")
@@ -759,7 +759,7 @@ impl super::Adapter {
 
         workarounds.set(
             super::Workarounds::EMULATE_BUFFER_MAP,
-            cfg!(target_arch = "wasm32"),
+            cfg!(any(webgl, Emscripten)),
         );
 
         let r = renderer.to_lowercase();
@@ -917,7 +917,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 main_vao,
-                #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+                #[cfg(all(native, feature = "renderdoc"))]
                 render_doc: Default::default(),
             },
             queue: super::Queue {
@@ -1112,13 +1112,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         if surface.presentable {
             let mut formats = vec![
                 wgt::TextureFormat::Rgba8Unorm,
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(native)]
                 wgt::TextureFormat::Bgra8Unorm,
             ];
             if surface.supports_srgb() {
                 formats.extend([
                     wgt::TextureFormat::Rgba8UnormSrgb,
-                    #[cfg(not(target_arch = "wasm32"))]
+                    #[cfg(native)]
                     wgt::TextureFormat::Bgra8UnormSrgb,
                 ])
             }
@@ -1178,17 +1178,9 @@ impl super::AdapterShared {
     }
 }
 
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for super::Adapter {}
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for super::Adapter {}
 
 #[cfg(test)]

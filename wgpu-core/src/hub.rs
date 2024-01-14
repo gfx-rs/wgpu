@@ -302,40 +302,30 @@ impl<A: HalApi> Hub<A> {
 }
 
 pub struct Hubs {
-    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+    #[cfg(vulkan)]
     pub(crate) vulkan: Hub<hal::api::Vulkan>,
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(metal)]
     pub(crate) metal: Hub<hal::api::Metal>,
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     pub(crate) dx12: Hub<hal::api::Dx12>,
-    #[cfg(feature = "gles")]
+    #[cfg(gles)]
     pub(crate) gl: Hub<hal::api::Gles>,
-    #[cfg(all(
-        not(all(feature = "vulkan", not(target_arch = "wasm32"))),
-        not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
-        not(all(feature = "dx12", windows)),
-        not(feature = "gles"),
-    ))]
+    #[cfg(all(not(vulkan), not(metal), not(dx12), not(gles)))]
     pub(crate) empty: Hub<hal::api::Empty>,
 }
 
 impl Hubs {
     pub(crate) fn new<F: GlobalIdentityHandlerFactory>(factory: &F) -> Self {
         Self {
-            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            #[cfg(vulkan)]
             vulkan: Hub::new(factory),
-            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(metal)]
             metal: Hub::new(factory),
-            #[cfg(all(feature = "dx12", windows))]
+            #[cfg(dx12)]
             dx12: Hub::new(factory),
-            #[cfg(feature = "gles")]
+            #[cfg(gles)]
             gl: Hub::new(factory),
-            #[cfg(all(
-                not(all(feature = "vulkan", not(target_arch = "wasm32"))),
-                not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
-                not(all(feature = "dx12", windows)),
-                not(feature = "gles"),
-            ))]
+            #[cfg(all(not(vulkan), not(metal), not(dx12), not(gles)))]
             empty: Hub::new(factory),
         }
     }
