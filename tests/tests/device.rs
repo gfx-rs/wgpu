@@ -52,11 +52,11 @@ fn device_lifetime_check() {
 
     instance.poll_all(false);
 
-    let pre_report = instance.generate_report();
+    let pre_report = instance.generate_report().unwrap().unwrap();
 
     drop(queue);
     drop(device);
-    let post_report = instance.generate_report();
+    let post_report = instance.generate_report().unwrap().unwrap();
     assert_ne!(
         pre_report, post_report,
         "Queue and Device has not been dropped as expected"

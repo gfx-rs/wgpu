@@ -320,13 +320,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         buffer_data: &Self::BufferData,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(webgpu)]
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        buffer: &Self::BufferId,
-        buffer_data: &Self::BufferData,
-        sub_range: Range<BufferAddress>,
-    ) -> js_sys::ArrayBuffer;
     fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData);
     fn texture_create_view(
         &self,
@@ -1037,6 +1030,7 @@ impl ObjectId {
         global_id: None,
     };
 
+    #[allow(dead_code)]
     pub fn new(id: NonZeroU64, global_id: NonZeroU64) -> Self {
         Self {
             id: Some(id),
@@ -1346,13 +1340,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         buffer_data: &crate::Data,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(webgpu)]
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        buffer: &ObjectId,
-        buffer_data: &crate::Data,
-        sub_range: Range<BufferAddress>,
-    ) -> js_sys::ArrayBuffer;
     fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data);
     fn texture_create_view(
         &self,
@@ -2463,18 +2450,6 @@ where
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
         Context::buffer_get_mapped_range(self, &buffer, buffer_data, sub_range)
-    }
-
-    #[cfg(webgpu)]
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        buffer: &ObjectId,
-        buffer_data: &crate::Data,
-        sub_range: Range<BufferAddress>,
-    ) -> js_sys::ArrayBuffer {
-        let buffer = <T::BufferId>::from(*buffer);
-        let buffer_data = downcast_ref(buffer_data);
-        Context::buffer_get_mapped_range_as_array_buffer(self, &buffer, buffer_data, sub_range)
     }
 
     fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) {

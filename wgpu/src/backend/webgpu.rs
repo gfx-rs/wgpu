@@ -69,19 +69,21 @@ unsafe impl<T> Send for Identified<T> {}
 #[cfg(send_sync)]
 unsafe impl<T> Sync for Identified<T> {}
 
-pub(crate) struct Context(web_sys::Gpu);
+pub(crate) struct ContextWebGpu(web_sys::Gpu);
 #[cfg(send_sync)]
-unsafe impl Send for Context {}
+unsafe impl Send for ContextWebGpu {}
 #[cfg(send_sync)]
-unsafe impl Sync for Context {}
+unsafe impl Sync for ContextWebGpu {}
 #[cfg(send_sync)]
 unsafe impl Send for BufferMappedRange {}
 #[cfg(send_sync)]
 unsafe impl Sync for BufferMappedRange {}
 
-impl fmt::Debug for Context {
+impl fmt::Debug for ContextWebGpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Context").field("type", &"Web").finish()
+        f.debug_struct("ContextWebGpu")
+            .field("type", &"Web")
+            .finish()
     }
 }
 
@@ -540,7 +542,8 @@ fn map_texture_view_dimension(
 }
 
 fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> web_sys::GpuImageCopyBuffer {
-    let buffer: &<Context as crate::Context>::BufferData = downcast_ref(view.buffer.data.as_ref());
+    let buffer: &<ContextWebGpu as crate::Context>::BufferData =
+        downcast_ref(view.buffer.data.as_ref());
     let mut mapped = web_sys::GpuImageCopyBuffer::new(&buffer.0.buffer);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
         mapped.bytes_per_row(bytes_per_row);
@@ -553,7 +556,7 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> web_sys::GpuImageCo
 }
 
 fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> web_sys::GpuImageCopyTexture {
-    let texture: &<Context as crate::Context>::TextureData =
+    let texture: &<ContextWebGpu as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
     let mut mapped = web_sys::GpuImageCopyTexture::new(&texture.0);
     mapped.mip_level(view.mip_level);
@@ -564,7 +567,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> web_sys::GpuImage
 fn map_tagged_texture_copy_view(
     view: crate::ImageCopyTextureTagged<'_>,
 ) -> web_sys::GpuImageCopyTextureTagged {
-    let texture: &<Context as crate::Context>::TextureData =
+    let texture: &<ContextWebGpu as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
     let mut mapped = web_sys::GpuImageCopyTextureTagged::new(&texture.0);
     mapped.mip_level(view.mip_level);
@@ -821,7 +824,7 @@ fn future_request_device(
             (device_id, device_data, queue_id, queue_data)
         })
         .map_err(|error_value| crate::RequestDeviceError {
-            inner: crate::RequestDeviceErrorKind::Web(error_value),
+            inner: crate::RequestDeviceErrorKind::WebGpu(error_value),
         })
 }
 
@@ -877,7 +880,7 @@ where
     *rc_callback.borrow_mut() = Some((closure_success, closure_rejected, callback));
 }
 
-impl Context {
+impl ContextWebGpu {
     /// Common portion of the internal branches of the public `instance_create_surface` function.
     ///
     /// Note: Analogous code also exists in the WebGL2 backend at
@@ -929,6 +932,15 @@ impl Context {
 
         Ok(create_identified((canvas, context)))
     }
+
+    /// Get mapped buffer range directly as a `js_sys::ArrayBuffer`.
+    pub fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        buffer_data: &<ContextWebGpu as crate::Context>::BufferData,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        buffer_data.0.get_mapped_array_buffer(sub_range)
+    }
 }
 
 // Represents the global object in the JavaScript context.
@@ -952,7 +964,31 @@ pub enum Canvas {
     Offscreen(web_sys::OffscreenCanvas),
 }
 
-impl crate::context::Context for Context {
+/// Returns the browsers gpu object or `None` if the current context is neither the main thread nor a dedicated worker.
+///
+/// If WebGPU is not supported, the Gpu property is `undefined` (but *not* necessarily `None`).
+///
+/// See:
+/// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>
+/// * <https://developer.mozilla.org/en-US/docs/Web/API/WorkerNavigator/gpu>
+pub fn get_browser_gpu_property() -> Option<web_sys::Gpu> {
+    let global: Global = js_sys::global().unchecked_into();
+
+    if !global.window().is_undefined() {
+        Some(global.unchecked_into::<web_sys::Window>().navigator().gpu())
+    } else if !global.worker().is_undefined() {
+        Some(
+            global
+                .unchecked_into::<web_sys::WorkerGlobalScope>()
+                .navigator()
+                .gpu(),
+        )
+    } else {
+        None
+    }
+}
+
+impl crate::context::Context for ContextWebGpu {
     type AdapterId = Identified<web_sys::GpuAdapter>;
     type AdapterData = Sendable<web_sys::GpuAdapter>;
     type DeviceId = Identified<web_sys::GpuDevice>;
@@ -1022,20 +1058,12 @@ impl crate::context::Context for Context {
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
-        let global: Global = js_sys::global().unchecked_into();
-        let gpu = if !global.window().is_undefined() {
-            global.unchecked_into::<web_sys::Window>().navigator().gpu()
-        } else if !global.worker().is_undefined() {
-            global
-                .unchecked_into::<web_sys::WorkerGlobalScope>()
-                .navigator()
-                .gpu()
-        } else {
+        let Some(gpu) = get_browser_gpu_property() else {
             panic!(
                 "Accessing the GPU is only supported on the main thread or from a dedicated worker"
             );
         };
-        Context(gpu)
+        ContextWebGpu(gpu)
     }
 
     unsafe fn instance_create_surface(
@@ -1587,7 +1615,7 @@ impl crate::context::Context for Context {
                         offset,
                         size,
                     }) => {
-                        let buffer: &<Context as crate::Context>::BufferData =
+                        let buffer: &<ContextWebGpu as crate::Context>::BufferData =
                             downcast_ref(buffer.data.as_ref());
                         let mut mapped_buffer_binding =
                             web_sys::GpuBufferBinding::new(&buffer.0.buffer);
@@ -1601,7 +1629,7 @@ impl crate::context::Context for Context {
                         panic!("Web backend does not support arrays of buffers")
                     }
                     crate::BindingResource::Sampler(sampler) => {
-                        let sampler: &<Context as crate::Context>::SamplerData =
+                        let sampler: &<ContextWebGpu as crate::Context>::SamplerData =
                             downcast_ref(sampler.data.as_ref());
                         JsValue::from(&sampler.0)
                     }
@@ -1609,7 +1637,7 @@ impl crate::context::Context for Context {
                         panic!("Web backend does not support arrays of samplers")
                     }
                     crate::BindingResource::TextureView(texture_view) => {
-                        let texture_view: &<Context as crate::Context>::TextureViewData =
+                        let texture_view: &<ContextWebGpu as crate::Context>::TextureViewData =
                             downcast_ref(texture_view.data.as_ref());
                         JsValue::from(&texture_view.0)
                     }
@@ -1622,7 +1650,7 @@ impl crate::context::Context for Context {
             })
             .collect::<js_sys::Array>();
 
-        let bgl: &<Context as crate::Context>::BindGroupLayoutData =
+        let bgl: &<ContextWebGpu as crate::Context>::BindGroupLayoutData =
             downcast_ref(desc.layout.data.as_ref());
         let mut mapped_desc = web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &bgl.0);
         if let Some(label) = desc.label {
@@ -1641,7 +1669,7 @@ impl crate::context::Context for Context {
             .bind_group_layouts
             .iter()
             .map(|bgl| {
-                let bgl: &<Context as crate::Context>::BindGroupLayoutData =
+                let bgl: &<ContextWebGpu as crate::Context>::BindGroupLayoutData =
                     downcast_ref(bgl.data.as_ref());
                 &bgl.0
             })
@@ -1659,7 +1687,7 @@ impl crate::context::Context for Context {
         device_data: &Self::DeviceData,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
-        let module: &<Context as crate::Context>::ShaderModuleData =
+        let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.vertex.module.data.as_ref());
         let mut mapped_vertex_state =
             web_sys::GpuVertexState::new(desc.vertex.entry_point, &module.0);
@@ -1696,7 +1724,7 @@ impl crate::context::Context for Context {
         let mut mapped_desc = web_sys::GpuRenderPipelineDescriptor::new(
             &match desc.layout {
                 Some(layout) => {
-                    let layout: &<Context as crate::Context>::PipelineLayoutData =
+                    let layout: &<ContextWebGpu as crate::Context>::PipelineLayoutData =
                         downcast_ref(layout.data.as_ref());
                     JsValue::from(&layout.0)
                 }
@@ -1734,7 +1762,7 @@ impl crate::context::Context for Context {
                     None => wasm_bindgen::JsValue::null(),
                 })
                 .collect::<js_sys::Array>();
-            let module: &<Context as crate::Context>::ShaderModuleData =
+            let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
                 downcast_ref(frag.module.data.as_ref());
             let mapped_fragment_desc =
                 web_sys::GpuFragmentState::new(frag.entry_point, &module.0, &targets);
@@ -1759,7 +1787,7 @@ impl crate::context::Context for Context {
         device_data: &Self::DeviceData,
         desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
-        let shader_module: &<Context as crate::Context>::ShaderModuleData =
+        let shader_module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.module.data.as_ref());
         let mapped_compute_stage =
             web_sys::GpuProgrammableStage::new(desc.entry_point, &shader_module.0);
@@ -1767,7 +1795,7 @@ impl crate::context::Context for Context {
         let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {
                 Some(layout) => {
-                    let layout: &<Context as crate::Context>::PipelineLayoutData =
+                    let layout: &<ContextWebGpu as crate::Context>::PipelineLayoutData =
                         downcast_ref(layout.data.as_ref());
                     JsValue::from(&layout.0)
                 }
@@ -2027,15 +2055,6 @@ impl crate::context::Context for Context {
             actual_mapping,
             temporary_mapping,
         })
-    }
-
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        _buffer: &Self::BufferId,
-        buffer_data: &Self::BufferData,
-        sub_range: Range<wgt::BufferAddress>,
-    ) -> js_sys::ArrayBuffer {
-        buffer_data.0.get_mapped_array_buffer(sub_range)
     }
 
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
@@ -2322,7 +2341,7 @@ impl crate::context::Context for Context {
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
 
-                    let view: &<Context as crate::Context>::TextureViewData =
+                    let view: &<ContextWebGpu as crate::Context>::TextureViewData =
                         downcast_ref(ca.view.data.as_ref());
 
                     let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachment::new(
@@ -2334,7 +2353,7 @@ impl crate::context::Context for Context {
                         mapped_color_attachment.clear_value(&cv);
                     }
                     if let Some(rt) = ca.resolve_target {
-                        let resolve_target_view: &<Context as crate::Context>::TextureViewData =
+                        let resolve_target_view: &<ContextWebGpu as crate::Context>::TextureViewData =
                             downcast_ref(rt.data.as_ref());
                         mapped_color_attachment.resolve_target(&resolve_target_view.0);
                     }
@@ -2353,7 +2372,7 @@ impl crate::context::Context for Context {
         }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
-            let depth_stencil_attachment: &<Context as crate::Context>::TextureViewData =
+            let depth_stencil_attachment: &<ContextWebGpu as crate::Context>::TextureViewData =
                 downcast_ref(dsa.view.data.as_ref());
             let mut mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachment::new(&depth_stencil_attachment.0);
@@ -2430,7 +2449,8 @@ impl crate::context::Context for Context {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) {
-        let buffer: &<Context as crate::Context>::BufferData = downcast_ref(buffer.data.as_ref());
+        let buffer: &<ContextWebGpu as crate::Context>::BufferData =
+            downcast_ref(buffer.data.as_ref());
         match size {
             Some(size) => encoder_data.0.clear_buffer_with_f64_and_f64(
                 &buffer.0.buffer,
