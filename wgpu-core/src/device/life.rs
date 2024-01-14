@@ -420,12 +420,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                 TempResource::DestroyedTexture(destroyed) => {
                     resources.destroyed_textures.insert(destroyed.id, destroyed);
                 }
-            }
-            TempResource::Tlas(raw) => {
-                resources.tlas_s.insert(raw.as_info().id(), raw);
-            }
-            TempResource::Blas(raw) => {
-                resources.blas_s.insert(raw.as_info().id(), raw);
+                TempResource::Tlas(raw) => {
+                    resources.tlas_s.insert(raw.as_info().id(), raw);
+                }
+                TempResource::Blas(raw) => {
+                    resources.blas_s.insert(raw.as_info().id(), raw);
+                }
             }
         }
     }
@@ -701,15 +701,8 @@ impl<A: HalApi> LifetimeTracker<A> {
         let _ = Self::triage_resources(
             resource_map,
             self.active.as_mut_slice(),
-            &mut self.free_resources,
             &mut trackers.blas_s,
             |maps| &mut maps.blas_s,
-            |_blas_id, _blas| {
-                #[cfg(feature = "trace")]
-                if let Some(ref mut t) = *trace {
-                    t.add(trace::Action::DestroyBlas(*_blas_id));
-                }
-            },
         );
         self
     }
@@ -720,15 +713,8 @@ impl<A: HalApi> LifetimeTracker<A> {
         let _ = Self::triage_resources(
             resource_map,
             self.active.as_mut_slice(),
-            &mut self.free_resources,
             &mut trackers.tlas_s,
             |maps| &mut maps.tlas_s,
-            |_tlas_id, _tlas| {
-                #[cfg(feature = "trace")]
-                if let Some(ref mut t) = *trace {
-                    t.add(trace::Action::DestroyTlas(*_tlas_id));
-                }
-            },
         );
         self
     }

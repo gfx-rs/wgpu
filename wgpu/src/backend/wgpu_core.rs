@@ -3129,7 +3129,7 @@ impl crate::Context for ContextWgpuCore {
 
         let tlas = tlas
             .into_iter()
-            .map(|e: crate::ray_tracing::ContextTlasBuildEntry<Context>| {
+            .map(|e: crate::ray_tracing::ContextTlasBuildEntry<ContextWgpuCore>| {
                 wgc::ray_tracing::TlasBuildEntry {
                     tlas_id: e.tlas_id,
                     instance_buffer_id: e.instance_buffer_id,

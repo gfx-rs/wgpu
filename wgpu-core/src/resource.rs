@@ -1479,8 +1479,13 @@ pub struct Blas<A: HalApi> {
 
 impl<A: HalApi> Drop for Blas<A> {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyBlas(self.info.id()));
+        }
         unsafe {
             if let Some(structure) = self.raw.take() {
+                resource_log!("Destroy raw Blas {:?}", self.info.label());
                 use hal::Device;
                 self.device.raw().destroy_acceleration_structure(structure);
             }
@@ -1516,9 +1521,14 @@ pub struct Tlas<A: HalApi> {
 
 impl<A: HalApi> Drop for Tlas<A> {
     fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyTlas(self.info.id()));
+        }
         unsafe {
             use hal::Device;
             if let Some(structure) = self.raw.take() {
+                resource_log!("Destroy raw Tlas {:?}", self.info.label());
                 self.device.raw().destroy_acceleration_structure(structure);
             }
             if let Some(buffer) = self.instance_buffer.write().take() {
