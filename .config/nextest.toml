@@ -1,3 +1,8 @@
+# None of our tests should take longer than 45s, and if they've gone 2x that,
+# terminate them to prevent infinite run-on.
+[profile.default]
+slow-timeout = { period = "45s", terminate-after = 2 }
+
 # Use two threads for tests with "2_threads" in their name
 [[profile.default.overrides]]
 filter = 'test(~2_threads)'

@@ -9,7 +9,7 @@ on:
 
 env:
   # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
-  # 
+  #
   # Must also be changed in ci.yaml
   DXC_RELEASE: "v1.7.2308"
   DXC_FILENAME: "dxc_2023_08_14.zip"
@@ -21,7 +21,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: Swatinem/rust-cache@v2
+      # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+      - uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           workspaces: |
             naga/xtask -> naga/xtask/target
@@ -45,7 +46,7 @@ jobs:
 
           curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
           7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
-          
+
           # We need to use cygpath to convert PWD to a windows path as we're using bash.
           cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
 
@@ -66,7 +67,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: Swatinem/rust-cache@v2
+      # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+      - uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           workspaces: |
             naga/xtask -> naga/xtask/target
@@ -74,7 +76,7 @@ jobs:
       - run: |
           cd naga
           cargo xtask validate msl
-      
+
   naga-validate-linux:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-latest
@@ -84,7 +86,8 @@ jobs:
       - name: Install tools
         run: sudo apt-get install spirv-tools glslang-tools graphviz
 
-      - uses: Swatinem/rust-cache@v2
+      # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+      - uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           workspaces: |
             naga/xtask -> naga/xtask/target
@@ -96,4 +99,3 @@ jobs:
       - run: cd naga; cargo xtask validate dot
 
       - run: cd naga; cargo xtask validate wgsl
-

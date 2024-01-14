@@ -16,7 +16,17 @@ pub fn initialize_instance() -> Instance {
     //
     // We can potentially work support back into the test runner in the future, but as the adapters are matched up
     // based on adapter index, removing some backends messes up the indexes in annoying ways.
-    let backends = Backends::all();
+    //
+    // WORKAROUND for https://github.com/rust-lang/cargo/issues/7160:
+    // `--no-default-features` is not passed through correctly to the test runner.
+    // We use it whenever we want to explicitly run with webgl instead of webgpu.
+    // To "disable" webgpu regardless, we do this by removing the webgpu backend whenever we see
+    // the webgl feature.
+    let backends = if cfg!(feature = "webgl") {
+        Backends::all() - Backends::BROWSER_WEBGPU
+    } else {
+        Backends::all()
+    };
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
     Instance::new(wgpu::InstanceDescriptor {
@@ -51,7 +61,7 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Opt
         let canvas = initialize_html_canvas();
 
         _surface = instance
-            .create_surface_from_canvas(canvas.clone())
+            .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
             .expect("could not create surface from canvas");
 
         surface_guard = Some(SurfaceGuard { canvas });

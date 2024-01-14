@@ -119,7 +119,7 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 ### MSRV policy
 
 Due to complex dependants, we have two MSRV policies:
- - `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
+ - `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.70**.
  - The rest of the workspace has an MSRV of **1.71**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
@@ -174,7 +174,7 @@ To run the test suite on WebGL (currently incomplete):
 
 ```
 cd wgpu
-wasm-pack test --headless --chrome --features webgl --workspace
+wasm-pack test --headless --chrome --no-default-features --features webgl --workspace
 ```
 
 This will automatically run the tests using a packaged browser. Remove `--headless` to run the tests with whatever browser you wish at `http://localhost:8000`.

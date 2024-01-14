@@ -14,7 +14,7 @@ use wgpu::*;
 /// to add them to. This is incorrect, as we do not immediatley invoke map_async callbacks.
 #[gpu_test]
 static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         // Create a mappable buffer
         let buffer = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("mappable buffer"),
@@ -36,7 +36,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         // Submit the work.
         ctx.queue.submit(Some(encoder.finish()));
         // Ensure the work is finished.
-        ctx.device.poll(MaintainBase::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         #[derive(Debug)]
         struct OrderingContext {
@@ -74,10 +74,10 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         });
 
         // No GPU work is happening at this point, but we want to process callbacks.
-        ctx.device.poll(MaintainBase::Poll);
+        ctx.async_poll(MaintainBase::Poll).await.panic_on_timeout();
 
         // Extract the ordering out of the arc.
-        let ordering = Arc::try_unwrap(ordering).unwrap().into_inner();
+        let ordering = Arc::into_inner(ordering).unwrap().into_inner();
 
         // There were two callbacks invoked
         assert_eq!(ordering.counter, 2);

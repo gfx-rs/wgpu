@@ -9,7 +9,7 @@ keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 resolver = "2"
-rust-version = "1.65"
+rust-version = "1.70"
 autotests = false
 
 [[test]]
@@ -44,7 +44,7 @@ harness = false
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
 bitflags = "2.2"
 bit-set = "0.5"
-termcolor = { version = "1.4.0" }
+termcolor = { version = "1.4.1" }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e

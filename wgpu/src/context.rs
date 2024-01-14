@@ -10,12 +10,12 @@ use wgt::{
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
-    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
+    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain,
+    MaintainResult, MapMode, PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
+    TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -103,8 +103,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     unsafe fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: SurfaceTargetUnsafe,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError>;
     fn instance_request_adapter(
         &self,
@@ -293,7 +292,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         maintain: Maintain,
-    ) -> bool;
+    ) -> MaintainResult;
     fn device_on_uncaptured_error(
         &self,
         device: &Self::DeviceId,
@@ -326,13 +325,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         buffer_data: &Self::BufferData,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(webgpu)]
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        buffer: &Self::BufferId,
-        buffer_data: &Self::BufferData,
-        sub_range: Range<BufferAddress>,
-    ) -> js_sys::ArrayBuffer;
     fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData);
     fn texture_create_view(
         &self,
@@ -1075,6 +1067,7 @@ impl ObjectId {
         global_id: None,
     };
 
+    #[allow(dead_code)]
     pub fn new(id: NonZeroU64, global_id: NonZeroU64) -> Self {
         Self {
             id: Some(id),
@@ -1180,8 +1173,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
 
     unsafe fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: SurfaceTargetUnsafe,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError>;
     #[allow(clippy::type_complexity)]
     fn instance_request_adapter(
@@ -1348,8 +1340,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data);
     fn device_mark_lost(&self, device: &ObjectId, device_data: &crate::Data, message: &str);
     fn queue_drop(&self, queue: &ObjectId, queue_data: &crate::Data);
-    fn device_poll(&self, device: &ObjectId, device_data: &crate::Data, maintain: Maintain)
-        -> bool;
+    fn device_poll(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        maintain: Maintain,
+    ) -> MaintainResult;
     fn device_on_uncaptured_error(
         &self,
         device: &ObjectId,
@@ -1381,13 +1377,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         buffer_data: &crate::Data,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
-    #[cfg(webgpu)]
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        buffer: &ObjectId,
-        buffer_data: &crate::Data,
-        sub_range: Range<BufferAddress>,
-    ) -> js_sys::ArrayBuffer;
     fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data);
     fn texture_create_view(
         &self,
@@ -2069,11 +2058,9 @@ where
 
     unsafe fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: SurfaceTargetUnsafe,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError> {
-        let (surface, data) =
-            unsafe { Context::instance_create_surface(self, display_handle, window_handle) }?;
+        let (surface, data) = unsafe { Context::instance_create_surface(self, target) }?;
         Ok((surface.into(), Box::new(data) as _))
     }
 
@@ -2471,7 +2458,7 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         maintain: Maintain,
-    ) -> bool {
+    ) -> MaintainResult {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_poll(self, &device, device_data, maintain)
@@ -2531,18 +2518,6 @@ where
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
         Context::buffer_get_mapped_range(self, &buffer, buffer_data, sub_range)
-    }
-
-    #[cfg(webgpu)]
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        buffer: &ObjectId,
-        buffer_data: &crate::Data,
-        sub_range: Range<BufferAddress>,
-    ) -> js_sys::ArrayBuffer {
-        let buffer = <T::BufferId>::from(*buffer);
-        let buffer_data = downcast_ref(buffer_data);
-        Context::buffer_get_mapped_range_as_array_buffer(self, &buffer, buffer_data, sub_range)
     }
 
     fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) {

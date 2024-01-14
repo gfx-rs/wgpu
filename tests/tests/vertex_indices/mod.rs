@@ -225,7 +225,7 @@ impl Test {
     }
 }
 
-fn vertex_index_common(ctx: TestingContext) {
+async fn vertex_index_common(ctx: TestingContext) {
     let identity_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: Some("identity buffer"),
         contents: bytemuck::cast_slice(&[0u32, 1, 2, 3, 4, 5, 6, 7, 8]),
@@ -428,11 +428,15 @@ fn vertex_index_common(ctx: TestingContext) {
         // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
         // with a hard wait in between.
         ctx.queue.submit([encoder1.finish()]);
-        ctx.device.poll(wgpu::Maintain::Wait);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
         ctx.queue.submit([encoder2.finish()]);
         let slice = cpu_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.device.poll(wgpu::Maintain::Wait);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
         let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 
         if data != expected {
@@ -463,4 +467,4 @@ static VERTEX_INDICES: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )
-    .run_sync(vertex_index_common);
+    .run_async(vertex_index_common);

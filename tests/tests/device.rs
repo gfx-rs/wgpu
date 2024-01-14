@@ -3,7 +3,7 @@ use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameter
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::always()))
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         // Create a bind group uisng a layout from another device. This should be a validation
         // error but currently crashes.
         let (device2, _) =
@@ -23,7 +23,9 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
             });
         }
 
-        ctx.device.poll(wgpu::Maintain::Poll);
+        ctx.async_poll(wgpu::Maintain::Poll)
+            .await
+            .panic_on_timeout();
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
@@ -50,11 +52,11 @@ fn device_lifetime_check() {
 
     instance.poll_all(false);
 
-    let pre_report = instance.generate_report();
+    let pre_report = instance.generate_report().unwrap().unwrap();
 
     drop(queue);
     drop(device);
-    let post_report = instance.generate_report();
+    let post_report = instance.generate_report().unwrap().unwrap();
     assert_ne!(
         pre_report, post_report,
         "Queue and Device has not been dropped as expected"
@@ -483,7 +485,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
 #[gpu_test]
 static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         // This test checks that when device.destroy is called, the provided
         // DeviceLostClosure is called with reason DeviceLostReason::Destroyed.
         let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
@@ -504,7 +506,10 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
 
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
-        assert!(ctx.device.poll(wgpu::Maintain::Wait));
+        assert!(ctx
+            .async_poll(wgpu::Maintain::wait())
+            .await
+            .is_queue_empty());
 
         assert!(
             was_called.load(std::sync::atomic::Ordering::SeqCst),

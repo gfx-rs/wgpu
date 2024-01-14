@@ -612,7 +612,9 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-                ctx.device.poll(wgpu::Maintain::Wait);
+                ctx.async_poll(wgpu::Maintain::wait())
+                    .await
+                    .panic_on_timeout();
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
                 wgpu_test::image::compare_image_output(

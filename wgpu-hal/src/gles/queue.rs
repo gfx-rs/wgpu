@@ -109,7 +109,7 @@ impl super::Queue {
             super::TextureInner::Texture { raw, target } => {
                 let num_layers = view.array_layers.end - view.array_layers.start;
                 if num_layers > 1 {
-                    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+                    #[cfg(webgl)]
                     unsafe {
                         gl.framebuffer_texture_multiview_ovr(
                             fbo_target,
@@ -143,7 +143,7 @@ impl super::Queue {
                     };
                 }
             }
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             super::TextureInner::ExternalFramebuffer { ref inner } => unsafe {
                 gl.bind_external_framebuffer(glow::FRAMEBUFFER, inner);
             },
@@ -432,7 +432,7 @@ impl super::Queue {
                     unsafe { gl.bind_buffer(copy_dst_target, None) };
                 }
             }
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             C::CopyExternalImageToTexture {
                 ref src,
                 dst,
@@ -1805,15 +1805,7 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 }
 
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for super::Queue {}
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for super::Queue {}

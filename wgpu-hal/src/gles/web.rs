@@ -111,15 +111,9 @@ impl Instance {
     }
 }
 
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for Instance {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
@@ -210,15 +204,9 @@ impl Clone for Surface {
     }
 }
 
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for Surface {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for Surface {}
 
 #[derive(Clone, Debug)]

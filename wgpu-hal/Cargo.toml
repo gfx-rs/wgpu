@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.65"
+rust-version = "1.70"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -160,6 +160,9 @@ path = "../naga"
 version = "0.14.0"
 features = ["clone"]
 
+[build-dependencies]
+cfg_aliases.workspace = true
+
 # DEV dependencies
 [dev-dependencies.naga]
 path = "../naga"
@@ -169,7 +172,7 @@ features = ["wgsl-in"]
 [dev-dependencies]
 cfg-if = "1"
 env_logger = "0.10"
-glam = "0.24.2" # for ray-traced-triangle example
+glam = "0.25.0" # for ray-traced-triangle example
 winit = { version = "0.29.9", features = [
     "android-native-activity",
 ] } # for "halmark" example

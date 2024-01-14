@@ -29,18 +29,18 @@ pub enum DrawError {
     IncompatibleBindGroup { index: u32, diff: Vec<String> },
     #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {
-        last_vertex: u32,
-        vertex_limit: u32,
+        last_vertex: u64,
+        vertex_limit: u64,
         slot: u32,
     },
     #[error("Instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
     InstanceBeyondLimit {
-        last_instance: u32,
-        instance_limit: u32,
+        last_instance: u64,
+        instance_limit: u64,
         slot: u32,
     },
     #[error("Index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
-    IndexBeyondLimit { last_index: u32, index_limit: u32 },
+    IndexBeyondLimit { last_index: u64, index_limit: u64 },
     #[error(
         "Pipeline index format ({pipeline:?}) and buffer index format ({buffer:?}) do not match"
     )]
@@ -147,7 +147,7 @@ pub struct Rect<T> {
 pub enum RenderCommand {
     SetBindGroup {
         index: u32,
-        num_dynamic_offsets: u8,
+        num_dynamic_offsets: usize,
         bind_group_id: id::BindGroupId,
     },
     SetPipeline(id::RenderPipelineId),

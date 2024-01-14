@@ -72,13 +72,7 @@ pub struct SubmittedWorkDoneClosureC {
     pub user_data: *mut u8,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Send for SubmittedWorkDoneClosureC {}
 
 pub struct SubmittedWorkDoneClosure {
@@ -87,21 +81,9 @@ pub struct SubmittedWorkDoneClosure {
     inner: SubmittedWorkDoneClosureInner,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 
 enum SubmittedWorkDoneClosureInner {
@@ -918,7 +900,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(webgl)]
     pub fn queue_copy_external_image_to_texture<A: HalApi>(
         &self,
         queue_id: QueueId,
@@ -1165,8 +1147,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // it, so make sure to set_size on it.
                         used_surface_textures.set_size(hub.textures.read().len());
 
-                        // TODO: ideally we would use `get_and_mark_destroyed` but the code here
-                        // wants to consume the command buffer.
                         #[allow(unused_mut)]
                         let mut cmdbuf = match command_buffer_guard.replace_with_error(cmb_id) {
                             Ok(cmdbuf) => cmdbuf,
@@ -1192,7 +1172,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ));
                         }
                         if !cmdbuf.is_finished() {
-                            if let Ok(cmdbuf) = Arc::try_unwrap(cmdbuf) {
+                            if let Some(cmdbuf) = Arc::into_inner(cmdbuf) {
                                 device.destroy_command_buffer(cmdbuf);
                             } else {
                                 panic!(

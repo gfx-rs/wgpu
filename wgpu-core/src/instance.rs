@@ -62,13 +62,13 @@ fn downlevel_default_limits_less_than_default_limits() {
 pub struct Instance {
     #[allow(dead_code)]
     pub name: String,
-    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+    #[cfg(vulkan)]
     pub vulkan: Option<HalInstance<hal::api::Vulkan>>,
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(metal)]
     pub metal: Option<HalInstance<hal::api::Metal>>,
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     pub dx12: Option<HalInstance<hal::api::Dx12>>,
-    #[cfg(feature = "gles")]
+    #[cfg(gles)]
     pub gl: Option<HalInstance<hal::api::Gles>>,
     pub flags: wgt::InstanceFlags,
 }
@@ -105,13 +105,13 @@ impl Instance {
 
         Self {
             name: name.to_string(),
-            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            #[cfg(vulkan)]
             vulkan: init(hal::api::Vulkan, &instance_desc),
-            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(metal)]
             metal: init(hal::api::Metal, &instance_desc),
-            #[cfg(all(feature = "dx12", windows))]
+            #[cfg(dx12)]
             dx12: init(hal::api::Dx12, &instance_desc),
-            #[cfg(feature = "gles")]
+            #[cfg(gles)]
             gl: init(hal::api::Gles, &instance_desc),
             flags: instance_desc.flags,
         }
@@ -121,8 +121,8 @@ impl Instance {
         fn destroy<A: HalApi>(_: A, instance: &Option<A::Instance>, surface: AnySurface) {
             unsafe {
                 if let Some(surface) = surface.take::<A>() {
-                    if let Ok(suf) = Arc::try_unwrap(surface) {
-                        if let Ok(raw) = Arc::try_unwrap(suf.raw) {
+                    if let Some(suf) = Arc::into_inner(surface) {
+                        if let Some(raw) = Arc::into_inner(suf.raw) {
                             instance.as_ref().unwrap().destroy_surface(raw);
                         } else {
                             panic!("Surface cannot be destroyed because is still in use");
@@ -134,13 +134,13 @@ impl Instance {
             }
         }
         match surface.raw.backend() {
-            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            #[cfg(vulkan)]
             Backend::Vulkan => destroy(hal::api::Vulkan, &self.vulkan, surface.raw),
-            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(metal)]
             Backend::Metal => destroy(hal::api::Metal, &self.metal, surface.raw),
-            #[cfg(all(feature = "dx12", windows))]
+            #[cfg(dx12)]
             Backend::Dx12 => destroy(hal::api::Dx12, &self.dx12, surface.raw),
-            #[cfg(feature = "gles")]
+            #[cfg(gles)]
             Backend::Gl => destroy(hal::api::Gles, &self.gl, surface.raw),
             _ => unreachable!(),
         }
@@ -479,74 +479,61 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
         id_in: Input<G, SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface");
 
         fn init<A: HalApi>(
-            any_surface: &mut Option<AnySurface>,
             inst: &Option<A::Instance>,
             display_handle: raw_window_handle::RawDisplayHandle,
             window_handle: raw_window_handle::RawWindowHandle,
-        ) {
-            if any_surface.is_none() {
-                if let Some(surface) = inst.as_ref().and_then(|inst| unsafe {
-                    match inst.create_surface(display_handle, window_handle) {
-                        Ok(raw) => Some(HalSurface::<A> { raw: Arc::new(raw) }),
-                        Err(e) => {
-                            log::warn!("Error: {:?}", e);
-                            None
-                        }
-                    }
-                }) {
-                    *any_surface = Some(AnySurface::new(surface));
+        ) -> Option<Result<AnySurface, hal::InstanceError>> {
+            inst.as_ref().map(|inst| unsafe {
+                match inst.create_surface(display_handle, window_handle) {
+                    Ok(raw) => Ok(AnySurface::new(HalSurface::<A> { raw: Arc::new(raw) })),
+                    Err(e) => Err(e),
                 }
-            }
+            })
         }
 
-        let mut hal_surface = None;
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-        init::<hal::api::Vulkan>(
-            &mut hal_surface,
-            &self.instance.vulkan,
-            display_handle,
-            window_handle,
-        );
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-        init::<hal::api::Metal>(
-            &mut hal_surface,
-            &self.instance.metal,
-            display_handle,
-            window_handle,
-        );
-        #[cfg(all(feature = "dx12", windows))]
-        init::<hal::api::Dx12>(
-            &mut hal_surface,
-            &self.instance.dx12,
-            display_handle,
-            window_handle,
-        );
-        #[cfg(feature = "gles")]
-        init::<hal::api::Gles>(
-            &mut hal_surface,
-            &self.instance.gl,
-            display_handle,
-            window_handle,
-        );
+        let mut hal_surface: Option<Result<AnySurface, hal::InstanceError>> = None;
+
+        #[cfg(vulkan)]
+        if hal_surface.is_none() {
+            hal_surface =
+                init::<hal::api::Vulkan>(&self.instance.vulkan, display_handle, window_handle);
+        }
+        #[cfg(metal)]
+        if hal_surface.is_none() {
+            hal_surface =
+                init::<hal::api::Metal>(&self.instance.metal, display_handle, window_handle);
+        }
+        #[cfg(dx12)]
+        if hal_surface.is_none() {
+            hal_surface =
+                init::<hal::api::Dx12>(&self.instance.dx12, display_handle, window_handle);
+        }
+        #[cfg(gles)]
+        if hal_surface.is_none() {
+            hal_surface = init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle);
+        }
+
+        //  This is only None if there's no instance at all.
+        let hal_surface = hal_surface.unwrap()?;
 
         let surface = Surface {
             presentation: Mutex::new(None),
             info: ResourceInfo::new("<Surface>"),
-            raw: hal_surface.unwrap(),
+            raw: hal_surface,
         };
 
         let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
-        id
+        Ok(id)
     }
 
     /// # Safety
     ///
     /// `layer` must be a valid pointer.
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(metal)]
     pub unsafe fn instance_create_surface_metal(
         &self,
         layer: *mut std::ffi::c_void,
@@ -578,79 +565,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id
     }
 
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(target_os = "emscripten"),
-        feature = "gles"
-    ))]
-    pub fn create_surface_webgl_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-        id_in: Input<G, SurfaceId>,
-    ) -> Result<SurfaceId, hal::InstanceError> {
-        profiling::scope!("Instance::create_surface_webgl_canvas");
-
-        let surface = Surface {
-            presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
-            raw: {
-                let hal_surface: HalSurface<hal::api::Gles> = self
-                    .instance
-                    .gl
-                    .as_ref()
-                    .map(|inst| {
-                        let raw_surface = inst.create_surface_from_canvas(canvas)?;
-                        Ok(HalSurface {
-                            raw: Arc::new(raw_surface),
-                        })
-                    })
-                    .transpose()?
-                    .unwrap();
-                AnySurface::new(hal_surface)
-            },
-        };
-
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
-        Ok(id)
-    }
-
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(target_os = "emscripten"),
-        feature = "gles"
-    ))]
-    pub fn create_surface_webgl_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-        id_in: Input<G, SurfaceId>,
-    ) -> Result<SurfaceId, hal::InstanceError> {
-        profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
-
-        let surface = Surface {
-            presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
-            raw: {
-                let hal_surface: HalSurface<hal::api::Gles> = self
-                    .instance
-                    .gl
-                    .as_ref()
-                    .map(|inst| {
-                        let raw_surface = inst.create_surface_from_offscreen_canvas(canvas)?;
-                        Ok(HalSurface {
-                            raw: Arc::new(raw_surface),
-                        })
-                    })
-                    .transpose()?
-                    .unwrap();
-                AnySurface::new(hal_surface)
-            },
-        };
-
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
-        Ok(id)
-    }
-
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     /// # Safety
     ///
     /// The visual must be valid and able to be used to make a swapchain with.
@@ -681,7 +596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id
     }
 
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     /// # Safety
     ///
     /// The surface_handle must be valid and able to be used to make a swapchain with.
@@ -714,7 +629,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id
     }
 
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     /// # Safety
     ///
     /// The swap_chain_panel must be valid and able to be used to make a swapchain with.
@@ -766,15 +681,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let surface = self.surfaces.unregister(id);
-        if let Ok(surface) = Arc::try_unwrap(surface.unwrap()) {
+        if let Some(surface) = Arc::into_inner(surface.unwrap()) {
             if let Some(present) = surface.presentation.lock().take() {
-                #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+                #[cfg(vulkan)]
                 unconfigure::<_, hal::api::Vulkan>(self, &surface.raw, &present);
-                #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+                #[cfg(metal)]
                 unconfigure::<_, hal::api::Metal>(self, &surface.raw, &present);
-                #[cfg(all(feature = "dx12", windows))]
+                #[cfg(dx12)]
                 unconfigure::<_, hal::api::Dx12>(self, &surface.raw, &present);
-                #[cfg(feature = "gles")]
+                #[cfg(gles)]
                 unconfigure::<_, hal::api::Gles>(self, &surface.raw, &present);
             }
 
@@ -818,23 +733,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut adapters = Vec::new();
 
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        #[cfg(vulkan)]
         self.enumerate(
             hal::api::Vulkan,
             &self.instance.vulkan,
             &inputs,
             &mut adapters,
         );
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+        #[cfg(metal)]
         self.enumerate(
             hal::api::Metal,
             &self.instance.metal,
             &inputs,
             &mut adapters,
         );
-        #[cfg(all(feature = "dx12", windows))]
+        #[cfg(dx12)]
         self.enumerate(hal::api::Dx12, &self.instance.dx12, &inputs, &mut adapters);
-        #[cfg(feature = "gles")]
+        #[cfg(gles)]
         self.enumerate(hal::api::Gles, &self.instance.gl, &inputs, &mut adapters);
 
         adapters
@@ -916,7 +831,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
         let mut device_types = Vec::new();
 
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        #[cfg(vulkan)]
         let (id_vulkan, adapters_vk) = gather(
             hal::api::Vulkan,
             self.instance.vulkan.as_ref(),
@@ -925,7 +840,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             desc.force_fallback_adapter,
             &mut device_types,
         );
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+        #[cfg(metal)]
         let (id_metal, adapters_metal) = gather(
             hal::api::Metal,
             self.instance.metal.as_ref(),
@@ -934,7 +849,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             desc.force_fallback_adapter,
             &mut device_types,
         );
-        #[cfg(all(feature = "dx12", windows))]
+        #[cfg(dx12)]
         let (id_dx12, adapters_dx12) = gather(
             hal::api::Dx12,
             self.instance.dx12.as_ref(),
@@ -943,7 +858,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             desc.force_fallback_adapter,
             &mut device_types,
         );
-        #[cfg(feature = "gles")]
+        #[cfg(gles)]
         let (id_gl, adapters_gl) = gather(
             hal::api::Gles,
             self.instance.gl.as_ref(),
@@ -1004,19 +919,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        #[cfg(vulkan)]
         if let Some(id) = self.select(&mut selected, id_vulkan, adapters_vk) {
             return Ok(id);
         }
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+        #[cfg(metal)]
         if let Some(id) = self.select(&mut selected, id_metal, adapters_metal) {
             return Ok(id);
         }
-        #[cfg(all(feature = "dx12", windows))]
+        #[cfg(dx12)]
         if let Some(id) = self.select(&mut selected, id_dx12, adapters_dx12) {
             return Ok(id);
         }
-        #[cfg(feature = "gles")]
+        #[cfg(gles)]
         if let Some(id) = self.select(&mut selected, id_gl, adapters_gl) {
             return Ok(id);
         }
@@ -1040,13 +955,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (id, _adapter): (crate::id::Id<Adapter<hal::empty::Api>>, Arc<Adapter<A>>) =
             match A::VARIANT {
-                #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+                #[cfg(vulkan)]
                 Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)),
-                #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+                #[cfg(metal)]
                 Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
-                #[cfg(all(feature = "dx12", windows))]
+                #[cfg(dx12)]
                 Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
-                #[cfg(feature = "gles")]
+                #[cfg(gles)]
                 Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
                 _ => unreachable!(),
             };

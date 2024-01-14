@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.65"
+rust-version = "1.70"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -128,3 +128,6 @@ web-sys = { version = "0.3.66", features = [
     "HtmlCanvasElement",
     "OffscreenCanvas",
 ] }
+
+[build-dependencies]
+cfg_aliases.workspace = true

@@ -52,30 +52,30 @@
 )]
 
 /// DirectX12 API internals.
-#[cfg(all(feature = "dx12", windows))]
+#[cfg(dx12)]
 pub mod dx12;
 /// A dummy API implementation.
 pub mod empty;
 /// GLES API internals.
-#[cfg(feature = "gles")]
+#[cfg(gles)]
 pub mod gles;
 /// Metal API internals.
-#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+#[cfg(metal)]
 pub mod metal;
 /// Vulkan API internals.
-#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+#[cfg(vulkan)]
 pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
-    #[cfg(feature = "gles")]
+    #[cfg(gles)]
     pub use super::gles::Api as Gles;
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(metal)]
     pub use super::metal::Api as Metal;
-    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+    #[cfg(vulkan)]
     pub use super::vulkan::Api as Vulkan;
 }
 
@@ -463,7 +463,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ImageCopyExternalImage,

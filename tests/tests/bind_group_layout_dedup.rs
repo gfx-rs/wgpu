@@ -31,9 +31,9 @@ const ENTRY: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
 #[gpu_test]
 static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().test_features_limits())
-    .run_sync(bgl_dedupe);
+    .run_async(bgl_dedupe);
 
-fn bgl_dedupe(ctx: TestingContext) {
+async fn bgl_dedupe(ctx: TestingContext) {
     let entries_1 = &[];
 
     let entries_2 = &[ENTRY];
@@ -126,7 +126,9 @@ fn bgl_dedupe(ctx: TestingContext) {
         }
     }
 
-    ctx.device.poll(wgpu::Maintain::Wait);
+    ctx.async_poll(wgpu::Maintain::wait())
+        .await
+        .panic_on_timeout();
 
     if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
         // Now all of the BGL ids should be dead, so we should get the same ids again.

@@ -59,6 +59,23 @@ This feature allowed you to call `global_id` on any wgpu opaque handle to get a 
 
 Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`) backend. These are enabled by default, but don't do anything when not targetting the corresponding OS. By @daxpedda in [#4815](https://github.com/gfx-rs/wgpu/pull/4815)
 
+### Unified surface creation
+
+Previously, there were various specialized surface creation functions for various platform specific handles.
+Now, `wgpu::Instance::create_surface` & `wgpu::Instance::create_surface_unsafe` instead each take a value that can be converted to the unified `wgpu::SurfaceTarget`/`wgpu::SurfaceTargetUnsafe` enums.
+Conversion to `wgpu::SurfaceTarget` is automatic for anything implementing `raw-window-handle`'s `HasWindowHandle` & `HasDisplayHandle` traits,
+meaning that you can continue to e.g. pass references to winit windows as before.
+By @wumpf in [#4984](https://github.com/gfx-rs/wgpu/pull/4984)
+
+### WebGPU & WebGL in the same binary
+
+Enabling `webgl` no longer removes the `webgpu` backend.
+Instead, there's a new (default enabled) `webgpu` feature that allows to explicitly opt-out of `webgpu` if so desired.
+If both `webgl` & `webgpu` are enabled, `wgpu::Instance` decides upon creation whether to target wgpu-core/WebGL or WebGPU.
+This means that adapter selection is not handled as with regular adapters, but still allows to decide at runtime whether
+`webgpu` or the `webgl` backend should be used using a single wasm binary.
+By @wumpf in [#5044](https://github.com/gfx-rs/wgpu/pull/5044)
+
 ### New Features
 
 #### General
@@ -181,6 +198,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - `BufferMappedRange` trait is now `WasmNotSendSync`, i.e. it is `Send`/`Sync` if not on wasm or `fragile-send-sync-non-atomic-wasm` is enabled. By @wumpf in [#4818](https://github.com/gfx-rs/wgpu/pull/4818)
 - Align `wgpu_types::CompositeAlphaMode` serde serialization to spec. By @littledivy in [#4940](https://github.com/gfx-rs/wgpu/pull/4940)
 - Fix error message of `ConfigureSurfaceError::TooLarge`. By @Dinnerbone in [#4960](https://github.com/gfx-rs/wgpu/pull/4960)
+- Fix dropping of `DeviceLostCallbackC` params. By @bradwerth in [#5032](https://github.com/gfx-rs/wgpu/pull/5032)
+- Fixed a number of panics. by @nical in [#4999](https://github.com/gfx-rs/wgpu/pull/4999), [#5014](https://github.com/gfx-rs/wgpu/pull/5014), [#5024](https://github.com/gfx-rs/wgpu/pull/5024), [#5025](https://github.com/gfx-rs/wgpu/pull/5025), [#5026](https://github.com/gfx-rs/wgpu/pull/5026), [#5027](https://github.com/gfx-rs/wgpu/pull/5027), [#5028](https://github.com/gfx-rs/wgpu/pull/5028) and [#5042](https://github.com/gfx-rs/wgpu/pull/5042).
 
 #### DX12
 

@@ -16,11 +16,10 @@
 //! - **`angle`** --- Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS
 //!   using.
 //! - **`vulkan-portability`** --- Enables the Vulkan backend on macOS & iOS.
+//! - **`webgpu`** --- Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 //! - **`webgl`** --- Enables the GLES backend on Wasm
 //!
 //!     - ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-//!     - ⚠️ WIP: This automatically disables use of WebGPU. See
-//!       [#2804](https://github.com/gfx-rs/wgpu/issues/3514).
 //!
 //! ### Shading language support
 //!
@@ -87,7 +86,10 @@ use std::{
     thread,
 };
 
-use context::{Context, DeviceRequest, DynContext, ObjectId};
+#[allow(unused_imports)] // Unused if all backends are disabled.
+use context::Context;
+
+use context::{DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -99,16 +101,17 @@ pub use wgt::{
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
-    InstanceFlags, Limits, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes,
-    PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp,
-    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
-    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
-    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
-    SurfaceStatus, TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
-    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
-    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    InstanceFlags, Limits, MaintainResult, MultisampleState, Origin2d, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
+    PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
+    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
+    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
+    SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend,
+    WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
+    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 #[cfg(not(webgpu))]
@@ -379,7 +382,7 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// serves a similar role.
 pub struct Surface<'window> {
     context: Arc<C>,
-    _surface: Option<Box<dyn WasmNotSendSync + 'window>>,
+    _surface: Option<Box<dyn WindowHandle + 'window>>,
     id: ObjectId,
     data: Box<Data>,
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
@@ -420,6 +423,149 @@ impl Drop for Surface<'_> {
         if !thread::panicking() {
             self.context.surface_drop(&self.id, self.data.as_ref())
         }
+    }
+}
+
+/// Super trait for window handles as used in [`SurfaceTarget`].
+pub trait WindowHandle: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
+
+impl<T> WindowHandle for T where T: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
+
+/// The window/canvas/surface/swap-chain/etc. a surface is attached to, for use with safe surface creation.
+///
+/// This is either a window or an actual web canvas depending on the platform and
+/// enabled features.
+/// Refer to the individual variants for more information.
+///
+/// See also [`SurfaceTargetUnsafe`] for unsafe variants.
+#[non_exhaustive]
+pub enum SurfaceTarget<'window> {
+    /// Window handle producer.
+    ///
+    /// If the specified display and window handle are not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation returns an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    ///
+    /// # Panics
+    ///
+    /// - On macOS/Metal: will panic if not called on the main thread.
+    /// - On web: will panic if the `raw_window_handle` does not properly refer to a
+    ///   canvas element.
+    Window(Box<dyn WindowHandle + 'window>),
+
+    /// Surface from a `web_sys::HtmlCanvasElement`.
+    ///
+    /// The `canvas` argument must be a valid `<canvas>` element to
+    /// create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    #[cfg(any(webgpu, webgl))]
+    Canvas(web_sys::HtmlCanvasElement),
+
+    /// Surface from a `web_sys::OffscreenCanvas`.
+    ///
+    /// The `canvas` argument must be a valid `OffscreenCanvas` object
+    /// to create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    #[cfg(any(webgpu, webgl))]
+    OffscreenCanvas(web_sys::OffscreenCanvas),
+}
+
+impl<'a, T> From<T> for SurfaceTarget<'a>
+where
+    T: WindowHandle + 'a,
+{
+    fn from(window: T) -> Self {
+        Self::Window(Box::new(window))
+    }
+}
+
+/// The window/canvas/surface/swap-chain/etc. a surface is attached to, for use with unsafe surface creation.
+///
+/// This is either a window or an actual web canvas depending on the platform and
+/// enabled features.
+/// Refer to the individual variants for more information.
+///
+/// See also [`SurfaceTarget`] for safe variants.
+#[non_exhaustive]
+pub enum SurfaceTargetUnsafe {
+    /// Raw window & display handle.
+    ///
+    /// If the specified display and window handle are not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
+    /// # Safety
+    ///
+    /// - `raw_window_handle` & `raw_display_handle` must be valid objects to create a surface upon.
+    /// - `raw_window_handle` & `raw_display_handle` must remain valid until after the returned
+    ///    [`Surface`] is  dropped.
+    RawHandle {
+        /// Raw display handle, underlying display must outlive the surface created from this.
+        raw_display_handle: raw_window_handle::RawDisplayHandle,
+
+        /// Raw display handle, underlying window must outlive the surface created from this.
+        raw_window_handle: raw_window_handle::RawWindowHandle,
+    },
+
+    /// Surface from `CoreAnimationLayer`.
+    ///
+    /// # Safety
+    ///
+    /// - layer must be a valid object to create a surface upon.
+    #[cfg(metal)]
+    CoreAnimationLayer(*mut std::ffi::c_void),
+
+    /// Surface from `IDCompositionVisual`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid IDCompositionVisual to create a surface upon.
+    #[cfg(dx12)]
+    CompositionVisual(*mut std::ffi::c_void),
+
+    /// Surface from DX12 `SurfaceHandle`.
+    ///
+    /// # Safety
+    ///
+    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
+    #[cfg(dx12)]
+    SurfaceHandle(*mut std::ffi::c_void),
+
+    /// Surface from DX12 `SwapChainPanel`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid SwapChainPanel to create a surface upon.
+    #[cfg(dx12)]
+    SwapChainPanel(*mut std::ffi::c_void),
+}
+
+impl SurfaceTargetUnsafe {
+    /// Creates a [`SurfaceTargetUnsafe::RawHandle`] from a window.
+    ///
+    /// # Safety
+    ///
+    /// - `window` must outlive the resulting surface target
+    ///   (and subsequently the surface created for this target).
+    pub unsafe fn from_window<T>(window: &T) -> Result<Self, raw_window_handle::HandleError>
+    where
+        T: HasDisplayHandle + HasWindowHandle,
+    {
+        Ok(Self::RawHandle {
+            raw_display_handle: window.display_handle()?.as_raw(),
+            raw_window_handle: window.window_handle()?.as_raw(),
+        })
     }
 }
 
@@ -1594,8 +1740,6 @@ impl Instance {
     /// See <https://github.com/gfx-rs/wgpu/issues/3514>
     /// * Windows: always enables Vulkan and GLES with no way to opt out
     /// * Linux: always enables Vulkan and GLES with no way to opt out
-    /// * Web: either targets WebGPU backend or, if `webgl` enabled, WebGL
-    ///   * TODO: Support both WebGPU and WebGL at the same time, see <https://github.com/gfx-rs/wgpu/issues/2804>
     pub const fn any_backend_feature_enabled() -> bool {
         // Method intentionally kept verbose to keep it a bit easier to follow!
 
@@ -1605,6 +1749,9 @@ impl Instance {
             cfg!(feature = "metal")
                 || cfg!(feature = "vulkan-portability")
                 || cfg!(feature = "angle")
+        // On the web, either WebGPU or WebGL must be enabled.
+        } else if cfg!(target_arch = "wasm32") {
+            cfg!(feature = "webgpu") || cfg!(feature = "webgl")
         } else {
             true
         }
@@ -1617,11 +1764,21 @@ impl Instance {
     /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
     ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
     ///
+    ///   [`Backends::BROWSER_WEBGPU`] takes a special role:
+    ///   If it is set and WebGPU support is detected, this instance will *only* be able to create
+    ///   WebGPU adapters. If you instead want to force use of WebGL, either
+    ///   disable the `webgpu` compile-time feature or do add the [`Backends::BROWSER_WEBGPU`]
+    ///   flag to the the `instance_desc`'s `backends` field.
+    ///   If it is set and WebGPU support is *not* detected, the instance will use wgpu-core
+    ///   to create adapters. Meaning that if the `webgl` feature is enabled, it is able to create
+    ///   a WebGL adapter.
+    ///
     /// # Panics
     ///
     /// If no backend feature for the active target platform is enabled,
     /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
-    pub fn new(instance_desc: InstanceDescriptor) -> Self {
+    #[allow(unreachable_code)]
+    pub fn new(_instance_desc: InstanceDescriptor) -> Self {
         if !Self::any_backend_feature_enabled() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \
@@ -1629,9 +1786,25 @@ impl Instance {
             );
         }
 
-        Self {
-            context: Arc::from(crate::backend::Context::init(instance_desc)),
+        #[cfg(webgpu)]
+        if _instance_desc.backends.contains(Backends::BROWSER_WEBGPU)
+            && crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined())
+        {
+            return Self {
+                context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
+            };
         }
+
+        #[cfg(wgpu_core)]
+        {
+            return Self {
+                context: Arc::from(crate::backend::ContextWgpuCore::init(_instance_desc)),
+            };
+        }
+
+        unreachable!(
+            "Earlier check of `any_backend_feature_enabled` should have prevented getting here!"
+        );
     }
 
     /// Create an new instance of wgpu from a wgpu-hal instance.
@@ -1643,11 +1816,11 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
-                crate::backend::Context::from_hal_instance::<A>(hal_instance)
+                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance)
             }),
         }
     }
@@ -1662,15 +1835,13 @@ impl Instance {
     /// - The raw instance handle returned must not be manually destroyed.
     ///
     /// [`Instance`]: hal::Api::Instance
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .instance_as_hal::<A>()
-        }
+        self.context
+            .as_any()
+            // If we don't have a wgpu-core instance, we don't have a hal instance either.
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
     }
 
     /// Create an new instance of wgpu from a wgpu-core instance.
@@ -1682,34 +1853,40 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-core Instance.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
-                crate::backend::Context::from_core_instance(core_instance)
+                crate::backend::ContextWgpuCore::from_core_instance(core_instance)
             }),
         }
     }
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
+    /// Always returns an empty vector if the instance decided upon creation to
+    /// target WebGPU since adapter creation is always async on WebGPU.
+    ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(not(webgpu))]
-    pub fn enumerate_adapters(&self, backends: Backends) -> impl ExactSizeIterator<Item = Adapter> {
+    #[cfg(wgpu_core)]
+    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .enumerate_adapters(backends)
-            .into_iter()
-            .map(move |id| crate::Adapter {
-                context: Arc::clone(&context),
-                id: ObjectId::from(id),
-                data: Box::new(()),
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| {
+                ctx.enumerate_adapters(backends)
+                    .into_iter()
+                    .map(move |id| crate::Adapter {
+                        context: Arc::clone(&context),
+                        id: ObjectId::from(id),
+                        data: Box::new(()),
+                    })
+                    .collect()
             })
+            .unwrap_or_default()
     }
 
     /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].
@@ -1735,7 +1912,7 @@ impl Instance {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this instance internal handle.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -1744,7 +1921,7 @@ impl Instance {
         let id = unsafe {
             context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
                 .unwrap()
                 .create_adapter_from_hal(hal_adapter)
                 .into()
@@ -1756,258 +1933,97 @@ impl Instance {
         }
     }
 
-    /// Creates a surface from a raw window handle.
+    /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
-    /// If the specified display and window handle are not supported by any of the backends, then the surface
-    /// will not be supported by any adapters.
+    /// See [`SurfaceTarget`] for what targets are supported.
+    /// See [`Instance::create_surface`] for surface creation with unsafe target variants.
     ///
-    /// If a reference is passed in `window`, the returned [`Surface`] will
-    /// hold a lifetime to it. Owned values will return a [`Surface<'static>`]
-    /// instead.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    ///
-    /// # Panics
-    ///
-    /// - On macOS/Metal: will panic if not called on the main thread.
-    /// - On web: will panic if the `raw_window_handle` does not properly refer to a
-    ///   canvas element.
-    pub fn create_surface<'window, W>(
+    /// Most commonly used are window handles (or provider of windows handles)
+    /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
+    pub fn create_surface<'window>(
         &self,
-        window: W,
-    ) -> Result<Surface<'window>, CreateSurfaceError>
-    where
-        W: HasWindowHandle + HasDisplayHandle + WasmNotSendSync + 'window,
-    {
-        let mut surface = unsafe { self.create_surface_from_raw(&window) }?;
-        surface._surface = Some(Box::new(window));
+        target: impl Into<SurfaceTarget<'window>>,
+    ) -> Result<Surface<'window>, CreateSurfaceError> {
+        // Handle origin (i.e. window) to optionally take ownership of to make the surface outlast the window.
+        let handle_origin;
+
+        let target = target.into();
+        let mut surface = match target {
+            SurfaceTarget::Window(window) => unsafe {
+                let surface = self.create_surface_unsafe(
+                    SurfaceTargetUnsafe::from_window(&window).map_err(|e| CreateSurfaceError {
+                        inner: CreateSurfaceErrorKind::RawHandle(e),
+                    })?,
+                );
+                handle_origin = Some(window);
+
+                surface
+            }?,
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::Canvas(canvas) => {
+                handle_origin = None;
+
+                let value: &wasm_bindgen::JsValue = &canvas;
+                let obj = std::ptr::NonNull::from(value).cast();
+                let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
+
+                // Note that we need to call this while we still have `value` around.
+                // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
+                unsafe {
+                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                }?
+            }
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::OffscreenCanvas(canvas) => {
+                handle_origin = None;
+
+                let value: &wasm_bindgen::JsValue = &canvas;
+                let obj = std::ptr::NonNull::from(value).cast();
+                let raw_window_handle =
+                    raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
+
+                // Note that we need to call this while we still have `value` around.
+                // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
+                unsafe {
+                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                }?
+            }
+        };
+
+        surface._surface = handle_origin;
+
         Ok(surface)
     }
 
-    /// An alternative version to [`create_surface()`](Self::create_surface)
-    /// which has no lifetime requirements to `window` and doesn't require
-    /// [`Send`] or [`Sync`] (on non-Wasm targets). This makes it `unsafe`
-    /// instead and always returns a [`Surface<'static>`].
+    /// Creates a new surface targeting a given window/canvas/surface/etc. using an unsafe target.
     ///
-    /// See [`create_surface()`](Self::create_surface) for more details.
+    /// See [`SurfaceTargetUnsafe`] for what targets are supported.
+    /// See [`Instance::create_surface`] for surface creation with safe target variants.
     ///
     /// # Safety
     ///
-    /// - `raw_window_handle` must be a valid object to create a surface upon.
-    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
-    ///   dropped.
-    pub unsafe fn create_surface_from_raw<W>(
+    /// - See respective [`SurfaceTargetUnsafe`] variants for safety requirements.
+    pub unsafe fn create_surface_unsafe<'window>(
         &self,
-        window: &W,
-    ) -> Result<Surface<'static>, CreateSurfaceError>
-    where
-        W: HasWindowHandle + HasDisplayHandle,
-    {
-        let raw_display_handle = window
-            .display_handle()
-            .map_err(|e| CreateSurfaceError {
-                inner: CreateSurfaceErrorKind::RawHandle(e),
-            })?
-            .as_raw();
-        let raw_window_handle = window
-            .window_handle()
-            .map_err(|e| CreateSurfaceError {
-                inner: CreateSurfaceErrorKind::RawHandle(e),
-            })?
-            .as_raw();
-        let (id, data) = unsafe {
-            DynContext::instance_create_surface(
-                &*self.context,
-                raw_display_handle,
-                raw_window_handle,
-            )
-        }?;
+        target: SurfaceTargetUnsafe,
+    ) -> Result<Surface<'window>, CreateSurfaceError> {
+        let (id, data) = unsafe { self.context.instance_create_surface(target) }?;
+
         Ok(Surface {
             context: Arc::clone(&self.context),
             _surface: None,
             id,
             data,
-            config: Mutex::new(None),
-        })
-    }
-
-    /// Creates a surface from `CoreAnimationLayer`.
-    ///
-    /// # Safety
-    ///
-    /// - layer must be a valid object to create a surface upon.
-    #[cfg(metal)]
-    pub unsafe fn create_surface_from_core_animation_layer(
-        &self,
-        layer: *mut std::ffi::c_void,
-    ) -> Surface<'static> {
-        let surface = unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .create_surface_from_core_animation_layer(layer)
-        };
-        Surface {
-            context: Arc::clone(&self.context),
-            _surface: None,
-            id: ObjectId::from(surface.id()),
-            data: Box::new(surface),
-            config: Mutex::new(None),
-        }
-    }
-
-    /// Creates a surface from `IDCompositionVisual`.
-    ///
-    /// # Safety
-    ///
-    /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(dx12)]
-    pub unsafe fn create_surface_from_visual(
-        &self,
-        visual: *mut std::ffi::c_void,
-    ) -> Surface<'static> {
-        let surface = unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .create_surface_from_visual(visual)
-        };
-        Surface {
-            context: Arc::clone(&self.context),
-            _surface: None,
-            id: ObjectId::from(surface.id()),
-            data: Box::new(surface),
-            config: Mutex::new(None),
-        }
-    }
-
-    /// Creates a surface from `SurfaceHandle`.
-    ///
-    /// # Safety
-    ///
-    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(dx12)]
-    pub unsafe fn create_surface_from_surface_handle(
-        &self,
-        surface_handle: *mut std::ffi::c_void,
-    ) -> Surface<'static> {
-        let surface = unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .create_surface_from_surface_handle(surface_handle)
-        };
-        Surface {
-            context: Arc::clone(&self.context),
-            _surface: None,
-            id: ObjectId::from(surface.id()),
-            data: Box::new(surface),
-            config: Mutex::new(None),
-        }
-    }
-
-    /// Creates a surface from `SwapChainPanel`.
-    ///
-    /// # Safety
-    ///
-    /// - visual must be a valid SwapChainPanel to create a surface upon.
-    #[cfg(dx12)]
-    pub unsafe fn create_surface_from_swap_chain_panel(
-        &self,
-        swap_chain_panel: *mut std::ffi::c_void,
-    ) -> Surface<'static> {
-        let surface = unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .create_surface_from_swap_chain_panel(swap_chain_panel)
-        };
-        Surface {
-            context: Arc::clone(&self.context),
-            _surface: None,
-            id: ObjectId::from(surface.id()),
-            data: Box::new(surface),
-            config: Mutex::new(None),
-        }
-    }
-
-    /// Creates a surface from a `web_sys::HtmlCanvasElement`.
-    ///
-    /// The `canvas` argument must be a valid `<canvas>` element to
-    /// create a surface upon.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
-    pub fn create_surface_from_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-    ) -> Result<Surface<'static>, CreateSurfaceError> {
-        let surface = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .instance_create_surface_from_canvas(canvas)?;
-
-        // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
-        Ok(Surface {
-            context: Arc::clone(&self.context),
-            _surface: None,
-            #[cfg(webgl)]
-            id: ObjectId::from(surface.id()),
-            #[cfg(webgl)]
-            data: Box::new(surface),
-            #[cfg(webgpu)]
-            id: ObjectId::UNUSED,
-            #[cfg(webgpu)]
-            data: Box::new(surface.1),
-            config: Mutex::new(None),
-        })
-    }
-
-    /// Creates a surface from a `web_sys::OffscreenCanvas`.
-    ///
-    /// The `canvas` argument must be a valid `OffscreenCanvas` object
-    /// to create a surface upon.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
-    pub fn create_surface_from_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-    ) -> Result<Surface<'static>, CreateSurfaceError> {
-        let surface = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .instance_create_surface_from_offscreen_canvas(canvas)?;
-
-        // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
-        Ok(Surface {
-            context: Arc::clone(&self.context),
-            _surface: None,
-            #[cfg(webgl)]
-            id: ObjectId::from(surface.id()),
-            #[cfg(webgl)]
-            data: Box::new(surface),
-            #[cfg(webgpu)]
-            id: ObjectId::UNUSED,
-            #[cfg(webgpu)]
-            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }
@@ -2033,13 +2049,15 @@ impl Instance {
     }
 
     /// Generates memory report.
-    #[cfg(not(webgpu))]
-    pub fn generate_report(&self) -> wgc::global::GlobalReport {
+    ///
+    /// Returns `None` if the feature is not supported by the backend
+    /// which happens only when WebGPU is pre-selected by the instance creation.
+    #[cfg(wgpu_core)]
+    pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
         self.context
             .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .generate_report()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| ctx.generate_report())
     }
 }
 
@@ -2104,7 +2122,7 @@ impl Adapter {
     ///
     /// - `hal_device` must be created from this adapter internal handle.
     /// - `desc.features` must be a subset of `hal_device` features.
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
@@ -2115,7 +2133,9 @@ impl Adapter {
         unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the device was generated from the same adapter.
+                // Therefore, unwrap is fine here since only WgpuCoreContext based adapters have the ability to create hal devices.
                 .unwrap()
                 .create_device_from_hal(&self.id.into(), hal_device, desc, trace_path)
         }
@@ -2154,17 +2174,19 @@ impl Adapter {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Adapter`]: hal::Api::Adapter
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
     ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback)
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback) }
+        } else {
+            hal_adapter_callback(None)
         }
     }
 
@@ -2239,7 +2261,7 @@ impl Adapter {
 }
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks.
+    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -2247,8 +2269,8 @@ impl Device {
     /// the caller receives it. `Queue`s can be shared between threads, so
     /// other threads could submit new work at any time.)
     ///
-    /// On the web, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> bool {
+    /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
+    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
         DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
     }
 
@@ -2496,7 +2518,7 @@ impl Device {
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -2505,7 +2527,9 @@ impl Device {
         let texture = unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the texture was generated from the same hal device.
+                // Therefore, unwrap is fine here since only WgpuCoreContext has the ability to create hal textures.
                 .unwrap()
                 .create_texture_from_hal::<A>(
                     hal_texture,
@@ -2533,7 +2557,7 @@ impl Device {
     /// - `hal_buffer` must be created from this device internal handle
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,
@@ -2547,7 +2571,9 @@ impl Device {
         let (id, buffer) = unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the buffer was generated from the same hal device.
+                // Therefore, unwrap is fine here since only WgpuCoreContext has the ability to create hal buffers.
                 .unwrap()
                 .create_buffer_from_hal::<A>(
                     hal_buffer,
@@ -2637,21 +2663,20 @@ impl Device {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Device`]: hal::Api::Device
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
-    ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .device_as_hal::<A, F, R>(
+    ) -> Option<R> {
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.device_as_hal::<A, F, R>(
                     self.data.as_ref().downcast_ref().unwrap(),
                     hal_device_callback,
                 )
-        }
+            })
     }
 
     /// Destroy this device.
@@ -2690,14 +2715,14 @@ pub struct RequestDeviceError {
 enum RequestDeviceErrorKind {
     /// Error from [`wgpu_core`].
     // must match dependency cfg
-    #[cfg(not(webgpu))]
-    Core(core::instance::RequestDeviceError),
+    #[cfg(wgpu_core)]
+    Core(wgc::instance::RequestDeviceError),
 
     /// Error from web API that was called by `wgpu` to request a device.
     ///
     /// (This is currently never used by the webgl backend, but it could be.)
     #[cfg(webgpu)]
-    Web(wasm_bindgen::JsValue),
+    WebGpu(wasm_bindgen::JsValue),
 }
 
 #[cfg(send_sync)]
@@ -2709,15 +2734,17 @@ unsafe impl Sync for RequestDeviceErrorKind {}
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
-            #[cfg(not(webgpu))]
-            RequestDeviceErrorKind::Core(error) => error.fmt(f),
+            #[cfg(wgpu_core)]
+            RequestDeviceErrorKind::Core(error) => error.fmt(_f),
             #[cfg(webgpu)]
-            RequestDeviceErrorKind::Web(error_js_value) => {
+            RequestDeviceErrorKind::WebGpu(error_js_value) => {
                 // wasm-bindgen provides a reasonable error stringification via `Debug` impl
-                write!(f, "{error_js_value:?}")
+                write!(_f, "{error_js_value:?}")
             }
+            #[cfg(not(any(webgpu, wgpu_core)))]
+            _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
         }
     }
 }
@@ -2725,17 +2752,19 @@ impl fmt::Display for RequestDeviceError {
 impl error::Error for RequestDeviceError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match &self.inner {
-            #[cfg(not(webgpu))]
+            #[cfg(wgpu_core)]
             RequestDeviceErrorKind::Core(error) => error.source(),
             #[cfg(webgpu)]
-            RequestDeviceErrorKind::Web(_) => None,
+            RequestDeviceErrorKind::WebGpu(_) => None,
+            #[cfg(not(any(webgpu, wgpu_core)))]
+            _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
         }
     }
 }
 
-#[cfg(not(webgpu))]
-impl From<core::instance::RequestDeviceError> for RequestDeviceError {
-    fn from(error: core::instance::RequestDeviceError) -> Self {
+#[cfg(wgpu_core)]
+impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
+    fn from(error: wgc::instance::RequestDeviceError) -> Self {
         Self {
             inner: RequestDeviceErrorKind::Core(error),
         }
@@ -2751,7 +2780,7 @@ pub struct CreateSurfaceError {
 #[derive(Clone, Debug)]
 enum CreateSurfaceErrorKind {
     /// Error from [`wgpu_hal`].
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     Hal(hal::InstanceError),
 
     /// Error from WebGPU surface creation.
@@ -2767,7 +2796,7 @@ static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 impl fmt::Display for CreateSurfaceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
-            #[cfg(not(webgpu))]
+            #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
             CreateSurfaceErrorKind::Web(e) => e.fmt(f),
             CreateSurfaceErrorKind::RawHandle(e) => e.fmt(f),
@@ -2778,7 +2807,7 @@ impl fmt::Display for CreateSurfaceError {
 impl error::Error for CreateSurfaceError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match &self.inner {
-            #[cfg(not(webgpu))]
+            #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
@@ -2786,7 +2815,7 @@ impl error::Error for CreateSurfaceError {
     }
 }
 
-#[cfg(not(webgpu))]
+#[cfg(wgpu_core)]
 impl From<hal::InstanceError> for CreateSurfaceError {
     fn from(e: hal::InstanceError) -> Self {
         Self {
@@ -3019,20 +3048,24 @@ impl<'a> BufferSlice<'a> {
     }
 
     /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will fail.
     ///
-    /// This is useful in wasm builds when you want to pass mapped data directly to js. Unlike `get_mapped_range`
-    /// which unconditionally copies mapped data into the wasm heap, this function directly hands you the
-    /// ArrayBuffer that we mapped the data into in js.
+    /// This is useful when targeting WebGPU and you want to pass mapped data directly to js.
+    /// Unlike `get_mapped_range` which unconditionally copies mapped data into the wasm heap,
+    /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
+    ///
+    /// This is only available on WebGPU, on any other backends this will return `None`.
     #[cfg(webgpu)]
-    pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        DynContext::buffer_get_mapped_range_as_array_buffer(
-            &*self.buffer.context,
-            &self.buffer.id,
-            self.buffer.data.as_ref(),
-            self.offset..end,
-        )
+    pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
+        self.buffer
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWebGpu>()
+            .map(|ctx| {
+                let buffer_data = crate::context::downcast_ref(self.buffer.data.as_ref());
+                let end = self.buffer.map_context.lock().add(self.offset, self.size);
+                ctx.buffer_get_mapped_range_as_array_buffer(buffer_data, self.offset..end)
+            })
     }
 
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
@@ -3068,18 +3101,21 @@ impl Texture {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
     ) {
         let texture = self.data.as_ref().downcast_ref().unwrap();
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .texture_as_hal::<A, F>(texture, hal_texture_callback)
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.texture_as_hal::<A, F>(texture, hal_texture_callback) }
+        } else {
+            hal_texture_callback(None)
         }
     }
 
@@ -4816,18 +4852,20 @@ impl Surface<'_> {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Surface must not be manually destroyed
-    #[cfg(not(webgpu))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
         &mut self,
         hal_surface_callback: F,
-    ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .surface_as_hal::<A, F, R>(self.data.downcast_ref().unwrap(), hal_surface_callback)
-        }
+    ) -> Option<R> {
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.surface_as_hal::<A, F, R>(
+                    self.data.downcast_ref().unwrap(),
+                    hal_surface_callback,
+                )
+            })
     }
 }
 

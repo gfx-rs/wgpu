@@ -30,7 +30,7 @@ env:
   CI_BINARY_BUILD: "build18"
 
   # We sometimes need nightly to use special things in CI.
-  # 
+  #
   # In order to prevent CI regressions, we pin the nightly version.
   NIGHTLY_VERSION: "nightly-2023-12-17"
   # Version of rust used to build the docs with.
@@ -43,7 +43,7 @@ env:
   REPO_MSRV: "1.71"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.65"
+  CORE_MSRV: "1.70"
 
   #
   # Environment variables
@@ -57,6 +57,7 @@ env:
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
+  WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
 
 # We distinguish the following kinds of builds:
@@ -74,6 +75,9 @@ env:
 
 jobs:
   check:
+    # runtime is normally 2-8 minutes
+    timeout-minutes: 15
+
     strategy:
       fail-fast: false
       matrix:
@@ -157,7 +161,8 @@ jobs:
           debug = false" >> .cargo/config.toml
 
       - name: caching
-        uses: Swatinem/rust-cache@v2
+        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
@@ -229,6 +234,9 @@ jobs:
   #
   # We don't test all platforms, just ones with different dependency stacks.
   check-core-msrv:
+    # runtime is normally 1-3 minutes
+    timeout-minutes: 10
+
     strategy:
       fail-fast: false
       matrix:
@@ -270,7 +278,8 @@ jobs:
           debug = false" >> .cargo/config.toml
 
       - name: caching
-        uses: Swatinem/rust-cache@v2
+        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
 
@@ -283,6 +292,9 @@ jobs:
           cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
   naga-minimal-versions:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
     name: MSRV naga Minimal Versions
     runs-on: ubuntu-22.04
 
@@ -330,8 +342,13 @@ jobs:
           cargo clippy --all-features -p naga -p naga-cli
 
   wasm-test:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+    
     name: Test WebAssembly
     runs-on: ubuntu-latest
+    needs: [check]
+
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
@@ -350,9 +367,12 @@ jobs:
       - name: execute tests
         run: |
           cd wgpu
-          wasm-pack test --headless --chrome --features webgl --workspace
+          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl --workspace
 
   gpu-test:
+    # runtime is normally 5-15 minutes
+    timeout-minutes: 30
+
     strategy:
       fail-fast: false
       matrix:
@@ -371,6 +391,7 @@ jobs:
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    needs: [check]
 
     steps:
       - name: checkout repo
@@ -389,7 +410,8 @@ jobs:
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: caching
-        uses: Swatinem/rust-cache@v2
+        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           workspaces: |
@@ -535,6 +557,9 @@ jobs:
           files: lcov.info
 
   doctest:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
     name: Doctest
     runs-on: ubuntu-latest
 
@@ -557,7 +582,8 @@ jobs:
           debug = 1" >> .cargo/config.toml
 
       - name: caching
-        uses: Swatinem/rust-cache@v2
+        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
 
@@ -569,6 +595,9 @@ jobs:
           cargo test --doc
 
   fmt:
+    # runtime is normally 15 seconds
+    timeout-minutes: 2
+
     name: Format
     runs-on: ubuntu-latest
     steps:
@@ -587,6 +616,9 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
   check-cts-runner:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
     name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
@@ -608,7 +640,8 @@ jobs:
           debug = 1" >> .cargo/config.toml
 
       - name: caching
-        uses: Swatinem/rust-cache@v2
+        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
+        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
 
@@ -620,6 +653,9 @@ jobs:
   #
   # This job is not required to pass for PRs to be merged.
   cargo-deny-check-advisories:
+    # runtime is normally 1 minute
+    timeout-minutes: 5
+
     name: "cargo-deny advisories"
     runs-on: ubuntu-latest
     steps:
@@ -634,6 +670,9 @@ jobs:
           rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
+    # runtime is normally 1 minute
+    timeout-minutes: 5
+    
     name: "cargo-deny"
     runs-on: ubuntu-latest
     steps:

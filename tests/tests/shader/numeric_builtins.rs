@@ -44,10 +44,10 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| {
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
             create_numeric_builtin_test(),
-        );
+        )
     });

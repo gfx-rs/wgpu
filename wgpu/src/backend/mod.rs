@@ -1,9 +1,9 @@
 #[cfg(webgpu)]
-mod web;
+mod webgpu;
 #[cfg(webgpu)]
-pub(crate) use web::Context;
+pub(crate) use webgpu::{get_browser_gpu_property, ContextWebGpu};
 
-#[cfg(not(webgpu))]
-mod direct;
-#[cfg(not(webgpu))]
-pub(crate) use direct::Context;
+#[cfg(wgpu_core)]
+mod wgpu_core;
+#[cfg(wgpu_core)]
+pub(crate) use wgpu_core::ContextWgpuCore;

@@ -11,7 +11,9 @@ use crate::{
     FastHashMap,
 };
 
-use super::{clear::clear_texture, BakedCommands, DestroyedBufferError, DestroyedTextureError};
+use super::{
+    clear::clear_texture, BakedCommands, ClearError, DestroyedBufferError, DestroyedTextureError,
+};
 
 /// Surface that was discarded by `StoreOp::Discard` of a preceding renderpass.
 /// Any read access to this surface needs to be preceded by a texture initialization.
@@ -301,15 +303,26 @@ impl<A: HalApi> BakedCommands<A> {
 
             // TODO: Could we attempt some range collapsing here?
             for range in ranges.drain(..) {
-                clear_texture(
+                let clear_result = clear_texture(
                     &texture_use.texture,
                     range,
                     &mut self.encoder,
                     &mut device_tracker.textures,
                     &device.alignments,
                     device.zero_buffer.as_ref().unwrap(),
-                )
-                .unwrap();
+                );
+
+                // A Texture can be destroyed between the command recording
+                // and now, this is out of our control so we have to handle
+                // it gracefully.
+                if let Err(ClearError::InvalidTexture(id)) = clear_result {
+                    return Err(DestroyedTextureError(id));
+                }
+
+                // Other errors are unexpected.
+                if let Err(error) = clear_result {
+                    panic!("{error}");
+                }
             }
         }
 
