@@ -177,7 +177,7 @@ impl ShaderTest {
 const MAX_BUFFER_SIZE: u64 = 128;
 
 /// Runs the given shader tests with the given storage_type for the input_buffer.
-fn shader_input_output_test(
+async fn shader_input_output_test(
     ctx: TestingContext,
     storage_type: InputStorageType,
     tests: Vec<ShaderTest>,
@@ -355,7 +355,7 @@ fn shader_input_output_test(
         ctx.queue.submit(Some(encoder.finish()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-        ctx.device.poll(Maintain::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 

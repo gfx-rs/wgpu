@@ -1,4 +1,4 @@
-use std::panic::AssertUnwindSafe;
+use std::{panic::AssertUnwindSafe, sync::Arc};
 
 use futures_lite::FutureExt;
 use wgpu::{Adapter, Device, Instance, Queue};
@@ -18,7 +18,7 @@ pub struct TestingContext {
     pub adapter: Adapter,
     pub adapter_info: wgpu::AdapterInfo,
     pub adapter_downlevel_capabilities: wgpu::DownlevelCapabilities,
-    pub device: Device,
+    pub device: Arc<Device>,
     pub device_features: wgpu::Features,
     pub device_limits: wgpu::Limits,
     pub queue: Queue,
@@ -58,6 +58,9 @@ pub async fn execute_test(
         return;
     }
 
+    // Print the name of the test.
+    log::info!("TEST: {}", config.name);
+
     let (device, queue) = pollster::block_on(initialize_device(
         &adapter,
         config.params.required_features,
@@ -69,7 +72,7 @@ pub async fn execute_test(
         adapter,
         adapter_info,
         adapter_downlevel_capabilities,
-        device,
+        device: Arc::new(device),
         device_features: config.params.required_features,
         device_limits: config.params.required_limits.clone(),
         queue,
@@ -109,4 +112,6 @@ pub async fn execute_test(
     if expectations_match_failures(&test_info.failures, failures) == ExpectationMatchResult::Panic {
         panic!();
     }
+    // Print the name of the test.
+    log::info!("TEST FINISHED: {}", config.name);
 }

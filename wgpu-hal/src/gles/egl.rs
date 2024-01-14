@@ -28,10 +28,10 @@ type WlDisplayConnectFun =
 
 type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const raw::c_void);
 
-#[cfg(not(target_os = "emscripten"))]
+#[cfg(not(Emscripten))]
 type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_4>;
 
-#[cfg(target_os = "emscripten")]
+#[cfg(Emscripten)]
 type EglInstance = khronos_egl::Instance<khronos_egl::Static>;
 
 type WlEglWindowCreateFun = unsafe extern "system" fn(
@@ -434,9 +434,9 @@ struct Inner {
     version: (i32, i32),
     supports_native_window: bool,
     config: khronos_egl::Config,
-    #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+    #[cfg_attr(Emscripten, allow(dead_code))]
     wl_display: Option<*mut raw::c_void>,
-    #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+    #[cfg_attr(Emscripten, allow(dead_code))]
     force_gles_minor_version: wgt::Gles3MinorVersion,
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
@@ -569,7 +569,7 @@ impl Inner {
         // and creating dummy pbuffer surface if not.
         let pbuffer = if version >= (1, 5)
             || display_extensions.contains("EGL_KHR_surfaceless_context")
-            || cfg!(target_os = "emscripten")
+            || cfg!(Emscripten)
         {
             log::debug!("\tEGL context: +surfaceless");
             None
@@ -675,11 +675,11 @@ unsafe impl Sync for Instance {}
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (EGL) Backend");
-        #[cfg(target_os = "emscripten")]
+        #[cfg(Emscripten)]
         let egl_result: Result<EglInstance, khronos_egl::Error> =
             Ok(khronos_egl::Instance::new(khronos_egl::Static));
 
-        #[cfg(not(target_os = "emscripten"))]
+        #[cfg(not(Emscripten))]
         let egl_result = if cfg!(windows) {
             unsafe {
                 khronos_egl::DynamicInstance::<khronos_egl::EGL1_4>::load_required_from_filename(
@@ -732,10 +732,10 @@ impl crate::Instance<super::Api> for Instance {
             None
         };
 
-        #[cfg(not(target_os = "emscripten"))]
+        #[cfg(not(Emscripten))]
         let egl1_5 = egl.upcast::<khronos_egl::EGL1_5>();
 
-        #[cfg(target_os = "emscripten")]
+        #[cfg(Emscripten)]
         let egl1_5: Option<&Arc<EglInstance>> = Some(&egl);
 
         let (display, display_owner, wsi_kind) =
@@ -842,10 +842,7 @@ impl crate::Instance<super::Api> for Instance {
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
-        #[cfg_attr(
-            any(target_os = "android", target_os = "emscripten"),
-            allow(unused_mut)
-        )]
+        #[cfg_attr(any(target_os = "android", Emscripten), allow(unused_mut))]
         let mut inner = self.inner.lock();
 
         match (window_handle, display_handle) {
@@ -875,7 +872,7 @@ impl crate::Instance<super::Api> for Instance {
                     )));
                 }
             }
-            #[cfg(not(target_os = "emscripten"))]
+            #[cfg(not(Emscripten))]
             (Rwh::Wayland(_), raw_window_handle::RawDisplayHandle::Wayland(display_handle)) => {
                 if inner
                     .wl_display
@@ -920,7 +917,7 @@ impl crate::Instance<super::Api> for Instance {
                     drop(old_inner);
                 }
             }
-            #[cfg(target_os = "emscripten")]
+            #[cfg(Emscripten)]
             (Rwh::Web(_), _) => {}
             other => {
                 return Err(crate::InstanceError::new(format!(
@@ -1172,7 +1169,7 @@ impl crate::Surface<super::Api> for Surface {
                         wl_window = Some(window);
                         window
                     }
-                    #[cfg(target_os = "emscripten")]
+                    #[cfg(Emscripten)]
                     (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut std::ffi::c_void,
                     (WindowKind::Unknown, Rwh::Win32(handle)) => {
                         handle.hwnd.get() as *mut std::ffi::c_void
@@ -1229,10 +1226,10 @@ impl crate::Surface<super::Api> for Surface {
                 }
                 attributes.push(khronos_egl::ATTRIB_NONE as i32);
 
-                #[cfg(not(target_os = "emscripten"))]
+                #[cfg(not(Emscripten))]
                 let egl1_5 = self.egl.instance.upcast::<khronos_egl::EGL1_5>();
 
-                #[cfg(target_os = "emscripten")]
+                #[cfg(Emscripten)]
                 let egl1_5: Option<&Arc<EglInstance>> = Some(&self.egl.instance);
 
                 // Careful, we can still be in 1.4 version even if `upcast` succeeds

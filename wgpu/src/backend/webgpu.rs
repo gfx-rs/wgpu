@@ -1978,9 +1978,9 @@ impl crate::context::Context for ContextWebGpu {
         _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
         _maintain: crate::Maintain,
-    ) -> bool {
+    ) -> crate::MaintainResult {
         // Device is polled automatically
-        true
+        crate::MaintainResult::SubmissionQueueEmpty
     }
 
     fn device_on_uncaptured_error(

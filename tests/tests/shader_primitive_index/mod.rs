@@ -43,7 +43,7 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         //
         //   +-----+-----+
         //   |white|blue |
@@ -57,6 +57,7 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
         pulling_common(ctx, &expected, |rpass| {
             rpass.draw(0..6, 0..1);
         })
+        .await;
     });
 
 #[gpu_test]
@@ -66,7 +67,7 @@ static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         //
         //   +-----+-----+
         //   |white| red |
@@ -80,9 +81,10 @@ static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
         pulling_common(ctx, &expected, |rpass| {
             rpass.draw_indexed(0..6, 0, 0..1);
         })
+        .await;
     });
 
-fn pulling_common(
+async fn pulling_common(
     ctx: TestingContext,
     expected: &[u8],
     draw_command: impl FnOnce(&mut wgpu::RenderPass<'_>),
@@ -192,5 +194,5 @@ fn pulling_common(
     }
     readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);
     ctx.queue.submit(Some(encoder.finish()));
-    readback_buffer.assert_buffer_contents(&ctx.device, expected);
+    readback_buffer.assert_buffer_contents(&ctx, expected).await;
 }

@@ -231,12 +231,12 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
             )
             .limits(Limits::downlevel_defaults()),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| {
         shader_input_output_test(
             ctx,
             InputStorageType::Uniform,
             create_struct_layout_tests(InputStorageType::Uniform),
-        );
+        )
     });
 
 #[gpu_test]
@@ -246,12 +246,12 @@ static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| {
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
             create_struct_layout_tests(InputStorageType::Storage),
-        );
+        )
     });
 
 #[gpu_test]
@@ -265,10 +265,10 @@ static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::downlevel_defaults()
             }),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| {
         shader_input_output_test(
             ctx,
             InputStorageType::PushConstant,
             create_struct_layout_tests(InputStorageType::PushConstant),
-        );
+        )
     });

@@ -10,8 +10,8 @@ use wgt::{
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
-    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
+    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain,
+    MaintainResult, MapMode, PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
@@ -287,7 +287,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         maintain: Maintain,
-    ) -> bool;
+    ) -> MaintainResult;
     fn device_on_uncaptured_error(
         &self,
         device: &Self::DeviceId,
@@ -1030,6 +1030,7 @@ impl ObjectId {
         global_id: None,
     };
 
+    #[allow(dead_code)]
     pub fn new(id: NonZeroU64, global_id: NonZeroU64) -> Self {
         Self {
             id: Some(id),
@@ -1302,8 +1303,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data);
     fn device_mark_lost(&self, device: &ObjectId, device_data: &crate::Data, message: &str);
     fn queue_drop(&self, queue: &ObjectId, queue_data: &crate::Data);
-    fn device_poll(&self, device: &ObjectId, device_data: &crate::Data, maintain: Maintain)
-        -> bool;
+    fn device_poll(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        maintain: Maintain,
+    ) -> MaintainResult;
     fn device_on_uncaptured_error(
         &self,
         device: &ObjectId,
@@ -2385,7 +2390,7 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         maintain: Maintain,
-    ) -> bool {
+    ) -> MaintainResult {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_poll(self, &device, device_data, maintain)

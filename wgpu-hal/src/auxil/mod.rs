@@ -1,7 +1,7 @@
-#[cfg(all(feature = "dx12", windows))]
+#[cfg(dx12)]
 pub(super) mod dxgi;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+#[cfg(all(native, feature = "renderdoc"))]
 pub(super) mod renderdoc;
 
 pub mod db {

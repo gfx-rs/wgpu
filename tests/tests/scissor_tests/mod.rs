@@ -11,7 +11,11 @@ const TEXTURE_HEIGHT: u32 = 2;
 const TEXTURE_WIDTH: u32 = 2;
 const BUFFER_SIZE: usize = (TEXTURE_WIDTH * TEXTURE_HEIGHT * 4) as usize;
 
-fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u8; BUFFER_SIZE]) {
+async fn scissor_test_impl(
+    ctx: &TestingContext,
+    scissor_rect: Rect,
+    expected_data: [u8; BUFFER_SIZE],
+) {
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Offscreen texture"),
         size: wgpu::Extent3d {
@@ -94,26 +98,30 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
         ctx.queue.submit(Some(encoder.finish()));
     }
-    readback_buffer.assert_buffer_contents(&ctx.device, &expected_data);
+    readback_buffer
+        .assert_buffer_contents(ctx, &expected_data)
+        .await;
 }
 
 #[gpu_test]
-static SCISSOR_TEST_FULL_RECT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    scissor_test_impl(
-        &ctx,
-        Rect {
-            x: 0,
-            y: 0,
-            width: TEXTURE_WIDTH,
-            height: TEXTURE_HEIGHT,
-        },
-        [255; BUFFER_SIZE],
-    );
-});
+static SCISSOR_TEST_FULL_RECT: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
+        scissor_test_impl(
+            &ctx,
+            Rect {
+                x: 0,
+                y: 0,
+                width: TEXTURE_WIDTH,
+                height: TEXTURE_HEIGHT,
+            },
+            [255; BUFFER_SIZE],
+        )
+        .await
+    });
 
 #[gpu_test]
 static SCISSOR_TEST_EMPTY_RECT: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+    GpuTestConfiguration::new().run_async(|ctx| async move {
         scissor_test_impl(
             &ctx,
             Rect {
@@ -123,12 +131,13 @@ static SCISSOR_TEST_EMPTY_RECT: GpuTestConfiguration =
                 height: 0,
             },
             [0; BUFFER_SIZE],
-        );
+        )
+        .await;
     });
 
 #[gpu_test]
 static SCISSOR_TEST_EMPTY_RECT_WITH_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         scissor_test_impl(
             &ctx,
             Rect {
@@ -138,12 +147,13 @@ static SCISSOR_TEST_EMPTY_RECT_WITH_OFFSET: GpuTestConfiguration = GpuTestConfig
                 height: 0,
             },
             [0; BUFFER_SIZE],
-        );
+        )
+        .await
     });
 
 #[gpu_test]
 static SCISSOR_TEST_CUSTOM_RECT: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+    GpuTestConfiguration::new().run_async(|ctx| async move {
         let mut expected_result = [0; BUFFER_SIZE];
         expected_result[((3 * BUFFER_SIZE) / 4)..][..BUFFER_SIZE / 4]
             .copy_from_slice(&[255; BUFFER_SIZE / 4]);
@@ -157,5 +167,6 @@ static SCISSOR_TEST_CUSTOM_RECT: GpuTestConfiguration =
                 height: TEXTURE_HEIGHT / 2,
             },
             expected_result,
-        );
+        )
+        .await;
     });

@@ -4,7 +4,7 @@ use wgpu_test::{gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
 static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+    GpuTestConfiguration::new().run_async(|ctx| async move {
         let size = 256;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -84,7 +84,9 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.device.poll(wgpu::Maintain::Wait);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
         let data: Vec<u8> = slice.get_mapped_range().to_vec();
 
         for byte in &data[..(size as usize * 2)] {
@@ -97,7 +99,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
 
 #[gpu_test]
 static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+    GpuTestConfiguration::new().run_async(|ctx| async move {
         let size = 256;
         let depth = 4;
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -177,7 +179,9 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.device.poll(wgpu::Maintain::Wait);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
         let data: Vec<u8> = slice.get_mapped_range().to_vec();
 
         for byte in &data[..((size * size) as usize * 2)] {

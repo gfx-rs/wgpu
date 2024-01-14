@@ -508,7 +508,7 @@ impl super::Instance {
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
-    #[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))]
+    #[cfg(metal)]
     fn create_surface_from_view(
         &self,
         view: *mut c_void,

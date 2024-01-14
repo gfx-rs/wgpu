@@ -205,32 +205,20 @@ impl UserClosures {
     }
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
 
 pub struct DeviceLostClosureRust {
     pub callback: DeviceLostCallback,
-    called: bool,
+    consumed: bool,
 }
 
 impl Drop for DeviceLostClosureRust {
     fn drop(&mut self) {
-        if !self.called {
-            panic!("DeviceLostClosureRust must be called before it is dropped.");
+        if !self.consumed {
+            panic!("DeviceLostClosureRust must be consumed before it is dropped.");
         }
     }
 }
@@ -239,22 +227,16 @@ impl Drop for DeviceLostClosureRust {
 pub struct DeviceLostClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
     pub user_data: *mut u8,
-    called: bool,
+    consumed: bool,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Send for DeviceLostClosureC {}
 
 impl Drop for DeviceLostClosureC {
     fn drop(&mut self) {
-        if !self.called {
-            panic!("DeviceLostClosureC must be called before it is dropped.");
+        if !self.consumed {
+            panic!("DeviceLostClosureC must be consumed before it is dropped.");
         }
     }
 }
@@ -280,7 +262,7 @@ impl DeviceLostClosure {
     pub fn from_rust(callback: DeviceLostCallback) -> Self {
         let inner = DeviceLostClosureRust {
             callback,
-            called: false,
+            consumed: false,
         };
         Self {
             inner: DeviceLostClosureInner::Rust { inner },
@@ -294,14 +276,18 @@ impl DeviceLostClosure {
     ///
     /// - Both pointers must point to `'static` data, as the callback may happen at
     ///   an unspecified time.
-    pub unsafe fn from_c(closure: DeviceLostClosureC) -> Self {
+    pub unsafe fn from_c(mut closure: DeviceLostClosureC) -> Self {
         // Build an inner with the values from closure, ensuring that
-        // inner.called is false.
+        // inner.consumed is false.
         let inner = DeviceLostClosureC {
             callback: closure.callback,
             user_data: closure.user_data,
-            called: false,
+            consumed: false,
         };
+
+        // Mark the original closure as consumed, so we can safely drop it.
+        closure.consumed = true;
+
         Self {
             inner: DeviceLostClosureInner::C { inner },
         }
@@ -310,19 +296,13 @@ impl DeviceLostClosure {
     pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
         match self.inner {
             DeviceLostClosureInner::Rust { mut inner } => {
-                if inner.called {
-                    panic!("DeviceLostClosureRust must only be called once.");
-                }
-                inner.called = true;
+                inner.consumed = true;
 
                 (inner.callback)(reason, message)
             }
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
             DeviceLostClosureInner::C { mut inner } => unsafe {
-                if inner.called {
-                    panic!("DeviceLostClosureC must only be called once.");
-                }
-                inner.called = true;
+                inner.consumed = true;
 
                 // Ensure message is structured as a null-terminated C string. It only
                 // needs to live as long as the callback invocation.

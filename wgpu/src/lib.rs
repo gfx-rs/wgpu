@@ -72,7 +72,10 @@ use std::{
     thread,
 };
 
-use context::{Context, DeviceRequest, DynContext, ObjectId};
+#[allow(unused_imports)] // Unused if all backends are disabled.
+use context::Context;
+
+use context::{DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -84,16 +87,17 @@ pub use wgt::{
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
-    InstanceFlags, Limits, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes,
-    PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp,
-    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
-    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
-    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
-    SurfaceStatus, TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
-    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
-    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    InstanceFlags, Limits, MaintainResult, MultisampleState, Origin2d, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
+    PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
+    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
+    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
+    SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend,
+    WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
+    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 #[cfg(not(webgpu))]
@@ -1758,7 +1762,7 @@ impl Instance {
     /// If no backend feature for the active target platform is enabled,
     /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
     #[allow(unreachable_code)]
-    pub fn new(instance_desc: InstanceDescriptor) -> Self {
+    pub fn new(_instance_desc: InstanceDescriptor) -> Self {
         if !Self::any_backend_feature_enabled() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \
@@ -1767,18 +1771,18 @@ impl Instance {
         }
 
         #[cfg(webgpu)]
-        if instance_desc.backends.contains(Backends::BROWSER_WEBGPU)
+        if _instance_desc.backends.contains(Backends::BROWSER_WEBGPU)
             && crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined())
         {
             return Self {
-                context: Arc::from(crate::backend::ContextWebGpu::init(instance_desc)),
+                context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
             };
         }
 
         #[cfg(wgpu_core)]
         {
             return Self {
-                context: Arc::from(crate::backend::ContextWgpuCore::init(instance_desc)),
+                context: Arc::from(crate::backend::ContextWgpuCore::init(_instance_desc)),
             };
         }
 
@@ -2241,7 +2245,7 @@ impl Adapter {
 }
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks.
+    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -2249,8 +2253,8 @@ impl Device {
     /// the caller receives it. `Queue`s can be shared between threads, so
     /// other threads could submit new work at any time.)
     ///
-    /// On the web, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> bool {
+    /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
+    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
         DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
     }
 
@@ -2714,15 +2718,17 @@ unsafe impl Sync for RequestDeviceErrorKind {}
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
             #[cfg(wgpu_core)]
-            RequestDeviceErrorKind::Core(error) => error.fmt(f),
+            RequestDeviceErrorKind::Core(error) => error.fmt(_f),
             #[cfg(webgpu)]
             RequestDeviceErrorKind::WebGpu(error_js_value) => {
                 // wasm-bindgen provides a reasonable error stringification via `Debug` impl
-                write!(f, "{error_js_value:?}")
+                write!(_f, "{error_js_value:?}")
             }
+            #[cfg(not(any(webgpu, wgpu_core)))]
+            _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
         }
     }
 }
@@ -2734,6 +2740,8 @@ impl error::Error for RequestDeviceError {
             RequestDeviceErrorKind::Core(error) => error.source(),
             #[cfg(webgpu)]
             RequestDeviceErrorKind::WebGpu(_) => None,
+            #[cfg(not(any(webgpu, wgpu_core)))]
+            _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
         }
     }
 }

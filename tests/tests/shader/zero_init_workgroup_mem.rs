@@ -24,7 +24,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 ..FailureCase::default()
             }),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         let bgl = ctx
             .device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -134,7 +134,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
         ctx.queue.submit(Some(encoder.finish()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-        ctx.device.poll(Maintain::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 
