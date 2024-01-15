@@ -1718,7 +1718,7 @@ impl Instance {
     ///
     /// Which feature makes this method return true depends on the target platform:
     /// * MacOS/iOS: `metal`, `vulkan-portability` or `angle`
-    /// * Wasm32: `webgpu`, `webgl` or target emscripten.
+    /// * Wasm32: `webgpu`, `webgl` or Emscripten target.
     /// * All other: Always returns true
     ///
     /// TODO: Right now it's otherwise not possible yet to opt-out of all features on most platforms.
