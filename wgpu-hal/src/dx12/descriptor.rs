@@ -202,7 +202,7 @@ impl CpuPool {
             .avaliable_heap_indices
             .iter()
             .next()
-            .unwrap_or_else(|| self.heaps.len());
+            .unwrap_or(self.heaps.len());
 
         // Allocate a new heap
         if heap_index == self.heaps.len() {
