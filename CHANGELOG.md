@@ -39,6 +39,20 @@ Bottom level categories:
 
 ## Unreleased
 
+### All Public Dependencies Are Re-Exported
+
+All of wgpu's public dependencies are now re-exported at the top level so that users don't need to take their own dependencies.
+This includes:
+- wgpu-core
+- wgpu-hal
+- naga
+- raw_window_handle
+- web_sys
+
+### `naga-ir` Shaders Have Dedicated Feature
+
+The `naga-ir` feature has been added to allow you to add naga module shaders without guessing about what other features needed to be enabled to get access to it.
+
 ### Direct3D 11 backend removal
 
 This backend had no functionality, and with the recent support for GL on Desktop, which allows wgpu to run on older devices, there is no need to keep the backend.

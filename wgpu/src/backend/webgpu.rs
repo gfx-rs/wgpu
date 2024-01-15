@@ -1400,7 +1400,7 @@ impl crate::context::Context for ContextWebGpu {
             feature = "spirv",
             feature = "glsl",
             feature = "wgsl",
-            feature = "naga"
+            feature = "naga-ir"
         )),
         allow(unreachable_code, unused_variables)
     )]
@@ -1411,7 +1411,7 @@ impl crate::context::Context for ContextWebGpu {
         desc: crate::ShaderModuleDescriptor<'_>,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
-        let mut descriptor = match desc.source {
+        let mut descriptor: web_sys::GpuShaderModuleDescriptor = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
                 use naga::{back, front, valid};
@@ -1465,7 +1465,7 @@ impl crate::context::Context for ContextWebGpu {
             }
             #[cfg(feature = "wgsl")]
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
-            #[cfg(feature = "naga")]
+            #[cfg(feature = "naga-ir")]
             crate::ShaderSource::Naga(module) => {
                 use naga::{back, valid};
 

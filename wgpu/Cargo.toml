@@ -45,7 +45,7 @@ angle = ["wgc?/gles"]
 vulkan-portability = ["wgc?/vulkan"]
 
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
-webgpu = []
+webgpu = ["naga?/wgsl-out"]
 
 ## Enables the GLES backend on Wasm
 ##
@@ -63,6 +63,9 @@ glsl = ["naga/glsl-in"]
 
 ## Enable accepting WGSL shaders as input.
 wgsl = ["wgc?/wgsl"]
+
+## Enable accepting naga IR shaders as input.
+naga-ir = ["naga"]
 
 #! ### Logging & Tracing
 # --------------------------------------------------------------------
@@ -177,10 +180,6 @@ cfg_aliases.workspace = true
 [dev-dependencies.naga]
 workspace = true
 features = ["wgsl-in"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-workspace = true
-features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, features = [

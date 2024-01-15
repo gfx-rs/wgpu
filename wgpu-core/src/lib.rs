@@ -105,6 +105,7 @@ mod track;
 pub mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
+pub use naga;
 
 use std::{borrow::Cow, os::raw::c_char};
 
