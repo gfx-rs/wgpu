@@ -1772,14 +1772,17 @@ impl Instance {
         }
 
         #[cfg(webgpu)]
-        if !cfg!(wgpu_core) // If wgpu-core isn't enabled we can't use anything else.
-            || (_instance_desc.backends.contains(Backends::BROWSER_WEBGPU)
-                && crate::backend::get_browser_gpu_property()
-                    .map_or(false, |gpu| !gpu.is_undefined()))
         {
-            return Self {
-                context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
-            };
+            let is_only_available_backend = !cfg!(wgpu_core);
+            let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
+            let support_webgpu =
+                crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined());
+
+            if is_only_available_backend || (requested_webgpu && support_webgpu) {
+                return Self {
+                    context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
+                };
+            }
         }
 
         #[cfg(wgpu_core)]
