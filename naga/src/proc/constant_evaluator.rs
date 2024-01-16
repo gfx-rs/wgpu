@@ -585,9 +585,9 @@ impl<'a> ConstantEvaluator<'a> {
     /// [`ZeroValue`], and [`Swizzle`] expressions - to the expression arena
     /// `self` contributes to.
     ///
-    /// If `expr`'s value cannot be determined at compile time, return a an
-    /// error. If it's acceptable to evaluate `expr` at runtime, this error can
-    /// be ignored, and the caller can append `expr` to the arena itself.
+    /// If `expr`'s value cannot be determined at compile time, return an
+    /// error. If it's acceptable to evaluate `expr` at runtime, the `expr`
+    /// will be appended to the arena and no error will be returned.
     ///
     /// We only consider `expr` itself, without recursing into its operands. Its
     /// operands must all have been produced by prior calls to
@@ -599,6 +599,22 @@ impl<'a> ConstantEvaluator<'a> {
     /// [`ZeroValue`]: Expression::ZeroValue
     /// [`Swizzle`]: Expression::Swizzle
     pub fn try_eval_and_append(
+        &mut self,
+        expr: Expression,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let res = self.try_eval_and_append_impl(&expr, span);
+        if self.function_local_data.is_some() {
+            match res {
+                Ok(h) => Ok(h),
+                Err(_) => Ok(self.append_expr(expr, span, false)),
+            }
+        } else {
+            res
+        }
+    }
+
+    fn try_eval_and_append_impl(
         &mut self,
         expr: &Expression,
         span: Span,
@@ -1836,6 +1852,10 @@ impl<'a> ConstantEvaluator<'a> {
             crate::valid::check_literal_value(literal)?;
         }
 
+        Ok(self.append_expr(expr, span, true))
+    }
+
+    fn append_expr(&mut self, expr: Expression, span: Span, is_const: bool) -> Handle<Expression> {
         if let Some(FunctionLocalData {
             ref mut emitter,
             ref mut block,
@@ -1845,19 +1865,20 @@ impl<'a> ConstantEvaluator<'a> {
         {
             let is_running = emitter.is_running();
             let needs_pre_emit = expr.needs_pre_emit();
-            if is_running && needs_pre_emit {
+            let h = if is_running && needs_pre_emit {
                 block.extend(emitter.finish(self.expressions));
                 let h = self.expressions.append(expr, span);
                 emitter.start(self.expressions);
-                expression_constness.insert(h);
-                Ok(h)
+                h
             } else {
-                let h = self.expressions.append(expr, span);
+                self.expressions.append(expr, span)
+            };
+            if is_const {
                 expression_constness.insert(h);
-                Ok(h)
             }
+            h
         } else {
-            Ok(self.expressions.append(expr, span))
+            self.expressions.append(expr, span)
         }
     }
 
@@ -1987,13 +2008,13 @@ mod tests {
         };
 
         let res1 = solver
-            .try_eval_and_append(&expr2, Default::default())
+            .try_eval_and_append(expr2, Default::default())
             .unwrap();
         let res2 = solver
-            .try_eval_and_append(&expr3, Default::default())
+            .try_eval_and_append(expr3, Default::default())
             .unwrap();
         let res3 = solver
-            .try_eval_and_append(&expr4, Default::default())
+            .try_eval_and_append(expr4, Default::default())
             .unwrap();
 
         assert_eq!(
@@ -2072,7 +2093,7 @@ mod tests {
         };
 
         let res = solver
-            .try_eval_and_append(&root, Default::default())
+            .try_eval_and_append(root, Default::default())
             .unwrap();
 
         assert_eq!(
@@ -2191,7 +2212,7 @@ mod tests {
         let root1 = Expression::AccessIndex { base, index: 1 };
 
         let res1 = solver
-            .try_eval_and_append(&root1, Default::default())
+            .try_eval_and_append(root1, Default::default())
             .unwrap();
 
         let root2 = Expression::AccessIndex {
@@ -2200,7 +2221,7 @@ mod tests {
         };
 
         let res2 = solver
-            .try_eval_and_append(&root2, Default::default())
+            .try_eval_and_append(root2, Default::default())
             .unwrap();
 
         match const_expressions[res1] {
@@ -2282,7 +2303,7 @@ mod tests {
 
         let solved_compose = solver
             .try_eval_and_append(
-                &Expression::Compose {
+                Expression::Compose {
                     ty: vec2_i32_ty,
                     components: vec![h_expr, h_expr],
                 },
@@ -2291,7 +2312,7 @@ mod tests {
             .unwrap();
         let solved_negate = solver
             .try_eval_and_append(
-                &Expression::Unary {
+                Expression::Unary {
                     op: UnaryOperator::Negate,
                     expr: solved_compose,
                 },
@@ -2363,7 +2384,7 @@ mod tests {
 
         let solved_compose = solver
             .try_eval_and_append(
-                &Expression::Splat {
+                Expression::Splat {
                     size: VectorSize::Bi,
                     value: h_expr,
                 },
@@ -2372,7 +2393,7 @@ mod tests {
             .unwrap();
         let solved_negate = solver
             .try_eval_and_append(
-                &Expression::Unary {
+                Expression::Unary {
                     op: UnaryOperator::Negate,
                     expr: solved_compose,
                 },

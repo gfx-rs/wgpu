@@ -260,29 +260,10 @@ impl<'a> Context<'a> {
             )
         };
 
-        let res = eval.try_eval_and_append(&expr, meta).map_err(|e| Error {
+        eval.try_eval_and_append(expr, meta).map_err(|e| Error {
             kind: e.into(),
             meta,
-        });
-
-        match res {
-            Ok(expr) => Ok(expr),
-            Err(e) => {
-                if self.is_const {
-                    Err(e)
-                } else {
-                    let needs_pre_emit = expr.needs_pre_emit();
-                    if needs_pre_emit {
-                        self.body.extend(self.emitter.finish(&self.expressions));
-                    }
-                    let h = self.expressions.append(expr, meta);
-                    if needs_pre_emit {
-                        self.emitter.start(&self.expressions);
-                    }
-                    Ok(h)
-                }
-            }
-        }
+        })
     }
 
     /// Add variable to current scope

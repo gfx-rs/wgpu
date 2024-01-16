@@ -358,18 +358,8 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         span: Span,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let mut eval = self.as_const_evaluator();
-        match eval.try_eval_and_append(&expr, span) {
-            Ok(expr) => Ok(expr),
-
-            // `expr` is not a constant expression. This is fine as
-            // long as we're not building `Module::const_expressions`.
-            Err(err) => match self.expr_type {
-                ExpressionContextType::Runtime(ref mut rctx) => {
-                    Ok(rctx.function.expressions.append(expr, span))
-                }
-                ExpressionContextType::Constant => Err(Error::ConstantEvaluatorError(err, span)),
-            },
-        }
+        eval.try_eval_and_append(expr, span)
+            .map_err(|e| Error::ConstantEvaluatorError(e, span))
     }
 
     fn const_access(&self, handle: Handle<crate::Expression>) -> Option<u32> {
@@ -1618,6 +1608,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                     LoweredGlobalDecl::Const(handle) => {
                         Typed::Plain(crate::Expression::Constant(handle))
+                    }
+                    LoweredGlobalDecl::Override(handle) => {
+                        Typed::Plain(crate::Expression::Override(handle))
                     }
                     _ => {
                         return Err(Error::Unexpected(span, ExpectedToken::Variable));
