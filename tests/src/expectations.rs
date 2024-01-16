@@ -250,23 +250,16 @@ impl FailureCase {
     /// Returns true if the given failure "satisfies" this failure case.
     pub(crate) fn matches_failure(&self, failure: &FailureResult) -> bool {
         for reason in self.reasons() {
-            let mut result = true;
+            let kind_matched = reason.kind.map_or(true, |kind| kind == failure.kind);
 
-            result &= reason.kind.map_or(true, |kind| kind == failure.kind);
+            let message_matched =
+                reason
+                    .message
+                    .map_or(true, |message| matches!(&failure.message, Some(actual) if actual.to_lowercase().contains(&message.to_lowercase())));
 
-            result &= reason
-                .message
-                .map_or(true, |message| match failure.message.as_deref() {
-                    Some(actual) => actual.to_lowercase().contains(&message.to_lowercase()),
-                    None => false,
-                });
-
-            if result {
+            if kind_matched && message_matched {
                 let message = failure.message.as_deref().unwrap_or("*no message*");
                 log::error!("Matched {} {message}", failure.kind);
-            }
-
-            if result {
                 return true;
             }
         }
