@@ -7,6 +7,13 @@ on:
   pull_request:
   merge_group:
 
+# Ensures that only one job is allowed to run at any given time for a pull
+# request (or commit sha). Existing jobs if the PR for example is rebased or
+# force pushed are cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 env:
   #
   # Dependency versioning
@@ -74,6 +81,16 @@ env:
 # It adds overhead to the build and another point of failure.
 
 jobs:
+  # List of basic checks that needs to pass before we fire heavier jobs.
+  basics:
+    runs-on: ubuntu-latest
+    needs:
+      - fmt
+      - doctest
+      - check
+    steps:
+      - run: exit 0
+
   check:
     # runtime is normally 2-8 minutes
     timeout-minutes: 15
@@ -135,6 +152,7 @@ jobs:
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    needs: fmt
 
     steps:
       - name: checkout repo
@@ -258,6 +276,7 @@ jobs:
 
     name: MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    needs: basics
 
     steps:
       - name: checkout repo
@@ -297,6 +316,7 @@ jobs:
 
     name: MSRV naga Minimal Versions
     runs-on: ubuntu-22.04
+    needs: basics
 
     steps:
       - name: checkout repo
@@ -347,7 +367,7 @@ jobs:
     
     name: Test WebAssembly
     runs-on: ubuntu-latest
-    needs: [check]
+    needs: basics
 
     steps:
       - name: checkout repo
@@ -391,7 +411,7 @@ jobs:
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [check]
+    needs: basics
 
     steps:
       - name: checkout repo
