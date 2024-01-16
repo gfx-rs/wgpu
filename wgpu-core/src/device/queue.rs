@@ -22,8 +22,9 @@ use crate::{
     resource_log, track, FastHashMap, SubmissionIndex,
 };
 
-use hal::{CommandEncoder as _, Device as _, Queue as _, RawSet as _};
+use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
+use smallvec::SmallVec;
 
 use std::{
     iter, mem, ptr,
@@ -1116,14 +1117,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 + 1;
             let mut active_executions = Vec::new();
 
-            // SAFETY: We're constructing this during the submission phase,
-            // where all resources it uses are guaranteed to outlive this
-            // short-lived set.
-            let mut submit_surface_textures = A::SubmitSurfaceTextureSet::new();
-
             let mut used_surface_textures = track::TextureUsageScope::new();
 
             let snatch_guard = device.snatchable_lock.read();
+
+            let mut submit_surface_textures_owned = SmallVec::<[_; 2]>::new();
 
             {
                 let mut command_buffer_guard = hub.command_buffers.write();
@@ -1230,10 +1228,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     }) => {
                                         has_work.store(true, Ordering::Relaxed);
 
-                                        if let Some(raw) = raw {
-                                            unsafe {
-                                                submit_surface_textures.insert(raw);
-                                            }
+                                        if raw.is_some() {
+                                            submit_surface_textures_owned.push(texture.clone());
                                         }
 
                                         true
@@ -1433,10 +1429,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }) => {
                             has_work.store(true, Ordering::Relaxed);
 
-                            if let Some(raw) = raw {
-                                unsafe {
-                                    submit_surface_textures.insert(raw);
-                                }
+                            if raw.is_some() {
+                                submit_surface_textures_owned.push(texture.clone());
                             }
 
                             unsafe {
@@ -1477,6 +1471,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
                 )
                 .collect::<Vec<_>>();
+
+            let mut submit_surface_textures =
+                SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
+
+            for texture in &submit_surface_textures_owned {
+                submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
+                    Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
+                    _ => None,
+                });
+            }
 
             unsafe {
                 queue

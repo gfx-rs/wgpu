@@ -48,9 +48,6 @@ use ash::{
     vk,
 };
 use parking_lot::{Mutex, RwLock};
-use smallvec::SmallVec;
-
-use crate::RawSet;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -83,23 +80,6 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
-    type SubmitSurfaceTextureSet = SubmitSurfaceTextureSet;
-}
-
-pub struct SubmitSurfaceTextureSet {
-    semaphores: SmallVec<[vk::Semaphore; 2]>,
-}
-
-impl RawSet<SurfaceTexture> for SubmitSurfaceTextureSet {
-    fn new() -> Self {
-        Self {
-            semaphores: SmallVec::new(),
-        }
-    }
-
-    unsafe fn insert(&mut self, texture: &SurfaceTexture) {
-        self.semaphores.push(texture.wait_semaphore);
-    }
 }
 
 struct DebugUtils {
@@ -610,7 +590,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
-        surface_textures: &SubmitSurfaceTextureSet,
+        surface_textures: &[&SurfaceTexture],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
@@ -620,9 +600,9 @@ impl crate::Queue<Api> for Queue {
         let mut signal_semaphores = ArrayVec::<_, 2>::new();
         let mut signal_values = ArrayVec::<_, 2>::new();
 
-        for &wait in &surface_textures.semaphores {
+        for &surface_texture in surface_textures {
             wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
-            wait_semaphores.push(wait);
+            wait_semaphores.push(surface_texture.wait_semaphore);
         }
 
         let old_index = self.relay_index.load(Ordering::Relaxed);

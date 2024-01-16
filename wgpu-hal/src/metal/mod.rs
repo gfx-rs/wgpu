@@ -68,7 +68,6 @@ impl crate::Api for Api {
     type ComputePipeline = ComputePipeline;
 
     type AccelerationStructure = AccelerationStructure;
-    type SubmitSurfaceTextureSet = ();
 }
 
 pub struct Instance {
@@ -369,7 +368,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
-        _surface_textures: &(),
+        _surface_textures: &[&SurfaceTexture],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         objc::rc::autoreleasepool(|| {
