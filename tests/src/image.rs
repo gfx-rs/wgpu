@@ -238,7 +238,7 @@ pub async fn compare_image_output(
     )
     .await;
     write_png(
-        difference_path,
+        &difference_path,
         width,
         height,
         &magma_image_with_alpha,
@@ -247,7 +247,7 @@ pub async fn compare_image_output(
     .await;
 
     if !all_passed {
-        panic!("Image data mismatch!")
+        panic!("Image data mismatch: {}", difference_path.display())
     }
 }
 
