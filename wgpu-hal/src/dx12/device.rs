@@ -138,7 +138,7 @@ impl super::Device {
         };
 
         let mut rtv_pool = descriptor::CpuPool::new(raw.clone(), d3d12::DescriptorHeapType::Rtv);
-        let null_rtv_handle = rtv_pool.alloc_handle();
+        let null_rtv_handle = rtv_pool.alloc_handle()?;
         // A null pResource is used to initialize a null descriptor,
         // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
         raw.create_render_target_view(
@@ -476,43 +476,47 @@ impl crate::Device<super::Api> for super::Device {
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
             ),
             handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
-                let raw_desc = unsafe { view_desc.to_srv() };
-                raw_desc.map(|raw_desc| {
-                    let handle = self.srv_uav_pool.lock().alloc_handle();
-                    unsafe {
-                        self.raw.CreateShaderResourceView(
-                            texture.resource.as_mut_ptr(),
-                            &raw_desc,
-                            handle.raw,
-                        )
-                    };
-                    handle
-                })
+                match unsafe { view_desc.to_srv() } {
+                    Some(raw_desc) => {
+                        let handle = self.srv_uav_pool.lock().alloc_handle()?;
+                        unsafe {
+                            self.raw.CreateShaderResourceView(
+                                texture.resource.as_mut_ptr(),
+                                &raw_desc,
+                                handle.raw,
+                            )
+                        };
+                        Some(handle)
+                    }
+                    None => None,
+                }
             } else {
                 None
             },
             handle_uav: if desc.usage.intersects(
                 crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
-                let raw_desc = unsafe { view_desc.to_uav() };
-                raw_desc.map(|raw_desc| {
-                    let handle = self.srv_uav_pool.lock().alloc_handle();
-                    unsafe {
-                        self.raw.CreateUnorderedAccessView(
-                            texture.resource.as_mut_ptr(),
-                            ptr::null_mut(),
-                            &raw_desc,
-                            handle.raw,
-                        )
-                    };
-                    handle
-                })
+                match unsafe { view_desc.to_uav() } {
+                    Some(raw_desc) => {
+                        let handle = self.srv_uav_pool.lock().alloc_handle()?;
+                        unsafe {
+                            self.raw.CreateUnorderedAccessView(
+                                texture.resource.as_mut_ptr(),
+                                ptr::null_mut(),
+                                &raw_desc,
+                                handle.raw,
+                            );
+                        }
+                        Some(handle)
+                    }
+                    None => None,
+                }
             } else {
                 None
             },
             handle_rtv: if desc.usage.intersects(crate::TextureUses::COLOR_TARGET) {
                 let raw_desc = unsafe { view_desc.to_rtv() };
-                let handle = self.rtv_pool.lock().alloc_handle();
+                let handle = self.rtv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw.CreateRenderTargetView(
                         texture.resource.as_mut_ptr(),
@@ -529,7 +533,7 @@ impl crate::Device<super::Api> for super::Device {
                 .intersects(crate::TextureUses::DEPTH_STENCIL_READ)
             {
                 let raw_desc = unsafe { view_desc.to_dsv(true) };
-                let handle = self.dsv_pool.lock().alloc_handle();
+                let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw.CreateDepthStencilView(
                         texture.resource.as_mut_ptr(),
@@ -546,7 +550,7 @@ impl crate::Device<super::Api> for super::Device {
                 .intersects(crate::TextureUses::DEPTH_STENCIL_WRITE)
             {
                 let raw_desc = unsafe { view_desc.to_dsv(false) };
-                let handle = self.dsv_pool.lock().alloc_handle();
+                let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw.CreateDepthStencilView(
                         texture.resource.as_mut_ptr(),
@@ -588,7 +592,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
-        let handle = self.sampler_pool.lock().alloc_handle();
+        let handle = self.sampler_pool.lock().alloc_handle()?;
 
         let reduction = match desc.compare {
             Some(_) => d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,

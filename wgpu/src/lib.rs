@@ -1718,6 +1718,7 @@ impl Instance {
     ///
     /// Which feature makes this method return true depends on the target platform:
     /// * MacOS/iOS: `metal`, `vulkan-portability` or `angle`
+    /// * Wasm32: `webgpu`, `webgl` or Emscripten target.
     /// * All other: Always returns true
     ///
     /// TODO: Right now it's otherwise not possible yet to opt-out of all features on most platforms.
@@ -1735,7 +1736,7 @@ impl Instance {
                 || cfg!(feature = "angle")
         // On the web, either WebGPU or WebGL must be enabled.
         } else if cfg!(target_arch = "wasm32") {
-            cfg!(feature = "webgpu") || cfg!(feature = "webgl")
+            cfg!(feature = "webgpu") || cfg!(feature = "webgl") || cfg!(target_os = "emscripten")
         } else {
             true
         }
@@ -1771,12 +1772,17 @@ impl Instance {
         }
 
         #[cfg(webgpu)]
-        if _instance_desc.backends.contains(Backends::BROWSER_WEBGPU)
-            && crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined())
         {
-            return Self {
-                context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
-            };
+            let is_only_available_backend = !cfg!(wgpu_core);
+            let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
+            let support_webgpu =
+                crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined());
+
+            if is_only_available_backend || (requested_webgpu && support_webgpu) {
+                return Self {
+                    context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
+                };
+            }
         }
 
         #[cfg(wgpu_core)]
