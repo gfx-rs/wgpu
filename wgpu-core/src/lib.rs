@@ -76,12 +76,13 @@
     unused_qualifications
 )]
 
+#[macro_use]
+pub mod error;
 pub mod any_surface;
 pub mod binding_model;
 pub mod command;
 mod conv;
 pub mod device;
-pub mod error;
 pub mod global;
 pub mod hal_api;
 mod hash_utils;

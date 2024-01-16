@@ -144,15 +144,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
             match present.device.downcast_clone::<A>() {
                 Some(device) => {
-                    if !device.is_valid() {
-                        return Err(DeviceError::Lost.into());
-                    }
+                    ensure!(device.is_valid(), DeviceError::Lost);
                     (device, present.config.clone())
                 }
-                None => return Err(SurfaceError::NotConfigured),
+                None => bail!(SurfaceError::NotConfigured),
             }
         } else {
-            return Err(SurfaceError::NotConfigured);
+            bail!(SurfaceError::NotConfigured);
         };
 
         #[cfg(feature = "trace")]
@@ -265,7 +263,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 match err {
                     hal::SurfaceError::Lost => Status::Lost,
                     hal::SurfaceError::Device(err) => {
-                        return Err(DeviceError::from(err).into());
+                        bail!(DeviceError::from(err));
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
                     hal::SurfaceError::Other(msg) => {
@@ -295,13 +293,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut presentation = surface.presentation.lock();
         let present = match presentation.as_mut() {
             Some(present) => present,
-            None => return Err(SurfaceError::NotConfigured),
+            None => bail!(SurfaceError::NotConfigured),
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+        ensure!(device.is_valid(), DeviceError::Lost);
         let queue_id = device.queue_id.read().unwrap();
         let queue = hub.queues.get(queue_id).unwrap();
 
@@ -396,9 +392,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+
+        ensure!(device.is_valid(), DeviceError::Lost);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {

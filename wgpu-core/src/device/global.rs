@@ -107,10 +107,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
-
+        ensure!(device.is_valid(), InvalidDevice);
         Ok(device.features)
     }
 
@@ -135,10 +132,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
-
+        ensure!(device.is_valid(), InvalidDevice);
         Ok(device.downlevel.clone())
     }
 
@@ -161,6 +155,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     break DeviceError::Invalid.into();
                 }
             };
+
             if !device.is_valid() {
                 break DeviceError::Lost.into();
             }
@@ -376,9 +371,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
         let snatch_guard = device.snatchable_lock.read();
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+
+        ensure!(device.is_valid(), DeviceError::Lost);
 
         let buffer = hub
             .buffers
@@ -437,9 +431,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+
+        ensure!(device.is_valid(), DeviceError::Lost);
 
         let snatch_guard = device.snatchable_lock.read();
 
@@ -2075,9 +2068,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
+        ensure!(device.is_valid(), InvalidDevice);
         device.lock_life().triage_suspected(&device.trackers);
         Ok(())
     }
@@ -2364,9 +2355,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let device = &buffer.device;
-            if !device.is_valid() {
-                return Err((op, DeviceError::Lost.into()));
-            }
+            ensure!(device.is_valid(), (op, DeviceError::Lost.into()));
 
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
                 return Err((op, e.into()));

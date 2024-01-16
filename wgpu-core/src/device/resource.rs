@@ -169,9 +169,18 @@ pub enum CreateDeviceError {
 }
 
 impl<A: HalApi> Device<A> {
+    /// Test if this is the same as another device.
+    ///
+    /// This could live in Resource trait (and an is_equal does exist), but it
+    /// would be annoying to import all the time.
+    pub(crate) fn is(&self, other: &Self) -> bool {
+        self.as_info().id() == other.as_info().id()
+    }
+
     pub(crate) fn raw(&self) -> &A::Device {
         self.raw.as_ref().unwrap()
     }
+
     pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
         if self.features.contains(feature) {
             Ok(())
@@ -1907,9 +1916,7 @@ impl<A: HalApi> Device<A> {
                 texture_id,
             ))?;
 
-        if texture.device.as_info().id() != view.device.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        ensure!(texture.device.is(&view.device), DeviceError::WrongDevice);
 
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
@@ -2024,9 +2031,7 @@ impl<A: HalApi> Device<A> {
                                 .add_single(&*sampler_guard, id)
                                 .ok_or(Error::InvalidSampler(id))?;
 
-                            if sampler.device.as_info().id() != self.as_info().id() {
-                                return Err(DeviceError::WrongDevice.into());
-                            }
+                            ensure!(sampler.device.is(self), DeviceError::WrongDevice);
 
                             // Allowed sampler values for filtering and comparison
                             let (allowed_filtering, allowed_comparison) = match ty {
@@ -2037,7 +2042,7 @@ impl<A: HalApi> Device<A> {
 
                             if let Some(allowed_filtering) = allowed_filtering {
                                 if allowed_filtering != sampler.filtering {
-                                    return Err(Error::WrongSamplerFiltering {
+                                    bail!(Error::WrongSamplerFiltering {
                                         binding,
                                         layout_flt: allowed_filtering,
                                         sampler_flt: sampler.filtering,
@@ -2046,7 +2051,7 @@ impl<A: HalApi> Device<A> {
                             }
 
                             if allowed_comparison != sampler.comparison {
-                                return Err(Error::WrongSamplerComparison {
+                                bail!(Error::WrongSamplerComparison {
                                     binding,
                                     layout_cmp: allowed_comparison,
                                     sampler_cmp: sampler.comparison,
@@ -2058,7 +2063,7 @@ impl<A: HalApi> Device<A> {
                             (res_index, 1)
                         }
                         _ => {
-                            return Err(Error::WrongBindingType {
+                            bail!(Error::WrongBindingType {
                                 binding,
                                 actual: decl.ty,
                                 expected: "Sampler",
@@ -2076,9 +2081,7 @@ impl<A: HalApi> Device<A> {
                             .samplers
                             .add_single(&*sampler_guard, id)
                             .ok_or(Error::InvalidSampler(id))?;
-                        if sampler.device.as_info().id() != self.as_info().id() {
-                            return Err(DeviceError::WrongDevice.into());
-                        }
+                        ensure!(sampler.device.is(self), DeviceError::WrongDevice);
                         hal_samplers.push(sampler.raw());
                     }
 
@@ -2421,10 +2424,7 @@ impl<A: HalApi> Device<A> {
 
         // Validate total resource counts and check for a matching device
         for bgl in &bind_group_layouts {
-            if bgl.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
-
+            ensure!(bgl.device.is(self), DeviceError::WrongDevice);
             count_validator.merge(&bgl.binding_count_validator);
         }
 
@@ -2528,9 +2528,7 @@ impl<A: HalApi> Device<A> {
             .get(desc.stage.module)
             .map_err(|_| validation::StageError::InvalidModule)?;
 
-        if shader_module.device.as_info().id() != self.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        ensure!(shader_module.device.is(self), DeviceError::WrongDevice);
 
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
@@ -2540,10 +2538,7 @@ impl<A: HalApi> Device<A> {
                     .get(pipeline_layout_id)
                     .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
 
-                if pipeline_layout.device.as_info().id() != self.as_info().id() {
-                    return Err(DeviceError::WrongDevice.into());
-                }
-
+                ensure!(pipeline_layout.device.is(self), DeviceError::WrongDevice);
                 Some(pipeline_layout)
             }
             None => None,
@@ -2923,10 +2918,7 @@ impl<A: HalApi> Device<A> {
                     .get(pipeline_layout_id)
                     .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
 
-                if pipeline_layout.device.as_info().id() != self.as_info().id() {
-                    return Err(DeviceError::WrongDevice.into());
-                }
-
+                ensure!(pipeline_layout.device.is(self), DeviceError::WrongDevice);
                 Some(pipeline_layout)
             }
             None => None,
@@ -2958,9 +2950,11 @@ impl<A: HalApi> Device<A> {
                     error: validation::StageError::InvalidModule,
                 }
             })?;
-            if vertex_shader_module.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
+
+            ensure!(
+                vertex_shader_module.device.is(self),
+                DeviceError::WrongDevice
+            );
 
             if let Some(ref interface) = vertex_shader_module.interface {
                 io = interface

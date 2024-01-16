@@ -569,9 +569,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "CommandEncoder::copy_buffer_to_buffer {source:?} -> {destination:?} {size:?}bytes"
         );
 
-        if source == destination {
-            return Err(TransferError::SameSourceDestinationBuffer.into());
-        }
+        ensure!(
+            source != destination,
+            TransferError::SameSourceDestinationBuffer
+        );
+
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
@@ -579,9 +581,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+
+        ensure!(
+            device.is_valid(),
+            TransferError::InvalidDevice(device.as_info().id())
+        );
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -611,9 +615,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .raw
             .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(source))?;
-        if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+
+        ensure!(
+            src_buffer.usage.contains(BufferUsages::COPY_SRC),
+            TransferError::MissingCopySrcUsageFlag
+        );
+
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
@@ -633,18 +640,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(destination))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
-            return Err(TransferError::MissingCopyDstUsageFlag(Some(destination), None).into());
+            bail!(TransferError::MissingCopyDstUsageFlag(
+                Some(destination),
+                None
+            ));
         }
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedCopySize(size).into());
+            bail!(TransferError::UnalignedCopySize(size));
         }
         if source_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedBufferOffset(source_offset).into());
+            bail!(TransferError::UnalignedBufferOffset(source_offset));
         }
         if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedBufferOffset(destination_offset).into());
+            bail!(TransferError::UnalignedBufferOffset(destination_offset));
         }
         if !device
             .downlevel
@@ -660,32 +670,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if src_buffer.usage.intersects(forbidden_usages)
                 || dst_buffer.usage.intersects(forbidden_usages)
             {
-                return Err(TransferError::MissingDownlevelFlags(MissingDownlevelFlags(
+                bail!(TransferError::MissingDownlevelFlags(MissingDownlevelFlags(
                     wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
-                ))
-                .into());
+                )));
             }
         }
 
         let source_end_offset = source_offset + size;
         let destination_end_offset = destination_offset + size;
         if source_end_offset > src_buffer.size {
-            return Err(TransferError::BufferOverrun {
+            bail!(TransferError::BufferOverrun {
                 start_offset: source_offset,
                 end_offset: source_end_offset,
                 buffer_size: src_buffer.size,
                 side: CopySide::Source,
-            }
-            .into());
+            });
         }
         if destination_end_offset > dst_buffer.size {
-            return Err(TransferError::BufferOverrun {
+            bail!(TransferError::BufferOverrun {
                 start_offset: destination_offset,
                 end_offset: destination_end_offset,
                 buffer_size: dst_buffer.size,
                 side: CopySide::Destination,
-            }
-            .into());
+            });
         }
 
         if size == 0 {
@@ -740,9 +747,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+
+        ensure!(
+            device.is_valid(),
+            TransferError::InvalidDevice(device.as_info().id())
+        );
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -810,7 +819,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(source.buffer))?;
         if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
+            bail!(TransferError::MissingCopySrcUsageFlag);
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
@@ -822,22 +831,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
+            bail!(TransferError::MissingCopyDstUsageFlag(
+                None,
+                Some(destination.texture)
+            ));
         }
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_raw));
 
-        if !dst_base.aspect.is_one() {
-            return Err(TransferError::CopyAspectNotOne.into());
-        }
+        ensure!(dst_base.aspect.is_one(), TransferError::CopyAspectNotOne);
 
         if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format, destination.aspect) {
-            return Err(TransferError::CopyToForbiddenTextureFormat {
+            bail!(TransferError::CopyToForbiddenTextureFormat {
                 format: dst_texture.desc.format,
                 aspect: destination.aspect,
-            }
-            .into());
+            });
         }
 
         let (required_buffer_bytes_in_copy, bytes_per_array_layer) = validate_linear_texture_data(
@@ -901,9 +908,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+
+        ensure!(
+            device.is_valid(),
+            TransferError::InvalidDevice(device.as_info().id())
+        );
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -959,20 +968,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
+            bail!(TransferError::MissingCopySrcUsageFlag);
         }
         if src_texture.desc.sample_count != 1 {
-            return Err(TransferError::InvalidSampleCount {
+            bail!(TransferError::InvalidSampleCount {
                 sample_count: src_texture.desc.sample_count,
-            }
-            .into());
+            });
         }
         if source.mip_level >= src_texture.desc.mip_level_count {
-            return Err(TransferError::InvalidMipLevel {
+            bail!(TransferError::InvalidMipLevel {
                 requested: source.mip_level,
                 count: src_texture.desc.mip_level_count,
-            }
-            .into());
+            });
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_raw));
 
@@ -991,22 +998,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(Some(destination.buffer), None).into(),
-            );
+            bail!(TransferError::MissingCopyDstUsageFlag(
+                Some(destination.buffer),
+                None
+            ));
         }
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
-        if !src_base.aspect.is_one() {
-            return Err(TransferError::CopyAspectNotOne.into());
-        }
+        ensure!(src_base.aspect.is_one(), TransferError::CopyAspectNotOne);
 
         if !conv::is_valid_copy_src_texture_format(src_texture.desc.format, source.aspect) {
-            return Err(TransferError::CopyFromForbiddenTextureFormat {
+            bail!(TransferError::CopyFromForbiddenTextureFormat {
                 format: src_texture.desc.format,
                 aspect: source.aspect,
-            }
-            .into());
+            });
         }
 
         let (required_buffer_bytes_in_copy, bytes_per_array_layer) = validate_linear_texture_data(
@@ -1074,9 +1079,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+
+        ensure!(
+            device.is_valid(),
+            TransferError::InvalidDevice(device.as_info().id())
+        );
 
         let snatch_guard = device.snatchable_lock.read();
 
@@ -1114,11 +1121,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if src_texture.desc.format.remove_srgb_suffix()
             != dst_texture.desc.format.remove_srgb_suffix()
         {
-            return Err(TransferError::TextureFormatsNotCopyCompatible {
+            bail!(TransferError::TextureFormatsNotCopyCompatible {
                 src_format: src_texture.desc.format,
                 dst_format: dst_texture.desc.format,
-            }
-            .into());
+            });
         }
 
         let (src_copy_size, array_layer_count) =
@@ -1136,10 +1142,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
         let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
         if src_tex_base.aspect != src_texture_aspects {
-            return Err(TransferError::CopySrcMissingAspects.into());
+            bail!(TransferError::CopySrcMissingAspects);
         }
         if dst_tex_base.aspect != dst_texture_aspects {
-            return Err(TransferError::CopyDstMissingAspects.into());
+            bail!(TransferError::CopyDstMissingAspects);
         }
 
         // Handle texture init *before* dealing with barrier transitions so we
@@ -1173,7 +1179,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
+            bail!(TransferError::MissingCopySrcUsageFlag);
         }
 
         //TODO: try to avoid this the collection. It's needed because both

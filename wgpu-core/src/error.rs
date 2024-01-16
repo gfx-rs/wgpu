@@ -3,6 +3,23 @@ use std::error::Error;
 
 use crate::{gfx_select, global::Global, identity::IdentityManagerFactory};
 
+/// Bail with the given error using `From` to perform conversion.
+macro_rules! bail {
+    ($err:expr) => {
+        return Err(From::from($err))
+    };
+}
+
+/// Ensure that the given expression is `true`, or construct and return the
+/// given error using `From` to convert it.
+macro_rules! ensure {
+    ($expression:expr, $err:expr) => {
+        if !$expression {
+            return Err(From::from($err));
+        }
+    };
+}
+
 pub struct ErrorFormatter<'a> {
     writer: &'a mut dyn fmt::Write,
     global: &'a Global<IdentityManagerFactory>,

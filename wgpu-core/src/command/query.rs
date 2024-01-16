@@ -438,18 +438,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
-        if !dst_buffer.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
-            return Err(ResolveError::MissingBufferUsage.into());
-        }
+        ensure!(
+            dst_buffer.usage.contains(wgt::BufferUsages::QUERY_RESOLVE),
+            ResolveError::MissingBufferUsage
+        );
 
         let end_query = start_query + query_count;
         if end_query > query_set.desc.count {
-            return Err(ResolveError::QueryOverrun {
+            bail!(ResolveError::QueryOverrun {
                 start_query,
                 end_query,
                 query_set_size: query_set.desc.count,
-            }
-            .into());
+            });
         }
 
         let elements_per_query = match query_set.desc.ty {
@@ -464,15 +464,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer_end_offset = buffer_start_offset + bytes_used;
 
         if buffer_end_offset > dst_buffer.size {
-            return Err(ResolveError::BufferOverrun {
+            bail!(ResolveError::BufferOverrun {
                 start_query,
                 end_query,
                 stride,
                 buffer_size: dst_buffer.size,
                 buffer_start_offset,
                 buffer_end_offset,
-            }
-            .into());
+            });
         }
 
         // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.

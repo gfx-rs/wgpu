@@ -583,9 +583,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
 
-        if dst.device.as_info().id() != device.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        ensure!(dst.device.is(device), DeviceError::WrongDevice);
 
         let src_buffer_size = staging_buffer.size;
         self.queue_validate_write_buffer_impl(&dst, buffer_id, buffer_offset, src_buffer_size)?;
@@ -669,13 +667,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
         if dst.device.as_info().id() != queue_id {
-            return Err(DeviceError::WrongDevice.into());
+            bail!(DeviceError::WrongDevice);
         }
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
+            bail!(TransferError::MissingCopyDstUsageFlag(
+                None,
+                Some(destination.texture)
+            ));
         }
 
         // Note: Doing the copy range validation early is important because ensures that the
@@ -685,9 +684,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (selector, dst_base) = extract_texture_selector(destination, size, &dst)?;
 
-        if !dst_base.aspect.is_one() {
-            return Err(TransferError::CopyAspectNotOne.into());
-        }
+        ensure!(dst_base.aspect.is_one(), TransferError::CopyAspectNotOne);
 
         if !conv::is_valid_copy_dst_texture_format(dst.desc.format, destination.aspect) {
             return Err(TransferError::CopyToForbiddenTextureFormat {
@@ -939,63 +936,60 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst = hub.textures.get(destination.texture).unwrap();
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
-            return Err(
-                TransferError::ExternalCopyToForbiddenTextureFormat(dst.desc.format).into(),
-            );
+            bail!(TransferError::ExternalCopyToForbiddenTextureFormat(
+                dst.desc.format
+            ));
         }
         if dst.desc.dimension != wgt::TextureDimension::D2 {
-            return Err(TransferError::InvalidDimensionExternal(destination.texture).into());
+            bail!(TransferError::InvalidDimensionExternal(destination.texture));
         }
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
+            bail!(TransferError::MissingCopyDstUsageFlag(
+                None,
+                Some(destination.texture)
+            ));
         }
         if !dst
             .desc
             .usage
             .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
         {
-            return Err(
-                TransferError::MissingRenderAttachmentUsageFlag(destination.texture).into(),
-            );
+            bail!(TransferError::MissingRenderAttachmentUsageFlag(
+                destination.texture
+            ));
         }
         if dst.desc.sample_count != 1 {
-            return Err(TransferError::InvalidSampleCount {
+            bail!(TransferError::InvalidSampleCount {
                 sample_count: dst.desc.sample_count,
-            }
-            .into());
+            });
         }
 
         if source.origin.x + size.width > src_width {
-            return Err(TransferError::TextureOverrun {
+            bail!(TransferError::TextureOverrun {
                 start_offset: source.origin.x,
                 end_offset: source.origin.x + size.width,
                 texture_size: src_width,
                 dimension: crate::resource::TextureErrorDimension::X,
                 side: CopySide::Source,
-            }
-            .into());
+            });
         }
         if source.origin.y + size.height > src_height {
-            return Err(TransferError::TextureOverrun {
+            bail!(TransferError::TextureOverrun {
                 start_offset: source.origin.y,
                 end_offset: source.origin.y + size.height,
                 texture_size: src_height,
                 dimension: crate::resource::TextureErrorDimension::Y,
                 side: CopySide::Source,
-            }
-            .into());
+            });
         }
         if size.depth_or_array_layers != 1 {
-            return Err(TransferError::TextureOverrun {
+            bail!(TransferError::TextureOverrun {
                 start_offset: 0,
                 end_offset: size.depth_or_array_layers,
                 texture_size: 1,
                 dimension: crate::resource::TextureErrorDimension::Z,
                 side: CopySide::Source,
-            }
-            .into());
+            });
         }
 
         // Note: Doing the copy range validation early is important because ensures that the
@@ -1147,7 +1141,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
 
                         if cmdbuf.device.as_info().id() != queue_id {
-                            return Err(DeviceError::WrongDevice.into());
+                            bail!(DeviceError::WrongDevice);
                         }
 
                         #[cfg(feature = "trace")]

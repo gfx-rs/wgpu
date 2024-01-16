@@ -228,9 +228,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(ClearError::InvalidDevice(cmd_buf.device.as_info().id()));
-        }
+        ensure!(
+            device.is_valid(),
+            ClearError::InvalidDevice(cmd_buf.device.as_info().id())
+        );
         let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
         clear_texture(
