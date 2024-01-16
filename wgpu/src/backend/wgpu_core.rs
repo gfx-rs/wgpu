@@ -820,7 +820,7 @@ impl crate::Context for ContextWgpuCore {
             feature = "spirv",
             feature = "glsl",
             feature = "wgsl",
-            feature = "naga"
+            feature = "naga-ir"
         )),
         allow(unreachable_code, unused_variables)
     )]
@@ -866,7 +866,7 @@ impl crate::Context for ContextWgpuCore {
             }
             #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
-            #[cfg(feature = "naga")]
+            #[cfg(feature = "naga-ir")]
             ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
             ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };

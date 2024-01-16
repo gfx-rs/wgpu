@@ -7,25 +7,28 @@
 //!
 //! ### Backends
 //!
-//! ⚠️ WIP: Not all backends can be manually configured today. On Windows & Linux the Vulkan & GLES
-//! backends are always enabled. See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more
+//! ⚠️ WIP: Not all backends can be manually configured today. On Windows & Linux the **Vulkan & GLES
+//! backends are always enabled**. See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more
 //! details.
 //!
 //! - **`dx12`** _(enabled by default)_ ---   Enables the DX12 backend on Windows.
 //! - **`metal`** _(enabled by default)_ --- Enables the Metal backend on macOS & iOS.
-//! - **`angle`** --- Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS
-//!   using.
+//! - **`webgpu`** _(enabled by default)_ --- Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
+//! - **`angle`** --- Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS.
 //! - **`vulkan-portability`** --- Enables the Vulkan backend on macOS & iOS.
-//! - **`webgpu`** --- Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
-//! - **`webgl`** --- Enables the GLES backend on Wasm
-//!
+//! - **`webgl`** --- Enables the GLES backend on Wasm.
 //!     - ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
+//!
+//! **Note:** In the documentation, if you see that an item depends on a backend,
+//! it means that the item is only available when that backend is enabled _and_ the backend
+//! is supported on the current platform.
 //!
 //! ### Shading language support
 //!
+//! - **`wgsl`** _(enabled by default)_ --- Enable accepting WGSL shaders as input.
 //! - **`spirv`** --- Enable accepting SPIR-V shaders as input.
 //! - **`glsl`** --- Enable accepting GLSL shaders as input.
-//! - **`wgsl`** _(enabled by default)_ --- Enable accepting WGSL shaders as input.
+//! - **`naga-ir`** --- Enable accepting Naga IR shaders as input.
 //!
 //! ### Logging & Tracing
 //!
@@ -48,6 +51,14 @@
 //!   artificially mark them as `Send` and `Sync` anyways to make it easier to write cross-platform
 //!   code. This is technically _very_ unsafe in a multithreaded environment, but on a wasm binary
 //!   compiled without atomics we know we are definitely not in a multithreaded environment.
+//!
+//! ### Feature Aliases
+//!
+//! These features aren't actually features on the crate itself, but a convenient shorthand for
+//! complicated cases.
+//!
+//! - **`wgpu_core`** --- Enabled when there is any non-webgpu backend enabled on the platform.
+//! - **`naga`** ---- Enabled when any non-wgsl shader input is enabled.
 //!
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
@@ -100,14 +111,44 @@ pub use wgt::{
     QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
-#[cfg(not(webgpu))]
-#[doc(hidden)]
-pub use ::hal;
-#[cfg(feature = "naga")]
-pub use ::naga;
-#[cfg(not(webgpu))]
-#[doc(hidden)]
+/// Re-export of our `wgpu-core` dependency.
+///
+#[cfg(wgpu_core)]
+#[doc(inline)]
 pub use ::wgc as core;
+
+/// Re-export of our `wgpu-hal` dependency.
+///
+///
+#[cfg(wgpu_core)]
+#[doc(inline)]
+pub use ::hal;
+
+/// Re-export of our `naga` dependency.
+///
+#[cfg(wgpu_core)]
+#[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
+#[doc(inline)]
+// We re-export wgpu-core's re-export of naga, as we may not have direct access to it.
+pub use ::wgc::naga;
+/// Re-export of our `naga` dependency.
+///
+#[cfg(all(not(wgpu_core), naga))]
+#[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
+#[doc(inline)]
+// If that's not available, we re-export our own.
+pub use naga;
+
+#[doc(inline)]
+/// Re-export of our `raw-window-handle` dependency.
+///
+pub use raw_window_handle as rwh;
+
+/// Re-export of our `web-sys` dependency.
+///
+#[cfg(any(webgl, webgpu))]
+#[doc(inline)]
+pub use web_sys;
 
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
@@ -644,7 +685,7 @@ impl Drop for ShaderModule {
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
-#[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
+#[cfg_attr(feature = "naga-ir", allow(clippy::large_enum_variant))]
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
@@ -669,7 +710,7 @@ pub enum ShaderSource<'a> {
     #[cfg(feature = "wgsl")]
     Wgsl(Cow<'a, str>),
     /// Naga module.
-    #[cfg(feature = "naga")]
+    #[cfg(feature = "naga-ir")]
     Naga(Cow<'static, naga::Module>),
     /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
     /// could be the last one active.
