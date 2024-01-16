@@ -307,13 +307,23 @@ define_backend_caller! { gfx_if_empty, gfx_if_empty_hidden, "empty" if all(
 /// [`Id`]: id::Id
 #[macro_export]
 macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
+    // Simple two-component expression, like `self.0.method(..)`.
+    ($id:expr => $c0:ident.$c1:tt.$method:ident $params:tt) => {
+        $crate::gfx_select!($id => {$c0.$c1}, $method $params)
+    };
+
+    // Simple identifier-only expression, like `global.method(..)`.
+    ($id:expr => $c0:ident.$method:ident $params:tt) => {
+        $crate::gfx_select!($id => {$c0}, $method $params)
+    };
+
+    ($id:expr => {$($c:tt)*}, $method:ident $params:tt) => {
         match $id.backend() {
-            wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($global.$method::<$crate::api::Vulkan>( $($param),* )),
-            wgt::Backend::Metal => $crate::gfx_if_metal!($global.$method::<$crate::api::Metal>( $($param),* )),
-            wgt::Backend::Dx12 => $crate::gfx_if_dx12!($global.$method::<$crate::api::Dx12>( $($param),* )),
-            wgt::Backend::Gl => $crate::gfx_if_gles!($global.$method::<$crate::api::Gles>( $($param),+ )),
-            wgt::Backend::Empty => $crate::gfx_if_empty!($global.$method::<$crate::api::Empty>( $($param),+ )),
+            wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($($c)*.$method::<$crate::api::Vulkan> $params),
+            wgt::Backend::Metal => $crate::gfx_if_metal!($($c)*.$method::<$crate::api::Metal> $params),
+            wgt::Backend::Dx12 => $crate::gfx_if_dx12!($($c)*.$method::<$crate::api::Dx12> $params),
+            wgt::Backend::Gl => $crate::gfx_if_gles!($($c)*.$method::<$crate::api::Gles> $params),
+            wgt::Backend::Empty => $crate::gfx_if_empty!($($c)*.$method::<$crate::api::Empty> $params),
             other => panic!("Unexpected backend {:?}", other),
         }
     };

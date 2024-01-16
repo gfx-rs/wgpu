@@ -21,8 +21,7 @@ impl Resource for WebGpuSampler {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.sampler_drop(self.1));
+        gfx_select!(self.1 => self.0.sampler_drop(self.1));
     }
 }
 
