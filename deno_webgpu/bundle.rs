@@ -30,8 +30,7 @@ impl Resource for WebGpuRenderBundle {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.render_bundle_drop(self.1));
+        gfx_select!(self.1 => self.0.render_bundle_drop(self.1));
     }
 }
 

@@ -21,8 +21,7 @@ impl Resource for WebGpuBindGroupLayout {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.bind_group_layout_drop(self.1));
+        gfx_select!(self.1 => self.0.bind_group_layout_drop(self.1));
     }
 }
 
@@ -36,8 +35,7 @@ impl Resource for WebGpuBindGroup {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.bind_group_drop(self.1));
+        gfx_select!(self.1 => self.0.bind_group_drop(self.1));
     }
 }
 
