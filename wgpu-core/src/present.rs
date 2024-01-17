@@ -163,7 +163,6 @@ impl Global {
         let suf = A::get_surface(surface.as_ref());
         let (texture_id, status) = match unsafe {
             suf.unwrap()
-                .raw
                 .acquire_texture(Some(std::time::Duration::from_millis(
                     FRAME_TIMEOUT_MS as u64,
                 )))
@@ -339,7 +338,7 @@ impl Global {
                             Err(hal::SurfaceError::Lost)
                         } else if !has_work.load(Ordering::Relaxed) {
                             log::error!("No work has been submitted for this frame");
-                            unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
+                            unsafe { suf.unwrap().discard_texture(raw.take().unwrap()) };
                             Err(hal::SurfaceError::Outdated)
                         } else {
                             unsafe {
@@ -347,7 +346,7 @@ impl Global {
                                     .raw
                                     .as_ref()
                                     .unwrap()
-                                    .present(&suf.unwrap().raw, raw.take().unwrap())
+                                    .present(suf.unwrap(), raw.take().unwrap())
                             }
                         }
                     }
@@ -427,7 +426,7 @@ impl Global {
                         has_work: _,
                     } => {
                         if surface_id == parent_id {
-                            unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
+                            unsafe { suf.unwrap().discard_texture(raw.take().unwrap()) };
                         } else {
                             log::warn!("Surface texture is outdated");
                         }

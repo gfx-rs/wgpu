@@ -1966,11 +1966,7 @@ impl Global {
                 let caps = unsafe {
                     let suf = A::get_surface(surface);
                     let adapter = &device.adapter;
-                    match adapter
-                        .raw
-                        .adapter
-                        .surface_capabilities(suf.unwrap().raw.as_ref())
-                    {
+                    match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
                         Some(caps) => caps,
                         None => break E::UnsupportedQueueFamily,
                     }
@@ -2055,7 +2051,6 @@ impl Global {
                 match unsafe {
                     A::get_surface(surface)
                         .unwrap()
-                        .raw
                         .configure(device.raw(), &hal_config)
                 } {
                     Ok(()) => (),

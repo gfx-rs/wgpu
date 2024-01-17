@@ -109,7 +109,7 @@ use crate::{
     command::{CommandBuffer, RenderBundle},
     device::{queue::Queue, Device},
     hal_api::HalApi,
-    instance::{Adapter, HalSurface, Surface},
+    instance::{Adapter, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
     resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
@@ -243,7 +243,7 @@ impl<A: HalApi> Hub<A> {
                     if let Some(device) = present.device.downcast_ref::<A>() {
                         let suf = A::get_surface(surface);
                         unsafe {
-                            suf.unwrap().raw.unconfigure(device.raw());
+                            suf.unwrap().unconfigure(device.raw());
                             //TODO: we could destroy the surface here
                         }
                     }
@@ -260,10 +260,10 @@ impl<A: HalApi> Hub<A> {
         }
     }
 
-    pub(crate) fn surface_unconfigure(&self, device: &Device<A>, surface: &HalSurface<A>) {
+    pub(crate) fn surface_unconfigure(&self, device: &Device<A>, surface: &A::Surface) {
         unsafe {
             use hal::Surface;
-            surface.raw.unconfigure(device.raw());
+            surface.unconfigure(device.raw());
         }
     }
 
