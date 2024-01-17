@@ -160,6 +160,7 @@ pub enum CreateShaderModuleError {
     #[cfg(feature = "wgsl")]
     #[error(transparent)]
     Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
+    #[cfg(feature = "glsl")]
     #[error(transparent)]
     ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseError>),
     #[error("Failed to generate the backend-specific code")]

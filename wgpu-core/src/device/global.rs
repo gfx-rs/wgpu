@@ -1189,6 +1189,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     pipeline::ShaderModuleSource::Wgsl(ref code) => {
                         trace.make_binary("wgsl", code.as_bytes())
                     }
+                    #[cfg(feature = "glsl")]
+                    pipeline::ShaderModuleSource::Glsl(ref code, _) => {
+                        trace.make_binary("glsl", code.as_bytes())
+                    }
                     pipeline::ShaderModuleSource::Naga(ref module) => {
                         let string =
                             ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())

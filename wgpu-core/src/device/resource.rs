@@ -1321,8 +1321,8 @@ impl<A: HalApi> Device<A> {
             }
             #[cfg(feature = "glsl")]
             pipeline::ShaderModuleSource::Glsl(code, options) => {
-                profiling::scope!("naga::front::glsl::parse_str");
                 let mut parser = naga::front::glsl::Frontend::default();
+                profiling::scope!("naga::front::glsl::Frontend.parse");
                 let module = parser.parse(&options, &code).map_err(|inner| {
                     pipeline::CreateShaderModuleError::ParsingGlsl(pipeline::ShaderError {
                         source: code.to_string(),

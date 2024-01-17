@@ -858,7 +858,7 @@ impl crate::Context for ContextWgpuCore {
                     stage,
                     defines: defines.clone(),
                 };
-                wgc::pipline::ShaderModuleSource::Glsl(shader, options)
+                wgc::pipeline::ShaderModuleSource::Glsl(Borrowed(shader), options)
             }
             #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
