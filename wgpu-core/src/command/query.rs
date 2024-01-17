@@ -268,8 +268,7 @@ impl<A: HalApi> QuerySet<A> {
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                raw_encoder
-                    .reset_queries(self.raw.as_ref().unwrap(), query_index..(query_index + 1));
+                raw_encoder.reset_queries(&self.raw, query_index..(query_index + 1));
             }
             raw_encoder.begin_query(query_set, query_index);
         }
@@ -321,7 +320,7 @@ pub(super) fn end_occlusion_query<A: HalApi>(
         // We can unwrap here as the validity was validated when the active query was set
         let query_set = storage.get(query_set_id).unwrap();
 
-        unsafe { raw_encoder.end_query(query_set.raw.as_ref().unwrap(), query_index) };
+        unsafe { raw_encoder.end_query(&query_set.raw, query_index) };
 
         Ok(())
     } else {

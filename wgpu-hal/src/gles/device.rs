@@ -484,7 +484,7 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(self, queue: super::Queue) {
+    unsafe fn exit(&mut self, queue: super::Queue) {
         let gl = &self.shared.context.lock();
         unsafe { gl.delete_vertex_array(self.main_vao) };
         unsafe { gl.delete_framebuffer(queue.draw_fbo) };
@@ -617,8 +617,8 @@ impl crate::Device<super::Api> for super::Device {
             data,
         })
     }
-    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        if let Some(raw) = buffer.raw {
+    unsafe fn destroy_buffer(&self, buffer: &mut super::Buffer) {
+        if let Some(raw) = buffer.raw.take() {
             let gl = &self.shared.context.lock();
             unsafe { gl.delete_buffer(raw) };
         }
@@ -928,7 +928,7 @@ impl crate::Device<super::Api> for super::Device {
             copy_size: desc.copy_extent(),
         })
     }
-    unsafe fn destroy_texture(&self, texture: super::Texture) {
+    unsafe fn destroy_texture(&self, texture: &mut super::Texture) {
         if texture.drop_guard.is_none() {
             let gl = &self.shared.context.lock();
             match texture.inner {
@@ -944,9 +944,9 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
 
-        // For clarity, we explicitly drop the drop guard. Although this has no real semantic effect as the
-        // end of the scope will drop the drop guard since this function takes ownership of the texture.
-        drop(texture.drop_guard);
+        // TODO: This is probably not needed since any caller to
+        // `destroy_texture` is obligated to drop it.
+        drop(texture.drop_guard.take());
     }
 
     unsafe fn create_texture_view(
@@ -963,7 +963,7 @@ impl crate::Device<super::Api> for super::Device {
             format: texture.format,
         })
     }
-    unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
+    unsafe fn destroy_texture_view(&self, _view: &mut super::TextureView) {}
 
     unsafe fn create_sampler(
         &self,
@@ -1059,7 +1059,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Sampler { raw })
     }
-    unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
+    unsafe fn destroy_sampler(&self, sampler: &mut super::Sampler) {
         let gl = &self.shared.context.lock();
         unsafe { gl.delete_sampler(sampler.raw) };
     }
@@ -1074,7 +1074,7 @@ impl crate::Device<super::Api> for super::Device {
             private_caps: self.shared.private_caps,
         })
     }
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
+    unsafe fn destroy_command_encoder(&self, _encoder: &mut super::CommandEncoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -1084,7 +1084,7 @@ impl crate::Device<super::Api> for super::Device {
             entries: Arc::from(desc.entries),
         })
     }
-    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
+    unsafe fn destroy_bind_group_layout(&self, _bg_layout: &mut super::BindGroupLayout) {}
 
     unsafe fn create_pipeline_layout(
         &self,
@@ -1169,7 +1169,7 @@ impl crate::Device<super::Api> for super::Device {
             },
         })
     }
-    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
+    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: &mut super::PipelineLayout) {}
 
     unsafe fn create_bind_group(
         &self,
@@ -1237,7 +1237,7 @@ impl crate::Device<super::Api> for super::Device {
             contents: contents.into_boxed_slice(),
         })
     }
-    unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {}
+    unsafe fn destroy_bind_group(&self, _group: &mut super::BindGroup) {}
 
     unsafe fn create_shader_module(
         &self,
@@ -1255,7 +1255,7 @@ impl crate::Device<super::Api> for super::Device {
             id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),
         })
     }
-    unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
+    unsafe fn destroy_shader_module(&self, _module: &mut super::ShaderModule) {}
 
     unsafe fn create_render_pipeline(
         &self,
@@ -1326,7 +1326,7 @@ impl crate::Device<super::Api> for super::Device {
             alpha_to_coverage_enabled: desc.multisample.alpha_to_coverage_enabled,
         })
     }
-    unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
+    unsafe fn destroy_render_pipeline(&self, pipeline: &mut super::RenderPipeline) {
         let mut program_cache = self.shared.program_cache.lock();
         // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache`
         // This is safe to assume as long as:
@@ -1353,7 +1353,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::ComputePipeline { inner })
     }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
+    unsafe fn destroy_compute_pipeline(&self, pipeline: &mut super::ComputePipeline) {
         let mut program_cache = self.shared.program_cache.lock();
         // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache``
         // This is safe to assume as long as:
@@ -1399,7 +1399,7 @@ impl crate::Device<super::Api> for super::Device {
             },
         })
     }
-    unsafe fn destroy_query_set(&self, set: super::QuerySet) {
+    unsafe fn destroy_query_set(&self, set: &mut super::QuerySet) {
         let gl = &self.shared.context.lock();
         for &query in set.queries.iter() {
             unsafe { gl.delete_query(query) };
@@ -1411,9 +1411,9 @@ impl crate::Device<super::Api> for super::Device {
             pending: Vec::new(),
         })
     }
-    unsafe fn destroy_fence(&self, fence: super::Fence) {
+    unsafe fn destroy_fence(&self, fence: &mut super::Fence) {
         let gl = &self.shared.context.lock();
-        for (_, sync) in fence.pending {
+        for (_, sync) in fence.pending.drain(..) {
             unsafe { gl.delete_sync(sync) };
         }
     }
@@ -1494,7 +1494,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> wgt::BufferAddress {
         unimplemented!()
     }
-    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: ()) {}
+    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: &mut ()) {}
 }
 
 #[cfg(send_sync)]

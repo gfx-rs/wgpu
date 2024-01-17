@@ -345,13 +345,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
                             Err(hal::SurfaceError::Outdated)
                         } else {
-                            unsafe {
-                                queue
-                                    .raw
-                                    .as_ref()
-                                    .unwrap()
-                                    .present(&suf.unwrap().raw, raw.take().unwrap())
-                            }
+                            unsafe { queue.raw().present(&suf.unwrap().raw, raw.take().unwrap()) }
                         }
                     }
                     _ => unreachable!(),

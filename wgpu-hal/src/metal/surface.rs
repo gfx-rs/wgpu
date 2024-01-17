@@ -70,8 +70,8 @@ impl super::Surface {
         }
     }
 
-    pub unsafe fn dispose(self) {
-        if let Some(view) = self.view {
+    pub unsafe fn dispose(&mut self) {
+        if let Some(view) = self.view.take() {
             let () = msg_send![view.as_ptr(), release];
         }
     }

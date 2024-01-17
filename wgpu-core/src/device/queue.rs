@@ -35,8 +35,14 @@ use super::Device;
 
 pub struct Queue<A: HalApi> {
     pub device: Option<Arc<Device<A>>>,
-    pub raw: Option<A::Queue>,
+    pub(crate) raw: Option<A::Queue>,
     pub info: ResourceInfo<QueueId>,
+}
+
+impl<A: HalApi> Queue<A> {
+    pub fn raw(&self) -> &A::Queue {
+        self.raw.as_ref().unwrap()
+    }
 }
 
 impl<A: HalApi> Resource<QueueId> for Queue<A> {
@@ -53,8 +59,10 @@ impl<A: HalApi> Resource<QueueId> for Queue<A> {
 
 impl<A: HalApi> Drop for Queue<A> {
     fn drop(&mut self) {
-        let queue = self.raw.take().unwrap();
-        self.device.as_ref().unwrap().release_queue(queue);
+        self.device
+            .as_ref()
+            .unwrap()
+            .release_queue(self.raw.take().unwrap());
     }
 }
 
@@ -205,14 +213,14 @@ impl<A: HalApi> PendingWrites<A> {
         }
     }
 
-    pub fn dispose(mut self, device: &A::Device) {
+    pub fn dispose(&mut self, device: &A::Device) {
         unsafe {
             if self.is_active {
                 self.command_encoder.discard_encoding();
             }
             self.command_encoder
-                .reset_all(self.executing_command_buffers.into_iter());
-            device.destroy_command_encoder(self.command_encoder);
+                .reset_all(self.executing_command_buffers.drain(..));
+            device.destroy_command_encoder(&mut self.command_encoder);
         }
 
         self.temp_resources.clear();
@@ -298,7 +306,7 @@ fn prepare_staging_buffer<A: HalApi>(
     let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size) }?;
 
     let staging_buffer = StagingBuffer {
-        raw: Mutex::new(Some(buffer)),
+        raw: Mutex::new(buffer),
         device: device.clone(),
         size,
         info: ResourceInfo::new("<StagingBuffer>"),
@@ -310,15 +318,11 @@ fn prepare_staging_buffer<A: HalApi>(
 
 impl<A: HalApi> StagingBuffer<A> {
     unsafe fn flush(&self, device: &A::Device) -> Result<(), DeviceError> {
+        let raw = self.raw.lock();
         if !self.is_coherent {
-            unsafe {
-                device.flush_mapped_ranges(
-                    self.raw.lock().as_ref().unwrap(),
-                    iter::once(0..self.size),
-                )
-            };
+            unsafe { device.flush_mapped_ranges(&*raw, iter::once(0..self.size)) };
         }
-        unsafe { device.unmap_buffer(self.raw.lock().as_ref().unwrap())? };
+        unsafe { device.unmap_buffer(&*raw)? };
         Ok(())
     }
 }
@@ -405,7 +409,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(device, data_size, device.instance_flags)?;
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
 
         let stage_fid = hub.staging_buffers.request();
         let staging_buffer = stage_fid.init(staging_buffer);
@@ -421,7 +424,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let result = self.queue_write_staging_buffer_impl(
             device,
-            pending_writes,
+            &mut pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
@@ -482,7 +485,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let staging_buffer = staging_buffer.unwrap();
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
 
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
@@ -495,7 +497,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let result = self.queue_write_staging_buffer_impl(
             device,
-            pending_writes,
+            &mut pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
@@ -600,18 +602,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         });
         let inner_buffer = staging_buffer.raw.lock();
         let barriers = iter::once(hal::BufferBarrier {
-            buffer: inner_buffer.as_ref().unwrap(),
+            buffer: &*inner_buffer,
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(&dst, &snatch_guard)));
         let encoder = pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
-            encoder.copy_buffer_to_buffer(
-                inner_buffer.as_ref().unwrap(),
-                dst_raw,
-                region.into_iter(),
-            );
+            encoder.copy_buffer_to_buffer(&inner_buffer, dst_raw, region.into_iter());
         }
         let dst = hub.buffers.get(buffer_id).unwrap();
         pending_writes.dst_buffers.insert(buffer_id, dst.clone());
@@ -741,7 +739,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
 
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
         let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
@@ -775,7 +772,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         encoder,
                         &mut trackers.textures,
                         &device.alignments,
-                        device.zero_buffer.as_ref().unwrap(),
+                        &device.zero_buffer,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -869,7 +866,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             let inner_buffer = staging_buffer.raw.lock();
             let barrier = hal::BufferBarrier {
-                buffer: inner_buffer.as_ref().unwrap(),
+                buffer: &*inner_buffer,
                 usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
             };
 
@@ -881,7 +878,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             unsafe {
                 encoder.transition_textures(transition.map(|pending| pending.into_hal(dst_raw)));
                 encoder.transition_buffers(iter::once(barrier));
-                encoder.copy_buffer_to_texture(inner_buffer.as_ref().unwrap(), dst_raw, regions);
+                encoder.copy_buffer_to_texture(&inner_buffer, dst_raw, regions);
             }
         }
 
@@ -1011,7 +1008,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             extract_texture_selector(&destination.to_untagged(), &size, &dst)?;
 
         let mut pending_writes = device.pending_writes.lock();
-        let encoder = pending_writes.as_mut().unwrap().activate();
+        let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
         // zero *first* as we don't keep track of partial texture layer inits.
@@ -1044,7 +1041,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         encoder,
                         &mut trackers.textures,
                         &device.alignments,
-                        device.zero_buffer.as_ref().unwrap(),
+                        &device.zero_buffer,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -1109,7 +1106,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = queue.device.as_ref().unwrap();
 
             let mut fence = device.fence.write();
-            let fence = fence.as_mut().unwrap();
             let submit_index = device
                 .active_submission_index
                 .fetch_add(1, Ordering::Relaxed)
@@ -1399,7 +1395,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mut pending_writes = device.pending_writes.lock();
-            let pending_writes = pending_writes.as_mut().unwrap();
 
             {
                 used_surface_textures.set_size(hub.textures.read().len());
@@ -1451,10 +1446,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .collect::<Vec<_>>();
             unsafe {
                 queue
-                    .raw
-                    .as_ref()
-                    .unwrap()
-                    .submit(&refs, Some((fence, submit_index)))
+                    .raw()
+                    .submit(&refs, Some((&mut fence, submit_index)))
                     .map_err(DeviceError::from)?;
             }
 
@@ -1462,7 +1455,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(pending_execution) = pending_writes.post_submit(
                 device.command_allocator.lock().as_mut().unwrap(),
                 device.raw(),
-                queue.raw.as_ref().unwrap(),
+                queue.raw(),
             ) {
                 active_executions.push(pending_execution);
             }
@@ -1477,7 +1470,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll) {
+            let (closures, _) = match device.maintain(&fence, wgt::Maintain::Poll) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),

@@ -822,9 +822,9 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(self, queue: super::Queue) {
-        unsafe { self.mem_allocator.into_inner().cleanup(&*self.shared) };
-        unsafe { self.desc_allocator.into_inner().cleanup(&*self.shared) };
+    unsafe fn exit(&mut self, queue: super::Queue) {
+        unsafe { self.mem_allocator.get_mut().cleanup(&*self.shared) };
+        unsafe { self.desc_allocator.get_mut().cleanup(&*self.shared) };
         for &sem in queue.relay_semaphores.iter() {
             unsafe { self.shared.raw.destroy_semaphore(sem, None) };
         }
@@ -905,9 +905,9 @@ impl crate::Device<super::Api> for super::Device {
             block: Some(Mutex::new(block)),
         })
     }
-    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+    unsafe fn destroy_buffer(&self, buffer: &mut super::Buffer) {
         unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
-        if let Some(block) = buffer.block {
+        if let Some(block) = buffer.block.take() {
             unsafe {
                 self.mem_allocator
                     .lock()
@@ -1063,11 +1063,11 @@ impl crate::Device<super::Api> for super::Device {
             view_formats: wgt_view_formats,
         })
     }
-    unsafe fn destroy_texture(&self, texture: super::Texture) {
+    unsafe fn destroy_texture(&self, texture: &mut super::Texture) {
         if texture.drop_guard.is_none() {
             unsafe { self.shared.raw.destroy_image(texture.raw, None) };
         }
-        if let Some(block) = texture.block {
+        if let Some(block) = texture.block.take() {
             unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
         }
     }
@@ -1129,7 +1129,7 @@ impl crate::Device<super::Api> for super::Device {
             attachment,
         })
     }
-    unsafe fn destroy_texture_view(&self, view: super::TextureView) {
+    unsafe fn destroy_texture_view(&self, view: &mut super::TextureView) {
         if !self.shared.private_caps.imageless_framebuffers {
             let mut fbuf_lock = self.shared.framebuffers.lock();
             for (key, &raw_fbuf) in fbuf_lock.iter() {
@@ -1186,7 +1186,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Sampler { raw })
     }
-    unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
+    unsafe fn destroy_sampler(&self, sampler: &mut super::Sampler) {
         unsafe { self.shared.raw.destroy_sampler(sampler.raw, None) };
     }
 
@@ -1212,7 +1212,7 @@ impl crate::Device<super::Api> for super::Device {
             end_of_pass_timer_query: None,
         })
     }
-    unsafe fn destroy_command_encoder(&self, cmd_encoder: super::CommandEncoder) {
+    unsafe fn destroy_command_encoder(&self, cmd_encoder: &mut super::CommandEncoder) {
         unsafe {
             // `vkDestroyCommandPool` also frees any command buffers allocated
             // from that pool, so there's no need to explicitly call
@@ -1349,7 +1349,7 @@ impl crate::Device<super::Api> for super::Device {
             binding_arrays,
         })
     }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: &mut super::BindGroupLayout) {
         unsafe {
             self.shared
                 .raw
@@ -1414,7 +1414,7 @@ impl crate::Device<super::Api> for super::Device {
             binding_arrays,
         })
     }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: &mut super::PipelineLayout) {
         unsafe {
             self.shared
                 .raw
@@ -1555,14 +1555,12 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };
-        Ok(super::BindGroup { set })
+        Ok(super::BindGroup { set: Some(set) })
     }
-    unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
-        unsafe {
-            self.desc_allocator
-                .lock()
-                .free(&*self.shared, Some(group.set))
-        };
+    unsafe fn destroy_bind_group(&self, group: &mut super::BindGroup) {
+        if let Some(set) = group.set.take() {
+            unsafe { self.desc_allocator.lock().free(&*self.shared, Some(set)) };
+        }
     }
 
     unsafe fn create_shader_module(
@@ -1624,8 +1622,8 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::ShaderModule::Raw(raw))
     }
-    unsafe fn destroy_shader_module(&self, module: super::ShaderModule) {
-        match module {
+    unsafe fn destroy_shader_module(&self, module: &mut super::ShaderModule) {
+        match *module {
             super::ShaderModule::Raw(raw) => {
                 unsafe { self.shared.raw.destroy_shader_module(raw, None) };
             }
@@ -1867,7 +1865,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::RenderPipeline { raw })
     }
-    unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
+    unsafe fn destroy_render_pipeline(&self, pipeline: &mut super::RenderPipeline) {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
     }
 
@@ -1912,7 +1910,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::ComputePipeline { raw })
     }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
+    unsafe fn destroy_compute_pipeline(&self, pipeline: &mut super::ComputePipeline) {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
     }
 
@@ -1951,7 +1949,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::QuerySet { raw })
     }
-    unsafe fn destroy_query_set(&self, set: super::QuerySet) {
+    unsafe fn destroy_query_set(&self, set: &mut super::QuerySet) {
         unsafe { self.shared.raw.destroy_query_pool(set.raw, None) };
     }
 
@@ -1970,20 +1968,20 @@ impl crate::Device<super::Api> for super::Device {
             }
         })
     }
-    unsafe fn destroy_fence(&self, fence: super::Fence) {
-        match fence {
+    unsafe fn destroy_fence(&self, fence: &mut super::Fence) {
+        match *fence {
             super::Fence::TimelineSemaphore(raw) => {
                 unsafe { self.shared.raw.destroy_semaphore(raw, None) };
             }
             super::Fence::FencePool {
-                active,
-                free,
+                ref mut active,
+                ref mut free,
                 last_completed: _,
             } => {
-                for (_, raw) in active {
+                for &mut (_, raw) in active {
                     unsafe { self.shared.raw.destroy_fence(raw, None) };
                 }
-                for raw in free {
+                for &mut raw in free {
                     unsafe { self.shared.raw.destroy_fence(raw, None) };
                 }
             }
@@ -2281,14 +2279,14 @@ impl crate::Device<super::Api> for super::Device {
             Ok(super::AccelerationStructure {
                 raw: raw_acceleration_structure,
                 buffer: raw_buffer,
-                block: Mutex::new(block),
+                block: Some(Mutex::new(block)),
             })
         }
     }
 
     unsafe fn destroy_acceleration_structure(
         &self,
-        acceleration_structure: super::AccelerationStructure,
+        acceleration_structure: &mut super::AccelerationStructure,
     ) {
         let ray_tracing_functions = self
             .shared
@@ -2304,9 +2302,12 @@ impl crate::Device<super::Api> for super::Device {
             self.shared
                 .raw
                 .destroy_buffer(acceleration_structure.buffer, None);
-            self.mem_allocator
-                .lock()
-                .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+
+            if let Some(block) = acceleration_structure.block.take() {
+                self.mem_allocator
+                    .lock()
+                    .dealloc(&*self.shared, block.into_inner());
+            }
         }
     }
 }

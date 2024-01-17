@@ -176,8 +176,8 @@ impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
         device.wait(&self.fence, self.fence_value, !0).unwrap();
         self.encoder.reset_all(self.used_cmd_bufs.drain(..));
-        for view in self.used_views.drain(..) {
-            device.destroy_texture_view(view);
+        for mut view in self.used_views.drain(..) {
+            device.destroy_texture_view(&mut view);
         }
         self.frames_recorded = 0;
     }
@@ -1005,28 +1005,29 @@ impl<A: hal::Api> Example<A> {
 
             for mut ctx in self.contexts {
                 ctx.wait_and_clear(&self.device);
-                self.device.destroy_command_encoder(ctx.encoder);
-                self.device.destroy_fence(ctx.fence);
+                self.device.destroy_command_encoder(&mut ctx.encoder);
+                self.device.destroy_fence(&mut ctx.fence);
             }
 
-            self.device.destroy_bind_group(self.bind_group);
-            self.device.destroy_buffer(self.scratch_buffer);
-            self.device.destroy_buffer(self.instances_buffer);
-            self.device.destroy_buffer(self.indices_buffer);
-            self.device.destroy_buffer(self.vertices_buffer);
-            self.device.destroy_buffer(self.uniform_buffer);
-            self.device.destroy_acceleration_structure(self.tlas);
-            self.device.destroy_acceleration_structure(self.blas);
-            self.device.destroy_texture_view(self.texture_view);
-            self.device.destroy_texture(self.texture);
-            self.device.destroy_compute_pipeline(self.pipeline);
-            self.device.destroy_pipeline_layout(self.pipeline_layout);
-            self.device.destroy_bind_group_layout(self.bgl);
-            self.device.destroy_shader_module(self.shader_module);
+            self.device.destroy_bind_group(&mut self.bind_group);
+            self.device.destroy_buffer(&mut self.scratch_buffer);
+            self.device.destroy_buffer(&mut self.instances_buffer);
+            self.device.destroy_buffer(&mut self.indices_buffer);
+            self.device.destroy_buffer(&mut self.vertices_buffer);
+            self.device.destroy_buffer(&mut self.uniform_buffer);
+            self.device.destroy_acceleration_structure(&mut self.tlas);
+            self.device.destroy_acceleration_structure(&mut self.blas);
+            self.device.destroy_texture_view(&mut self.texture_view);
+            self.device.destroy_texture(&mut self.texture);
+            self.device.destroy_compute_pipeline(&mut self.pipeline);
+            self.device
+                .destroy_pipeline_layout(&mut self.pipeline_layout);
+            self.device.destroy_bind_group_layout(&mut self.bgl);
+            self.device.destroy_shader_module(&mut self.shader_module);
 
             self.surface.unconfigure(&self.device);
             self.device.exit(self.queue);
-            self.instance.destroy_surface(self.surface);
+            self.instance.destroy_surface(&mut self.surface);
             drop(self.adapter);
         }
     }

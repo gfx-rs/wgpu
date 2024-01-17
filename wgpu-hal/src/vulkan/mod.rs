@@ -369,7 +369,7 @@ pub struct Buffer {
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
 #[derive(Debug)]
@@ -422,7 +422,7 @@ pub struct PipelineLayout {
 
 #[derive(Debug)]
 pub struct BindGroup {
-    set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
+    set: Option<gpu_descriptor::DescriptorSet<vk::DescriptorSet>>,
 }
 
 #[derive(Default)]

@@ -223,7 +223,7 @@ pub trait Instance<A: Api>: Sized + WasmNotSendSync {
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<A::Surface, InstanceError>;
-    unsafe fn destroy_surface(&self, surface: A::Surface);
+    unsafe fn destroy_surface(&self, surface: &mut A::Surface);
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
@@ -295,12 +295,12 @@ pub trait Adapter<A: Api>: WasmNotSendSync {
 
 pub trait Device<A: Api>: WasmNotSendSync {
     /// Exit connection to this logical device.
-    unsafe fn exit(self, queue: A::Queue);
+    unsafe fn exit(&mut self, queue: A::Queue);
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUses::empty()`.
     unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
-    unsafe fn destroy_buffer(&self, buffer: A::Buffer);
+    unsafe fn destroy_buffer(&self, buffer: &mut A::Buffer);
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
         &self,
@@ -319,63 +319,63 @@ pub trait Device<A: Api>: WasmNotSendSync {
     ///
     /// The initial usage for all subresources is `TextureUses::UNINITIALIZED`.
     unsafe fn create_texture(&self, desc: &TextureDescriptor) -> Result<A::Texture, DeviceError>;
-    unsafe fn destroy_texture(&self, texture: A::Texture);
+    unsafe fn destroy_texture(&self, texture: &mut A::Texture);
     unsafe fn create_texture_view(
         &self,
         texture: &A::Texture,
         desc: &TextureViewDescriptor,
     ) -> Result<A::TextureView, DeviceError>;
-    unsafe fn destroy_texture_view(&self, view: A::TextureView);
+    unsafe fn destroy_texture_view(&self, view: &mut A::TextureView);
     unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
-    unsafe fn destroy_sampler(&self, sampler: A::Sampler);
+    unsafe fn destroy_sampler(&self, sampler: &mut A::Sampler);
 
     unsafe fn create_command_encoder(
         &self,
         desc: &CommandEncoderDescriptor<A>,
     ) -> Result<A::CommandEncoder, DeviceError>;
-    unsafe fn destroy_command_encoder(&self, pool: A::CommandEncoder);
+    unsafe fn destroy_command_encoder(&self, pool: &mut A::CommandEncoder);
 
     /// Creates a bind group layout.
     unsafe fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor,
     ) -> Result<A::BindGroupLayout, DeviceError>;
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: A::BindGroupLayout);
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: &mut A::BindGroupLayout);
     unsafe fn create_pipeline_layout(
         &self,
         desc: &PipelineLayoutDescriptor<A>,
     ) -> Result<A::PipelineLayout, DeviceError>;
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: A::PipelineLayout);
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: &mut A::PipelineLayout);
     unsafe fn create_bind_group(
         &self,
         desc: &BindGroupDescriptor<A>,
     ) -> Result<A::BindGroup, DeviceError>;
-    unsafe fn destroy_bind_group(&self, group: A::BindGroup);
+    unsafe fn destroy_bind_group(&self, group: &mut A::BindGroup);
 
     unsafe fn create_shader_module(
         &self,
         desc: &ShaderModuleDescriptor,
         shader: ShaderInput,
     ) -> Result<A::ShaderModule, ShaderError>;
-    unsafe fn destroy_shader_module(&self, module: A::ShaderModule);
+    unsafe fn destroy_shader_module(&self, module: &mut A::ShaderModule);
     unsafe fn create_render_pipeline(
         &self,
         desc: &RenderPipelineDescriptor<A>,
     ) -> Result<A::RenderPipeline, PipelineError>;
-    unsafe fn destroy_render_pipeline(&self, pipeline: A::RenderPipeline);
+    unsafe fn destroy_render_pipeline(&self, pipeline: &mut A::RenderPipeline);
     unsafe fn create_compute_pipeline(
         &self,
         desc: &ComputePipelineDescriptor<A>,
     ) -> Result<A::ComputePipeline, PipelineError>;
-    unsafe fn destroy_compute_pipeline(&self, pipeline: A::ComputePipeline);
+    unsafe fn destroy_compute_pipeline(&self, pipeline: &mut A::ComputePipeline);
 
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<Label>,
     ) -> Result<A::QuerySet, DeviceError>;
-    unsafe fn destroy_query_set(&self, set: A::QuerySet);
+    unsafe fn destroy_query_set(&self, set: &mut A::QuerySet);
     unsafe fn create_fence(&self) -> Result<A::Fence, DeviceError>;
-    unsafe fn destroy_fence(&self, fence: A::Fence);
+    unsafe fn destroy_fence(&self, fence: &mut A::Fence);
     unsafe fn get_fence_value(&self, fence: &A::Fence) -> Result<FenceValue, DeviceError>;
     /// Calling wait with a lower value than the current fence value will immediately return.
     unsafe fn wait(
@@ -402,7 +402,7 @@ pub trait Device<A: Api>: WasmNotSendSync {
     ) -> wgt::BufferAddress;
     unsafe fn destroy_acceleration_structure(
         &self,
-        acceleration_structure: A::AccelerationStructure,
+        acceleration_structure: &mut A::AccelerationStructure,
     );
 }
 

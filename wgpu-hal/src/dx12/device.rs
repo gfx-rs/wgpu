@@ -318,7 +318,7 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(mut self, _queue: super::Queue) {
+    unsafe fn exit(&mut self, _queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         self.mem_allocator = None;
     }
@@ -366,7 +366,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
 
-    unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
+    unsafe fn destroy_buffer(&self, buffer: &mut super::Buffer) {
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
             super::suballocation::free_buffer_allocation(
@@ -451,7 +451,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
 
-    unsafe fn destroy_texture(&self, mut texture: super::Texture) {
+    unsafe fn destroy_texture(&self, texture: &mut super::Texture) {
         if let Some(alloc) = texture.allocation.take() {
             super::suballocation::free_texture_allocation(
                 alloc,
@@ -564,7 +564,7 @@ impl crate::Device<super::Api> for super::Device {
             },
         })
     }
-    unsafe fn destroy_texture_view(&self, view: super::TextureView) {
+    unsafe fn destroy_texture_view(&self, view: &mut super::TextureView) {
         if view.handle_srv.is_some() || view.handle_uav.is_some() {
             let mut pool = self.srv_uav_pool.lock();
             if let Some(handle) = view.handle_srv {
@@ -626,7 +626,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Sampler { handle })
     }
-    unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
+    unsafe fn destroy_sampler(&self, sampler: &mut super::Sampler) {
         self.sampler_pool.lock().free_handle(sampler.handle);
     }
 
@@ -656,8 +656,8 @@ impl crate::Device<super::Api> for super::Device {
             end_of_pass_timer_query: None,
         })
     }
-    unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
-        if let Some(list) = encoder.list {
+    unsafe fn destroy_command_encoder(&self, encoder: &mut super::CommandEncoder) {
+        if let Some(ref list) = encoder.list {
             list.close();
         }
     }
@@ -709,7 +709,7 @@ impl crate::Device<super::Api> for super::Device {
             copy_counts: vec![1; num_views.max(num_samplers) as usize],
         })
     }
-    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
+    unsafe fn destroy_bind_group_layout(&self, _bg_layout: &mut super::BindGroupLayout) {}
 
     unsafe fn create_pipeline_layout(
         &self,
@@ -1071,7 +1071,7 @@ impl crate::Device<super::Api> for super::Device {
             },
         })
     }
-    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
+    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: &mut super::PipelineLayout) {}
 
     unsafe fn create_bind_group(
         &self,
@@ -1240,7 +1240,7 @@ impl crate::Device<super::Api> for super::Device {
             dynamic_buffers,
         })
     }
-    unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
+    unsafe fn destroy_bind_group(&self, group: &mut super::BindGroup) {
         if let Some(dual) = group.handle_views {
             self.shared.heap_views.free_slice(dual);
         }
@@ -1262,7 +1262,7 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
     }
-    unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {
+    unsafe fn destroy_shader_module(&self, _module: &mut super::ShaderModule) {
         // just drop
     }
 
@@ -1449,7 +1449,7 @@ impl crate::Device<super::Api> for super::Device {
             vertex_strides,
         })
     }
-    unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {}
+    unsafe fn destroy_render_pipeline(&self, _pipeline: &mut super::RenderPipeline) {}
 
     unsafe fn create_compute_pipeline(
         &self,
@@ -1484,7 +1484,7 @@ impl crate::Device<super::Api> for super::Device {
             layout: desc.layout.shared.clone(),
         })
     }
-    unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
+    unsafe fn destroy_compute_pipeline(&self, _pipeline: &mut super::ComputePipeline) {}
 
     unsafe fn create_query_set(
         &self,
@@ -1517,7 +1517,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::QuerySet { raw, raw_ty })
     }
-    unsafe fn destroy_query_set(&self, _set: super::QuerySet) {}
+    unsafe fn destroy_query_set(&self, _set: &mut super::QuerySet) {}
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         let mut raw = d3d12::Fence::null();
@@ -1532,7 +1532,7 @@ impl crate::Device<super::Api> for super::Device {
         hr.into_device_result("Fence creation")?;
         Ok(super::Fence { raw })
     }
-    unsafe fn destroy_fence(&self, _fence: super::Fence) {}
+    unsafe fn destroy_fence(&self, _fence: &mut super::Fence) {}
     unsafe fn get_fence_value(
         &self,
         fence: &super::Fence,
@@ -1671,7 +1671,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn destroy_acceleration_structure(
         &self,
-        _acceleration_structure: super::AccelerationStructure,
+        _acceleration_structure: &mut super::AccelerationStructure,
     ) {
         // Destroy a D3D12 resource as per-usual.
         todo!()

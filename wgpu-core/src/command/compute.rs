@@ -446,12 +446,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // But no point in erroring over that nuance here!
             if let Some(range) = range {
                 unsafe {
-                    raw.reset_queries(query_set.raw.as_ref().unwrap(), range);
+                    raw.reset_queries(&query_set.raw, range);
                 }
             }
 
             Some(hal::ComputePassTimestampWrites {
-                query_set: query_set.raw.as_ref().unwrap(),
+                query_set: &query_set.raw,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -582,13 +582,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     // Rebind resources
-                    if state.binder.pipeline_layout.is_none()
-                        || !state
-                            .binder
-                            .pipeline_layout
-                            .as_ref()
-                            .unwrap()
-                            .is_equal(&pipeline.layout)
+                    if state
+                        .binder
+                        .pipeline_layout
+                        .as_ref()
+                        .map_or(true, |p| !p.is_equal(&pipeline.layout))
                     {
                         let (start_index, entries) = state.binder.change_pipeline_layout(
                             &pipeline.layout,

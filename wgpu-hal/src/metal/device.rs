@@ -274,7 +274,7 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(self, _queue: super::Queue) {}
+    unsafe fn exit(&mut self, _queue: super::Queue) {}
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
         let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
@@ -305,7 +305,7 @@ impl crate::Device<super::Api> for super::Device {
             })
         })
     }
-    unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {}
+    unsafe fn destroy_buffer(&self, _buffer: &mut super::Buffer) {}
 
     unsafe fn map_buffer(
         &self,
@@ -383,7 +383,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
 
-    unsafe fn destroy_texture(&self, _texture: super::Texture) {}
+    unsafe fn destroy_texture(&self, _texture: &mut super::Texture) {}
 
     unsafe fn create_texture_view(
         &self,
@@ -445,7 +445,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::TextureView { raw, aspects })
     }
-    unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
+    unsafe fn destroy_texture_view(&self, _view: &mut super::TextureView) {}
 
     unsafe fn create_sampler(
         &self,
@@ -505,7 +505,7 @@ impl crate::Device<super::Api> for super::Device {
             Ok(super::Sampler { raw })
         })
     }
-    unsafe fn destroy_sampler(&self, _sampler: super::Sampler) {}
+    unsafe fn destroy_sampler(&self, _sampler: &mut super::Sampler) {}
 
     unsafe fn create_command_encoder(
         &self,
@@ -519,7 +519,7 @@ impl crate::Device<super::Api> for super::Device {
             temp: super::Temp::default(),
         })
     }
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
+    unsafe fn destroy_command_encoder(&self, _encoder: &mut super::CommandEncoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -529,7 +529,7 @@ impl crate::Device<super::Api> for super::Device {
             entries: Arc::from(desc.entries),
         })
     }
-    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
+    unsafe fn destroy_bind_group_layout(&self, _bg_layout: &mut super::BindGroupLayout) {}
 
     unsafe fn create_pipeline_layout(
         &self,
@@ -696,7 +696,7 @@ impl crate::Device<super::Api> for super::Device {
             per_stage_map,
         })
     }
-    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
+    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: &mut super::PipelineLayout) {}
 
     unsafe fn create_bind_group(
         &self,
@@ -777,7 +777,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(bg)
     }
 
-    unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {}
+    unsafe fn destroy_bind_group(&self, _group: &mut super::BindGroup) {}
 
     unsafe fn create_shader_module(
         &self,
@@ -794,7 +794,7 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
     }
-    unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
+    unsafe fn destroy_shader_module(&self, _module: &mut super::ShaderModule) {}
 
     unsafe fn create_render_pipeline(
         &self,
@@ -1027,7 +1027,7 @@ impl crate::Device<super::Api> for super::Device {
             })
         })
     }
-    unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {}
+    unsafe fn destroy_render_pipeline(&self, _pipeline: &mut super::RenderPipeline) {}
 
     unsafe fn create_compute_pipeline(
         &self,
@@ -1082,7 +1082,7 @@ impl crate::Device<super::Api> for super::Device {
             })
         })
     }
-    unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
+    unsafe fn destroy_compute_pipeline(&self, _pipeline: &mut super::ComputePipeline) {}
 
     unsafe fn create_query_set(
         &self,
@@ -1149,7 +1149,7 @@ impl crate::Device<super::Api> for super::Device {
             }
         })
     }
-    unsafe fn destroy_query_set(&self, _set: super::QuerySet) {}
+    unsafe fn destroy_query_set(&self, _set: &mut super::QuerySet) {}
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         Ok(super::Fence {
@@ -1157,7 +1157,7 @@ impl crate::Device<super::Api> for super::Device {
             pending_command_buffers: Vec::new(),
         })
     }
-    unsafe fn destroy_fence(&self, _fence: super::Fence) {}
+    unsafe fn destroy_fence(&self, _fence: &mut super::Fence) {}
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
         let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
@@ -1244,7 +1244,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn destroy_acceleration_structure(
         &self,
-        _acceleration_structure: super::AccelerationStructure,
+        _acceleration_structure: &mut super::AccelerationStructure,
     ) {
         unimplemented!()
     }

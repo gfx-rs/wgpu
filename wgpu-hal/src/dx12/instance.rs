@@ -125,7 +125,7 @@ impl crate::Instance<super::Api> for super::Instance {
             ))),
         }
     }
-    unsafe fn destroy_surface(&self, _surface: super::Surface) {
+    unsafe fn destroy_surface(&self, _surface: &mut super::Surface) {
         // just drop
     }
 

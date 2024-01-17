@@ -170,7 +170,7 @@ impl crate::Instance<super::Api> for Instance {
         self.create_surface_from_canvas(canvas)
     }
 
-    unsafe fn destroy_surface(&self, surface: Surface) {
+    unsafe fn destroy_surface(&self, surface: &mut Surface) {
         let mut context_option_ref = self.webgl2_context.lock();
 
         if let Some(context) = context_option_ref.as_ref() {

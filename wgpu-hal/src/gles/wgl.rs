@@ -531,7 +531,7 @@ impl crate::Instance<super::Api> for Instance {
             srgb_capable: self.srgb_capable,
         })
     }
-    unsafe fn destroy_surface(&self, _surface: Surface) {}
+    unsafe fn destroy_surface(&self, _surface: &mut Surface) {}
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
         unsafe {

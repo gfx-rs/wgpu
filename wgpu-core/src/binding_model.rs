@@ -449,7 +449,7 @@ pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindG
 /// Bind group layout.
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {
-    pub(crate) raw: Option<A::BindGroupLayout>,
+    pub(crate) raw: A::BindGroupLayout,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) entries: bgl::EntryMap,
     /// It is very important that we know if the bind group comes from the BGL pool.
@@ -470,17 +470,16 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
         if matches!(self.origin, bgl::Origin::Pool) {
             self.device.bgl_pool.remove(&self.entries);
         }
-        if let Some(raw) = self.raw.take() {
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBindGroupLayout(self.info.id()));
-            }
 
-            resource_log!("Destroy raw BindGroupLayout {:?}", self.info.label());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_bind_group_layout(raw);
-            }
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyBindGroupLayout(self.info.id()));
+        }
+
+        resource_log!("Destroy raw BindGroupLayout {:?}", self.info.label());
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_bind_group_layout(&mut self.raw);
         }
     }
 }
@@ -502,7 +501,7 @@ impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
 }
 impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &A::BindGroupLayout {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 }
 
@@ -604,7 +603,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct PipelineLayout<A: HalApi> {
-    pub(crate) raw: Option<A::PipelineLayout>,
+    pub(crate) raw: A::PipelineLayout,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) info: ResourceInfo<PipelineLayoutId>,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
@@ -613,25 +612,23 @@ pub struct PipelineLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for PipelineLayout<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw PipelineLayout {:?}", self.info.label());
+        resource_log!("Destroy raw PipelineLayout {:?}", self.info.label());
 
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineLayout(self.info.id()));
-            }
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyPipelineLayout(self.info.id()));
+        }
 
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_pipeline_layout(raw);
-            }
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_pipeline_layout(&mut self.raw);
         }
     }
 }
 
 impl<A: HalApi> PipelineLayout<A> {
     pub(crate) fn raw(&self) -> &A::PipelineLayout {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 
     pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::EntryMap, { hal::MAX_BIND_GROUPS }> {
@@ -833,7 +830,7 @@ pub(crate) fn buffer_binding_type_alignment(
 
 #[derive(Debug)]
 pub struct BindGroup<A: HalApi> {
-    pub(crate) raw: Option<A::BindGroup>,
+    pub(crate) raw: A::BindGroup,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<BindGroupLayout<A>>,
     pub(crate) info: ResourceInfo<BindGroupId>,
@@ -848,18 +845,16 @@ pub struct BindGroup<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroup<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw BindGroup {:?}", self.info.label());
+        resource_log!("Destroy raw BindGroup {:?}", self.info.label());
 
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBindGroup(self.info.id()));
-            }
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyBindGroup(self.info.id()));
+        }
 
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_bind_group(raw);
-            }
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_bind_group(&mut self.raw);
         }
     }
 }
@@ -874,7 +869,7 @@ impl<A: HalApi> BindGroup<A> {
         for texture in &self.used_texture_ranges {
             let _ = texture.texture.raw(guard)?;
         }
-        self.raw.as_ref()
+        Some(&self.raw)
     }
     pub(crate) fn validate_dynamic_bindings(
         &self,

@@ -50,7 +50,7 @@ impl crate::Instance<Api> for Context {
     ) -> Result<Context, crate::InstanceError> {
         Ok(Context)
     }
-    unsafe fn destroy_surface(&self, surface: Context) {}
+    unsafe fn destroy_surface(&self, surface: &mut Context) {}
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
         Vec::new()
     }
@@ -122,11 +122,11 @@ impl crate::Queue<Api> for Context {
 }
 
 impl crate::Device<Api> for Context {
-    unsafe fn exit(self, queue: Context) {}
+    unsafe fn exit(&mut self, queue: Context) {}
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_buffer(&self, buffer: Resource) {}
+    unsafe fn destroy_buffer(&self, buffer: &mut Resource) {}
     unsafe fn map_buffer(
         &self,
         buffer: &Resource,
@@ -143,7 +143,7 @@ impl crate::Device<Api> for Context {
     unsafe fn create_texture(&self, desc: &crate::TextureDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_texture(&self, texture: Resource) {}
+    unsafe fn destroy_texture(&self, texture: &mut Resource) {}
     unsafe fn create_texture_view(
         &self,
         texture: &Resource,
@@ -151,11 +151,11 @@ impl crate::Device<Api> for Context {
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_texture_view(&self, view: Resource) {}
+    unsafe fn destroy_texture_view(&self, view: &mut Resource) {}
     unsafe fn create_sampler(&self, desc: &crate::SamplerDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_sampler(&self, sampler: Resource) {}
+    unsafe fn destroy_sampler(&self, sampler: &mut Resource) {}
 
     unsafe fn create_command_encoder(
         &self,
@@ -163,7 +163,7 @@ impl crate::Device<Api> for Context {
     ) -> DeviceResult<Encoder> {
         Ok(Encoder)
     }
-    unsafe fn destroy_command_encoder(&self, encoder: Encoder) {}
+    unsafe fn destroy_command_encoder(&self, encoder: &mut Encoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -171,21 +171,21 @@ impl crate::Device<Api> for Context {
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: &mut Resource) {}
     unsafe fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<Api>,
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: &mut Resource) {}
     unsafe fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<Api>,
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_bind_group(&self, group: Resource) {}
+    unsafe fn destroy_bind_group(&self, group: &mut Resource) {}
 
     unsafe fn create_shader_module(
         &self,
@@ -194,21 +194,21 @@ impl crate::Device<Api> for Context {
     ) -> Result<Resource, crate::ShaderError> {
         Ok(Resource)
     }
-    unsafe fn destroy_shader_module(&self, module: Resource) {}
+    unsafe fn destroy_shader_module(&self, module: &mut Resource) {}
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<Api>,
     ) -> Result<Resource, crate::PipelineError> {
         Ok(Resource)
     }
-    unsafe fn destroy_render_pipeline(&self, pipeline: Resource) {}
+    unsafe fn destroy_render_pipeline(&self, pipeline: &mut Resource) {}
     unsafe fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<Api>,
     ) -> Result<Resource, crate::PipelineError> {
         Ok(Resource)
     }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn destroy_compute_pipeline(&self, pipeline: &mut Resource) {}
 
     unsafe fn create_query_set(
         &self,
@@ -216,11 +216,11 @@ impl crate::Device<Api> for Context {
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_query_set(&self, set: Resource) {}
+    unsafe fn destroy_query_set(&self, set: &mut Resource) {}
     unsafe fn create_fence(&self) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_fence(&self, fence: Resource) {}
+    unsafe fn destroy_fence(&self, fence: &mut Resource) {}
     unsafe fn get_fence_value(&self, fence: &Resource) -> DeviceResult<crate::FenceValue> {
         Ok(0)
     }
@@ -255,7 +255,7 @@ impl crate::Device<Api> for Context {
     ) -> wgt::BufferAddress {
         Default::default()
     }
-    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
+    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: &mut Resource) {}
 }
 
 impl crate::CommandEncoder<Api> for Encoder {

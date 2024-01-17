@@ -155,7 +155,7 @@ pub(crate) fn fixup_discarded_surfaces<
             encoder,
             texture_tracker,
             &device.alignments,
-            device.zero_buffer.as_ref().unwrap(),
+            &device.zero_buffer,
         )
         .unwrap();
     }
@@ -309,7 +309,7 @@ impl<A: HalApi> BakedCommands<A> {
                     &mut self.encoder,
                     &mut device_tracker.textures,
                     &device.alignments,
-                    device.zero_buffer.as_ref().unwrap(),
+                    &device.zero_buffer,
                 );
 
                 // A Texture can be destroyed between the command recording

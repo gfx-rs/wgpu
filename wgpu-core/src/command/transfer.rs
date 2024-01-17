@@ -480,7 +480,7 @@ fn handle_texture_init<A: HalApi>(
                 cmd_buf_raw,
                 &mut trackers.textures,
                 &device.alignments,
-                device.zero_buffer.as_ref().unwrap(),
+                &device.zero_buffer,
             )?;
         }
     }

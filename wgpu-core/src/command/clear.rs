@@ -242,7 +242,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder,
             &mut tracker.textures,
             &device.alignments,
-            device.zero_buffer.as_ref().unwrap(),
+            &device.zero_buffer,
         )
     }
 }

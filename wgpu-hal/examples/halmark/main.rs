@@ -55,8 +55,8 @@ impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
         device.wait(&self.fence, self.fence_value, !0).unwrap();
         self.encoder.reset_all(self.used_cmd_bufs.drain(..));
-        for view in self.used_views.drain(..) {
-            device.destroy_texture_view(view);
+        for mut view in self.used_views.drain(..) {
+            device.destroy_texture_view(&mut view);
         }
         self.frames_recorded = 0;
     }
@@ -280,7 +280,7 @@ impl<A: hal::Api> Example<A> {
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
         };
-        let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
+        let mut staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
             let mapping = device
                 .map_buffer(&staging_buffer, 0..staging_buffer_desc.size)
@@ -493,7 +493,7 @@ impl<A: hal::Api> Example<A> {
                 .submit(&[&init_cmd], Some((&mut fence, init_fence_value)))
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
-            device.destroy_buffer(staging_buffer);
+            device.destroy_buffer(&mut staging_buffer);
             cmd_encoder.reset_all(iter::once(init_cmd));
             fence
         };
@@ -548,28 +548,29 @@ impl<A: hal::Api> Example<A> {
 
             for mut ctx in self.contexts {
                 ctx.wait_and_clear(&self.device);
-                self.device.destroy_command_encoder(ctx.encoder);
-                self.device.destroy_fence(ctx.fence);
+                self.device.destroy_command_encoder(&mut ctx.encoder);
+                self.device.destroy_fence(&mut ctx.fence);
             }
 
-            self.device.destroy_bind_group(self.local_group);
-            self.device.destroy_bind_group(self.global_group);
-            self.device.destroy_buffer(self.local_buffer);
-            self.device.destroy_buffer(self.global_buffer);
-            self.device.destroy_texture_view(self.texture_view);
-            self.device.destroy_texture(self.texture);
-            self.device.destroy_sampler(self.sampler);
-            self.device.destroy_shader_module(self.shader);
-            self.device.destroy_render_pipeline(self.pipeline);
+            self.device.destroy_bind_group(&mut self.local_group);
+            self.device.destroy_bind_group(&mut self.global_group);
+            self.device.destroy_buffer(&mut self.local_buffer);
+            self.device.destroy_buffer(&mut self.global_buffer);
+            self.device.destroy_texture_view(&mut self.texture_view);
+            self.device.destroy_texture(&mut self.texture);
+            self.device.destroy_sampler(&mut self.sampler);
+            self.device.destroy_shader_module(&mut self.shader);
+            self.device.destroy_render_pipeline(&mut self.pipeline);
             self.device
-                .destroy_bind_group_layout(self.local_group_layout);
+                .destroy_bind_group_layout(&mut self.local_group_layout);
             self.device
-                .destroy_bind_group_layout(self.global_group_layout);
-            self.device.destroy_pipeline_layout(self.pipeline_layout);
+                .destroy_bind_group_layout(&mut self.global_group_layout);
+            self.device
+                .destroy_pipeline_layout(&mut self.pipeline_layout);
 
             self.surface.unconfigure(&self.device);
             self.device.exit(self.queue);
-            self.instance.destroy_surface(self.surface);
+            self.instance.destroy_surface(&mut self.surface);
             drop(self.adapter);
         }
     }

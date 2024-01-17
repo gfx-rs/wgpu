@@ -122,8 +122,8 @@ impl Instance {
             unsafe {
                 if let Some(surface) = surface.take::<A>() {
                     if let Some(suf) = Arc::into_inner(surface) {
-                        if let Some(raw) = Arc::into_inner(suf.raw) {
-                            instance.as_ref().unwrap().destroy_surface(raw);
+                        if let Some(mut raw) = Arc::into_inner(suf.raw) {
+                            instance.as_ref().unwrap().destroy_surface(&mut raw);
                         } else {
                             panic!("Surface cannot be destroyed because is still in use");
                         }

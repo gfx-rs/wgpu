@@ -519,8 +519,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if device
             .pending_writes
             .lock()
-            .as_ref()
-            .unwrap()
             .dst_buffers
             .contains_key(&buffer_id)
         {
@@ -751,8 +749,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if device
                     .pending_writes
                     .lock()
-                    .as_ref()
-                    .unwrap()
                     .dst_textures
                     .contains_key(&texture_id)
                 {
@@ -1319,7 +1315,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .as_mut()
                 .unwrap()
-                .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
+                .acquire_encoder(device.raw(), queue.raw())
             {
                 Ok(raw) => raw,
                 Err(_) => break DeviceError::OutOfMemory,
@@ -2008,8 +2004,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 // Wait for all work to finish before configuring the surface.
                 let fence = device.fence.read();
-                let fence = fence.as_ref().unwrap();
-                match device.maintain(fence, wgt::Maintain::Wait) {
+                match device.maintain(&fence, wgt::Maintain::Wait) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -2108,8 +2103,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .get(device_id)
                 .map_err(|_| DeviceError::Invalid)?;
             let fence = device.fence.read();
-            let fence = fence.as_ref().unwrap();
-            device.maintain(fence, maintain)?
+            device.maintain(&fence, maintain)?
         };
 
         closures.fire();
@@ -2142,8 +2136,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     wgt::Maintain::Poll
                 };
                 let fence = device.fence.read();
-                let fence = fence.as_ref().unwrap();
-                let (cbs, queue_empty) = device.maintain(fence, maintain)?;
+                let (cbs, queue_empty) = device.maintain(&fence, maintain)?;
                 all_queue_empty = all_queue_empty && queue_empty;
 
                 closures.extend(cbs);
@@ -2236,12 +2229,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // need to wait for submissions or triage them. We know we were
             // just polled, so `life_tracker.free_resources` is empty.
             debug_assert!(device.lock_life().queue_empty());
-            {
-                let mut pending_writes = device.pending_writes.lock();
-                let pending_writes = pending_writes.as_mut().unwrap();
-                pending_writes.deactivate();
-            }
-
+            device.pending_writes.lock().deactivate();
             drop(device);
         }
     }

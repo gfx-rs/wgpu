@@ -938,7 +938,7 @@ impl crate::Instance<super::Api> for Instance {
             srgb_kind: inner.srgb_kind,
         })
     }
-    unsafe fn destroy_surface(&self, _surface: Surface) {}
+    unsafe fn destroy_surface(&self, _surface: &mut Surface) {}
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
         let inner = self.inner.lock();

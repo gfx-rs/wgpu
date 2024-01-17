@@ -1159,7 +1159,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             }
 
             Some(hal::RenderPassTimestampWrites {
-                query_set: query_set.raw.as_ref().unwrap(),
+                query_set: &query_set.raw,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -1173,7 +1173,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .add_single(query_set_guard, occlusion_query_set)
                 .ok_or(RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
 
-            Some(query_set.raw.as_ref().unwrap())
+            Some(&query_set.raw)
         } else {
             None
         };

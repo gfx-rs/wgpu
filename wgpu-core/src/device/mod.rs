@@ -401,14 +401,14 @@ impl<A: HalApi> CommandAllocator<A> {
         self.free_encoders.push(encoder);
     }
 
-    fn dispose(self, device: &A::Device) {
+    fn dispose(&mut self, device: &A::Device) {
         resource_log!(
             "CommandAllocator::dispose encoders {}",
             self.free_encoders.len()
         );
-        for cmd_encoder in self.free_encoders {
+        for mut cmd_encoder in self.free_encoders.drain(..) {
             unsafe {
-                device.destroy_command_encoder(cmd_encoder);
+                device.destroy_command_encoder(&mut cmd_encoder);
             }
         }
     }

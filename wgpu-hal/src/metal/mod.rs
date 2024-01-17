@@ -114,7 +114,7 @@ impl crate::Instance<Api> for Instance {
         }
     }
 
-    unsafe fn destroy_surface(&self, surface: Surface) {
+    unsafe fn destroy_surface(&self, surface: &mut Surface) {
         unsafe { surface.dispose() };
     }
 
