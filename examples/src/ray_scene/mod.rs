@@ -299,6 +299,7 @@ fn upload_scene_components(
 fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
     let mut scene = RawSceneComponents::default();
 
+    load_model(&mut scene, "/skybox/models/teslacyberv3.0.obj");
     load_model(&mut scene, "/ray_scene/cube.obj");
 
     upload_scene_components(device, queue, &scene)
@@ -475,7 +476,7 @@ impl crate::framework::Example for Example {
                 for y in 0..side_count {
                     let instance = self
                         .tlas_package
-                        .get_mut_single((x + y) * side_count)
+                        .get_mut_single(x + y * side_count)
                         .unwrap();
 
                     let blas_index = (x + y)
