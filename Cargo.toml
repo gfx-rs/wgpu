@@ -150,7 +150,7 @@ hassle-rs = "0.11.0"
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.12.3"
+glow = "0.13.1"
 glutin = "0.29.1"
 
 # wasm32 dependencies
