@@ -107,6 +107,7 @@ impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+#[cfg(feature = "glsl")]
 impl fmt::Display for ShaderError<naga::front::glsl::ParseError> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = self.label.as_deref().unwrap_or_default();
@@ -114,6 +115,7 @@ impl fmt::Display for ShaderError<naga::front::glsl::ParseError> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+#[cfg(feature = "spirv")]
 impl fmt::Display for ShaderError<naga::front::spv::Error> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = self.label.as_deref().unwrap_or_default();
