@@ -59,6 +59,9 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
+## Enable `ShaderModuleSource::Glsl`
+glsl = ["naga/glsl-in"]
+
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
 ## WebGL/WebGPU objects can not be shared between threads.
