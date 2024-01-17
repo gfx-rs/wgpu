@@ -626,8 +626,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 wgt::TextureFormat::Rgb10a2Unorm,
                 wgt::TextureFormat::Rgba16Float,
             ],
-            // we currently use a flip effect which supports 2..=16 buffers
-            swap_chain_sizes: 2..=16,
+            // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
+            maximum_frame_latency: 1..=16,
             current_extent,
             usage: crate::TextureUses::COLOR_TARGET
                 | crate::TextureUses::COPY_SRC
