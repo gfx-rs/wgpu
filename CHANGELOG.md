@@ -113,7 +113,7 @@ By @cwfitzgerald in [#4780](https://github.com/gfx-rs/wgpu/pull/4780).
 It is now possible to safely create a `wgpu::Surface` with `wgpu::Instance::create_surface()` by letting `wgpu::Surface` hold a lifetime to `window`.
 Passing an owned value `window` to `Surface` will return a `wgpu::Surface<'static>`.
 
-All possible safe variants (owned windows and on the web canvases) are grouped using `wgpu::SurfaceTarget`.
+All possible safe variants (owned windows and web canvases) are grouped using `wgpu::SurfaceTarget`.
 Conversion to `wgpu::SurfaceTarget` is automatic for any type implementing `raw-window-handle`'s `HasWindowHandle` & `HasDisplayHandle` traits, i.e. most window types.
 For web canvas types this has to be done explicitly:
 ```rust
