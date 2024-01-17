@@ -41,9 +41,9 @@ Bottom level categories:
 
 ### Improved Multithreading through internal use of Reference Counting
 
-[Check the blog post!](https://gfx-rs.github.io/2023/11/24/arcanization.html)
-
 Large refactoring of wgpu’s internals aiming at reducing lock contention, and providing better performance when using wgpu on multiple threads.
+
+[Check the blog post!](https://gfx-rs.github.io/2023/11/24/arcanization.html)
 
 By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and thanks also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
 
@@ -189,12 +189,12 @@ By @jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](http
 - GPU buffer memory is released during "lose the device". By @bradwerth in [#4851](https://github.com/gfx-rs/wgpu/pull/4851).
 - wgpu and wgpu-core cargo feature flags are now documented on docs.rs. By @wumpf in [#4886](https://github.com/gfx-rs/wgpu/pull/4886).
 - DeviceLostClosure is guaranteed to be invoked exactly once. By @bradwerth in [#4862](https://github.com/gfx-rs/wgpu/pull/4862).
-- Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
-- `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
+- Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586).
+- `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647).
 - Rename of `DispatchIndirect`, `DrawIndexedIndirect`, and `DrawIndirect` types in the `wgpu::util` module to `DispatchIndirectArgs`, `DrawIndexedIndirectArgs`, and `DrawIndirectArgs`. By @cwfitzgerald in [#4723](https://github.com/gfx-rs/wgpu/pull/4723).
-- Make the size parameter of `encoder.clear_buffer` an `Option<u64>` instead of `Option<NonZero<u64>>`. By @nical in [#4737](https://github.com/gfx-rs/wgpu/pull/4737)
+- Make the size parameter of `encoder.clear_buffer` an `Option<u64>` instead of `Option<NonZero<u64>>`. By @nical in [#4737](https://github.com/gfx-rs/wgpu/pull/4737).
 - Reduce the `info` log level noise. By @nical in [#4769](https://github.com/gfx-rs/wgpu/pull/4769), [#4711](https://github.com/gfx-rs/wgpu/pull/4711) and [#4772](https://github.com/gfx-rs/wgpu/pull/4772)
-- Rename `features` & `limits` fields of `DeviceDescriptor` to `required_features` & `required_limits`. By @teoxoy in [#4803](https://github.com/gfx-rs/wgpu/pull/4803)
+- Rename `features` & `limits` fields of `DeviceDescriptor` to `required_features` & `required_limits`. By @teoxoy in [#4803](https://github.com/gfx-rs/wgpu/pull/4803).
 
 #### OpenGL
 - `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
@@ -207,7 +207,7 @@ By @jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](http
 - Naga constant evaluation can now process binary operators whose operands are both vectors. By @jimblandy in [#4861](https://github.com/gfx-rs/wgpu/pull/4861).
 - Add `--bulk-validate` option to Naga CLI. By @jimblandy in [#4871](https://github.com/gfx-rs/wgpu/pull/4871).
 - Naga's `cargo xtask validate` now runs validation jobs in parallel, using the [jobserver](https://crates.io/crates/jobserver) protocol to limit concurrency, and offers a `validate all` subcommand, which runs all available validation types. By @jimblandy in [#4902](https://github.com/gfx-rs/wgpu/pull/4902).
-- Remove `span` and `validate` features. Always fully validate shader modules, and always track source positions for use in error messages. By @teoxoy in [#4706](https://github.com/gfx-rs/wgpu/pull/4706)
+- Remove `span` and `validate` features. Always fully validate shader modules, and always track source positions for use in error messages. By @teoxoy in [#4706](https://github.com/gfx-rs/wgpu/pull/4706).
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 - Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711).
@@ -258,8 +258,8 @@ By @jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](http
 ### Examples
 
 - remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
-- hello-compute example fix failure with "wgpu error: Validation Error" if arguments are missing by @vilcans in [#4939](https://github.com/gfx-rs/wgpu/pull/4939)
-- Made the examples page not crash on Chrome on Android, and responsive to screen sizes by @Dinnerbone in [#4958](https://github.com/gfx-rs/wgpu/pull/4958)
+- hello-compute example fix failure with "wgpu error: Validation Error" if arguments are missing by @vilcans in [#4939](https://github.com/gfx-rs/wgpu/pull/4939).
+- Made the examples page not crash on Chrome on Android, and responsive to screen sizes by @Dinnerbone in [#4958](https://github.com/gfx-rs/wgpu/pull/4958).
 
 ## v0.18.2 (2023-12-06)
 
