@@ -1,4 +1,4 @@
-use wgt::Backend;
+use wgt::{Backend, WasmNotSendSync};
 
 use crate::{
     global::Global,
@@ -7,13 +7,12 @@ use crate::{
     instance::{HalSurface, Instance, Surface},
 };
 
-pub trait HalApi: hal::Api {
+pub trait HalApi: hal::Api + 'static + WasmNotSendSync {
     const VARIANT: Backend;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self>;
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>>;
-    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>>;
 }
 
 impl HalApi for hal::api::Empty {
@@ -24,18 +23,15 @@ impl HalApi for hal::api::Empty {
     fn instance_as_hal(_: &Instance) -> Option<&Self::Instance> {
         unimplemented!("called empty api")
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(_: &Global<G>) -> &Hub<Self, G> {
+    fn hub<G: GlobalIdentityHandlerFactory>(_: &Global<G>) -> &Hub<Self> {
         unimplemented!("called empty api")
     }
     fn get_surface(_: &Surface) -> Option<&HalSurface<Self>> {
         unimplemented!("called empty api")
     }
-    fn get_surface_mut(_: &mut Surface) -> Option<&mut HalSurface<Self>> {
-        unimplemented!("called empty api")
-    }
 }
 
-#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+#[cfg(vulkan)]
 impl HalApi for hal::api::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -48,18 +44,15 @@ impl HalApi for hal::api::Vulkan {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.vulkan.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
         &global.hubs.vulkan
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.vulkan.as_ref()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
-        surface.vulkan.as_mut()
+        surface.raw.downcast_ref()
     }
 }
 
-#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+#[cfg(metal)]
 impl HalApi for hal::api::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -72,18 +65,15 @@ impl HalApi for hal::api::Metal {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.metal.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
         &global.hubs.metal
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.metal.as_ref()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
-        surface.metal.as_mut()
+        surface.raw.downcast_ref()
     }
 }
 
-#[cfg(all(feature = "dx12", windows))]
+#[cfg(dx12)]
 impl HalApi for hal::api::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -96,42 +86,15 @@ impl HalApi for hal::api::Dx12 {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.dx12.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
         &global.hubs.dx12
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.dx12.as_ref()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
-        surface.dx12.as_mut()
+        surface.raw.downcast_ref()
     }
 }
 
-#[cfg(all(feature = "dx11", windows))]
-impl HalApi for hal::api::Dx11 {
-    const VARIANT: Backend = Backend::Dx11;
-    fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
-        Instance {
-            name: name.to_owned(),
-            dx11: Some(hal_instance),
-            ..Default::default()
-        }
-    }
-    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
-        instance.dx11.as_ref()
-    }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
-        &global.hubs.dx11
-    }
-    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.dx11.as_ref()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
-        surface.dx11.as_mut()
-    }
-}
-
-#[cfg(feature = "gles")]
+#[cfg(gles)]
 impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -145,13 +108,10 @@ impl HalApi for hal::api::Gles {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.gl.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
         &global.hubs.gl
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.gl.as_ref()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
-        surface.gl.as_mut()
+        surface.raw.downcast_ref()
     }
 }

@@ -10,7 +10,7 @@
 
 extern crate wgpu_hal as hal;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 fn main() {
     env_logger::init();
     println!("Initializing external GL context");
@@ -72,7 +72,7 @@ fn main() {
 
     println!("Initializing external GL context");
     let egl = khronos_egl::Instance::new(khronos_egl::Static);
-    let display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
+    let display = unsafe { egl.get_display(khronos_egl::DEFAULT_DISPLAY) }.unwrap();
     egl.initialize(display)
         .expect("unable to initialize display");
 
@@ -116,14 +116,14 @@ fn main() {
     fill_screen(&exposed, 640, 400);
 }
 
-#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+#[cfg(any(windows, all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 fn main() {}
 
-#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+#[cfg(any(not(any(windows, target_arch = "wasm32")), target_os = "emscripten"))]
 fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height: u32) {
     use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
 
-    let mut od = unsafe {
+    let od = unsafe {
         exposed
             .adapter
             .open(wgt::Features::empty(), &wgt::Limits::downlevel_defaults())

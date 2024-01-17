@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Affine3A, Mat4, Quat, Vec3};
+use glam::Affine3A;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

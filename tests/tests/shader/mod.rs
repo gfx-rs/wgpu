@@ -15,9 +15,9 @@ use wgpu::{
 
 use wgpu_test::TestingContext;
 
-mod numeric_builtins;
-mod struct_layout;
-mod zero_init_workgroup_mem;
+pub mod numeric_builtins;
+pub mod struct_layout;
+pub mod zero_init_workgroup_mem;
 
 #[derive(Clone, Copy, PartialEq)]
 enum InputStorageType {
@@ -40,6 +40,8 @@ impl InputStorageType {
 struct ShaderTest {
     /// Human readable name
     name: String,
+    /// Header text. This is arbitrary code injected at the top of the shader. Replaces {{header}}
+    header: String,
     /// This text will be the body of the `Input` struct. Replaces "{{input_members}}"
     /// in the shader_test shader.
     custom_struct_members: String,
@@ -132,6 +134,7 @@ impl ShaderTest {
     ) -> Self {
         Self {
             name,
+            header: String::new(),
             custom_struct_members,
             body,
             input_type: String::from("CustomStruct"),
@@ -142,6 +145,12 @@ impl ShaderTest {
             output_initialization: u32::MAX,
             failures: Backends::empty(),
         }
+    }
+
+    fn header(mut self, header: String) -> Self {
+        self.header = header;
+
+        self
     }
 
     /// Add another set of possible outputs. If any of the given
@@ -168,7 +177,7 @@ impl ShaderTest {
 const MAX_BUFFER_SIZE: u64 = 128;
 
 /// Runs the given shader tests with the given storage_type for the input_buffer.
-fn shader_input_output_test(
+async fn shader_input_output_test(
     ctx: TestingContext,
     storage_type: InputStorageType,
     tests: Vec<ShaderTest>,
@@ -272,6 +281,7 @@ fn shader_input_output_test(
         // This isn't terribly efficient but the string is short and it's a test.
         // The body and input members are the longest part, so do them last.
         let mut processed = source
+            .replace("{{header}}", &test.header)
             .replace("{{storage_type}}", storage_type.as_str())
             .replace("{{input_type}}", &test.input_type)
             .replace("{{output_type}}", &test.output_type)
@@ -345,7 +355,7 @@ fn shader_input_output_test(
         ctx.queue.submit(Some(encoder.finish()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-        ctx.device.poll(Maintain::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 

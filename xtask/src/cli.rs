@@ -8,19 +8,23 @@ Usage: xtask <COMMAND>
 
 Commands:
   run-wasm
+    --release   Build in release mode
+    --no-serve  Just build the generated files, don't serve them
+  test
+    --llvm-cov  Run tests with LLVM code coverage using the llvm-cov tool
 
 Options:
   -h, --help  Print help
 ";
 
-pub(crate) struct Args {
-    pub(crate) subcommand: Subcommand,
+pub struct Args {
+    pub subcommand: Subcommand,
+    pub command_args: Arguments,
 }
 
 impl Args {
     pub fn parse() -> Self {
         let mut args = Arguments::from_env();
-        log::debug!("parsing args: {args:?}");
         if args.contains("--help") {
             eprint!("{HELP}");
             // Emulate Cargo exit status:
@@ -28,8 +32,11 @@ impl Args {
             let cargo_like_exit_code = 101;
             exit(cargo_like_exit_code);
         }
-        match Subcommand::parse(args).map(|subcommand| Self { subcommand }) {
-            Ok(this) => this,
+        match Subcommand::parse(&mut args) {
+            Ok(subcommand) => Self {
+                subcommand,
+                command_args: args,
+            },
             Err(e) => {
                 eprintln!("{:?}", anyhow!(e));
                 exit(1)
@@ -38,18 +45,20 @@ impl Args {
     }
 }
 
-pub(crate) enum Subcommand {
-    RunWasm { args: Arguments },
+pub enum Subcommand {
+    RunWasm,
+    Test,
 }
 
 impl Subcommand {
-    fn parse(mut args: Arguments) -> anyhow::Result<Subcommand> {
+    fn parse(args: &mut Arguments) -> anyhow::Result<Subcommand> {
         let subcmd = args
             .subcommand()
             .context("failed to parse subcommand")?
             .context("no subcommand specified; see `--help` for more details")?;
         match &*subcmd {
-            "run-wasm" => Ok(Self::RunWasm { args }),
+            "run-wasm" => Ok(Self::RunWasm),
+            "test" => Ok(Self::Test),
             other => {
                 bail!("unrecognized subcommand {other:?}; see `--help` for more details")
             }

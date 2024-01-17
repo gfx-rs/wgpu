@@ -1,7 +1,38 @@
-/*! This library safely implements WebGPU on native platforms.
- *  It is designed for integration into browsers, as well as wrapping
- *  into other language-specific user-friendly libraries.
- */
+//! This library safely implements WebGPU on native platforms.
+//! It is designed for integration into browsers, as well as wrapping
+//! into other language-specific user-friendly libraries.
+//!
+//! ## Feature flags
+// NOTE: feature docs. below should be kept in sync. with `Cargo.toml`!
+//!
+//! - **`api_log_info`** --- Log all API entry points at info instead of trace level.
+//! - **`resource_log_info`** --- Log resource lifecycle management at info instead of trace level.
+//! - **`link`** _(enabled by default)_ --- Use static linking for libraries. Disale to manually
+//!   link. Enabled by default.
+//! - **`renderdoc`** --- Support the Renderdoc graphics debugger:
+//!   [https://renderdoc.org/](https://renderdoc.org/)
+//! - **`strict_asserts`** --- Apply run-time checks, even in release builds. These are in addition
+//!   to the validation carried out at public APIs in all builds.
+//! - **`trace`** --- Enable API tracing.
+//! - **`replay`** --- Enable API replaying
+//! - **`serial-pass`** --- Enable serializable compute/render passes, and bundle encoders.
+//! - **`wgsl`** --- Enable `ShaderModuleSource::Wgsl`
+//! - **`fragile-send-sync-non-atomic-wasm`** --- Implement `Send` and `Sync` on Wasm, but only if
+//!   atomics are not enabled.
+//!
+//!   WebGL/WebGPU objects can not be shared between threads. However, it can be useful to
+//!   artificially mark them as `Send` and `Sync` anyways to make it easier to write cross-platform
+//!   code. This is technically _very_ unsafe in a multithreaded environment, but on a wasm binary
+//!   compiled without atomics we know we are definitely not in a multithreaded environment.
+//!
+//!  ### Backends, passed through to wgpu-hal
+//!
+//!  - **`metal`** --- Enable the `metal` backend.
+//!  - **`vulkan`** --- Enable the `vulkan` backend.
+//!  - **`gles`** --- Enable the `GLES` backend.
+//!
+//!    This is used for all of GLES, OpenGL, and WebGL.
+//!  - **`dx12`** --- Enable the `dx12` backend.
 
 // When we have no backends, we end up with a lot of dead or otherwise unreachable code.
 #![cfg_attr(
@@ -9,7 +40,6 @@
         not(all(feature = "vulkan", not(target_arch = "wasm32"))),
         not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
         not(all(feature = "dx12", windows)),
-        not(all(feature = "dx11", windows)),
         not(feature = "gles"),
     ),
     allow(unused, clippy::let_and_return)
@@ -35,19 +65,18 @@
     // For some reason `rustc` can warn about these in const generics even
     // though they are required.
     unused_braces,
-    // Clashes with clippy::pattern_type_mismatch
-    clippy::needless_borrowed_reference,
+    // It gets in the way a lot and does not prevent bugs in practice.
+    clippy::pattern_type_mismatch,
 )]
 #![warn(
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,
     unused_extern_crates,
-    unused_qualifications,
-    // We don't match on a reference, unless required.
-    clippy::pattern_type_mismatch,
+    unused_qualifications
 )]
 
+pub mod any_surface;
 pub mod binding_model;
 pub mod command;
 mod conv;
@@ -55,25 +84,32 @@ pub mod device;
 pub mod error;
 pub mod global;
 pub mod hal_api;
+mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
 mod init_tracker;
 pub mod instance;
 pub mod pipeline;
+mod pool;
 pub mod present;
 pub mod ray_tracing;
 pub mod registry;
 pub mod resource;
+mod snatch;
 pub mod storage;
 mod track;
-mod validation;
+// This is public for users who pre-compile shaders while still wanting to
+// preserve all run-time checks that `wgpu-core` does.
+// See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
+// made private again.
+pub mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 
-use atomic::{AtomicUsize, Ordering};
+use std::{borrow::Cow, os::raw::c_char};
 
-use std::{borrow::Cow, os::raw::c_char, ptr, sync::atomic};
+pub(crate) use hash_utils::*;
 
 /// The index of a queue submission.
 ///
@@ -88,10 +124,18 @@ pub type Label<'a> = Option<Cow<'a, str>>;
 
 trait LabelHelpers<'a> {
     fn borrow_option(&'a self) -> Option<&'a str>;
+    fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str>;
     fn borrow_or_default(&'a self) -> &'a str;
 }
 impl<'a> LabelHelpers<'a> for Label<'a> {
     fn borrow_option(&'a self) -> Option<&'a str> {
+        self.as_ref().map(|cow| cow.as_ref())
+    }
+    fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str> {
+        if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
+            return None;
+        }
+
         self.as_ref().map(|cow| cow.as_ref())
     }
     fn borrow_or_default(&'a self) -> &'a str {
@@ -99,153 +143,12 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
     }
 }
 
-/// Reference count object that is 1:1 with each reference.
-///
-/// All the clones of a given `RefCount` point to the same
-/// heap-allocated atomic reference count. When the count drops to
-/// zero, only the count is freed. No other automatic cleanup takes
-/// place; this is just a reference count, not a smart pointer.
-///
-/// `RefCount` values are created only by [`LifeGuard::new`] and by
-/// `Clone`, so every `RefCount` is implicitly tied to some
-/// [`LifeGuard`].
-#[derive(Debug)]
-struct RefCount(ptr::NonNull<AtomicUsize>);
-
-unsafe impl Send for RefCount {}
-unsafe impl Sync for RefCount {}
-
-impl RefCount {
-    const MAX: usize = 1 << 24;
-
-    /// Construct a new `RefCount`, with an initial count of 1.
-    fn new() -> RefCount {
-        let bx = Box::new(AtomicUsize::new(1));
-        Self(unsafe { ptr::NonNull::new_unchecked(Box::into_raw(bx)) })
+pub fn hal_label(opt: Option<&str>, flags: wgt::InstanceFlags) -> Option<&str> {
+    if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
+        return None;
     }
 
-    fn load(&self) -> usize {
-        unsafe { self.0.as_ref() }.load(Ordering::Acquire)
-    }
-}
-
-impl Clone for RefCount {
-    fn clone(&self) -> Self {
-        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::AcqRel);
-        assert!(old_size < Self::MAX);
-        Self(self.0)
-    }
-}
-
-impl Drop for RefCount {
-    fn drop(&mut self) {
-        unsafe {
-            if self.0.as_ref().fetch_sub(1, Ordering::AcqRel) == 1 {
-                drop(Box::from_raw(self.0.as_ptr()));
-            }
-        }
-    }
-}
-
-/// Reference count object that tracks multiple references.
-/// Unlike `RefCount`, it's manually inc()/dec() called.
-#[derive(Debug)]
-struct MultiRefCount(AtomicUsize);
-
-impl MultiRefCount {
-    fn new() -> Self {
-        Self(AtomicUsize::new(1))
-    }
-
-    fn inc(&self) {
-        self.0.fetch_add(1, Ordering::AcqRel);
-    }
-
-    fn dec_and_check_empty(&self) -> bool {
-        self.0.fetch_sub(1, Ordering::AcqRel) == 1
-    }
-}
-
-/// Information needed to decide when it's safe to free some wgpu-core
-/// resource.
-///
-/// Each type representing a `wgpu-core` resource, like [`Device`],
-/// [`Buffer`], etc., contains a `LifeGuard` which indicates whether
-/// it is safe to free.
-///
-/// A resource may need to be retained for any of several reasons:
-///
-/// - The user may hold a reference to it (via a `wgpu::Buffer`, say).
-///
-/// - Other resources may depend on it (a texture view's backing
-///   texture, for example).
-///
-/// - It may be used by commands sent to the GPU that have not yet
-///   finished execution.
-///
-/// [`Device`]: device::Device
-/// [`Buffer`]: resource::Buffer
-#[derive(Debug)]
-pub struct LifeGuard {
-    /// `RefCount` for the user's reference to this resource.
-    ///
-    /// When the user first creates a `wgpu-core` resource, this `RefCount` is
-    /// created along with the resource's `LifeGuard`. When the user drops the
-    /// resource, we swap this out for `None`. Note that the resource may
-    /// still be held alive by other resources.
-    ///
-    /// Any `Stored<T>` value holds a clone of this `RefCount` along with the id
-    /// of a `T` resource.
-    ref_count: Option<RefCount>,
-
-    /// The index of the last queue submission in which the resource
-    /// was used.
-    ///
-    /// Each queue submission is fenced and assigned an index number
-    /// sequentially. Thus, when a queue submission completes, we know any
-    /// resources used in that submission and any lower-numbered submissions are
-    /// no longer in use by the GPU.
-    submission_index: AtomicUsize,
-
-    /// The `label` from the descriptor used to create the resource.
-    #[cfg(debug_assertions)]
-    pub(crate) label: String,
-}
-
-impl LifeGuard {
-    #[allow(unused_variables)]
-    fn new(label: &str) -> Self {
-        Self {
-            ref_count: Some(RefCount::new()),
-            submission_index: AtomicUsize::new(0),
-            #[cfg(debug_assertions)]
-            label: label.to_string(),
-        }
-    }
-
-    fn add_ref(&self) -> RefCount {
-        self.ref_count.clone().unwrap()
-    }
-
-    /// Record that this resource will be used by the queue submission with the
-    /// given index.
-    ///
-    /// Returns `true` if the resource is still held by the user.
-    fn use_at(&self, submit_index: SubmissionIndex) -> bool {
-        self.submission_index
-            .store(submit_index as _, Ordering::Release);
-        self.ref_count.is_some()
-    }
-
-    fn life_count(&self) -> SubmissionIndex {
-        self.submission_index.load(Ordering::Acquire) as _
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Stored<T> {
-    value: id::Valid<T>,
-    ref_count: RefCount,
+    opt
 }
 
 const DOWNLEVEL_WARNING_MESSAGE: &str = "The underlying API or device in use does not \
@@ -352,8 +255,11 @@ macro_rules! define_backend_caller {
 define_backend_caller! { gfx_if_vulkan, gfx_if_vulkan_hidden, "vulkan" if all(feature = "vulkan", not(target_arch = "wasm32")) }
 define_backend_caller! { gfx_if_metal, gfx_if_metal_hidden, "metal" if all(feature = "metal", any(target_os = "macos", target_os = "ios")) }
 define_backend_caller! { gfx_if_dx12, gfx_if_dx12_hidden, "dx12" if all(feature = "dx12", windows) }
-define_backend_caller! { gfx_if_dx11, gfx_if_dx11_hidden, "dx11" if all(feature = "dx11", windows) }
 define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "gles" }
+define_backend_caller! { gfx_if_empty, gfx_if_empty_hidden, "empty" if all(
+    not(any(feature = "metal", feature = "vulkan", feature = "gles")),
+    any(target_os = "macos", target_os = "ios"),
+) }
 
 /// Dispatch on an [`Id`]'s backend to a backend-generic method.
 ///
@@ -384,7 +290,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 ///
 /// ```ignore
 /// impl<...> Global<...> {
-///    pub fn device_create_buffer<A: hal::Api>(&self, ...) -> ...
+///    pub fn device_create_buffer<A: HalApi>(&self, ...) -> ...
 ///    { ... }
 /// }
 /// ```
@@ -392,7 +298,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// That `gfx_select!` call uses `device_id`'s backend to select the right
 /// backend type `A` for a call to `Global::device_create_buffer<A>`.
 ///
-/// However, there's nothing about this macro that is specific to `global::Global`.
+/// However, there's nothing about this macro that is specific to `hub::Global`.
 /// For example, Firefox's embedding of `wgpu_core` defines its own types with
 /// methods that take `hal::Api` type parameters. Firefox uses `gfx_select!` to
 /// dynamically dispatch to the right specialization based on the resource's id.
@@ -407,19 +313,32 @@ macro_rules! gfx_select {
             wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($global.$method::<$crate::api::Vulkan>( $($param),* )),
             wgt::Backend::Metal => $crate::gfx_if_metal!($global.$method::<$crate::api::Metal>( $($param),* )),
             wgt::Backend::Dx12 => $crate::gfx_if_dx12!($global.$method::<$crate::api::Dx12>( $($param),* )),
-            wgt::Backend::Dx11 => $crate::gfx_if_dx11!($global.$method::<$crate::api::Dx11>( $($param),* )),
             wgt::Backend::Gl => $crate::gfx_if_gles!($global.$method::<$crate::api::Gles>( $($param),+ )),
+            wgt::Backend::Empty => $crate::gfx_if_empty!($global.$method::<$crate::api::Empty>( $($param),+ )),
             other => panic!("Unexpected backend {:?}", other),
         }
     };
 }
 
-/// Fast hash map used internally.
-type FastHashMap<K, V> =
-    std::collections::HashMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
-/// Fast hash set used internally.
-type FastHashSet<K> =
-    std::collections::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+#[cfg(feature = "api_log_info")]
+macro_rules! api_log {
+    ($($arg:tt)+) => (log::info!($($arg)+))
+}
+#[cfg(not(feature = "api_log_info"))]
+macro_rules! api_log {
+    ($($arg:tt)+) => (log::trace!($($arg)+))
+}
+pub(crate) use api_log;
+
+#[cfg(feature = "resource_log_info")]
+macro_rules! resource_log {
+    ($($arg:tt)+) => (log::info!($($arg)+))
+}
+#[cfg(not(feature = "resource_log_info"))]
+macro_rules! resource_log {
+    ($($arg:tt)+) => (log::trace!($($arg)+))
+}
+pub(crate) use resource_log;
 
 #[inline]
 pub(crate) fn get_lowest_common_denom(a: u32, b: u32) -> u32 {

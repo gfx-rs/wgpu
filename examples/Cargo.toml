@@ -1,0 +1,69 @@
+[package]
+name = "wgpu-examples"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Common example code"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+harness = false
+
+[[bin]]
+name = "wgpu-examples"
+path = "src/main.rs"
+test = false
+
+[dependencies]
+bytemuck.workspace = true
+cfg-if.workspace = true
+encase = { workspace = true, features = ["glam"] }
+flume.workspace = true
+getrandom.workspace = true
+glam.workspace = true
+ktx2.workspace = true
+log.workspace = true
+nanorand.workspace = true
+noise.workspace = true
+obj.workspace = true
+png.workspace = true
+pollster.workspace = true
+web-time.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+fern.workspace = true
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+hal = { workspace = true, optional = true }
+# We need these features in the framework examples and tests
+web-sys = { workspace = true, features = [
+    "Location",
+    "Blob",
+    "RequestInit",
+    "RequestMode",
+    "Request",
+    "ImageData",
+    "Response",
+    "HtmlImageElement",
+    "WebGl2RenderingContext",
+    "CanvasRenderingContext2d",
+] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true

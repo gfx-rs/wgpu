@@ -1,11 +1,18 @@
-name: Documentation
+name: Docs
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/docs.yml'
   push:
     branches:
-      - master
+      - trunk
 
 env:
+  # We need to use nightly for various features
+  # when building docs.rs style docs.
+  NIGHTLY_VERSION: nightly-2023-12-17
+
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
@@ -16,21 +23,16 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Install nightly toolchain
-        run: rustup toolchain install nightly --no-self-update --profile=minimal
-
-      - name: Add EGL for OpenGL
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq libegl1-mesa-dev
+      - name: Install documentation toolchain
+        run: rustup toolchain install ${{ env.NIGHTLY_VERSION }} --no-self-update --profile=minimal
 
       - name: Build the docs (nightly)
         run: |
-          cargo +nightly doc --no-deps --lib
+          cargo +${{ env.NIGHTLY_VERSION }} doc --no-deps --lib
         env:
           RUSTDOCFLAGS: --cfg docsrs
 
@@ -39,7 +41,8 @@ jobs:
         if: ${{ failure() }}
 
       - name: Deploy the docs
-        uses: JamesIves/github-pages-deploy-action@v4.4.3
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/doc

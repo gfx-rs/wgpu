@@ -1,0 +1,100 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct _mslBufferSizes {
+    uint size3;
+};
+
+struct type_2 {
+    float inner[10];
+};
+struct FooStruct {
+    metal::packed_float3 v3_;
+    float v1_;
+};
+typedef metal::float2 type_6[1];
+struct type_8 {
+    metal::float4 inner[20];
+};
+struct type_11 {
+    metal::float2x4 inner[2];
+};
+struct type_12 {
+    type_11 inner[2];
+};
+struct type_14 {
+    metal::float4x2 inner[2];
+};
+struct type_15 {
+    type_14 inner[2];
+};
+constant bool Foo_1 = true;
+
+void test_msl_packed_vec3_as_arg(
+    metal::float3 arg
+) {
+    return;
+}
+
+void test_msl_packed_vec3_(
+    device FooStruct& alignment
+) {
+    int idx = 1;
+    alignment.v3_ = metal::float3(1.0);
+    alignment.v3_[0] = 1.0;
+    alignment.v3_[0] = 2.0;
+    int _e16 = idx;
+    alignment.v3_[_e16] = 3.0;
+    FooStruct data = alignment;
+    metal::float3 l0_ = data.v3_;
+    metal::float2 l1_ = metal::float3(data.v3_).zx;
+    test_msl_packed_vec3_as_arg(data.v3_);
+    metal::float3 mvm0_ = metal::float3(data.v3_) * metal::float3x3 {};
+    metal::float3 mvm1_ = metal::float3x3 {} * metal::float3(data.v3_);
+    metal::float3 svm0_ = data.v3_ * 2.0;
+    metal::float3 svm1_ = 2.0 * data.v3_;
+}
+
+kernel void main_(
+  metal::uint3 __local_invocation_id [[thread_position_in_threadgroup]]
+, threadgroup type_2& wg
+, threadgroup metal::atomic_uint& at_1
+, device FooStruct& alignment [[user(fake0)]]
+, device type_6 const& dummy [[user(fake0)]]
+, constant type_8& float_vecs [[user(fake0)]]
+, constant metal::float3& global_vec [[user(fake0)]]
+, constant metal::float3x2& global_mat [[user(fake0)]]
+, constant type_12& global_nested_arrays_of_matrices_2x4_ [[user(fake0)]]
+, constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+) {
+    if (metal::all(__local_invocation_id == metal::uint3(0u))) {
+        wg = {};
+        metal::atomic_store_explicit(&at_1, 0, metal::memory_order_relaxed);
+    }
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    float Foo = 1.0;
+    bool at = true;
+    test_msl_packed_vec3_(alignment);
+    metal::float4x2 _e5 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
+    metal::float4 _e10 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
+    wg.inner[7] = (_e5 * _e10).x;
+    metal::float3x2 _e16 = global_mat;
+    metal::float3 _e18 = global_vec;
+    wg.inner[6] = (_e16 * _e18).x;
+    float _e26 = dummy[1].y;
+    wg.inner[5] = _e26;
+    float _e32 = float_vecs.inner[0].w;
+    wg.inner[4] = _e32;
+    float _e37 = alignment.v1_;
+    wg.inner[3] = _e37;
+    float _e43 = alignment.v3_[0];
+    wg.inner[2] = _e43;
+    alignment.v1_ = 4.0;
+    wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
+    metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
+    return;
+}

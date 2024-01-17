@@ -1,18 +1,14 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
-use wgpu_test::{
-    image::calc_difference, initialize_test, FailureCase, TestParameters, TestingContext,
-};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
-#[test]
-fn reinterpret_srgb_ness() {
-    let parameters = TestParameters::default()
-        .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
-        .limits(Limits::downlevel_defaults())
-        .skip(FailureCase {
-            backends: Some(wgpu::Backends::GL),
-            ..FailureCase::default()
-        });
-    initialize_test(parameters, |ctx| {
+#[gpu_test]
+static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
         let unorm_data: [[u8; 4]; 4] = [
             [180, 0, 0, 255],
             [0, 84, 0, 127],
@@ -45,7 +41,8 @@ fn reinterpret_srgb_ness() {
             TextureFormat::Rgba8UnormSrgb,
             &unorm_data,
             &srgb_data,
-        );
+        )
+        .await;
 
         // Reinterpret Rgba8UnormSrgb back to Rgba8Unorm
         reinterpret(
@@ -56,11 +53,11 @@ fn reinterpret_srgb_ness() {
             TextureFormat::Rgba8Unorm,
             &srgb_data,
             &unorm_data,
-        );
+        )
+        .await;
     });
-}
 
-fn reinterpret(
+async fn reinterpret(
     ctx: &TestingContext,
     shader: &wgpu::ShaderModule,
     size: wgpu::Extent3d,
@@ -81,6 +78,7 @@ fn reinterpret(
             sample_count: 1,
             view_formats: &[reinterpret_to],
         },
+        wgpu::util::TextureDataOrder::LayerMajor,
         bytemuck::cast_slice(src_data),
     );
     let tv = tex.create_view(&wgpu::TextureViewDescriptor {
@@ -182,7 +180,9 @@ fn reinterpret(
 
     let slice = read_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.device.poll(wgpu::Maintain::Wait);
+    ctx.async_poll(wgpu::Maintain::wait())
+        .await
+        .panic_on_timeout();
 
     let data: Vec<u8> = slice.get_mapped_range().to_vec();
     let tolerance_data: [[u8; 4]; 4] = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [1, 1, 1, 0]];
@@ -193,10 +193,10 @@ fn reinterpret(
             let expect = expect_data[(h * size.width + w) as usize];
             let tolerance = tolerance_data[(h * size.width + w) as usize];
             let index = (w * 4 + offset) as usize;
-            if calc_difference(expect[0], data[index]) > tolerance[0]
-                || calc_difference(expect[1], data[index + 1]) > tolerance[1]
-                || calc_difference(expect[2], data[index + 2]) > tolerance[2]
-                || calc_difference(expect[3], data[index + 3]) > tolerance[3]
+            if expect[0].abs_diff(data[index]) > tolerance[0]
+                || expect[1].abs_diff(data[index + 1]) > tolerance[1]
+                || expect[2].abs_diff(data[index + 2]) > tolerance[2]
+                || expect[3].abs_diff(data[index + 3]) > tolerance[3]
             {
                 panic!(
                     "Reinterpret {:?} as {:?} mismatch! expect {:?} get [{}, {}, {}, {}]",

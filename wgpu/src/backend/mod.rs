@@ -1,23 +1,9 @@
-#[cfg(all(
-    target_arch = "wasm32",
-    not(any(target_os = "emscripten", feature = "webgl"))
-))]
-mod web;
-#[cfg(all(
-    target_arch = "wasm32",
-    not(any(target_os = "emscripten", feature = "webgl"))
-))]
-pub(crate) use web::Context;
+#[cfg(webgpu)]
+mod webgpu;
+#[cfg(webgpu)]
+pub(crate) use webgpu::{get_browser_gpu_property, ContextWebGpu};
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    target_os = "emscripten",
-    feature = "webgl"
-))]
-mod direct;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    target_os = "emscripten",
-    feature = "webgl"
-))]
-pub(crate) use direct::Context;
+#[cfg(wgpu_core)]
+mod wgpu_core;
+#[cfg(wgpu_core)]
+pub(crate) use wgpu_core::ContextWgpuCore;

@@ -1,32 +1,55 @@
+use std::{marker::PhantomData, sync::Arc};
+
+use wgt::Backend;
+
 use crate::{
     hal_api::HalApi,
     hub::{HubReport, Hubs},
-    id,
+    id::SurfaceId,
     identity::GlobalIdentityHandlerFactory,
     instance::{Instance, Surface},
-    registry::Registry,
-    storage::{Element, StorageReport},
+    registry::{Registry, RegistryReport},
+    resource_log,
+    storage::Element,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct GlobalReport {
-    pub surfaces: StorageReport,
-    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+    pub surfaces: RegistryReport,
+    #[cfg(vulkan)]
     pub vulkan: Option<HubReport>,
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(metal)]
     pub metal: Option<HubReport>,
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     pub dx12: Option<HubReport>,
-    #[cfg(all(feature = "dx11", windows))]
-    pub dx11: Option<HubReport>,
-    #[cfg(feature = "gles")]
+    #[cfg(gles)]
     pub gl: Option<HubReport>,
+}
+
+impl GlobalReport {
+    pub fn surfaces(&self) -> &RegistryReport {
+        &self.surfaces
+    }
+    pub fn hub_report(&self, backend: Backend) -> &HubReport {
+        match backend {
+            #[cfg(vulkan)]
+            Backend::Vulkan => self.vulkan.as_ref().unwrap(),
+            #[cfg(metal)]
+            Backend::Metal => self.metal.as_ref().unwrap(),
+            #[cfg(dx12)]
+            Backend::Dx12 => self.dx12.as_ref().unwrap(),
+            #[cfg(gles)]
+            Backend::Gl => self.gl.as_ref().unwrap(),
+            _ => panic!("HubReport is not supported on this backend"),
+        }
+    }
 }
 
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
-    pub surfaces: Registry<Surface, id::SurfaceId, G>,
-    pub(crate) hubs: Hubs<G>,
+    pub surfaces: Registry<SurfaceId, Surface>,
+    pub(crate) hubs: Hubs,
+    _phantom: PhantomData<G>,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -34,8 +57,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance: Instance::new(name, instance_desc),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
@@ -50,8 +74,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance: A::create_instance_from_hal(name, hal_instance),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
@@ -69,46 +94,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance,
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
     pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
-        let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
+        let surfaces_locked = self.surfaces.read();
         // this is used for tests, which keep the adapter
-        hub.clear(&mut surface_guard, false);
+        hub.clear(&surfaces_locked, false);
     }
 
     pub fn generate_report(&self) -> GlobalReport {
         GlobalReport {
-            surfaces: self.surfaces.data.read().generate_report(),
-            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            surfaces: self.surfaces.generate_report(),
+            #[cfg(vulkan)]
             vulkan: if self.instance.vulkan.is_some() {
                 Some(self.hubs.vulkan.generate_report())
             } else {
                 None
             },
-            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(metal)]
             metal: if self.instance.metal.is_some() {
                 Some(self.hubs.metal.generate_report())
             } else {
                 None
             },
-            #[cfg(all(feature = "dx12", windows))]
+            #[cfg(dx12)]
             dx12: if self.instance.dx12.is_some() {
                 Some(self.hubs.dx12.generate_report())
             } else {
                 None
             },
-            #[cfg(all(feature = "dx11", windows))]
-            dx11: if self.instance.dx11.is_some() {
-                Some(self.hubs.dx11.generate_report())
-            } else {
-                None
-            },
-            #[cfg(feature = "gles")]
+            #[cfg(gles)]
             gl: if self.instance.gl.is_some() {
                 Some(self.hubs.gl.generate_report())
             } else {
@@ -121,50 +141,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
-        log::info!("Dropping Global");
-        let mut surface_guard = self.surfaces.data.write();
+        resource_log!("Global::drop");
+        let mut surfaces_locked = self.surfaces.write();
 
         // destroy hubs before the instance gets dropped
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        #[cfg(vulkan)]
         {
-            self.hubs.vulkan.clear(&mut surface_guard, true);
+            self.hubs.vulkan.clear(&surfaces_locked, true);
         }
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+        #[cfg(metal)]
         {
-            self.hubs.metal.clear(&mut surface_guard, true);
+            self.hubs.metal.clear(&surfaces_locked, true);
         }
-        #[cfg(all(feature = "dx12", windows))]
+        #[cfg(dx12)]
         {
-            self.hubs.dx12.clear(&mut surface_guard, true);
+            self.hubs.dx12.clear(&surfaces_locked, true);
         }
-        #[cfg(all(feature = "dx11", windows))]
+        #[cfg(gles)]
         {
-            self.hubs.dx11.clear(&mut surface_guard, true);
-        }
-        #[cfg(feature = "gles")]
-        {
-            self.hubs.gl.clear(&mut surface_guard, true);
+            self.hubs.gl.clear(&surfaces_locked, true);
         }
 
         // destroy surfaces
-        for element in surface_guard.map.drain(..) {
-            if let Element::Occupied(surface, _) = element {
-                self.instance.destroy_surface(surface);
+        for element in surfaces_locked.map.drain(..) {
+            if let Element::Occupied(arc_surface, _) = element {
+                if let Some(surface) = Arc::into_inner(arc_surface) {
+                    self.instance.destroy_surface(surface);
+                } else {
+                    panic!("Surface cannot be destroyed because is still in use");
+                }
             }
         }
     }
 }
 
-#[cfg(all(
-    test,
-    any(
-        not(target_arch = "wasm32"),
-        all(
-            feature = "fragile-send-sync-non-atomic-wasm",
-            not(target_feature = "atomics")
-        )
-    )
-))]
+#[cfg(send_sync)]
 fn _test_send_sync(global: &Global<crate::identity::IdentityManagerFactory>) {
     fn test_internal<T: Send + Sync>(_: T) {}
     test_internal(global)

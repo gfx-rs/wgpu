@@ -1,5 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
+    use std::sync::Arc;
     use std::{
         env, fmt,
         io::{Read, Write},
@@ -8,13 +9,12 @@ mod native {
 
     use deno_core::anyhow::anyhow;
     use deno_core::error::AnyError;
-    use deno_core::op;
+    use deno_core::op2;
     use deno_core::resolve_url_or_path;
     use deno_core::serde_json::json;
     use deno_core::v8;
     use deno_core::JsRuntime;
     use deno_core::RuntimeOptions;
-    use deno_core::ZeroCopyBuf;
     use deno_web::BlobStore;
     use termcolor::Ansi;
     use termcolor::Color::Red;
@@ -36,7 +36,10 @@ mod native {
                 deno_webidl::deno_webidl::init_ops_and_esm(),
                 deno_console::deno_console::init_ops_and_esm(),
                 deno_url::deno_url::init_ops_and_esm(),
-                deno_web::deno_web::init_ops_and_esm::<Permissions>(BlobStore::default(), None),
+                deno_web::deno_web::init_ops_and_esm::<Permissions>(
+                    Arc::new(BlobStore::default()),
+                    None,
+                ),
                 deno_webgpu::deno_webgpu::init_ops_and_esm(true),
                 cts_runner::init_ops_and_esm(),
             ],
@@ -47,7 +50,7 @@ mod native {
         let cfg = json!({"args": args, "cwd": env::current_dir().unwrap().to_string_lossy() });
 
         {
-            let context = isolate.global_context();
+            let context = isolate.main_context();
             let scope = &mut isolate.handle_scope();
             let context_local = v8::Local::new(scope, context);
             let global_obj = context_local.global(scope);
@@ -56,7 +59,6 @@ mod native {
             let bootstrap_fn = v8::Local::<v8::Function>::try_from(bootstrap_fn).unwrap();
 
             let options_v8 = deno_core::serde_v8::to_v8(scope, cfg).unwrap();
-            let bootstrap_fn = v8::Local::new(scope, bootstrap_fn);
             let undefined = v8::undefined(scope);
             bootstrap_fn
                 .call(scope, undefined.into(), &[options_v8])
@@ -86,28 +88,29 @@ mod native {
         deps = [deno_webidl, deno_web],
         ops = [op_exit, op_read_file_sync, op_write_file_sync],
         esm_entry_point = "ext:cts_runner/bootstrap.js",
-        esm = ["bootstrap.js"],
+        esm = ["src/bootstrap.js"],
     );
 
-    #[op]
+    #[op2(fast)]
     fn op_exit(code: i32) -> Result<(), AnyError> {
         std::process::exit(code)
     }
 
-    #[op]
-    fn op_read_file_sync(path: String) -> Result<ZeroCopyBuf, AnyError> {
-        let path = std::path::Path::new(&path);
+    #[op2]
+    #[buffer]
+    fn op_read_file_sync(#[string] path: &str) -> Result<Vec<u8>, AnyError> {
+        let path = std::path::Path::new(path);
         let mut file = std::fs::File::open(path)?;
         let mut buf = Vec::new();
         file.read_to_end(&mut buf)?;
-        Ok(ZeroCopyBuf::from(buf))
+        Ok(buf)
     }
 
-    #[op]
-    fn op_write_file_sync(path: String, buf: ZeroCopyBuf) -> Result<(), AnyError> {
-        let path = std::path::Path::new(&path);
+    #[op2(fast)]
+    fn op_write_file_sync(#[string] path: &str, #[buffer] buf: &[u8]) -> Result<(), AnyError> {
+        let path = std::path::Path::new(path);
         let mut file = std::fs::File::create(path)?;
-        file.write_all(&buf)?;
+        file.write_all(buf)?;
         Ok(())
     }
 
@@ -157,8 +160,6 @@ mod native {
         fn allow_hrtime(&mut self) -> bool {
             false
         }
-
-        fn check_unstable(&self, _state: &deno_core::OpState, _api_name: &'static str) {}
     }
 }
 

@@ -10,37 +10,22 @@
 
 use wgc::device::trace;
 
-use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
-
-#[derive(Debug)]
-pub struct IdentityPassThrough<I>(PhantomData<I>);
-
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandler<I>
-    for IdentityPassThrough<I>
-{
-    type Input = I;
-    fn process(&self, id: I, backend: wgt::Backend) -> I {
-        let (index, epoch, _backend) = id.unzip();
-        I::zip(index, epoch, backend)
-    }
-    fn free(&self, _id: I) {}
-}
+use std::{borrow::Cow, fs, path::Path};
 
 pub struct IdentityPassThroughFactory;
 
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I>
-    for IdentityPassThroughFactory
-{
-    type Filter = IdentityPassThrough<I>;
-    fn spawn(&self) -> Self::Filter {
-        IdentityPassThrough(PhantomData)
+impl<I: wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I> for IdentityPassThroughFactory {
+    type Input = I;
+
+    fn input_to_id(id_in: Self::Input) -> I {
+        id_in
     }
-}
-impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {
-    fn ids_are_generated_in_wgpu() -> bool {
+
+    fn autogenerate_ids() -> bool {
         false
     }
 }
+impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
 pub trait GlobalPlay {
     fn encode_commands<A: wgc::hal_api::HalApi>(
@@ -53,7 +38,7 @@ pub trait GlobalPlay {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
     );
 }
 
@@ -246,7 +231,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
         let (cmd_buf, error) = self
             .command_encoder_finish::<A>(encoder, &wgt::CommandBufferDescriptor { label: None });
         if let Some(e) = error {
-            panic!("{:?}", e);
+            panic!("{e}");
         }
         cmd_buf
     }
@@ -256,10 +241,10 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
     ) {
         use wgc::device::trace::Action;
-        log::info!("action {:?}", action);
+        log::debug!("action {:?}", action);
         //TODO: find a way to force ID perishing without excessive `maintain()` calls.
         match action {
             Action::Init { .. } => {
@@ -274,7 +259,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_buffer::<A>(device, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::FreeBuffer(id) => {
@@ -287,7 +272,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_texture::<A>(device, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::FreeTexture(id) => {
@@ -304,7 +289,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.texture_create_view::<A>(parent_id, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyTextureView(id) => {
@@ -314,7 +299,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_sampler::<A>(device, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroySampler(id) => {
@@ -330,7 +315,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             Action::CreateBindGroupLayout(id, desc) => {
                 let (_, error) = self.device_create_bind_group_layout::<A>(device, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyBindGroupLayout(id) => {
@@ -340,7 +325,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_pipeline_layout::<A>(device, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyPipelineLayout(id) => {
@@ -350,17 +335,17 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_bind_group::<A>(device, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyBindGroup(id) => {
                 self.bind_group_drop::<A>(id);
             }
             Action::CreateShaderModule { id, desc, data } => {
-                log::info!("Creating shader from {}", data);
+                log::debug!("Creating shader from {}", data);
                 let code = fs::read_to_string(dir.join(&data)).unwrap();
                 let source = if data.ends_with(".wgsl") {
-                    wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
+                    wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code.clone()))
                 } else if data.ends_with(".ron") {
                     let module = ron::de::from_str(&code).unwrap();
                     wgc::pipeline::ShaderModuleSource::Naga(module)
@@ -369,7 +354,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 };
                 let (_, error) = self.device_create_shader_module::<A>(device, &desc, source, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    println!("shader compilation error:\n---{code}\n---\n{e}");
                 }
             }
             Action::DestroyShaderModule(id) => {
@@ -391,7 +376,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 let (_, error) =
                     self.device_create_compute_pipeline::<A>(device, &desc, id, implicit_ids);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyComputePipeline(id) => {
@@ -413,7 +398,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 let (_, error) =
                     self.device_create_render_pipeline::<A>(device, &desc, id, implicit_ids);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyRenderPipeline(id) => {
@@ -428,7 +413,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                     id,
                 );
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyRenderBundle(id) => {
@@ -438,7 +423,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_query_set::<A>(device, &desc, id);
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
             }
             Action::DestroyQuerySet(id) => {
@@ -478,10 +463,10 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    comb_manager.alloc(device.backend()),
+                    comb_manager.process(device.backend()),
                 );
                 if let Some(e) = error {
-                    panic!("{:?}", e);
+                    panic!("{e}");
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
                 self.queue_submit::<A>(device, &[cmdbuf]).unwrap();

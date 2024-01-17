@@ -1,10 +1,58 @@
 //! A cross-platform graphics and compute library based on [WebGPU](https://gpuweb.github.io/gpuweb/).
 //!
 //! To start using the API, create an [`Instance`].
+//!
+//! ## Feature flags
+// NOTE: feature docs. below should be kept in sync. with `Cargo.toml`!
+//!
+//! ### Backends
+//!
+//! ⚠️ WIP: Not all backends can be manually configured today. On Windows & Linux the Vulkan & GLES
+//! backends are always enabled. See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more
+//! details.
+//!
+//! - **`dx12`** _(enabled by default)_ ---   Enables the DX12 backend on Windows.
+//! - **`metal`** _(enabled by default)_ --- Enables the Metal backend on macOS & iOS.
+//! - **`angle`** --- Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS
+//!   using.
+//! - **`vulkan-portability`** --- Enables the Vulkan backend on macOS & iOS.
+//! - **`webgpu`** --- Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
+//! - **`webgl`** --- Enables the GLES backend on Wasm
+//!
+//!     - ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
+//!
+//! ### Shading language support
+//!
+//! - **`spirv`** --- Enable accepting SPIR-V shaders as input.
+//! - **`glsl`** --- Enable accepting GLSL shaders as input.
+//! - **`wgsl`** _(enabled by default)_ --- Enable accepting WGSL shaders as input.
+//!
+//! ### Logging & Tracing
+//!
+//! The following features do not have any effect on the WebGPU backend.
+//!
+//! - **`strict_asserts`** --- Apply run-time checks, even in release builds. These are in addition
+//!   to the validation carried out at public APIs in all builds.
+//! - **`api_log_info`** --- Log all API entry points at info instead of trace level.
+//! - **`trace`** --- Allow writing of trace capture files. See [`Adapter::request_device`].
+//! - **`replay`** --- Allow deserializing of trace capture files that were written with the `trace`
+//!   feature. To replay a trace file use the [wgpu
+//!   player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
+//!
+//! ### Other
+//!
+//! - **`fragile-send-sync-non-atomic-wasm`** --- Implement `Send` and `Sync` on Wasm, but only if
+//!   atomics are not enabled.
+//!
+//!   WebGL/WebGPU objects can not be shared between threads. However, it can be useful to
+//!   artificially mark them as `Send` and `Sync` anyways to make it easier to write cross-platform
+//!   code. This is technically _very_ unsafe in a multithreaded environment, but on a wasm binary
+//!   compiled without atomics we know we are definitely not in a multithreaded environment.
+//!
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
-#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
+#![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
 
 mod backend;
 mod context;
@@ -14,7 +62,7 @@ mod macros;
 
 /// Module to add ray tracing support to wgpu.
 /// It adds support for acceleration structures and ray queries.
-/// The features [`wgpu::Features::RAY_QUERY`] and [`wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE`] where added and are required to use this module.
+/// The features [`Features::RAY_QUERY`] and [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] where added and are required to use this module.
 /// This is an experimental feature and is not available on all backends.
 /// It is not part of the WebGPU standard and is only natively supported with the Vulkan backend so far.
 /// DirectX 12 and Metal support are planned, the API is subject to change.
@@ -32,53 +80,52 @@ use std::{
     error, fmt,
     future::Future,
     marker::PhantomData,
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
 };
 
-use context::{Context, DeviceRequest, DynContext, ObjectId};
+#[allow(unused_imports)] // Unused if all backends are disabled.
+use context::Context;
+
+use context::{DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, Gles3MinorVersion,
-    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits,
-    MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
-    PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
-    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
+    Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
+    Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
+    InstanceFlags, Limits, MaintainResult, MultisampleState, Origin2d, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
+    PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
+    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
+    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
+    SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend,
+    WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
+    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    feature = "webgl",
-    target_os = "emscripten"
-))]
+#[cfg(not(webgpu))]
 #[doc(hidden)]
 pub use ::hal;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    feature = "webgl",
-    target_os = "emscripten"
-))]
+#[cfg(feature = "naga")]
+pub use ::naga;
+#[cfg(not(webgpu))]
 #[doc(hidden)]
 pub use ::wgc as core;
 
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
-#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+#[cfg(any(webgpu, webgl))]
 pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
 
 /// Filter for error scopes.
@@ -92,21 +139,9 @@ pub enum ErrorFilter {
 static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
 type C = dyn DynContext;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 type Data = dyn Any + Send + Sync;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 type Data = dyn Any;
 
 /// Context for all other wgpu objects. Instance of wgpu.
@@ -121,13 +156,7 @@ type Data = dyn Any;
 pub struct Instance {
     context: Arc<C>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 /// Handle to a physical graphics and/or compute device.
@@ -144,13 +173,7 @@ pub struct Adapter {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
 impl Drop for Adapter {
@@ -175,13 +198,7 @@ pub struct Device {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Device: Send, Sync);
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
@@ -192,13 +209,7 @@ static_assertions::assert_impl_all!(Device: Send, Sync);
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex(ObjectId, Arc<crate::Data>);
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
 /// The main purpose of this struct is to resolve mapped ranges (convert sizes
@@ -275,13 +286,7 @@ pub struct Buffer {
     usage: BufferUsages,
     // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 /// Slice into a [`Buffer`].
@@ -298,14 +303,8 @@ pub struct BufferSlice<'a> {
     offset: BufferAddress,
     size: Option<BufferSize>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(BufferSlice: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(BufferSlice<'_>: Send, Sync);
 
 /// Handle to a texture on the GPU.
 ///
@@ -320,13 +319,7 @@ pub struct Texture {
     owned: bool,
     descriptor: TextureDescriptor<'static>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
 /// Handle to a texture view.
@@ -341,13 +334,7 @@ pub struct TextureView {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
 /// Handle to a sampler.
@@ -365,13 +352,7 @@ pub struct Sampler {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
 impl Drop for Sampler {
@@ -399,9 +380,9 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
 /// serves a similar role.
-#[derive(Debug)]
-pub struct Surface {
+pub struct Surface<'window> {
     context: Arc<C>,
+    _surface: Option<Box<dyn WindowHandle + 'window>>,
     id: ObjectId,
     data: Box<Data>,
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
@@ -412,20 +393,179 @@ pub struct Surface {
     // been created is is additionally wrapped in an option.
     config: Mutex<Option<SurfaceConfiguration>>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(Surface: Send, Sync);
 
-impl Drop for Surface {
+// This custom implementation is required because [`Surface::_surface`] doesn't
+// require [`Debug`](fmt::Debug), which we should not require from the user.
+impl<'window> fmt::Debug for Surface<'window> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Surface")
+            .field("context", &self.context)
+            .field(
+                "_surface",
+                &if self._surface.is_some() {
+                    "Some"
+                } else {
+                    "None"
+                },
+            )
+            .field("id", &self.id)
+            .field("data", &self.data)
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(Surface<'_>: Send, Sync);
+
+impl Drop for Surface<'_> {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.surface_drop(&self.id, self.data.as_ref())
         }
+    }
+}
+
+/// Super trait for window handles as used in [`SurfaceTarget`].
+pub trait WindowHandle: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
+
+impl<T> WindowHandle for T where T: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}
+
+/// The window/canvas/surface/swap-chain/etc. a surface is attached to, for use with safe surface creation.
+///
+/// This is either a window or an actual web canvas depending on the platform and
+/// enabled features.
+/// Refer to the individual variants for more information.
+///
+/// See also [`SurfaceTargetUnsafe`] for unsafe variants.
+#[non_exhaustive]
+pub enum SurfaceTarget<'window> {
+    /// Window handle producer.
+    ///
+    /// If the specified display and window handle are not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation returns an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    ///
+    /// # Panics
+    ///
+    /// - On macOS/Metal: will panic if not called on the main thread.
+    /// - On web: will panic if the `raw_window_handle` does not properly refer to a
+    ///   canvas element.
+    Window(Box<dyn WindowHandle + 'window>),
+
+    /// Surface from a `web_sys::HtmlCanvasElement`.
+    ///
+    /// The `canvas` argument must be a valid `<canvas>` element to
+    /// create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    #[cfg(any(webgpu, webgl))]
+    Canvas(web_sys::HtmlCanvasElement),
+
+    /// Surface from a `web_sys::OffscreenCanvas`.
+    ///
+    /// The `canvas` argument must be a valid `OffscreenCanvas` object
+    /// to create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    #[cfg(any(webgpu, webgl))]
+    OffscreenCanvas(web_sys::OffscreenCanvas),
+}
+
+impl<'a, T> From<T> for SurfaceTarget<'a>
+where
+    T: WindowHandle + 'a,
+{
+    fn from(window: T) -> Self {
+        Self::Window(Box::new(window))
+    }
+}
+
+/// The window/canvas/surface/swap-chain/etc. a surface is attached to, for use with unsafe surface creation.
+///
+/// This is either a window or an actual web canvas depending on the platform and
+/// enabled features.
+/// Refer to the individual variants for more information.
+///
+/// See also [`SurfaceTarget`] for safe variants.
+#[non_exhaustive]
+pub enum SurfaceTargetUnsafe {
+    /// Raw window & display handle.
+    ///
+    /// If the specified display and window handle are not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
+    /// # Safety
+    ///
+    /// - `raw_window_handle` & `raw_display_handle` must be valid objects to create a surface upon.
+    /// - `raw_window_handle` & `raw_display_handle` must remain valid until after the returned
+    ///    [`Surface`] is  dropped.
+    RawHandle {
+        /// Raw display handle, underlying display must outlive the surface created from this.
+        raw_display_handle: raw_window_handle::RawDisplayHandle,
+
+        /// Raw display handle, underlying window must outlive the surface created from this.
+        raw_window_handle: raw_window_handle::RawWindowHandle,
+    },
+
+    /// Surface from `CoreAnimationLayer`.
+    ///
+    /// # Safety
+    ///
+    /// - layer must be a valid object to create a surface upon.
+    #[cfg(metal)]
+    CoreAnimationLayer(*mut std::ffi::c_void),
+
+    /// Surface from `IDCompositionVisual`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid IDCompositionVisual to create a surface upon.
+    #[cfg(dx12)]
+    CompositionVisual(*mut std::ffi::c_void),
+
+    /// Surface from DX12 `SurfaceHandle`.
+    ///
+    /// # Safety
+    ///
+    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
+    #[cfg(dx12)]
+    SurfaceHandle(*mut std::ffi::c_void),
+
+    /// Surface from DX12 `SwapChainPanel`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid SwapChainPanel to create a surface upon.
+    #[cfg(dx12)]
+    SwapChainPanel(*mut std::ffi::c_void),
+}
+
+impl SurfaceTargetUnsafe {
+    /// Creates a [`SurfaceTargetUnsafe::RawHandle`] from a window.
+    ///
+    /// # Safety
+    ///
+    /// - `window` must outlive the resulting surface target
+    ///   (and subsequently the surface created for this target).
+    pub unsafe fn from_window<T>(window: &T) -> Result<Self, raw_window_handle::HandleError>
+    where
+        T: HasDisplayHandle + HasWindowHandle,
+    {
+        Ok(Self::RawHandle {
+            raw_display_handle: window.display_handle()?.as_raw(),
+            raw_window_handle: window.window_handle()?.as_raw(),
+        })
     }
 }
 
@@ -446,13 +586,7 @@ pub struct BindGroupLayout {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);
 
 impl Drop for BindGroupLayout {
@@ -478,13 +612,7 @@ pub struct BindGroup {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
 impl Drop for BindGroup {
@@ -509,13 +637,7 @@ pub struct ShaderModule {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 
 impl Drop for ShaderModule {
@@ -537,7 +659,7 @@ impl Drop for ShaderModule {
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
 #[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
@@ -568,33 +690,34 @@ pub enum ShaderSource<'a> {
     #[doc(hidden)]
     Dummy(PhantomData<&'a ()>),
 }
-static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
+static_assertions::assert_impl_all!(ShaderSource<'_>: Send, Sync);
 
 /// Descriptor for use with [`Device::create_shader_module`].
 ///
 /// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ShaderModuleDescriptor<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
 }
-static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 
 /// Descriptor for a shader module given by SPIR-V binary, for use with
 /// [`Device::create_shader_module_spirv`].
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
+#[derive(Debug)]
 pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Binary SPIR-V data, in 4-byte words.
     pub source: Cow<'a, [u32]>,
 }
-static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV: Send, Sync);
+static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV<'_>: Send, Sync);
 
 /// Handle to a pipeline layout.
 ///
@@ -608,13 +731,7 @@ pub struct PipelineLayout {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
 impl Drop for PipelineLayout {
@@ -638,13 +755,7 @@ pub struct RenderPipeline {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl Drop for RenderPipeline {
@@ -679,13 +790,7 @@ pub struct ComputePipeline {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl Drop for ComputePipeline {
@@ -723,13 +828,7 @@ pub struct CommandBuffer {
     id: Option<ObjectId>,
     data: Option<Box<Data>>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 
 impl Drop for CommandBuffer {
@@ -758,13 +857,7 @@ pub struct CommandEncoder {
     id: Option<ObjectId>,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
 
 impl Drop for CommandEncoder {
@@ -853,13 +946,7 @@ pub struct RenderBundle {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
 
 impl Drop for RenderBundle {
@@ -882,20 +969,8 @@ pub struct QuerySet {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
 impl Drop for QuerySet {
@@ -919,14 +994,16 @@ pub struct Queue {
     id: ObjectId,
     data: Box<Data>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
+
+impl Drop for Queue {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.queue_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
 
 /// Resource that can be bound to a pipeline.
 ///
@@ -973,14 +1050,8 @@ pub enum BindingResource<'a> {
     /// Todo
     AccelerationStructure(&'a crate::ray_tracing::Tlas),
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(BindingResource: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);
 
 /// Describes the segment of a buffer to bind.
 ///
@@ -1011,27 +1082,29 @@ pub struct BufferBinding<'a> {
     /// Size of the binding in bytes, or `None` for using the rest of the buffer.
     pub size: Option<BufferSize>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(BufferBinding<'_>: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a render pass.
 ///
-/// The render target must be cleared at least once before its content is loaded.
-///
-/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop).
+/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop),
+/// plus the corresponding clearValue.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum LoadOp<V> {
-    /// Clear with a specified value.
+    /// Loads the specified value for this attachment into the render pass.
+    ///
+    /// On some GPU hardware (primarily mobile), "clear" is significantly cheaper
+    /// because it avoids loading data from main memory into tile-local memory.
+    ///
+    /// On other GPU hardware, there isn’t a significant difference.
+    ///
+    /// As a result, it is recommended to use "clear" rather than "load" in cases
+    /// where the initial value doesn’t matter
+    /// (e.g. the render target will be cleared using a skybox).
     Clear(V),
-    /// Load from memory.
+    /// Loads the existing value for this attachment into the render pass.
     Load,
 }
 
@@ -1039,6 +1112,28 @@ impl<V: Default> Default for LoadOp<V> {
     fn default() -> Self {
         Self::Clear(Default::default())
     }
+}
+
+/// Operation to perform to the output attachment at the end of a render pass.
+///
+/// Corresponds to [WebGPU `GPUStoreOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum StoreOp {
+    /// Stores the resulting value of the render pass for this attachment.
+    #[default]
+    Store,
+    /// Discards the resulting value of the render pass for this attachment.
+    ///
+    /// The attachment will be treated as uninitialized afterwards.
+    /// (If only either Depth or Stencil texture-aspects is set to `Discard`,
+    /// the respective other texture-aspect will be preserved.)
+    ///
+    /// This can be significantly faster on tile-based render hardware.
+    ///
+    /// Prefer this if the attachment is not read by subsequent passes.
+    Discard,
 }
 
 /// Pair of load and store operations for an attachment aspect.
@@ -1052,14 +1147,18 @@ pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
     /// Whether data will be written to through this attachment.
-    pub store: bool,
+    ///
+    /// Note that resolve textures (if specified) are always written to,
+    /// regardless of this setting.
+    pub store: StoreOp,
 }
 
 impl<V: Default> Default for Operations<V> {
+    #[inline]
     fn default() -> Self {
         Self {
-            load: Default::default(),
-            store: true,
+            load: LoadOp::<V>::default(),
+            store: StoreOp::default(),
         }
     }
 }
@@ -1080,14 +1179,8 @@ pub struct RenderPassTimestampWrites<'a> {
     /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: Option<u32>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(RenderPassTimestampWrites: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RenderPassTimestampWrites<'_>: Send, Sync);
 
 /// Describes a color attachment to a [`RenderPass`].
 ///
@@ -1100,18 +1193,14 @@ pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
     /// The view that will receive the resolved output if multisampling is used.
+    ///
+    /// If set, it is always written to, regardless of how [`Self::ops`] is configured.
     pub resolve_target: Option<&'tex TextureView>,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(RenderPassColorAttachment: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RenderPassColorAttachment<'_>: Send, Sync);
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
 ///
@@ -1128,14 +1217,8 @@ pub struct RenderPassDepthStencilAttachment<'tex> {
     /// What operations will be performed on the stencil part of the attachment.
     pub stencil_ops: Option<Operations<u32>>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment<'_>: Send, Sync);
 
 // The underlying types are also exported so that documentation shows up for them
 
@@ -1148,15 +1231,9 @@ pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 ///
 /// Corresponds to [WebGPU `GPURequestAdapterOptions`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
-pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(RequestAdapterOptions: Send, Sync);
+pub type RequestAdapterOptions<'a, 'b> = RequestAdapterOptionsBase<&'a Surface<'b>>;
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RequestAdapterOptions<'_, '_>: Send, Sync);
 /// Describes a [`Device`].
 ///
 /// For use with [`Adapter::request_device`].
@@ -1164,7 +1241,7 @@ static_assertions::assert_impl_all!(RequestAdapterOptions: Send, Sync);
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor).
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(DeviceDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 /// Describes a [`Buffer`].
 ///
 /// For use with [`Device::create_buffer`].
@@ -1172,7 +1249,7 @@ static_assertions::assert_impl_all!(DeviceDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUBufferDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferdescriptor).
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(BufferDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(BufferDescriptor<'_>: Send, Sync);
 /// Describes a [`CommandEncoder`].
 ///
 /// For use with [`Device::create_command_encoder`].
@@ -1180,7 +1257,7 @@ static_assertions::assert_impl_all!(BufferDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUCommandEncoderDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucommandencoderdescriptor).
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(CommandEncoderDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 /// Describes a [`RenderBundle`].
 ///
 /// For use with [`RenderBundleEncoder::finish`].
@@ -1188,7 +1265,7 @@ static_assertions::assert_impl_all!(CommandEncoderDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPURenderBundleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundledescriptor).
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(RenderBundleDescriptor<'_>: Send, Sync);
 /// Describes a [`Texture`].
 ///
 /// For use with [`Device::create_texture`].
@@ -1196,7 +1273,7 @@ static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
-static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
 /// Describes a [`QuerySet`].
 ///
 /// For use with [`Device::create_query_set`].
@@ -1204,17 +1281,11 @@ static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(QuerySetDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(QuerySetDescriptor<'_>: Send, Sync);
 pub use wgt::Maintain as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Maintain: Send, Sync);
 
 /// Describes a [`TextureView`].
@@ -1248,7 +1319,7 @@ pub struct TextureViewDescriptor<'a> {
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
 }
-static_assertions::assert_impl_all!(TextureViewDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(TextureViewDescriptor<'_>: Send, Sync);
 
 /// Describes a [`PipelineLayout`].
 ///
@@ -1270,14 +1341,8 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
     pub push_constant_ranges: &'a [PushConstantRange],
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(PipelineLayoutDescriptor: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_>: Send, Sync);
 
 /// Describes a [`Sampler`].
 ///
@@ -1312,7 +1377,7 @@ pub struct SamplerDescriptor<'a> {
     /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
     pub border_color: Option<SamplerBorderColor>,
 }
-static_assertions::assert_impl_all!(SamplerDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(SamplerDescriptor<'_>: Send, Sync);
 
 impl Default for SamplerDescriptor<'_> {
     fn default() -> Self {
@@ -1346,14 +1411,8 @@ pub struct BindGroupEntry<'a> {
     /// Resource to attach to the binding
     pub resource: BindingResource<'a>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(BindGroupEntry: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(BindGroupEntry<'_>: Send, Sync);
 
 /// Describes a group of bindings and the resources to be bound.
 ///
@@ -1370,14 +1429,8 @@ pub struct BindGroupDescriptor<'a> {
     /// The resources to bind to this bind group.
     pub entries: &'a [BindGroupEntry<'a>],
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(BindGroupDescriptor: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(BindGroupDescriptor<'_>: Send, Sync);
 
 /// Describes the attachments of a render pass.
 ///
@@ -1403,14 +1456,8 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<&'tex QuerySet>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RenderPassDescriptor<'_, '_>: Send, Sync);
 
 /// Describes how the vertex buffer is interpreted.
 ///
@@ -1427,7 +1474,7 @@ pub struct VertexBufferLayout<'a> {
     /// The list of attributes which comprise a single vertex.
     pub attributes: &'a [VertexAttribute],
 }
-static_assertions::assert_impl_all!(VertexBufferLayout: Send, Sync);
+static_assertions::assert_impl_all!(VertexBufferLayout<'_>: Send, Sync);
 
 /// Describes the vertex processing in a render pipeline.
 ///
@@ -1445,14 +1492,8 @@ pub struct VertexState<'a> {
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(VertexState: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(VertexState<'_>: Send, Sync);
 
 /// Describes the fragment processing in a render pipeline.
 ///
@@ -1470,14 +1511,8 @@ pub struct FragmentState<'a> {
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(FragmentState: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(FragmentState<'_>: Send, Sync);
 
 /// Describes a render (graphics) pipeline.
 ///
@@ -1505,21 +1540,15 @@ pub struct RenderPipelineDescriptor<'a> {
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
 
 /// Describes the timestamp writes of a compute pass.
 ///
 /// For use with [`ComputePassDescriptor`].
 /// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
 ///
-/// Corresponds to [WebGPU `GPUComputePassTimestampWrite`](
+/// Corresponds to [WebGPU `GPUComputePassTimestampWrites`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrites).
 #[derive(Clone, Debug)]
 pub struct ComputePassTimestampWrites<'a> {
@@ -1530,14 +1559,8 @@ pub struct ComputePassTimestampWrites<'a> {
     /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: Option<u32>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(ComputePassTimestampWrites: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ComputePassTimestampWrites<'_>: Send, Sync);
 
 /// Describes the attachments of a compute pass.
 ///
@@ -1554,14 +1577,8 @@ pub struct ComputePassDescriptor<'a> {
     /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
     pub timestamp_writes: Option<ComputePassTimestampWrites<'a>>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ComputePassDescriptor<'_>: Send, Sync);
 
 /// Describes a compute pipeline.
 ///
@@ -1581,14 +1598,8 @@ pub struct ComputePipelineDescriptor<'a> {
     /// and no return value in the shader.
     pub entry_point: &'a str,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(ComputePipelineDescriptor: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -1596,14 +1607,8 @@ pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// Corresponds to [WebGPU `GPUImageCopyBuffer`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(ImageCopyBuffer: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ImageCopyBuffer<'_>: Send, Sync);
 
 pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// View of a texture which can be used to copy to/from a buffer/texture.
@@ -1611,14 +1616,8 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// Corresponds to [WebGPU `GPUImageCopyTexture`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 
 pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
 /// View of a texture which can be used to copy to a texture, including
@@ -1627,14 +1626,8 @@ pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
 /// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
 pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 
 /// Describes a [`BindGroupLayout`].
 ///
@@ -1650,7 +1643,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
     /// Array of entries in this BindGroupLayout
     pub entries: &'a [BindGroupLayoutEntry],
 }
-static_assertions::assert_impl_all!(BindGroupLayoutDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(BindGroupLayoutDescriptor<'_>: Send, Sync);
 
 /// Describes a [`RenderBundleEncoder`].
 ///
@@ -1674,7 +1667,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
     pub multiview: Option<NonZeroU32>,
 }
-static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor<'_>: Send, Sync);
 
 /// Surface texture that can be rendered to.
 /// Result of a successful call to [`Surface::get_current_texture`].
@@ -1692,13 +1685,7 @@ pub struct SurfaceTexture {
     presented: bool,
     detail: Box<dyn AnyWasmNotSendSync>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
 
 /// Result of an unsuccessful call to [`Surface::get_current_texture`].
@@ -1732,22 +1719,92 @@ impl Default for Instance {
     /// Creates a new instance of wgpu with default options.
     ///
     /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
+    ///
+    /// # Panics
+    ///
+    /// If no backend feature for the active target platform is enabled,
+    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
     fn default() -> Self {
         Self::new(InstanceDescriptor::default())
     }
 }
 
 impl Instance {
+    /// Returns `true` if any backend feature is enabled for the current build configuration.
+    ///
+    /// Which feature makes this method return true depends on the target platform:
+    /// * MacOS/iOS: `metal`, `vulkan-portability` or `angle`
+    /// * All other: Always returns true
+    ///
+    /// TODO: Right now it's otherwise not possible yet to opt-out of all features on most platforms.
+    /// See <https://github.com/gfx-rs/wgpu/issues/3514>
+    /// * Windows: always enables Vulkan and GLES with no way to opt out
+    /// * Linux: always enables Vulkan and GLES with no way to opt out
+    pub const fn any_backend_feature_enabled() -> bool {
+        // Method intentionally kept verbose to keep it a bit easier to follow!
+
+        // On macOS and iOS, at least one of Metal, Vulkan or GLES backend must be enabled.
+        let is_mac_or_ios = cfg!(target_os = "macos") || cfg!(target_os = "ios");
+        if is_mac_or_ios {
+            cfg!(feature = "metal")
+                || cfg!(feature = "vulkan-portability")
+                || cfg!(feature = "angle")
+        // On the web, either WebGPU or WebGL must be enabled.
+        } else if cfg!(target_arch = "wasm32") {
+            cfg!(feature = "webgpu") || cfg!(feature = "webgl")
+        } else {
+            true
+        }
+    }
+
     /// Create an new instance of wgpu.
     ///
     /// # Arguments
     ///
     /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
     ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
-    pub fn new(instance_desc: InstanceDescriptor) -> Self {
-        Self {
-            context: Arc::from(crate::backend::Context::init(instance_desc)),
+    ///
+    ///   [`Backends::BROWSER_WEBGPU`] takes a special role:
+    ///   If it is set and WebGPU support is detected, this instance will *only* be able to create
+    ///   WebGPU adapters. If you instead want to force use of WebGL, either
+    ///   disable the `webgpu` compile-time feature or do add the [`Backends::BROWSER_WEBGPU`]
+    ///   flag to the the `instance_desc`'s `backends` field.
+    ///   If it is set and WebGPU support is *not* detected, the instance will use wgpu-core
+    ///   to create adapters. Meaning that if the `webgl` feature is enabled, it is able to create
+    ///   a WebGL adapter.
+    ///
+    /// # Panics
+    ///
+    /// If no backend feature for the active target platform is enabled,
+    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
+    #[allow(unreachable_code)]
+    pub fn new(_instance_desc: InstanceDescriptor) -> Self {
+        if !Self::any_backend_feature_enabled() {
+            panic!(
+                "No wgpu backend feature that is implemented for the target platform was enabled. \
+                 See `wgpu::Instance::any_backend_feature_enabled()` for more information."
+            );
         }
+
+        #[cfg(webgpu)]
+        if _instance_desc.backends.contains(Backends::BROWSER_WEBGPU)
+            && crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined())
+        {
+            return Self {
+                context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
+            };
+        }
+
+        #[cfg(wgpu_core)]
+        {
+            return Self {
+                context: Arc::from(crate::backend::ContextWgpuCore::init(_instance_desc)),
+            };
+        }
+
+        unreachable!(
+            "Earlier check of `any_backend_feature_enabled` should have prevented getting here!"
+        );
     }
 
     /// Create an new instance of wgpu from a wgpu-hal instance.
@@ -1759,15 +1816,11 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
-                crate::backend::Context::from_hal_instance::<A>(hal_instance)
+                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance)
             }),
         }
     }
@@ -1782,19 +1835,13 @@ impl Instance {
     /// - The raw instance handle returned must not be manually destroyed.
     ///
     /// [`Instance`]: hal::Api::Instance
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .instance_as_hal::<A>()
-        }
+        self.context
+            .as_any()
+            // If we don't have a wgpu-core instance, we don't have a hal instance either.
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
     }
 
     /// Create an new instance of wgpu from a wgpu-core instance.
@@ -1806,42 +1853,40 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-core Instance.
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
-                crate::backend::Context::from_core_instance(core_instance)
+                crate::backend::ContextWgpuCore::from_core_instance(core_instance)
             }),
         }
     }
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
+    /// Always returns an empty vector if the instance decided upon creation to
+    /// target WebGPU since adapter creation is always async on WebGPU.
+    ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
-    pub fn enumerate_adapters(&self, backends: Backends) -> impl ExactSizeIterator<Item = Adapter> {
+    #[cfg(wgpu_core)]
+    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .enumerate_adapters(backends)
-            .into_iter()
-            .map(move |id| crate::Adapter {
-                context: Arc::clone(&context),
-                id: ObjectId::from(id),
-                data: Box::new(()),
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| {
+                ctx.enumerate_adapters(backends)
+                    .into_iter()
+                    .map(move |id| crate::Adapter {
+                        context: Arc::clone(&context),
+                        id: ObjectId::from(id),
+                        data: Box::new(()),
+                    })
+                    .collect()
             })
+            .unwrap_or_default()
     }
 
     /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].
@@ -1851,7 +1896,7 @@ impl Instance {
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub fn request_adapter(
         &self,
-        options: &RequestAdapterOptions,
+        options: &RequestAdapterOptions<'_, '_>,
     ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
@@ -1867,11 +1912,7 @@ impl Instance {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this instance internal handle.
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -1880,7 +1921,7 @@ impl Instance {
         let id = unsafe {
             context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
                 .unwrap()
                 .create_adapter_from_hal(hal_adapter)
                 .into()
@@ -1892,186 +1933,97 @@ impl Instance {
         }
     }
 
-    /// Creates a surface from a raw window handle.
+    /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
-    /// If the specified display and window handle are not supported by any of the backends, then the surface
-    /// will not be supported by any adapters.
+    /// See [`SurfaceTarget`] for what targets are supported.
+    /// See [`Instance::create_surface`] for surface creation with unsafe target variants.
+    ///
+    /// Most commonly used are window handles (or provider of windows handles)
+    /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
+    pub fn create_surface<'window>(
+        &self,
+        target: impl Into<SurfaceTarget<'window>>,
+    ) -> Result<Surface<'window>, CreateSurfaceError> {
+        // Handle origin (i.e. window) to optionally take ownership of to make the surface outlast the window.
+        let handle_origin;
+
+        let target = target.into();
+        let mut surface = match target {
+            SurfaceTarget::Window(window) => unsafe {
+                let surface = self.create_surface_unsafe(
+                    SurfaceTargetUnsafe::from_window(&window).map_err(|e| CreateSurfaceError {
+                        inner: CreateSurfaceErrorKind::RawHandle(e),
+                    })?,
+                );
+                handle_origin = Some(window);
+
+                surface
+            }?,
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::Canvas(canvas) => {
+                handle_origin = None;
+
+                let value: &wasm_bindgen::JsValue = &canvas;
+                let obj = std::ptr::NonNull::from(value).cast();
+                let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
+
+                // Note that we need to call this while we still have `value` around.
+                // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
+                unsafe {
+                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                }?
+            }
+
+            #[cfg(any(webgpu, webgl))]
+            SurfaceTarget::OffscreenCanvas(canvas) => {
+                handle_origin = None;
+
+                let value: &wasm_bindgen::JsValue = &canvas;
+                let obj = std::ptr::NonNull::from(value).cast();
+                let raw_window_handle =
+                    raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
+                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
+
+                // Note that we need to call this while we still have `value` around.
+                // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
+                unsafe {
+                    self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                }?
+            }
+        };
+
+        surface._surface = handle_origin;
+
+        Ok(surface)
+    }
+
+    /// Creates a new surface targeting a given window/canvas/surface/etc. using an unsafe target.
+    ///
+    /// See [`SurfaceTargetUnsafe`] for what targets are supported.
+    /// See [`Instance::create_surface`] for surface creation with safe target variants.
     ///
     /// # Safety
     ///
-    /// - `raw_window_handle` must be a valid object to create a surface upon.
-    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
-    ///   dropped.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    ///
-    /// # Panics
-    ///
-    /// - On macOS/Metal: will panic if not called on the main thread.
-    /// - On web: will panic if the `raw_window_handle` does not properly refer to a
-    ///   canvas element.
-    pub unsafe fn create_surface<
-        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
-    >(
+    /// - See respective [`SurfaceTargetUnsafe`] variants for safety requirements.
+    pub unsafe fn create_surface_unsafe<'window>(
         &self,
-        window: &W,
-    ) -> Result<Surface, CreateSurfaceError> {
-        let (id, data) = DynContext::instance_create_surface(
-            &*self.context,
-            raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
-            raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
-        )?;
+        target: SurfaceTargetUnsafe,
+    ) -> Result<Surface<'window>, CreateSurfaceError> {
+        let (id, data) = unsafe { self.context.instance_create_surface(target) }?;
+
         Ok(Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             id,
             data,
-            config: Mutex::new(None),
-        })
-    }
-
-    /// Creates a surface from `CoreAnimationLayer`.
-    ///
-    /// # Safety
-    ///
-    /// - layer must be a valid object to create a surface upon.
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub unsafe fn create_surface_from_core_animation_layer(
-        &self,
-        layer: *mut std::ffi::c_void,
-    ) -> Surface {
-        let surface = unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .create_surface_from_core_animation_layer(layer)
-        };
-        Surface {
-            context: Arc::clone(&self.context),
-            id: ObjectId::from(surface.id()),
-            data: Box::new(surface),
-            config: Mutex::new(None),
-        }
-    }
-
-    /// Creates a surface from `IDCompositionVisual`.
-    ///
-    /// # Safety
-    ///
-    /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
-        let surface = unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .create_surface_from_visual(visual)
-        };
-        Surface {
-            context: Arc::clone(&self.context),
-            id: ObjectId::from(surface.id()),
-            data: Box::new(surface),
-            config: Mutex::new(None),
-        }
-    }
-
-    /// Creates a surface from `SurfaceHandle`.
-    ///
-    /// # Safety
-    ///
-    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_surface_handle(
-        &self,
-        surface_handle: *mut std::ffi::c_void,
-    ) -> Surface {
-        let surface = unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .create_surface_from_surface_handle(surface_handle)
-        };
-        Surface {
-            context: Arc::clone(&self.context),
-            id: ObjectId::from(surface.id()),
-            data: Box::new(surface),
-            config: Mutex::new(None),
-        }
-    }
-
-    /// Creates a surface from a `web_sys::HtmlCanvasElement`.
-    ///
-    /// The `canvas` argument must be a valid `<canvas>` element to
-    /// create a surface upon.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-    pub fn create_surface_from_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-    ) -> Result<Surface, CreateSurfaceError> {
-        let surface = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .instance_create_surface_from_canvas(canvas)?;
-
-        // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
-        Ok(Surface {
-            context: Arc::clone(&self.context),
-            #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-            id: ObjectId::from(surface.id()),
-            #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-            data: Box::new(surface),
-            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::UNUSED,
-            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(surface.1),
-            config: Mutex::new(None),
-        })
-    }
-
-    /// Creates a surface from a `web_sys::OffscreenCanvas`.
-    ///
-    /// The `canvas` argument must be a valid `OffscreenCanvas` object
-    /// to create a surface upon.
-    ///
-    /// # Errors
-    ///
-    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
-    ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-    pub fn create_surface_from_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-    ) -> Result<Surface, CreateSurfaceError> {
-        let surface = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .instance_create_surface_from_offscreen_canvas(canvas)?;
-
-        // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
-        Ok(Surface {
-            context: Arc::clone(&self.context),
-            #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-            id: ObjectId::from(surface.id()),
-            #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-            data: Box::new(surface),
-            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::UNUSED,
-            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }
@@ -2097,17 +2049,15 @@ impl Instance {
     }
 
     /// Generates memory report.
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
-    pub fn generate_report(&self) -> wgc::global::GlobalReport {
+    ///
+    /// Returns `None` if the feature is not supported by the backend
+    /// which happens only when WebGPU is pre-selected by the instance creation.
+    #[cfg(wgpu_core)]
+    pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
         self.context
             .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .generate_report()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| ctx.generate_report())
     }
 }
 
@@ -2130,7 +2080,7 @@ impl Adapter {
     /// - Adapter does not support all features wgpu requires to safely operate.
     pub fn request_device(
         &self,
-        desc: &DeviceDescriptor,
+        desc: &DeviceDescriptor<'_>,
         trace_path: Option<&std::path::Path>,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let context = Arc::clone(&self.context);
@@ -2172,22 +2122,20 @@ impl Adapter {
     ///
     /// - `hal_device` must be created from this adapter internal handle.
     /// - `desc.features` must be a subset of `hal_device` features.
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
-        desc: &DeviceDescriptor,
+        desc: &DeviceDescriptor<'_>,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
         let context = Arc::clone(&self.context);
         unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the device was generated from the same adapter.
+                // Therefore, unwrap is fine here since only WgpuCoreContext based adapters have the ability to create hal devices.
                 .unwrap()
                 .create_device_from_hal(&self.id.into(), hal_device, desc, trace_path)
         }
@@ -2226,26 +2174,24 @@ impl Adapter {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Adapter`]: hal::Api::Adapter
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
     ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback)
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback) }
+        } else {
+            hal_adapter_callback(None)
         }
     }
 
     /// Returns whether this adapter may present to the passed surface.
-    pub fn is_surface_supported(&self, surface: &Surface) -> bool {
+    pub fn is_surface_supported(&self, surface: &Surface<'_>) -> bool {
         DynContext::adapter_is_surface_supported(
             &*self.context,
             &self.id,
@@ -2255,18 +2201,12 @@ impl Adapter {
         )
     }
 
-    /// List all features that are supported with this adapter.
-    ///
-    /// Features must be explicitly requested in [`Adapter::request_device`] in order
-    /// to use them.
+    /// The features which can be used to create devices on this adapter.
     pub fn features(&self) -> Features {
         DynContext::adapter_features(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// List the "best" limits that are supported by this adapter.
-    ///
-    /// Limits must be explicitly requested in [`Adapter::request_device`] to set
-    /// the values that you are allowed to use.
+    /// The best limits which can be used to create devices on this adapter.
     pub fn limits(&self) -> Limits {
         DynContext::adapter_limits(&*self.context, &self.id, self.data.as_ref())
     }
@@ -2321,7 +2261,7 @@ impl Adapter {
 }
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks.
+    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -2329,27 +2269,27 @@ impl Device {
     /// the caller receives it. `Queue`s can be shared between threads, so
     /// other threads could submit new work at any time.)
     ///
-    /// On the web, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> bool {
+    /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
+    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
         DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
     }
 
-    /// List all features that may be used with this device.
+    /// The features which can be used on this device.
     ///
-    /// Functions may panic if you use unsupported features.
+    /// No additional features can be used, even if the underlying adapter can support them.
     pub fn features(&self) -> Features {
         DynContext::device_features(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// List all limits that were requested of this device.
+    /// The limits which can be used on this device.
     ///
-    /// If any of these limits are exceeded, functions may panic.
+    /// No better limits can be used, even if the underlying adapter can support them.
     pub fn limits(&self) -> Limits {
         DynContext::device_limits(&*self.context, &self.id, self.data.as_ref())
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor) -> ShaderModule {
+    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
             &self.id,
@@ -2376,7 +2316,7 @@ impl Device {
     /// This has no effect on web.
     pub unsafe fn create_shader_module_unchecked(
         &self,
-        desc: ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor<'_>,
     ) -> ShaderModule {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
@@ -2402,7 +2342,7 @@ impl Device {
     /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
     pub unsafe fn create_shader_module_spirv(
         &self,
-        desc: &ShaderModuleDescriptorSpirV,
+        desc: &ShaderModuleDescriptorSpirV<'_>,
     ) -> ShaderModule {
         let (id, data) = unsafe {
             DynContext::device_create_shader_module_spirv(
@@ -2420,7 +2360,7 @@ impl Device {
     }
 
     /// Creates an empty [`CommandEncoder`].
-    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
+    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> CommandEncoder {
         let (id, data) = DynContext::device_create_command_encoder(
             &*self.context,
             &self.id,
@@ -2437,8 +2377,8 @@ impl Device {
     /// Creates an empty [`RenderBundleEncoder`].
     pub fn create_render_bundle_encoder(
         &self,
-        desc: &RenderBundleEncoderDescriptor,
-    ) -> RenderBundleEncoder {
+        desc: &RenderBundleEncoderDescriptor<'_>,
+    ) -> RenderBundleEncoder<'_> {
         let (id, data) = DynContext::device_create_render_bundle_encoder(
             &*self.context,
             &self.id,
@@ -2455,7 +2395,7 @@ impl Device {
     }
 
     /// Creates a new [`BindGroup`].
-    pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
+    pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> BindGroup {
         let (id, data) = DynContext::device_create_bind_group(
             &*self.context,
             &self.id,
@@ -2470,7 +2410,10 @@ impl Device {
     }
 
     /// Creates a [`BindGroupLayout`].
-    pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
+    pub fn create_bind_group_layout(
+        &self,
+        desc: &BindGroupLayoutDescriptor<'_>,
+    ) -> BindGroupLayout {
         let (id, data) = DynContext::device_create_bind_group_layout(
             &*self.context,
             &self.id,
@@ -2485,7 +2428,7 @@ impl Device {
     }
 
     /// Creates a [`PipelineLayout`].
-    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> PipelineLayout {
         let (id, data) = DynContext::device_create_pipeline_layout(
             &*self.context,
             &self.id,
@@ -2500,7 +2443,7 @@ impl Device {
     }
 
     /// Creates a [`RenderPipeline`].
-    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
+    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> RenderPipeline {
         let (id, data) = DynContext::device_create_render_pipeline(
             &*self.context,
             &self.id,
@@ -2515,7 +2458,7 @@ impl Device {
     }
 
     /// Creates a [`ComputePipeline`].
-    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
+    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
         let (id, data) = DynContext::device_create_compute_pipeline(
             &*self.context,
             &self.id,
@@ -2530,7 +2473,7 @@ impl Device {
     }
 
     /// Creates a [`Buffer`].
-    pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
+    pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
@@ -2552,7 +2495,7 @@ impl Device {
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
-    pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
+    pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Texture {
         let (id, data) =
             DynContext::device_create_texture(&*self.context, &self.id, self.data.as_ref(), desc);
         Texture {
@@ -2575,20 +2518,18 @@ impl Device {
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
-        desc: &TextureDescriptor,
+        desc: &TextureDescriptor<'_>,
     ) -> Texture {
         let texture = unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the texture was generated from the same hal device.
+                // Therefore, unwrap is fine here since only WgpuCoreContext has the ability to create hal textures.
                 .unwrap()
                 .create_texture_from_hal::<A>(
                     hal_texture,
@@ -2616,15 +2557,11 @@ impl Device {
     /// - `hal_buffer` must be created from this device internal handle
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,
-        desc: &BufferDescriptor,
+        desc: &BufferDescriptor<'_>,
     ) -> Buffer {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
@@ -2634,7 +2571,9 @@ impl Device {
         let (id, buffer) = unsafe {
             self.context
                 .as_any()
-                .downcast_ref::<crate::backend::Context>()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                // Part of the safety requirements is that the buffer was generated from the same hal device.
+                // Therefore, unwrap is fine here since only WgpuCoreContext has the ability to create hal buffers.
                 .unwrap()
                 .create_buffer_from_hal::<A>(
                     hal_buffer,
@@ -2656,7 +2595,7 @@ impl Device {
     /// Creates a new [`Sampler`].
     ///
     /// `desc` specifies the behavior of the sampler.
-    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
+    pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Sampler {
         let (id, data) =
             DynContext::device_create_sampler(&*self.context, &self.id, self.data.as_ref(), desc);
         Sampler {
@@ -2667,7 +2606,7 @@ impl Device {
     }
 
     /// Creates a new [`QuerySet`].
-    pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> QuerySet {
+    pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
         let (id, data) =
             DynContext::device_create_query_set(&*self.context, &self.id, self.data.as_ref(), desc);
         QuerySet {
@@ -2724,25 +2663,38 @@ impl Device {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Device`]: hal::Api::Device
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
-    ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .device_as_hal::<A, F, R>(
+    ) -> Option<R> {
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.device_as_hal::<A, F, R>(
                     self.data.as_ref().downcast_ref().unwrap(),
                     hal_device_callback,
                 )
-        }
+            })
+    }
+
+    /// Destroy this device.
+    pub fn destroy(&self) {
+        DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
+    }
+
+    /// Set a DeviceLostCallback on this device.
+    pub fn set_device_lost_callback(
+        &self,
+        callback: impl Fn(DeviceLostReason, String) + Send + 'static,
+    ) {
+        DynContext::device_set_device_lost_callback(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            Box::new(callback),
+        )
     }
 }
 
@@ -2754,18 +2706,70 @@ impl Drop for Device {
     }
 }
 
-/// Requesting a device failed.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RequestDeviceError;
+/// Requesting a device from an [`Adapter`] failed.
+#[derive(Clone, Debug)]
+pub struct RequestDeviceError {
+    inner: RequestDeviceErrorKind,
+}
+#[derive(Clone, Debug)]
+enum RequestDeviceErrorKind {
+    /// Error from [`wgpu_core`].
+    // must match dependency cfg
+    #[cfg(wgpu_core)]
+    Core(wgc::instance::RequestDeviceError),
+
+    /// Error from web API that was called by `wgpu` to request a device.
+    ///
+    /// (This is currently never used by the webgl backend, but it could be.)
+    #[cfg(webgpu)]
+    WebGpu(wasm_bindgen::JsValue),
+}
+
+#[cfg(send_sync)]
+unsafe impl Send for RequestDeviceErrorKind {}
+#[cfg(send_sync)]
+unsafe impl Sync for RequestDeviceErrorKind {}
+
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Requesting a device failed")
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.inner {
+            #[cfg(wgpu_core)]
+            RequestDeviceErrorKind::Core(error) => error.fmt(_f),
+            #[cfg(webgpu)]
+            RequestDeviceErrorKind::WebGpu(error_js_value) => {
+                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
+                write!(_f, "{error_js_value:?}")
+            }
+            #[cfg(not(any(webgpu, wgpu_core)))]
+            _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
+        }
     }
 }
 
-impl error::Error for RequestDeviceError {}
+impl error::Error for RequestDeviceError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.inner {
+            #[cfg(wgpu_core)]
+            RequestDeviceErrorKind::Core(error) => error.source(),
+            #[cfg(webgpu)]
+            RequestDeviceErrorKind::WebGpu(_) => None,
+            #[cfg(not(any(webgpu, wgpu_core)))]
+            _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
+        }
+    }
+}
+
+#[cfg(wgpu_core)]
+impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
+    fn from(error: wgc::instance::RequestDeviceError) -> Self {
+        Self {
+            inner: RequestDeviceErrorKind::Core(error),
+        }
+    }
+}
 
 /// [`Instance::create_surface()`] or a related function failed.
 #[derive(Clone, Debug)]
@@ -2776,30 +2780,26 @@ pub struct CreateSurfaceError {
 #[derive(Clone, Debug)]
 enum CreateSurfaceErrorKind {
     /// Error from [`wgpu_hal`].
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
-    // must match dependency cfg
+    #[cfg(wgpu_core)]
     Hal(hal::InstanceError),
 
     /// Error from WebGPU surface creation.
     #[allow(dead_code)] // may be unused depending on target and features
     Web(String),
+
+    /// Error when trying to get a [`DisplayHandle`] or a [`WindowHandle`] from
+    /// `raw_window_handle`.
+    RawHandle(raw_window_handle::HandleError),
 }
 static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 
 impl fmt::Display for CreateSurfaceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
-            #[cfg(any(
-                not(target_arch = "wasm32"),
-                target_os = "emscripten",
-                feature = "webgl"
-            ))]
+            #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
             CreateSurfaceErrorKind::Web(e) => e.fmt(f),
+            CreateSurfaceErrorKind::RawHandle(e) => e.fmt(f),
         }
     }
 }
@@ -2807,22 +2807,15 @@ impl fmt::Display for CreateSurfaceError {
 impl error::Error for CreateSurfaceError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match &self.inner {
-            #[cfg(any(
-                not(target_arch = "wasm32"),
-                target_os = "emscripten",
-                feature = "webgl"
-            ))]
+            #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
+            CreateSurfaceErrorKind::RawHandle(e) => e.source(),
         }
     }
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    target_os = "emscripten",
-    feature = "webgl"
-))]
+#[cfg(wgpu_core)]
 impl From<hal::InstanceError> for CreateSurfaceError {
     fn from(e: hal::InstanceError) -> Self {
         Self {
@@ -2953,12 +2946,12 @@ impl Drop for BufferViewMut<'_> {
 
 impl Buffer {
     /// Return the binding view of the entire buffer.
-    pub fn as_entire_binding(&self) -> BindingResource {
+    pub fn as_entire_binding(&self) -> BindingResource<'_> {
         BindingResource::Buffer(self.as_entire_buffer_binding())
     }
 
     /// Return the binding view of the entire buffer.
-    pub fn as_entire_buffer_binding(&self) -> BufferBinding {
+    pub fn as_entire_buffer_binding(&self) -> BufferBinding<'_> {
         BufferBinding {
             buffer: self,
             offset: 0,
@@ -2968,7 +2961,7 @@ impl Buffer {
 
     /// Use only a portion of this Buffer for a given operation. Choosing a range with no end
     /// will use the rest of the buffer. Using a totally unbounded range will use the entire buffer.
-    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
+    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds);
         BufferSlice {
             buffer: self,
@@ -3055,23 +3048,24 @@ impl<'a> BufferSlice<'a> {
     }
 
     /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will fail.
     ///
-    /// This is useful in wasm builds when you want to pass mapped data directly to js. Unlike `get_mapped_range`
-    /// which unconditionally copies mapped data into the wasm heap, this function directly hands you the
-    /// ArrayBuffer that we mapped the data into in js.
-    #[cfg(all(
-        target_arch = "wasm32",
-        not(any(target_os = "emscripten", feature = "webgl"))
-    ))]
-    pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        DynContext::buffer_get_mapped_range_as_array_buffer(
-            &*self.buffer.context,
-            &self.buffer.id,
-            self.buffer.data.as_ref(),
-            self.offset..end,
-        )
+    /// This is useful when targeting WebGPU and you want to pass mapped data directly to js.
+    /// Unlike `get_mapped_range` which unconditionally copies mapped data into the wasm heap,
+    /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
+    ///
+    /// This is only available on WebGPU, on any other backends this will return `None`.
+    #[cfg(webgpu)]
+    pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
+        self.buffer
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWebGpu>()
+            .map(|ctx| {
+                let buffer_data = crate::context::downcast_ref(self.buffer.data.as_ref());
+                let end = self.buffer.map_context.lock().add(self.offset, self.size);
+                ctx.buffer_get_mapped_range_as_array_buffer(buffer_data, self.offset..end)
+            })
     }
 
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
@@ -3107,27 +3101,26 @@ impl Texture {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
+    #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
     ) {
         let texture = self.data.as_ref().downcast_ref().unwrap();
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .texture_as_hal::<A, F>(texture, hal_texture_callback)
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.texture_as_hal::<A, F>(texture, hal_texture_callback) }
+        } else {
+            hal_texture_callback(None)
         }
     }
 
     /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+    pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
         let (id, data) =
             DynContext::texture_create_view(&*self.context, &self.id, self.data.as_ref(), desc);
         TextureView {
@@ -3143,7 +3136,7 @@ impl Texture {
     }
 
     /// Make an `ImageCopyTexture` representing the whole texture.
-    pub fn as_image_copy(&self) -> ImageCopyTexture {
+    pub fn as_image_copy(&self) -> ImageCopyTexture<'_> {
         ImageCopyTexture {
             texture: self,
             mip_level: 0,
@@ -3271,7 +3264,7 @@ impl CommandEncoder {
     /// Begins recording of a compute pass.
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
-    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor) -> ComputePass {
+    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass<'_> {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
@@ -3318,8 +3311,8 @@ impl CommandEncoder {
     /// Copy data from a buffer to a texture.
     pub fn copy_buffer_to_texture(
         &mut self,
-        source: ImageCopyBuffer,
-        destination: ImageCopyTexture,
+        source: ImageCopyBuffer<'_>,
+        destination: ImageCopyTexture<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_buffer_to_texture(
@@ -3335,8 +3328,8 @@ impl CommandEncoder {
     /// Copy data from a texture to a buffer.
     pub fn copy_texture_to_buffer(
         &mut self,
-        source: ImageCopyTexture,
-        destination: ImageCopyBuffer,
+        source: ImageCopyTexture<'_>,
+        destination: ImageCopyBuffer<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_texture_to_buffer(
@@ -3358,8 +3351,8 @@ impl CommandEncoder {
     /// - Copy would overrun either texture
     pub fn copy_texture_to_texture(
         &mut self,
-        source: ImageCopyTexture,
-        destination: ImageCopyTexture,
+        source: ImageCopyTexture<'_>,
+        destination: ImageCopyTexture<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_texture_to_texture(
@@ -3405,7 +3398,7 @@ impl CommandEncoder {
         &mut self,
         buffer: &Buffer,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
@@ -3439,6 +3432,31 @@ impl CommandEncoder {
         let id = self.id.as_ref().unwrap();
         DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
     }
+
+    /// Resolves a query set, writing the results into the supplied destination buffer.
+    ///
+    /// Occlusion and timestamp queries are 8 bytes each (see [`crate::QUERY_SIZE`]). For pipeline statistics queries,
+    /// see [`PipelineStatisticsTypes`] for more information.
+    pub fn resolve_query_set(
+        &mut self,
+        query_set: &QuerySet,
+        query_range: Range<u32>,
+        destination: &Buffer,
+        destination_offset: BufferAddress,
+    ) {
+        DynContext::command_encoder_resolve_query_set(
+            &*self.context,
+            self.id.as_ref().unwrap(),
+            self.data.as_ref(),
+            &query_set.id,
+            query_set.data.as_ref(),
+            query_range.start,
+            query_range.end - query_range.start,
+            &destination.id,
+            destination.data.as_ref(),
+            destination_offset,
+        )
+    }
 }
 
 /// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
@@ -3458,33 +3476,6 @@ impl CommandEncoder {
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
-        )
-    }
-}
-
-/// [`Features::TIMESTAMP_QUERY`] or [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl CommandEncoder {
-    /// Resolve a query set, writing the results into the supplied destination buffer.
-    ///
-    /// Queries may be between 8 and 40 bytes each. See [`PipelineStatisticsTypes`] for more information.
-    pub fn resolve_query_set(
-        &mut self,
-        query_set: &QuerySet,
-        query_range: Range<u32>,
-        destination: &Buffer,
-        destination_offset: BufferAddress,
-    ) {
-        DynContext::command_encoder_resolve_query_set(
-            &*self.context,
-            self.id.as_ref().unwrap(),
-            self.data.as_ref(),
-            &query_set.id,
-            query_set.data.as_ref(),
-            query_range.start,
-            query_range.end - query_range.start,
-            &destination.id,
-            destination.data.as_ref(),
-            destination_offset,
         )
     }
 }
@@ -3637,6 +3628,35 @@ impl<'a> RenderPass<'a> {
         );
     }
 
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        DynContext::render_pass_insert_debug_marker(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            label,
+        );
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        DynContext::render_pass_push_debug_group(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            label,
+        );
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        DynContext::render_pass_pop_debug_group(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+        );
+    }
+
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffer(s) can be set with [`RenderPass::set_vertex_buffer`].
@@ -3666,35 +3686,6 @@ impl<'a> RenderPass<'a> {
             vertices,
             instances,
         )
-    }
-
-    /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) {
-        DynContext::render_pass_insert_debug_marker(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-            label,
-        );
-    }
-
-    /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) {
-        DynContext::render_pass_push_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-            label,
-        );
-    }
-
-    /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) {
-        DynContext::render_pass_pop_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-        );
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
@@ -3734,12 +3725,17 @@ impl<'a> RenderPass<'a> {
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
-    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
+    /// these and issue an error.
+    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
+    ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
+    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
-    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
-    /// It is not affected by changes to the state that are performed after it is called.
+    /// See details on the individual flags for more information.
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.parent.context,
@@ -3754,13 +3750,17 @@ impl<'a> RenderPass<'a> {
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`.
     ///
-    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
+    /// these and issue an error.
+    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
+    ///   [`DrawIndexedIndirect::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
+    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
-    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
-    /// It is not affected by changes to the state that are performed after it is called.
+    /// See details on the individual flags for more information.
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3781,19 +3781,16 @@ impl<'a> RenderPass<'a> {
     ///
     /// Commands in the bundle do not inherit this render pass's current render state, and after the
     /// bundle has executed, the state is **cleared** (reset to defaults, not the previous state).
-    pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle> + 'a>(
-        &mut self,
-        render_bundles: I,
-    ) {
+    pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
+        let mut render_bundles = render_bundles
+            .into_iter()
+            .map(|rb| (&rb.id, rb.data.as_ref()));
+
         DynContext::render_pass_execute_bundles(
             &*self.parent.context,
             &mut self.id,
             self.data.as_mut(),
-            Box::new(
-                render_bundles
-                    .into_iter()
-                    .map(|rb| (&rb.id, rb.data.as_ref())),
-            ),
+            &mut render_bundles,
         )
     }
 }
@@ -3805,7 +3802,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
@@ -3833,7 +3830,7 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
@@ -3866,7 +3863,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// The structure expected in `count_buffer` is the following:
@@ -3912,7 +3909,7 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
     /// These draw structures are expected to be tightly packed.
     ///
@@ -4168,7 +4165,7 @@ impl<'a> ComputePass<'a> {
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirect`](crate::util::DispatchIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
     pub fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -4268,7 +4265,7 @@ impl<'a> Drop for ComputePass<'a> {
 
 impl<'a> RenderBundleEncoder<'a> {
     /// Finishes recording and returns a [`RenderBundle`] that can be executed in other render passes.
-    pub fn finish(self, desc: &RenderBundleDescriptor) -> RenderBundle {
+    pub fn finish(self, desc: &RenderBundleDescriptor<'_>) -> RenderBundle {
         let (id, data) =
             DynContext::render_bundle_encoder_finish(&*self.context, self.id, self.data, desc);
         RenderBundle {
@@ -4416,7 +4413,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_bundle_encoder_draw_indirect(
             &*self.parent.context,
@@ -4434,7 +4431,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -4493,7 +4490,7 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A read-only view into a staging buffer.
+/// A write-only view into a staging buffer.
 ///
 /// Reading into this buffer won't yield the contents of the buffer from the
 /// GPU and is likely to be slow. Because of this, although [`AsMut`] is
@@ -4504,14 +4501,8 @@ pub struct QueueWriteBufferView<'a> {
     offset: BufferAddress,
     inner: Box<dyn context::QueueWriteBuffer>,
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
 
 impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
@@ -4628,7 +4619,7 @@ impl Queue {
     /// This method fails if `size` overruns the size of `texture`, or if `data` is too short.
     pub fn write_texture(
         &self,
-        texture: ImageCopyTexture,
+        texture: ImageCopyTexture<'_>,
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
@@ -4645,11 +4636,11 @@ impl Queue {
     }
 
     /// Schedule a copy of data from `image` into `texture`.
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(any(webgpu, webgl))]
     pub fn copy_external_image_to_texture(
         &self,
         source: &wgt::ImageCopyExternalImage,
-        dest: ImageCopyTextureTagged,
+        dest: ImageCopyTextureTagged<'_>,
         size: Extent3d,
     ) {
         DynContext::queue_copy_external_image_to_texture(
@@ -4667,15 +4658,15 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
+        let mut command_buffers = command_buffers
+            .into_iter()
+            .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap()));
+
         let (raw, data) = DynContext::queue_submit(
             &*self.context,
             &self.id,
             self.data.as_ref(),
-            Box::new(
-                command_buffers
-                    .into_iter()
-                    .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap())),
-            ),
+            &mut command_buffers,
         );
 
         SubmissionIndex(raw, data)
@@ -4742,7 +4733,7 @@ impl Drop for SurfaceTexture {
     }
 }
 
-impl Surface {
+impl Surface<'_> {
     /// Returns the capabilities of the surface when used with the given adapter.
     ///
     /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
@@ -4783,6 +4774,7 @@ impl Surface {
     ///
     /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
+    /// - `config.width` or `config.height` is zero.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
         DynContext::surface_configure(
             &*self.context,
@@ -4860,286 +4852,227 @@ impl Surface {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Surface must not be manually destroyed
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
-    pub unsafe fn as_hal_mut<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&mut A::Surface>) -> R,
-        R,
-    >(
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
         &mut self,
         hal_surface_callback: F,
-    ) -> R {
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .surface_as_hal_mut::<A, F, R>(
+    ) -> Option<R> {
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.surface_as_hal::<A, F, R>(
                     self.data.downcast_ref().unwrap(),
                     hal_surface_callback,
                 )
-        }
+            })
     }
 }
 
 /// Opaque globally-unique identifier
-#[cfg(feature = "expose-ids")]
-#[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
-pub struct Id<T>(::core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+pub struct Id<T>(NonZeroU64, PhantomData<*mut T>);
+
+impl<T> Id<T> {
+    /// For testing use only. We provide no guarentees about the actual value of the ids.
+    #[doc(hidden)]
+    pub fn inner(&self) -> u64 {
+        self.0.get()
+    }
+}
 
 // SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
 // returned for different types , so `Id` can safely implement Send and Sync.
-#[cfg(feature = "expose-ids")]
 unsafe impl<T> Send for Id<T> {}
 
 // SAFETY: See the implementation for `Send`.
-#[cfg(feature = "expose-ids")]
 unsafe impl<T> Sync for Id<T> {}
 
-#[cfg(feature = "expose-ids")]
 impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl<T> Copy for Id<T> {}
 
-#[cfg(feature = "expose-ids")]
 impl<T> fmt::Debug for Id<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Id").field(&self.0).finish()
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl<T> PartialEq for Id<T> {
     fn eq(&self, other: &Id<T>) -> bool {
         self.0 == other.0
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl<T> Eq for Id<T> {}
 
-#[cfg(feature = "expose-ids")]
 impl<T> std::hash::Hash for Id<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Adapter {
     /// Returns a globally-unique identifier for this `Adapter`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Adapter`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Adapter> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Device {
     /// Returns a globally-unique identifier for this `Device`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Device`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Device> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Queue {
     /// Returns a globally-unique identifier for this `Queue`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Queue`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Queue> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl ShaderModule {
     /// Returns a globally-unique identifier for this `ShaderModule`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `ShaderModule`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<ShaderModule> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl BindGroupLayout {
     /// Returns a globally-unique identifier for this `BindGroupLayout`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `BindGroupLayout`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<BindGroupLayout> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl BindGroup {
     /// Returns a globally-unique identifier for this `BindGroup`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `BindGroup`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<BindGroup> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl TextureView {
     /// Returns a globally-unique identifier for this `TextureView`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `TextureView`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<TextureView> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Sampler {
     /// Returns a globally-unique identifier for this `Sampler`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Sampler`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Sampler> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Buffer {
     /// Returns a globally-unique identifier for this `Buffer`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Buffer`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Buffer> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Texture {
     /// Returns a globally-unique identifier for this `Texture`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Texture`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Texture> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl QuerySet {
     /// Returns a globally-unique identifier for this `QuerySet`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `QuerySet`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<QuerySet> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl PipelineLayout {
     /// Returns a globally-unique identifier for this `PipelineLayout`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `PipelineLayout`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<PipelineLayout> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl RenderPipeline {
     /// Returns a globally-unique identifier for this `RenderPipeline`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `RenderPipeline`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<RenderPipeline> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl ComputePipeline {
     /// Returns a globally-unique identifier for this `ComputePipeline`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `ComputePipeline`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<ComputePipeline> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl RenderBundle {
     /// Returns a globally-unique identifier for this `RenderBundle`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `RenderBundle`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<RenderBundle> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Self> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
-impl Surface {
+impl Surface<'_> {
     /// Returns a globally-unique identifier for this `Surface`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Surface`s created from the same
-    /// `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Surface> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    pub fn global_id(&self) -> Id<Surface<'_>> {
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
@@ -5153,55 +5086,29 @@ pub enum Error {
     /// Out of memory error
     OutOfMemory {
         /// Lower level source of the error.
-        #[cfg(any(
-            not(target_arch = "wasm32"),
-            all(
-                feature = "fragile-send-sync-non-atomic-wasm",
-                not(target_feature = "atomics")
-            )
-        ))]
+        #[cfg(send_sync)]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + Send + 'static>,
         /// Lower level source of the error.
-        #[cfg(not(any(
-            not(target_arch = "wasm32"),
-            all(
-                feature = "fragile-send-sync-non-atomic-wasm",
-                not(target_feature = "atomics")
-            )
-        )))]
+        #[cfg(not(send_sync))]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + 'static>,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
         /// Lower level source of the error.
-        #[cfg(any(
-            not(target_arch = "wasm32"),
-            all(
-                feature = "fragile-send-sync-non-atomic-wasm",
-                not(target_feature = "atomics")
-            )
-        ))]
+        #[cfg(send_sync)]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + Send + 'static>,
         /// Lower level source of the error.
-        #[cfg(not(any(
-            not(target_arch = "wasm32"),
-            all(
-                feature = "fragile-send-sync-non-atomic-wasm",
-                not(target_feature = "atomics")
-            )
-        )))]
+        #[cfg(not(send_sync))]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
         source: Box<dyn error::Error + 'static>,
         /// Description of the validation error.
         description: String,
     },
 }
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Error: Send);
 
 impl error::Error for Error {
@@ -5228,12 +5135,12 @@ mod send_sync {
     use std::any::Any;
     use std::fmt;
 
-    use wgt::{WasmNotSend, WasmNotSync};
+    use wgt::WasmNotSendSync;
 
-    pub trait AnyWasmNotSendSync: Any + WasmNotSend + WasmNotSync {
+    pub trait AnyWasmNotSendSync: Any + WasmNotSendSync {
         fn upcast_any_ref(&self) -> &dyn Any;
     }
-    impl<T: Any + WasmNotSend + WasmNotSync> AnyWasmNotSendSync for T {
+    impl<T: Any + WasmNotSendSync> AnyWasmNotSendSync for T {
         #[inline]
         fn upcast_any_ref(&self) -> &dyn Any {
             self

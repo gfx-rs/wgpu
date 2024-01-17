@@ -3,16 +3,15 @@ extern crate wgpu_hal as hal;
 use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use glam::{Affine3A, Mat4, Vec3};
 use std::{
     borrow::{Borrow, Cow},
-    iter, mem,
-    mem::{align_of, size_of},
-    ptr::{self, copy_nonoverlapping},
+    iter, mem, ptr,
     time::Instant,
 };
+use winit::window::WindowButtons;
 
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
 const DESIRED_FRAMES: u32 = 3;
@@ -216,38 +215,42 @@ struct Example<A: hal::Api> {
 }
 
 impl<A: hal::Api> Example<A> {
-    fn init(window: &winit::window::Window) -> Result<Self, hal::InstanceError> {
+    fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
-            flags: if cfg!(debug_assertions) {
-                hal::InstanceFlags::all()
-            } else {
-                hal::InstanceFlags::empty()
+            flags: wgt::InstanceFlags::default(),
+            dx12_shader_compiler: wgt::Dx12Compiler::Dxc {
+                dxil_path: None,
+                dxc_path: None,
             },
-            dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = unsafe {
-            instance
-                .create_surface(window.raw_display_handle(), window.raw_window_handle())
-                .unwrap()
+        let surface = {
+            let raw_window_handle = window.window_handle()?.as_raw();
+            let raw_display_handle = window.display_handle()?.as_raw();
+
+            unsafe {
+                instance
+                    .create_surface(raw_display_handle, raw_window_handle)
+                    .unwrap()
+            }
         };
 
         let (adapter, features) = unsafe {
             let mut adapters = instance.enumerate_adapters();
             if adapters.is_empty() {
-                return Err(hal::InstanceError);
+                panic!("No adapters found");
             }
             let exposed = adapters.swap_remove(0);
             dbg!(exposed.features);
             (exposed.adapter, exposed.features)
         };
-        let surface_caps =
-            unsafe { adapter.surface_capabilities(&surface) }.ok_or(hal::InstanceError)?;
+        let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
+            .expect("Surface doesn't support presentation");
         log::info!("Surface caps: {:#?}", surface_caps);
 
-        let hal::OpenDevice { device, mut queue } =
+        let hal::OpenDevice { device, queue } =
             unsafe { adapter.open(features, &wgt::Limits::default()).unwrap() };
 
         let window_size: (u32, u32) = window.inner_size().into();
@@ -320,47 +323,32 @@ impl<A: hal::Api> Example<A> {
 
         let bgl = unsafe { device.create_bind_group_layout(&bgl_desc).unwrap() };
 
-        pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
-            const MAGIC_NUMBER: u32 = 0x0723_0203;
-            assert_eq!(
-                data.len() % size_of::<u32>(),
-                0,
-                "data size is not a multiple of 4"
-            );
-
-            //If the data happens to be aligned, directly use the byte array,
-            // otherwise copy the byte array in an owned vector and use that instead.
-            let words = if data.as_ptr().align_offset(align_of::<u32>()) == 0 {
-                let (pre, words, post) = unsafe { data.align_to::<u32>() };
-                debug_assert!(pre.is_empty());
-                debug_assert!(post.is_empty());
-                Cow::from(words)
-            } else {
-                let mut words = vec![0u32; data.len() / size_of::<u32>()];
-                unsafe {
-                    copy_nonoverlapping(data.as_ptr(), words.as_mut_ptr() as *mut u8, data.len());
-                }
-                Cow::from(words)
-            };
-
-            assert_eq!(
-                words[0], MAGIC_NUMBER,
-                "wrong magic word {:x}. Make sure you are using a binary SPIRV file.",
-                words[0]
-            );
-
-            words
-        }
-
+        let naga_shader = {
+            let shader_file = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("examples")
+                .join("ray-traced-triangle")
+                .join("shader.wgsl");
+            let source = std::fs::read_to_string(shader_file).unwrap();
+            let module = naga::front::wgsl::Frontend::new().parse(&source).unwrap();
+            let info = naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::RAY_QUERY,
+            )
+            .validate(&module)
+            .unwrap();
+            hal::NagaShader {
+                module: Cow::Owned(module),
+                info,
+                debug_source: None,
+            }
+        };
+        let shader_desc = hal::ShaderModuleDescriptor {
+            label: None,
+            runtime_checks: false,
+        };
         let shader_module = unsafe {
             device
-                .create_shader_module(
-                    &hal::ShaderModuleDescriptor {
-                        label: None,
-                        runtime_checks: false,
-                    },
-                    hal::ShaderInput::SpirV(&make_spirv_raw(include_bytes!("shader.comp.spv"))),
-                )
+                .create_shader_module(&shader_desc, hal::ShaderInput::Naga(naga_shader))
                 .unwrap()
         };
 
@@ -940,7 +928,7 @@ impl<A: hal::Api> Example<A> {
             ctx.encoder.copy_texture_to_texture(
                 &self.texture,
                 hal::TextureUses::COPY_SRC,
-                &surface_tex.borrow(),
+                surface_tex.borrow(),
                 std::iter::once(hal::TextureCopy {
                     src_base: hal::TextureCopyBase {
                         mip_level: 0,
@@ -973,7 +961,7 @@ impl<A: hal::Api> Example<A> {
                 None
             };
             self.queue.submit(&[&cmd_buf], fence_param).unwrap();
-            self.queue.present(&mut self.surface, surface_tex).unwrap();
+            self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };
@@ -1070,53 +1058,54 @@ cfg_if::cfg_if! {
 fn main() {
     env_logger::init();
 
-    let event_loop = winit::event_loop::EventLoop::new();
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = winit::window::WindowBuilder::new()
-        .with_title("hal-bunnymark")
+        .with_title("hal-ray-traced-triangle")
         .with_inner_size(winit::dpi::PhysicalSize {
             width: 512,
             height: 512,
         })
         .with_resizable(false)
+        .with_enabled_buttons(WindowButtons::CLOSE)
         .build(&event_loop)
         .unwrap();
 
     let example_result = Example::<Api>::init(&window);
     let mut example = Some(example_result.expect("Selected backend is not supported"));
 
-    event_loop.run(move |event, _, control_flow| {
-        let _ = &window; // force ownership by the closure
-        *control_flow = winit::event_loop::ControlFlow::Poll;
-        match event {
-            winit::event::Event::RedrawEventsCleared => {
-                window.request_redraw();
-            }
-            winit::event::Event::WindowEvent { event, .. } => match event {
-                winit::event::WindowEvent::KeyboardInput {
-                    input:
-                        winit::event::KeyboardInput {
-                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
-                            state: winit::event::ElementState::Pressed,
-                            ..
-                        },
-                    ..
+    event_loop
+        .run(move |event, target| {
+            let _ = &window; // force ownership by the closure
+            target.set_control_flow(winit::event_loop::ControlFlow::Poll);
+            match event {
+                winit::event::Event::WindowEvent { event, .. } => match event {
+                    winit::event::WindowEvent::CloseRequested => {
+                        target.exit();
+                    }
+                    winit::event::WindowEvent::KeyboardInput { event, .. }
+                        if event.physical_key
+                            == winit::keyboard::PhysicalKey::Code(
+                                winit::keyboard::KeyCode::Escape,
+                            ) =>
+                    {
+                        target.exit();
+                    }
+                    winit::event::WindowEvent::RedrawRequested => {
+                        let ex = example.as_mut().unwrap();
+                        ex.render();
+                    }
+                    _ => {
+                        example.as_mut().unwrap().update(event);
+                    }
+                },
+                winit::event::Event::LoopExiting => {
+                    example.take().unwrap().exit();
                 }
-                | winit::event::WindowEvent::CloseRequested => {
-                    *control_flow = winit::event_loop::ControlFlow::Exit;
+                winit::event::Event::AboutToWait => {
+                    window.request_redraw();
                 }
-                _ => {
-                    example.as_mut().unwrap().update(event);
-                }
-            },
-            winit::event::Event::RedrawRequested(_) => {
-                let ex = example.as_mut().unwrap();
-
-                ex.render();
+                _ => {}
             }
-            winit::event::Event::LoopDestroyed => {
-                example.take().unwrap().exit();
-            }
-            _ => {}
-        }
-    });
+        })
+        .unwrap();
 }

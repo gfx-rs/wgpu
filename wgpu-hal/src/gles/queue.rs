@@ -1,29 +1,39 @@
-use super::Command as C;
+use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use std::{mem, slice, sync::Arc};
+use std::{
+    mem, slice,
+    sync::{atomic::Ordering, Arc},
+};
 
-#[cfg(not(target_arch = "wasm32"))]
 const DEBUG_ID: u32 = 0;
 
-const CUBEMAP_FACES: [u32; 6] = [
-    glow::TEXTURE_CUBE_MAP_POSITIVE_X,
-    glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
-    glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
-    glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
-    glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
-    glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
-];
-
-#[cfg(not(target_arch = "wasm32"))]
 fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
-fn is_layered_target(target: super::BindTarget) -> bool {
+fn get_2d_target(target: u32, array_layer: u32) -> u32 {
+    const CUBEMAP_FACES: [u32; 6] = [
+        glow::TEXTURE_CUBE_MAP_POSITIVE_X,
+        glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
+        glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
+        glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
+        glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+    ];
+
     match target {
-        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_3D | glow::TEXTURE_CUBE_MAP_ARRAY => true,
-        _ => false,
+        glow::TEXTURE_2D => target,
+        glow::TEXTURE_CUBE_MAP => CUBEMAP_FACES[array_layer as usize],
+        _ => unreachable!(),
+    }
+}
+
+fn get_z_offset(target: u32, base: &crate::TextureCopyBase) -> u32 {
+    match target {
+        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY => base.array_layer,
+        glow::TEXTURE_3D => base.origin.z,
+        _ => unreachable!(),
     }
 }
 
@@ -48,20 +58,17 @@ impl super::Queue {
         unsafe { gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]) };
         unsafe { gl.draw_arrays(glow::TRIANGLES, 0, 3) };
 
-        if self.draw_buffer_count != 0 {
+        let draw_buffer_count = self.draw_buffer_count.load(Ordering::Relaxed);
+        if draw_buffer_count != 0 {
             // Reset the draw buffers to what they were before the clear
-            let indices = (0..self.draw_buffer_count as u32)
+            let indices = (0..draw_buffer_count as u32)
                 .map(|i| glow::COLOR_ATTACHMENT0 + i)
                 .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
             unsafe { gl.draw_buffers(&indices) };
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        for draw_buffer in 0..self.draw_buffer_count as u32 {
-            unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
-        }
     }
 
-    unsafe fn reset_state(&mut self, gl: &glow::Context) {
+    unsafe fn reset_state(&self, gl: &glow::Context) {
         unsafe { gl.use_program(None) };
         unsafe { gl.bind_framebuffer(glow::FRAMEBUFFER, None) };
         unsafe { gl.disable(glow::DEPTH_TEST) };
@@ -76,7 +83,8 @@ impl super::Queue {
         }
 
         unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None) };
-        self.current_index_buffer = None;
+        let mut current_index_buffer = self.current_index_buffer.lock();
+        *current_index_buffer = None;
     }
 
     unsafe fn set_attachment(
@@ -101,7 +109,7 @@ impl super::Queue {
             super::TextureInner::Texture { raw, target } => {
                 let num_layers = view.array_layers.end - view.array_layers.start;
                 if num_layers > 1 {
-                    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+                    #[cfg(webgl)]
                     unsafe {
                         gl.framebuffer_texture_multiview_ovr(
                             fbo_target,
@@ -122,29 +130,20 @@ impl super::Queue {
                             view.array_layers.start as i32,
                         )
                     };
-                } else if target == glow::TEXTURE_CUBE_MAP {
-                    unsafe {
-                        gl.framebuffer_texture_2d(
-                            fbo_target,
-                            attachment,
-                            CUBEMAP_FACES[view.array_layers.start as usize],
-                            Some(raw),
-                            view.mip_levels.start as i32,
-                        )
-                    };
                 } else {
                     unsafe {
+                        assert_eq!(view.mip_levels.len(), 1);
                         gl.framebuffer_texture_2d(
                             fbo_target,
                             attachment,
-                            target,
+                            get_2d_target(target, view.array_layers.start),
                             Some(raw),
                             view.mip_levels.start as i32,
                         )
                     };
                 }
             }
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             super::TextureInner::ExternalFramebuffer { ref inner } => unsafe {
                 gl.bind_external_framebuffer(glow::FRAMEBUFFER, inner);
             },
@@ -152,7 +151,7 @@ impl super::Queue {
     }
 
     unsafe fn process(
-        &mut self,
+        &self,
         gl: &glow::Context,
         command: &C,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] data_bytes: &[u8],
@@ -161,20 +160,43 @@ impl super::Queue {
         match *command {
             C::Draw {
                 topology,
-                start_vertex,
+                first_vertex,
                 vertex_count,
                 instance_count,
+                first_instance,
+                ref first_instance_location,
             } => {
-                // Don't use `gl.draw_arrays` for `instance_count == 1`.
-                // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `draw_arrays`.
-                // See https://github.com/gfx-rs/wgpu/issues/3578
-                unsafe {
-                    gl.draw_arrays_instanced(
-                        topology,
-                        start_vertex as i32,
-                        vertex_count as i32,
-                        instance_count as i32,
-                    )
+                let supports_full_instancing = self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
+
+                if supports_full_instancing {
+                    unsafe {
+                        gl.draw_arrays_instanced_base_instance(
+                            topology,
+                            first_vertex as i32,
+                            vertex_count as i32,
+                            instance_count as i32,
+                            first_instance,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        gl.uniform_1_u32(first_instance_location.as_ref(), first_instance);
+                    }
+
+                    // Don't use `gl.draw_arrays` for `instance_count == 1`.
+                    // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `draw_arrays`.
+                    // See https://github.com/gfx-rs/wgpu/issues/3578
+                    unsafe {
+                        gl.draw_arrays_instanced(
+                            topology,
+                            first_vertex as i32,
+                            vertex_count as i32,
+                            instance_count as i32,
+                        )
+                    }
                 };
             }
             C::DrawIndexed {
@@ -183,38 +205,75 @@ impl super::Queue {
                 index_count,
                 index_offset,
                 base_vertex,
+                first_instance,
                 instance_count,
+                ref first_instance_location,
             } => {
                 match base_vertex {
-                    // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
-                    // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
-                    // See https://github.com/gfx-rs/wgpu/issues/3578
-                    0 => unsafe {
-                        gl.draw_elements_instanced(
-                            topology,
-                            index_count as i32,
-                            index_type,
-                            index_offset as i32,
-                            instance_count as i32,
-                        )
-                    },
-                    _ => unsafe {
-                        gl.draw_elements_instanced_base_vertex(
-                            topology,
-                            index_count as _,
-                            index_type,
-                            index_offset as i32,
-                            instance_count as i32,
-                            base_vertex,
-                        )
-                    },
+                    0 => {
+                        unsafe {
+                            gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
+                        };
+
+                        unsafe {
+                            // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
+                            // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
+                            // See https://github.com/gfx-rs/wgpu/issues/3578
+                            gl.draw_elements_instanced(
+                                topology,
+                                index_count as i32,
+                                index_type,
+                                index_offset as i32,
+                                instance_count as i32,
+                            )
+                        }
+                    }
+                    _ => {
+                        let supports_full_instancing = self
+                            .shared
+                            .private_caps
+                            .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
+
+                        if supports_full_instancing {
+                            unsafe {
+                                gl.draw_elements_instanced_base_vertex_base_instance(
+                                    topology,
+                                    index_count as i32,
+                                    index_type,
+                                    index_offset as i32,
+                                    instance_count as i32,
+                                    base_vertex,
+                                    first_instance,
+                                )
+                            }
+                        } else {
+                            unsafe {
+                                gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
+                            };
+
+                            // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
+                            unsafe {
+                                gl.draw_elements_instanced_base_vertex(
+                                    topology,
+                                    index_count as _,
+                                    index_type,
+                                    index_offset as i32,
+                                    instance_count as i32,
+                                    base_vertex,
+                                )
+                            }
+                        }
+                    }
                 }
             }
             C::DrawIndirect {
                 topology,
                 indirect_buf,
                 indirect_offset,
+                ref first_instance_location,
             } => {
+                unsafe { gl.uniform_1_u32(first_instance_location.as_ref(), 0) };
+
                 unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
                 unsafe { gl.draw_arrays_indirect_offset(topology, indirect_offset as i32) };
             }
@@ -223,7 +282,10 @@ impl super::Queue {
                 index_type,
                 indirect_buf,
                 indirect_offset,
+                ref first_instance_location,
             } => {
+                unsafe { gl.uniform_1_u32(first_instance_location.as_ref(), 0) };
+
                 unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
                 unsafe {
                     gl.draw_elements_indirect_offset(topology, index_type, indirect_offset as i32)
@@ -361,13 +423,16 @@ impl super::Queue {
                 unsafe { gl.bind_buffer(copy_src_target, None) };
                 if is_index_buffer_only_element_dst {
                     unsafe {
-                        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, self.current_index_buffer)
+                        gl.bind_buffer(
+                            glow::ELEMENT_ARRAY_BUFFER,
+                            *self.current_index_buffer.lock(),
+                        )
                     };
                 } else {
                     unsafe { gl.bind_buffer(copy_dst_target, None) };
                 }
             }
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             C::CopyExternalImageToTexture {
                 ref src,
                 dst,
@@ -393,12 +458,7 @@ impl super::Queue {
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 if is_layered_target(dst_target) {
-                    let z_offset =
-                        if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY = dst_target {
-                            copy.dst_base.array_layer as i32
-                        } else {
-                            copy.dst_base.origin.z as i32
-                        };
+                    let z_offset = get_z_offset(dst_target, &copy.dst_base);
 
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
@@ -407,7 +467,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -422,7 +482,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -437,7 +497,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -449,11 +509,7 @@ impl super::Queue {
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }
                 } else {
-                    let dst_target = if let glow::TEXTURE_CUBE_MAP = dst_target {
-                        CUBEMAP_FACES[copy.dst_base.array_layer as usize]
-                    } else {
-                        dst_target
-                    };
+                    let dst_target = get_2d_target(dst_target, copy.dst_base.array_layer);
 
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
@@ -513,7 +569,6 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
-                dst_is_cubemap,
                 ref copy,
             } => {
                 //TODO: handle 3D copies
@@ -542,33 +597,14 @@ impl super::Queue {
                 }
 
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
-                if dst_is_cubemap {
-                    unsafe {
-                        gl.copy_tex_sub_image_2d(
-                            CUBEMAP_FACES[copy.dst_base.array_layer as usize],
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        )
-                    };
-                } else if is_layered_target(dst_target) {
+                if is_layered_target(dst_target) {
                     unsafe {
                         gl.copy_tex_sub_image_3d(
                             dst_target,
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                dst_target
-                            {
-                                copy.dst_base.array_layer as i32
-                            } else {
-                                copy.dst_base.origin.z as i32
-                            },
+                            get_z_offset(dst_target, &copy.dst_base) as i32,
                             copy.src_base.origin.x as i32,
                             copy.src_base.origin.y as i32,
                             copy.size.width as i32,
@@ -578,7 +614,7 @@ impl super::Queue {
                 } else {
                     unsafe {
                         gl.copy_tex_sub_image_2d(
-                            dst_target,
+                            get_2d_target(dst_target, copy.dst_base.array_layer),
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
@@ -599,7 +635,7 @@ impl super::Queue {
                 ref copy,
             } => {
                 let (block_width, block_height) = dst_format.block_dimensions();
-                let block_size = dst_format.block_size(None).unwrap();
+                let block_size = dst_format.block_copy_size(None).unwrap();
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 let row_texels = copy
                     .buffer_layout
@@ -636,13 +672,7 @@ impl super::Queue {
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
-                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                    dst_target
-                                {
-                                    copy.texture_base.array_layer as i32
-                                } else {
-                                    copy.texture_base.origin.z as i32
-                                },
+                                get_z_offset(dst_target, &copy.texture_base) as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -654,11 +684,7 @@ impl super::Queue {
                     } else {
                         unsafe {
                             gl.tex_sub_image_2d(
-                                if let glow::TEXTURE_CUBE_MAP = dst_target {
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
-                                } else {
-                                    dst_target
-                                },
+                                get_2d_target(dst_target, copy.texture_base.array_layer),
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
@@ -712,13 +738,7 @@ impl super::Queue {
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
-                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                    dst_target
-                                {
-                                    copy.texture_base.array_layer as i32
-                                } else {
-                                    copy.texture_base.origin.z as i32
-                                },
+                                get_z_offset(dst_target, &copy.texture_base) as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -729,11 +749,7 @@ impl super::Queue {
                     } else {
                         unsafe {
                             gl.compressed_tex_sub_image_2d(
-                                if let glow::TEXTURE_CUBE_MAP = dst_target {
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
-                                } else {
-                                    dst_target
-                                },
+                                get_2d_target(dst_target, copy.texture_base.array_layer),
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
@@ -757,7 +773,7 @@ impl super::Queue {
                 dst_target: _,
                 ref copy,
             } => {
-                let block_size = src_format.block_size(None).unwrap();
+                let block_size = src_format.block_copy_size(None).unwrap();
                 if src_format.is_compressed() {
                     log::error!("Not implemented yet: compressed texture copy to buffer");
                     return;
@@ -854,7 +870,8 @@ impl super::Queue {
             }
             C::SetIndexBuffer(buffer) => {
                 unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer)) };
-                self.current_index_buffer = Some(buffer);
+                let mut current_index_buffer = self.current_index_buffer.lock();
+                *current_index_buffer = Some(buffer);
             }
             C::BeginQuery(query, target) => {
                 unsafe { gl.begin_query(target, query) };
@@ -862,34 +879,107 @@ impl super::Queue {
             C::EndQuery(target) => {
                 unsafe { gl.end_query(target) };
             }
+            C::TimestampQuery(query) => {
+                unsafe { gl.query_counter(query, glow::TIMESTAMP) };
+            }
             C::CopyQueryResults {
                 ref query_range,
                 ref dst,
                 dst_target,
                 dst_offset,
             } => {
-                self.temp_query_results.clear();
-                for &query in queries[query_range.start as usize..query_range.end as usize].iter() {
-                    let result = unsafe { gl.get_query_parameter_u32(query, glow::QUERY_RESULT) };
-                    self.temp_query_results.push(result as u64);
-                }
-                let query_data = unsafe {
-                    slice::from_raw_parts(
-                        self.temp_query_results.as_ptr() as *const u8,
-                        self.temp_query_results.len() * mem::size_of::<u64>(),
-                    )
-                };
-                match dst.raw {
-                    Some(buffer) => {
-                        unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
-                        unsafe {
-                            gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data)
-                        };
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::QUERY_BUFFERS)
+                    && dst.raw.is_some()
+                {
+                    unsafe {
+                        // We're assuming that the only relevant queries are 8 byte timestamps or
+                        // occlusion tests.
+                        let query_size = 8;
+
+                        let query_range_size = query_size * query_range.len();
+
+                        let buffer = gl.create_buffer().ok();
+                        gl.bind_buffer(glow::QUERY_BUFFER, buffer);
+                        gl.buffer_data_size(
+                            glow::QUERY_BUFFER,
+                            query_range_size as _,
+                            glow::STREAM_COPY,
+                        );
+
+                        for (i, &query) in queries
+                            [query_range.start as usize..query_range.end as usize]
+                            .iter()
+                            .enumerate()
+                        {
+                            gl.get_query_parameter_u64_with_offset(
+                                query,
+                                glow::QUERY_RESULT,
+                                query_size * i,
+                            )
+                        }
+                        gl.bind_buffer(dst_target, dst.raw);
+                        gl.copy_buffer_sub_data(
+                            glow::QUERY_BUFFER,
+                            dst_target,
+                            0,
+                            dst_offset as _,
+                            query_range_size as _,
+                        );
+                        if let Some(buffer) = buffer {
+                            gl.delete_buffer(buffer)
+                        }
                     }
-                    None => {
-                        let data = &mut dst.data.as_ref().unwrap().lock().unwrap();
-                        let len = query_data.len().min(data.len());
-                        data[..len].copy_from_slice(&query_data[..len]);
+                } else {
+                    let mut temp_query_results = self.temp_query_results.lock();
+                    temp_query_results.clear();
+                    for &query in
+                        queries[query_range.start as usize..query_range.end as usize].iter()
+                    {
+                        let mut result: u64 = 0;
+                        unsafe {
+                            if self
+                                .shared
+                                .private_caps
+                                .contains(PrivateCapabilities::QUERY_64BIT)
+                            {
+                                let result: *mut u64 = &mut result;
+                                gl.get_query_parameter_u64_with_offset(
+                                    query,
+                                    glow::QUERY_RESULT,
+                                    result as usize,
+                                )
+                            } else {
+                                result =
+                                    gl.get_query_parameter_u32(query, glow::QUERY_RESULT) as u64;
+                            }
+                        };
+                        temp_query_results.push(result);
+                    }
+                    let query_data = unsafe {
+                        slice::from_raw_parts(
+                            temp_query_results.as_ptr() as *const u8,
+                            temp_query_results.len() * mem::size_of::<u64>(),
+                        )
+                    };
+                    match dst.raw {
+                        Some(buffer) => {
+                            unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
+                            unsafe {
+                                gl.buffer_sub_data_u8_slice(
+                                    dst_target,
+                                    dst_offset as i32,
+                                    query_data,
+                                )
+                            };
+                        }
+                        None => {
+                            let data = &mut dst.data.as_ref().unwrap().lock().unwrap();
+                            let len = query_data.len().min(data.len());
+                            data[..len].copy_from_slice(&query_data[..len]);
+                        }
                     }
                 }
             }
@@ -962,24 +1052,20 @@ impl super::Queue {
                 unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
             }
             C::InvalidateAttachments(ref list) => {
-                unsafe { gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list) };
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::INVALIDATE_FRAMEBUFFER)
+                {
+                    unsafe { gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list) };
+                }
             }
             C::SetDrawColorBuffers(count) => {
-                self.draw_buffer_count = count;
+                self.draw_buffer_count.store(count, Ordering::Relaxed);
                 let indices = (0..count as u32)
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
                 unsafe { gl.draw_buffers(&indices) };
-
-                if self
-                    .shared
-                    .private_caps
-                    .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
-                {
-                    for draw_buffer in 0..count as u32 {
-                        unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
-                    }
-                }
             }
             C::ClearColorF {
                 draw_buffer,
@@ -994,7 +1080,13 @@ impl super::Queue {
                 {
                     unsafe { self.perform_shader_clear(gl, draw_buffer, *color) };
                 } else {
-                    unsafe { gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color) };
+                    // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
+                    // on Windows.
+                    unsafe {
+                        gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
+                        gl.clear_color(color[0], color[1], color[2], color[3]);
+                        gl.clear(glow::COLOR_BUFFER_BIT);
+                    }
                 }
             }
             C::ClearColorU(draw_buffer, ref color) => {
@@ -1004,20 +1096,29 @@ impl super::Queue {
                 unsafe { gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, color) };
             }
             C::ClearDepth(depth) => {
-                unsafe { gl.clear_buffer_f32_slice(glow::DEPTH, 0, &[depth]) };
+                // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
+                // on Windows.
+                unsafe {
+                    gl.clear_depth_f32(depth);
+                    gl.clear(glow::DEPTH_BUFFER_BIT);
+                }
             }
             C::ClearStencil(value) => {
-                unsafe { gl.clear_buffer_i32_slice(glow::STENCIL, 0, &[value as i32]) };
+                // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
+                // on Windows.
+                unsafe {
+                    gl.clear_stencil(value as i32);
+                    gl.clear(glow::STENCIL_BUFFER_BIT);
+                }
             }
             C::ClearDepthAndStencil(depth, stencil_value) => {
+                // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
+                // on Windows.
                 unsafe {
-                    gl.clear_buffer_depth_stencil(
-                        glow::DEPTH_STENCIL,
-                        0,
-                        depth,
-                        stencil_value as i32,
-                    )
-                };
+                    gl.clear_depth_f32(depth);
+                    gl.clear_stencil(stencil_value as i32);
+                    gl.clear(glow::DEPTH_BUFFER_BIT | glow::STENCIL_BUFFER_BIT);
+                }
             }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
@@ -1229,6 +1330,10 @@ impl super::Queue {
                         unsafe { gl.disable(glow::DEPTH_CLAMP) };
                     }
                 }
+                // POLYGON_MODE_LINE also implies POLYGON_MODE_POINT
+                if self.features.contains(wgt::Features::POLYGON_MODE_LINE) {
+                    unsafe { gl.polygon_mode(glow::FRONT_AND_BACK, state.polygon_mode) };
+                }
             }
             C::SetBlendConstant(c) => {
                 unsafe { gl.blend_color(c[0], c[1], c[2], c[3]) };
@@ -1249,7 +1354,7 @@ impl super::Queue {
                         )
                     };
                     if let Some(ref blend) = *blend {
-                        unsafe { gl.enable_draw_buffer(index, glow::BLEND) };
+                        unsafe { gl.enable_draw_buffer(glow::BLEND, index) };
                         if blend.color != blend.alpha {
                             unsafe {
                                 gl.blend_equation_separate_draw_buffer(
@@ -1273,12 +1378,8 @@ impl super::Queue {
                                 gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst)
                             };
                         }
-                    } else if self
-                        .shared
-                        .private_caps
-                        .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
-                    {
-                        unsafe { gl.disable_draw_buffer(index, glow::BLEND) };
+                    } else {
+                        unsafe { gl.disable_draw_buffer(glow::BLEND, index) };
                     }
                 } else {
                     unsafe {
@@ -1332,9 +1433,21 @@ impl super::Queue {
                 texture,
                 target,
                 aspects,
+                ref mip_levels,
             } => {
                 unsafe { gl.active_texture(glow::TEXTURE0 + slot) };
                 unsafe { gl.bind_texture(target, Some(texture)) };
+
+                unsafe {
+                    gl.tex_parameter_i32(target, glow::TEXTURE_BASE_LEVEL, mip_levels.start as i32)
+                };
+                unsafe {
+                    gl.tex_parameter_i32(
+                        target,
+                        glow::TEXTURE_MAX_LEVEL,
+                        (mip_levels.end - 1) as i32,
+                    )
+                };
 
                 let version = gl.version();
                 let is_min_es_3_1 = version.is_embedded && (version.major, version.minor) >= (3, 1);
@@ -1369,98 +1482,262 @@ impl super::Queue {
                     )
                 };
             }
-            #[cfg(not(target_arch = "wasm32"))]
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
                 unsafe {
-                    gl.debug_message_insert(
-                        glow::DEBUG_SOURCE_APPLICATION,
-                        glow::DEBUG_TYPE_MARKER,
-                        DEBUG_ID,
-                        glow::DEBUG_SEVERITY_NOTIFICATION,
-                        marker,
-                    )
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
+                    {
+                        gl.debug_message_insert(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            glow::DEBUG_TYPE_MARKER,
+                            DEBUG_ID,
+                            glow::DEBUG_SEVERITY_NOTIFICATION,
+                            marker,
+                        )
+                    }
                 };
             }
-            #[cfg(target_arch = "wasm32")]
-            C::InsertDebugMarker(_) => (),
-            #[cfg_attr(target_arch = "wasm32", allow(unused))]
             C::PushDebugGroup(ref range) => {
-                #[cfg(not(target_arch = "wasm32"))]
                 let marker = extract_marker(data_bytes, range);
-                #[cfg(not(target_arch = "wasm32"))]
                 unsafe {
-                    gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
+                    {
+                        gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                    }
                 };
             }
             C::PopDebugGroup => {
-                #[cfg(not(target_arch = "wasm32"))]
                 unsafe {
-                    gl.pop_debug_group()
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
+                    {
+                        gl.pop_debug_group()
+                    }
                 };
             }
             C::SetPushConstants {
                 ref uniform,
                 offset,
             } => {
-                fn get_data<T>(data: &[u8], offset: u32) -> &[T] {
-                    let raw = &data[(offset as usize)..];
-                    unsafe {
-                        slice::from_raw_parts(
-                            raw.as_ptr() as *const _,
-                            raw.len() / mem::size_of::<T>(),
-                        )
-                    }
+                // T must be POD
+                //
+                // This function is absolutely sketchy and we really should be using bytemuck.
+                unsafe fn get_data<T, const COUNT: usize>(data: &[u8], offset: u32) -> &[T; COUNT] {
+                    let data_required = mem::size_of::<T>() * COUNT;
+
+                    let raw = &data[(offset as usize)..][..data_required];
+
+                    debug_assert_eq!(data_required, raw.len());
+
+                    let slice: &[T] =
+                        unsafe { slice::from_raw_parts(raw.as_ptr() as *const _, COUNT) };
+
+                    slice.try_into().unwrap()
                 }
 
-                let location = uniform.location.as_ref();
+                let location = Some(&uniform.location);
 
-                match uniform.utype {
-                    glow::FLOAT => {
-                        let data = get_data::<f32>(data_bytes, offset)[0];
+                match uniform.ty {
+                    //
+                    // --- Float 1-4 Component ---
+                    //
+                    naga::TypeInner::Scalar(naga::Scalar::F32) => {
+                        let data = unsafe { get_data::<f32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_f32(location, data) };
                     }
-                    glow::FLOAT_VEC2 => {
-                        let data = get_data::<[f32; 2]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_2_f32_slice(location, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Bi,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 2>(data_bytes, offset) };
+                        unsafe { gl.uniform_2_f32_slice(location, data) };
                     }
-                    glow::FLOAT_VEC3 => {
-                        let data = get_data::<[f32; 3]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_3_f32_slice(location, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Tri,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 3>(data_bytes, offset) };
+                        unsafe { gl.uniform_3_f32_slice(location, data) };
                     }
-                    glow::FLOAT_VEC4 => {
-                        let data = get_data::<[f32; 4]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_4_f32_slice(location, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Quad,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
+                        unsafe { gl.uniform_4_f32_slice(location, data) };
                     }
-                    glow::INT => {
-                        let data = get_data::<i32>(data_bytes, offset)[0];
+
+                    //
+                    // --- Int 1-4 Component ---
+                    //
+                    naga::TypeInner::Scalar(naga::Scalar::I32) => {
+                        let data = unsafe { get_data::<i32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_i32(location, data) };
                     }
-                    glow::INT_VEC2 => {
-                        let data = get_data::<[i32; 2]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_2_i32_slice(location, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Bi,
+                        scalar: naga::Scalar::I32,
+                    } => {
+                        let data = unsafe { get_data::<i32, 2>(data_bytes, offset) };
+                        unsafe { gl.uniform_2_i32_slice(location, data) };
                     }
-                    glow::INT_VEC3 => {
-                        let data = get_data::<[i32; 3]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_3_i32_slice(location, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Tri,
+                        scalar: naga::Scalar::I32,
+                    } => {
+                        let data = unsafe { get_data::<i32, 3>(data_bytes, offset) };
+                        unsafe { gl.uniform_3_i32_slice(location, data) };
                     }
-                    glow::INT_VEC4 => {
-                        let data = get_data::<[i32; 4]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_4_i32_slice(location, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Quad,
+                        scalar: naga::Scalar::I32,
+                    } => {
+                        let data = unsafe { get_data::<i32, 4>(data_bytes, offset) };
+                        unsafe { gl.uniform_4_i32_slice(location, data) };
                     }
-                    glow::FLOAT_MAT2 => {
-                        let data = get_data::<[f32; 4]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_matrix_2_f32_slice(location, false, &data) };
+
+                    //
+                    // --- Uint 1-4 Component ---
+                    //
+                    naga::TypeInner::Scalar(naga::Scalar::U32) => {
+                        let data = unsafe { get_data::<u32, 1>(data_bytes, offset)[0] };
+                        unsafe { gl.uniform_1_u32(location, data) };
                     }
-                    glow::FLOAT_MAT3 => {
-                        let data = get_data::<[f32; 9]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_matrix_3_f32_slice(location, false, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Bi,
+                        scalar: naga::Scalar::U32,
+                    } => {
+                        let data = unsafe { get_data::<u32, 2>(data_bytes, offset) };
+                        unsafe { gl.uniform_2_u32_slice(location, data) };
                     }
-                    glow::FLOAT_MAT4 => {
-                        let data = get_data::<[f32; 16]>(data_bytes, offset)[0];
-                        unsafe { gl.uniform_matrix_4_f32_slice(location, false, &data) };
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Tri,
+                        scalar: naga::Scalar::U32,
+                    } => {
+                        let data = unsafe { get_data::<u32, 3>(data_bytes, offset) };
+                        unsafe { gl.uniform_3_u32_slice(location, data) };
                     }
-                    _ => panic!("Unsupported uniform datatype!"),
+                    naga::TypeInner::Vector {
+                        size: naga::VectorSize::Quad,
+                        scalar: naga::Scalar::U32,
+                    } => {
+                        let data = unsafe { get_data::<u32, 4>(data_bytes, offset) };
+                        unsafe { gl.uniform_4_u32_slice(location, data) };
+                    }
+
+                    //
+                    // --- Matrix 2xR ---
+                    //
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Bi,
+                        rows: naga::VectorSize::Bi,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
+                        unsafe { gl.uniform_matrix_2_f32_slice(location, false, data) };
+                    }
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Bi,
+                        rows: naga::VectorSize::Tri,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        // repack 2 vec3s into 6 values.
+                        let unpacked_data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
+                        #[rustfmt::skip]
+                        let packed_data = [
+                            unpacked_data[0], unpacked_data[1], unpacked_data[2],
+                            unpacked_data[4], unpacked_data[5], unpacked_data[6],
+                        ];
+                        unsafe { gl.uniform_matrix_2x3_f32_slice(location, false, &packed_data) };
+                    }
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Bi,
+                        rows: naga::VectorSize::Quad,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
+                        unsafe { gl.uniform_matrix_2x4_f32_slice(location, false, data) };
+                    }
+
+                    //
+                    // --- Matrix 3xR ---
+                    //
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Tri,
+                        rows: naga::VectorSize::Bi,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 6>(data_bytes, offset) };
+                        unsafe { gl.uniform_matrix_3x2_f32_slice(location, false, data) };
+                    }
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Tri,
+                        rows: naga::VectorSize::Tri,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        // repack 3 vec3s into 9 values.
+                        let unpacked_data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
+                        #[rustfmt::skip]
+                        let packed_data = [
+                            unpacked_data[0], unpacked_data[1], unpacked_data[2],
+                            unpacked_data[4], unpacked_data[5], unpacked_data[6],
+                            unpacked_data[8], unpacked_data[9], unpacked_data[10],
+                        ];
+                        unsafe { gl.uniform_matrix_3_f32_slice(location, false, &packed_data) };
+                    }
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Tri,
+                        rows: naga::VectorSize::Quad,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
+                        unsafe { gl.uniform_matrix_3x4_f32_slice(location, false, data) };
+                    }
+
+                    //
+                    // --- Matrix 4xR ---
+                    //
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Quad,
+                        rows: naga::VectorSize::Bi,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
+                        unsafe { gl.uniform_matrix_4x2_f32_slice(location, false, data) };
+                    }
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Quad,
+                        rows: naga::VectorSize::Tri,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        // repack 4 vec3s into 12 values.
+                        let unpacked_data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
+                        #[rustfmt::skip]
+                        let packed_data = [
+                            unpacked_data[0], unpacked_data[1], unpacked_data[2],
+                            unpacked_data[4], unpacked_data[5], unpacked_data[6],
+                            unpacked_data[8], unpacked_data[9], unpacked_data[10],
+                            unpacked_data[12], unpacked_data[13], unpacked_data[14],
+                        ];
+                        unsafe { gl.uniform_matrix_4x3_f32_slice(location, false, &packed_data) };
+                    }
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Quad,
+                        rows: naga::VectorSize::Quad,
+                        scalar: naga::Scalar::F32,
+                    } => {
+                        let data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
+                        unsafe { gl.uniform_matrix_4_f32_slice(location, false, data) };
+                    }
+                    _ => panic!("Unsupported uniform datatype: {:?}!", uniform.ty),
                 }
             }
         }
@@ -1469,7 +1746,7 @@ impl super::Queue {
 
 impl crate::Queue<super::Api> for super::Queue {
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&super::CommandBuffer],
         signal_fence: Option<(&mut super::Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
@@ -1481,17 +1758,26 @@ impl crate::Queue<super::Api> for super::Queue {
             // this at the beginning of the loop in case something outside of wgpu modified
             // this state prior to commit.
             unsafe { self.reset_state(gl) };
-            #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref label) = cmd_buf.label {
-                unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+                {
+                    unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
+                }
             }
 
             for command in cmd_buf.commands.iter() {
                 unsafe { self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries) };
             }
 
-            #[cfg(not(target_arch = "wasm32"))]
-            if cmd_buf.label.is_some() {
+            if cmd_buf.label.is_some()
+                && self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+            {
                 unsafe { gl.pop_debug_group() };
             }
         }
@@ -1507,17 +1793,11 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 
     unsafe fn present(
-        &mut self,
-        surface: &mut super::Surface,
+        &self,
+        surface: &super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
-        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
-        let gl = unsafe { &self.shared.context.get_without_egl_lock() };
-
-        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-        let gl = &self.shared.context.glow_context;
-
-        unsafe { surface.present(texture, gl) }
+        unsafe { surface.present(texture, &self.shared.context) }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
@@ -1525,15 +1805,7 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 }
 
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for super::Queue {}
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for super::Queue {}

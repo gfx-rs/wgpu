@@ -1,13 +1,19 @@
 [package]
 name = "wgpu-core"
-version = "0.17.0"
-authors = ["wgpu developers"]
+version = "0.18.0"
+authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
+
+# Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
+# copy the crates it actually uses out of the workspace, so it's meaningful for
+# them to have less restrictive MSRVs individually than the workspace as a
+# whole, if their code permits. See `../README.md` for details.
+rust-version = "1.70"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -24,68 +30,104 @@ targets = [
 [features]
 default = ["link"]
 
-# Backends, passed through to wgpu-hal
-metal = ["hal/metal"]
-vulkan = ["hal/vulkan"]
-gles = ["hal/gles"]
-dx11 = ["hal/dx11"]
-dx12 = ["hal/dx12"]
+## Log all API entry points at info instead of trace level.
+api_log_info = []
 
-# Use static linking for libraries. Disale to manually link. Enabled by default.
+## Log resource lifecycle management at info instead of trace level.
+resource_log_info = []
+
+## Use static linking for libraries. Disale to manually link. Enabled by default.
 link = ["hal/link"]
 
-# Support the Renderdoc graphics debugger:
-# https://renderdoc.org/
+## Support the Renderdoc graphics debugger:
+## <https://renderdoc.org/>
 renderdoc = ["hal/renderdoc"]
 
-# Apply run-time checks, even in release builds. These are in addition
-# to the validation carried out at public APIs in all builds.
+## Apply run-time checks, even in release builds. These are in addition
+## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
-angle = ["hal/gles"]
-# Enable API tracing
+
+## Enable API tracing.
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
-# Enable API replaying
+
+## Enable API replaying
 replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
-# Enable serializable compute/render passes, and bundle encoders.
+
+## Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
-id32 = []
-# Enable `ShaderModuleSource::Wgsl`
+
+## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
-# Implement `Send` and `Sync` on Wasm.
-fragile-send-sync-non-atomic-wasm = ["hal/fragile-send-sync-non-atomic-wasm", "wgt/fragile-send-sync-non-atomic-wasm"]
+
+## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
+##
+## WebGL/WebGPU objects can not be shared between threads.
+## However, it can be useful to artificially mark them as `Send` and `Sync`
+## anyways to make it easier to write cross-platform code.
+## This is technically *very* unsafe in a multithreaded environment,
+## but on a wasm binary compiled without atomics we know we are definitely
+## not in a multithreaded environment.
+fragile-send-sync-non-atomic-wasm = [
+    "hal/fragile-send-sync-non-atomic-wasm",
+    "wgt/fragile-send-sync-non-atomic-wasm",
+]
+
+#! ### Backends, passed through to wgpu-hal
+# --------------------------------------------------------------------
+
+## Enable the `metal` backend.
+metal = ["hal/metal"]
+
+## Enable the `vulkan` backend.
+vulkan = ["hal/vulkan"]
+
+## Enable the `GLES` backend.
+##
+## This is used for all of GLES, OpenGL, and WebGL.
+gles = ["hal/gles"]
+
+## Enable the `dx12` backend.
+dx12 = ["hal/dx12"]
 
 [dependencies]
 arrayvec = "0.7"
-bitflags = "2"
 bit-vec = "0.6"
+bitflags = "2"
 codespan-reporting = "0.11"
-rustc-hash = "1.1"
+indexmap = "2"
 log = "0.4"
+once_cell = "1"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
-raw-window-handle = { version = "0.5", optional = true }
+raw-window-handle = { version = "0.6", optional = true }
 ron = { version = "0.8", optional = true }
+rustc-hash = "1.1"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "7a19f3af909202c7eafd36633b5584bfbb353ecb"
-version = "0.13.0"
-features = ["clone", "span", "validate"]
+path = "../naga"
+version = "0.14.0"
+features = ["clone"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.17"
+version = "0.18.0"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.17"
+version = "0.18.0"
 default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.64", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
+web-sys = { version = "0.3.66", features = [
+    "HtmlCanvasElement",
+    "OffscreenCanvas",
+] }
+
+[build-dependencies]
+cfg_aliases.workspace = true

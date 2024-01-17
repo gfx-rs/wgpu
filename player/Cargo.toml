@@ -10,9 +10,15 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
-[features]
-angle = ["wgc/angle"]
-vulkan-portability = ["wgc/vulkan"]
+[lib]
+name = "player"
+path = "src/lib.rs"
+test = false
+
+[[bin]]
+name = "play"
+path = "src/bin/play.rs"
+test = false
 
 [dependencies]
 env_logger.workspace = true
@@ -27,7 +33,7 @@ features = ["replay"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 workspace = true
-features = ["replay", "raw-window-handle", "strict_asserts", "wgsl", "metal", "dx11", "dx12", "vulkan", "gles"]
+features = ["replay", "raw-window-handle", "strict_asserts", "wgsl", "metal", "dx12", "vulkan", "gles"]
 
 [dev-dependencies]
 serde.workspace = true

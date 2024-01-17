@@ -1,8 +1,17 @@
-use crate::auxil::{self, dxgi::result::HResult as _};
+use crate::{
+    auxil::{self, dxgi::result::HResult as _},
+    dx12::shader_compilation,
+};
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, sync::Arc};
+use std::{
+    ffi, mem,
+    num::NonZeroU32,
+    ptr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
     um::{d3d12 as d3d12_ty, synchapi, winbase},
@@ -19,20 +28,12 @@ impl super::Device {
         limits: &wgt::Limits,
         private_caps: super::PrivateCapabilities,
         library: &Arc<d3d12::D3D12Lib>,
-        dx12_shader_compiler: wgt::Dx12Compiler,
+        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = if private_caps.suballocation_supported {
             super::suballocation::create_allocator_wrapper(&raw)?
         } else {
             None
-        };
-
-        let dxc_container = match dx12_shader_compiler {
-            wgt::Dx12Compiler::Dxc {
-                dxil_path,
-                dxc_path,
-            } => super::shader_compilation::get_dxc_container(dxc_path, dxil_path)?,
-            wgt::Dx12Compiler::Fxc => None,
         };
 
         let mut idle_fence = d3d12::Fence::null();
@@ -181,14 +182,17 @@ impl super::Device {
         })
     }
 
-    pub(super) unsafe fn wait_idle(&self) -> Result<(), crate::DeviceError> {
+    // Blocks until the dedicated present queue is finished with all of its work.
+    //
+    // Once this method completes, the surface is able to be resized or deleted.
+    pub(super) unsafe fn wait_for_present_queue_idle(&self) -> Result<(), crate::DeviceError> {
         let cur_value = self.idler.fence.get_value();
         if cur_value == !0 {
             return Err(crate::DeviceError::Lost);
         }
 
         let value = cur_value + 1;
-        log::info!("Waiting for idle with value {}", value);
+        log::debug!("Waiting for idle with value {}", value);
         self.present_queue.signal(&self.idler.fence, value);
         let hr = self
             .idler
@@ -986,7 +990,7 @@ impl crate::Device<super::Api> for super::Device {
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
 
         let (special_constants_root_index, special_constants_binding) = if desc.flags.intersects(
-            crate::PipelineLayoutFlags::BASE_VERTEX_INSTANCE
+            crate::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE
                 | crate::PipelineLayoutFlags::NUM_WORK_GROUPS,
         ) {
             let parameter_index = parameters.len();
@@ -994,7 +998,7 @@ impl crate::Device<super::Api> for super::Device {
             parameters.push(d3d12::RootParameter::constants(
                 d3d12::ShaderVisibility::All, // really needed for VS and CS only
                 native_binding(&bind_cbv),
-                3, // 0 = base vertex, 1 = base instance, 2 = other
+                3, // 0 = first_vertex, 1 = first_instance, 2 = other
             ));
             let binding = bind_cbv.clone();
             bind_cbv.register += 1;
@@ -1516,7 +1520,7 @@ impl crate::Device<super::Api> for super::Device {
         let hr = unsafe {
             self.raw.CreateFence(
                 0,
-                d3d12_ty::D3D12_FENCE_FLAG_NONE,
+                d3d12_ty::D3D12_FENCE_FLAG_SHARED,
                 &d3d12_ty::ID3D12Fence::uuidof(),
                 raw.mut_void(),
             )
@@ -1537,19 +1541,80 @@ impl crate::Device<super::Api> for super::Device {
         value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if unsafe { fence.raw.GetCompletedValue() } >= value {
+        let timeout_duration = Duration::from_millis(timeout_ms as u64);
+
+        // We first check if the fence has already reached the value we're waiting for.
+        let mut fence_value = unsafe { fence.raw.GetCompletedValue() };
+        if fence_value >= value {
             return Ok(true);
         }
-        let hr = fence.raw.set_event_on_completion(self.idler.event, value);
-        hr.into_device_result("Set event")?;
 
-        match unsafe { synchapi::WaitForSingleObject(self.idler.event.0, timeout_ms) } {
-            winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::DeviceError::Lost),
-            winbase::WAIT_OBJECT_0 => Ok(true),
-            winerror::WAIT_TIMEOUT => Ok(false),
-            other => {
-                log::error!("Unexpected wait status: 0x{:x}", other);
-                Err(crate::DeviceError::Lost)
+        fence
+            .raw
+            .set_event_on_completion(self.idler.event, value)
+            .into_device_result("Set event")?;
+
+        let start_time = Instant::now();
+
+        // We need to loop to get correct behavior when timeouts are involved.
+        //
+        // wait(0):
+        //   - We set the event from the fence value 0.
+        //   - WaitForSingleObject times out, we return false.
+        //
+        // wait(1):
+        //   - We set the event from the fence value 1.
+        //   - WaitForSingleObject returns. However we do not know if the fence value is 0 or 1,
+        //     just that _something_ triggered the event. We check the fence value, and if it is
+        //     1, we return true. Otherwise, we loop and wait again.
+        loop {
+            let elapsed = start_time.elapsed();
+
+            // We need to explicitly use checked_sub. Overflow with duration panics, and if the
+            // timing works out just right, we can get a negative remaining wait duration.
+            //
+            // This happens when a previous iteration WaitForSingleObject succeeded with a previous fence value,
+            // right before the timeout would have been hit.
+            let remaining_wait_duration = match timeout_duration.checked_sub(elapsed) {
+                Some(remaining) => remaining,
+                None => {
+                    log::trace!("Timeout elapsed inbetween waits!");
+                    break Ok(false);
+                }
+            };
+
+            log::trace!(
+                "Waiting for fence value {} for {:?}",
+                value,
+                remaining_wait_duration
+            );
+
+            match unsafe {
+                synchapi::WaitForSingleObject(
+                    self.idler.event.0,
+                    remaining_wait_duration.as_millis().try_into().unwrap(),
+                )
+            } {
+                winbase::WAIT_OBJECT_0 => {}
+                winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => {
+                    log::error!("Wait failed!");
+                    break Err(crate::DeviceError::Lost);
+                }
+                winerror::WAIT_TIMEOUT => {
+                    log::trace!("Wait timed out!");
+                    break Ok(false);
+                }
+                other => {
+                    log::error!("Unexpected wait status: 0x{:x}", other);
+                    break Err(crate::DeviceError::Lost);
+                }
+            };
+
+            fence_value = unsafe { fence.raw.GetCompletedValue() };
+            log::trace!("Wait complete! Fence actual value: {}", fence_value);
+
+            if fence_value >= value {
+                break Ok(true);
             }
         }
     }

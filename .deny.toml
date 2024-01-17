@@ -1,12 +1,11 @@
 [bans]
 multiple-versions = "deny"
 skip-tree = [
-	{ name = "cts_runner" },
-	{ name = "player" },
-	{ name = "wgpu-info" },
+	{ name = "windows-sys", version = "0.45" },
+	{ name = "winit", version = "0.27.5" },
+	{ name = "rustc_version", version = "0.2.3" },
 ]
 skip = [
-	{ name = "wgpu" }
 ]
 wildcards = "deny"
 
@@ -19,14 +18,19 @@ allow = [
 	"CC0-1.0",
 	"ISC",
 	"MIT",
-	"MPL-2.0",
+	"MIT-0",
 	"Unicode-DFS-2016",
 	"Zlib",
 ]
 
 [sources]
 allow-git = [
+	# Waiting on releases; used in examples only
+	"https://github.com/SiegeEngine/ddsfile",
+	"https://github.com/Razaekel/noise-rs",
+	
 	"https://github.com/grovesNL/glow",
+	"https://github.com/gfx-rs/metal-rs",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"

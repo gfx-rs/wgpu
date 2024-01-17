@@ -1,13 +1,16 @@
+#[cfg(feature = "trace")]
+use crate::device::trace;
 use crate::{
-    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
     command::ColorAttachmentError,
-    device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
-    id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    resource::Resource,
-    validation, Label, LifeGuard, Stored,
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
+    hal_api::HalApi,
+    id::{ComputePipelineId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
+    resource::{Resource, ResourceInfo, ResourceType},
+    resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32};
+use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32, sync::Arc};
 use thiserror::Error;
 
 /// Information about buffer bindings, which
@@ -40,26 +43,49 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub struct ShaderModule<A: hal::Api> {
-    pub(crate) raw: A::ShaderModule,
-    pub(crate) device_id: Stored<DeviceId>,
+pub struct ShaderModule<A: HalApi> {
+    pub(crate) raw: Option<A::ShaderModule>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
-    #[cfg(debug_assertions)]
+    pub(crate) info: ResourceInfo<ShaderModuleId>,
     pub(crate) label: String,
 }
 
-impl<A: hal::Api> Resource for ShaderModule<A> {
-    const TYPE: &'static str = "ShaderModule";
+impl<A: HalApi> Drop for ShaderModule<A> {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw ShaderModule {:?}", self.info.label());
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyShaderModule(self.info.id()));
+            }
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_shader_module(raw);
+            }
+        }
+    }
+}
 
-    fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
+    const TYPE: ResourceType = "ShaderModule";
+
+    fn as_info(&self) -> &ResourceInfo<ShaderModuleId> {
+        &self.info
     }
 
-    fn label(&self) -> &str {
-        #[cfg(debug_assertions)]
-        return &self.label;
-        #[cfg(not(debug_assertions))]
-        return "";
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<ShaderModuleId> {
+        &mut self.info
+    }
+
+    fn label(&self) -> String {
+        self.label.clone()
+    }
+}
+
+impl<A: HalApi> ShaderModule<A> {
+    pub(crate) fn raw(&self) -> &A::ShaderModule {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -212,19 +238,48 @@ pub enum CreateComputePipelineError {
 }
 
 #[derive(Debug)]
-pub struct ComputePipeline<A: hal::Api> {
-    pub(crate) raw: A::ComputePipeline,
-    pub(crate) layout_id: Stored<PipelineLayoutId>,
-    pub(crate) device_id: Stored<DeviceId>,
+pub struct ComputePipeline<A: HalApi> {
+    pub(crate) raw: Option<A::ComputePipeline>,
+    pub(crate) layout: Arc<PipelineLayout<A>>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) _shader_module: Arc<ShaderModule<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) info: ResourceInfo<ComputePipelineId>,
 }
 
-impl<A: hal::Api> Resource for ComputePipeline<A> {
-    const TYPE: &'static str = "ComputePipeline";
+impl<A: HalApi> Drop for ComputePipeline<A> {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw ComputePipeline {:?}", self.info.label());
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyComputePipeline(self.info.id()));
+            }
+
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_compute_pipeline(raw);
+            }
+        }
+    }
+}
+
+impl<A: HalApi> Resource<ComputePipelineId> for ComputePipeline<A> {
+    const TYPE: ResourceType = "ComputePipeline";
+
+    fn as_info(&self) -> &ResourceInfo<ComputePipelineId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<ComputePipelineId> {
+        &mut self.info
+    }
+}
+
+impl<A: HalApi> ComputePipeline<A> {
+    pub(crate) fn raw(&self) -> &A::ComputePipeline {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -299,8 +354,8 @@ pub enum ColorStateError {
     FormatNotBlendable(wgt::TextureFormat),
     #[error("Format {0:?} does not have a color aspect")]
     FormatNotColor(wgt::TextureFormat),
-    #[error("Format {0:?} can't be multisampled")]
-    FormatNotMultisampled(wgt::TextureFormat),
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
         pipeline: validation::NumericType,
@@ -321,8 +376,8 @@ pub enum DepthStencilStateError {
     FormatNotDepth(wgt::TextureFormat),
     #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
     FormatNotStencil(wgt::TextureFormat),
-    #[error("Format {0:?} can't be multisampled")]
-    FormatNotMultisampled(wgt::TextureFormat),
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -384,6 +439,15 @@ pub enum CreateRenderPipelineError {
     },
     #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
     UnalignedShader { group: u32, binding: u32, size: u64 },
+    #[error("Using the blend factor {factor:?} for render target {target} is not possible. Only the first render target may be used when dual-source blending.")]
+    BlendFactorOnUnsupportedTarget {
+        factor: wgt::BlendFactor,
+        target: u32,
+    },
+    #[error("Pipeline expects the shader entry point to make use of dual-source blending.")]
+    PipelineExpectsShaderToUseDualSourceBlending,
+    #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
+    ShaderExpectsPipelineToUseDualSourceBlending,
 }
 
 bitflags::bitflags! {
@@ -417,22 +481,52 @@ impl Default for VertexStep {
 }
 
 #[derive(Debug)]
-pub struct RenderPipeline<A: hal::Api> {
-    pub(crate) raw: A::RenderPipeline,
-    pub(crate) layout_id: Stored<PipelineLayoutId>,
-    pub(crate) device_id: Stored<DeviceId>,
+pub struct RenderPipeline<A: HalApi> {
+    pub(crate) raw: Option<A::RenderPipeline>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) layout: Arc<PipelineLayout<A>>,
+    pub(crate) _shader_modules:
+        ArrayVec<Arc<ShaderModule<A>>, { hal::MAX_CONCURRENT_SHADER_STAGES }>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
     pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) info: ResourceInfo<RenderPipelineId>,
 }
 
-impl<A: hal::Api> Resource for RenderPipeline<A> {
-    const TYPE: &'static str = "RenderPipeline";
+impl<A: HalApi> Drop for RenderPipeline<A> {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw RenderPipeline {:?}", self.info.label());
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyRenderPipeline(self.info.id()));
+            }
+
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_render_pipeline(raw);
+            }
+        }
+    }
+}
+
+impl<A: HalApi> Resource<RenderPipelineId> for RenderPipeline<A> {
+    const TYPE: ResourceType = "RenderPipeline";
+
+    fn as_info(&self) -> &ResourceInfo<RenderPipelineId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<RenderPipelineId> {
+        &mut self.info
+    }
+}
+
+impl<A: HalApi> RenderPipeline<A> {
+    pub(crate) fn raw(&self) -> &A::RenderPipeline {
+        self.raw.as_ref().unwrap()
     }
 }

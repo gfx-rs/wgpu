@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration};
 
-use wasm_bindgen_test::wasm_bindgen_test;
 use wgpu::*;
 
 /// The WebGPU specification has very specific requirements about the ordering of map_async
@@ -13,10 +12,9 @@ use wgpu::*;
 ///
 /// We previously immediately invoked on_submitted_work_done callbacks if there was no active submission
 /// to add them to. This is incorrect, as we do not immediatley invoke map_async callbacks.
-#[wasm_bindgen_test]
-#[test]
-fn queue_submitted_callback_ordering() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .run_async(|ctx| async move {
         // Create a mappable buffer
         let buffer = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("mappable buffer"),
@@ -38,7 +36,7 @@ fn queue_submitted_callback_ordering() {
         // Submit the work.
         ctx.queue.submit(Some(encoder.finish()));
         // Ensure the work is finished.
-        ctx.device.poll(MaintainBase::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         #[derive(Debug)]
         struct OrderingContext {
@@ -76,10 +74,10 @@ fn queue_submitted_callback_ordering() {
         });
 
         // No GPU work is happening at this point, but we want to process callbacks.
-        ctx.device.poll(MaintainBase::Poll);
+        ctx.async_poll(MaintainBase::Poll).await.panic_on_timeout();
 
         // Extract the ordering out of the arc.
-        let ordering = Arc::try_unwrap(ordering).unwrap().into_inner();
+        let ordering = Arc::into_inner(ordering).unwrap().into_inner();
 
         // There were two callbacks invoked
         assert_eq!(ordering.counter, 2);
@@ -87,5 +85,4 @@ fn queue_submitted_callback_ordering() {
         assert_eq!(ordering.value_read_map_async, Some(0));
         // The queue submitted work done callback was invoked second.
         assert_eq!(ordering.value_read_queue_submitted, Some(1));
-    })
-}
+    });

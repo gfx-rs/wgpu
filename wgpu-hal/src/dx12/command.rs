@@ -20,7 +20,7 @@ impl crate::BufferTextureCopy {
         &self,
         format: wgt::TextureFormat,
     ) -> d3d12_ty::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-        let (block_width, block_height) = format.block_dimensions();
+        let (block_width, _) = format.block_dimensions();
         d3d12_ty::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
             Offset: self.buffer_layout.offset,
             Footprint: d3d12_ty::D3D12_SUBRESOURCE_FOOTPRINT {
@@ -30,16 +30,13 @@ impl crate::BufferTextureCopy {
                 )
                 .unwrap(),
                 Width: self.size.width,
-                Height: self
-                    .buffer_layout
-                    .rows_per_image
-                    .map_or(self.size.height, |count| count * block_height),
+                Height: self.size.height,
                 Depth: self.size.depth,
                 RowPitch: {
                     let actual = self.buffer_layout.bytes_per_row.unwrap_or_else(|| {
                         // this may happen for single-line updates
                         let block_size = format
-                            .block_size(Some(self.texture_base.aspect.map()))
+                            .block_copy_size(Some(self.texture_base.aspect.map()))
                             .unwrap();
                         (self.size.width / block_width) * block_size
                     });
@@ -85,7 +82,7 @@ impl super::CommandEncoder {
         self.pass.clear();
     }
 
-    unsafe fn prepare_draw(&mut self, base_vertex: i32, base_instance: u32) {
+    unsafe fn prepare_draw(&mut self, first_vertex: i32, first_instance: u32) {
         while self.pass.dirty_vertex_buffers != 0 {
             let list = self.list.as_ref().unwrap();
             let index = self.pass.dirty_vertex_buffers.trailing_zeros();
@@ -101,18 +98,18 @@ impl super::CommandEncoder {
         if let Some(root_index) = self.pass.layout.special_constants_root_index {
             let needs_update = match self.pass.root_elements[root_index as usize] {
                 super::RootElement::SpecialConstantBuffer {
-                    base_vertex: other_vertex,
-                    base_instance: other_instance,
+                    first_vertex: other_vertex,
+                    first_instance: other_instance,
                     other: _,
-                } => base_vertex != other_vertex || base_instance != other_instance,
+                } => first_vertex != other_vertex || first_instance != other_instance,
                 _ => true,
             };
             if needs_update {
                 self.pass.dirty_root_elements |= 1 << root_index;
                 self.pass.root_elements[root_index as usize] =
                     super::RootElement::SpecialConstantBuffer {
-                        base_vertex,
-                        base_instance,
+                        first_vertex,
+                        first_instance,
                         other: 0,
                     };
             }
@@ -124,18 +121,18 @@ impl super::CommandEncoder {
         if let Some(root_index) = self.pass.layout.special_constants_root_index {
             let needs_update = match self.pass.root_elements[root_index as usize] {
                 super::RootElement::SpecialConstantBuffer {
-                    base_vertex,
-                    base_instance,
+                    first_vertex,
+                    first_instance,
                     other,
-                } => [base_vertex as u32, base_instance, other] != count,
+                } => [first_vertex as u32, first_instance, other] != count,
                 _ => true,
             };
             if needs_update {
                 self.pass.dirty_root_elements |= 1 << root_index;
                 self.pass.root_elements[root_index as usize] =
                     super::RootElement::SpecialConstantBuffer {
-                        base_vertex: count[0] as i32,
-                        base_instance: count[1],
+                        first_vertex: count[0] as i32,
+                        first_instance: count[1],
                         other: count[2],
                     };
             }
@@ -168,17 +165,17 @@ impl super::CommandEncoder {
                     }
                 }
                 super::RootElement::SpecialConstantBuffer {
-                    base_vertex,
-                    base_instance,
+                    first_vertex,
+                    first_instance,
                     other,
                 } => match self.pass.kind {
                     Pk::Render => {
-                        list.set_graphics_root_constant(index, base_vertex as u32, 0);
-                        list.set_graphics_root_constant(index, base_instance, 1);
+                        list.set_graphics_root_constant(index, first_vertex as u32, 0);
+                        list.set_graphics_root_constant(index, first_instance, 1);
                     }
                     Pk::Compute => {
-                        list.set_compute_root_constant(index, base_vertex as u32, 0);
-                        list.set_compute_root_constant(index, base_instance, 1);
+                        list.set_compute_root_constant(index, first_vertex as u32, 0);
+                        list.set_compute_root_constant(index, first_instance, 1);
                         list.set_compute_root_constant(index, other, 2);
                     }
                     Pk::Transfer => (),
@@ -220,8 +217,8 @@ impl super::CommandEncoder {
         if let Some(root_index) = layout.special_constants_root_index {
             self.pass.root_elements[root_index as usize] =
                 super::RootElement::SpecialConstantBuffer {
-                    base_vertex: 0,
-                    base_instance: 0,
+                    first_vertex: 0,
+                    first_instance: 0,
                     other: 0,
                 };
         }
@@ -415,6 +412,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             wgt::TextureAspect::All => 0..2,
                             wgt::TextureAspect::DepthOnly => 0..1,
                             wgt::TextureAspect::StencilOnly => 1..2,
+                            _ => unreachable!(),
+                        }
+                    } else if let Some(planes) = barrier.texture.format.planes() {
+                        match barrier.range.aspect {
+                            wgt::TextureAspect::All => 0..planes,
+                            wgt::TextureAspect::Plane0 => 0..1,
+                            wgt::TextureAspect::Plane1 => 1..2,
+                            wgt::TextureAspect::Plane2 => 2..3,
+                            _ => unreachable!(),
                         }
                     } else {
                         match barrier.texture.format {
@@ -911,15 +917,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         layout: &super::PipelineLayout,
         _stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
+        let offset_words = offset_bytes as usize / 4;
+
         let info = layout.shared.root_constant_info.as_ref().unwrap();
 
         self.pass.root_elements[info.root_index as usize] = super::RootElement::Constant;
 
-        self.pass.constant_data[(offset as usize)..(offset as usize + data.len())]
-            .copy_from_slice(data);
+        self.pass.constant_data[offset_words..(offset_words + data.len())].copy_from_slice(data);
 
         if self.pass.layout.signature == layout.shared.signature {
             self.pass.dirty_root_elements |= 1 << info.root_index;
@@ -1030,34 +1037,34 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
-        unsafe { self.prepare_draw(start_vertex as i32, start_instance) };
+        unsafe { self.prepare_draw(first_vertex as i32, first_instance) };
         self.list.as_ref().unwrap().draw(
             vertex_count,
             instance_count,
-            start_vertex,
-            start_instance,
+            first_vertex,
+            first_instance,
         );
     }
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
-        unsafe { self.prepare_draw(base_vertex, start_instance) };
+        unsafe { self.prepare_draw(base_vertex, first_instance) };
         self.list.as_ref().unwrap().draw_indexed(
             index_count,
             instance_count,
-            start_index,
+            first_index,
             base_vertex,
-            start_instance,
+            first_instance,
         );
     }
     unsafe fn draw_indirect(

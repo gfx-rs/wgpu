@@ -25,26 +25,22 @@ pub enum DrawError {
     MissingVertexBuffer { index: u32 },
     #[error("Index buffer must be set")]
     MissingIndexBuffer,
-    #[error("The pipeline layout, associated with the current render pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
-    IncompatibleBindGroup {
-        index: u32,
-        //expected: BindGroupLayoutId,
-        //provided: Option<(BindGroupLayoutId, BindGroupId)>,
-    },
+    #[error("Incompatible bind group at index {index} in the current render pipeline")]
+    IncompatibleBindGroup { index: u32, diff: Vec<String> },
     #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {
-        last_vertex: u32,
-        vertex_limit: u32,
+        last_vertex: u64,
+        vertex_limit: u64,
         slot: u32,
     },
     #[error("Instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
     InstanceBeyondLimit {
-        last_instance: u32,
-        instance_limit: u32,
+        last_instance: u64,
+        instance_limit: u64,
         slot: u32,
     },
     #[error("Index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
-    IndexBeyondLimit { last_index: u32, index_limit: u32 },
+    IndexBeyondLimit { last_index: u64, index_limit: u64 },
     #[error(
         "Pipeline index format ({pipeline:?}) and buffer index format ({buffer:?}) do not match"
     )]
@@ -67,6 +63,8 @@ pub enum RenderCommandError {
     InvalidRenderBundle(id::RenderBundleId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
+    #[error("Vertex buffer index {index} is greater than the device's requested `max_vertex_buffers` limit {max}")]
+    VertexBufferIndexOutOfRange { index: u32, max: u32 },
     #[error("Dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(u64, &'static str, u32),
     #[error("Number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
@@ -149,7 +147,7 @@ pub struct Rect<T> {
 pub enum RenderCommand {
     SetBindGroup {
         index: u32,
-        num_dynamic_offsets: u8,
+        num_dynamic_offsets: usize,
         bind_group_id: id::BindGroupId,
     },
     SetPipeline(id::RenderPipelineId),

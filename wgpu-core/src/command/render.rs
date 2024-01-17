@@ -1,5 +1,7 @@
+use crate::resource::Resource;
 use crate::{
-    binding_model::{BindError, BindGroupLayouts},
+    api_log,
+    binding_model::BindError,
     command::{
         self,
         bind::Binder,
@@ -10,24 +12,23 @@ use crate::{
         RenderCommand, RenderCommandError, StateChange,
     },
     device::{
-        AttachmentData, Device, MissingDownlevelFlags, MissingFeatures,
+        AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
         RenderPassCompatibilityCheckType, RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    hub::Token,
-    id,
+    hal_label, id,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{Buffer, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
     storage::Storage,
-    track::{TextureSelector, UsageConflict, UsageScope},
+    track::{TextureSelector, Tracker, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
-    Label, Stored,
+    Label,
 };
 
 use arrayvec::ArrayVec;
@@ -43,9 +44,13 @@ use serde::Deserialize;
 #[cfg(any(feature = "serial-pass", feature = "trace"))]
 use serde::Serialize;
 
+use std::sync::Arc;
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
-use super::{memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions};
+use super::{
+    memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
+    QueryResetMap,
+};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -313,10 +318,10 @@ impl OptionalState {
 
 #[derive(Debug, Default)]
 struct IndexState {
-    bound_buffer_view: Option<(id::Valid<id::BufferId>, Range<BufferAddress>)>,
+    bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
     format: Option<IndexFormat>,
     pipeline_format: Option<IndexFormat>,
-    limit: u32,
+    limit: u64,
 }
 
 impl IndexState {
@@ -330,7 +335,8 @@ impl IndexState {
                     IndexFormat::Uint16 => 1,
                     IndexFormat::Uint32 => 2,
                 };
-                ((range.end - range.start) >> shift) as u32
+
+                (range.end - range.start) >> shift
             }
             None => 0,
         }
@@ -364,11 +370,11 @@ impl VertexBufferState {
 struct VertexState {
     inputs: ArrayVec<VertexBufferState, { hal::MAX_VERTEX_BUFFERS }>,
     /// Length of the shortest vertex rate vertex buffer
-    vertex_limit: u32,
+    vertex_limit: u64,
     /// Buffer slot which the shortest vertex rate vertex buffer is bound to
     vertex_limit_slot: u32,
     /// Length of the shortest instance rate vertex buffer
-    instance_limit: u32,
+    instance_limit: u64,
     /// Buffer slot which the shortest instance rate vertex buffer is bound to
     instance_limit_slot: u32,
     /// Total amount of buffers required by the pipeline.
@@ -377,13 +383,16 @@ struct VertexState {
 
 impl VertexState {
     fn update_limits(&mut self) {
-        self.vertex_limit = u32::MAX;
-        self.instance_limit = u32::MAX;
+        // Ensure that the limits are always smaller than u32::MAX so that
+        // interger overlows can be prevented via saturating additions.
+        let max = u32::MAX as u64;
+        self.vertex_limit = max;
+        self.instance_limit = max;
         for (idx, vbs) in self.inputs.iter().enumerate() {
             if vbs.step.stride == 0 || !vbs.bound {
                 continue;
             }
-            let limit = (vbs.total_size / vbs.step.stride) as u32;
+            let limit = vbs.total_size / vbs.step.stride;
             match vbs.step.mode {
                 VertexStepMode::Vertex => {
                     if limit < self.vertex_limit {
@@ -409,9 +418,9 @@ impl VertexState {
 }
 
 #[derive(Debug)]
-struct State {
+struct State<A: HalApi> {
     pipeline_flags: PipelineFlags,
-    binder: Binder,
+    binder: Binder<A>,
     blend_constant: OptionalState,
     stencil_reference: u32,
     pipeline: Option<id::RenderPipelineId>,
@@ -420,12 +429,8 @@ struct State {
     debug_scope_depth: u32,
 }
 
-impl State {
-    fn is_ready<A: hal::Api>(
-        &self,
-        indexed: bool,
-        bind_group_layouts: &BindGroupLayouts<A>,
-    ) -> Result<(), DrawError> {
+impl<A: HalApi> State<A> {
+    fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
         // Determine how many vertex buffers have already been bound
         let vertex_buffer_count = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
         // Compare with the needed quantity
@@ -435,11 +440,12 @@ impl State {
             });
         }
 
-        let bind_mask = self.binder.invalid_mask(bind_group_layouts);
+        let bind_mask = self.binder.invalid_mask();
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DrawError::IncompatibleBindGroup {
                 index: bind_mask.trailing_zeros(),
+                diff: self.binder.bgl_diff(),
             });
         }
         if self.pipeline.is_none() {
@@ -520,6 +526,8 @@ pub enum ColorAttachmentError {
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassErrorInner {
     #[error(transparent)]
+    Device(DeviceError),
+    #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
@@ -570,8 +578,10 @@ pub enum RenderPassErrorInner {
     },
     #[error("Surface texture is dropped before the render pass is finished")]
     SurfaceTextureDropped,
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left for render pass")]
     OutOfMemory,
+    #[error("The bind group at index {0:?} is invalid")]
+    InvalidBindGroup(usize),
     #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,
     #[error("Unable to clear non-present/read-only stencil")]
@@ -640,6 +650,11 @@ impl PrettyError for RenderPassErrorInner {
         if let Self::InvalidAttachment(id) = *self {
             fmt.texture_view_label_with_key(&id, "attachment");
         };
+        if let Self::Draw(DrawError::IncompatibleBindGroup { diff, .. }) = self {
+            for d in diff {
+                fmt.note(&d);
+            }
+        };
     }
 }
 
@@ -652,6 +667,12 @@ impl From<MissingBufferUsageError> for RenderPassErrorInner {
 impl From<MissingTextureUsageError> for RenderPassErrorInner {
     fn from(error: MissingTextureUsageError) -> Self {
         Self::RenderCommand(error.into())
+    }
+}
+
+impl From<DeviceError> for RenderPassErrorInner {
+    fn from(error: DeviceError) -> Self {
+        Self::Device(error)
     }
 }
 
@@ -684,16 +705,16 @@ where
     }
 }
 
-struct RenderAttachment<'a> {
-    texture_id: &'a Stored<id::TextureId>,
+struct RenderAttachment<'a, A: HalApi> {
+    texture: Arc<Texture<A>>,
     selector: &'a TextureSelector,
     usage: hal::TextureUses,
 }
 
-impl<A: hal::Api> TextureView<A> {
-    fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment {
+impl<A: HalApi> TextureView<A> {
+    fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment<A> {
         RenderAttachment {
-            texture_id: &self.parent_id,
+            texture: self.parent.read().as_ref().unwrap().clone(),
             selector: &self.selector,
             usage,
         }
@@ -707,13 +728,13 @@ struct RenderPassInfo<'a, A: HalApi> {
     context: RenderPassContext,
     usage_scope: UsageScope<A>,
     /// All render attachments, including depth/stencil
-    render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
+    render_attachments: AttachmentDataVec<RenderAttachment<'a, A>>,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
 
-    pending_discard_init_fixups: SurfacesInDiscardState,
+    pending_discard_init_fixups: SurfacesInDiscardState<A>,
     divergent_discarded_depth_stencil_aspect: Option<(wgt::TextureAspect, &'a TextureView<A>)>,
     multiview: Option<NonZeroU32>,
 }
@@ -721,27 +742,24 @@ struct RenderPassInfo<'a, A: HalApi> {
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn add_pass_texture_init_actions<V>(
         channel: &PassChannel<V>,
-        texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+        texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         view: &TextureView<A>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
-        pending_discard_init_fixups: &mut SurfacesInDiscardState,
+        pending_discard_init_fixups: &mut SurfacesInDiscardState<A>,
     ) {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
-                    id: view.parent_id.value.0,
+                    texture: view.parent.read().as_ref().unwrap().clone(),
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
                 },
-                texture_guard,
             ));
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
-                view.parent_id.value,
+                view.parent.read().as_ref().unwrap(),
                 TextureInitRange::from(view.selector.clone()),
-                texture_guard,
             );
         }
         if channel.store_op == StoreOp::Discard {
@@ -749,7 +767,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // discard right away be alright since the texture can't be used
             // during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent_id.value.0,
+                texture: view.parent.read().as_ref().unwrap().clone(),
                 mip_level: view.selector.mips.start,
                 layer: view.selector.layers.start,
             });
@@ -763,7 +781,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
         occlusion_query_set: Option<id::QuerySetId>,
-        cmd_buf: &mut CommandBuffer<A>,
+        encoder: &mut CommandEncoder<A>,
+        trackers: &mut Tracker<A>,
+        texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
+        pending_query_resets: &mut QueryResetMap<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
         buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
         texture_guard: &'a Storage<Texture<A>, id::TextureId>,
@@ -777,7 +798,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut is_depth_read_only = false;
         let mut is_stencil_read_only = false;
 
-        let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
+        let mut render_attachments = AttachmentDataVec::<RenderAttachment<A>>::new();
         let mut discarded_surfaces = AttachmentDataVec::new();
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
         let mut divergent_discarded_depth_stencil_aspect = None;
@@ -857,8 +878,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
-            let view: &TextureView<A> = cmd_buf
-                .trackers
+            let view: &TextureView<A> = trackers
                 .views
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -878,17 +898,15 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             {
                 Self::add_pass_texture_init_actions(
                     &at.depth,
-                    &mut cmd_buf.texture_memory_actions,
+                    texture_memory_actions,
                     view,
-                    texture_guard,
                     &mut pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
                 Self::add_pass_texture_init_actions(
                     &at.stencil,
-                    &mut cmd_buf.texture_memory_actions,
+                    texture_memory_actions,
                     view,
-                    texture_guard,
                     &mut pending_discard_init_fixups,
                 );
             } else {
@@ -917,14 +935,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
                 if need_init_beforehand {
                     pending_discard_init_fixups.extend(
-                        cmd_buf.texture_memory_actions.register_init_action(
-                            &TextureInitTrackerAction {
-                                id: view.parent_id.value.0,
-                                range: TextureInitRange::from(view.selector.clone()),
-                                kind: MemoryInitKind::NeedsInitializedMemory,
-                            },
-                            texture_guard,
-                        ),
+                        texture_memory_actions.register_init_action(&TextureInitTrackerAction {
+                            texture: view.parent.read().as_ref().unwrap().clone(),
+                            range: TextureInitRange::from(view.selector.clone()),
+                            kind: MemoryInitKind::NeedsInitializedMemory,
+                        }),
                     );
                 }
 
@@ -938,10 +953,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 // (possible optimization: Delay and potentially drop this zeroing)
                 if at.depth.store_op != at.stencil.store_op {
                     if !need_init_beforehand {
-                        cmd_buf.texture_memory_actions.register_implicit_init(
-                            view.parent_id.value,
+                        texture_memory_actions.register_implicit_init(
+                            view.parent.read().as_ref().unwrap(),
                             TextureInitRange::from(view.selector.clone()),
-                            texture_guard,
                         );
                     }
                     divergent_discarded_depth_stencil_aspect = Some((
@@ -955,7 +969,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
-                        texture: view.parent_id.value.0,
+                        texture: view.parent.read().as_ref().unwrap().clone(),
                         mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
                     });
@@ -979,7 +993,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
-                    view: &view.raw,
+                    view: view.raw(),
                     usage,
                 },
                 depth_ops: at.depth.hal_ops(),
@@ -995,8 +1009,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 colors.push(None);
                 continue;
             };
-            let color_view: &TextureView<A> = cmd_buf
-                .trackers
+            let color_view: &TextureView<A> = trackers
                 .views
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -1021,9 +1034,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             Self::add_pass_texture_init_actions(
                 &at.channel,
-                &mut cmd_buf.texture_memory_actions,
+                texture_memory_actions,
                 color_view,
-                texture_guard,
                 &mut pending_discard_init_fixups,
             );
             render_attachments
@@ -1031,8 +1043,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let mut hal_resolve_target = None;
             if let Some(resolve_target) = at.resolve_target {
-                let resolve_view: &TextureView<A> = cmd_buf
-                    .trackers
+                let resolve_view: &TextureView<A> = trackers
                     .views
                     .add_single(view_guard, resolve_target)
                     .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
@@ -1083,23 +1094,22 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     });
                 }
 
-                cmd_buf.texture_memory_actions.register_implicit_init(
-                    resolve_view.parent_id.value,
+                texture_memory_actions.register_implicit_init(
+                    resolve_view.parent.read().as_ref().unwrap(),
                     TextureInitRange::from(resolve_view.selector.clone()),
-                    texture_guard,
                 );
                 render_attachments
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: &resolve_view.raw,
+                    view: resolve_view.raw(),
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
             }
 
             colors.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
-                    view: &color_view.raw,
+                    view: color_view.raw(),
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
@@ -1136,25 +1146,20 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         };
 
         let timestamp_writes = if let Some(tw) = timestamp_writes {
-            let query_set = cmd_buf
-                .trackers
+            let query_set = trackers
                 .query_sets
                 .add_single(query_set_guard, tw.query_set)
                 .ok_or(RenderPassErrorInner::InvalidQuerySet(tw.query_set))?;
 
             if let Some(index) = tw.beginning_of_pass_write_index {
-                cmd_buf
-                    .pending_query_resets
-                    .use_query_set(tw.query_set, query_set, index);
+                pending_query_resets.use_query_set(tw.query_set, query_set, index);
             }
             if let Some(index) = tw.end_of_pass_write_index {
-                cmd_buf
-                    .pending_query_resets
-                    .use_query_set(tw.query_set, query_set, index);
+                pending_query_resets.use_query_set(tw.query_set, query_set, index);
             }
 
             Some(hal::RenderPassTimestampWrites {
-                query_set: &query_set.raw,
+                query_set: query_set.raw.as_ref().unwrap(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -1163,19 +1168,18 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         };
 
         let occlusion_query_set = if let Some(occlusion_query_set) = occlusion_query_set {
-            let query_set = cmd_buf
-                .trackers
+            let query_set = trackers
                 .query_sets
                 .add_single(query_set_guard, occlusion_query_set)
                 .ok_or(RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
 
-            Some(&query_set.raw)
+            Some(query_set.raw.as_ref().unwrap())
         } else {
             None
         };
 
         let hal_desc = hal::RenderPassDescriptor {
-            label,
+            label: hal_label(label, device.instance_flags),
             extent,
             sample_count,
             color_attachments: &colors,
@@ -1185,7 +1189,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             occlusion_query_set,
         };
         unsafe {
-            cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
+            encoder.raw.begin_render_pass(&hal_desc);
         };
 
         Ok(Self {
@@ -1205,31 +1209,21 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn finish(
         mut self,
         raw: &mut A::CommandEncoder,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
-    ) -> Result<(UsageScope<A>, SurfacesInDiscardState), RenderPassErrorInner> {
+    ) -> Result<(UsageScope<A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
         unsafe {
             raw.end_render_pass();
         }
 
         for ra in self.render_attachments {
-            if !texture_guard.contains(ra.texture_id.value.0) {
-                return Err(RenderPassErrorInner::SurfaceTextureDropped);
-            }
-            let texture = &texture_guard[ra.texture_id.value];
+            let texture = &ra.texture;
             check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             unsafe {
                 self.usage_scope
                     .textures
-                    .merge_single(
-                        texture_guard,
-                        ra.texture_id.value,
-                        Some(ra.selector.clone()),
-                        &ra.texture_id.ref_count,
-                        ra.usage,
-                    )
+                    .merge_single(texture, Some(ra.selector.clone()), ra.usage)
                     .map_err(UsageConflict::from)?
             };
         }
@@ -1262,7 +1256,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
-                        view: &view.raw,
+                        view: view.raw(),
                         usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,
@@ -1311,31 +1305,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         timestamp_writes: Option<&RenderPassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
     ) -> Result<(), RenderPassError> {
-        profiling::scope!("CommandEncoder::run_render_pass");
-        let init_scope = PassErrorScope::Pass(encoder_id);
+        profiling::scope!(
+            "CommandEncoder::run_render_pass {}",
+            base.label.unwrap_or("")
+        );
+
+        let discard_hal_labels = self
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
+        let label = hal_label(base.label, self.instance.flags);
+
+        let pass_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
+        let device = &cmd_buf.device;
+        let snatch_guard = device.snatchable_lock.read();
 
         let (scope, pending_discard_init_fixups) = {
-            let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
-
-            // Spell out the type, to placate rust-analyzer.
-            // https://github.com/rust-lang/rust-analyzer/issues/12247
-            let cmd_buf: &mut CommandBuffer<A> =
-                CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id)
-                    .map_pass_err(init_scope)?;
-
-            // We automatically keep extending command buffers over time, and because
-            // we want to insert a command buffer _before_ what we're about to record,
-            // we need to make sure to close the previous one.
-            cmd_buf.encoder.close();
-            // We will reset this to `Recording` if we succeed, acts as a fail-safe.
-            cmd_buf.status = CommandEncoderStatus::Error;
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf.commands {
+            if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
                     base: BasePass::from_ref(base),
                     target_colors: color_attachments.to_vec(),
@@ -1345,19 +1339,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let device = &device_guard[cmd_buf.device_id.value];
-            cmd_buf.encoder.open_pass(base.label);
+            if !device.is_valid() {
+                return Err(DeviceError::Lost).map_pass_err(pass_scope);
+            }
 
-            let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
-            let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (render_pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-            let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (tlas_guard, _) = hub.tlas_s.read(&mut token);
+            let encoder = &mut cmd_buf_data.encoder;
+            let status = &mut cmd_buf_data.status;
+            let tracker = &mut cmd_buf_data.trackers;
+            let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
+            let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
+            let pending_query_resets = &mut cmd_buf_data.pending_query_resets;
+
+            // We automatically keep extending command buffers over time, and because
+            // we want to insert a command buffer _before_ what we're about to record,
+            // we need to make sure to close the previous one.
+            encoder.close().map_pass_err(pass_scope)?;
+            // We will reset this to `Recording` if we succeed, acts as a fail-safe.
+            *status = CommandEncoderStatus::Error;
+            encoder.open_pass(label).map_pass_err(pass_scope)?;
+
+            let bundle_guard = hub.render_bundles.read();
+            let bind_group_guard = hub.bind_groups.read();
+            let render_pipeline_guard = hub.render_pipelines.read();
+            let query_set_guard = hub.query_sets.read();
+            let buffer_guard = hub.buffers.read();
+            let texture_guard = hub.textures.read();
+            let view_guard = hub.texture_views.read();
+            let tlas_guard = hub.tlas_s.read();
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1366,20 +1374,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut info = RenderPassInfo::start(
                 device,
-                base.label,
+                label,
                 color_attachments,
                 depth_stencil_attachment,
                 timestamp_writes,
                 occlusion_query_set_id,
-                cmd_buf,
+                encoder,
+                tracker,
+                texture_memory_actions,
+                pending_query_resets,
                 &*view_guard,
                 &*buffer_guard,
                 &*texture_guard,
                 &*query_set_guard,
             )
-            .map_pass_err(init_scope)?;
+            .map_pass_err(pass_scope)?;
 
-            cmd_buf.trackers.set_size(
+            tracker.set_size(
                 Some(&*buffer_guard),
                 Some(&*texture_guard),
                 Some(&*view_guard),
@@ -1393,7 +1404,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Some(&*tlas_guard),
             );
 
-            let raw = &mut cmd_buf.encoder.raw;
+            let raw = &mut encoder.raw;
 
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
@@ -1417,6 +1428,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         num_dynamic_offsets,
                         bind_group_id,
                     } => {
+                        api_log!("RenderPass::set_bind_group {index} {bind_group_id:?}");
+
                         let scope = PassErrorScope::SetBindGroup(bind_group_id);
                         let max_bind_groups = device.limits.max_bind_groups;
                         if index >= max_bind_groups {
@@ -1429,17 +1442,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         temp_offsets.clear();
                         temp_offsets.extend_from_slice(
-                            &base.dynamic_offsets[dynamic_offset_count
-                                ..dynamic_offset_count + (num_dynamic_offsets as usize)],
+                            &base.dynamic_offsets
+                                [dynamic_offset_count..dynamic_offset_count + num_dynamic_offsets],
                         );
-                        dynamic_offset_count += num_dynamic_offsets as usize;
+                        dynamic_offset_count += num_dynamic_offsets;
 
-                        let bind_group: &crate::binding_model::BindGroup<A> = cmd_buf
-                            .trackers
+                        let bind_group = tracker
                             .bind_groups
                             .add_single(&*bind_group_guard, bind_group_id)
                             .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
+
+                        if bind_group.device.as_info().id() != device.as_info().id() {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
+
                         bind_group
                             .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
                             .map_pass_err(scope)?;
@@ -1447,73 +1464,81 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // merge the resource tracker in
                         unsafe {
                             info.usage_scope
-                                .merge_bind_group(&*texture_guard, &bind_group.used)
+                                .merge_bind_group(&bind_group.used)
                                 .map_pass_err(scope)?;
                         }
                         //Note: stateless trackers are not merged: the lifetime reference
                         // is held to the bind group itself.
 
-                        cmd_buf.buffer_memory_init_actions.extend(
+                        buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
-                                match buffer_guard.get(action.id) {
-                                    Ok(buffer) => buffer.initialization_status.check_action(action),
-                                    Err(_) => None,
-                                }
+                                action
+                                    .buffer
+                                    .initialization_status
+                                    .read()
+                                    .check_action(action)
                             }),
                         );
                         for action in bind_group.used_texture_ranges.iter() {
-                            info.pending_discard_init_fixups.extend(
-                                cmd_buf
-                                    .texture_memory_actions
-                                    .register_init_action(action, &texture_guard),
-                            );
+                            info.pending_discard_init_fixups
+                                .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        cmd_buf.tlas_actions.extend(
-                            bind_group.used.acceleration_structures.used().map(|id| {
-                                cmd_buf.trackers.tlas_s.add_single(&tlas_guard, id.0);
+                        let mapped_used_resources = bind_group
+                            .used
+                            .acceleration_structures
+                            .used_resources()
+                            .map(|blas| {
+                                tracker.tlas_s.add_single(&tlas_guard, blas.as_info().id());
+
                                 crate::ray_tracing::TlasAction {
-                                    id: id.0,
+                                    id: blas.as_info().id(),
                                     kind: crate::ray_tracing::TlasActionKind::Use,
                                 }
-                            }),
-                        );
+                            });
 
-                        let pipeline_layout_id = state.binder.pipeline_layout_id;
-                        let entries = state.binder.assign_group(
-                            index as usize,
-                            id::Valid(bind_group_id),
-                            bind_group,
-                            &temp_offsets,
-                        );
-                        if !entries.is_empty() {
-                            let pipeline_layout =
-                                &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                        cmd_buf_data.tlas_actions.extend(mapped_used_resources);
+
+                        let pipeline_layout = state.binder.pipeline_layout.clone();
+                        let entries =
+                            state
+                                .binder
+                                .assign_group(index as usize, bind_group, &temp_offsets);
+                        if !entries.is_empty() && pipeline_layout.is_some() {
+                            let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {
-                                let raw_bg =
-                                    &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
-
-                                unsafe {
-                                    raw.set_bind_group(
-                                        pipeline_layout,
-                                        index + i as u32,
-                                        raw_bg,
-                                        &e.dynamic_offsets,
-                                    );
+                                if let Some(group) = e.group.as_ref() {
+                                    let raw_bg = group
+                                        .raw(&snatch_guard)
+                                        .ok_or(RenderPassErrorInner::InvalidBindGroup(i))
+                                        .map_pass_err(scope)?;
+                                    unsafe {
+                                        raw.set_bind_group(
+                                            pipeline_layout,
+                                            index + i as u32,
+                                            raw_bg,
+                                            &e.dynamic_offsets,
+                                        );
+                                    }
                                 }
                             }
                         }
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
+                        api_log!("RenderPass::set_pipeline {pipeline_id:?}");
+
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         state.pipeline = Some(pipeline_id);
 
-                        let pipeline: &pipeline::RenderPipeline<A> = cmd_buf
-                            .trackers
+                        let pipeline: &pipeline::RenderPipeline<A> = tracker
                             .render_pipelines
                             .add_single(&*render_pipeline_guard, pipeline_id)
                             .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                             .map_pass_err(scope)?;
+
+                        if pipeline.device.as_info().id() != device.as_info().id() {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
 
                         info.context
                             .check_compatible(
@@ -1539,7 +1564,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require(pipeline.flags.contains(PipelineFlags::BLEND_CONSTANT));
 
                         unsafe {
-                            raw.set_render_pipeline(&pipeline.raw);
+                            raw.set_render_pipeline(pipeline.raw());
                         }
 
                         if pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE) {
@@ -1549,33 +1574,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         // Rebind resource
-                        if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
-                            let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
-
+                        if state.binder.pipeline_layout.is_none()
+                            || !state
+                                .binder
+                                .pipeline_layout
+                                .as_ref()
+                                .unwrap()
+                                .is_equal(&pipeline.layout)
+                        {
                             let (start_index, entries) = state.binder.change_pipeline_layout(
-                                &*pipeline_layout_guard,
-                                pipeline.layout_id.value,
+                                &pipeline.layout,
                                 &pipeline.late_sized_buffer_groups,
                             );
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
-                                    let raw_bg =
-                                        &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
-
-                                    unsafe {
-                                        raw.set_bind_group(
-                                            &pipeline_layout.raw,
-                                            start_index as u32 + i as u32,
-                                            raw_bg,
-                                            &e.dynamic_offsets,
-                                        );
+                                    if let Some(group) = e.group.as_ref() {
+                                        let raw_bg = group
+                                            .raw(&snatch_guard)
+                                            .ok_or(RenderPassErrorInner::InvalidBindGroup(i))
+                                            .map_pass_err(scope)?;
+                                        unsafe {
+                                            raw.set_bind_group(
+                                                pipeline.layout.raw(),
+                                                start_index as u32 + i as u32,
+                                                raw_bg,
+                                                &e.dynamic_offsets,
+                                            );
+                                        }
                                     }
                                 }
                             }
 
                             // Clear push constant ranges
                             let non_overlapping = super::bind::compute_nonoverlapping_ranges(
-                                &pipeline_layout.push_constant_ranges,
+                                &pipeline.layout.push_constant_ranges,
                             );
                             for range in non_overlapping {
                                 let offset = range.range.start;
@@ -1585,7 +1617,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     size_bytes,
                                     |clear_offset, clear_data| unsafe {
                                         raw.set_push_constants(
-                                            &pipeline_layout.raw,
+                                            pipeline.layout.raw(),
                                             range.stages,
                                             clear_offset,
                                             clear_data,
@@ -1624,17 +1656,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
+                        api_log!("RenderPass::set_index_buffer {buffer_id:?}");
+
                         let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                        let buffer: &Buffer<A> = info
+                        let buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                             .map_pass_err(scope)?;
+
+                        if buffer.device.as_info().id() != device.as_info().id() {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
+
                         check_buffer_usage(buffer.usage, BufferUsages::INDEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
@@ -1642,14 +1681,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Some(s) => offset + s.get(),
                             None => buffer.size,
                         };
-                        state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
+                        state.index.bound_buffer_view = Some((buffer_id, offset..end));
 
                         state.index.format = Some(index_format);
                         state.index.update_limit();
 
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            buffer.initialization_status.create_action(
-                                buffer_id,
+                        buffer_memory_init_actions.extend(
+                            buffer.initialization_status.read().create_action(
+                                buffer,
                                 offset..end,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1670,17 +1709,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
+                        api_log!("RenderPass::set_vertex_buffer {slot} {buffer_id:?}");
+
                         let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                        let buffer: &Buffer<A> = info
+                        let buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                             .map_pass_err(scope)?;
+
+                        if buffer.device.as_info().id() != device.as_info().id() {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
+
+                        let max_vertex_buffers = device.limits.max_vertex_buffers;
+                        if slot >= max_vertex_buffers {
+                            return Err(RenderCommandError::VertexBufferIndexOutOfRange {
+                                index: slot,
+                                max: max_vertex_buffers,
+                            })
+                            .map_pass_err(scope);
+                        }
+
                         check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
@@ -1698,9 +1753,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         vertex_state.bound = true;
 
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            buffer.initialization_status.create_action(
-                                buffer_id,
+                        buffer_memory_init_actions.extend(
+                            buffer.initialization_status.read().create_action(
+                                buffer,
                                 offset..(offset + vertex_state.total_size),
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1717,6 +1772,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.vertex.update_limits();
                     }
                     RenderCommand::SetBlendConstant(ref color) => {
+                        api_log!("RenderPass::set_blend_constant");
+
                         state.blend_constant = OptionalState::Set;
                         let array = [
                             color.r as f32,
@@ -1729,6 +1786,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::SetStencilReference(value) => {
+                        api_log!("RenderPass::set_stencil_reference {value}");
+
                         state.stencil_reference = value;
                         if state
                             .pipeline_flags
@@ -1744,6 +1803,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth_min,
                         depth_max,
                     } => {
+                        api_log!("RenderPass::set_viewport {rect:?}");
+
                         let scope = PassErrorScope::SetViewport;
                         if rect.x < 0.0
                             || rect.y < 0.0
@@ -1780,6 +1841,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size_bytes,
                         values_offset,
                     } => {
+                        api_log!("RenderPass::set_push_constants");
+
                         let scope = PassErrorScope::SetPushConstant;
                         let values_offset = values_offset
                             .ok_or(RenderPassErrorInner::InvalidValuesOffset)
@@ -1791,12 +1854,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let data_slice =
                             &base.push_constant_data[(values_offset as usize)..values_end_offset];
 
-                        let pipeline_layout_id = state
+                        let pipeline_layout = state
                             .binder
-                            .pipeline_layout_id
+                            .pipeline_layout
+                            .as_ref()
                             .ok_or(DrawError::MissingPipeline)
                             .map_pass_err(scope)?;
-                        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                         pipeline_layout
                             .validate_push_constant_ranges(stages, offset, end_offset_bytes)
@@ -1804,10 +1867,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
 
                         unsafe {
-                            raw.set_push_constants(&pipeline_layout.raw, stages, offset, data_slice)
+                            raw.set_push_constants(
+                                pipeline_layout.raw(),
+                                stages,
+                                offset,
+                                data_slice,
+                            )
                         }
                     }
                     RenderCommand::SetScissor(ref rect) => {
+                        api_log!("RenderPass::set_scissor_rect {rect:?}");
+
                         let scope = PassErrorScope::SetScissorRect;
                         if rect.x + rect.w > info.extent.width
                             || rect.y + rect.h > info.extent.height
@@ -1831,17 +1901,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_vertex,
                         first_instance,
                     } => {
+                        api_log!(
+                            "RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}"
+                        );
+
                         let indexed = false;
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: false,
                             pipeline: state.pipeline,
                         };
-                        state
-                            .is_ready::<A>(indexed, &bind_group_layout_guard)
-                            .map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
 
-                        let last_vertex = first_vertex + vertex_count;
+                        let last_vertex = first_vertex as u64 + vertex_count as u64;
                         let vertex_limit = state.vertex.vertex_limit;
                         if last_vertex > vertex_limit {
                             return Err(DrawError::VertexBeyondLimit {
@@ -1851,7 +1923,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        let last_instance = first_instance + instance_count;
+                        let last_instance = first_instance as u64 + instance_count as u64;
                         let instance_limit = state.vertex.instance_limit;
                         if last_instance > instance_limit {
                             return Err(DrawError::InstanceBeyondLimit {
@@ -1873,19 +1945,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         base_vertex,
                         first_instance,
                     } => {
+                        api_log!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
+
                         let indexed = true;
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: false,
                             pipeline: state.pipeline,
                         };
-                        state
-                            .is_ready::<A>(indexed, &*bind_group_layout_guard)
-                            .map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
 
-                        //TODO: validate that base_vertex + max_index() is
-                        // within the provided range
-                        let last_index = first_index + index_count;
+                        let last_index = first_index as u64 + index_count as u64;
                         let index_limit = state.index.limit;
                         if last_index > index_limit {
                             return Err(DrawError::IndexBeyondLimit {
@@ -1894,7 +1964,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        let last_instance = first_instance + instance_count;
+                        let last_instance = first_instance as u64 + instance_count as u64;
                         let instance_limit = state.vertex.instance_limit;
                         if last_instance > instance_limit {
                             return Err(DrawError::InstanceBeyondLimit {
@@ -1921,14 +1991,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         count,
                         indexed,
                     } => {
+                        api_log!("RenderPass::draw_indirect (indexed:{indexed}) {buffer_id:?} {offset} {count:?}");
+
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: true,
                             pipeline: state.pipeline,
                         };
-                        state
-                            .is_ready::<A>(indexed, &*bind_group_layout_guard)
-                            .map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
 
                         let stride = match indexed {
                             false => mem::size_of::<wgt::DrawIndirectArgs>(),
@@ -1944,7 +2014,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer: &Buffer<A> = info
+                        let indirect_buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -1953,7 +2023,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
@@ -1970,9 +2040,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                         }
 
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            indirect_buffer.initialization_status.create_action(
-                                buffer_id,
+                        buffer_memory_init_actions.extend(
+                            indirect_buffer.initialization_status.read().create_action(
+                                indirect_buffer,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1995,14 +2065,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max_count,
                         indexed,
                     } => {
+                        api_log!("RenderPass::multi_draw_indirect_count (indexed:{indexed}) {buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset:?} {max_count:?}");
+
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: true,
                             pipeline: state.pipeline,
                         };
-                        state
-                            .is_ready::<A>(indexed, &*bind_group_layout_guard)
-                            .map_pass_err(scope)?;
+                        state.is_ready(indexed).map_pass_err(scope)?;
 
                         let stride = match indexed {
                             false => mem::size_of::<wgt::DrawIndirectArgs>(),
@@ -2016,7 +2086,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer: &Buffer<A> = info
+                        let indirect_buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -2025,11 +2095,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
-                        let count_buffer: &Buffer<A> = info
+                        let count_buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(
@@ -2042,7 +2112,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                         let count_raw = count_buffer
                             .raw
-                            .as_ref()
+                            .get(&snatch_guard)
                             .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))
                             .map_pass_err(scope)?;
 
@@ -2056,9 +2126,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            indirect_buffer.initialization_status.create_action(
-                                buffer_id,
+                        buffer_memory_init_actions.extend(
+                            indirect_buffer.initialization_status.read().create_action(
+                                indirect_buffer,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -2074,9 +2144,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            count_buffer.initialization_status.create_action(
-                                count_buffer_id,
+                        buffer_memory_init_actions.extend(
+                            count_buffer.initialization_status.read().create_action(
+                                count_buffer,
                                 count_buffer_offset..end_count_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -2105,46 +2175,59 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::PushDebugGroup { color: _, len } => {
                         state.debug_scope_depth += 1;
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
-                        string_offset += len;
-                        unsafe {
-                            raw.begin_debug_marker(label);
+                        if !discard_hal_labels {
+                            let label = str::from_utf8(
+                                &base.string_data[string_offset..string_offset + len],
+                            )
+                            .unwrap();
+
+                            api_log!("RenderPass::push_debug_group {label:?}");
+                            unsafe {
+                                raw.begin_debug_marker(label);
+                            }
                         }
+                        string_offset += len;
                     }
                     RenderCommand::PopDebugGroup => {
+                        api_log!("RenderPass::pop_debug_group");
+
                         let scope = PassErrorScope::PopDebugGroup;
                         if state.debug_scope_depth == 0 {
                             return Err(RenderPassErrorInner::InvalidPopDebugGroup)
                                 .map_pass_err(scope);
                         }
                         state.debug_scope_depth -= 1;
-                        unsafe {
-                            raw.end_debug_marker();
+                        if !discard_hal_labels {
+                            unsafe {
+                                raw.end_debug_marker();
+                            }
                         }
                     }
                     RenderCommand::InsertDebugMarker { color: _, len } => {
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
-                        string_offset += len;
-                        unsafe {
-                            raw.insert_debug_marker(label);
+                        if !discard_hal_labels {
+                            let label = str::from_utf8(
+                                &base.string_data[string_offset..string_offset + len],
+                            )
+                            .unwrap();
+                            api_log!("RenderPass::insert_debug_marker {label:?}");
+                            unsafe {
+                                raw.insert_debug_marker(label);
+                            }
                         }
+                        string_offset += len;
                     }
                     RenderCommand::WriteTimestamp {
                         query_set_id,
                         query_index,
                     } => {
+                        api_log!("RenderPass::write_timestamps {query_set_id:?} {query_index}");
                         let scope = PassErrorScope::WriteTimestamp;
 
                         device
                             .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                             .map_pass_err(scope)?;
 
-                        let query_set = cmd_buf
-                            .trackers
+                        let query_set = tracker
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
@@ -2155,19 +2238,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut cmd_buf.pending_query_resets),
+                                Some(&mut cmd_buf_data.pending_query_resets),
                             )
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::BeginOcclusionQuery { query_index } => {
+                        api_log!("RenderPass::begin_occlusion_query {query_index}");
                         let scope = PassErrorScope::BeginOcclusionQuery;
 
                         let query_set_id = occlusion_query_set_id
                             .ok_or(RenderPassErrorInner::MissingOcclusionQuerySet)
                             .map_pass_err(scope)?;
 
-                        let query_set = cmd_buf
-                            .trackers
+                        let query_set = tracker
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
@@ -2178,12 +2261,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut cmd_buf.pending_query_resets),
+                                Some(&mut cmd_buf_data.pending_query_resets),
                                 &mut active_query,
                             )
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::EndOcclusionQuery => {
+                        api_log!("RenderPass::end_occlusion_query");
                         let scope = PassErrorScope::EndOcclusionQuery;
 
                         end_occlusion_query(raw, &*query_set_guard, &mut active_query)
@@ -2193,10 +2277,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         query_set_id,
                         query_index,
                     } => {
+                        api_log!("RenderPass::begin_pipeline_statistics_query {query_set_id:?} {query_index}");
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set = cmd_buf
-                            .trackers
+                        let query_set = tracker
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
@@ -2207,25 +2291,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut cmd_buf.pending_query_resets),
+                                Some(&mut cmd_buf_data.pending_query_resets),
                                 &mut active_query,
                             )
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::EndPipelineStatisticsQuery => {
+                        api_log!("RenderPass::end_pipeline_statistics_query");
                         let scope = PassErrorScope::EndPipelineStatisticsQuery;
 
                         end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
+                        api_log!("RenderPass::execute_bundle {bundle_id:?}");
                         let scope = PassErrorScope::ExecuteBundle;
-                        let bundle: &command::RenderBundle<A> = cmd_buf
-                            .trackers
+                        let bundle: &command::RenderBundle<A> = tracker
                             .bundles
                             .add_single(&*bundle_guard, bundle_id)
                             .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
                             .map_pass_err(scope)?;
+
+                        if bundle.device.as_info().id() != device.as_info().id() {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
 
                         info.context
                             .check_compatible(
@@ -2249,48 +2338,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                         }
 
-                        cmd_buf.buffer_memory_init_actions.extend(
+                        buffer_memory_init_actions.extend(
                             bundle
                                 .buffer_memory_init_actions
                                 .iter()
-                                .filter_map(|action| match buffer_guard.get(action.id) {
-                                    Ok(buffer) => buffer.initialization_status.check_action(action),
-                                    Err(_) => None,
+                                .filter_map(|action| {
+                                    action
+                                        .buffer
+                                        .initialization_status
+                                        .read()
+                                        .check_action(action)
                                 }),
                         );
                         for action in bundle.texture_memory_init_actions.iter() {
-                            info.pending_discard_init_fixups.extend(
-                                cmd_buf
-                                    .texture_memory_actions
-                                    .register_init_action(action, &texture_guard),
-                            );
+                            info.pending_discard_init_fixups
+                                .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        unsafe {
-                            bundle.execute(
-                                raw,
-                                &*pipeline_layout_guard,
-                                &*bind_group_guard,
-                                &*render_pipeline_guard,
-                                &*buffer_guard,
-                            )
-                        }
-                        .map_err(|e| match e {
-                            ExecutionError::DestroyedBuffer(id) => {
-                                RenderCommandError::DestroyedBuffer(id)
-                            }
-                            ExecutionError::Unimplemented(what) => {
-                                RenderCommandError::Unimplemented(what)
-                            }
-                        })
-                        .map_pass_err(scope)?;
+                        unsafe { bundle.execute(raw) }
+                            .map_err(|e| match e {
+                                ExecutionError::DestroyedBuffer(id) => {
+                                    RenderCommandError::DestroyedBuffer(id)
+                                }
+                                ExecutionError::InvalidBindGroup(id) => {
+                                    RenderCommandError::InvalidBindGroup(id)
+                                }
+                                ExecutionError::Unimplemented(what) => {
+                                    RenderCommandError::Unimplemented(what)
+                                }
+                            })
+                            .map_pass_err(scope)?;
 
                         unsafe {
                             info.usage_scope
-                                .merge_render_bundle(&*texture_guard, &bundle.used)
+                                .merge_render_bundle(&bundle.used)
                                 .map_pass_err(scope)?;
-                            cmd_buf
-                                .trackers
+                            tracker
                                 .add_from_render_bundle(&bundle.used)
                                 .map_pass_err(scope)?;
                         };
@@ -2301,50 +2384,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Merging renderpass into cmd_buf {:?}", encoder_id);
             let (trackers, pending_discard_init_fixups) =
-                info.finish(raw, &*texture_guard).map_pass_err(init_scope)?;
+                info.finish(raw).map_pass_err(pass_scope)?;
 
-            cmd_buf.encoder.close();
+            encoder.close().map_pass_err(pass_scope)?;
             (trackers, pending_discard_init_fixups)
         };
 
-        let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let cmd_buf = hub.command_buffers.get(encoder_id).unwrap();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
-        let cmd_buf = cmb_guard.get_mut(encoder_id).unwrap();
+        let query_set_guard = hub.query_sets.read();
+
+        let encoder = &mut cmd_buf_data.encoder;
+        let status = &mut cmd_buf_data.status;
+        let tracker = &mut cmd_buf_data.trackers;
+
         {
-            let transit = cmd_buf.encoder.open();
+            let transit = encoder.open().map_pass_err(pass_scope)?;
 
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
                 transit,
-                &texture_guard,
-                &mut cmd_buf.trackers.textures,
-                &device_guard[cmd_buf.device_id.value],
+                &mut tracker.textures,
+                &cmd_buf.device,
             );
 
-            cmd_buf
+            cmd_buf_data
                 .pending_query_resets
                 .reset_queries(
                     transit,
                     &query_set_guard,
-                    cmd_buf.device_id.value.0.backend(),
+                    cmd_buf.device.info.id().backend(),
                 )
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
             super::CommandBuffer::insert_barriers_from_scope(
                 transit,
-                &mut cmd_buf.trackers,
+                tracker,
                 &scope,
-                &*buffer_guard,
-                &*texture_guard,
+                &snatch_guard,
             );
         }
 
-        cmd_buf.status = CommandEncoderStatus::Recording;
-        cmd_buf.encoder.close_and_swap();
+        *status = CommandEncoderStatus::Recording;
+        encoder.close_and_swap().map_pass_err(pass_scope)?;
 
         Ok(())
     }
@@ -2387,7 +2472,7 @@ pub mod render_ffi {
 
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index,
-            num_dynamic_offsets: offset_length.try_into().unwrap(),
+            num_dynamic_offsets: offset_length,
             bind_group_id,
         });
     }

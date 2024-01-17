@@ -12,27 +12,39 @@ autotests = false
 publish = false
 
 [[test]]
-name = "wgpu-tests"
+name = "wgpu-test"
 path = "tests/root.rs"
+harness = false
 
 [features]
 webgl = ["wgpu/webgl"]
 
 [dependencies]
+anyhow.workspace = true
+arrayvec.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
-env_logger.workspace = true
+ctor.workspace = true
+futures-lite.workspace = true
+heck.workspace = true
+libtest-mimic.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 png.workspace = true
 pollster.workspace = true
+profiling.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+wgpu-macros.workspace = true
 wgpu.workspace = true
-wgt.workspace = true
+wgt = { workspace = true, features = ["replay"] }
 glam.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger.workspace = true
 nv-flip.workspace = true
+parking_lot = { workspace = true, features = ["deadlock_detection"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_log.workspace = true
@@ -42,11 +54,11 @@ web-sys = { workspace = true }
 
 [dev-dependencies]
 naga = { workspace = true, features = ["wgsl-in"] }
-wasm-bindgen-test.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
+wasm-bindgen-test.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }

@@ -1,0 +1,47 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Khronos Glslang Reference Front End; 10
+; Bound: 27
+; Schema: 0
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %colour
+               OpSource GLSL 450
+               OpName %main "main"
+               OpName %deg "deg"
+               OpName %rad "rad"
+               OpName %deg_again "deg_again"
+               OpName %colour "colour"
+               OpDecorate %colour Location 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+%_ptr_Function_float = OpTypePointer Function %float
+   %float_15 = OpConstant %float 15
+    %v4float = OpTypeVector %float 4
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+     %colour = OpVariable %_ptr_Output_v4float Output
+    %v3float = OpTypeVector %float 3
+    %float_1 = OpConstant %float 1
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+        %deg = OpVariable %_ptr_Function_float Function
+        %rad = OpVariable %_ptr_Function_float Function
+  %deg_again = OpVariable %_ptr_Function_float Function
+               OpStore %deg %float_15
+         %11 = OpLoad %float %deg
+         %12 = OpExtInst %float %1 Radians %11
+               OpStore %rad %12
+         %14 = OpLoad %float %rad
+         %15 = OpExtInst %float %1 Degrees %14
+               OpStore %deg_again %15
+         %19 = OpLoad %float %deg_again
+         %21 = OpCompositeConstruct %v3float %19 %19 %19
+         %23 = OpCompositeExtract %float %21 0
+         %24 = OpCompositeExtract %float %21 1
+         %25 = OpCompositeExtract %float %21 2
+         %26 = OpCompositeConstruct %v4float %23 %24 %25 %float_1
+               OpStore %colour %26
+               OpReturn
+               OpFunctionEnd

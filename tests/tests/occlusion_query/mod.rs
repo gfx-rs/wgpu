@@ -1,9 +1,10 @@
 use std::borrow::Cow;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
-#[test]
-fn occlusion_query() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_async(|ctx| async move {
         // Create depth texture
         let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Depth texture"),
@@ -69,7 +70,7 @@ fn occlusion_query() {
                     view: &depth_texture_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
@@ -116,7 +117,9 @@ fn occlusion_query() {
         mapping_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        ctx.device.poll(wgpu::Maintain::Wait);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
         let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
@@ -124,5 +127,4 @@ fn occlusion_query() {
         assert_ne!(query_data[0], 0);
         assert_ne!(query_data[1], 0);
         assert_eq!(query_data[2], 0);
-    })
-}
+    });

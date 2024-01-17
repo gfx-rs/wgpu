@@ -18,7 +18,7 @@ pub(super) struct ViewDescriptor {
 
 impl crate::TextureViewDescriptor<'_> {
     pub(super) fn to_internal(&self, texture: &super::Texture) -> ViewDescriptor {
-        let aspects = crate::FormatAspects::new(self.format, self.range.aspect);
+        let aspects = crate::FormatAspects::new(texture.format, self.range.aspect);
 
         ViewDescriptor {
             dimension: self.dimension,
@@ -31,6 +31,14 @@ impl crate::TextureViewDescriptor<'_> {
             array_layer_base: self.range.base_array_layer,
             array_layer_count: self.range.array_layer_count.unwrap_or(!0),
         }
+    }
+}
+
+fn aspects_to_plane(aspects: crate::FormatAspects) -> u32 {
+    match aspects {
+        crate::FormatAspects::PLANE_1 => 1,
+        crate::FormatAspects::PLANE_2 => 2,
+        _ => 0,
     }
 }
 
@@ -79,7 +87,7 @@ impl ViewDescriptor {
                     *desc.u.Texture2D_mut() = d3d12_ty::D3D12_TEX2D_SRV {
                         MostDetailedMip: self.mip_level_base,
                         MipLevels: self.mip_level_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: aspects_to_plane(self.aspects),
                         ResourceMinLODClamp: 0.0,
                     }
                 }
@@ -103,7 +111,7 @@ impl ViewDescriptor {
                         MipLevels: self.mip_level_count,
                         FirstArraySlice: self.array_layer_base,
                         ArraySize: self.array_layer_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: aspects_to_plane(self.aspects),
                         ResourceMinLODClamp: 0.0,
                     }
                 }
@@ -179,7 +187,7 @@ impl ViewDescriptor {
                 unsafe {
                     *desc.u.Texture2D_mut() = d3d12_ty::D3D12_TEX2D_UAV {
                         MipSlice: self.mip_level_base,
-                        PlaneSlice: 0,
+                        PlaneSlice: aspects_to_plane(self.aspects),
                     }
                 }
             }
@@ -190,7 +198,7 @@ impl ViewDescriptor {
                         MipSlice: self.mip_level_base,
                         FirstArraySlice: self.array_layer_base,
                         ArraySize: self.array_layer_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: aspects_to_plane(self.aspects),
                     }
                 }
             }
@@ -250,7 +258,7 @@ impl ViewDescriptor {
                 unsafe {
                     *desc.u.Texture2D_mut() = d3d12_ty::D3D12_TEX2D_RTV {
                         MipSlice: self.mip_level_base,
-                        PlaneSlice: 0,
+                        PlaneSlice: aspects_to_plane(self.aspects),
                     }
                 }
             }
@@ -272,7 +280,7 @@ impl ViewDescriptor {
                         MipSlice: self.mip_level_base,
                         FirstArraySlice: self.array_layer_base,
                         ArraySize: self.array_layer_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: aspects_to_plane(self.aspects),
                     }
                 }
             }

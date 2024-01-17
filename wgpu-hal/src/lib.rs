@@ -11,7 +11,7 @@
  *  General design direction is to follow the majority by the following weights:
  *  - wgpu-core: 1.5
  *  - primary backends (Vulkan/Metal/DX12): 1.0 each
- *  - secondary backends (DX11/GLES): 0.5 each
+ *  - secondary backend (GLES): 0.5
  */
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
@@ -51,36 +51,31 @@
     clippy::pattern_type_mismatch,
 )]
 
-/// DirectX11 API internals.
-#[cfg(all(feature = "dx11", windows))]
-pub mod dx11;
 /// DirectX12 API internals.
-#[cfg(all(feature = "dx12", windows))]
+#[cfg(dx12)]
 pub mod dx12;
 /// A dummy API implementation.
 pub mod empty;
 /// GLES API internals.
-#[cfg(feature = "gles")]
+#[cfg(gles)]
 pub mod gles;
 /// Metal API internals.
-#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+#[cfg(metal)]
 pub mod metal;
 /// Vulkan API internals.
-#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+#[cfg(vulkan)]
 pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(all(feature = "dx11", windows))]
-    pub use super::dx11::Api as Dx11;
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
-    #[cfg(feature = "gles")]
+    #[cfg(gles)]
     pub use super::gles::Api as Gles;
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(metal)]
     pub use super::metal::Api as Metal;
-    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+    #[cfg(vulkan)]
     pub use super::vulkan::Api as Vulkan;
 }
 
@@ -90,13 +85,17 @@ use std::{
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
 };
 
 use bitflags::bitflags;
+use parking_lot::Mutex;
 use thiserror::Error;
-use wgt::{WasmNotSend, WasmNotSync};
+use wgt::WasmNotSendSync;
 
+// - Vertex + Fragment
+// - Compute
+pub const MAX_CONCURRENT_SHADER_STAGES: usize = 2;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
@@ -189,7 +188,7 @@ impl InstanceError {
     }
 }
 
-pub trait Api: Clone + Sized {
+pub trait Api: Clone + fmt::Debug + Sized {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;
@@ -197,27 +196,27 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: WasmNotSend + WasmNotSync + fmt::Debug;
+    type CommandBuffer: WasmNotSendSync + fmt::Debug;
 
-    type Buffer: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
-    type Texture: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
-    type SurfaceTexture: fmt::Debug + WasmNotSend + WasmNotSync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + WasmNotSend + WasmNotSync;
-    type Sampler: fmt::Debug + WasmNotSend + WasmNotSync;
-    type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
-    type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
+    type Buffer: fmt::Debug + WasmNotSendSync + 'static;
+    type Texture: fmt::Debug + WasmNotSendSync + 'static;
+    type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
+    type TextureView: fmt::Debug + WasmNotSendSync;
+    type Sampler: fmt::Debug + WasmNotSendSync;
+    type QuerySet: fmt::Debug + WasmNotSendSync;
+    type Fence: fmt::Debug + WasmNotSendSync;
 
-    type BindGroupLayout: WasmNotSend + WasmNotSync;
-    type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
-    type PipelineLayout: WasmNotSend + WasmNotSync;
-    type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;
-    type RenderPipeline: WasmNotSend + WasmNotSync;
-    type ComputePipeline: WasmNotSend + WasmNotSync;
+    type BindGroupLayout: fmt::Debug + WasmNotSendSync;
+    type BindGroup: fmt::Debug + WasmNotSendSync;
+    type PipelineLayout: fmt::Debug + WasmNotSendSync;
+    type ShaderModule: fmt::Debug + WasmNotSendSync;
+    type RenderPipeline: fmt::Debug + WasmNotSendSync;
+    type ComputePipeline: fmt::Debug + WasmNotSendSync;
 
-    type AccelerationStructure: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
+    type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
 }
 
-pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
+pub trait Instance<A: Api>: Sized + WasmNotSendSync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
@@ -228,14 +227,30 @@ pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Surface<A: Api>: WasmNotSendSync {
+    /// Configures the surface to use the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All surfaces created using other devices must have been unconfigured before this call.
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &A::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
-    unsafe fn unconfigure(&mut self, device: &A::Device);
+    /// Unconfigures the surface on the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - The surface must have been configured on the given device.
+    unsafe fn unconfigure(&self, device: &A::Device);
 
     /// Returns the next texture to be presented by the swapchain for drawing
     ///
@@ -248,13 +263,13 @@ pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
     ///
     /// Returns `None` on timing out.
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
-    unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
+    unsafe fn discard_texture(&self, texture: A::SurfaceTexture);
 }
 
-pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Adapter<A: Api>: WasmNotSendSync {
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -278,7 +293,7 @@ pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
-pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Device<A: Api>: WasmNotSendSync {
     /// Exit connection to this logical device.
     unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
@@ -391,7 +406,7 @@ pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
     );
 }
 
-pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Queue<A: Api>: WasmNotSendSync {
     /// Submits the command buffers for execution on GPU.
     ///
     /// Valid usage:
@@ -399,13 +414,13 @@ pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
     ///   that are associated with this queue.
     /// - all of the command buffers had `CommadBuffer::finish()` called.
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&A::CommandBuffer],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
     ) -> Result<(), DeviceError>;
     unsafe fn present(
-        &mut self,
-        surface: &mut A::Surface,
+        &self,
+        surface: &A::Surface,
         texture: A::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
@@ -415,7 +430,7 @@ pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
+pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.
@@ -448,7 +463,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
@@ -503,11 +518,19 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
+    /// Sets a range in push constant data.
+    ///
+    /// IMPORTANT: while the data is passed as words, the offset is in bytes!
+    ///
+    /// # Safety
+    ///
+    /// - `offset_bytes` must be a multiple of 4.
+    /// - The range of push constants written must be valid for the pipeline layout at draw time.
     unsafe fn set_push_constants(
         &mut self,
         layout: &A::PipelineLayout,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     );
 
@@ -557,17 +580,17 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     );
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     );
     unsafe fn draw_indirect(
@@ -632,22 +655,11 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
 }
 
 bitflags!(
-    /// Instance initialization flags.
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct InstanceFlags: u32 {
-        /// Generate debug information in shaders and objects.
-        const DEBUG = 1 << 0;
-        /// Enable validation, if possible.
-        const VALIDATION = 1 << 1;
-    }
-);
-
-bitflags!(
     /// Pipeline layout creation flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
-        /// Include support for base vertex/instance drawing.
-        const BASE_VERTEX_INSTANCE = 1 << 0;
+        /// Include support for `first_vertex` / `first_instance` drawing.
+        const FIRST_VERTEX_INSTANCE = 1 << 0;
         /// Include support for num work groups builtin.
         const NUM_WORK_GROUPS = 1 << 1;
     }
@@ -713,6 +725,11 @@ bitflags!(
         const COLOR = 1 << 0;
         const DEPTH = 1 << 1;
         const STENCIL = 1 << 2;
+        const PLANE_0 = 1 << 3;
+        const PLANE_1 = 1 << 4;
+        const PLANE_2 = 1 << 5;
+
+        const DEPTH_STENCIL = Self::DEPTH.bits() | Self::STENCIL.bits();
     }
 );
 
@@ -722,6 +739,9 @@ impl FormatAspects {
             wgt::TextureAspect::All => Self::all(),
             wgt::TextureAspect::DepthOnly => Self::DEPTH,
             wgt::TextureAspect::StencilOnly => Self::STENCIL,
+            wgt::TextureAspect::Plane0 => Self::PLANE_0,
+            wgt::TextureAspect::Plane1 => Self::PLANE_1,
+            wgt::TextureAspect::Plane2 => Self::PLANE_2,
         };
         Self::from(format) & aspect_mask
     }
@@ -736,6 +756,9 @@ impl FormatAspects {
             Self::COLOR => wgt::TextureAspect::All,
             Self::DEPTH => wgt::TextureAspect::DepthOnly,
             Self::STENCIL => wgt::TextureAspect::StencilOnly,
+            Self::PLANE_0 => wgt::TextureAspect::Plane0,
+            Self::PLANE_1 => wgt::TextureAspect::Plane1,
+            Self::PLANE_2 => wgt::TextureAspect::Plane2,
             _ => unreachable!(),
         }
     }
@@ -749,8 +772,9 @@ impl From<wgt::TextureFormat> for FormatAspects {
             | wgt::TextureFormat::Depth32Float
             | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
-                Self::DEPTH | Self::STENCIL
+                Self::DEPTH_STENCIL
             }
+            wgt::TextureFormat::NV12 => Self::PLANE_0 | Self::PLANE_1,
             _ => Self::COLOR,
         }
     }
@@ -860,7 +884,7 @@ bitflags::bitflags! {
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
-    pub flags: InstanceFlags,
+    pub flags: wgt::InstanceFlags,
     pub dx12_shader_compiler: wgt::Dx12Compiler,
     pub gles_minor_version: wgt::Gles3MinorVersion,
 }
@@ -906,11 +930,6 @@ pub struct SurfaceCapabilities {
 
     /// Current extent of the surface, if known.
     pub current_extent: Option<wgt::Extent3d>,
-
-    /// Range of supported extents.
-    ///
-    /// `current_extent` must be inside this range.
-    pub extents: RangeInclusive<wgt::Extent3d>,
 
     /// Supported texture usage flags.
     ///
@@ -1135,6 +1154,8 @@ pub struct NagaShader {
     pub module: Cow<'static, naga::Module>,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
+    /// Source codes for debug
+    pub debug_source: Option<DebugSource>,
 }
 
 // Custom implementation avoids the need to generate Debug impl code
@@ -1155,6 +1176,12 @@ pub enum ShaderInput<'a> {
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     pub runtime_checks: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DebugSource {
+    pub file_name: Cow<'static, str>,
+    pub source_code: Cow<'static, str>,
 }
 
 /// Describes a programmable pipeline stage.
@@ -1403,8 +1430,11 @@ pub struct ComputePassDescriptor<'a, A: Api> {
     pub timestamp_writes: Option<ComputePassTimestampWrites<'a, A>>,
 }
 
-/// Stores if any API validation error has occurred in this process
-/// since it was last reset.
+/// Stores the text of any validation errors that have occurred since
+/// the last call to `get_and_reset`.
+///
+/// Each value is a validation error and a message associated with it,
+/// or `None` if the error has no message from the api.
 ///
 /// This is used for internal wgpu testing only and _must not_ be used
 /// as a way to check for errors.
@@ -1415,24 +1445,24 @@ pub struct ComputePassDescriptor<'a, A: Api> {
 /// This prevents the issue of one validation error terminating the
 /// entire process.
 pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
-    inner: AtomicBool::new(false),
+    inner: Mutex::new(Vec::new()),
 };
 
 /// Flag for internal testing.
 pub struct ValidationCanary {
-    inner: AtomicBool,
+    inner: Mutex<Vec<String>>,
 }
 
 impl ValidationCanary {
     #[allow(dead_code)] // in some configurations this function is dead
-    fn set(&self) {
-        self.inner.store(true, std::sync::atomic::Ordering::SeqCst);
+    fn add(&self, msg: String) {
+        self.inner.lock().push(msg);
     }
 
-    /// Returns true if any API validation error has occurred in this process
+    /// Returns any API validation errors that hav occurred in this process
     /// since the last call to this function.
-    pub fn get_and_reset(&self) -> bool {
-        self.inner.swap(false, std::sync::atomic::Ordering::SeqCst)
+    pub fn get_and_reset(&self) -> Vec<String> {
+        self.inner.lock().drain(..).collect()
     }
 }
 
@@ -1553,8 +1583,8 @@ pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
     pub offset: u32,
 }
 
-pub type AccelerationStructureBuildFlags = wgt::AccelerationStructureFlags;
-pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
+pub use wgt::AccelerationStructureFlags as AccelerationStructureBuildFlags;
+pub use wgt::AccelerationStructureGeometryFlags;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

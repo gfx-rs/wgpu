@@ -17,7 +17,7 @@ impl<'a> ErrorFormatter<'a> {
         writeln!(self.writer, "      note: {note}").expect("Error formatting error");
     }
 
-    pub fn label(&mut self, label_key: &str, label_value: &str) {
+    pub fn label(&mut self, label_key: &str, label_value: &String) {
         if !label_key.is_empty() && !label_value.is_empty() {
             self.note(&format!("{label_key} = `{label_value}`"));
         }
@@ -162,21 +162,9 @@ pub fn format_pretty_any(
 #[derive(Debug)]
 pub struct ContextError {
     pub string: &'static str,
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        all(
-            feature = "fragile-send-sync-non-atomic-wasm",
-            not(target_feature = "atomics")
-        )
-    ))]
+    #[cfg(send_sync)]
     pub cause: Box<dyn Error + Send + Sync + 'static>,
-    #[cfg(not(any(
-        not(target_arch = "wasm32"),
-        all(
-            feature = "fragile-send-sync-non-atomic-wasm",
-            not(target_feature = "atomics")
-        )
-    )))]
+    #[cfg(not(send_sync))]
     pub cause: Box<dyn Error + 'static>,
     pub label_key: &'static str,
     pub label: String,

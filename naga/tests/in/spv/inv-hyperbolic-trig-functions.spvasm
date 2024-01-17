@@ -1,0 +1,37 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Khronos Glslang Reference Front End; 10
+; Bound: 19
+; Schema: 0
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main"
+               OpSource GLSL 450
+               OpName %main "main"
+               OpName %b "b"
+               OpName %a "a"
+               OpName %c "c"
+               OpName %d "d"
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+%_ptr_Function_float = OpTypePointer Function %float
+%_ptr_Private_float = OpTypePointer Private %float
+          %a = OpVariable %_ptr_Private_float Private
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+          %b = OpVariable %_ptr_Function_float Function
+          %c = OpVariable %_ptr_Function_float Function
+          %d = OpVariable %_ptr_Function_float Function
+         %11 = OpLoad %float %a
+         %12 = OpExtInst %float %1 Asinh %11
+               OpStore %b %12
+         %14 = OpLoad %float %a
+         %15 = OpExtInst %float %1 Acosh %14
+               OpStore %c %15
+         %17 = OpLoad %float %a
+         %18 = OpExtInst %float %1 Atanh %17
+               OpStore %d %18
+               OpReturn
+               OpFunctionEnd

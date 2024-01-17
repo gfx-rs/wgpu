@@ -539,7 +539,7 @@ struct CompiledStage {
 impl super::Device {
     pub(super) unsafe fn create_swapchain(
         &self,
-        surface: &mut super::Surface,
+        surface: &super::Surface,
         config: &crate::SurfaceConfiguration,
         provided_old_swapchain: Option<super::Swapchain>,
     ) -> Result<super::Swapchain, crate::SurfaceError> {
@@ -667,6 +667,9 @@ impl super::Device {
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
             view_formats.push(desc.format)
         }
+        if desc.format.is_multi_planar_format() {
+            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+        }
 
         super::Texture {
             raw: vk_image,
@@ -723,7 +726,9 @@ impl super::Device {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
                 };
-                let needs_temp_options = !runtime_checks || !binding_map.is_empty();
+                let needs_temp_options = !runtime_checks
+                    || !binding_map.is_empty()
+                    || naga_shader.debug_source.is_some();
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -739,6 +744,14 @@ impl super::Device {
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
                     }
+
+                    if let Some(ref debug) = naga_shader.debug_source {
+                        temp_options.debug_info = Some(naga::back::spv::DebugInfo {
+                            source_code: &debug.source_code,
+                            file_name: debug.file_name.as_ref().as_ref(),
+                        })
+                    }
+
                     &temp_options
                 } else {
                     &self.naga_options
@@ -979,11 +992,7 @@ impl crate::Device<super::Api> for super::Device {
             wgt_view_formats = desc.view_formats.clone();
             wgt_view_formats.push(desc.format);
 
-            if self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
-                || self
-                    .enabled_device_extensions()
-                    .contains(&vk::KhrImageFormatListFn::name())
-            {
+            if self.shared.private_caps.image_format_list {
                 vk_view_formats = desc
                     .view_formats
                     .iter()
@@ -991,6 +1000,9 @@ impl crate::Device<super::Api> for super::Device {
                     .collect();
                 vk_view_formats.push(original_format)
             }
+        }
+        if desc.format.is_multi_planar_format() {
+            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
         }
 
         let mut vk_info = vk::ImageCreateInfo::builder()
@@ -1065,7 +1077,7 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let subresource_range = conv::map_subresource_range(&desc.range, desc.format);
+        let subresource_range = conv::map_subresource_range(&desc.range, texture.format);
         let mut vk_info = vk::ImageViewCreateInfo::builder()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(texture.raw)
@@ -1152,7 +1164,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         if desc.anisotropy_clamp != 1 {
-            // We only enable anisotropy if it is supported, and wgpu-hal interface guarentees
+            // We only enable anisotropy if it is supported, and wgpu-hal interface guarantees
             // the clamp is in the range [1, 16] which is always supported if anisotropy is.
             vk_info = vk_info
                 .anisotropy_enable(true)
@@ -1571,6 +1583,14 @@ impl crate::Device<super::Api> for super::Device {
                     });
                 }
                 let mut naga_options = self.naga_options.clone();
+                naga_options.debug_info =
+                    naga_shader
+                        .debug_source
+                        .as_ref()
+                        .map(|d| naga::back::spv::DebugInfo {
+                            source_code: d.source_code.as_ref(),
+                            file_name: d.file_name.as_ref().as_ref(),
+                        });
                 if !desc.runtime_checks {
                     naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                         index: naga::proc::BoundsCheckPolicy::Unchecked,
@@ -1628,7 +1648,7 @@ impl crate::Device<super::Api> for super::Device {
             multiview: desc.multiview,
             ..Default::default()
         };
-        let mut stages = ArrayVec::<_, 2>::new();
+        let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
         let mut vertex_buffers = Vec::with_capacity(desc.vertex_buffers.len());
         let mut vertex_attributes = Vec::new();
 
@@ -2071,10 +2091,12 @@ impl crate::Device<super::Api> for super::Device {
     ) -> crate::AccelerationStructureBuildSizes {
         const CAPACITY: usize = 8;
 
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         let (geometries, primitive_counts) = match *desc.entries {
             crate::AccelerationStructureEntries::Instances(ref instances) => {
@@ -2182,10 +2204,12 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         unsafe {
             ray_tracing_functions
@@ -2201,10 +2225,12 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         let vk_buffer_info = vk::BufferCreateInfo::builder()
             .size(desc.size)
@@ -2264,10 +2290,12 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         acceleration_structure: super::AccelerationStructure,
     ) {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         unsafe {
             ray_tracing_functions

@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 pub struct Context;
 #[derive(Debug)]
@@ -58,22 +58,22 @@ impl crate::Instance<Api> for Context {
 
 impl crate::Surface<Api> for Context {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &Context,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &Context) {}
+    unsafe fn unconfigure(&self, device: &Context) {}
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
-    unsafe fn discard_texture(&mut self, texture: Resource) {}
+    unsafe fn discard_texture(&self, texture: Resource) {}
 }
 
 impl crate::Adapter<Api> for Context {
@@ -102,15 +102,15 @@ impl crate::Adapter<Api> for Context {
 
 impl crate::Queue<Api> for Context {
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&Resource],
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())
     }
     unsafe fn present(
-        &mut self,
-        surface: &mut Context,
+        &self,
+        surface: &Context,
         texture: Resource,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
@@ -284,7 +284,7 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
@@ -347,7 +347,7 @@ impl crate::CommandEncoder<Api> for Encoder {
         &mut self,
         layout: &Resource,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
     }
@@ -373,18 +373,18 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
     }
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
     }

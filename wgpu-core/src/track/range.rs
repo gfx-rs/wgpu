@@ -77,8 +77,8 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
     ) -> impl Iterator<Item = (Range<I>, &T)> + 'a {
         self.ranges
             .iter()
-            .filter(move |&&(ref inner, ..)| inner.end > range.start && inner.start < range.end)
-            .map(move |&(ref inner, ref v)| {
+            .filter(move |&(inner, ..)| inner.end > range.start && inner.start < range.end)
+            .map(move |(inner, v)| {
                 let new_range = inner.start.max(range.start)..inner.end.min(range.end);
 
                 (new_range, v)

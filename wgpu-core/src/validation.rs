@@ -1,4 +1,5 @@
-use crate::{binding_model::BindEntryMap, FastHashMap, FastHashSet};
+use crate::{device::bgl, FastHashMap, FastHashSet};
+use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -58,13 +59,18 @@ impl NumericDimension {
 #[derive(Clone, Copy, Debug)]
 pub struct NumericType {
     dim: NumericDimension,
-    kind: naga::ScalarKind,
-    width: naga::Bytes,
+    scalar: naga::Scalar,
 }
 
 impl fmt::Display for NumericType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}{}{}", self.kind, self.width * 8, self.dim)
+        write!(
+            f,
+            "{:?}{}{}",
+            self.scalar.kind,
+            self.scalar.width * 8,
+            self.dim
+        )
     }
 }
 
@@ -117,11 +123,13 @@ struct EntryPoint {
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
+    dual_source_blending: bool,
 }
 
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
+    features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -246,7 +254,7 @@ pub enum StageError {
     TooManyVaryings { used: u32, limit: u32 },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
-    #[error("Shader global {0:?} is not available in the layout pipeline layout")]
+    #[error("Shader global {0:?} is not available in the pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
     #[error("Unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
     Filtering {
@@ -294,7 +302,9 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
         Tf::Rgba8Snorm => Sf::Rgba8Snorm,
         Tf::Rgba8Uint => Sf::Rgba8Uint,
         Tf::Rgba8Sint => Sf::Rgba8Sint,
+        Tf::Bgra8Unorm => Sf::Bgra8Unorm,
 
+        Tf::Rgb10a2Uint => Sf::Rgb10a2Uint,
         Tf::Rgb10a2Unorm => Sf::Rgb10a2Unorm,
         Tf::Rg11b10Float => Sf::Rg11b10Float,
 
@@ -348,7 +358,9 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
         Sf::Rgba8Snorm => Tf::Rgba8Snorm,
         Sf::Rgba8Uint => Tf::Rgba8Uint,
         Sf::Rgba8Sint => Tf::Rgba8Sint,
+        Sf::Bgra8Unorm => Tf::Bgra8Unorm,
 
+        Sf::Rgb10a2Uint => Tf::Rgb10a2Uint,
         Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
         Sf::Rg11b10Float => Tf::Rg11b10Float,
 
@@ -551,7 +563,9 @@ impl Resource {
                             }
                             naga::ScalarKind::Sint => wgt::TextureSampleType::Sint,
                             naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
-                            naga::ScalarKind::Bool => unreachable!(),
+                            naga::ScalarKind::AbstractInt
+                            | naga::ScalarKind::AbstractFloat
+                            | naga::ScalarKind::Bool => unreachable!(),
                         },
                         view_dimension,
                         multisampled: multi,
@@ -589,77 +603,76 @@ impl Resource {
 
 impl NumericType {
     fn from_vertex_format(format: wgt::VertexFormat) -> Self {
-        use naga::{ScalarKind as Sk, VectorSize as Vs};
+        use naga::{Scalar, VectorSize as Vs};
         use wgt::VertexFormat as Vf;
 
-        let (dim, kind, width) = match format {
-            Vf::Uint32 => (NumericDimension::Scalar, Sk::Uint, 4),
+        let (dim, scalar) = match format {
+            Vf::Uint32 => (NumericDimension::Scalar, Scalar::U32),
             Vf::Uint8x2 | Vf::Uint16x2 | Vf::Uint32x2 => {
-                (NumericDimension::Vector(Vs::Bi), Sk::Uint, 4)
+                (NumericDimension::Vector(Vs::Bi), Scalar::U32)
             }
-            Vf::Uint32x3 => (NumericDimension::Vector(Vs::Tri), Sk::Uint, 4),
+            Vf::Uint32x3 => (NumericDimension::Vector(Vs::Tri), Scalar::U32),
             Vf::Uint8x4 | Vf::Uint16x4 | Vf::Uint32x4 => {
-                (NumericDimension::Vector(Vs::Quad), Sk::Uint, 4)
+                (NumericDimension::Vector(Vs::Quad), Scalar::U32)
             }
-            Vf::Sint32 => (NumericDimension::Scalar, Sk::Sint, 4),
+            Vf::Sint32 => (NumericDimension::Scalar, Scalar::I32),
             Vf::Sint8x2 | Vf::Sint16x2 | Vf::Sint32x2 => {
-                (NumericDimension::Vector(Vs::Bi), Sk::Sint, 4)
+                (NumericDimension::Vector(Vs::Bi), Scalar::I32)
             }
-            Vf::Sint32x3 => (NumericDimension::Vector(Vs::Tri), Sk::Sint, 4),
+            Vf::Sint32x3 => (NumericDimension::Vector(Vs::Tri), Scalar::I32),
             Vf::Sint8x4 | Vf::Sint16x4 | Vf::Sint32x4 => {
-                (NumericDimension::Vector(Vs::Quad), Sk::Sint, 4)
+                (NumericDimension::Vector(Vs::Quad), Scalar::I32)
             }
-            Vf::Float32 => (NumericDimension::Scalar, Sk::Float, 4),
+            Vf::Float32 => (NumericDimension::Scalar, Scalar::F32),
             Vf::Unorm8x2
             | Vf::Snorm8x2
             | Vf::Unorm16x2
             | Vf::Snorm16x2
             | Vf::Float16x2
-            | Vf::Float32x2 => (NumericDimension::Vector(Vs::Bi), Sk::Float, 4),
-            Vf::Float32x3 => (NumericDimension::Vector(Vs::Tri), Sk::Float, 4),
+            | Vf::Float32x2 => (NumericDimension::Vector(Vs::Bi), Scalar::F32),
+            Vf::Float32x3 => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
             Vf::Unorm8x4
             | Vf::Snorm8x4
             | Vf::Unorm16x4
             | Vf::Snorm16x4
             | Vf::Float16x4
-            | Vf::Float32x4 => (NumericDimension::Vector(Vs::Quad), Sk::Float, 4),
-            Vf::Float64 => (NumericDimension::Scalar, Sk::Float, 8),
-            Vf::Float64x2 => (NumericDimension::Vector(Vs::Bi), Sk::Float, 8),
-            Vf::Float64x3 => (NumericDimension::Vector(Vs::Tri), Sk::Float, 8),
-            Vf::Float64x4 => (NumericDimension::Vector(Vs::Quad), Sk::Float, 8),
+            | Vf::Float32x4 => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
+            Vf::Float64 => (NumericDimension::Scalar, Scalar::F64),
+            Vf::Float64x2 => (NumericDimension::Vector(Vs::Bi), Scalar::F64),
+            Vf::Float64x3 => (NumericDimension::Vector(Vs::Tri), Scalar::F64),
+            Vf::Float64x4 => (NumericDimension::Vector(Vs::Quad), Scalar::F64),
         };
 
         NumericType {
             dim,
-            kind,
             //Note: Shader always sees data as int, uint, or float.
             // It doesn't know if the original is normalized in a tighter form.
-            width,
+            scalar,
         }
     }
 
     fn from_texture_format(format: wgt::TextureFormat) -> Self {
-        use naga::{ScalarKind as Sk, VectorSize as Vs};
+        use naga::{Scalar, VectorSize as Vs};
         use wgt::TextureFormat as Tf;
 
-        let (dim, kind) = match format {
+        let (dim, scalar) = match format {
             Tf::R8Unorm | Tf::R8Snorm | Tf::R16Float | Tf::R32Float => {
-                (NumericDimension::Scalar, Sk::Float)
+                (NumericDimension::Scalar, Scalar::F32)
             }
-            Tf::R8Uint | Tf::R16Uint | Tf::R32Uint => (NumericDimension::Scalar, Sk::Uint),
-            Tf::R8Sint | Tf::R16Sint | Tf::R32Sint => (NumericDimension::Scalar, Sk::Sint),
+            Tf::R8Uint | Tf::R16Uint | Tf::R32Uint => (NumericDimension::Scalar, Scalar::U32),
+            Tf::R8Sint | Tf::R16Sint | Tf::R32Sint => (NumericDimension::Scalar, Scalar::I32),
             Tf::Rg8Unorm | Tf::Rg8Snorm | Tf::Rg16Float | Tf::Rg32Float => {
-                (NumericDimension::Vector(Vs::Bi), Sk::Float)
+                (NumericDimension::Vector(Vs::Bi), Scalar::F32)
             }
             Tf::Rg8Uint | Tf::Rg16Uint | Tf::Rg32Uint => {
-                (NumericDimension::Vector(Vs::Bi), Sk::Uint)
+                (NumericDimension::Vector(Vs::Bi), Scalar::U32)
             }
             Tf::Rg8Sint | Tf::Rg16Sint | Tf::Rg32Sint => {
-                (NumericDimension::Vector(Vs::Bi), Sk::Sint)
+                (NumericDimension::Vector(Vs::Bi), Scalar::I32)
             }
-            Tf::R16Snorm | Tf::R16Unorm => (NumericDimension::Scalar, Sk::Float),
-            Tf::Rg16Snorm | Tf::Rg16Unorm => (NumericDimension::Vector(Vs::Bi), Sk::Float),
-            Tf::Rgba16Snorm | Tf::Rgba16Unorm => (NumericDimension::Vector(Vs::Quad), Sk::Float),
+            Tf::R16Snorm | Tf::R16Unorm => (NumericDimension::Scalar, Scalar::F32),
+            Tf::Rg16Snorm | Tf::Rg16Unorm => (NumericDimension::Vector(Vs::Bi), Scalar::F32),
+            Tf::Rgba16Snorm | Tf::Rgba16Unorm => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
             Tf::Rgba8Unorm
             | Tf::Rgba8UnormSrgb
             | Tf::Rgba8Snorm
@@ -667,14 +680,14 @@ impl NumericType {
             | Tf::Bgra8UnormSrgb
             | Tf::Rgb10a2Unorm
             | Tf::Rgba16Float
-            | Tf::Rgba32Float => (NumericDimension::Vector(Vs::Quad), Sk::Float),
-            Tf::Rgba8Uint | Tf::Rgba16Uint | Tf::Rgba32Uint => {
-                (NumericDimension::Vector(Vs::Quad), Sk::Uint)
+            | Tf::Rgba32Float => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
+            Tf::Rgba8Uint | Tf::Rgba16Uint | Tf::Rgba32Uint | Tf::Rgb10a2Uint => {
+                (NumericDimension::Vector(Vs::Quad), Scalar::U32)
             }
             Tf::Rgba8Sint | Tf::Rgba16Sint | Tf::Rgba32Sint => {
-                (NumericDimension::Vector(Vs::Quad), Sk::Sint)
+                (NumericDimension::Vector(Vs::Quad), Scalar::I32)
             }
-            Tf::Rg11b10Float => (NumericDimension::Vector(Vs::Tri), Sk::Float),
+            Tf::Rg11b10Float => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
             Tf::Stencil8
             | Tf::Depth16Unorm
             | Tf::Depth32Float
@@ -683,7 +696,8 @@ impl NumericType {
             | Tf::Depth24PlusStencil8 => {
                 panic!("Unexpected depth format")
             }
-            Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Sk::Float),
+            Tf::NV12 => panic!("Unexpected nv12 format"),
+            Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
             | Tf::Bc2RgbaUnorm
@@ -695,36 +709,35 @@ impl NumericType {
             | Tf::Etc2Rgb8A1Unorm
             | Tf::Etc2Rgb8A1UnormSrgb
             | Tf::Etc2Rgba8Unorm
-            | Tf::Etc2Rgba8UnormSrgb => (NumericDimension::Vector(Vs::Quad), Sk::Float),
+            | Tf::Etc2Rgba8UnormSrgb => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
             Tf::Bc4RUnorm | Tf::Bc4RSnorm | Tf::EacR11Unorm | Tf::EacR11Snorm => {
-                (NumericDimension::Scalar, Sk::Float)
+                (NumericDimension::Scalar, Scalar::F32)
             }
             Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRg11Unorm | Tf::EacRg11Snorm => {
-                (NumericDimension::Vector(Vs::Bi), Sk::Float)
+                (NumericDimension::Vector(Vs::Bi), Scalar::F32)
             }
             Tf::Bc6hRgbUfloat | Tf::Bc6hRgbFloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
-                (NumericDimension::Vector(Vs::Tri), Sk::Float)
+                (NumericDimension::Vector(Vs::Tri), Scalar::F32)
             }
             Tf::Astc {
                 block: _,
                 channel: _,
-            } => (NumericDimension::Vector(Vs::Quad), Sk::Float),
+            } => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
         };
 
         NumericType {
             dim,
-            kind,
             //Note: Shader always sees data as int, uint, or float.
             // It doesn't know if the original is normalized in a tighter form.
-            width: 4,
+            scalar,
         }
     }
 
     fn is_subtype_of(&self, other: &NumericType) -> bool {
-        if self.width > other.width {
+        if self.scalar.width > other.scalar.width {
             return false;
         }
-        if self.kind != other.kind {
+        if self.scalar.kind != other.scalar.kind {
             return false;
         }
         match (self.dim, other.dim) {
@@ -739,7 +752,7 @@ impl NumericType {
     }
 
     fn is_compatible_with(&self, other: &NumericType) -> bool {
-        if self.kind != other.kind {
+        if self.scalar.kind != other.scalar.kind {
             return false;
         }
         match (self.dim, other.dim) {
@@ -765,6 +778,27 @@ pub fn check_texture_format(
     }
 }
 
+pub enum BindingLayoutSource<'a> {
+    /// The binding layout is derived from the pipeline layout.
+    ///
+    /// This will be filled in by the shader binding validation, as it iterates the shader's interfaces.
+    Derived(ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+    /// The binding layout is provided by the user in BGLs.
+    ///
+    /// This will be validated against the shader's interfaces.
+    Provided(ArrayVec<&'a bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+}
+
+impl<'a> BindingLayoutSource<'a> {
+    pub fn new_derived(limits: &wgt::Limits) -> Self {
+        let mut array = ArrayVec::new();
+        for _ in 0..limits.max_bind_groups {
+            array.push(Default::default());
+        }
+        BindingLayoutSource::Derived(array)
+    }
+}
+
 pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
 
 impl Interface {
@@ -775,24 +809,21 @@ impl Interface {
         arena: &naga::UniqueArena<naga::Type>,
     ) {
         let numeric_ty = match arena[ty].inner {
-            naga::TypeInner::Scalar { kind, width } => NumericType {
+            naga::TypeInner::Scalar(scalar) => NumericType {
                 dim: NumericDimension::Scalar,
-                kind,
-                width,
+                scalar,
             },
-            naga::TypeInner::Vector { size, kind, width } => NumericType {
+            naga::TypeInner::Vector { size, scalar } => NumericType {
                 dim: NumericDimension::Vector(size),
-                kind,
-                width,
+                scalar,
             },
             naga::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => NumericType {
                 dim: NumericDimension::Matrix(columns, rows),
-                kind: naga::ScalarKind::Float,
-                width,
+                scalar,
             },
             naga::TypeInner::Struct { ref members, .. } => {
                 for member in members {
@@ -815,6 +846,7 @@ impl Interface {
                 location,
                 interpolation,
                 sampling,
+                .. // second_blend_source
             }) => Varying::Local {
                 location,
                 iv: InterfaceVar {
@@ -832,7 +864,12 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
+    pub fn new(
+        module: &naga::Module,
+        info: &naga::valid::ModuleInfo,
+        limits: wgt::Limits,
+        features: wgt::Features,
+    ) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -906,7 +943,7 @@ impl Interface {
                 ep.sampling_pairs
                     .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
             }
-
+            ep.dual_source_blending = info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
 
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
@@ -914,6 +951,7 @@ impl Interface {
 
         Self {
             limits,
+            features,
             resources,
             entry_points,
         }
@@ -921,8 +959,7 @@ impl Interface {
 
     pub fn check_stage(
         &self,
-        given_layouts: Option<&[&BindEntryMap]>,
-        derived_layouts: &mut [BindEntryMap],
+        layouts: &mut BindingLayoutSource<'_>,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
@@ -946,45 +983,53 @@ impl Interface {
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
-            let result = match given_layouts {
-                Some(layouts) => {
-                    // update the required binding size for this buffer
-                    if let ResourceType::Buffer { size } = res.ty {
-                        match shader_binding_sizes.entry(res.bind.clone()) {
-                            Entry::Occupied(e) => {
-                                *e.into_mut() = size.max(*e.get());
-                            }
-                            Entry::Vacant(e) => {
-                                e.insert(size);
+            let result = 'err: {
+                match layouts {
+                    BindingLayoutSource::Provided(layouts) => {
+                        // update the required binding size for this buffer
+                        if let ResourceType::Buffer { size } = res.ty {
+                            match shader_binding_sizes.entry(res.bind.clone()) {
+                                Entry::Occupied(e) => {
+                                    *e.into_mut() = size.max(*e.get());
+                                }
+                                Entry::Vacant(e) => {
+                                    e.insert(size);
+                                }
                             }
                         }
+
+                        let Some(map) = layouts.get(res.bind.group as usize) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        let Some(entry) = map.get(res.bind.binding) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        if !entry.visibility.contains(stage_bit) {
+                            break 'err Err(BindingError::Invisible);
+                        }
+
+                        res.check_binding_use(entry)
                     }
-                    layouts
-                        .get(res.bind.group as usize)
-                        .and_then(|map| map.get(&res.bind.binding))
-                        .ok_or(BindingError::Missing)
-                        .and_then(|entry| {
-                            if entry.visibility.contains(stage_bit) {
-                                Ok(entry)
-                            } else {
-                                Err(BindingError::Invisible)
+                    BindingLayoutSource::Derived(layouts) => {
+                        let Some(map) = layouts.get_mut(res.bind.group as usize) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        let ty = match res.derive_binding_type() {
+                            Ok(ty) => ty,
+                            Err(error) => break 'err Err(error),
+                        };
+
+                        match map.entry(res.bind.binding) {
+                            indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
+                                break 'err Err(BindingError::InconsistentlyDerivedType)
                             }
-                        })
-                        .and_then(|entry| res.check_binding_use(entry))
-                }
-                None => derived_layouts
-                    .get_mut(res.bind.group as usize)
-                    .ok_or(BindingError::Missing)
-                    .and_then(|set| {
-                        let ty = res.derive_binding_type()?;
-                        match set.entry(res.bind.binding) {
-                            Entry::Occupied(e) if e.get().ty != ty => {
-                                return Err(BindingError::InconsistentlyDerivedType)
-                            }
-                            Entry::Occupied(e) => {
+                            indexmap::map::Entry::Occupied(e) => {
                                 e.into_mut().visibility |= stage_bit;
                             }
-                            Entry::Vacant(e) => {
+                            indexmap::map::Entry::Vacant(e) => {
                                 e.insert(BindGroupLayoutEntry {
                                     binding: res.bind.binding,
                                     ty,
@@ -994,20 +1039,28 @@ impl Interface {
                             }
                         }
                         Ok(())
-                    }),
+                    }
+                }
             };
             if let Err(error) = result {
                 return Err(StageError::Binding(res.bind.clone(), error));
             }
         }
 
-        // check the compatibility between textures and samplers
-        if let Some(layouts) = given_layouts {
+        // Check the compatibility between textures and samplers
+        //
+        // We only need to do this if the binding layout is provided by the user, as derived
+        // layouts will inherently be correctly tagged.
+        if let BindingLayoutSource::Provided(layouts) = layouts {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
-                let texture_layout = &layouts[texture_bind.group as usize][&texture_bind.binding];
-                let sampler_layout = &layouts[sampler_bind.group as usize][&sampler_bind.binding];
+                let texture_layout = layouts[texture_bind.group as usize]
+                    .get(texture_bind.binding)
+                    .unwrap();
+                let sampler_layout = layouts[sampler_bind.group as usize]
+                    .get(sampler_bind.binding)
+                    .unwrap();
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
 
@@ -1123,7 +1176,12 @@ impl Interface {
         }
 
         // Check all vertex outputs and make sure the fragment shader consumes them.
-        if shader_stage == naga::ShaderStage::Fragment {
+        // This requirement is removed if the `SHADER_UNUSED_VERTEX_OUTPUT` feature is enabled.
+        if shader_stage == naga::ShaderStage::Fragment
+            && !self
+                .features
+                .contains(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT)
+        {
             for &index in inputs.keys() {
                 // This is a linear scan, but the count should be low enough
                 // that this should be fine.
@@ -1179,5 +1237,16 @@ impl Interface {
             })
             .collect();
         Ok(outputs)
+    }
+
+    pub fn fragment_uses_dual_source_blending(
+        &self,
+        entry_point_name: &str,
+    ) -> Result<bool, StageError> {
+        let pair = (naga::ShaderStage::Fragment, entry_point_name.to_string());
+        self.entry_points
+            .get(&pair)
+            .ok_or(StageError::MissingEntryPoint(pair.1))
+            .map(|ep| ep.dual_source_blending)
     }
 }

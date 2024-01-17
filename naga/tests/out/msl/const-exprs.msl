@@ -1,0 +1,100 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+constant uint TWO = 2u;
+constant int THREE = 3;
+constant int FOUR = 4;
+constant int FOUR_ALIAS = 4;
+constant int TEST_CONSTANT_ADDITION = 8;
+constant int TEST_CONSTANT_ALIAS_ADDITION = 8;
+constant float PI = 3.141;
+constant float phi_sun = 6.282;
+constant metal::float4 DIV = metal::float4(0.44444445, 0.0, 0.0, 0.0);
+constant int TEXTURE_KIND_REGULAR = 0;
+constant int TEXTURE_KIND_WARP = 1;
+constant int TEXTURE_KIND_SKY = 2;
+constant metal::float2 add_vec = metal::float2(4.0, 5.0);
+constant metal::bool2 compare_vec = metal::bool2(true, false);
+
+void swizzle_of_compose(
+) {
+    metal::int4 out = metal::int4(4, 3, 2, 1);
+}
+
+void index_of_compose(
+) {
+    int out_1 = 2;
+}
+
+void compose_three_deep(
+) {
+    int out_2 = 6;
+}
+
+void non_constant_initializers(
+) {
+    int w = 30;
+    int x = {};
+    int y = {};
+    int z = 70;
+    metal::int4 out_3 = {};
+    int _e2 = w;
+    x = _e2;
+    int _e4 = x;
+    y = _e4;
+    int _e8 = w;
+    int _e9 = x;
+    int _e10 = y;
+    int _e11 = z;
+    out_3 = metal::int4(_e8, _e9, _e10, _e11);
+    return;
+}
+
+void splat_of_constant(
+) {
+    metal::int4 out_4 = metal::int4(-4, -4, -4, -4);
+}
+
+void compose_of_constant(
+) {
+    metal::int4 out_5 = metal::int4(-4, -4, -4, -4);
+}
+
+void compose_of_splat(
+) {
+    metal::float4 x_1 = metal::float4(2.0, 1.0, 1.0, 1.0);
+}
+
+uint map_texture_kind(
+    int texture_kind
+) {
+    switch(texture_kind) {
+        case 0: {
+            return 10u;
+        }
+        case 1: {
+            return 20u;
+        }
+        case 2: {
+            return 30u;
+        }
+        default: {
+            return 0u;
+        }
+    }
+}
+
+kernel void main_(
+) {
+    swizzle_of_compose();
+    index_of_compose();
+    compose_three_deep();
+    non_constant_initializers();
+    splat_of_constant();
+    compose_of_constant();
+    compose_of_splat();
+    return;
+}

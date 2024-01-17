@@ -35,6 +35,11 @@ impl super::AdapterShared {
             Tf::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE), //TODO?
             Tf::Rgba8Uint => (glow::RGBA8UI, glow::RGBA_INTEGER, glow::UNSIGNED_BYTE),
             Tf::Rgba8Sint => (glow::RGBA8I, glow::RGBA_INTEGER, glow::BYTE),
+            Tf::Rgb10a2Uint => (
+                glow::RGB10_A2UI,
+                glow::RGBA_INTEGER,
+                glow::UNSIGNED_INT_2_10_10_10_REV,
+            ),
             Tf::Rgb10a2Unorm => (
                 glow::RGB10_A2,
                 glow::RGBA,
@@ -82,6 +87,7 @@ impl super::AdapterShared {
                 glow::DEPTH_STENCIL,
                 glow::UNSIGNED_INT_24_8,
             ),
+            Tf::NV12 => unreachable!(),
             Tf::Rgb9e5Ufloat => (glow::RGB9_E5, glow::RGB, glow::UNSIGNED_INT_5_9_9_9_REV),
             Tf::Bc1RgbaUnorm => (glow::COMPRESSED_RGBA_S3TC_DXT1_EXT, glow::RGBA, 0),
             Tf::Bc1RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT, glow::RGBA, 0),
@@ -279,18 +285,6 @@ pub fn map_primitive_topology(topology: wgt::PrimitiveTopology) -> u32 {
 }
 
 pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::PrimitiveState {
-    match state.polygon_mode {
-        wgt::PolygonMode::Fill => {}
-        wgt::PolygonMode::Line => panic!(
-            "{:?} is not enabled for this backend",
-            wgt::Features::POLYGON_MODE_LINE
-        ),
-        wgt::PolygonMode::Point => panic!(
-            "{:?} is not enabled for this backend",
-            wgt::Features::POLYGON_MODE_POINT
-        ),
-    }
-
     super::PrimitiveState {
         //Note: we are flipping the front face, so that
         // the Y-flip in the generated GLSL keeps the same visibility.
@@ -305,6 +299,11 @@ pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::Primiti
             None => 0,
         },
         unclipped_depth: state.unclipped_depth,
+        polygon_mode: match state.polygon_mode {
+            wgt::PolygonMode::Fill => glow::FILL,
+            wgt::PolygonMode::Line => glow::LINE,
+            wgt::PolygonMode::Point => glow::POINT,
+        },
     }
 }
 
@@ -376,6 +375,10 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> u32 {
         Bf::Constant => glow::CONSTANT_COLOR,
         Bf::OneMinusConstant => glow::ONE_MINUS_CONSTANT_COLOR,
         Bf::SrcAlphaSaturated => glow::SRC_ALPHA_SATURATE,
+        Bf::Src1 => glow::SRC1_COLOR,
+        Bf::OneMinusSrc1 => glow::ONE_MINUS_SRC1_COLOR,
+        Bf::Src1Alpha => glow::SRC1_ALPHA,
+        Bf::OneMinusSrc1Alpha => glow::ONE_MINUS_SRC1_ALPHA,
     }
 }
 
@@ -408,104 +411,10 @@ pub(super) fn map_storage_access(access: wgt::StorageTextureAccess) -> u32 {
     }
 }
 
-pub(super) fn is_sampler(glsl_uniform_type: u32) -> bool {
-    match glsl_uniform_type {
-        glow::INT_SAMPLER_1D
-        | glow::INT_SAMPLER_1D_ARRAY
-        | glow::INT_SAMPLER_2D
-        | glow::INT_SAMPLER_2D_ARRAY
-        | glow::INT_SAMPLER_2D_MULTISAMPLE
-        | glow::INT_SAMPLER_2D_MULTISAMPLE_ARRAY
-        | glow::INT_SAMPLER_2D_RECT
-        | glow::INT_SAMPLER_3D
-        | glow::INT_SAMPLER_CUBE
-        | glow::INT_SAMPLER_CUBE_MAP_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_1D
-        | glow::UNSIGNED_INT_SAMPLER_1D_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_2D
-        | glow::UNSIGNED_INT_SAMPLER_2D_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE
-        | glow::UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_2D_RECT
-        | glow::UNSIGNED_INT_SAMPLER_3D
-        | glow::UNSIGNED_INT_SAMPLER_CUBE
-        | glow::UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY
-        | glow::SAMPLER_1D
-        | glow::SAMPLER_1D_SHADOW
-        | glow::SAMPLER_1D_ARRAY
-        | glow::SAMPLER_1D_ARRAY_SHADOW
-        | glow::SAMPLER_2D
-        | glow::SAMPLER_2D_SHADOW
-        | glow::SAMPLER_2D_ARRAY
-        | glow::SAMPLER_2D_ARRAY_SHADOW
-        | glow::SAMPLER_2D_MULTISAMPLE
-        | glow::SAMPLER_2D_MULTISAMPLE_ARRAY
-        | glow::SAMPLER_2D_RECT
-        | glow::SAMPLER_2D_RECT_SHADOW
-        | glow::SAMPLER_3D
-        | glow::SAMPLER_CUBE
-        | glow::SAMPLER_CUBE_MAP_ARRAY
-        | glow::SAMPLER_CUBE_MAP_ARRAY_SHADOW
-        | glow::SAMPLER_CUBE_SHADOW => true,
-        _ => false,
-    }
-}
-
-pub(super) fn is_image(glsl_uniform_type: u32) -> bool {
-    match glsl_uniform_type {
-        glow::INT_IMAGE_1D
-        | glow::INT_IMAGE_1D_ARRAY
-        | glow::INT_IMAGE_2D
-        | glow::INT_IMAGE_2D_ARRAY
-        | glow::INT_IMAGE_2D_MULTISAMPLE
-        | glow::INT_IMAGE_2D_MULTISAMPLE_ARRAY
-        | glow::INT_IMAGE_2D_RECT
-        | glow::INT_IMAGE_3D
-        | glow::INT_IMAGE_CUBE
-        | glow::INT_IMAGE_CUBE_MAP_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_1D
-        | glow::UNSIGNED_INT_IMAGE_1D_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_2D
-        | glow::UNSIGNED_INT_IMAGE_2D_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE
-        | glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_2D_RECT
-        | glow::UNSIGNED_INT_IMAGE_3D
-        | glow::UNSIGNED_INT_IMAGE_CUBE
-        | glow::UNSIGNED_INT_IMAGE_CUBE_MAP_ARRAY
-        | glow::IMAGE_1D
-        | glow::IMAGE_1D_ARRAY
-        | glow::IMAGE_2D
-        | glow::IMAGE_2D_ARRAY
-        | glow::IMAGE_2D_MULTISAMPLE
-        | glow::IMAGE_2D_MULTISAMPLE_ARRAY
-        | glow::IMAGE_2D_RECT
-        | glow::IMAGE_3D
-        | glow::IMAGE_CUBE
-        | glow::IMAGE_CUBE_MAP_ARRAY => true,
-        _ => false,
-    }
-}
-
-pub(super) fn is_atomic_counter(glsl_uniform_type: u32) -> bool {
-    glsl_uniform_type == glow::UNSIGNED_INT_ATOMIC_COUNTER
-}
-
-pub(super) fn is_opaque_type(glsl_uniform_type: u32) -> bool {
-    is_sampler(glsl_uniform_type)
-        || is_image(glsl_uniform_type)
-        || is_atomic_counter(glsl_uniform_type)
-}
-
-pub(super) fn uniform_byte_size(glsl_uniform_type: u32) -> u32 {
-    match glsl_uniform_type {
-        glow::FLOAT | glow::INT => 4,
-        glow::FLOAT_VEC2 | glow::INT_VEC2 => 8,
-        glow::FLOAT_VEC3 | glow::INT_VEC3 => 12,
-        glow::FLOAT_VEC4 | glow::INT_VEC4 => 16,
-        glow::FLOAT_MAT2 => 16,
-        glow::FLOAT_MAT3 => 36,
-        glow::FLOAT_MAT4 => 64,
-        _ => panic!("Unsupported uniform datatype! {glsl_uniform_type:#X}"),
+pub(super) fn is_layered_target(target: u32) -> bool {
+    match target {
+        glow::TEXTURE_2D | glow::TEXTURE_CUBE_MAP => false,
+        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY | glow::TEXTURE_3D => true,
+        _ => unreachable!(),
     }
 }

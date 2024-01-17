@@ -1,7 +1,5 @@
-#version 300 es
-precision lowp float;
 // A triangle that fills the whole screen
-const vec2[3] TRIANGLE_POS = vec2[](
+vec2[3] TRIANGLE_POS = vec2[](
   vec2( 0.0, -3.0),
   vec2(-3.0,  1.0),
   vec2( 3.0,  1.0)

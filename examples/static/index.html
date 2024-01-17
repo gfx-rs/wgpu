@@ -1,0 +1,189 @@
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <style type="text/css">
+        :focus {
+            outline: none;
+        }
+
+        body {
+            margin: 0px;
+            background: #fff;
+            font-family: "Calibri", "Arial", sans-serif;
+            width: 100%;
+            height: 100%;
+        }
+
+        .root {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #banner {
+            background: #dee;
+            padding: 0.5em 0;
+            border-bottom: 1px solid #abb;
+
+            @media only screen and (max-width: 1000px) {
+                max-height: 0;
+                transition: max-height 0.15s ease;
+                overflow: hidden;
+                padding: 0;
+            }
+        }
+
+        #banner.visible {
+            max-height: 100%;
+        }
+
+        .banner-prefix {
+            text-align: center;
+        }
+
+        p {
+            font-size: 0.8em;
+            padding: 0;
+            margin: 0.5em 0;
+        }
+
+        .backend-list-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-evenly;
+
+            @media only screen and (max-width: 1000px) {
+                flex-direction: column;
+            }
+        }
+
+        .backend-list {
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            align-content: center;
+            height: 100px;
+
+            @media only screen and (max-width: 1000px) {
+                flex-direction: row;
+                height: initial;
+            }
+        }
+
+        .example-item {
+            @media only screen and (max-width: 1000px) {
+                width: 33vw;
+            }
+
+            @media only screen and (max-width: 500px) {
+                width: 50vw;
+            }
+        }
+
+        .example-link {
+            margin-left: 7px;
+            margin-right: 7px;
+        }
+        
+        .backend-name {
+            text-align: center;
+        }
+
+        .main-canvas {
+            margin: 0;
+            /* This allows the flexbox to grow to max size, this is needed for WebGPU */
+            flex: 1;
+            /* This forces CSS to ignore the width/height of the canvas, this is needed for WebGL */
+            contain: size;
+        }
+
+
+        #menu-button {
+            display: none;
+
+            @media only screen and (max-width: 1000px) {
+                display: block;
+                width: 30px;
+                height: 33px;
+                margin: 0 auto;
+            }
+        }
+
+        #menu-button span {
+            display: block;
+            width: 100%;
+            height: 3px;
+            margin: 6px auto;
+            background-color: #333;
+            transition: all 0.3s ease-in-out;
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="root">
+        <div id="menu-button"><span></span><span></span><span></span></div>
+
+        <div id="banner">
+            <div class="banner-prefix">
+                <p>
+                    <a href="../index.html">
+                        Back to home page
+                    </a>
+                </p>
+            </div>
+            <div class="backend-list-container">
+                <div class="backend-list">
+                    <p class="backend-name">WebGL2</p>
+                    <div class="item-list" id="webgl2-list">
+                        
+                    </div>
+                </div>
+                <div class="backend-list">
+                    <p class="backend-name">WebGPU</p>
+                    <div class="item-list" id="webgpu-list">
+                
+                    </div>
+                </div>
+            </div>
+        </div>
+        <canvas class="main-canvas" id="canvas"></canvas>
+    </div>
+    <script type="module">
+        const params = new URLSearchParams(window.location.search);
+        const backend = params.get("backend");
+        const example = params.get("example");
+        if (backend !== null && example !== null) {
+            import(`./${backend}.js`).then((module) => module.default());
+        } else {
+            window.location.assign(
+                `${window.location.href}?backend=webgl2&example=hello_triangle`
+            );
+        }
+
+        const menuButton = document.getElementById("menu-button");
+        const banner = document.getElementById("banner");
+        menuButton.onclick = () => {
+            if (menuButton.classList.contains("active")) {
+                menuButton.classList.remove("active");
+                banner.classList.remove("visible");
+            } else {
+                menuButton.classList.add("active");
+                banner.classList.add("visible");
+            }
+        };
+    </script>
+</body>
+
+</html>

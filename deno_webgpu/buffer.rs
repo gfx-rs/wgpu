@@ -3,14 +3,12 @@
 use deno_core::error::type_error;
 use deno_core::error::AnyError;
 use deno_core::futures::channel::oneshot;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::ZeroCopyBuf;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::convert::TryFrom;
 use std::rc::Rc;
 use std::time::Duration;
 use wgpu_core::resource::BufferAccessResult;
@@ -40,12 +38,13 @@ impl Resource for WebGpuBufferMapped {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_buffer(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    size: u64,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Cow<str>,
+    #[number] size: u64,
     usage: u32,
     mapped_at_creation: bool,
 ) -> Result<WebGpuResult, AnyError> {
@@ -56,7 +55,7 @@ pub fn op_webgpu_create_buffer(
     let device = device_resource.1;
 
     let descriptor = wgpu_core::resource::BufferDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         size,
         usage: wgpu_types::BufferUsages::from_bits(usage)
             .ok_or_else(|| type_error("usage is not valid"))?,
@@ -70,14 +69,15 @@ pub fn op_webgpu_create_buffer(
   ) => state, WebGpuBuffer)
 }
 
-#[op]
+#[op2(async)]
+#[serde]
 pub async fn op_webgpu_buffer_get_map_async(
     state: Rc<RefCell<OpState>>,
-    buffer_rid: ResourceId,
-    device_rid: ResourceId,
+    #[smi] buffer_rid: ResourceId,
+    #[smi] device_rid: ResourceId,
     mode: u32,
-    offset: u64,
-    size: u64,
+    #[number] offset: u64,
+    #[number] size: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let (sender, receiver) = oneshot::channel::<BufferAccessResult>();
 
@@ -106,7 +106,7 @@ pub async fn op_webgpu_buffer_get_map_async(
                     2 => wgpu_core::device::HostMap::Write,
                     _ => unreachable!(),
                 },
-                callback: wgpu_core::resource::BufferMapCallback::from_rust(callback),
+                callback: Some(wgpu_core::resource::BufferMapCallback::from_rust(callback)),
             }
         ))
         .err();
@@ -123,7 +123,7 @@ pub async fn op_webgpu_buffer_get_map_async(
             {
                 let state = state.borrow();
                 let instance = state.borrow::<super::Instance>();
-                gfx_select!(device => instance.device_poll(device, wgpu_types::Maintain::Wait))
+                gfx_select!(device => instance.device_poll(device, wgpu_types::Maintain::wait()))
                     .unwrap();
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -143,13 +143,14 @@ pub async fn op_webgpu_buffer_get_map_async(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_buffer_get_mapped_range(
     state: &mut OpState,
-    buffer_rid: ResourceId,
-    offset: u64,
-    size: Option<u64>,
-    mut buf: ZeroCopyBuf,
+    #[smi] buffer_rid: ResourceId,
+    #[number] offset: u64,
+    #[number] size: Option<u64>,
+    #[buffer] buf: &mut [u8],
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let buffer_resource = state.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
@@ -172,12 +173,13 @@ pub fn op_webgpu_buffer_get_mapped_range(
     Ok(WebGpuResult::rid(rid))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_buffer_unmap(
     state: &mut OpState,
-    buffer_rid: ResourceId,
-    mapped_rid: ResourceId,
-    buf: Option<ZeroCopyBuf>,
+    #[smi] buffer_rid: ResourceId,
+    #[smi] mapped_rid: ResourceId,
+    #[buffer] buf: Option<&[u8]>,
 ) -> Result<WebGpuResult, AnyError> {
     let mapped_resource = state
         .resource_table
@@ -188,7 +190,7 @@ pub fn op_webgpu_buffer_unmap(
 
     if let Some(buf) = buf {
         let slice = unsafe { std::slice::from_raw_parts_mut(mapped_resource.0, mapped_resource.1) };
-        slice.copy_from_slice(&buf);
+        slice.copy_from_slice(buf);
     }
 
     gfx_ok!(buffer => instance.buffer_unmap(buffer))

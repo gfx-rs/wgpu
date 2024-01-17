@@ -34,6 +34,7 @@ impl super::PrivateCapabilities {
             Tf::Bgra8Unorm => F::B8G8R8A8_UNORM,
             Tf::Rgba8Uint => F::R8G8B8A8_UINT,
             Tf::Rgba8Sint => F::R8G8B8A8_SINT,
+            Tf::Rgb10a2Uint => F::A2B10G10R10_UINT_PACK32,
             Tf::Rgb10a2Unorm => F::A2B10G10R10_UNORM_PACK32,
             Tf::Rg11b10Float => F::B10G11R11_UFLOAT_PACK32,
             Tf::Rg32Uint => F::R32G32_UINT,
@@ -73,6 +74,7 @@ impl super::PrivateCapabilities {
                 }
             }
             Tf::Depth16Unorm => F::D16_UNORM,
+            Tf::NV12 => F::G8_B8R8_2PLANE_420_UNORM,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
             Tf::Bc1RgbaUnormSrgb => F::BC1_RGBA_SRGB_BLOCK,
@@ -198,7 +200,7 @@ impl crate::ColorAttachment<'_, super::Api> {
             .view
             .attachment
             .view_format
-            .sample_type(None)
+            .sample_type(None, None)
             .unwrap()
         {
             wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {
@@ -220,7 +222,7 @@ pub fn derive_image_layout(
     format: wgt::TextureFormat,
 ) -> vk::ImageLayout {
     // Note: depth textures are always sampled with RODS layout
-    let is_color = crate::FormatAspects::from(format).contains(crate::FormatAspects::COLOR);
+    let is_color = !format.is_depth_stencil_format();
     match usage {
         crate::TextureUses::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUses::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -411,6 +413,15 @@ pub fn map_aspects(aspects: crate::FormatAspects) -> vk::ImageAspectFlags {
     if aspects.contains(crate::FormatAspects::STENCIL) {
         flags |= vk::ImageAspectFlags::STENCIL;
     }
+    if aspects.contains(crate::FormatAspects::PLANE_0) {
+        flags |= vk::ImageAspectFlags::PLANE_0;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_1) {
+        flags |= vk::ImageAspectFlags::PLANE_1;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_2) {
+        flags |= vk::ImageAspectFlags::PLANE_2;
+    }
     flags
 }
 
@@ -450,8 +461,7 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
     } else if mode == vk::PresentModeKHR::FIFO {
         Some(wgt::PresentMode::Fifo)
     } else if mode == vk::PresentModeKHR::FIFO_RELAXED {
-        //Some(wgt::PresentMode::Relaxed)
-        None
+        Some(wgt::PresentMode::FifoRelaxed)
     } else {
         log::warn!("Unrecognized present mode {:?}", mode);
         None
@@ -812,6 +822,10 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> vk::BlendFactor {
         Bf::SrcAlphaSaturated => vk::BlendFactor::SRC_ALPHA_SATURATE,
         Bf::Constant => vk::BlendFactor::CONSTANT_COLOR,
         Bf::OneMinusConstant => vk::BlendFactor::ONE_MINUS_CONSTANT_COLOR,
+        Bf::Src1 => vk::BlendFactor::SRC1_COLOR,
+        Bf::OneMinusSrc1 => vk::BlendFactor::ONE_MINUS_SRC1_COLOR,
+        Bf::Src1Alpha => vk::BlendFactor::SRC1_ALPHA,
+        Bf::OneMinusSrc1Alpha => vk::BlendFactor::ONE_MINUS_SRC1_ALPHA,
     }
 }
 

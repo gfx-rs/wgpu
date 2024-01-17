@@ -1,6 +1,15 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+// use here so that the recursive RIDL macro can find the crate
+use winapi::um::unknwnbase::{IUnknown, IUnknownVtbl};
+use winapi::RIDL;
+
+RIDL! {#[uuid(0x63aad0b8, 0x7c24, 0x40ff, 0x85, 0xa8, 0x64, 0x0d, 0x94, 0x4c, 0xc3, 0x25)]
+interface ISwapChainPanelNative(ISwapChainPanelNativeVtbl): IUnknown(IUnknownVtbl) {
+    fn SetSwapChain(swapChain: *const winapi::shared::dxgi1_2::IDXGISwapChain1,) -> winapi::um::winnt::HRESULT,
+}}
+
 winapi::ENUM! {
     enum D3D12_VIEW_INSTANCING_TIER {
         D3D12_VIEW_INSTANCING_TIER_NOT_SUPPORTED  = 0,
