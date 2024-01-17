@@ -37,7 +37,17 @@ Bottom level categories:
 - Hal
 -->
 
-## Unreleased
+## v0.19.0 (2024-01-17)
+
+This release includes:
+- `wgpu`
+- `wgpu-core`
+- `wgpu-hal`
+- `wgpu-types`
+- `wgpu-info`
+- `naga` (skipped from 0.14 to 0.19)
+- `naga-cli` (skipped from 0.14 to 0.19)
+- `d3d12` (skipped from 0.7 to 0.19)
 
 ### Improved Multithreading through internal use of Reference Counting
 
@@ -180,6 +190,29 @@ As part of this work, the public types `naga::ScalarKind` and
 `naga::Literal` now have new variants, `AbstractInt` and `AbstractFloat`.
 
 By @jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](https://github.com/gfx-rs/wgpu/pull/4755).
+
+### `Instance::enumerate_adapters` now returns `Vec<Adapter>` instead of an `ExactSizeIterator`
+
+This allows us to support WebGPU and WebGL in the same binary.
+
+```diff
+- let adapters: Vec<Adapter> = instance.enumerate_adapters(wgpu::Backends::all()).collect();
++ let adapters: Vec<Adapter> = instance.enumerate_adapters(wgpu::Backends::all());
+```
+
+By @wumpf in [#5044](https://github.com/gfx-rs/wgpu/pull/5044)
+
+### `device.poll()` now returns a `MaintainResult` instead of a `bool`
+
+This is a forward looking change, as we plan to add more information to the `MaintainResult` in the future.
+This enum has the same data as the boolean, but with some useful helper functions.
+
+```diff
+- let queue_finished: bool = device.poll(wgpu::Maintain::Wait);
++ let queue_finished: bool = device.poll(wgpu::Maintain::Wait).is_queue_empty();
+```
+
+By @cwfitzgerald in [#5053](https://github.com/gfx-rs/wgpu/pull/5053)
 
 ### New Features
 

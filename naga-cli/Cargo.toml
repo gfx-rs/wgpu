@@ -1,6 +1,6 @@
 [package]
 name = "naga-cli"
-version = "0.14.0"
+version = "0.19.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Shader translation command line tool"
@@ -25,7 +25,7 @@ env_logger = "0.10"
 argh = "0.1.5"
 
 [dependencies.naga]
-version = "0.14"
+version = "0.19"
 path = "../naga"
 features = [
     "compact",
