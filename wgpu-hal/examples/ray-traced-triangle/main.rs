@@ -14,7 +14,7 @@ use std::{
 use winit::window::WindowButtons;
 
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
-const DESIRED_FRAMES: u32 = 3;
+const DESIRED_MAX_LATENCY: u32 = 2;
 
 /// [D3D12_RAYTRACING_INSTANCE_DESC](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_instance_desc)
 /// [VkAccelerationStructureInstanceKHR](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkAccelerationStructureInstanceKHR.html)
@@ -264,9 +264,9 @@ impl<A: hal::Api> Example<A> {
             *surface_caps.formats.first().unwrap()
         };
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: DESIRED_FRAMES
-                .max(*surface_caps.swap_chain_sizes.start())
-                .min(*surface_caps.swap_chain_sizes.end()),
+            maximum_frame_latency: DESIRED_MAX_LATENCY
+                .max(*surface_caps.maximum_frame_latency.start())
+                .min(*surface_caps.maximum_frame_latency.end()),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
             format: surface_format,

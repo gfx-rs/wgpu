@@ -579,7 +579,7 @@ impl super::Device {
         let mut info = vk::SwapchainCreateInfoKHR::builder()
             .flags(raw_flags)
             .surface(surface.raw)
-            .min_image_count(config.swap_chain_size)
+            .min_image_count(config.maximum_frame_latency + 1) // TODO: https://github.com/gfx-rs/wgpu/issues/2869
             .image_format(original_format)
             .image_color_space(color_space)
             .image_extent(vk::Extent2D {

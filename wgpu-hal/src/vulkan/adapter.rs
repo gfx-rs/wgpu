@@ -1848,7 +1848,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
             .collect();
         Some(crate::SurfaceCapabilities {
             formats,
-            swap_chain_sizes: caps.min_image_count..=max_image_count,
+            // TODO: Right now we're always trunkating the swap chain
+            // (presumably - we're actually setting the min image count which isn't necessarily the swap chain size)
+            // Instead, we should use extensions when available to wait in present.
+            // See https://github.com/gfx-rs/wgpu/issues/2869
+            maximum_frame_latency: (caps.min_image_count - 1)..=(max_image_count - 1), // Note this can't underflow since both `min_image_count` is at least one and we already patched `max_image_count`.
             current_extent,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
             present_modes: raw_present_modes

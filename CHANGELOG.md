@@ -98,6 +98,7 @@ By @wumpf in [#5044](https://github.com/gfx-rs/wgpu/pull/5044)
 - Added support for the float32-filterable feature. By @almarklein in [#4759](https://github.com/gfx-rs/wgpu/pull/4759)
 - GPU buffer memory is released during "lose the device". By @bradwerth in [#4851](https://github.com/gfx-rs/wgpu/pull/4851)
 - wgpu and wgpu-core features are now documented on docs.rs. By @wumpf in [#4886](https://github.com/gfx-rs/wgpu/pull/4886)
+- `SurfaceConfiguration` now exposes `desired_maximum_frame_latency` which was previously hard-coded to 2. By setting it to 1 you can reduce latency under the risk of making GPU & CPU work sequential. Currently, on DX12 this affects the `MaximumFrameLatency`, on all other backends except OpenGL the size of the swapchain (on OpenGL this has no effect). By @emilk & @wumpf in [#4899](https://github.com/gfx-rs/wgpu/pull/4899)
 - DeviceLostClosure is guaranteed to be invoked exactly once. By @bradwerth in [#4862](https://github.com/gfx-rs/wgpu/pull/4862)
 
 #### OpenGL

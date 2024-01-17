@@ -1138,7 +1138,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     vec![wgt::PresentMode::Fifo] //TODO
                 },
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
-                swap_chain_sizes: 2..=2,
+                maximum_frame_latency: 2..=2, //TODO, unused currently
                 current_extent: None,
                 usage: crate::TextureUses::COLOR_TARGET,
             })

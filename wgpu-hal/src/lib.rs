@@ -922,11 +922,14 @@ pub struct SurfaceCapabilities {
     /// Must be at least one.
     pub formats: Vec<wgt::TextureFormat>,
 
-    /// Range for the swap chain sizes.
+    /// Range for the number of queued frames.
     ///
-    /// - `swap_chain_sizes.start` must be at least 1.
-    /// - `swap_chain_sizes.end` must be larger or equal to `swap_chain_sizes.start`.
-    pub swap_chain_sizes: RangeInclusive<u32>,
+    /// This adjusts either the swapchain frame count to value + 1 - or sets SetMaximumFrameLatency to the value given,
+    /// or uses a wait-for-present in the acquire method to limit rendering such that it acts like it's a value + 1 swapchain frame set.
+    ///
+    /// - `maximum_frame_latency.start` must be at least 1.
+    /// - `maximum_frame_latency.end` must be larger or equal to `maximum_frame_latency.start`.
+    pub maximum_frame_latency: RangeInclusive<u32>,
 
     /// Current extent of the surface, if known.
     pub current_extent: Option<wgt::Extent3d>,
@@ -1252,9 +1255,9 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
 
 #[derive(Debug, Clone)]
 pub struct SurfaceConfiguration {
-    /// Number of textures in the swap chain. Must be in
-    /// `SurfaceCapabilities::swap_chain_size` range.
-    pub swap_chain_size: u32,
+    /// Maximum number of queued frames. Must be in
+    /// `SurfaceCapabilities::maximum_frame_latency` range.
+    pub maximum_frame_latency: u32,
     /// Vertical synchronization mode.
     pub present_mode: wgt::PresentMode,
     /// Alpha composition mode.

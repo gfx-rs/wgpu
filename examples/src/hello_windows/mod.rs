@@ -30,20 +30,11 @@ impl ViewportDesc {
 
     fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport {
         let size = self.window.inner_size();
-
-        let caps = self.surface.get_capabilities(adapter);
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: caps.formats[0],
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: caps.alpha_modes[0],
-            view_formats: vec![],
-        };
-
+        let config = self
+            .surface
+            .get_default_config(adapter, size.width, size.height)
+            .unwrap();
         self.surface.configure(device, &config);
-
         Viewport { desc: self, config }
     }
 }

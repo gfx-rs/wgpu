@@ -23,7 +23,7 @@ const BUNNY_SIZE: f32 = 0.15 * 256.0;
 const GRAVITY: f32 = -9.8 * 100.0;
 const MAX_VELOCITY: f32 = 750.0;
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
-const DESIRED_FRAMES: u32 = 3;
+const DESIRED_MAX_LATENCY: u32 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -132,9 +132,9 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: DESIRED_FRAMES.clamp(
-                *surface_caps.swap_chain_sizes.start(),
-                *surface_caps.swap_chain_sizes.end(),
+            maximum_frame_latency: DESIRED_MAX_LATENCY.clamp(
+                *surface_caps.maximum_frame_latency.start(),
+                *surface_caps.maximum_frame_latency.end(),
             ),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,

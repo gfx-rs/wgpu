@@ -1982,10 +1982,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                let num_frames = present::DESIRED_NUM_FRAMES
-                    .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
+                let maximum_frame_latency = config.desired_maximum_frame_latency.clamp(
+                    *caps.maximum_frame_latency.start(),
+                    *caps.maximum_frame_latency.end(),
+                );
                 let mut hal_config = hal::SurfaceConfiguration {
-                    swap_chain_size: num_frames,
+                    maximum_frame_latency,
                     present_mode: config.present_mode,
                     composite_alpha_mode: config.alpha_mode,
                     format: config.format,
@@ -2056,7 +2058,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 *presentation = Some(present::Presentation {
                     device: super::any_device::AnyDevice::new(device.clone()),
                     config: config.clone(),
-                    num_frames,
                     acquired_texture: None,
                 });
             }

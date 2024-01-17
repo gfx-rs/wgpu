@@ -320,13 +320,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let pc = &self.shared.private_caps;
         Some(crate::SurfaceCapabilities {
             formats,
-            //Note: this is hardcoded in `CAMetalLayer` documentation
-            swap_chain_sizes: if pc.can_set_maximum_drawables_count {
-                2..=3
+            // We use this here to govern the maximum number of drawables + 1.
+            // See https://developer.apple.com/documentation/quartzcore/cametallayer/2938720-maximumdrawablecount
+            maximum_frame_latency: if pc.can_set_maximum_drawables_count {
+                1..=2
             } else {
-                // 3 is the default in `CAMetalLayer` documentation
+                // 3 is the default value for maximum drawables in `CAMetalLayer` documentation
                 // iOS 10.3 was tested to use 3 on iphone5s
-                3..=3
+                2..=2
             },
             present_modes: if pc.can_set_display_sync {
                 vec![wgt::PresentMode::Fifo, wgt::PresentMode::Immediate]
