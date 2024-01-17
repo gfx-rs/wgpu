@@ -62,6 +62,9 @@ wgsl = ["naga/wgsl-in"]
 ## Enable `ShaderModuleSource::Glsl`
 glsl = ["naga/glsl-in"]
 
+## Enable `ShaderModuleSource::SpirV`
+spirv = ["naga/spv-in", "dep:zerocopy"]
+
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
 ## WebGL/WebGPU objects can not be shared between threads.
@@ -109,6 +112,7 @@ rustc-hash = "1.1"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
+zerocopy = { version = "0.7", optional = true }
 
 [dependencies.naga]
 path = "../naga"

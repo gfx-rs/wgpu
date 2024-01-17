@@ -22,6 +22,8 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::Device as _;
 use parking_lot::RwLock;
+#[cfg(feature = "spirv")]
+use zerocopy::AsBytes;
 
 use wgt::{BufferAddress, TextureFormat};
 
@@ -1192,6 +1194,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     #[cfg(feature = "glsl")]
                     pipeline::ShaderModuleSource::Glsl(ref code, _) => {
                         trace.make_binary("glsl", code.as_bytes())
+                    }
+                    #[cfg(feature = "spirv")]
+                    pipeline::ShaderModuleSource::SpirV(ref code, _) => {
+                        trace.make_binary("spirv", code.as_bytes())
                     }
                     pipeline::ShaderModuleSource::Naga(ref module) => {
                         let string =

@@ -844,9 +844,7 @@ impl crate::Context for ContextWgpuCore {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
-                let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
+                wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv), options)
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
