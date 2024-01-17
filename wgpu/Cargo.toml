@@ -56,10 +56,10 @@ webgl = ["hal", "wgc/gles"]
 # --------------------------------------------------------------------
 
 ## Enable accepting SPIR-V shaders as input.
-spirv = ["naga/spv-in"]
+spirv = ["naga/spv-in", "wgc/spirv"]
 
 ## Enable accepting GLSL shaders as input.
-glsl = ["naga/glsl-in"]
+glsl = ["naga/glsl-in", "wgc/glsl"]
 
 ## Enable accepting WGSL shaders as input.
 wgsl = ["wgc?/wgsl"]
