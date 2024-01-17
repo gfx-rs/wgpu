@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -90,7 +90,7 @@ glow = { version = "0.13", git = "https://github.com/grovesNL/glow.git", rev = "
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.18.0"
+version = "0.19.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
@@ -127,7 +127,7 @@ winapi = { version = "0.3", features = [
     "winuser",
     "dcomp",
 ] }
-d3d12 = { path = "../d3d12/", version = "0.7.0", optional = true, features = [
+d3d12 = { path = "../d3d12/", version = "0.19.0", optional = true, features = [
     "libloading",
 ] }
 
@@ -157,7 +157,7 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 path = "../naga"
-version = "0.14.0"
+version = "0.19.0"
 features = ["clone"]
 
 [build-dependencies]
@@ -166,7 +166,7 @@ cfg_aliases.workspace = true
 # DEV dependencies
 [dev-dependencies.naga]
 path = "../naga"
-version = "0.14.0"
+version = "0.19.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]
