@@ -141,7 +141,7 @@ pub struct Error {
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct ParseError {
-    errors: Vec<Error>,
+    pub errors: Vec<Error>,
 }
 
 impl ParseError {
