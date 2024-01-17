@@ -223,7 +223,7 @@ By @jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](http
 - Align `wgpu_types::CompositeAlphaMode` serde serialization to spec. By @littledivy in [#4940](https://github.com/gfx-rs/wgpu/pull/4940).
 - Fix error message of `ConfigureSurfaceError::TooLarge`. By @Dinnerbone in [#4960](https://github.com/gfx-rs/wgpu/pull/4960).
 - Fix dropping of `DeviceLostCallbackC` params. By @bradwerth in [#5032](https://github.com/gfx-rs/wgpu/pull/5032).
-- Fixed a number of panics. by @nical in [#4999](https://github.com/gfx-rs/wgpu/pull/4999), [#5014](https://github.com/gfx-rs/wgpu/pull/5014), [#5024](https://github.com/gfx-rs/wgpu/pull/5024), [#5025](https://github.com/gfx-rs/wgpu/pull/5025), [#5026](https://github.com/gfx-rs/wgpu/pull/5026), [#5027](https://github.com/gfx-rs/wgpu/pull/5027), [#5028](https://github.com/gfx-rs/wgpu/pull/5028) and [#5042](https://github.com/gfx-rs/wgpu/pull/5042).
+- Fixed a number of panics. By @nical in [#4999](https://github.com/gfx-rs/wgpu/pull/4999), [#5014](https://github.com/gfx-rs/wgpu/pull/5014), [#5024](https://github.com/gfx-rs/wgpu/pull/5024), [#5025](https://github.com/gfx-rs/wgpu/pull/5025), [#5026](https://github.com/gfx-rs/wgpu/pull/5026), [#5027](https://github.com/gfx-rs/wgpu/pull/5027), [#5028](https://github.com/gfx-rs/wgpu/pull/5028) and [#5042](https://github.com/gfx-rs/wgpu/pull/5042).
 - No longer validate surfaces against their allowed extent range on configure. This caused warnings that were almost impossible to avoid. As before, the resulting behavior depends on the compositor. By @wumpf in [#4796](https://github.com/gfx-rs/wgpu/pull/4796).
 
 #### DX12
@@ -240,7 +240,7 @@ By @jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](http
 
 #### WGL
 
-- Create a hidden window per `wgpu::Instance` instead of sharing a global one.
+- Create a hidden window per `wgpu::Instance` instead of sharing a global one. By @Zoxc in [#4603](https://github.com/gfx-rs/wgpu/issues/4603)
 
 #### Naga
 
@@ -257,9 +257,9 @@ By @jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](http
 
 ### Examples
 
-- remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
-- hello-compute example fix failure with "wgpu error: Validation Error" if arguments are missing by @vilcans in [#4939](https://github.com/gfx-rs/wgpu/pull/4939).
-- Made the examples page not crash on Chrome on Android, and responsive to screen sizes by @Dinnerbone in [#4958](https://github.com/gfx-rs/wgpu/pull/4958).
+- remove winit dependency from hello-compute example. By @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
+- hello-compute example fix failure with `wgpu error: Validation Error` if arguments are missing. By @vilcans in [#4939](https://github.com/gfx-rs/wgpu/pull/4939).
+- Made the examples page not crash on Chrome on Android, and responsive to screen sizes. By @Dinnerbone in [#4958](https://github.com/gfx-rs/wgpu/pull/4958).
 
 ## v0.18.2 (2023-12-06)
 
