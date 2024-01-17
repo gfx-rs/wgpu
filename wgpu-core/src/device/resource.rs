@@ -1309,9 +1309,22 @@ impl<A: HalApi> Device<A> {
         let (module, source) = match source {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
-                profiling::scope!("naga::wgsl::parse_str");
+                profiling::scope!("naga::front::wgsl::parse_str");
                 let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
                     pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
+                        source: code.to_string(),
+                        label: desc.label.as_ref().map(|l| l.to_string()),
+                        inner: Box::new(inner),
+                    })
+                })?;
+                (Cow::Owned(module), code.into_owned())
+            }
+            #[cfg(feature = "glsl")]
+            pipeline::ShaderModuleSource::Glsl(code, options) => {
+                profiling::scope!("naga::front::glsl::parse_str");
+                let mut parser = naga::front::glsl::Frontend::default();
+                let module = parser.parse(&options, &code).map_err(|inner| {
+                    pipeline::CreateShaderModuleError::ParsingGlsl(pipeline::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
