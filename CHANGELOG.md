@@ -81,7 +81,7 @@ By @cwfitzgerald in [#4841](https://github.com/gfx-rs/wgpu/pull/4841).
 
 #### `dx12` and `metal` Backend Crate Features
 
-Wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`) backend. These are enabled by default, but don't do anything when not targeting the corresponding OS.
+wgpu now exposes backend feature for the Direct3D 12 (`dx12`) and Metal (`metal`) backend. These are enabled by default, but don't do anything when not targeting the corresponding OS.
 By @daxpedda in [#4815](https://github.com/gfx-rs/wgpu/pull/4815).
 
 ### Direct3D 11 Backend Removal
