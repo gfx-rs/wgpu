@@ -805,8 +805,8 @@ impl crate::Surface<Api> for Surface {
         unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) };
         let waitable = unsafe { swap_chain.GetFrameLatencyWaitableObject() };
 
-        let mut resources = Vec::with_capacity(config.maximum_frame_latency as usize);
-        for i in 0..config.maximum_frame_latency {
+        let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
+        for i in 0..swap_chain_buffer {
             let mut resource = d3d12::Resource::null();
             unsafe {
                 swap_chain.GetBuffer(i, &d3d12_ty::ID3D12Resource::uuidof(), resource.mut_void())
