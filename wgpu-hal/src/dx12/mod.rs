@@ -660,10 +660,14 @@ impl crate::Surface<Api> for Surface {
 
         let non_srgb_format = auxil::dxgi::conv::map_texture_format_nosrgb(config.format);
 
+        // The range for `SetMaximumFrameLatency` is 1-16 so the maximum latency requested should be 15 because we add 1.
+        // https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
+        debug_assert!(config.maximum_frame_latency <= 15);
+
         // Nvidia recommends to use 1-2 more buffers than the maximum latency
         // https://developer.nvidia.com/blog/advanced-api-performance-swap-chains/
         // For high latency extra buffers seems excessive, so go with a minimum of 3 and beyond that add 1.
-        let swap_chain_buffer = (config.maximum_frame_latency + 1).min(3);
+        let swap_chain_buffer = (config.maximum_frame_latency + 1).min(16);
 
         let swap_chain = match self.swap_chain.write().take() {
             //Note: this path doesn't properly re-initialize all of the things
