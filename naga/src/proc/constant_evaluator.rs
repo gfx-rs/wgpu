@@ -916,6 +916,13 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Floor => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
+            crate::MathFunction::Fract => {
+                component_wise_float!(self, span, [arg], |e| {
+                    // N.B., Rust's definition of `fract` is `e - e.trunc()`, so we can't use that
+                    // here.
+                    Ok([e - e.floor()])
+                })
+            }
             crate::MathFunction::Fma => {
                 component_wise_float!(
                     self,
