@@ -174,7 +174,7 @@ impl ParseError {
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.errors.iter().map(|e| write!(f, "{e:?}")).collect()
+        self.errors.iter().try_for_each(|e| write!(f, "{e:?}"))
     }
 }
 
