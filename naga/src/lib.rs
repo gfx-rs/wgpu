@@ -688,7 +688,6 @@ pub enum ImageClass {
 
 /// A data type declared in the module.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "clone", derive(Clone))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -701,7 +700,6 @@ pub struct Type {
 
 /// Enum with additional information, depending on the kind of type.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "clone", derive(Clone))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
