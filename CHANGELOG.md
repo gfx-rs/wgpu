@@ -37,6 +37,12 @@ Bottom level categories:
 - Hal
 -->
 
+## Unreleased
+
+### Documentation
+
+- Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
+
 ## v0.19.0 (2024-01-17)
 
 This release includes:
