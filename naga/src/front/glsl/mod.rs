@@ -13,7 +13,7 @@ To begin, take a look at the documentation for the [`Frontend`].
 */
 
 pub use ast::{Precision, Profile};
-pub use error::{ParseError, Error, ErrorKind, ExpectedToken};
+pub use error::{Error, ErrorKind, ExpectedToken, ParseError};
 pub use token::TokenValue;
 
 use crate::{proc::Layouter, FastHashMap, FastHashSet, Handle, Module, ShaderStage, Span, Type};
