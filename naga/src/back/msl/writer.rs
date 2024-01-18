@@ -2768,7 +2768,9 @@ impl<W: Write> Writer<W> {
                     if !continuing.is_empty() || break_if.is_some() {
                         let gate_name = self.namer.call("loop_init");
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                        writeln!(self.out, "{level}while(true) {{")?;
+                        // The empty inline assembly "call" will prevent the metal compiler
+                        // from optimizing out these potentially-infinte loops.
+                        writeln!(self.out, "{level}while(true) {{__asm__(\"\");")?;
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
@@ -2783,7 +2785,7 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
                     } else {
-                        writeln!(self.out, "{level}while(true) {{")?;
+                        writeln!(self.out, "{level}while(true) {{__asm__(\"\");")?;
                     }
                     self.put_block(level.next(), body, context)?;
                     writeln!(self.out, "{level}}}")?;

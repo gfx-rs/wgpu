@@ -101,7 +101,7 @@ fragment fs_mainOutput fs_main(
     uint i = 0u;
     metal::float3 normal_1 = metal::normalize(in.world_normal);
     bool loop_init = true;
-    while(true) {
+    while(true) {__asm__("");
         if (!loop_init) {
             uint _e40 = i;
             i = _e40 + 1u;
@@ -151,7 +151,7 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
     uint i_1 = 0u;
     metal::float3 normal_2 = metal::normalize(in_1.world_normal);
     bool loop_init_1 = true;
-    while(true) {
+    while(true) {__asm__("");
         if (!loop_init_1) {
             uint _e40 = i_1;
             i_1 = _e40 + 1u;

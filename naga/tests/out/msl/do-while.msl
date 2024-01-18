@@ -9,7 +9,7 @@ void fb1_(
     thread bool& cond
 ) {
     bool loop_init = true;
-    while(true) {
+    while(true) {__asm__("");
         if (!loop_init) {
             bool _e1 = cond;
             if (!(cond)) {

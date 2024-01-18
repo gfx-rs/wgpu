@@ -63,7 +63,7 @@ kernel void main_(
     rq.intersector.force_opacity((_e12.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (_e12.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);
     rq.intersector.accept_any_intersection((_e12.flags & 4) != 0);
     rq.intersection = rq.intersector.intersect(metal::raytracing::ray(_e12.origin, _e12.dir, _e12.tmin, _e12.tmax), acc_struct, _e12.cull_mask);    rq.ready = true;
-    while(true) {
+    while(true) {__asm__("");
         bool _e13 = rq.ready;
         rq.ready = false;
         if (_e13) {

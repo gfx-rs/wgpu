@@ -19,7 +19,7 @@ uint collatz_iterations(
     uint n = {};
     uint i = 0u;
     n = n_base;
-    while(true) {
+    while(true) {__asm__("");
         uint _e4 = n;
         if (_e4 > 1u) {
         } else {

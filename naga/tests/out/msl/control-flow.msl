@@ -31,7 +31,7 @@ void switch_case_break(
 void loop_switch_continue(
     int x
 ) {
-    while(true) {
+    while(true) {__asm__("");
         switch(x) {
             case 1: {
                 continue;

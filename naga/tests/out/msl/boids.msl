@@ -56,7 +56,7 @@ kernel void main_(
     metal::float2 _e14 = particlesSrc.particles[index].vel;
     vVel = _e14;
     bool loop_init = true;
-    while(true) {
+    while(true) {__asm__("");
         if (!loop_init) {
             uint _e91 = i;
             i = _e91 + 1u;
