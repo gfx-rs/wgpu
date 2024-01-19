@@ -36,6 +36,7 @@ impl crate::TextureViewDescriptor<'_> {
 
 fn aspects_to_plane(aspects: crate::FormatAspects) -> u32 {
     match aspects {
+        crate::FormatAspects::STENCIL => 1,
         crate::FormatAspects::PLANE_1 => 1,
         crate::FormatAspects::PLANE_2 => 2,
         _ => 0,
