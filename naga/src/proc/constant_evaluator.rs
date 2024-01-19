@@ -97,7 +97,7 @@ macro_rules! gen_component_wise_extractor {
                         .and_then(|comps| Ok(handler(comps)?.into())),
                 )+
                 &Expression::Compose { ty, ref components } => match &eval.types[ty].inner {
-                    &TypeInner::Vector { size: _, scalar } => match scalar.kind {
+                    &TypeInner::Vector { size, scalar } => match scalar.kind {
                         $(ScalarKind::$scalar_kind)|* => {
                             let first_ty = ty;
                             let mut component_groups =
@@ -132,7 +132,7 @@ macro_rules! gen_component_wise_extractor {
                             let component_groups = component_groups.into_inner().unwrap();
                             let mut new_components =
                                 ArrayVec::<_, { crate::VectorSize::MAX }>::new();
-                            for idx in 0..N {
+                            for idx in 0..(size as u8).into() {
                                 let group = component_groups
                                     .iter()
                                     .map(|cs| cs[idx])
