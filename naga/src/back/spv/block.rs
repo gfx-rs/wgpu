@@ -1183,7 +1183,7 @@ impl<'w> BlockContext<'w> {
                             count_id,
                         ))
                     }
-                    Mf::FindLsb => MathOp::Ext(spirv::GLOp::FindILsb),
+                    Mf::FirstTrailingBit => MathOp::Ext(spirv::GLOp::FindILsb),
                     Mf::FirstLeadingBit => {
                         if arg_ty.scalar_width() == Some(4) {
                             let thing = match arg_scalar_kind {

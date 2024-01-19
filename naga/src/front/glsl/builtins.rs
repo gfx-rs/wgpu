@@ -646,7 +646,7 @@ fn inject_standard_builtins(
                 "bitfieldReverse" => MathFunction::ReverseBits,
                 "bitfieldExtract" => MathFunction::ExtractBits,
                 "bitfieldInsert" => MathFunction::InsertBits,
-                "findLSB" => MathFunction::FindLsb,
+                "findLSB" => MathFunction::FirstTrailingBit,
                 "findMSB" => MathFunction::FirstLeadingBit,
                 _ => unreachable!(),
             };
@@ -695,7 +695,9 @@ fn inject_standard_builtins(
                 // we need to cast the return type of findLsb / findMsb
                 let mc = if scalar.kind == Sk::Uint {
                     match mc {
-                        MacroCall::MathFunction(MathFunction::FindLsb) => MacroCall::FindLsbUint,
+                        MacroCall::MathFunction(MathFunction::FirstTrailingBit) => {
+                            MacroCall::FindLsbUint
+                        }
                         MacroCall::MathFunction(MathFunction::FirstLeadingBit) => {
                             MacroCall::FindMsbUint
                         }
@@ -1789,7 +1791,7 @@ impl MacroCall {
             )?,
             mc @ (MacroCall::FindLsbUint | MacroCall::FindMsbUint) => {
                 let fun = match mc {
-                    MacroCall::FindLsbUint => MathFunction::FindLsb,
+                    MacroCall::FindLsbUint => MathFunction::FirstTrailingBit,
                     MacroCall::FindMsbUint => MathFunction::FirstLeadingBit,
                     _ => unreachable!(),
                 };

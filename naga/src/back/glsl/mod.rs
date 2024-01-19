@@ -3647,7 +3647,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         return Ok(());
                     }
-                    Mf::FindLsb => "findLSB",
+                    Mf::FirstTrailingBit => "findLSB",
                     Mf::FirstLeadingBit => "findMSB",
                     // data packing
                     Mf::Pack4x8snorm => "packSnorm4x8",
@@ -3724,7 +3724,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // so they need to be cast to uint if the argument is also an uint.
                 let ret_might_need_int_to_uint = matches!(
                     fun,
-                    Mf::FindLsb | Mf::FirstLeadingBit | Mf::CountOneBits | Mf::Abs
+                    Mf::FirstTrailingBit | Mf::FirstLeadingBit | Mf::CountOneBits | Mf::Abs
                 );
 
                 // Some GLSL functions only accept signed integers (like abs),
