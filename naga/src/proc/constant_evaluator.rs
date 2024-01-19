@@ -27,6 +27,7 @@ macro_rules! gen_component_wise_extractor {
         scalar_kinds: [$( $scalar_kind:ident ),* $(,)?],
     ) => {
         /// A subset of [`Literal`]s intended to be used for implementing numeric built-ins.
+        #[derive(Debug)]
         enum $target<const N: usize> {
             $(
                 #[doc = concat!(
