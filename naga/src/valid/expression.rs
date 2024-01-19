@@ -1336,7 +1336,7 @@ impl super::Validator {
                     | Mf::CountLeadingZeros
                     | Mf::CountOneBits
                     | Mf::ReverseBits
-                    | Mf::FindLsb
+                    | Mf::FirstTrailingBit
                     | Mf::FirstLeadingBit => {
                         if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));

@@ -1796,7 +1796,7 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                     Mf::ExtractBits => "",
                     Mf::InsertBits => "",
-                    Mf::FindLsb => "",
+                    Mf::FirstTrailingBit => "",
                     Mf::FirstLeadingBit => "",
                     // data packing
                     Mf::Pack4x8snorm => "pack_float_to_snorm4x8",
@@ -1835,7 +1835,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, " - ")?;
                     self.put_expression(arg1.unwrap(), context, false)?;
                     write!(self.out, ")")?;
-                } else if fun == Mf::FindLsb {
+                } else if fun == Mf::FirstTrailingBit {
                     write!(self.out, "((({NAMESPACE}::ctz(")?;
                     self.put_expression(arg, context, true)?;
                     write!(self.out, ") + 1) % 33) - 1)")?;
