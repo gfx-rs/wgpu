@@ -1199,7 +1199,7 @@ pub enum MathFunction {
     ExtractBits,
     InsertBits,
     FindLsb,
-    FindMsb,
+    FirstLeadingBit,
     // data packing
     Pack4x8snorm,
     Pack4x8unorm,

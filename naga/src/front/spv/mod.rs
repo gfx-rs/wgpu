@@ -3027,7 +3027,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Glo::UnpackUnorm2x16 => Mf::Unpack2x16unorm,
                         Glo::UnpackSnorm2x16 => Mf::Unpack2x16snorm,
                         Glo::FindILsb => Mf::FindLsb,
-                        Glo::FindUMsb | Glo::FindSMsb => Mf::FindMsb,
+                        Glo::FindUMsb | Glo::FindSMsb => Mf::FirstLeadingBit,
                         // TODO: https://github.com/gfx-rs/naga/issues/2526
                         Glo::Modf | Glo::Frexp => return Err(Error::UnsupportedExtInst(inst_id)),
                         Glo::IMix

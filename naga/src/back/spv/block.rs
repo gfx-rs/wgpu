@@ -1184,12 +1184,12 @@ impl<'w> BlockContext<'w> {
                         ))
                     }
                     Mf::FindLsb => MathOp::Ext(spirv::GLOp::FindILsb),
-                    Mf::FindMsb => {
+                    Mf::FirstLeadingBit => {
                         if arg_ty.scalar_width() == Some(4) {
                             let thing = match arg_scalar_kind {
                                 Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
                                 Some(crate::ScalarKind::Sint) => spirv::GLOp::FindSMsb,
-                                other => unimplemented!("Unexpected findMSB({:?})", other),
+                                other => unimplemented!("Unexpected firstLeadingBit({:?})", other),
                             };
                             MathOp::Ext(thing)
                         } else {
