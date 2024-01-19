@@ -438,7 +438,13 @@ pub enum DeviceError {
 impl From<hal::DeviceError> for DeviceError {
     fn from(error: hal::DeviceError) -> Self {
         match error {
-            hal::DeviceError::Lost => DeviceError::Lost,
+            hal::DeviceError::Lost => {
+                #[cfg(feature = "device_lost_panic")]
+                panic!("Device lost");
+
+                #[allow(unused)]
+                DeviceError::Lost
+            }
             hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
             hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
         }
