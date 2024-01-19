@@ -65,10 +65,8 @@ void main() {
     ivec4 sign_b = ivec4(-1, -1, -1, -1);
     vec4 sign_d = vec4(-1.0, -1.0, -1.0, -1.0);
     int const_dot = ( + ivec2(0).x * ivec2(0).x + ivec2(0).y * ivec2(0).y);
-    uint first_leading_bit_abs = uint(findMSB(0u));
-    int flb_a = findMSB(-1);
-    ivec2 flb_b = findMSB(ivec2(-1));
-    uvec2 flb_c = uvec2(findMSB(uvec2(1u)));
+    ivec2 flb_b = ivec2(-1, -1);
+    uvec2 flb_c = uvec2(0u, 0u);
     int ftb_a = findLSB(-1);
     uint ftb_b = uint(findLSB(1u));
     ivec2 ftb_c = findLSB(ivec2(-1));
