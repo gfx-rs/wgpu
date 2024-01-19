@@ -10,10 +10,8 @@ fn main() {
     let sign_b = vec4<i32>(-1i, -1i, -1i, -1i);
     let sign_d = vec4<f32>(-1f, -1f, -1f, -1f);
     let const_dot = dot(vec2<i32>(), vec2<i32>());
-    let first_leading_bit_abs = firstLeadingBit(0u);
-    let flb_a = firstLeadingBit(-1i);
-    let flb_b = firstLeadingBit(vec2(-1i));
-    let flb_c = firstLeadingBit(vec2(1u));
+    let flb_b = vec2<i32>(-1i, -1i);
+    let flb_c = vec2<u32>(0u, 0u);
     let ftb_a = firstTrailingBit(-1i);
     let ftb_b = firstTrailingBit(1u);
     let ftb_c = firstTrailingBit(vec2(-1i));
