@@ -61,6 +61,12 @@ Bottom level categories:
         - `tan`
         - `tanh`
 
+### Bug Fixes
+
+#### WGL
+
+- In Surface::configure and Surface::present, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
+
 ## v0.19.0 (2024-01-17)
 
 This release includes:
