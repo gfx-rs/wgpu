@@ -660,10 +660,14 @@ impl crate::Surface<Api> for Surface {
 
         let non_srgb_format = auxil::dxgi::conv::map_texture_format_nosrgb(config.format);
 
+        // The range for `SetMaximumFrameLatency` is 1-16 so the maximum latency requested should be 15 because we add 1.
+        // https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
+        debug_assert!(config.maximum_frame_latency <= 15);
+
         // Nvidia recommends to use 1-2 more buffers than the maximum latency
         // https://developer.nvidia.com/blog/advanced-api-performance-swap-chains/
         // For high latency extra buffers seems excessive, so go with a minimum of 3 and beyond that add 1.
-        let swap_chain_buffer = (config.maximum_frame_latency + 1).min(3);
+        let swap_chain_buffer = (config.maximum_frame_latency + 1).min(16);
 
         let swap_chain = match self.swap_chain.write().take() {
             //Note: this path doesn't properly re-initialize all of the things
@@ -805,8 +809,8 @@ impl crate::Surface<Api> for Surface {
         unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) };
         let waitable = unsafe { swap_chain.GetFrameLatencyWaitableObject() };
 
-        let mut resources = Vec::with_capacity(config.maximum_frame_latency as usize);
-        for i in 0..config.maximum_frame_latency {
+        let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
+        for i in 0..swap_chain_buffer {
             let mut resource = d3d12::Resource::null();
             unsafe {
                 swap_chain.GetBuffer(i, &d3d12_ty::ID3D12Resource::uuidof(), resource.mut_void())
