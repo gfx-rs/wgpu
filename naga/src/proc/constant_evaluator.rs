@@ -28,6 +28,7 @@ macro_rules! gen_component_wise_extractor {
     ) => {
         /// A subset of [`Literal`]s intended to be used for implementing numeric built-ins.
         #[derive(Debug)]
+        #[cfg_attr(test, derive(PartialEq))]
         enum $target<const N: usize> {
             $(
                 #[doc = concat!(
