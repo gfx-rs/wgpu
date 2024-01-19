@@ -788,7 +788,7 @@ impl<'a> ResolveContext<'a> {
                     Mf::ReverseBits |
                     Mf::ExtractBits |
                     Mf::InsertBits |
-                    Mf::FindLsb |
+                    Mf::FirstTrailingBit |
                     Mf::FirstLeadingBit => match *res_arg.inner_with(types)  {
                         Ti::Scalar(scalar @ crate::Scalar {
                             kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,

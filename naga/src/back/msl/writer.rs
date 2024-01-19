@@ -1875,7 +1875,7 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                     Mf::ExtractBits => "",
                     Mf::InsertBits => "",
-                    Mf::FindLsb => "",
+                    Mf::FirstTrailingBit => "",
                     Mf::FirstLeadingBit => "",
                     // data packing
                     Mf::Pack4x8snorm => "pack_float_to_snorm4x8",
@@ -1920,7 +1920,7 @@ impl<W: Write> Writer<W> {
                         self.put_expression(arg1.unwrap(), context, false)?;
                         write!(self.out, ")")?;
                     }
-                    Mf::FindLsb => {
+                    Mf::FirstTrailingBit => {
                         let scalar = context.resolve_type(arg).scalar().unwrap();
                         let constant = scalar.width * 8 + 1;
 
