@@ -647,7 +647,7 @@ fn inject_standard_builtins(
                 "bitfieldExtract" => MathFunction::ExtractBits,
                 "bitfieldInsert" => MathFunction::InsertBits,
                 "findLSB" => MathFunction::FindLsb,
-                "findMSB" => MathFunction::FindMsb,
+                "findMSB" => MathFunction::FirstLeadingBit,
                 _ => unreachable!(),
             };
 
@@ -696,7 +696,9 @@ fn inject_standard_builtins(
                 let mc = if scalar.kind == Sk::Uint {
                     match mc {
                         MacroCall::MathFunction(MathFunction::FindLsb) => MacroCall::FindLsbUint,
-                        MacroCall::MathFunction(MathFunction::FindMsb) => MacroCall::FindMsbUint,
+                        MacroCall::MathFunction(MathFunction::FirstLeadingBit) => {
+                            MacroCall::FindMsbUint
+                        }
                         mc => mc,
                     }
                 } else {
@@ -1788,7 +1790,7 @@ impl MacroCall {
             mc @ (MacroCall::FindLsbUint | MacroCall::FindMsbUint) => {
                 let fun = match mc {
                     MacroCall::FindLsbUint => MathFunction::FindLsb,
-                    MacroCall::FindMsbUint => MathFunction::FindMsb,
+                    MacroCall::FindMsbUint => MathFunction::FirstLeadingBit,
                     _ => unreachable!(),
                 };
                 let res = ctx.add_expression(
