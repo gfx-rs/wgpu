@@ -485,7 +485,7 @@ impl super::MathFunction {
             Self::ExtractBits => 3,
             Self::InsertBits => 4,
             Self::FindLsb => 1,
-            Self::FindMsb => 1,
+            Self::FirstLeadingBit => 1,
             // data packing
             Self::Pack4x8snorm => 1,
             Self::Pack4x8unorm => 1,

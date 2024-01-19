@@ -1876,7 +1876,7 @@ impl<W: Write> Writer<W> {
                     Mf::ExtractBits => "",
                     Mf::InsertBits => "",
                     Mf::FindLsb => "",
-                    Mf::FindMsb => "",
+                    Mf::FirstLeadingBit => "",
                     // data packing
                     Mf::Pack4x8snorm => "pack_float_to_snorm4x8",
                     Mf::Pack4x8unorm => "pack_float_to_unorm4x8",
@@ -1928,7 +1928,7 @@ impl<W: Write> Writer<W> {
                         self.put_expression(arg, context, true)?;
                         write!(self.out, ") + 1) % {constant}) - 1)")?;
                     }
-                    Mf::FindMsb => {
+                    Mf::FirstLeadingBit => {
                         let inner = context.resolve_type(arg);
                         let scalar = inner.scalar().unwrap();
                         let constant = scalar.width * 8 - 1;
@@ -2702,7 +2702,7 @@ impl<W: Write> Writer<W> {
                             }
                         }
                     }
-                    crate::MathFunction::FindMsb
+                    crate::MathFunction::FirstLeadingBit
                     | crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Unpack4xI8
