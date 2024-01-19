@@ -938,3 +938,15 @@ impl crate::Queue<Api> for Queue {
         (1_000_000_000.0 / frequency as f64) as f32
     }
 }
+
+/// A shorthand for producing a `ResourceCreationFailed` error if a ComPtr is null.
+#[inline]
+pub fn null_comptr_check<T: winapi::Interface>(
+    ptr: &d3d12::ComPtr<T>,
+) -> Result<(), crate::DeviceError> {
+    if d3d12::ComPtr::is_null(ptr) {
+        return Err(crate::DeviceError::ResourceCreationFailed);
+    }
+
+    Ok(())
+}

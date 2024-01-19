@@ -16,6 +16,7 @@ use placed as allocation;
 // This is the fast path using gpu_allocator to suballocate buffers and textures.
 #[cfg(feature = "windows_rs")]
 mod placed {
+    use crate::dx12::null_comptr_check;
     use d3d12::ComPtr;
     use parking_lot::Mutex;
     use std::ptr;
@@ -115,6 +116,8 @@ mod placed {
             )
         };
 
+        null_comptr_check(resource)?;
+
         Ok((hr, Some(AllocationWrapper { allocation })))
     }
 
@@ -161,6 +164,8 @@ mod placed {
                 resource.mut_void(),
             )
         };
+
+        null_comptr_check(resource)?;
 
         Ok((hr, Some(AllocationWrapper { allocation })))
     }
@@ -223,6 +228,7 @@ mod placed {
 // This is the older, slower path where it doesn't suballocate buffers.
 // Tracking issue for when it can be removed: https://github.com/gfx-rs/wgpu/issues/3207
 mod committed {
+    use crate::dx12::null_comptr_check;
     use d3d12::ComPtr;
     use parking_lot::Mutex;
     use std::ptr;
@@ -296,6 +302,8 @@ mod committed {
             )
         };
 
+        null_comptr_check(resource)?;
+
         Ok((hr, None))
     }
 
@@ -331,6 +339,8 @@ mod committed {
                 resource.mut_void(),
             )
         };
+
+        null_comptr_check(resource)?;
 
         Ok((hr, None))
     }
