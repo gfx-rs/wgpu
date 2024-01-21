@@ -2,7 +2,8 @@ use crate::{
     binding_model,
     hal_api::HalApi,
     hub::Hub,
-    id::{self},
+    id,
+    id::markers,
     identity::{GlobalIdentityHandlerFactory, Input},
     resource::{Buffer, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation},
@@ -463,18 +464,18 @@ pub struct ImplicitPipelineContext {
 }
 
 pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
-    pub root_id: Input<G, id::PipelineLayoutId>,
-    pub group_ids: &'a [Input<G, id::BindGroupLayoutId>],
+    pub root_id: Input<G, markers::PipelineLayout>,
+    pub group_ids: &'a [Input<G, markers::BindGroupLayout>],
 }
 
 impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
     fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare::<G>(self.root_id).into_id(),
+            root_id: hub.pipeline_layouts.prepare::<G, _>(self.root_id).into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare::<G>(*id_in).into_id())
+                .map(|id_in| hub.bind_group_layouts.prepare::<G, _>(*id_in).into_id())
                 .collect(),
         }
     }

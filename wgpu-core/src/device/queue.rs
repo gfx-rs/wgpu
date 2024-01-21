@@ -12,6 +12,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label,
+    id::markers,
     id::{self, QueueId},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
@@ -37,17 +38,19 @@ use super::Device;
 pub struct Queue<A: HalApi> {
     pub device: Option<Arc<Device<A>>>,
     pub raw: Option<A::Queue>,
-    pub info: ResourceInfo<QueueId>,
+    pub info: ResourceInfo<Queue<A>>,
 }
 
-impl<A: HalApi> Resource<QueueId> for Queue<A> {
+impl<A: HalApi> Resource for Queue<A> {
     const TYPE: ResourceType = "Queue";
 
-    fn as_info(&self) -> &ResourceInfo<QueueId> {
+    type Marker = crate::id::markers::Queue;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<QueueId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -436,7 +439,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: QueueId,
         buffer_size: wgt::BufferSize,
-        id_in: Input<G, id::StagingBufferId>,
+        id_in: Input<G, markers::StagingBuffer>,
     ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
         profiling::scope!("Queue::create_staging_buffer");
         let hub = A::hub(self);
@@ -451,7 +454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(device, buffer_size.get(), device.instance_flags)?;
 
-        let fid = hub.staging_buffers.prepare::<G>(id_in);
+        let fid = hub.staging_buffers.prepare::<G, _>(id_in);
         let (id, _) = fid.assign(staging_buffer);
         resource_log!("Queue::create_staging_buffer {id:?}");
 
@@ -669,7 +672,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        if dst.device.as_info().id() != queue_id {
+        if dst.device.as_info().id() != queue_id.transmute() {
             return Err(DeviceError::WrongDevice.into());
         }
 
@@ -1150,7 +1153,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Err(_) => continue,
                         };
 
-                        if cmdbuf.device.as_info().id() != queue_id {
+                        if cmdbuf.device.as_info().id() != queue_id.transmute() {
                             return Err(DeviceError::WrongDevice.into());
                         }
 

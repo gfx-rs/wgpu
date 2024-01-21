@@ -6,6 +6,7 @@ use crate::{
     device::{queue::Queue, resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
+    id::markers,
     id::{AdapterId, DeviceId, QueueId, SurfaceId},
     identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
@@ -149,18 +150,20 @@ impl Instance {
 
 pub struct Surface {
     pub(crate) presentation: Mutex<Option<Presentation>>,
-    pub(crate) info: ResourceInfo<SurfaceId>,
+    pub(crate) info: ResourceInfo<Surface>,
     pub(crate) raw: AnySurface,
 }
 
-impl Resource<SurfaceId> for Surface {
+impl Resource for Surface {
     const TYPE: ResourceType = "Surface";
 
-    fn as_info(&self) -> &ResourceInfo<SurfaceId> {
+    type Marker = crate::id::markers::Surface;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<SurfaceId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 
@@ -190,7 +193,7 @@ impl Surface {
 
 pub struct Adapter<A: HalApi> {
     pub(crate) raw: hal::ExposedAdapter<A>,
-    pub(crate) info: ResourceInfo<AdapterId>,
+    pub(crate) info: ResourceInfo<Adapter<A>>,
 }
 
 impl<A: HalApi> Adapter<A> {
@@ -382,14 +385,16 @@ impl<A: HalApi> Adapter<A> {
     }
 }
 
-impl<A: HalApi> Resource<AdapterId> for Adapter<A> {
+impl<A: HalApi> Resource for Adapter<A> {
     const TYPE: ResourceType = "Adapter";
 
-    fn as_info(&self) -> &ResourceInfo<AdapterId> {
+    type Marker = crate::id::markers::Adapter;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<AdapterId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -478,7 +483,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
-        id_in: Input<G, SurfaceId>,
+        id_in: Input<G, markers::Surface>,
     ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface");
 
@@ -526,7 +531,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw: hal_surface,
         };
 
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G, _>(id_in).assign(surface);
         Ok(id)
     }
 
@@ -537,7 +542,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn instance_create_surface_metal(
         &self,
         layer: *mut std::ffi::c_void,
-        id_in: Input<G, SurfaceId>,
+        id_in: Input<G, markers::Surface>,
     ) -> SurfaceId {
         profiling::scope!("Instance::create_surface_metal");
 
@@ -561,7 +566,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G, _>(id_in).assign(surface);
         id
     }
 
@@ -572,7 +577,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn instance_create_surface_from_visual(
         &self,
         visual: *mut std::ffi::c_void,
-        id_in: Input<G, SurfaceId>,
+        id_in: Input<G, markers::Surface>,
     ) -> SurfaceId {
         profiling::scope!("Instance::instance_create_surface_from_visual");
 
@@ -592,7 +597,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G, _>(id_in).assign(surface);
         id
     }
 
@@ -603,7 +608,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn instance_create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
-        id_in: Input<G, SurfaceId>,
+        id_in: Input<G, markers::Surface>,
     ) -> SurfaceId {
         profiling::scope!("Instance::instance_create_surface_from_surface_handle");
 
@@ -625,7 +630,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G, _>(id_in).assign(surface);
         id
     }
 
@@ -636,7 +641,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn instance_create_surface_from_swap_chain_panel(
         &self,
         swap_chain_panel: *mut std::ffi::c_void,
-        id_in: Input<G, SurfaceId>,
+        id_in: Input<G, markers::Surface>,
     ) -> SurfaceId {
         profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
 
@@ -658,7 +663,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G, _>(id_in).assign(surface);
         id
     }
 
@@ -703,7 +708,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         _: A,
         instance: &Option<A::Instance>,
-        inputs: &AdapterInputs<Input<G, AdapterId>>,
+        inputs: &AdapterInputs<Input<G, markers::Adapter>>,
         list: &mut Vec<AdapterId>,
     ) {
         let inst = match *instance {
@@ -722,12 +727,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         for raw in hal_adapters {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-            let (id, _) = hub.adapters.prepare::<G>(id_backend).assign(adapter);
+            let (id, _) = hub.adapters.prepare::<G, _>(id_backend).assign(adapter);
             list.push(id);
         }
     }
 
-    pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
+    pub fn enumerate_adapters(
+        &self,
+        inputs: AdapterInputs<Input<G, markers::Adapter>>,
+    ) -> Vec<AdapterId> {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
 
@@ -758,7 +766,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     fn select<A: HalApi>(
         &self,
         selected: &mut usize,
-        new_id: Option<Input<G, AdapterId>>,
+        new_id: Option<Input<G, markers::Adapter>>,
         mut list: Vec<hal::ExposedAdapter<A>>,
     ) -> Option<AdapterId> {
         match selected.checked_sub(list.len()) {
@@ -771,7 +779,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
                 let (id, _) = HalApi::hub(self)
                     .adapters
-                    .prepare::<G>(new_id.unwrap())
+                    .prepare::<G, _>(new_id.unwrap())
                     .assign(adapter);
                 Some(id)
             }
@@ -781,7 +789,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
-        inputs: AdapterInputs<Input<G, AdapterId>>,
+        inputs: AdapterInputs<Input<G, markers::Adapter>>,
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("Instance::request_adapter");
         api_log!("Instance::request_adapter");
@@ -947,24 +955,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn create_adapter_from_hal<A: HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
-        input: Input<G, AdapterId>,
+        input: Input<G, markers::Adapter>,
     ) -> AdapterId {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let fid = A::hub(self).adapters.prepare::<G>(input);
+        let fid = A::hub(self).adapters.prepare::<G, _>(input);
 
-        let (id, _adapter): (crate::id::Id<Adapter<hal::empty::Api>>, Arc<Adapter<A>>) =
-            match A::VARIANT {
-                #[cfg(vulkan)]
-                Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)),
-                #[cfg(metal)]
-                Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
-                #[cfg(dx12)]
-                Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
-                #[cfg(gles)]
-                Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
-                _ => unreachable!(),
-            };
+        let (id, _adapter): (_, Arc<Adapter<A>>) = match A::VARIANT {
+            #[cfg(vulkan)]
+            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)),
+            #[cfg(metal)]
+            Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
+            #[cfg(dx12)]
+            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
+            #[cfg(gles)]
+            Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
+            _ => unreachable!(),
+        };
         resource_log!("Created Adapter {:?}", id);
         id
     }
@@ -1065,15 +1072,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-        device_id_in: Input<G, DeviceId>,
-        queue_id_in: Input<G, QueueId>,
+        device_id_in: Input<G, markers::Device>,
+        queue_id_in: Input<G, markers::Queue>,
     ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
         let hub = A::hub(self);
-        let device_fid = hub.devices.prepare::<G>(device_id_in);
-        let queue_fid = hub.queues.prepare::<G>(queue_id_in);
+        let device_fid = hub.devices.prepare::<G, markers::Device>(device_id_in);
+        let queue_fid = hub.queues.prepare::<G, markers::Queue>(queue_id_in);
 
         let error = loop {
             let adapter = match hub.adapters.get(adapter_id) {
@@ -1114,14 +1121,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         hal_device: OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-        device_id_in: Input<G, DeviceId>,
-        queue_id_in: Input<G, QueueId>,
+        device_id_in: Input<G, markers::Device>,
+        queue_id_in: Input<G, markers::Queue>,
     ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
         profiling::scope!("Global::create_device_from_hal");
 
         let hub = A::hub(self);
-        let devices_fid = hub.devices.prepare::<G>(device_id_in);
-        let queues_fid = hub.queues.prepare::<G>(queue_id_in);
+        let devices_fid = hub.devices.prepare::<G, markers::Device>(device_id_in);
+        let queues_fid = hub.queues.prepare::<G, markers::Queue>(queue_id_in);
 
         let error = loop {
             let adapter = match hub.adapters.get(adapter_id) {

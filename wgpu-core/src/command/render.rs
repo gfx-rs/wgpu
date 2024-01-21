@@ -784,10 +784,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         trackers: &mut Tracker<A>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         pending_query_resets: &mut QueryResetMap<A>,
-        view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
-        buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &'a Storage<Texture<A>, id::TextureId>,
-        query_set_guard: &'a Storage<QuerySet<A>, id::QuerySetId>,
+        view_guard: &'a Storage<TextureView<A>>,
+        buffer_guard: &'a Storage<Buffer<A>>,
+        texture_guard: &'a Storage<Texture<A>>,
+        query_set_guard: &'a Storage<QuerySet<A>>,
         snatch_guard: &SnatchGuard<'a>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::start");
@@ -2391,7 +2391,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (trackers, pending_discard_init_fixups)
         };
 
-        let cmd_buf = hub.command_buffers.get(encoder_id).unwrap();
+        let cmd_buf = hub.command_buffers.get(encoder_id.transmute()).unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

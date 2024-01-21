@@ -5,7 +5,6 @@ use wgt::Backend;
 use crate::{
     hal_api::HalApi,
     hub::{HubReport, Hubs},
-    id::SurfaceId,
     identity::GlobalIdentityHandlerFactory,
     instance::{Instance, Surface},
     registry::{Registry, RegistryReport},
@@ -47,7 +46,7 @@ impl GlobalReport {
 
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
-    pub surfaces: Registry<SurfaceId, Surface>,
+    pub surfaces: Registry<Surface>,
     pub(crate) hubs: Hubs,
     _phantom: PhantomData<G>,
 }
