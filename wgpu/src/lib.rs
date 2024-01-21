@@ -1812,7 +1812,7 @@ impl Instance {
             );
         }
 
-        #[cfg(webgpu)]
+        #[cfg(all(webgpu, web_sys_unstable_apis))]
         {
             let is_only_available_backend = !cfg!(wgpu_core);
             let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
@@ -3086,7 +3086,7 @@ impl<'a> BufferSlice<'a> {
     /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
     ///
     /// This is only available on WebGPU, on any other backends this will return `None`.
-    #[cfg(webgpu)]
+    #[cfg(all(webgpu, web_sys_unstable_apis))]
     pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
         self.buffer
             .context

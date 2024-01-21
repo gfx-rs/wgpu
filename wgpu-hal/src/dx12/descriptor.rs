@@ -1,3 +1,4 @@
+use super::null_comptr_check;
 use crate::auxil::dxgi::result::HResult as _;
 use bit_set::BitSet;
 use parking_lot::Mutex;
@@ -52,6 +53,8 @@ impl GeneralHeap {
                 )
                 .into_device_result("Descriptor heap creation")?
         };
+
+        null_comptr_check(&raw)?;
 
         Ok(Self {
             raw: raw.clone(),
@@ -129,6 +132,8 @@ impl FixedSizeHeap {
                 0,
             )
             .into_device_result("Descriptor heap creation")?;
+
+        null_comptr_check(&heap)?;
 
         Ok(Self {
             handle_size: device.get_descriptor_increment_size(ty) as _,
@@ -253,6 +258,8 @@ impl CpuHeap {
         let raw = device
             .create_descriptor_heap(total, ty, d3d12::DescriptorHeapFlags::empty(), 0)
             .into_device_result("CPU descriptor heap creation")?;
+
+        null_comptr_check(&raw)?;
 
         Ok(Self {
             inner: Mutex::new(CpuHeapInner {

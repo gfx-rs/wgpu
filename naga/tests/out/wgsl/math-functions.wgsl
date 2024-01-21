@@ -12,7 +12,7 @@ fn main() {
     let sign_c = sign(-1f);
     let sign_d = sign(vec4(-1f));
     let const_dot = dot(vec2<i32>(), vec2<i32>());
-    let first_leading_bit_abs = firstLeadingBit(abs(0u));
+    let first_leading_bit_abs = firstLeadingBit(0u);
     let flb_a = firstLeadingBit(-1i);
     let flb_b = firstLeadingBit(vec2(-1i));
     let flb_c = firstLeadingBit(vec2(1u));
