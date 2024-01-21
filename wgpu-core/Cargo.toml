@@ -63,7 +63,7 @@ wgsl = ["naga/wgsl-in"]
 glsl = ["naga/glsl-in"]
 
 ## Enable `ShaderModuleSource::SpirV`
-spirv = ["naga/spv-in", "dep:zerocopy"]
+spirv = ["naga/spv-in", "dep:bytemuck"]
 
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
@@ -99,6 +99,7 @@ dx12 = ["hal/dx12"]
 arrayvec = "0.7"
 bit-vec = "0.6"
 bitflags = "2"
+bytemuck = { version = "1.14", optional = true }
 codespan-reporting = "0.11"
 indexmap = "2"
 log = "0.4"
@@ -112,7 +113,6 @@ rustc-hash = "1.1"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
-zerocopy = { version = "0.7", optional = true }
 
 [dependencies.naga]
 path = "../naga"
