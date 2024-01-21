@@ -39,6 +39,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### Documentation
+
+- Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
+
 ### New features
 
 - Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
