@@ -22,8 +22,6 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::Device as _;
 use parking_lot::RwLock;
-#[cfg(feature = "spirv")]
-use {bytemuck::cast_slice, std::borrow::Borrow};
 
 use wgt::{BufferAddress, TextureFormat};
 
@@ -1197,7 +1195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     #[cfg(feature = "spirv")]
                     pipeline::ShaderModuleSource::SpirV(ref code, _) => {
-                        trace.make_binary("spirv", cast_slice::<u32, u8>(code.borrow()))
+                        trace.make_binary("spirv", bytemuck::cast_slice::<u32, u8>(&code))
                     }
                     pipeline::ShaderModuleSource::Naga(ref module) => {
                         let string =
