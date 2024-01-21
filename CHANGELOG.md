@@ -37,6 +37,36 @@ Bottom level categories:
 - Hal
 -->
 
+## Unreleased
+
+### New features
+
+- Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
+    - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
+        - `abs`
+        - `acos`
+        - `acosh`
+        - `asin`
+        - `asinh`
+        - `atan`
+        - `atanh`
+        - `cos`
+        - `cosh`
+        - `round`
+        - `saturate`
+        - `sin`
+        - `sinh`
+        - `sqrt`
+        - `step`
+        - `tan`
+        - `tanh`
+
+### Bug Fixes
+
+#### WGL
+
+- In Surface::configure and Surface::present, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
+
 ## v0.19.0 (2024-01-17)
 
 This release includes:
