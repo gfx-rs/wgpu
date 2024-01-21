@@ -39,10 +39,6 @@ Bottom level categories:
 
 ## Unreleased
 
-### Documentation
-
-- Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
-
 ### New features
 
 - Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
@@ -65,11 +61,27 @@ Bottom level categories:
         - `tan`
         - `tanh`
 
+## v0.19.1 (2024-01-21)
+
 ### Bug Fixes
 
-#### WGL
+#### DX12
 
-- In Surface::configure and Surface::present, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
+- Properly register all swapchain buffers to prevent error on surface present. By @dtzxporter in [#5091](https://github.com/gfx-rs/wgpu/pull/5091)
+- Check for extra null states when creating resources. By @nical in [#5096](https://github.com/gfx-rs/wgpu/pull/5096)
+- Fix depth-only and stencil-only views causing crashes. By @teoxoy in [#5100](https://github.com/gfx-rs/wgpu/pull/5100)
+
+#### OpenGL
+
+- In Surface::configure and Surface::present on Windows, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
+
+#### WebGPU
+
+- Improve error message when compiling WebGPU backend on wasm without the `web_sys_unstable_apis` set. By @rukai in [#5104](https://github.com/gfx-rs/wgpu/pull/5104)
+
+### Documentation
+
+- Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
 
 ## v0.19.0 (2024-01-17)
 
