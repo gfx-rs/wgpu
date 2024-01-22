@@ -380,7 +380,7 @@ impl<A: HalApi> Device<A> {
         let mut device_lost_invocations = SmallVec::new();
         if !self.is_valid() && life_tracker.queue_empty() {
             // We can release gpu resources associated with this device.
-            life_tracker.release_gpu_resources();
+            self.release_gpu_resources();
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
@@ -3331,7 +3331,6 @@ impl<A: HalApi> Device<A> {
             // It's important to not hold the lock while calling the closure.
             drop(life_lock);
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
-            life_lock = self.lock_life();
         }
 
         // 2) Complete any outstanding mapAsync() steps.
@@ -3343,7 +3342,26 @@ impl<A: HalApi> Device<A> {
         // until they are cleared, and then drop the device.
 
         // Eagerly release GPU resources.
-        life_lock.release_gpu_resources();
+        self.release_gpu_resources();
+    }
+
+    pub(crate) fn release_gpu_resources(&self) {
+        // This is called when the device is lost, which makes every associated
+        // resource invalid and unusable. This is an opportunity to release all of
+        // the underlying gpu resources, even though the objects remain visible to
+        // the user agent. We purge this memory naturally when resources have been
+        // moved into the appropriate buckets, so this function just needs to
+        // initiate movement into those buckets, and it can do that by calling
+        // "destroy" on all the resources we know about.
+
+        // During these iterations, we discard all errors. We don't care!
+        let trackers = self.trackers.lock();
+        for buffer in trackers.buffers.used_resources() {
+            let _ = buffer.destroy();
+        }
+        for texture in trackers.textures.used_resources() {
+            let _ = texture.destroy();
+        }
     }
 }
 

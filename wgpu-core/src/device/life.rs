@@ -837,47 +837,4 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
         pending_callbacks
     }
-
-    pub(crate) fn release_gpu_resources(&mut self) {
-        // This is called when the device is lost, which makes every associated
-        // resource invalid and unusable. This is an opportunity to release all of
-        // the underlying gpu resources, even though the objects remain visible to
-        // the user agent. We purge this memory naturally when resources have been
-        // moved into the appropriate buckets, so this function just needs to
-        // initiate movement into those buckets, and it can do that by calling
-        // "destroy" on all the resources we know about which aren't already marked
-        // for cleanup.
-
-        // During these iterations, we discard all errors. We don't care!
-
-        // Destroy all the mapped buffers.
-        for buffer in &self.mapped {
-            let _ = buffer.destroy();
-        }
-
-        // Destroy all the unmapped buffers.
-        for buffer in &self.ready_to_map {
-            let _ = buffer.destroy();
-        }
-
-        // Destroy all the future_suspected_buffers.
-        for buffer in &self.future_suspected_buffers {
-            let _ = buffer.destroy();
-        }
-
-        // Destroy the buffers in all active submissions.
-        for submission in &self.active {
-            for buffer in &submission.mapped {
-                let _ = buffer.destroy();
-            }
-        }
-
-        // Destroy all the future_suspected_textures.
-        // TODO: texture.destroy is not implemented
-        /*
-        for texture in &self.future_suspected_textures {
-            let _ = texture.destroy();
-        }
-        */
-    }
 }

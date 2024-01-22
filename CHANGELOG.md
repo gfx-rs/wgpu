@@ -45,6 +45,8 @@ Bottom level categories:
 
 ### New features
 
+#### General
+
 - Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
     - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
         - `abs`
@@ -64,6 +66,8 @@ Bottom level categories:
         - `step`
         - `tan`
         - `tanh`
+- Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
+
 
 ### Bug Fixes
 
