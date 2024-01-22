@@ -852,10 +852,7 @@ impl crate::Context for ContextWgpuCore {
                 stage,
                 defines,
             } => {
-                let options = naga::front::glsl::Options {
-                    stage,
-                    defines: defines.clone(),
-                };
+                let options = naga::front::glsl::Options { stage, defines };
                 wgc::pipeline::ShaderModuleSource::Glsl(Borrowed(shader), options)
             }
             #[cfg(feature = "wgsl")]
