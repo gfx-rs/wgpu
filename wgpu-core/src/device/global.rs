@@ -1195,7 +1195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     #[cfg(feature = "spirv")]
                     pipeline::ShaderModuleSource::SpirV(ref code, _) => {
-                        trace.make_binary("spirv", bytemuck::cast_slice::<u32, u8>(&code))
+                        trace.make_binary("spirv", bytemuck::cast_slice::<u32, u8>(code))
                     }
                     pipeline::ShaderModuleSource::Naga(ref module) => {
                         let string =
