@@ -487,7 +487,7 @@ impl PhysicalDeviceFeatures {
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
 
         features.set(
-            F::SHADER_I64_IMAGE_ATOMIC,
+            F::SHADER_I64_TEXTURE_ATOMIC,
             caps.supports_extension(vk::ExtShaderImageAtomicInt64Fn::name()),
         );
 
@@ -828,7 +828,7 @@ impl PhysicalDeviceCapabilities {
         }
 
         // Require `VK_EXT_shader_image_atomic_int64` if the associated feature was requested
-        if requested_features.contains(wgt::Features::SHADER_I64_IMAGE_ATOMIC) {
+        if requested_features.contains(wgt::Features::SHADER_I64_TEXTURE_ATOMIC) {
             extensions.push(vk::ExtShaderImageAtomicInt64Fn::name());
         }
 
@@ -1473,7 +1473,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Int64);
             }
 
-            if features.contains(wgt::Features::SHADER_I64_IMAGE_ATOMIC) {
+            if features.contains(wgt::Features::SHADER_I64_TEXTURE_ATOMIC) {
                 capabilities.push(spv::Capability::Int64ImageEXT);
                 capabilities.push(spv::Capability::Int64Atomics);
             }

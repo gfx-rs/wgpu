@@ -872,7 +872,7 @@ bitflags::bitflags! {
         /// - DX12 (with Shader Model 6.6 and AtomicInt64OnTypedResourceSupported)
         ///
         /// This is a native only feature.
-        const SHADER_I64_IMAGE_ATOMIC = 1 << 64;
+        const SHADER_I64_TEXTURE_ATOMIC = 1 << 64;
     }
 }
 

@@ -111,7 +111,7 @@ bitflags::bitflags! {
         /// Support for 64-bit signed and unsigned integers.
         const SHADER_I64 = 0x8000;
         /// Support for atomic operations on 64-bit signed and unsigned integer storage textures within compute shaders.
-        const SHADER_I64_IMAGE_ATOMIC = 0x10000;
+        const SHADER_I64_TEXTURE_ATOMIC = 0x10000;
     }
 }
 

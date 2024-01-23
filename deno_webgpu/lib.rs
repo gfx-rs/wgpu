@@ -651,7 +651,7 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features.0.contains("shader-i64"),
         );
         features.set(
-            wgpu_types::Features::SHADER_I64_IMAGE_ATOMIC,
+            wgpu_types::Features::SHADER_I64_TEXTURE_ATOMIC,
             required_features.0.contains("shader-i64-image-atomic"),
         );
 

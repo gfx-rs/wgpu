@@ -321,7 +321,7 @@ impl super::Adapter {
             hr == 0 && features9.AtomicInt64OnTypedResourceSupported != 0
         };
         features.set(
-            wgt::Features::SHADER_I64_IMAGE_ATOMIC,
+            wgt::Features::SHADER_I64_TEXTURE_ATOMIC,
             atomic_int64_on_typed_resource_supported,
         );
 
