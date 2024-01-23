@@ -844,9 +844,7 @@ impl crate::Context for ContextWgpuCore {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
-                let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
+                wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv), options)
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
@@ -854,12 +852,8 @@ impl crate::Context for ContextWgpuCore {
                 stage,
                 defines,
             } => {
-                // Parse the given shader code and store its representation.
                 let options = naga::front::glsl::Options { stage, defines };
-                let mut parser = naga::front::glsl::Frontend::default();
-                let module = parser.parse(&options, shader).unwrap();
-
-                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
+                wgc::pipeline::ShaderModuleSource::Glsl(Borrowed(shader), options)
             }
             #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
