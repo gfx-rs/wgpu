@@ -646,6 +646,14 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT,
             required_features.0.contains("shader-unused-vertex-output"),
         );
+        features.set(
+            wgpu_types::Features::SHADER_I64,
+            required_features.0.contains("shader-i64"),
+        );
+        features.set(
+            wgpu_types::Features::SHADER_I64_IMAGE_ATOMIC,
+            required_features.0.contains("shader-i64-image-atomic"),
+        );
 
         features
     }

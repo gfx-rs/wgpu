@@ -41,6 +41,7 @@ pub struct PhysicalDeviceFeatures {
     ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
     zero_initialize_workgroup_memory:
         Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
+    shader_image_atomic_int64: Option<vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -86,6 +87,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.ray_query {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_image_atomic_int64 {
             info = info.push_next(feature);
         }
         info
@@ -189,7 +193,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_clip_distance(requested_features.contains(wgt::Features::SHADER_CLIP_DISTANCE))
                 //.shader_cull_distance(requested_features.contains(wgt::Features::SHADER_CULL_DISTANCE))
                 .shader_float64(requested_features.contains(wgt::Features::SHADER_F64))
-                //.shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
+                .shader_int64(requested_features.contains(wgt::Features::SHADER_I64))
                 .shader_int16(requested_features.contains(wgt::Features::SHADER_I16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
@@ -351,6 +355,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_image_atomic_int64: if device_api_version >= vk::API_VERSION_1_1
+                || enabled_extensions.contains(&vk::KhrGetPhysicalDeviceProperties2Fn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT::builder()
+                        .shader_image_int64_atomics(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -468,8 +483,13 @@ impl PhysicalDeviceFeatures {
         //if self.core.shader_clip_distance != 0 {
         //if self.core.shader_cull_distance != 0 {
         features.set(F::SHADER_F64, self.core.shader_float64 != 0);
-        //if self.core.shader_int64 != 0 {
+        features.set(F::SHADER_I64, self.core.shader_int64 != 0);
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
+
+        features.set(
+            F::SHADER_I64_IMAGE_ATOMIC,
+            caps.supports_extension(vk::ExtShaderImageAtomicInt64Fn::name()),
+        );
 
         //if caps.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
         //if caps.supports_extension(vk::ExtSamplerFilterMinmaxFn::name()) {
@@ -805,6 +825,11 @@ impl PhysicalDeviceCapabilities {
         // Require `VK_EXT_texture_compression_astc_hdr` if the associated feature was requested
         if requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
             extensions.push(vk::ExtTextureCompressionAstcHdrFn::name());
+        }
+
+        // Require `VK_EXT_shader_image_atomic_int64` if the associated feature was requested
+        if requested_features.contains(wgt::Features::SHADER_I64_IMAGE_ATOMIC) {
+            extensions.push(vk::ExtShaderImageAtomicInt64Fn::name());
         }
 
         extensions
@@ -1442,6 +1467,15 @@ impl super::Adapter {
 
             if features.contains(wgt::Features::RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
+            }
+
+            if features.contains(wgt::Features::SHADER_I64) {
+                capabilities.push(spv::Capability::Int64);
+            }
+
+            if features.contains(wgt::Features::SHADER_I64_IMAGE_ATOMIC) {
+                capabilities.push(spv::Capability::Int64ImageEXT);
+                capabilities.push(spv::Capability::Int64Atomics);
             }
 
             let mut flags = spv::WriterFlags::empty();

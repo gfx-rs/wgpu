@@ -77,7 +77,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u16 {
+    pub struct Capabilities: u32 {
         /// Support for [`AddressSpace:PushConstant`].
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
@@ -104,10 +104,14 @@ bitflags::bitflags! {
         const MULTISAMPLED_SHADING = 0x800;
         /// Support for ray queries and acceleration structures.
         const RAY_QUERY = 0x1000;
-        /// Support for generating two sources for blending from fragement shaders.
+        /// Support for generating two sources for blending from fragment shaders.
         const DUAL_SOURCE_BLENDING = 0x2000;
         /// Support for arrayed cube textures.
         const CUBE_ARRAY_TEXTURES = 0x4000;
+        /// Support for 64-bit signed and unsigned integers.
+        const SHADER_I64 = 0x8000;
+        /// Support for atomic operations on 64-bit signed and unsigned integer storage textures within compute shaders.
+        const SHADER_I64_IMAGE_ATOMIC = 0x10000;
     }
 }
 
