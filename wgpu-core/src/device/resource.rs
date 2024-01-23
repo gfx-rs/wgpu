@@ -1178,7 +1178,7 @@ impl<A: HalApi> Device<A> {
 
         Ok(TextureView {
             raw: Some(raw),
-            parent: RwLock::new(Some(texture.clone())),
+            parent: texture.clone(),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
                 texture_format: texture.desc.format,
@@ -1892,17 +1892,13 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
     ) -> Result<(), binding_model::CreateBindGroupError> {
-        let texture = view.parent.read();
-        let texture_id = texture.as_ref().unwrap().as_info().id();
+        let texture = &view.parent;
+        let texture_id = texture.as_info().id();
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
         let texture = used
             .textures
-            .add_single(
-                texture.as_ref().unwrap(),
-                Some(view.selector.clone()),
-                internal_use,
-            )
+            .add_single(texture, Some(view.selector.clone()), internal_use)
             .ok_or(binding_model::CreateBindGroupError::InvalidTexture(
                 texture_id,
             ))?;

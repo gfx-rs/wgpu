@@ -1172,7 +1172,7 @@ pub enum TextureViewNotRenderableReason {
 pub struct TextureView<A: HalApi> {
     pub(crate) raw: Option<A::TextureView>,
     // if it's a surface texture - it's none
-    pub(crate) parent: RwLock<Option<Arc<Texture<A>>>>,
+    pub(crate) parent: Arc<Texture<A>>,
     pub(crate) device: Arc<Device<A>>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
