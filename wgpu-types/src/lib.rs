@@ -865,7 +865,7 @@ bitflags::bitflags! {
 
         /// Allows compute shaders to use atomic operations on i64 or u64 storage textures.
         ///
-        /// Requires SHADER_I64.
+        /// Requires SHADER_I64 and [`Dx12Compiler::Dxc`].
         ///
         /// Supported platforms:
         /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
