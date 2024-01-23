@@ -289,14 +289,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         let raw = self.list.take().unwrap();
-        let closed = raw.close().into_result().is_ok();
-        Ok(super::CommandBuffer { raw, closed })
+        raw.close()
+            .into_device_result("GraphicsCommandList::close")?;
+        Ok(super::CommandBuffer { raw })
     }
     unsafe fn reset_all<I: Iterator<Item = super::CommandBuffer>>(&mut self, command_buffers: I) {
         for cmd_buf in command_buffers {
-            if cmd_buf.closed {
-                self.free_lists.push(cmd_buf.raw);
-            }
+            self.free_lists.push(cmd_buf.raw);
         }
         self.allocator.reset();
     }
