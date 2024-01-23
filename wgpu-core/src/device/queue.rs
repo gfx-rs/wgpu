@@ -228,18 +228,18 @@ impl<A: HalApi> PendingWrites<A> {
             .push(TempResource::StagingBuffer(buffer));
     }
 
-    #[must_use]
-    fn pre_submit(&mut self) -> Option<&A::CommandBuffer> {
+    fn pre_submit(&mut self) -> Result<Option<&A::CommandBuffer>, DeviceError> {
         self.dst_buffers.clear();
         self.dst_textures.clear();
         if self.is_active {
-            let cmd_buf = unsafe { self.command_encoder.end_encoding().unwrap() };
+            let cmd_buf = unsafe { self.command_encoder.end_encoding()? };
             self.is_active = false;
             self.executing_command_buffers.push(cmd_buf);
-            self.executing_command_buffers.last()
-        } else {
-            None
+
+            return Ok(self.executing_command_buffers.last());
         }
+
+        Ok(None)
     }
 
     #[must_use]
@@ -1463,7 +1463,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let refs = pending_writes
-                .pre_submit()
+                .pre_submit()?
                 .into_iter()
                 .chain(
                     active_executions
