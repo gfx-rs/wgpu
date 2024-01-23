@@ -33,8 +33,7 @@ use std::{
     ops::Range,
     ptr::NonNull,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering}, Arc, Weak
     },
 };
 
@@ -741,6 +740,7 @@ pub struct Texture<A: HalApi> {
     pub(crate) full_range: TextureSelector,
     pub(crate) info: ResourceInfo<TextureId>,
     pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
+    pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
 }
 
 impl<A: HalApi> Drop for Texture<A> {
@@ -851,6 +851,14 @@ impl<A: HalApi> Texture<A> {
                     return Err(resource::DestroyError::AlreadyDestroyed);
                 }
             };
+
+            let mut views = self.views.lock();
+            for view in views.iter() {
+                if let Some(view) = view.upgrade() {
+
+                }
+            }
+            views.clear();
 
             queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {
                 raw: Some(raw),

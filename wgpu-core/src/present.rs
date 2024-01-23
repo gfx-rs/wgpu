@@ -32,7 +32,7 @@ use crate::{
 };
 
 use hal::{Queue as _, Surface as _};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use wgt::SurfaceStatus as Status;
 
@@ -231,6 +231,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     clear_mode: RwLock::new(resource::TextureClearMode::Surface {
                         clear_view: Some(clear_view),
                     }),
+                    views: Mutex::new(Vec::new()),
                 };
 
                 let (id, resource) = fid.assign(texture);

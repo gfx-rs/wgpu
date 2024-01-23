@@ -818,6 +818,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(view);
+
+            {
+                let mut views = texture.views.lock();
+                views.push(Arc::downgrade(&resource));
+            }
+
             api_log!("Texture::create_view({texture_id:?}) -> {id:?}");
             device.trackers.lock().views.insert_single(id, resource);
             return (id, None);

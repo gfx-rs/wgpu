@@ -595,6 +595,7 @@ impl<A: HalApi> Device<A> {
             },
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             clear_mode: RwLock::new(clear_mode),
+            views: Mutex::new(Vec::new()),
         }
     }
 
