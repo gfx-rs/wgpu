@@ -863,7 +863,7 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const SHADER_I64 = 1 << 64;
 
-        /// Allows compute shaders to use atomic operations on i64 or u64 storage images.
+        /// Allows compute shaders to use atomic operations on i64 or u64 storage textures.
         ///
         /// Requires SHADER_I64.
         ///
