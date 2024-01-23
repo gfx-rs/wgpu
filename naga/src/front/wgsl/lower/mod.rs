@@ -1530,6 +1530,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ast::Literal::Number(Number::F32(f)) => crate::Literal::F32(f),
                     ast::Literal::Number(Number::I32(i)) => crate::Literal::I32(i),
                     ast::Literal::Number(Number::U32(u)) => crate::Literal::U32(u),
+                    ast::Literal::Number(Number::I64(i)) => crate::Literal::I64(i),
+                    ast::Literal::Number(Number::U64(u)) => crate::Literal::U64(u),
                     ast::Literal::Number(Number::F64(f)) => crate::Literal::F64(f),
                     ast::Literal::Number(Number::AbstractInt(i)) => crate::Literal::AbstractInt(i),
                     ast::Literal::Number(Number::AbstractFloat(f)) => {

@@ -102,6 +102,10 @@ impl super::Scalar {
         kind: crate::ScalarKind::Sint,
         width: 8,
     };
+    pub const U64: Self = Self {
+        kind: crate::ScalarKind::Uint,
+        width: 8,
+    };
     pub const BOOL: Self = Self {
         kind: crate::ScalarKind::Bool,
         width: crate::BOOL_WIDTH,
@@ -186,8 +190,16 @@ impl std::hash::Hash for crate::Literal {
                 hasher.write_u8(4);
                 v.hash(hasher);
             }
-            Self::I64(v) | Self::AbstractInt(v) => {
+            Self::I64(v) => {
                 hasher.write_u8(5);
+                v.hash(hasher);
+            }
+            Self::U64(v) => {
+                hasher.write_u8(6);
+                v.hash(hasher);
+            }
+            Self::AbstractInt(v) => {
+                hasher.write_u8(7);
                 v.hash(hasher);
             }
         }
@@ -218,7 +230,7 @@ impl crate::Literal {
 
     pub const fn width(&self) -> crate::Bytes {
         match *self {
-            Self::F64(_) | Self::I64(_) => 8,
+            Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
@@ -230,6 +242,7 @@ impl crate::Literal {
             Self::F32(_) => crate::Scalar::F32,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
+            Self::U64(_) => crate::Scalar::U64,
             Self::I64(_) => crate::Scalar::I64,
             Self::Bool(_) => crate::Scalar::BOOL,
             Self::AbstractInt(_) => crate::Scalar::ABSTRACT_INT,

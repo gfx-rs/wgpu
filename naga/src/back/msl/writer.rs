@@ -1273,6 +1273,9 @@ impl<W: Write> Writer<W> {
                 crate::Literal::I32(value) => {
                     write!(self.out, "{value}")?;
                 }
+                crate::Literal::U64(value) => {
+                    write!(self.out, "{value}uL")?;
+                }
                 crate::Literal::I64(value) => {
                     write!(self.out, "{value}L")?;
                 }

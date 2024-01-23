@@ -1151,7 +1151,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::U32(v) => v as i32,
                         Literal::F32(v) => v as i32,
                         Literal::Bool(v) => v as i32,
-                        Literal::F64(_) | Literal::I64(_) => {
+                        Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
                         }
                         Literal::AbstractInt(v) => i32::try_from_abstract(v)?,
@@ -1162,7 +1162,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::U32(v) => v,
                         Literal::F32(v) => v as u32,
                         Literal::Bool(v) => v as u32,
-                        Literal::F64(_) | Literal::I64(_) => {
+                        Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
                         }
                         Literal::AbstractInt(v) => u32::try_from_abstract(v)?,
@@ -1173,7 +1173,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::U32(v) => v as f32,
                         Literal::F32(v) => v,
                         Literal::Bool(v) => v as u32 as f32,
-                        Literal::F64(_) | Literal::I64(_) => {
+                        Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
                         }
                         Literal::AbstractInt(v) => f32::try_from_abstract(v)?,
@@ -1185,7 +1185,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v as f64,
                         Literal::F64(v) => v,
                         Literal::Bool(v) => v as u32 as f64,
-                        Literal::I64(_) => return make_error(),
+                        Literal::I64(_) | Literal::U64(_) => return make_error(),
                         Literal::AbstractInt(v) => f64::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => f64::try_from_abstract(v)?,
                     }),
@@ -1196,6 +1196,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::Bool(v) => v,
                         Literal::F64(_)
                         | Literal::I64(_)
+                        | Literal::U64(_)
                         | Literal::AbstractInt(_)
                         | Literal::AbstractFloat(_) => {
                             return make_error();
