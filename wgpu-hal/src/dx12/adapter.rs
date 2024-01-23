@@ -313,7 +313,7 @@ impl super::Adapter {
                 unsafe { mem::zeroed() };
             let hr = unsafe {
                 device.CheckFeatureSupport(
-                    d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS9,
+                    37, // D3D12_FEATURE_D3D12_OPTIONS9
                     &mut features9 as *mut _ as *mut _,
                     mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS9>() as _,
                 )
