@@ -237,7 +237,7 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Default)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct Features: u64 {
+    pub struct Features: u128 {
         //
         // ---- Start numbering at 1 << 0 ----
         //
@@ -313,26 +313,6 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const SHADER_F16 = 1 << 8;
-
-        /// Allows shaders to use i64 and u64.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        ///
-        /// This is a native only feature.
-        const SHADER_I64 = 1 << 9;
-
-        /// Allows compute shaders to use atomic operations on i64 or u64 storage textures.
-        ///
-        /// Requires SHADER_I64 and [`Dx12Compiler::Dxc`].
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
-        /// - DX12 (with Shader Model 6.6 and AtomicInt64OnTypedResourceSupported)
-        ///
-        /// This is a native only feature.
-        const SHADER_I64_TEXTURE_ATOMIC = 1 << 10;
 
         // 11..14 available
 
@@ -873,6 +853,26 @@ bitflags::bitflags! {
         /// - Vulkan (with dualSrcBlend)
         /// - DX12
         const DUAL_SOURCE_BLENDING = 1 << 63;
+
+        /// Allows shaders to use i64 and u64.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        const SHADER_I64 = 1 << 64;
+
+        /// Allows compute shaders to use atomic operations on i64 or u64 storage textures.
+        ///
+        /// Requires SHADER_I64 and [`Dx12Compiler::Dxc`].
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
+        /// - DX12 (with Shader Model 6.6 and AtomicInt64OnTypedResourceSupported)
+        ///
+        /// This is a native only feature.
+        const SHADER_I64_TEXTURE_ATOMIC = 1 << 65;
     }
 }
 
