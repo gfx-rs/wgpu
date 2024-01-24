@@ -465,6 +465,7 @@ static VERTEX_INDICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
+            .features(wgpu::Features::INDIRECT_FIRST_INSTANCE),
     )
     .run_async(vertex_index_common);
