@@ -1,14 +1,12 @@
-use crate::arena::Handle;
-use crate::arena::{Arena, UniqueArena};
-
 use super::validate_atomic_compare_exchange_struct;
-
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
-    ExpressionError, FunctionInfo, ModuleInfo,
+    Capabilities, ExpressionError, FunctionInfo, ModuleInfo, ShaderStages,
 };
+use crate::arena::{Arena, Handle, UniqueArena};
 use crate::span::WithSpan;
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
+use crate::{ImageClass, StorageAccess};
 
 use bit_set::BitSet;
 
@@ -45,6 +43,8 @@ pub enum AtomicError {
     InvalidOperand(Handle<crate::Expression>),
     #[error("Result type for {0:?} doesn't match the statement")]
     ResultTypeMismatch(Handle<crate::Expression>),
+    #[error("TODO")]
+    MissingTextureCapability,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -333,11 +333,33 @@ impl super::Validator {
         value: Handle<crate::Expression>,
         result: Handle<crate::Expression>,
         context: &BlockContext,
+        stages: &mut ShaderStages,
     ) -> Result<(), WithSpan<FunctionError>> {
         let pointer_inner = context.resolve_type(pointer, &self.valid_expression_set)?;
         let ptr_scalar = match *pointer_inner {
             crate::TypeInner::Pointer { base, .. } => match context.types[base].inner {
                 crate::TypeInner::Atomic(scalar) => scalar,
+                crate::TypeInner::Image {
+                    class:
+                        ImageClass::Storage {
+                            format,
+                            access: StorageAccess::STORE,
+                        },
+                    ..
+                } if todo!("Validate format is R64Uint/R64Sint") => {
+                    if !self
+                        .capabilities
+                        .contains(Capabilities::SHADER_I64_TEXTURE_ATOMIC)
+                    {
+                        return Err(AtomicError::MissingTextureCapability
+                            .with_span_handle(pointer, context.expressions)
+                            .into_other());
+                    }
+
+                    *stages &= super::ShaderStages::COMPUTE;
+
+                    todo!("Match format")
+                }
                 ref other => {
                     log::error!("Atomic pointer to type {:?}", other);
                     return Err(AtomicError::InvalidPointer(pointer)
@@ -815,7 +837,7 @@ impl super::Validator {
                     value,
                     result,
                 } => {
-                    self.validate_atomic(pointer, fun, value, result, context)?;
+                    self.validate_atomic(pointer, fun, value, result, context, &mut stages)?;
                 }
                 S::WorkGroupUniformLoad { pointer, result } => {
                     stages &= super::ShaderStages::COMPUTE;

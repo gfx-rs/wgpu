@@ -2321,6 +2321,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         }
     }
 
+    // TODO: Replicate same logic from validate_atomic
     fn atomic_pointer(
         &mut self,
         expr: Handle<ast::Expression<'source>>,
