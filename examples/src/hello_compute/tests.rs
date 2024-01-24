@@ -57,9 +57,7 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .skip(FailureCase::adapter("V3D"))
-            // Segfaults on linux CI only https://github.com/gfx-rs/wgpu/issues/4285
-            .skip(FailureCase::backend_adapter(wgpu::Backends::GL, "llvmpipe")),
+            .skip(FailureCase::adapter("V3D")),
     )
     .run_sync(|ctx| {
         use std::{sync::mpsc, sync::Arc, thread, time::Duration};
@@ -69,24 +67,30 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
         let thread_count = 8;
 
         let (tx, rx) = mpsc::channel();
-        for _ in 0..thread_count {
-            let tx = tx.clone();
-            let ctx = Arc::clone(&ctx);
-            thread::spawn(move || {
-                let input = &[100, 100, 100];
-                pollster::block_on(assert_execute_gpu(
-                    &ctx.device,
-                    &ctx.queue,
-                    input,
-                    &[25, 25, 25],
-                ));
-                tx.send(true).unwrap();
-            });
-        }
+        let workers: Vec<_> = (0..thread_count)
+            .map(move |_| {
+                let tx = tx.clone();
+                let ctx = Arc::clone(&ctx);
+                thread::spawn(move || {
+                    let input = &[100, 100, 100];
+                    pollster::block_on(assert_execute_gpu(
+                        &ctx.device,
+                        &ctx.queue,
+                        input,
+                        &[25, 25, 25],
+                    ));
+                    tx.send(true).unwrap();
+                })
+            })
+            .collect();
 
         for _ in 0..thread_count {
             rx.recv_timeout(Duration::from_secs(10))
                 .expect("A thread never completed.");
+        }
+
+        for worker in workers {
+            worker.join().unwrap();
         }
     });
 
