@@ -1130,6 +1130,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(bind_group);
+
+            let weak_ref = Arc::downgrade(&resource);
+            for range in &resource.used_texture_ranges {
+                range.texture.bind_groups.lock().push(weak_ref.clone());
+            }
+            for range in &resource.used_buffer_ranges {
+                range.buffer.bind_groups.lock().push(weak_ref.clone());
+            }
+
             api_log!("Device::create_bind_group -> {id:?}");
 
             device

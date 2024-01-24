@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
+    binding_model::BindGroup,
     device::{
         queue, BufferMapPendingClosure, Device, DeviceError, HostMap, MissingDownlevelFlags,
         MissingFeatures,
@@ -378,6 +379,7 @@ pub struct Buffer<A: HalApi> {
     pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
     pub(crate) info: ResourceInfo<BufferId>,
     pub(crate) map_state: Mutex<BufferMapState<A>>,
+    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
 }
 
 impl<A: HalApi> Drop for Buffer<A> {
@@ -541,12 +543,18 @@ impl<A: HalApi> Buffer<A> {
                 }
             };
 
+            let bind_groups = {
+                let mut guard = self.bind_groups.lock();
+                std::mem::take(&mut *guard)
+            };
+
             queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
                 raw: Some(raw),
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
                 id: self.info.id.unwrap(),
                 label: self.info.label.clone(),
+                bind_groups,
             }))
         };
 
@@ -596,6 +604,29 @@ impl<A: HalApi> Resource<BufferId> for Buffer<A> {
     }
 }
 
+fn snatch_and_destroy_bind_groups<A: HalApi>(
+    device: &Device<A>,
+    bind_groups: &[Weak<BindGroup<A>>],
+) {
+    for bind_group in bind_groups {
+        if let Some(bind_group) = bind_group.upgrade() {
+            if let Some(raw_bind_group) = bind_group.raw.snatch(device.snatchable_lock.write()) {
+                resource_log!("Destroy raw BindGroup (destroyed) {:?}", bind_group.label());
+
+                #[cfg(feature = "trace")]
+                if let Some(t) = device.trace.lock().as_mut() {
+                    t.add(trace::Action::DestroyBindGroup(bind_group.info.id()));
+                }
+
+                unsafe {
+                    use hal::Device;
+                    device.raw().destroy_bind_group(raw_bind_group);
+                }
+            }
+        }
+    }
+}
+
 /// A buffer that has been marked as destroyed and is staged for actual deletion soon.
 #[derive(Debug)]
 pub struct DestroyedBuffer<A: HalApi> {
@@ -604,6 +635,7 @@ pub struct DestroyedBuffer<A: HalApi> {
     label: String,
     pub(crate) id: BufferId,
     pub(crate) submission_index: u64,
+    bind_groups: Vec<Weak<BindGroup<A>>>,
 }
 
 impl<A: HalApi> DestroyedBuffer<A> {
@@ -618,6 +650,8 @@ impl<A: HalApi> DestroyedBuffer<A> {
 
 impl<A: HalApi> Drop for DestroyedBuffer<A> {
     fn drop(&mut self) {
+        snatch_and_destroy_bind_groups(&self.device, &self.bind_groups);
+
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
 
@@ -742,6 +776,7 @@ pub struct Texture<A: HalApi> {
     pub(crate) info: ResourceInfo<TextureId>,
     pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
     pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
+    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
 }
 
 impl<A: HalApi> Drop for Texture<A> {
@@ -858,9 +893,15 @@ impl<A: HalApi> Texture<A> {
                 std::mem::take(&mut *guard)
             };
 
+            let bind_groups = {
+                let mut guard = self.bind_groups.lock();
+                std::mem::take(&mut *guard)
+            };
+
             queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {
                 raw: Some(raw),
                 views,
+                bind_groups,
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
                 id: self.info.id.unwrap(),
@@ -978,6 +1019,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 pub struct DestroyedTexture<A: HalApi> {
     raw: Option<A::Texture>,
     views: Vec<Weak<TextureView<A>>>,
+    bind_groups: Vec<Weak<BindGroup<A>>>,
     device: Arc<Device<A>>,
     label: String,
     pub(crate) id: TextureId,
@@ -997,6 +1039,8 @@ impl<A: HalApi> DestroyedTexture<A> {
 impl<A: HalApi> Drop for DestroyedTexture<A> {
     fn drop(&mut self) {
         let device = &self.device;
+        snatch_and_destroy_bind_groups(device, &self.bind_groups);
+
         for view in self.views.drain(..) {
             if let Some(view) = view.upgrade() {
                 if let Some(raw_view) = view.raw.snatch(device.snatchable_lock.write()) {
