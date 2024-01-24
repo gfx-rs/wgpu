@@ -110,7 +110,7 @@ bitflags::bitflags! {
         const CUBE_ARRAY_TEXTURES = 0x4000;
         /// Support for 64-bit signed and unsigned integers.
         const SHADER_I64 = 0x8000;
-        /// Support for atomic operations on 64-bit signed and unsigned integer storage textures within compute shaders.
+        /// Support for atomic operations on R64Sint and R64Uint read_write storage textures from within compute shaders.
         const SHADER_I64_TEXTURE_ATOMIC = 0x10000;
     }
 }

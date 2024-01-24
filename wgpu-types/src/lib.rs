@@ -863,7 +863,7 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const SHADER_I64 = 1 << 64;
 
-        /// Allows compute shaders to use atomic operations on i64 or u64 storage textures.
+        /// Allows compute shaders to use atomic operations on R64Sint and R64Uint read_write storage textures.
         ///
         /// Requires SHADER_I64 and [`Dx12Compiler::Dxc`].
         ///
