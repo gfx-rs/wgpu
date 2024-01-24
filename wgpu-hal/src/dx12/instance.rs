@@ -3,11 +3,14 @@ use winapi::shared::{dxgi1_5, minwindef};
 
 use super::SurfaceTarget;
 use crate::auxil::{self, dxgi::result::HResult as _};
+use bitflags::Flags;
 use std::{mem, sync::Arc};
 
 impl Drop for super::Instance {
     fn drop(&mut self) {
-        crate::auxil::dxgi::exception::unregister_exception_handler();
+        if self.flags.contains(wgt::InstanceFlags::VALIDATION) {
+            crate::auxil::dxgi::exception::unregister_exception_handler();
+        }
     }
 }
 
