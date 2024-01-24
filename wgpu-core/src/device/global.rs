@@ -2237,7 +2237,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(device) = hub.devices.unregister(device_id) {
             let device_lost_closure = device.lock_life().device_lost_closure.take();
             if let Some(closure) = device_lost_closure {
-                closure.call(DeviceLostReason::Unknown, String::from("Device dropped."));
+                closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
             }
 
             // The things `Device::prepare_to_die` takes care are mostly

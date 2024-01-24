@@ -531,8 +531,8 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         let callback = Box::new(move |reason, message| {
             was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(
-                matches!(reason, wgt::DeviceLostReason::Unknown),
-                "Device lost info reason should match DeviceLostReason::Unknown."
+                matches!(reason, wgt::DeviceLostReason::Dropped),
+                "Device lost info reason should match DeviceLostReason::Dropped."
             );
             assert!(
                 message == "Device dropped.",

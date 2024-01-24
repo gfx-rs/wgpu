@@ -7099,4 +7099,11 @@ pub enum DeviceLostReason {
     Unknown = 0,
     /// After Device::destroy
     Destroyed = 1,
+    /// After Device::drop
+    ///
+    /// WebGPU does not invoke the device lost callback when the device is
+    /// dropped to prevent garbage collection from being observable. In wgpu,
+    /// we invoke the callback on drop to help with managing memory owned by
+    /// the callback.
+    Dropped = 2,
 }
