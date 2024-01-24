@@ -3,7 +3,6 @@ use winapi::shared::{dxgi1_5, minwindef};
 
 use super::SurfaceTarget;
 use crate::auxil::{self, dxgi::result::HResult as _};
-use bitflags::Flags;
 use std::{mem, sync::Arc};
 
 impl Drop for super::Instance {
