@@ -61,11 +61,18 @@ Bottom level categories:
         - `tan`
         - `tanh`
 
-## v0.19.1 (2024-01-21)
+## v0.19.2 (2024-02-29)
 
 ### Bug Fixes
 
 #### DX12
+- Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
+
+## v0.19.1 (2024-01-21)
+
+### Bug Fixes
+
+#### WGL
 
 - Properly register all swapchain buffers to prevent error on surface present. By @dtzxporter in [#5091](https://github.com/gfx-rs/wgpu/pull/5091)
 - Check for extra null states when creating resources. By @nical in [#5096](https://github.com/gfx-rs/wgpu/pull/5096)
