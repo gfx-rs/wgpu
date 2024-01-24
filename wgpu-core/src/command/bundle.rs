@@ -514,9 +514,12 @@ impl RenderBundleEncoder {
                         })
                         .map_pass_err(scope);
                     }
-                    commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
-                    commands.push(command);
+
+                    if instance_count > 0 && vertex_count > 0 {
+                        commands.extend(state.flush_vertices());
+                        commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
+                        commands.push(command);
+                    }
                 }
                 RenderCommand::DrawIndexed {
                     index_count,
@@ -556,10 +559,13 @@ impl RenderBundleEncoder {
                         })
                         .map_pass_err(scope);
                     }
-                    commands.extend(state.flush_index());
-                    commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
-                    commands.push(command);
+
+                    if instance_count > 0 && index_count > 0 {
+                        commands.extend(state.flush_index());
+                        commands.extend(state.flush_vertices());
+                        commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
+                        commands.push(command);
+                    }
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
