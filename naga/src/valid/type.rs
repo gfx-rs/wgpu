@@ -245,11 +245,31 @@ impl super::Validator {
                     scalar.width == 4
                 }
             }
-            crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+            crate::ScalarKind::Sint => {
                 if scalar.width == 8 {
-                    return Err(WidthError::Unsupported64Bit);
+                    if !self.capabilities.contains(Capabilities::SHADER_I64) {
+                        return Err(WidthError::MissingCapability {
+                            name: "i64",
+                            flag: "INT64",
+                        });
+                    }
+                    true
+                } else {
+                    scalar.width == 4
                 }
-                scalar.width == 4
+            }
+            crate::ScalarKind::Uint => {
+                if scalar.width == 8 {
+                    if !self.capabilities.contains(Capabilities::SHADER_I64) {
+                        return Err(WidthError::MissingCapability {
+                            name: "u64",
+                            flag: "INT64",
+                        });
+                    }
+                    true
+                } else {
+                    scalar.width == 4
+                }
             }
             crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
                 return Err(WidthError::Abstract);
@@ -335,7 +355,18 @@ impl super::Validator {
                     | crate::ScalarKind::Float
                     | crate::ScalarKind::AbstractInt
                     | crate::ScalarKind::AbstractFloat => false,
-                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                        if width == 4 {
+                            true
+                        } else if width == 8 {
+                            self.require_type_capability(
+                                Capabilities::SHADER_I64 | Capabilities::SHADER_I64_TEXTURE_ATOMIC,
+                            )?;
+                            true
+                        } else {
+                            false
+                        }
+                    }
                 };
                 if !good {
                     return Err(TypeError::InvalidAtomicWidth(kind, width));

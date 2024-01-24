@@ -2451,6 +2451,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::Literal::I64(_) => {
                         return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
                     }
+                    crate::Literal::U64(_) => {
+                        return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
+                    }
                     crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
                         return Err(Error::Custom(
                             "Abstract types should not appear in IR presented to backends".into(),
