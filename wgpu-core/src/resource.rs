@@ -853,21 +853,14 @@ impl<A: HalApi> Texture<A> {
                 }
             };
 
-            let mut views = self.views.lock();
-            let mut snatched_views = Vec::with_capacity(views.len());
-
-            for view in views.iter() {
-                if let Some(view) = view.upgrade() {
-                    if let Some(raw) = view.raw.snatch(device.snatchable_lock.write()) {
-                        snatched_views.push((view.info.id(), raw));
-                    }
-                }
-            }
-            views.clear();
+            let views = {
+                let mut guard = self.views.lock();
+                std::mem::take(&mut *guard)
+            };
 
             queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {
                 raw: Some(raw),
-                views: snatched_views,
+                views,
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
                 id: self.info.id.unwrap(),
@@ -984,7 +977,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 #[derive(Debug)]
 pub struct DestroyedTexture<A: HalApi> {
     raw: Option<A::Texture>,
-    views: Vec<(TextureViewId, A::TextureView)>,
+    views: Vec<Weak<TextureView<A>>>,
     device: Arc<Device<A>>,
     label: String,
     pub(crate) id: TextureId,
@@ -1003,16 +996,22 @@ impl<A: HalApi> DestroyedTexture<A> {
 
 impl<A: HalApi> Drop for DestroyedTexture<A> {
     fn drop(&mut self) {
-        for (_id, view) in self.views.drain(..) {
-            resource_log!("Destroy raw TextureView (destroyed) {:?}", _id);
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTextureView(_id));
-            }
+        let device = &self.device;
+        for view in self.views.drain(..) {
+            if let Some(view) = view.upgrade() {
+                if let Some(raw_view) = view.raw.snatch(device.snatchable_lock.write()) {
+                    resource_log!("Destroy raw TextureView (destroyed) {:?}", view.label());
 
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_texture_view(view);
+                    #[cfg(feature = "trace")]
+                    if let Some(t) = self.device.trace.lock().as_mut() {
+                        t.add(trace::Action::DestroyTextureView(view.info.id()));
+                    }
+
+                    unsafe {
+                        use hal::Device;
+                        self.device.raw().destroy_texture_view(raw_view);
+                    }
+                }
             }
         }
         if let Some(raw) = self.raw.take() {
