@@ -33,7 +33,8 @@ use std::{
     ops::Range,
     ptr::NonNull,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering}, Arc, Weak
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Weak,
     },
 };
 

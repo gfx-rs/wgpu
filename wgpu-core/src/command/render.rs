@@ -997,8 +997,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
-                    view: view.raw(snatch_guard)
-                        .ok_or_else(||RenderPassErrorInner::InvalidAttachment(view.info.id()))?,
+                    view: view
+                        .raw(snatch_guard)
+                        .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(view.info.id()))?,
                     usage,
                 },
                 depth_ops: at.depth.hal_ops(),
@@ -1107,16 +1108,18 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: resolve_view.raw(snatch_guard)
-                        .ok_or_else(|| RenderPassErrorInner::InvalidResolveTarget(resolve_view.info.id()))?,
+                    view: resolve_view.raw(snatch_guard).ok_or_else(|| {
+                        RenderPassErrorInner::InvalidResolveTarget(resolve_view.info.id())
+                    })?,
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
             }
 
             colors.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
-                    view: color_view.raw(snatch_guard)
-                        .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(color_view.info.id()))?,
+                    view: color_view.raw(snatch_guard).ok_or_else(|| {
+                        RenderPassErrorInner::InvalidAttachment(color_view.info.id())
+                    })?,
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
@@ -1264,8 +1267,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
-                        view: view.raw(snatch_guard)
-                            .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(view.info.id()))?,
+                        view: view.raw(snatch_guard).ok_or_else(|| {
+                            RenderPassErrorInner::InvalidAttachment(view.info.id())
+                        })?,
                         usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,
