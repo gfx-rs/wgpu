@@ -2199,7 +2199,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(binding_model::BindGroup {
-            raw: Some(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             layout: layout.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
