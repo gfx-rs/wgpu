@@ -1170,7 +1170,7 @@ pub enum TextureViewNotRenderableReason {
 
 #[derive(Debug)]
 pub struct TextureView<A: HalApi> {
-    pub(crate) raw: Option<A::TextureView>,
+    pub(crate) raw: Snatchable<A::TextureView>,
     // if it's a surface texture - it's none
     pub(crate) parent: Arc<Texture<A>>,
     pub(crate) device: Arc<Device<A>>,
@@ -1203,8 +1203,8 @@ impl<A: HalApi> Drop for TextureView<A> {
 }
 
 impl<A: HalApi> TextureView<A> {
-    pub(crate) fn raw(&self) -> &A::TextureView {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::TextureView> {
+        self.raw.get(snatch_guard)
     }
 }
 

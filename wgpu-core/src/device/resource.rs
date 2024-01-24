@@ -1177,7 +1177,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(TextureView {
-            raw: Some(raw),
+            raw: Snatchable::new(raw),
             parent: texture.clone(),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
@@ -2126,7 +2126,7 @@ impl<A: HalApi> Device<A> {
                     )?;
                     let res_index = hal_textures.len();
                     hal_textures.push(hal::TextureBinding {
-                        view: view.raw(),
+                        view: view.raw(&snatch_guard).ok_or(Error::InvalidTextureView((id)))?,
                         usage: internal_use,
                     });
                     (res_index, 1)
@@ -2152,7 +2152,7 @@ impl<A: HalApi> Device<A> {
                             &mut used_texture_ranges,
                         )?;
                         hal_textures.push(hal::TextureBinding {
-                            view: view.raw(),
+                            view: view.raw(&snatch_guard).ok_or(Error::InvalidTextureView(id))?,
                             usage: internal_use,
                         });
                     }
