@@ -76,7 +76,9 @@ env:
 jobs:
   check:
     # runtime is normally 2-8 minutes
-    timeout-minutes: 15
+    #
+    # currently high due to documentation time problems on mac.
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
