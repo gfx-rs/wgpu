@@ -3,30 +3,36 @@
         (
             entry_point:"no_padding_vert",
             target_profile:"vs_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"needs_padding_vert",
             target_profile:"vs_5_1",
+            debug_printf:false,
         ),
     ],
     fragment:[
         (
             entry_point:"no_padding_frag",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"needs_padding_frag",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
     ],
     compute:[
         (
             entry_point:"no_padding_comp",
             target_profile:"cs_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"needs_padding_comp",
             target_profile:"cs_5_1",
+            debug_printf:false,
         ),
     ],
 )

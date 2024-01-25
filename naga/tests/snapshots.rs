@@ -549,7 +549,7 @@ fn write_output_hlsl(
     info: &naga::valid::ModuleInfo,
     options: &naga::back::hlsl::Options,
 ) {
-    use naga::back::hlsl;
+    use naga::back::hlsl::{self, WriterFlags};
     use std::fmt::Write as _;
 
     println!("generating HLSL");
@@ -576,6 +576,8 @@ fn write_output_hlsl(
         }
         .push(hlsl_snapshots::ConfigItem {
             entry_point: name.clone(),
+            // Skip DXC until it supports debug printf
+            debug_printf: options.flags.contains(WriterFlags::EMIT_DEBUG_PRINTF),
             target_profile: format!(
                 "{}_{}",
                 ep.stage.to_hlsl_str(),
@@ -816,7 +818,7 @@ fn convert_wgsl() {
         ),
         (
             "debug-printf",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV,
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL,
         ),
     ];
 
@@ -897,7 +899,11 @@ fn convert_spv_all() {
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
-    convert_spv("debug-printf-s", false, Targets::GLSL | Targets::WGSL);
+    convert_spv(
+        "debug-printf-s",
+        false,
+        Targets::GLSL | Targets::WGSL | Targets::HLSL,
+    );
 }
 
 #[cfg(feature = "glsl-in")]

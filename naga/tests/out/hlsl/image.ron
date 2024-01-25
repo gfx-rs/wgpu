@@ -3,38 +3,46 @@
         (
             entry_point:"queries",
             target_profile:"vs_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"levels_queries",
             target_profile:"vs_5_1",
+            debug_printf:false,
         ),
     ],
     fragment:[
         (
             entry_point:"texture_sample",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"texture_sample_comparison",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"gather",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"depth_no_comparison",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
     ],
     compute:[
         (
             entry_point:"main",
             target_profile:"cs_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"depth_load",
             target_profile:"cs_5_1",
+            debug_printf:false,
         ),
     ],
 )

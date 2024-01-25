@@ -1,6 +1,5 @@
 void main_1()
 {
-    printf("%d",42);
     return;
 }
 

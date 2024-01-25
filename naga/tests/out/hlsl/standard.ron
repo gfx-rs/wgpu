@@ -5,6 +5,7 @@
         (
             entry_point:"derivatives",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
     ],
     compute:[

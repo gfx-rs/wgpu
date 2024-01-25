@@ -311,21 +311,29 @@ fn validate_hlsl_with_dxc(
     config_item: hlsl_snapshots::ConfigItem,
     dxc: &str,
 ) -> anyhow::Result<()> {
-    // Reference:
-    // <https://github.com/microsoft/DirectXShaderCompiler/blob/6ee4074a4b43fa23bf5ad27e4f6cafc6b835e437/tools/clang/docs/UsingDxc.rst>.
-    validate_hlsl(
-        file,
-        dxc,
-        config_item,
-        &[
-            "-Wno-parentheses-equality",
-            "-Zi",
-            "-Qembed_debug",
-            "-Od",
-            "-HV",
-            "2018",
-        ],
-    )
+    if config_item.debug_printf {
+        log::debug!(
+            "skipping config. item {config_item:?} because it \
+             uses debug printf which is not supported on DXC"
+        );
+        Ok(())
+    } else {
+        // Reference:
+        // <https://github.com/microsoft/DirectXShaderCompiler/blob/6ee4074a4b43fa23bf5ad27e4f6cafc6b835e437/tools/clang/docs/UsingDxc.rst>.
+        validate_hlsl(
+            file,
+            dxc,
+            config_item,
+            &[
+                "-Wno-parentheses-equality",
+                "-Zi",
+                "-Qembed_debug",
+                "-Od",
+                "-HV",
+                "2018",
+            ],
+        )
+    }
 }
 
 fn validate_hlsl_with_fxc(
@@ -370,6 +378,7 @@ fn validate_hlsl(
     let hlsl_snapshots::ConfigItem {
         entry_point,
         target_profile,
+        ..
     } = config_item;
     EasyCommand::new(bin, |cmd| {
         cmd.arg(file)
