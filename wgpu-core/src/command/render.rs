@@ -20,7 +20,6 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label, id,
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{Buffer, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
@@ -1288,7 +1287,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
 // Common routines between render/compute
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_run_render_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,

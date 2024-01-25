@@ -40,7 +40,7 @@ specify the id, and they all return the id used. For example, the
 declaration of `Global::device_create_buffer` looks like this:
 
 ```ignore
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     /* ... */
     pub fn device_create_buffer<A: HalApi>(
         &self,
@@ -118,7 +118,6 @@ use crate::{
     command::{CommandBuffer, RenderBundle},
     device::{queue::Queue, Device},
     hal_api::HalApi,
-    identity::GlobalIdentityHandlerFactory,
     instance::{Adapter, HalSurface, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
@@ -199,25 +198,25 @@ pub struct Hub<A: HalApi> {
 }
 
 impl<A: HalApi> Hub<A> {
-    fn new<F: GlobalIdentityHandlerFactory>(factory: &F) -> Self {
+    fn new() -> Self {
         Self {
-            adapters: Registry::new(A::VARIANT, factory),
-            devices: Registry::new(A::VARIANT, factory),
-            queues: Registry::new(A::VARIANT, factory),
-            pipeline_layouts: Registry::new(A::VARIANT, factory),
-            shader_modules: Registry::new(A::VARIANT, factory),
-            bind_group_layouts: Registry::new(A::VARIANT, factory),
-            bind_groups: Registry::new(A::VARIANT, factory),
-            command_buffers: Registry::new(A::VARIANT, factory),
-            render_bundles: Registry::new(A::VARIANT, factory),
-            render_pipelines: Registry::new(A::VARIANT, factory),
-            compute_pipelines: Registry::new(A::VARIANT, factory),
-            query_sets: Registry::new(A::VARIANT, factory),
-            buffers: Registry::new(A::VARIANT, factory),
-            staging_buffers: Registry::new(A::VARIANT, factory),
-            textures: Registry::new(A::VARIANT, factory),
-            texture_views: Registry::new(A::VARIANT, factory),
-            samplers: Registry::new(A::VARIANT, factory),
+            adapters: Registry::new(A::VARIANT),
+            devices: Registry::new(A::VARIANT),
+            queues: Registry::new(A::VARIANT),
+            pipeline_layouts: Registry::new(A::VARIANT),
+            shader_modules: Registry::new(A::VARIANT),
+            bind_group_layouts: Registry::new(A::VARIANT),
+            bind_groups: Registry::new(A::VARIANT),
+            command_buffers: Registry::new(A::VARIANT),
+            render_bundles: Registry::new(A::VARIANT),
+            render_pipelines: Registry::new(A::VARIANT),
+            compute_pipelines: Registry::new(A::VARIANT),
+            query_sets: Registry::new(A::VARIANT),
+            buffers: Registry::new(A::VARIANT),
+            staging_buffers: Registry::new(A::VARIANT),
+            textures: Registry::new(A::VARIANT),
+            texture_views: Registry::new(A::VARIANT),
+            samplers: Registry::new(A::VARIANT),
         }
     }
 
@@ -313,18 +312,18 @@ pub struct Hubs {
 }
 
 impl Hubs {
-    pub(crate) fn new<F: GlobalIdentityHandlerFactory>(factory: &F) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             #[cfg(vulkan)]
-            vulkan: Hub::new(factory),
+            vulkan: Hub::new(),
             #[cfg(metal)]
-            metal: Hub::new(factory),
+            metal: Hub::new(),
             #[cfg(dx12)]
-            dx12: Hub::new(factory),
+            dx12: Hub::new(),
             #[cfg(gles)]
-            gl: Hub::new(factory),
+            gl: Hub::new(),
             #[cfg(all(not(vulkan), not(metal), not(dx12), not(gles)))]
-            empty: Hub::new(factory),
+            empty: Hub::new(),
         }
     }
 }

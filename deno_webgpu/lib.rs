@@ -96,8 +96,7 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-pub type Instance =
-    std::sync::Arc<wgpu_core::global::Global<wgpu_core::identity::IdentityManagerFactory>>;
+pub type Instance = std::sync::Arc<wgpu_core::global::Global>;
 
 struct WebGpuAdapter(Instance, wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {
@@ -410,7 +409,6 @@ pub async fn op_webgpu_request_adapter(
     } else {
         state.put(std::sync::Arc::new(wgpu_core::global::Global::new(
             "webgpu",
-            wgpu_core::identity::IdentityManagerFactory,
             wgpu_types::InstanceDescriptor {
                 backends,
                 flags: wgpu_types::InstanceFlags::from_build_config(),
@@ -428,7 +426,7 @@ pub async fn op_webgpu_request_adapter(
     };
     let res = instance.request_adapter(
         &descriptor,
-        wgpu_core::instance::AdapterInputs::Mask(backends, |_| ()),
+        wgpu_core::instance::AdapterInputs::Mask(backends, |_| None),
     );
 
     let adapter = match res {
@@ -675,8 +673,8 @@ pub async fn op_webgpu_request_device(
       adapter,
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
-      (),
-      ()
+      None,
+      None
     ));
     if let Some(err) = maybe_err {
         return Err(DomExceptionOperationError::new(&err.to_string()).into());
@@ -773,6 +771,6 @@ pub fn op_webgpu_create_query_set(
     gfx_put!(device => instance.device_create_query_set(
     device,
     &descriptor,
-    ()
+    None
   ) => state, WebGpuQuerySet)
 }

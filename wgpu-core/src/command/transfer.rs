@@ -9,7 +9,6 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{BufferId, CommandEncoderId, DeviceId, TextureId},
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
@@ -554,7 +553,7 @@ fn handle_dst_texture_init<A: HalApi>(
     Ok(())
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_copy_buffer_to_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,

@@ -8,7 +8,6 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{self, Id},
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     resource::QuerySet,
     storage::Storage,
@@ -346,7 +345,7 @@ pub(super) fn end_pipeline_statistics_query<A: HalApi>(
     }
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_write_timestamp<A: HalApi>(
         &self,
         command_encoder_id: id::CommandEncoderId,

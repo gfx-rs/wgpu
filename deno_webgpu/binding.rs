@@ -208,7 +208,7 @@ pub fn op_webgpu_create_bind_group_layout(
     gfx_put!(device => instance.device_create_bind_group_layout(
     device,
     &descriptor,
-    ()
+    None
   ) => state, WebGpuBindGroupLayout)
 }
 
@@ -243,7 +243,7 @@ pub fn op_webgpu_create_pipeline_layout(
     gfx_put!(device => instance.device_create_pipeline_layout(
     device,
     &descriptor,
-    ()
+    None
   ) => state, super::pipeline::WebGpuPipelineLayout)
 }
 
@@ -322,6 +322,6 @@ pub fn op_webgpu_create_bind_group(
     gfx_put!(device => instance.device_create_bind_group(
     device,
     &descriptor,
-    ()
+    None
   ) => state, WebGpuBindGroup)
 }

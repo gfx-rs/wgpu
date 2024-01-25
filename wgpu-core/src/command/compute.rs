@@ -18,7 +18,6 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     id::DeviceId,
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
     resource::{self},
@@ -340,7 +339,7 @@ impl<A: HalApi> State<A> {
 
 // Common routines between render/compute
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_run_compute_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,

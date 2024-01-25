@@ -27,10 +27,7 @@ use crate::snatch::SnatchGuard;
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
-use crate::{
-    api_log, global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory,
-    resource_log, Label,
-};
+use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
 use hal::CommandEncoder as _;
 use parking_lot::Mutex;
@@ -410,7 +407,7 @@ pub enum CommandEncoderError {
     Device(#[from] DeviceError),
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_finish<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,

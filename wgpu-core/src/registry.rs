@@ -4,8 +4,8 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
 use crate::{
-    id::{self, Id, Marker},
-    identity::{IdentityHandlerFactory, IdentityManager},
+    id::Id,
+    identity::IdentityManager,
     resource::Resource,
     storage::{Element, InvalidId, Storage},
 };
@@ -44,16 +44,16 @@ pub struct Registry<T: Resource> {
 }
 
 impl<T: Resource> Registry<T> {
-    pub(crate) fn new<F: IdentityHandlerFactory<T::Marker>>(backend: Backend, factory: &F) -> Self {
+    pub(crate) fn new(backend: Backend) -> Self {
         Self {
-            identity: factory.spawn(),
+            identity: Arc::new(IdentityManager::new()),
             storage: RwLock::new(Storage::new()),
             backend,
         }
     }
 
-    pub(crate) fn without_backend<F: IdentityHandlerFactory<T::Marker>>(factory: &F) -> Self {
-        Self::new(Backend::Empty, factory)
+    pub(crate) fn without_backend() -> Self {
+        Self::new(Backend::Empty)
     }
 }
 
@@ -108,17 +108,14 @@ impl<T: Resource> FutureId<'_, T> {
 }
 
 impl<T: Resource> Registry<T> {
-    pub(crate) fn prepare<F, U: Marker>(&self, id_in: F::Input) -> FutureId<T>
-    where
-        F: IdentityHandlerFactory<U>,
-        T::Marker: id::transmute::Transmute<U>,
-    {
+    pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<T> {
         FutureId {
-            id: if F::autogenerate_ids() {
-                self.identity.process(self.backend)
-            } else {
-                self.identity
-                    .mark_as_used(F::input_to_id(id_in).transmute())
+            id: match id_in {
+                Some(id_in) => {
+                    self.identity.mark_as_used(id_in);
+                    id_in
+                }
+                None => self.identity.process(self.backend),
             },
             identity: self.identity.clone(),
             data: &self.storage,
