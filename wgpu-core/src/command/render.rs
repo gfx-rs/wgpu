@@ -1931,7 +1931,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         unsafe {
-                            raw.draw(first_vertex, vertex_count, first_instance, instance_count);
+                            if instance_count > 0 && vertex_count > 0 {
+                                raw.draw(
+                                    first_vertex,
+                                    vertex_count,
+                                    first_instance,
+                                    instance_count,
+                                );
+                            }
                         }
                     }
                     RenderCommand::DrawIndexed {
@@ -1972,13 +1979,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         unsafe {
-                            raw.draw_indexed(
-                                first_index,
-                                index_count,
-                                base_vertex,
-                                first_instance,
-                                instance_count,
-                            );
+                            if instance_count > 0 && index_count > 0 {
+                                raw.draw_indexed(
+                                    first_index,
+                                    index_count,
+                                    base_vertex,
+                                    first_instance,
+                                    instance_count,
+                                );
+                            }
                         }
                     }
                     RenderCommand::MultiDrawIndirect {
