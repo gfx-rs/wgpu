@@ -566,6 +566,7 @@ impl<A: HalApi> Device<A> {
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
+            bind_groups: Mutex::new(Vec::new()),
         })
     }
 
@@ -596,6 +597,7 @@ impl<A: HalApi> Device<A> {
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             clear_mode: RwLock::new(clear_mode),
             views: Mutex::new(Vec::new()),
+            bind_groups: Mutex::new(Vec::new()),
         }
     }
 
@@ -615,6 +617,7 @@ impl<A: HalApi> Device<A> {
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
+            bind_groups: Mutex::new(Vec::new()),
         }
     }
 
@@ -2199,7 +2202,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(binding_model::BindGroup {
-            raw: Some(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             layout: layout.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),

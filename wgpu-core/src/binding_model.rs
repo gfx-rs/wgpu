@@ -13,7 +13,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log,
-    snatch::SnatchGuard,
+    snatch::{SnatchGuard, Snatchable},
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     Label,
@@ -833,7 +833,7 @@ pub(crate) fn buffer_binding_type_alignment(
 
 #[derive(Debug)]
 pub struct BindGroup<A: HalApi> {
-    pub(crate) raw: Option<A::BindGroup>,
+    pub(crate) raw: Snatchable<A::BindGroup>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<BindGroupLayout<A>>,
     pub(crate) info: ResourceInfo<BindGroupId>,
@@ -874,7 +874,7 @@ impl<A: HalApi> BindGroup<A> {
         for texture in &self.used_texture_ranges {
             let _ = texture.texture.raw(guard)?;
         }
-        self.raw.as_ref()
+        self.raw.get(guard)
     }
     pub(crate) fn validate_dynamic_bindings(
         &self,

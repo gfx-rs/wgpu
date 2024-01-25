@@ -232,6 +232,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         clear_view: Some(clear_view),
                     }),
                     views: Mutex::new(Vec::new()),
+                    bind_groups: Mutex::new(Vec::new()),
                 };
 
                 let (id, resource) = fid.assign(texture);
