@@ -956,6 +956,11 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Log2 => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
             }
+            crate::MathFunction::Max => {
+                component_wise_scalar!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.max(e2)])
+                })
+            }
             crate::MathFunction::Radians => {
                 component_wise_float!(self, span, [arg], |e1| { Ok([e1.to_radians()]) })
             }
