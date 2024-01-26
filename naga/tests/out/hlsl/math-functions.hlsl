@@ -72,10 +72,8 @@ void main()
     float4 d = radians(v);
     float4 e = saturate(v);
     float4 g = refract(v, v, 1.0);
-    int sign_a = sign(-1);
-    int4 sign_b = sign((-1).xxxx);
-    float sign_c = sign(-1.0);
-    float4 sign_d = sign((-1.0).xxxx);
+    int4 sign_b = int4(-1, -1, -1, -1);
+    float4 sign_d = float4(-1.0, -1.0, -1.0, -1.0);
     int const_dot = dot((int2)0, (int2)0);
     uint first_leading_bit_abs = firstbithigh(0u);
     int flb_a = asint(firstbithigh(-1));

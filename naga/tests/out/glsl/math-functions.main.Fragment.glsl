@@ -62,10 +62,8 @@ void main() {
     vec4 d = radians(v);
     vec4 e = clamp(v, vec4(0.0), vec4(1.0));
     vec4 g = refract(v, v, 1.0);
-    int sign_a = sign(-1);
-    ivec4 sign_b = sign(ivec4(-1));
-    float sign_c = sign(-1.0);
-    vec4 sign_d = sign(vec4(-1.0));
+    ivec4 sign_b = ivec4(-1, -1, -1, -1);
+    vec4 sign_d = vec4(-1.0, -1.0, -1.0, -1.0);
     int const_dot = ( + ivec2(0).x * ivec2(0).x + ivec2(0).y * ivec2(0).y);
     uint first_leading_bit_abs = uint(findMSB(0u));
     int flb_a = findMSB(-1);

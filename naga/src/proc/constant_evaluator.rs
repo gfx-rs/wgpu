@@ -234,6 +234,22 @@ gen_component_wise_extractor! {
     ],
 }
 
+gen_component_wise_extractor! {
+    component_wise_signed -> Signed,
+    literals: [
+        AbstractFloat => AbstractFloat: f64,
+        AbstractInt => AbstractInt: i64,
+        F32 => F32: f32,
+        I32 => I32: i32,
+    ],
+    scalar_kinds: [
+        Sint,
+        AbstractInt,
+        Float,
+        AbstractFloat,
+    ],
+}
+
 #[derive(Debug)]
 enum Behavior {
     Wgsl,
@@ -974,6 +990,9 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::Saturate => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
+            }
+            crate::MathFunction::Sign => {
+                component_wise_signed!(self, span, [arg], |e| { Ok([e.signum()]) })
             }
             crate::MathFunction::Sin => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
