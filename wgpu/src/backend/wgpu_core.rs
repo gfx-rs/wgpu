@@ -2219,6 +2219,10 @@ impl crate::Context for ContextWgpuCore {
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         };
 
+        for cmdbuf in &temp_command_buffers {
+            wgc::gfx_select!(*queue => self.0.command_buffer_drop(*cmdbuf));
+        }
+
         (Unused, index)
     }
 
