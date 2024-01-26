@@ -2717,8 +2717,13 @@ impl<A: HalApi> Device<A> {
         let mut shader_expects_dual_source_blending = false;
         let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
+            let mut last_stride = 0;
+            for attribute in vb_state.attributes.iter() {
+                last_stride = last_stride.max(attribute.offset + attribute.format.size());
+            }
             vertex_steps.push(pipeline::VertexStep {
                 stride: vb_state.array_stride,
+                last_stride,
                 mode: vb_state.step_mode,
             });
             if vb_state.attributes.is_empty() {
