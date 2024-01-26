@@ -68,6 +68,7 @@ Bottom level categories:
         - `tanh`
     - [#5098](https://github.com/gfx-rs/wgpu/pull/5098) by @ErichDonGubler:
         - `ceil`
+        - `floor`
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 
 
