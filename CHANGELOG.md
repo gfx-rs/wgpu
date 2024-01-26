@@ -81,6 +81,7 @@ Bottom level categories:
         - `log`
         - `log2`
         - `max`
+        - `min`
         - `radians`
         - `reverseBits`
         - `sign`
