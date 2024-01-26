@@ -80,6 +80,7 @@ Bottom level categories:
         - `inverseSqrt`
         - `log`
         - `log2`
+        - `max`
         - `radians`
         - `reverseBits`
         - `sign`
