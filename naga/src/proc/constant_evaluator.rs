@@ -1233,6 +1233,9 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::ReverseBits => {
                 component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
             }
+            crate::MathFunction::FirstTrailingBit => {
+                component_wise_concrete_int(self, span, [arg], |ci| Ok(first_trailing_bit(ci)))
+            }
             crate::MathFunction::FirstLeadingBit => {
                 component_wise_concrete_int(self, span, [arg], |ci| Ok(first_leading_bit(ci)))
             }
@@ -2098,6 +2101,86 @@ impl<'a> ConstantEvaluator<'a> {
         };
 
         Ok(resolution)
+    }
+}
+
+fn first_trailing_bit(concrete_int: ConcreteInt<1>) -> ConcreteInt<1> {
+    // NOTE: Bit indices for this built-in start at 0 at the "right" (or LSB). For example, a value
+    // of 1 means the least significant bit is set. Therefore, an input of `0x[80 00…]` would
+    // return a right-to-left bit index of 0.
+    let trailing_zeros_to_bit_idx = |e: u32| -> u32 {
+        match e {
+            idx @ 0..=31 => idx,
+            32 => u32::MAX,
+            _ => unreachable!(),
+        }
+    };
+    match concrete_int {
+        ConcreteInt::U32([e]) => ConcreteInt::U32([trailing_zeros_to_bit_idx(e.trailing_zeros())]),
+        ConcreteInt::I32([e]) => {
+            ConcreteInt::I32([trailing_zeros_to_bit_idx(e.trailing_zeros()) as i32])
+        }
+    }
+}
+
+#[test]
+fn first_trailing_bit_smoke() {
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([0])),
+        ConcreteInt::I32([-1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([1])),
+        ConcreteInt::I32([0])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([2])),
+        ConcreteInt::I32([1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([-1])),
+        ConcreteInt::I32([0]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([i32::MIN])),
+        ConcreteInt::I32([31]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([i32::MAX])),
+        ConcreteInt::I32([0]),
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_trailing_bit(ConcreteInt::I32([1 << idx])),
+            ConcreteInt::I32([idx])
+        )
+    }
+
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([0])),
+        ConcreteInt::U32([u32::MAX])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([1])),
+        ConcreteInt::U32([0])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([2])),
+        ConcreteInt::U32([1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([1 << 31])),
+        ConcreteInt::U32([31]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([u32::MAX])),
+        ConcreteInt::U32([0]),
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_trailing_bit(ConcreteInt::U32([1 << idx])),
+            ConcreteInt::U32([idx])
+        )
     }
 }
 
