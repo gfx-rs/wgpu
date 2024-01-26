@@ -842,6 +842,9 @@ impl<'a> ConstantEvaluator<'a> {
                     Ok([e1.powf(e2)])
                 })
             }
+            crate::MathFunction::Ceil => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.ceil()]) })
+            }
             crate::MathFunction::Clamp => {
                 component_wise_scalar!(
                     self,
