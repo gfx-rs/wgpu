@@ -361,6 +361,7 @@ impl VertexBufferState {
         total_size: 0,
         step: pipeline::VertexStep {
             stride: 0,
+            last_stride: 0,
             mode: VertexStepMode::Vertex,
         },
         bound: false,
@@ -384,11 +385,13 @@ struct VertexState {
 
 impl VertexState {
     fn update_limits(&mut self) {
-        // Ensure that the limits are always smaller than u32::MAX so that
-        // interger overlows can be prevented via saturating additions.
-        let max = u32::MAX as u64;
-        self.vertex_limit = max;
-        self.instance_limit = max;
+        // TODO: This isn't entirely spec-compliant.
+        // We currently require that the buffer range can fit `stride` * count bytes.
+        // The spec, however, lets a buffer be a bit smaller as long as the size of the
+        // last element fits in it (the last element can be smaller than the stride between
+        // elements).
+        self.vertex_limit = u32::MAX as u64;
+        self.instance_limit = u32::MAX as u64;
         for (idx, vbs) in self.inputs.iter().enumerate() {
             if vbs.step.stride == 0 || !vbs.bound {
                 continue;

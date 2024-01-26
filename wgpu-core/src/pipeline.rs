@@ -493,6 +493,9 @@ pub struct VertexStep {
     /// The byte stride in the buffer between one attribute value and the next.
     pub stride: wgt::BufferAddress,
 
+    /// The byte size required to fit the last vertex in the stream.
+    pub last_stride: wgt::BufferAddress,
+
     /// Whether the buffer is indexed by vertex number or instance number.
     pub mode: wgt::VertexStepMode,
 }
@@ -501,6 +504,7 @@ impl Default for VertexStep {
     fn default() -> Self {
         Self {
             stride: 0,
+            last_stride: 0,
             mode: wgt::VertexStepMode::Vertex,
         }
     }
