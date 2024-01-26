@@ -837,7 +837,9 @@ impl<'a> ConstantEvaluator<'a> {
             ));
         }
 
+        // NOTE: We try to match the declaration order of `MathFunction` here.
         match fun {
+            // comparison
             crate::MathFunction::Abs => {
                 component_wise_scalar(self, span, [arg], |args| match args {
                     Scalar::AbstractFloat([e]) => Ok(Scalar::AbstractFloat([e.abs()])),
@@ -847,31 +849,15 @@ impl<'a> ConstantEvaluator<'a> {
                     Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
                 })
             }
-            crate::MathFunction::Acos => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acos()]) })
-            }
-            crate::MathFunction::Acosh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acosh()]) })
-            }
-            crate::MathFunction::Asin => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asin()]) })
-            }
-            crate::MathFunction::Asinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
-            }
-            crate::MathFunction::Atan => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
-            }
-            crate::MathFunction::Atanh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.atanh()]) })
-            }
-            crate::MathFunction::Pow => {
-                component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
-                    Ok([e1.powf(e2)])
+            crate::MathFunction::Min => {
+                component_wise_scalar!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.min(e2)])
                 })
             }
-            crate::MathFunction::Ceil => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.ceil()]) })
+            crate::MathFunction::Max => {
+                component_wise_scalar!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.max(e2)])
+                })
             }
             crate::MathFunction::Clamp => {
                 component_wise_scalar!(
@@ -887,90 +873,60 @@ impl<'a> ConstantEvaluator<'a> {
                     }
                 )
             }
+            crate::MathFunction::Saturate => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
+            }
+
+            // trigonometry
             crate::MathFunction::Cos => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.cos()]) })
             }
             crate::MathFunction::Cosh => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.cosh()]) })
             }
-            crate::MathFunction::CountLeadingZeros => {
-                component_wise_concrete_int!(self, span, [arg], |e| {
-                    #[allow(clippy::useless_conversion)]
-                    Ok([e
-                        .leading_zeros()
-                        .try_into()
-                        .expect("bit count overflowed 32 bits, somehow!?")])
-                })
+            crate::MathFunction::Sin => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
             }
-            crate::MathFunction::CountOneBits => {
-                component_wise_concrete_int!(self, span, [arg], |e| {
-                    #[allow(clippy::useless_conversion)]
-                    Ok([e
-                        .count_ones()
-                        .try_into()
-                        .expect("bit count overflowed 32 bits, somehow!?")])
-                })
+            crate::MathFunction::Sinh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.sinh()]) })
             }
-            crate::MathFunction::CountTrailingZeros => {
-                component_wise_concrete_int!(self, span, [arg], |e| {
-                    #[allow(clippy::useless_conversion)]
-                    Ok([e
-                        .trailing_zeros()
-                        .try_into()
-                        .expect("bit count overflowed 32 bits, somehow!?")])
-                })
+            crate::MathFunction::Tan => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.tan()]) })
             }
-            crate::MathFunction::Degrees => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.to_degrees()]) })
+            crate::MathFunction::Tanh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.tanh()]) })
             }
-            crate::MathFunction::Exp => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
+            crate::MathFunction::Acos => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.acos()]) })
             }
-            crate::MathFunction::Exp2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp2()]) })
+            crate::MathFunction::Asin => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.asin()]) })
             }
-            crate::MathFunction::Floor => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
+            crate::MathFunction::Atan => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
             }
-            crate::MathFunction::Fract => {
-                component_wise_float!(self, span, [arg], |e| {
-                    // N.B., Rust's definition of `fract` is `e - e.trunc()`, so we can't use that
-                    // here.
-                    Ok([e - e.floor()])
-                })
+            crate::MathFunction::Asinh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
             }
-            crate::MathFunction::Fma => {
-                component_wise_float!(
-                    self,
-                    span,
-                    [arg, arg1.unwrap(), arg2.unwrap()],
-                    |e1, e2, e3| { Ok([e1.mul_add(e2, e3)]) }
-                )
+            crate::MathFunction::Acosh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.acosh()]) })
             }
-            crate::MathFunction::InverseSqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([1. / e.sqrt()]) })
-            }
-            crate::MathFunction::Log => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.ln()]) })
-            }
-            crate::MathFunction::Log2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
-            }
-            crate::MathFunction::Max => {
-                component_wise_scalar!(self, span, [arg, arg1.unwrap()], |e1, e2| {
-                    Ok([e1.max(e2)])
-                })
-            }
-            crate::MathFunction::Min => {
-                component_wise_scalar!(self, span, [arg, arg1.unwrap()], |e1, e2| {
-                    Ok([e1.min(e2)])
-                })
+            crate::MathFunction::Atanh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.atanh()]) })
             }
             crate::MathFunction::Radians => {
                 component_wise_float!(self, span, [arg], |e1| { Ok([e1.to_radians()]) })
             }
-            crate::MathFunction::ReverseBits => {
-                component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
+            crate::MathFunction::Degrees => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.to_degrees()]) })
+            }
+
+            // decomposition
+            crate::MathFunction::Ceil => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.ceil()]) })
+            }
+            crate::MathFunction::Floor => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
             crate::MathFunction::Round => {
                 // TODO: Use `f{32,64}.round_ties_even()` when available on stable. This polyfill
@@ -998,35 +954,92 @@ impl<'a> ConstantEvaluator<'a> {
                     Float::F32([e]) => Ok(Float::F32([(round_ties_even(e as f64) as f32)])),
                 })
             }
-            crate::MathFunction::Saturate => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
+            crate::MathFunction::Fract => {
+                component_wise_float!(self, span, [arg], |e| {
+                    // N.B., Rust's definition of `fract` is `e - e.trunc()`, so we can't use that
+                    // here.
+                    Ok([e - e.floor()])
+                })
             }
+            crate::MathFunction::Trunc => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.trunc()]) })
+            }
+
+            // exponent
+            crate::MathFunction::Exp => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
+            }
+            crate::MathFunction::Exp2 => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.exp2()]) })
+            }
+            crate::MathFunction::Log => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.ln()]) })
+            }
+            crate::MathFunction::Log2 => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
+            }
+            crate::MathFunction::Pow => {
+                component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.powf(e2)])
+                })
+            }
+
+            // computational
             crate::MathFunction::Sign => {
                 component_wise_signed!(self, span, [arg], |e| { Ok([e.signum()]) })
             }
-            crate::MathFunction::Sin => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
-            }
-            crate::MathFunction::Sinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sinh()]) })
-            }
-            crate::MathFunction::Tan => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.tan()]) })
-            }
-            crate::MathFunction::Tanh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.tanh()]) })
-            }
-            crate::MathFunction::Sqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
+            crate::MathFunction::Fma => {
+                component_wise_float!(
+                    self,
+                    span,
+                    [arg, arg1.unwrap(), arg2.unwrap()],
+                    |e1, e2, e3| { Ok([e1.mul_add(e2, e3)]) }
+                )
             }
             crate::MathFunction::Step => {
                 component_wise_float!(self, span, [arg, arg1.unwrap()], |edge, x| {
                     Ok([if edge <= x { 1.0 } else { 0.0 }])
                 })
             }
-            crate::MathFunction::Trunc => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.trunc()]) })
+            crate::MathFunction::Sqrt => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
             }
+            crate::MathFunction::InverseSqrt => {
+                component_wise_float!(self, span, [arg], |e| { Ok([1. / e.sqrt()]) })
+            }
+
+            // bits
+            crate::MathFunction::CountTrailingZeros => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .trailing_zeros()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
+            }
+            crate::MathFunction::CountLeadingZeros => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .leading_zeros()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
+            }
+            crate::MathFunction::CountOneBits => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .count_ones()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
+            }
+            crate::MathFunction::ReverseBits => {
+                component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
+            }
+
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
             ))),
