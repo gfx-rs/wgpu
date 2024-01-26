@@ -75,6 +75,7 @@ Bottom level categories:
         - `exp`
         - `exp2`
         - `floor`
+        - `fma`
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 
 
