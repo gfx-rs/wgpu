@@ -113,6 +113,7 @@ pub struct ShaderError<E> {
     pub label: Option<String>,
     pub inner: Box<E>,
 }
+
 #[cfg(feature = "wgsl")]
 impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -121,6 +122,7 @@ impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+
 #[cfg(feature = "glsl")]
 impl fmt::Display for ShaderError<naga::front::glsl::ParseError> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -137,6 +139,7 @@ impl fmt::Display for ShaderError<naga::front::spv::Error> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+
 impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use codespan_reporting::{
@@ -168,6 +171,7 @@ impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> 
         )
     }
 }
+
 impl<E> Error for ShaderError<E>
 where
     ShaderError<E>: fmt::Display,
