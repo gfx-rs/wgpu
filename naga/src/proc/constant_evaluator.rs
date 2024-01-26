@@ -940,6 +940,9 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Log2 => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
             }
+            crate::MathFunction::Radians => {
+                component_wise_float!(self, span, [arg], |e1| { Ok([e1.to_radians()]) })
+            }
             crate::MathFunction::Round => {
                 // TODO: Use `f{32,64}.round_ties_even()` when available on stable. This polyfill
                 // is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
