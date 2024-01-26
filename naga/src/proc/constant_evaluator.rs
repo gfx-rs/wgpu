@@ -924,6 +924,9 @@ impl<'a> ConstantEvaluator<'a> {
                     |e1, e2, e3| { Ok([e1.mul_add(e2, e3)]) }
                 )
             }
+            crate::MathFunction::InverseSqrt => {
+                component_wise_float!(self, span, [arg], |e| { Ok([1. / e.sqrt()]) })
+            }
             crate::MathFunction::Round => {
                 // TODO: Use `f{32,64}.round_ties_even()` when available on stable. This polyfill
                 // is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
