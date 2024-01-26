@@ -1014,6 +1014,9 @@ impl<'a> ConstantEvaluator<'a> {
                     Ok([if edge <= x { 1.0 } else { 0.0 }])
                 })
             }
+            crate::MathFunction::Trunc => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.trunc()]) })
+            }
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
             ))),
