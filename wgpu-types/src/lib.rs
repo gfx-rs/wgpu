@@ -895,6 +895,14 @@ bitflags::bitflags! {
         /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
         /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
         const ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER = 1 << 3;
+        /// Enable GPU-based validation. Currently, this only changes behavior on DX12 and Vulkan
+        /// back ends.
+        ///
+        /// Supported platforms:
+        ///
+        /// - D3D12; called ["GPU-based validation", or
+        ///   "GBV"](https://web.archive.org/web/20230206120404/https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-d3d12-debug-layer-gpu-based-validation)
+        const GPU_BASED_VALIDATION = 1 << 4;
     }
 }
 
@@ -907,7 +915,7 @@ impl Default for InstanceFlags {
 impl InstanceFlags {
     /// Enable debugging and validation flags.
     pub fn debugging() -> Self {
-        InstanceFlags::DEBUG | InstanceFlags::VALIDATION
+        InstanceFlags::DEBUG | InstanceFlags::VALIDATION | InstanceFlags::GPU_BASED_VALIDATION
     }
 
     /// Infer good defaults from the build type
@@ -949,6 +957,9 @@ impl InstanceFlags {
         }
         if let Some(bit) = env("WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER") {
             self.set(Self::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER, bit);
+        }
+        if let Some(bit) = env("WGPU_GPU_BASED_VALIDATION") {
+            self.set(Self::GPU_BASED_VALIDATION, bit);
         }
 
         self

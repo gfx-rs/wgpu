@@ -20,14 +20,25 @@ impl crate::Instance<super::Api> for super::Instance {
             crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
         })?;
 
-        if desc.flags.contains(wgt::InstanceFlags::VALIDATION) {
+        if desc
+            .flags
+            .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION)
+        {
             // Enable debug layer
             match lib_main.get_debug_interface() {
                 Ok(pair) => match pair.into_result() {
                     Ok(debug_controller) => {
-                        debug_controller.enable_layer();
-                        if !debug_controller.enable_gpu_based_validation() {
-                            log::warn!("Failed to enable GPU-based validation");
+                        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
+                            debug_controller.enable_layer();
+                        }
+                        if desc
+                            .flags
+                            .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
+                        {
+                            #[allow(clippy::collapsible_if)]
+                            if !debug_controller.enable_gpu_based_validation() {
+                                log::warn!("Failed to enable GPU-based validation");
+                            }
                         }
                     }
                     Err(err) => {
