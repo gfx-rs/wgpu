@@ -5553,10 +5553,7 @@ pub struct Extent3d {
     /// Height of the extent
     pub height: u32,
     /// The depth of the extent or the number of array layers
-    #[cfg_attr(
-        feature = "deserialize",
-        serde(default = "default_depth")
-    )]
+    #[cfg_attr(feature = "deserialize", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
 }
 

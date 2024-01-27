@@ -40,8 +40,14 @@ use std::{fmt, mem, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(serde::Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(serde::Deserialize))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "serial-pass"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(serde::Deserialize)
+)]
 pub enum ComputeCommand {
     SetBindGroup {
         index: u32,
@@ -146,7 +152,10 @@ impl fmt::Debug for ComputePass {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
+#[cfg_attr(
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
 pub struct ComputePassTimestampWrites {
     /// The query set to write the timestamps to.
     pub query_set: id::QuerySetId,

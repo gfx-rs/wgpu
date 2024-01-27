@@ -57,9 +57,16 @@ use super::{
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
 #[cfg_attr(
-    any(feature = "serialize", feature = "deserialize", feature = "serial-pass"),
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
+#[cfg_attr(
+    any(
+        feature = "serialize",
+        feature = "deserialize",
+        feature = "serial-pass"
+    ),
     serde(rename_all = "kebab-case")
 )]
 pub enum LoadOp {
@@ -73,9 +80,16 @@ pub enum LoadOp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
 #[cfg_attr(
-    any(feature = "serialize", feature = "deserialize", feature = "serial-pass"),
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
+#[cfg_attr(
+    any(
+        feature = "serialize",
+        feature = "deserialize",
+        feature = "serial-pass"
+    ),
     serde(rename_all = "kebab-case")
 )]
 pub enum StoreOp {
@@ -91,7 +105,10 @@ pub enum StoreOp {
 #[repr(C)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
+#[cfg_attr(
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
 pub struct PassChannel<V> {
     /// Operation to perform to the output attachment at the start of a
     /// renderpass.
@@ -129,7 +146,10 @@ impl<V> PassChannel<V> {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
+#[cfg_attr(
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
 pub struct RenderPassColorAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
@@ -143,7 +163,10 @@ pub struct RenderPassColorAttachment {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
+#[cfg_attr(
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
 pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
@@ -195,9 +218,16 @@ impl RenderPassDepthStencilAttachment {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
 #[cfg_attr(
-    any(feature = "serialize", feature = "deserialize", feature = "serial-pass"),
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
+#[cfg_attr(
+    any(
+        feature = "serialize",
+        feature = "deserialize",
+        feature = "serial-pass"
+    ),
     serde(rename_all = "kebab-case")
 )]
 pub enum RenderPassTimestampLocation {
@@ -209,7 +239,10 @@ pub enum RenderPassTimestampLocation {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(Deserialize))]
+#[cfg_attr(
+    any(feature = "deserialize", feature = "serial-pass"),
+    derive(Deserialize)
+)]
 pub struct RenderPassTimestampWrites {
     /// The query set to write the timestamp to.
     pub query_set: id::QuerySetId,
