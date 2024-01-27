@@ -47,11 +47,20 @@ renderdoc = ["hal/renderdoc"]
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
 
+## serde
+serde = ["serialize", "deserialize", "wgt/serde"]
+
+## serialize
+serialize = ["dep:serde", "wgt/serialize"]
+
+## deserialize
+deserialize = ["dep:serde", "wgt/deserialize"]
+
 ## Enable API tracing.
-trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
+trace = ["ron", "serialize", "arrayvec/serde", "naga/serialize"]
 
 ## Enable API replaying
-replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
+replay = ["deserialize", "arrayvec/serde", "naga/deserialize"]
 
 ## Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
