@@ -127,11 +127,11 @@ impl crate::error::PrettyError for RenderCommandError {
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
+    feature = "serialize",
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
+    feature = "deserialize",
     derive(serde::Deserialize)
 )]
 pub struct Rect<T> {
@@ -144,11 +144,11 @@ pub struct Rect<T> {
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
+    feature = "serialize",
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
+    feature = "deserialize",
     derive(serde::Deserialize)
 )]
 pub enum RenderCommand {

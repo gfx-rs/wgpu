@@ -29,9 +29,9 @@ use crate::{
 };
 
 use hal::CommandEncoder as _;
-#[cfg(any(feature = "serial-pass", feature = "replay"))]
+#[cfg(feature = "deserialize")]
 use serde::Deserialize;
-#[cfg(any(feature = "serial-pass", feature = "trace"))]
+#[cfg(feature = "serialize")]
 use serde::Serialize;
 
 use thiserror::Error;
@@ -41,11 +41,11 @@ use std::{fmt, mem, str};
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
+    feature = "serialize",
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
+    feature = "deserialize",
     derive(serde::Deserialize)
 )]
 pub enum ComputeCommand {
@@ -151,8 +151,8 @@ impl fmt::Debug for ComputePass {
 /// Describes the writing of timestamp values in a compute pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
-#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct ComputePassTimestampWrites {
     /// The query set to write the timestamps to.
     pub query_set: id::QuerySetId,

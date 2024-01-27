@@ -56,19 +56,19 @@ type Dummy = hal::api::Empty;
     serde(from = "SerialId")
 )]
 #[cfg_attr(
-    all(feature = "serde", not(feature = "trace")),
+    all(feature = "serialize", not(feature = "trace")),
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    all(feature = "serde", not(feature = "replay")),
+    all(feature = "deserialize", not(feature = "replay")),
     derive(serde::Deserialize)
 )]
 pub struct Id<T: 'static + WasmNotSendSync>(NonZeroId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
 #[allow(dead_code)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 enum SerialId {
     // The only variant forces RON to not ignore "Id"
     Id(Index, Epoch, Backend),

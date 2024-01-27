@@ -51,19 +51,19 @@ strict_asserts = ["wgt/strict_asserts"]
 serde = ["serialize", "deserialize", "wgt/serde"]
 
 ## serialize
-serialize = ["dep:serde", "wgt/serialize"]
+serialize = ["dep:serde", "wgt/serialize", "arrayvec/serde"]
 
 ## deserialize
-deserialize = ["dep:serde", "wgt/deserialize"]
+deserialize = ["dep:serde", "wgt/deserialize", "arrayvec/serde"]
 
 ## Enable API tracing.
-trace = ["ron", "serialize", "arrayvec/serde", "naga/serialize"]
+trace = ["ron", "serialize", "naga/serialize"]
 
 ## Enable API replaying
-replay = ["deserialize", "arrayvec/serde", "naga/deserialize"]
+replay = ["deserialize", "naga/deserialize"]
 
 ## Enable serializable compute/render passes, and bundle encoders.
-serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
+serial-pass = ["serde", "wgt/serde"]
 
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
