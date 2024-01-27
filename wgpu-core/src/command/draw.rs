@@ -126,8 +126,8 @@ impl crate::error::PrettyError for RenderCommandError {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(serde::Serialize))]
+#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(serde::Deserialize))]
 pub struct Rect<T> {
     pub x: T,
     pub y: T,
@@ -137,8 +137,8 @@ pub struct Rect<T> {
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(serde::Serialize))]
+#[cfg_attr(any(feature = "deserialize", feature = "serial-pass"), derive(serde::Deserialize))]
 pub enum RenderCommand {
     SetBindGroup {
         index: u32,
