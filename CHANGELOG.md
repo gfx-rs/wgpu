@@ -67,6 +67,7 @@ Bottom level categories:
         - `tan`
         - `tanh`
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
+- Signed and unsigned 64 bit integer support in shaders. By @rodolphito in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 
 
 ### Bug Fixes
@@ -193,7 +194,7 @@ let surface = instance.create_surface(my_window.clone())?;
 ```
 
 All platform specific surface creation using points have moved into `SurfaceTargetUnsafe` as well.
-For example: 
+For example:
 
 Safety by @daxpedda in [#4597](https://github.com/gfx-rs/wgpu/pull/4597)
 Unification by @wumpf in [#4984](https://github.com/gfx-rs/wgpu/pull/4984)

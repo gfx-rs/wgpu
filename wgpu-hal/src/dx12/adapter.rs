@@ -294,6 +294,20 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
+        let int64_shader_ops_supported = {
+            let mut features1: d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1 =
+                unsafe { mem::zeroed() };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS1,
+                    &mut features1 as *mut _ as *mut _,
+                    mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1>() as _,
+                )
+            };
+            hr == 0 && features1.Int64ShaderOps != 0
+        };
+        features.set(wgt::Features::SHADER_I64, int64_shader_ops_supported);
+
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
 

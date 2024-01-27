@@ -1416,6 +1416,10 @@ impl<A: HalApi> Device<A> {
                 .contains(wgt::Features::SHADER_EARLY_DEPTH_TEST),
         );
         caps.set(
+            Caps::SHADER_I64,
+            self.features.contains(wgt::Features::SHADER_I64),
+        );
+        caps.set(
             Caps::MULTISAMPLED_SHADING,
             self.downlevel
                 .flags

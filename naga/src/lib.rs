@@ -884,6 +884,7 @@ pub enum Literal {
     F32(f32),
     U32(u32),
     I32(i32),
+    U64(u64),
     I64(i64),
     Bool(bool),
     AbstractInt(i64),

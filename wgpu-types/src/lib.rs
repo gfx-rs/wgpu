@@ -793,10 +793,16 @@ bitflags::bitflags! {
         /// This is a native-only feature.
         const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 56;
 
-        // 57 available
-
         // Shader:
 
+        /// Allows shaders to use i64 and u64.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        const SHADER_I64 = 1 << 57;
         /// Allows for the creation of ray-tracing queries within shaders.
         ///
         /// Supported platforms:
