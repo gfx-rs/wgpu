@@ -9,10 +9,10 @@
 )]
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
-#[cfg(any(feature = "serialize", test))]
-use serde::Serialize;
 #[cfg(any(feature = "deserialize", test))]
 use serde::Deserialize;
+#[cfg(any(feature = "serialize", test))]
+use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
@@ -133,7 +133,10 @@ impl Backend {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum PowerPreference {
     #[default]
     /// Power usage is not considered when choosing an adapter.
@@ -994,20 +997,32 @@ impl InstanceFlags {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase", default))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase", default)
+)]
 pub struct Limits {
     /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
     /// Defaults to 8192. Higher is "better".
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "maxTextureDimension1D"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "maxTextureDimension1D")
+    )]
     pub max_texture_dimension_1d: u32,
     /// Maximum allowed value for the `size.width` and `size.height` of a texture created with `TextureDimension::D2`.
     /// Defaults to 8192. Higher is "better".
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "maxTextureDimension2D"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "maxTextureDimension2D")
+    )]
     pub max_texture_dimension_2d: u32,
     /// Maximum allowed value for the `size.width`, `size.height`, and `size.depth_or_array_layers`
     /// of a texture created with `TextureDimension::D3`.
     /// Defaults to 2048. Higher is "better".
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "maxTextureDimension3D"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "maxTextureDimension3D")
+    )]
     pub max_texture_dimension_3d: u32,
     /// Maximum allowed value for the `size.depth_or_array_layers` of a texture created with `TextureDimension::D2`.
     /// Defaults to 256. Higher is "better".
@@ -1740,23 +1755,41 @@ impl_bitflags!(ShaderStages);
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum TextureViewDimension {
     /// A one dimensional texture. `texture_1d` in WGSL and `texture1D` in GLSL.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "1d"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "1d")
+    )]
     D1,
     /// A two dimensional texture. `texture_2d` in WGSL and `texture2D` in GLSL.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "2d"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "2d")
+    )]
     #[default]
     D2,
     /// A two dimensional array texture. `texture_2d_array` in WGSL and `texture2DArray` in GLSL.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "2d-array"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "2d-array")
+    )]
     D2Array,
     /// A cubemap texture. `texture_cube` in WGSL and `textureCube` in GLSL.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "cube"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "cube")
+    )]
     Cube,
     /// A cubemap array texture. `texture_cube_array` in WGSL and `textureCubeArray` in GLSL.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "cube-array"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "cube-array")
+    )]
     CubeArray,
     /// A three dimensional texture. `texture_3d` in WGSL and `texture3D` in GLSL.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "3d"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "3d")
+    )]
     D3,
 }
 
@@ -1783,7 +1816,10 @@ impl TextureViewDimension {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum BlendFactor {
     /// 0.0
     Zero = 0,
@@ -1846,7 +1882,10 @@ impl BlendFactor {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum BlendOperation {
     /// Src + Dst
     #[default]
@@ -1869,7 +1908,10 @@ pub enum BlendOperation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct BlendComponent {
     /// Multiplier for the source, which is produced by the fragment shader.
     pub src_factor: BlendFactor,
@@ -1925,7 +1967,10 @@ impl Default for BlendComponent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct BlendState {
     /// Color equation.
     pub color: BlendComponent,
@@ -1965,7 +2010,10 @@ impl BlendState {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct ColorTargetState {
     /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the format
     /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`][CEbrp]
@@ -1998,7 +2046,10 @@ impl From<TextureFormat> for ColorTargetState {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum PrimitiveTopology {
     /// Vertex data is a list of points. Each vertex is a new point.
     PointList = 0,
@@ -2039,7 +2090,10 @@ impl PrimitiveTopology {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum FrontFace {
     /// Triangles with vertices in counter clockwise order are considered the front face.
     ///
@@ -2061,7 +2115,10 @@ pub enum FrontFace {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum Face {
     /// Front face
     Front = 0,
@@ -2074,7 +2131,10 @@ pub enum Face {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum PolygonMode {
     /// Polygons are filled
     #[default]
@@ -2093,7 +2153,10 @@ pub enum PolygonMode {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct PrimitiveState {
     /// The primitive topology used to interpret vertices.
     pub topology: PrimitiveTopology,
@@ -2134,7 +2197,10 @@ pub struct PrimitiveState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct MultisampleState {
     /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
     /// this should be `1`
@@ -4518,7 +4584,10 @@ impl DepthStencilState {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum IndexFormat {
     /// Indices are 16 bit unsigned integers.
     Uint16 = 0,
@@ -4535,7 +4604,10 @@ pub enum IndexFormat {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum StencilOperation {
     /// Keep stencil value unchanged.
     #[default]
@@ -4569,7 +4641,10 @@ pub enum StencilOperation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct StencilFaceState {
     /// Comparison function that determines if the fail_op or pass_op is used on the stencil buffer.
     pub compare: CompareFunction,
@@ -4620,7 +4695,10 @@ impl Default for StencilFaceState {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum CompareFunction {
     /// Function never passes
     Never = 1,
@@ -4715,7 +4793,10 @@ impl CompareFunction {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum VertexStepMode {
     /// Vertex data is advanced every vertex.
     #[default]
@@ -4737,7 +4818,10 @@ pub enum VertexStepMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct VertexAttribute {
     /// Format of the input
     pub format: VertexFormat,
@@ -4755,7 +4839,10 @@ pub struct VertexAttribute {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "lowercase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "lowercase")
+)]
 pub enum VertexFormat {
     /// Two unsigned bytes (u8). `vec2<u32>` in shaders.
     Uint8x2 = 0,
@@ -5049,7 +5136,10 @@ pub enum PresentMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "lowercase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "lowercase")
+)]
 pub enum CompositeAlphaMode {
     /// Chooses either `Opaque` or `Inherit` automatically，depending on the
     /// `alpha_mode` that the current surface can support.
@@ -5276,7 +5366,10 @@ impl PresentationTimestamp {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct Color {
     /// Red component of the color
     pub r: f64,
@@ -5338,13 +5431,22 @@ impl Color {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum TextureDimension {
     /// 1D texture
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "1d"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "1d")
+    )]
     D1,
     /// 2D texture
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "2d"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "2d")
+    )]
     D2,
     /// 3D texture
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename = "3d"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "3d")
+    )]
     D3,
 }
 
@@ -5356,7 +5458,10 @@ pub enum TextureDimension {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct Origin2d {
     ///
     pub x: u32,
@@ -5392,7 +5497,10 @@ impl std::fmt::Debug for Origin2d {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct Origin3d {
     /// X position of the origin
     pub x: u32,
@@ -5435,14 +5543,20 @@ impl std::fmt::Debug for Origin3d {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct Extent3d {
     /// Width of the extent
     pub width: u32,
     /// Height of the extent
     pub height: u32,
     /// The depth of the extent or the number of array layers
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default = "default_depth"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(default = "default_depth")
+    )]
     pub depth_or_array_layers: u32,
 }
 
@@ -5767,7 +5881,10 @@ impl<L, V> TextureDescriptor<L, V> {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum TextureAspect {
     /// Depth, Stencil, and Color.
     #[default]
@@ -5792,7 +5909,10 @@ pub enum TextureAspect {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum AddressMode {
     /// Clamp the value to the edge of the texture
     ///
@@ -5826,7 +5946,10 @@ pub enum AddressMode {
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum FilterMode {
     /// Nearest neighbor sampling.
     ///
@@ -6137,7 +6260,10 @@ impl Default for TextureSampleType {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum StorageTextureAccess {
     /// The texture can only be written in the shader and it:
     /// - may or may not be annotated with `write` (WGSL).
@@ -6200,7 +6326,10 @@ pub enum StorageTextureAccess {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum SamplerBindingType {
     /// The sampling result is produced based on more than a single color sample from a texture,
     /// e.g. when bilinear interpolation is enabled.
@@ -6544,7 +6673,10 @@ unsafe impl Sync for ExternalImageSource {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum PredefinedColorSpace {
     /// sRGB color space
     Srgb,
@@ -6592,7 +6724,10 @@ impl<T: Copy> ImageCopyTextureTagged<T> {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct ImageSubresourceRange {
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`][TAA].
     ///

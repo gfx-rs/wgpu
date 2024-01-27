@@ -40,14 +40,8 @@ use std::{fmt, mem, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    feature = "deserialize",
-    derive(serde::Deserialize)
-)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum ComputeCommand {
     SetBindGroup {
         index: u32,

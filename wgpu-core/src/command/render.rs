@@ -58,7 +58,10 @@ use super::{
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum LoadOp {
     /// Clear the output attachment with the clear color. Clearing is faster than loading.
     Clear = 0,
@@ -71,7 +74,10 @@ pub enum LoadOp {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum StoreOp {
     /// Discards the content of the render target.
     ///
@@ -190,7 +196,10 @@ impl RenderPassDepthStencilAttachment {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "kebab-case"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "kebab-case")
+)]
 pub enum RenderPassTimestampLocation {
     Beginning = 0,
     End = 1,

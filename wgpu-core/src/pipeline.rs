@@ -313,7 +313,10 @@ impl<A: HalApi> ComputePipeline<A> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(rename_all = "camelCase"))]
+#[cfg_attr(
+    any(feature = "serialize", feature = "deserialize"),
+    serde(rename_all = "camelCase")
+)]
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub array_stride: wgt::BufferAddress,
