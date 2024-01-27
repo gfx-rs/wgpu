@@ -42,7 +42,7 @@ pub enum ShaderModuleSource<'a> {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub shader_bound_checks: wgt::ShaderBoundChecks,
 }
 
@@ -359,13 +359,13 @@ pub struct RenderPipelineDescriptor<'a> {
     /// The vertex processing state for this pipeline.
     pub vertex: VertexState<'a>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
-    #[cfg_attr(any(feature = "deserialize", feature = "serialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    #[cfg_attr(any(feature = "deserialize", feature = "serialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub depth_stencil: Option<wgt::DepthStencilState>,
     /// The multi-sampling properties of the pipeline.
-    #[cfg_attr(any(feature = "deserialize", feature = "serialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a>>,

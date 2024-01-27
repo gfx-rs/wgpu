@@ -2021,10 +2021,10 @@ pub struct ColorTargetState {
     /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
     pub format: TextureFormat,
     /// The blending that is used for this pipeline.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub blend: Option<BlendState>,
     /// Mask which enables/disables writes to different color/alpha channel.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub write_mask: ColorWrites,
 }
 
@@ -2162,25 +2162,25 @@ pub struct PrimitiveState {
     pub topology: PrimitiveTopology,
     /// When drawing strip topologies with indices, this is the required format for the index buffer.
     /// This has no effect on non-indexed or non-strip draws.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub strip_index_format: Option<IndexFormat>,
     /// The face to consider the front for the purpose of culling and stencil operations.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub front_face: FrontFace,
     /// The face culling mode.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub cull_mode: Option<Face>,
     /// If set to true, the polygon depth is not clipped to 0-1 before rasterization.
     ///
     /// Enabling this requires `Features::DEPTH_CLIP_CONTROL` to be enabled.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub unclipped_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to `Line` requires `Features::POLYGON_MODE_LINE` to be enabled.
     ///
     /// Setting this to `Point` requires `Features::POLYGON_MODE_POINT` to be enabled.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub polygon_mode: PolygonMode,
     /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.
     /// Only valid for PolygonMode::Fill!
@@ -4547,10 +4547,10 @@ pub struct DepthStencilState {
     /// Comparison function used to compare depth values in the depth test.
     pub depth_compare: CompareFunction,
     /// Stencil state.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub stencil: StencilState,
     /// Depth bias state.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub bias: DepthBiasState,
 }
 
@@ -5554,7 +5554,7 @@ pub struct Extent3d {
     pub height: u32,
     /// The depth of the extent or the number of array layers
     #[cfg_attr(
-        any(feature = "serialize", feature = "deserialize"),
+        feature = "deserialize",
         serde(default = "default_depth")
     )]
     pub depth_or_array_layers: u32,
@@ -6365,7 +6365,7 @@ pub enum BindingType {
         /// for each dynamic binding in increasing order of binding number.
         ///
         /// [RPsbg]: ../wgpu/struct.RenderPass.html#method.set_bind_group
-        #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+        #[cfg_attr(feature = "deserialize", serde(default))]
         has_dynamic_offset: bool,
 
         /// The minimum size for a [`BufferBinding`] matching this entry, in bytes.
@@ -6393,7 +6393,7 @@ pub enum BindingType {
         /// [minimum buffer binding size]: https://www.w3.org/TR/webgpu/#minimum-buffer-binding-size
         /// [`create_render_pipeline`]: ../wgpu/struct.Device.html#method.create_render_pipeline
         /// [`create_compute_pipeline`]: ../wgpu/struct.Device.html#method.create_compute_pipeline
-        #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+        #[cfg_attr(feature = "deserialize", serde(default))]
         min_binding_size: Option<BufferSize>,
     },
     /// A sampler that can be used to sample a texture.
@@ -6513,7 +6513,7 @@ pub struct BindGroupLayoutEntry {
     /// If this value is Some and `ty` is `BindingType::Texture`, [`Features::TEXTURE_BINDING_ARRAY`] must be supported.
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub count: Option<NonZeroU32>,
 }
 
@@ -6548,10 +6548,10 @@ pub struct ImageCopyTexture<T> {
     /// The base texel of the texture in the selected `mip_level`. Together
     /// with the `copy_size` argument to copy functions, defines the
     /// sub-region of the texture to copy.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub origin: Origin3d,
     /// The copy aspect.
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub aspect: TextureAspect,
 }
 
