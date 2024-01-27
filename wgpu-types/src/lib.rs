@@ -867,6 +867,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - DX12 (emulated via Rg32Sint and Rg32Uint textures)
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_R64INT = 1 << 65;
