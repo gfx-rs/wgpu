@@ -56,11 +56,17 @@ type Dummy = hal::api::Empty;
     serde(from = "SerialId")
 )]
 #[cfg_attr(
-    all(feature = "serialize", not(feature = "trace")),
+    all(
+        any(feature = "serialize", feature = "serial-pass"),
+        not(feature = "trace")
+    ),
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    all(feature = "deserialize", not(feature = "replay")),
+    all(
+        any(feature = "deserialize", feature = "serial-pass"),
+        not(feature = "replay")
+    ),
     derive(serde::Deserialize)
 )]
 pub struct Id<T: 'static + WasmNotSendSync>(NonZeroId, PhantomData<T>);
