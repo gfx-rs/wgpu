@@ -45,6 +45,8 @@ impl super::PrivateCapabilities {
             Tf::Rgba16Unorm => F::R16G16B16A16_UNORM,
             Tf::Rgba16Snorm => F::R16G16B16A16_SNORM,
             Tf::Rgba16Float => F::R16G16B16A16_SFLOAT,
+            Tf::R64Uint => F::R64_UINT,
+            Tf::R64Sint => F::R64_SINT,
             Tf::Rgba32Uint => F::R32G32B32A32_UINT,
             Tf::Rgba32Sint => F::R32G32B32A32_SINT,
             Tf::Rgba32Float => F::R32G32B32A32_SFLOAT,

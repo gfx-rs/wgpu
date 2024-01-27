@@ -171,7 +171,7 @@ bitflags::bitflags! {
 }
 
 struct BlockInfo {
-    stages: super::ShaderStages,
+    stages: ShaderStages,
     finished: bool,
 }
 
@@ -262,7 +262,7 @@ impl super::Validator {
         arguments: &[Handle<crate::Expression>],
         result: Option<Handle<crate::Expression>>,
         context: &BlockContext,
-    ) -> Result<super::ShaderStages, WithSpan<CallError>> {
+    ) -> Result<ShaderStages, WithSpan<CallError>> {
         let fun = &context.functions[function];
         if fun.arguments.len() != arguments.len() {
             return Err(CallError::ArgumentCount {

@@ -1059,6 +1059,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba16Unorm => empty,
             Tf::Rgba16Snorm => empty,
             Tf::Rgba16Float => filterable | storage | half_float_renderable,
+            Tf::R64Uint => empty,
+            Tf::R64Sint => empty,
             Tf::Rgba32Uint => renderable | storage,
             Tf::Rgba32Sint => renderable | storage,
             Tf::Rgba32Float => unfilterable | storage | float_renderable | texture_float_linear,
