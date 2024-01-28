@@ -49,7 +49,6 @@ struct Expectation {
     data: ExpectedData,
 }
 
-#[derive(serde::Deserialize)]
 struct Test<'a> {
     features: wgt::Features,
     expectations: Vec<Expectation>,
@@ -72,7 +71,30 @@ impl Test<'_> {
             _ => unreachable!(),
         };
         let string = read_to_string(path).unwrap().replace("Empty", backend_name);
-        ron::de::from_str(&string).unwrap()
+
+        #[derive(serde::Deserialize)]
+        struct SerializedTest<'a> {
+            features: Vec<String>,
+            expectations: Vec<Expectation>,
+            actions: Vec<wgc::device::trace::Action<'a>>,
+        }
+        let SerializedTest {
+            features,
+            expectations,
+            actions,
+        } = ron::de::from_str(&string).unwrap();
+        let features = features
+            .iter()
+            .map(|feature| {
+                wgt::Features::from_name(feature)
+                    .unwrap_or_else(|| panic!("Invalid feature flag {}", feature))
+            })
+            .fold(wgt::Features::empty(), |a, b| a | b);
+        Test {
+            features,
+            expectations,
+            actions,
+        }
     }
 
     fn run(

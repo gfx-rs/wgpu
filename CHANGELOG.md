@@ -81,6 +81,7 @@ Bottom level categories:
 #### Tests
 
 - Fix intermittent crashes on Linux in the `multithreaded_compute` test. By @jimblandy in [#5129](https://github.com/gfx-rs/wgpu/pull/5129).
+- Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @rodolphito in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
 
 ## v0.19.0 (2024-01-17)
 
@@ -193,7 +194,7 @@ let surface = instance.create_surface(my_window.clone())?;
 ```
 
 All platform specific surface creation using points have moved into `SurfaceTargetUnsafe` as well.
-For example: 
+For example:
 
 Safety by @daxpedda in [#4597](https://github.com/gfx-rs/wgpu/pull/4597)
 Unification by @wumpf in [#4984](https://github.com/gfx-rs/wgpu/pull/4984)
