@@ -1,5 +1,5 @@
 (
-    features: 0x0004_0004_0000_0000, // MAPPABLE_PRIMARY_BUFFERS | CLEAR_TEXTURE
+    features: ["MAPPABLE_PRIMARY_BUFFERS", "CLEAR_TEXTURE"],
     expectations: [
         (
             name: "Quad",

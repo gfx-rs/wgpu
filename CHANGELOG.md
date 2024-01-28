@@ -82,6 +82,7 @@ Bottom level categories:
 #### Tests
 
 - Fix intermittent crashes on Linux in the `multithreaded_compute` test. By @jimblandy in [#5129](https://github.com/gfx-rs/wgpu/pull/5129).
+- Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @rodolphito in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
 
 ## v0.19.0 (2024-01-17)
 
