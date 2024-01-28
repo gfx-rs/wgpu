@@ -1,5 +1,5 @@
 (
-    features: 0x0,
+    features: [],
     expectations: [
         (
             name: "Sampled Texture",
@@ -56,7 +56,7 @@
             format: "rgba8unorm",
             usage: 9, // STORAGE + COPY_SRC
             view_formats: [],
-        )),        
+        )),
         CreateTextureView(
             id: Id(1, 1, Empty),
             parent_id: Id(1, 1, Empty),
