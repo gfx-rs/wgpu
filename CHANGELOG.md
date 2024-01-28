@@ -67,8 +67,8 @@ Bottom level categories:
         - `tan`
         - `tanh`
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
-- `wgpu`, `wgpu-core` and `wgpu-types` now have `serialize` and `deserialize` features. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - `wgpu-types`'s `trace` and `replay` features have been replaced by `serialize` and `deserialize` respectively. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
+- `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 
 
 ### Bug Fixes
