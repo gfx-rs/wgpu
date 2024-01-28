@@ -1109,7 +1109,7 @@ impl<W: Write> Writer<W> {
                     if value == i64::MIN {
                         write!(self.out, "i64({})", value)?;
                     } else {
-                        write!(self.out, "{}i", value)?;
+                        write!(self.out, "{}li", value)?;
                     }
                 }
                 crate::Literal::U64(value) => write!(self.out, "{:?}lu", value)?,
