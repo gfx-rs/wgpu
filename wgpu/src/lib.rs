@@ -38,8 +38,6 @@
 //!   to the validation carried out at public APIs in all builds.
 //! - **`api_log_info`** --- Log all API entry points at info instead of trace level.
 //! - **`serde`** --- Enables serde functionality on common wgpu types.
-//! - **`serialize`** ---Enables serialize functionality on common wgpu types.
-//! - **`deserialize`** --- Enables deserialize functionality on common wgpu types.
 //! - **`trace`** --- Allow writing of trace capture files. See [`Adapter::request_device`].
 //! - **`replay`** --- Allow deserializing of trace capture files that were written with the `trace`
 //!   feature. To replay a trace file use the [wgpu
@@ -1118,8 +1116,7 @@ static_assertions::assert_impl_all!(BufferBinding<'_>: Send, Sync);
 /// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop),
 /// plus the corresponding clearValue.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LoadOp<V> {
     /// Loads the specified value for this attachment into the render pass.
     ///
@@ -1146,8 +1143,7 @@ impl<V: Default> Default for LoadOp<V> {
 ///
 /// Corresponds to [WebGPU `GPUStoreOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Default)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum StoreOp {
     /// Stores the resulting value of the render pass for this attachment.
     #[default]
@@ -1169,8 +1165,7 @@ pub enum StoreOp {
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// separate `loadOp` and `storeOp` fields are used instead.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
