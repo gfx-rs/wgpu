@@ -48,22 +48,13 @@ renderdoc = ["hal/renderdoc"]
 strict_asserts = ["wgt/strict_asserts"]
 
 ## Enables serde functionality on common wgpu types.
-serde = ["serialize", "deserialize", "serial-pass", "wgt/serde"]
-
-## Enables serialize functionality on common wgpu types.
-serialize = ["dep:serde", "wgt/serde", "arrayvec/serde"]
-
-## Enables deserialize functionality on common wgpu types.
-deserialize = ["dep:serde", "wgt/serde", "arrayvec/serde"]
+serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enable API tracing.
-trace = ["ron", "serialize", "naga/serialize"]
+trace = ["ron", "serde", "naga/serialize"]
 
 ## Enable API replaying
-replay = ["deserialize", "naga/deserialize"]
-
-## Enable serializable compute/render passes, and bundle encoders.
-serial-pass = ["dep:serde", "wgt/serde", "arrayvec/serde"]
+replay = ["serde", "naga/deserialize"]
 
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]

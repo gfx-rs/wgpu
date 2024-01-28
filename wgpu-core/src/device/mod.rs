@@ -42,15 +42,14 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HostMap {
     Read,
     Write,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
     pub colors: ArrayVec<Option<T>, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub resolves: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
@@ -74,7 +73,7 @@ pub enum RenderPassCompatibilityCheckType {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
     pub sample_count: u32,
@@ -457,8 +456,7 @@ pub struct MissingFeatures(pub wgt::Features);
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImplicitPipelineContext {
     pub root_id: id::PipelineLayoutId,
     pub group_ids: ArrayVec<id::BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,

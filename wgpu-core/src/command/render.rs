@@ -40,9 +40,9 @@ use wgt::{
     TextureViewDimension, VertexStepMode,
 };
 
-#[cfg(any(feature = "deserialize", feature = "serial-pass"))]
+#[cfg(feature = "serde")]
 use serde::Deserialize;
-#[cfg(any(feature = "serialize", feature = "serial-pass"))]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 use std::sync::Arc;
@@ -56,19 +56,8 @@ use super::{
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(
-    any(feature = "deserialize", feature = "serial-pass"),
-    derive(Deserialize)
-)]
-#[cfg_attr(
-    any(
-        feature = "serialize",
-        feature = "deserialize",
-        feature = "serial-pass"
-    ),
-    serde(rename_all = "kebab-case")
-)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum LoadOp {
     /// Clear the output attachment with the clear color. Clearing is faster than loading.
     Clear = 0,
@@ -79,19 +68,8 @@ pub enum LoadOp {
 /// Operation to perform to the output attachment at the end of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(
-    any(feature = "deserialize", feature = "serial-pass"),
-    derive(Deserialize)
-)]
-#[cfg_attr(
-    any(
-        feature = "serialize",
-        feature = "deserialize",
-        feature = "serial-pass"
-    ),
-    serde(rename_all = "kebab-case")
-)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StoreOp {
     /// Discards the content of the render target.
     ///
@@ -104,11 +82,8 @@ pub enum StoreOp {
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 #[repr(C)]
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(
-    any(feature = "deserialize", feature = "serial-pass"),
-    derive(Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Deserialize))]
 pub struct PassChannel<V> {
     /// Operation to perform to the output attachment at the start of a
     /// renderpass.
@@ -145,11 +120,8 @@ impl<V> PassChannel<V> {
 /// Describes a color attachment to a render pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(
-    any(feature = "deserialize", feature = "serial-pass"),
-    derive(Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Deserialize))]
 pub struct RenderPassColorAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
@@ -162,11 +134,8 @@ pub struct RenderPassColorAttachment {
 /// Describes a depth/stencil attachment to a render pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(
-    any(feature = "deserialize", feature = "serial-pass"),
-    derive(Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Deserialize))]
 pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
@@ -217,19 +186,8 @@ impl RenderPassDepthStencilAttachment {
 /// Location to write a timestamp to (beginning or end of the pass).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(
-    any(feature = "deserialize", feature = "serial-pass"),
-    derive(Deserialize)
-)]
-#[cfg_attr(
-    any(
-        feature = "serialize",
-        feature = "deserialize",
-        feature = "serial-pass"
-    ),
-    serde(rename_all = "kebab-case")
-)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum RenderPassTimestampLocation {
     Beginning = 0,
     End = 1,
@@ -238,11 +196,8 @@ pub enum RenderPassTimestampLocation {
 /// Describes the writing of timestamp values in a render pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(any(feature = "serialize", feature = "serial-pass"), derive(Serialize))]
-#[cfg_attr(
-    any(feature = "deserialize", feature = "serial-pass"),
-    derive(Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Deserialize))]
 pub struct RenderPassTimestampWrites {
     /// The query set to write the timestamp to.
     pub query_set: id::QuerySetId,
@@ -266,7 +221,7 @@ pub struct RenderPassDescriptor<'a> {
     pub occlusion_query_set: Option<id::QuerySetId>,
 }
 
-#[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct RenderPass {
     base: BasePass<RenderCommand>,
     parent_id: id::CommandEncoderId,
@@ -276,9 +231,9 @@ pub struct RenderPass {
     occlusion_query_set_id: Option<id::QuerySetId>,
 
     // Resource binding dedupe state.
-    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     current_bind_groups: BindGroupStateChange,
-    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     current_pipeline: StateChange<id::RenderPipelineId>,
 }
 

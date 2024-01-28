@@ -21,9 +21,8 @@ use crate::{
 
 use arrayvec::ArrayVec;
 
-#[cfg(feature = "deserialize")]
+#[cfg(feature = "serde")]
 use serde::Deserialize;
-#[cfg(feature = "serialize")]
 use serde::Serialize;
 
 use std::{borrow::Cow, ops::Range, sync::Arc};
@@ -406,8 +405,7 @@ impl BindingTypeMaxCountValidator {
 
 /// Bindable resource and the slot to bind it to.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupEntry<'a> {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -418,8 +416,7 @@ pub struct BindGroupEntry<'a> {
 
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupDescriptor<'a> {
     /// Debug label of the bind group.
     ///
@@ -433,8 +430,7 @@ pub struct BindGroupDescriptor<'a> {
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout.
     ///
@@ -582,8 +578,7 @@ pub enum PushConstantUploadError {
 ///
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PipelineLayoutDescriptor<'a> {
     /// Debug label of the pipeine layout.
     ///
@@ -734,8 +729,7 @@ impl<A: HalApi> Resource<PipelineLayoutId> for PipelineLayout<A> {
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferBinding {
     pub buffer_id: BufferId,
     pub offset: wgt::BufferAddress,
@@ -745,8 +739,7 @@ pub struct BufferBinding {
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
     BufferArray(Cow<'a, [BufferBinding]>),

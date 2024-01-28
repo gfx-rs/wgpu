@@ -79,21 +79,15 @@ strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
 api_log_info = ["wgc/api_log_info"]
 
 ## Enables serde functionality on common wgpu types.
-serde = ["serialize", "deserialize", "wgc/serde"]
-
-## Enables serialize functionality on common wgpu types.
-serialize = ["dep:serde", "wgc/serialize"]
-
-## Enables deserialize functionality on common wgpu types.
-deserialize = ["dep:serde", "wgc/deserialize"]
+serde = ["dep:serde", "wgc/serde"]
 
 ## Allow writing of trace capture files.
 ## See [`Adapter::request_device`].
-trace = ["serialize", "wgc/trace"]
+trace = ["serde", "wgc/trace"]
 
 ## Allow deserializing of trace capture files that were written with the `trace` feature.
 ## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
-replay = ["deserialize", "wgc/replay"]
+replay = ["serde", "wgc/replay"]
 
 #! ### Other
 # --------------------------------------------------------------------
