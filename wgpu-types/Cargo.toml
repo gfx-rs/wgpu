@@ -28,8 +28,6 @@ targets = [
 [lib]
 
 [features]
-trace = ["serde"]
-replay = ["serde"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 

@@ -67,8 +67,7 @@ pub struct Id<T: 'static + WasmNotSendSync>(NonZeroId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
 #[allow(dead_code)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum SerialId {
     // The only variant forces RON to not ignore "Id"
     Id(Index, Epoch, Backend),

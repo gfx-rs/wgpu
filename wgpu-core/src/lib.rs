@@ -13,9 +13,9 @@
 //!   [https://renderdoc.org/](https://renderdoc.org/)
 //! - **`strict_asserts`** --- Apply run-time checks, even in release builds. These are in addition
 //!   to the validation carried out at public APIs in all builds.
+//! - **`serde`** --- Enables serialization via `serde` on common wgpu types.
 //! - **`trace`** --- Enable API tracing.
 //! - **`replay`** --- Enable API replaying
-//! - **`serial-pass`** --- Enable serializable compute/render passes, and bundle encoders.
 //! - **`wgsl`** --- Enable `ShaderModuleSource::Wgsl`
 //! - **`fragile-send-sync-non-atomic-wasm`** --- Implement `Send` and `Sync` on Wasm, but only if
 //!   atomics are not enabled.

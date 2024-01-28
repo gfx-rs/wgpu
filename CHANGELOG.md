@@ -67,6 +67,8 @@ Bottom level categories:
         - `tan`
         - `tanh`
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
+- `wgpu-types`'s `trace` and `replay` features have been replaced by the `serde` feature. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
+- `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - Signed and unsigned 64 bit integer support in shaders. By @rodolphito in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 
 
@@ -74,6 +76,7 @@ Bottom level categories:
 
 #### General
 - Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
+- Fix `serde` feature not compiling for `wgpu-types`. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 
 #### WGL
 
