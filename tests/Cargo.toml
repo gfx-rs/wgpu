@@ -38,7 +38,7 @@ serde_json.workspace = true
 serde.workspace = true
 wgpu-macros.workspace = true
 wgpu.workspace = true
-wgt = { workspace = true, features = ["deserialize"] }
+wgt = { workspace = true, features = ["serde"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true

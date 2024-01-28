@@ -28,9 +28,6 @@ targets = [
 [lib]
 
 [features]
-serde = ["serialize", "deserialize"]
-serialize = ["dep:serde"]
-deserialize = ["dep:serde"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 

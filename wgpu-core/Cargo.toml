@@ -51,10 +51,10 @@ strict_asserts = ["wgt/strict_asserts"]
 serde = ["serialize", "deserialize", "serial-pass", "wgt/serde"]
 
 ## Enables serialize functionality on common wgpu types.
-serialize = ["dep:serde", "wgt/serialize", "arrayvec/serde"]
+serialize = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enables deserialize functionality on common wgpu types.
-deserialize = ["dep:serde", "wgt/deserialize", "arrayvec/serde"]
+deserialize = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enable API tracing.
 trace = ["ron", "serialize", "naga/serialize"]
