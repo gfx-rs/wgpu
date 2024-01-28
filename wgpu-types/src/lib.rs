@@ -11,6 +11,7 @@
 
 #[cfg(any(feature = "serde", test))]
 use serde::Deserialize;
+#[cfg(any(feature = "serde", test))]
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;

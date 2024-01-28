@@ -23,6 +23,7 @@ use arrayvec::ArrayVec;
 
 #[cfg(feature = "serde")]
 use serde::Deserialize;
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 use std::{borrow::Cow, ops::Range, sync::Arc};
