@@ -47,14 +47,14 @@ renderdoc = ["hal/renderdoc"]
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
 
+## Enables serialization via `serde` on common wgpu types.
+serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
+
 ## Enable API tracing.
-trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
+trace = ["ron", "serde", "naga/serialize"]
 
 ## Enable API replaying
-replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
-
-## Enable serializable compute/render passes, and bundle encoders.
-serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
+replay = ["serde", "naga/deserialize"]
 
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]

@@ -29,7 +29,7 @@ winit = { workspace = true, optional = true }
 
 [dependencies.wgt]
 workspace = true
-features = ["replay"]
+features = ["serde"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 workspace = true

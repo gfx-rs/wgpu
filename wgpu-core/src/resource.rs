@@ -1186,8 +1186,8 @@ impl<A: HalApi> Borrow<TextureSelector> for Texture<A> {
 
 /// Describes a [`TextureView`].
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize), serde(default))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view.
     ///
@@ -1343,8 +1343,7 @@ impl<A: HalApi> Resource<TextureViewId> for TextureView<A> {
 
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SamplerDescriptor<'a> {
     /// Debug label of the sampler.
     ///
