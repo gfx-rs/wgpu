@@ -126,8 +126,7 @@ impl crate::error::PrettyError for RenderCommandError {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rect<T> {
     pub x: T,
     pub y: T,
@@ -137,8 +136,7 @@ pub struct Rect<T> {
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RenderCommand {
     SetBindGroup {
         index: u32,

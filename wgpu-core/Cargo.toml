@@ -47,7 +47,7 @@ renderdoc = ["hal/renderdoc"]
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
 
-## Enables serde functionality on common wgpu types.
+## Enables serialization via `serde` on common wgpu types.
 serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enable API tracing.

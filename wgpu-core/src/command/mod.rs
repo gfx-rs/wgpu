@@ -338,8 +338,7 @@ pub struct BasePassRef<'a, C> {
 /// [`InsertDebugMarker`]: RenderCommand::InsertDebugMarker
 #[doc(hidden)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasePass<C> {
     pub label: Option<String>,
 

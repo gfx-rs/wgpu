@@ -37,7 +37,7 @@
 //! - **`strict_asserts`** --- Apply run-time checks, even in release builds. These are in addition
 //!   to the validation carried out at public APIs in all builds.
 //! - **`api_log_info`** --- Log all API entry points at info instead of trace level.
-//! - **`serde`** --- Enables serde functionality on common wgpu types.
+//! - **`serde`** --- Enables serialization via `serde` on common wgpu types.
 //! - **`trace`** --- Allow writing of trace capture files. See [`Adapter::request_device`].
 //! - **`replay`** --- Allow deserializing of trace capture files that were written with the `trace`
 //!   feature. To replay a trace file use the [wgpu

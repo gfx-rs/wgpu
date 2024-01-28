@@ -82,8 +82,7 @@ pub enum StoreOp {
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 #[repr(C)]
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-#[cfg_attr(feature = "serde", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PassChannel<V> {
     /// Operation to perform to the output attachment at the start of a
     /// renderpass.
@@ -120,8 +119,7 @@ impl<V> PassChannel<V> {
 /// Describes a color attachment to a render pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-#[cfg_attr(feature = "serde", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderPassColorAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
@@ -134,8 +132,7 @@ pub struct RenderPassColorAttachment {
 /// Describes a depth/stencil attachment to a render pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-#[cfg_attr(feature = "serde", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
@@ -196,8 +193,7 @@ pub enum RenderPassTimestampLocation {
 /// Describes the writing of timestamp values in a render pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-#[cfg_attr(feature = "serde", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderPassTimestampWrites {
     /// The query set to write the timestamp to.
     pub query_set: id::QuerySetId,

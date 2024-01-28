@@ -13,7 +13,7 @@
 //!   [https://renderdoc.org/](https://renderdoc.org/)
 //! - **`strict_asserts`** --- Apply run-time checks, even in release builds. These are in addition
 //!   to the validation carried out at public APIs in all builds.
-//! - **`serde`** --- Enables serde functionality on common wgpu types.
+//! - **`serde`** --- Enables serialization via `serde` on common wgpu types.
 //! - **`trace`** --- Enable API tracing.
 //! - **`replay`** --- Enable API replaying
 //! - **`wgsl`** --- Enable `ShaderModuleSource::Wgsl`
