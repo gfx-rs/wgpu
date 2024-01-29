@@ -94,7 +94,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
     hub::Hub,
-    id::{self, RenderBundleId},
+    id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{Resource, ResourceInfo, ResourceType},
@@ -832,7 +832,7 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction<A>>,
     pub(super) context: RenderPassContext,
-    pub(crate) info: ResourceInfo<RenderBundleId>,
+    pub(crate) info: ResourceInfo<RenderBundle<A>>,
     discard_hal_labels: bool,
 }
 
@@ -1067,14 +1067,16 @@ impl<A: HalApi> RenderBundle<A> {
     }
 }
 
-impl<A: HalApi> Resource<RenderBundleId> for RenderBundle<A> {
+impl<A: HalApi> Resource for RenderBundle<A> {
     const TYPE: ResourceType = "RenderBundle";
 
-    fn as_info(&self) -> &ResourceInfo<RenderBundleId> {
+    type Marker = crate::id::markers::RenderBundle;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<RenderBundleId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }

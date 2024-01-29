@@ -24,7 +24,6 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::device::DeviceLostClosure;
-use wgc::id::TypedId;
 use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
@@ -604,7 +603,7 @@ impl crate::Context for ContextWgpuCore {
             id: queue_id,
             error_sink,
         };
-        ready(Ok((device_id, device, device_id, queue)))
+        ready(Ok((device_id, device, device_id.transmute(), queue)))
     }
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
@@ -1805,7 +1804,8 @@ impl crate::Context for ContextWgpuCore {
         if let Err(cause) = wgc::gfx_select!(
             encoder => self.0.command_encoder_run_compute_pass(*encoder, pass_data)
         ) {
-            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(*encoder));
+            let name =
+                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
@@ -1888,7 +1888,8 @@ impl crate::Context for ContextWgpuCore {
         if let Err(cause) =
             wgc::gfx_select!(encoder => self.0.command_encoder_run_render_pass(*encoder, pass_data))
         {
-            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(*encoder));
+            let name =
+                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
@@ -2922,10 +2923,10 @@ impl crate::Context for ContextWgpuCore {
 
 impl<T> From<ObjectId> for wgc::id::Id<T>
 where
-    T: 'static + WasmNotSendSync,
+    T: wgc::id::Marker,
 {
     fn from(id: ObjectId) -> Self {
-        let id = id.id();
+        let id = wgc::id::RawId::from_non_zero(id.id());
         // SAFETY: The id was created via the impl below
         unsafe { Self::from_raw(id) }
     }
@@ -2933,10 +2934,10 @@ where
 
 impl<T> From<wgc::id::Id<T>> for ObjectId
 where
-    T: 'static + WasmNotSendSync,
+    T: wgc::id::Marker,
 {
     fn from(id: wgc::id::Id<T>) -> Self {
-        let id = id.into_raw();
+        let id = id.into_raw().into_non_zero();
         Self::from_global_id(id)
     }
 }

@@ -2,9 +2,12 @@
 
 The `wgpu_core` API uses identifiers of type [`Id<R>`] to refer to
 resources of type `R`. For example, [`id::DeviceId`] is an alias for
-`Id<Device<Empty>>`, and [`id::BufferId`] is an alias for
-`Id<Buffer<Empty>>`. `Id` implements `Copy`, `Hash`, `Eq`, `Ord`, and
+`Id<markers::Device>`, and [`id::BufferId`] is an alias for
+`Id<markers::Buffer>`. `Id` implements `Copy`, `Hash`, `Eq`, `Ord`, and
 of course `Debug`.
+
+[`id::DeviceId`]: crate::id::DeviceId
+[`id::BufferId`]: crate::id::BufferId
 
 Each `Id` contains not only an index for the resource it denotes but
 also a Backend indicating which `wgpu` backend it belongs to. You
@@ -43,7 +46,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
-        id_in: Input<G, id::BufferId>,
+        id_in: Input<G>,
     ) -> (id::BufferId, Option<resource::CreateBufferError>) {
         /* ... */
     }
@@ -115,7 +118,6 @@ use crate::{
     command::{CommandBuffer, RenderBundle},
     device::{queue::Queue, Device},
     hal_api::HalApi,
-    id,
     identity::GlobalIdentityHandlerFactory,
     instance::{Adapter, HalSurface, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
@@ -177,23 +179,23 @@ impl HubReport {
 ///
 /// [`A::hub(global)`]: HalApi::hub
 pub struct Hub<A: HalApi> {
-    pub adapters: Registry<id::AdapterId, Adapter<A>>,
-    pub devices: Registry<id::DeviceId, Device<A>>,
-    pub queues: Registry<id::QueueId, Queue<A>>,
-    pub pipeline_layouts: Registry<id::PipelineLayoutId, PipelineLayout<A>>,
-    pub shader_modules: Registry<id::ShaderModuleId, ShaderModule<A>>,
-    pub bind_group_layouts: Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
-    pub bind_groups: Registry<id::BindGroupId, BindGroup<A>>,
-    pub command_buffers: Registry<id::CommandBufferId, CommandBuffer<A>>,
-    pub render_bundles: Registry<id::RenderBundleId, RenderBundle<A>>,
-    pub render_pipelines: Registry<id::RenderPipelineId, RenderPipeline<A>>,
-    pub compute_pipelines: Registry<id::ComputePipelineId, ComputePipeline<A>>,
-    pub query_sets: Registry<id::QuerySetId, QuerySet<A>>,
-    pub buffers: Registry<id::BufferId, Buffer<A>>,
-    pub staging_buffers: Registry<id::StagingBufferId, StagingBuffer<A>>,
-    pub textures: Registry<id::TextureId, Texture<A>>,
-    pub texture_views: Registry<id::TextureViewId, TextureView<A>>,
-    pub samplers: Registry<id::SamplerId, Sampler<A>>,
+    pub adapters: Registry<Adapter<A>>,
+    pub devices: Registry<Device<A>>,
+    pub queues: Registry<Queue<A>>,
+    pub pipeline_layouts: Registry<PipelineLayout<A>>,
+    pub shader_modules: Registry<ShaderModule<A>>,
+    pub bind_group_layouts: Registry<BindGroupLayout<A>>,
+    pub bind_groups: Registry<BindGroup<A>>,
+    pub command_buffers: Registry<CommandBuffer<A>>,
+    pub render_bundles: Registry<RenderBundle<A>>,
+    pub render_pipelines: Registry<RenderPipeline<A>>,
+    pub compute_pipelines: Registry<ComputePipeline<A>>,
+    pub query_sets: Registry<QuerySet<A>>,
+    pub buffers: Registry<Buffer<A>>,
+    pub staging_buffers: Registry<StagingBuffer<A>>,
+    pub textures: Registry<Texture<A>>,
+    pub texture_views: Registry<TextureView<A>>,
+    pub samplers: Registry<Sampler<A>>,
 }
 
 impl<A: HalApi> Hub<A> {
@@ -222,11 +224,7 @@ impl<A: HalApi> Hub<A> {
     //TODO: instead of having a hacky `with_adapters` parameter,
     // we should have `clear_device(device_id)` that specifically destroys
     // everything related to a logical device.
-    pub(crate) fn clear(
-        &self,
-        surface_guard: &Storage<Surface, id::SurfaceId>,
-        with_adapters: bool,
-    ) {
+    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>, with_adapters: bool) {
         use hal::Surface;
 
         let mut devices = self.devices.write();

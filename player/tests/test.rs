@@ -105,7 +105,7 @@ impl Test<'_> {
         test_num: u32,
     ) {
         let backend = adapter.backend();
-        let device_id = wgc::id::TypedId::zip(test_num, 0, backend);
+        let device_id = wgc::id::Id::zip(test_num, 0, backend);
         let (_, _, error) = wgc::gfx_select!(adapter => global.adapter_request_device(
             adapter,
             &wgt::DeviceDescriptor {
@@ -115,7 +115,7 @@ impl Test<'_> {
             },
             None,
             device_id,
-            device_id
+            device_id.transmute()
         ));
         if let Some(e) = error {
             panic!("{:?}", e);
@@ -128,7 +128,7 @@ impl Test<'_> {
         }
         println!("\t\t\tMapping...");
         for expect in &self.expectations {
-            let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
+            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch, backend);
             wgc::gfx_select!(device_id => global.buffer_map_async(
                 buffer,
                 expect.offset .. expect.offset+expect.data.len() as wgt::BufferAddress,
@@ -148,7 +148,7 @@ impl Test<'_> {
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
-            let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
+            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch, backend);
             let (ptr, size) =
                 wgc::gfx_select!(device_id => global.buffer_get_mapped_range(buffer, expect.offset, Some(expect.data.len() as wgt::BufferAddress)))
                     .unwrap();
@@ -221,10 +221,9 @@ impl Corpus {
                     force_fallback_adapter: false,
                     compatible_surface: None,
                 },
-                wgc::instance::AdapterInputs::IdSet(
-                    &[wgc::id::TypedId::zip(0, 0, backend)],
-                    |id| id.backend(),
-                ),
+                wgc::instance::AdapterInputs::IdSet(&[wgc::id::Id::zip(0, 0, backend)], |id| {
+                    id.backend()
+                }),
             ) {
                 Ok(adapter) => adapter,
                 Err(_) => continue,

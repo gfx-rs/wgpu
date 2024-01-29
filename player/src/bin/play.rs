@@ -61,7 +61,7 @@ fn main() {
         global.instance_create_surface(
             window.display_handle().unwrap().into(),
             window.window_handle().unwrap().into(),
-            wgc::id::TypedId::zip(0, 1, wgt::Backend::Empty),
+            wgc::id::Id::zip(0, 1, wgt::Backend::Empty),
         )
     }
     .unwrap();
@@ -79,22 +79,21 @@ fn main() {
                         #[cfg(not(feature = "winit"))]
                         compatible_surface: None,
                     },
-                    wgc::instance::AdapterInputs::IdSet(
-                        &[wgc::id::TypedId::zip(0, 0, backend)],
-                        |id| id.backend(),
-                    ),
+                    wgc::instance::AdapterInputs::IdSet(&[wgc::id::Id::zip(0, 0, backend)], |id| {
+                        id.backend()
+                    }),
                 )
                 .expect("Unable to find an adapter for selected backend");
 
             let info = gfx_select!(adapter => global.adapter_get_info(adapter)).unwrap();
             log::info!("Picked '{}'", info.name);
-            let id = wgc::id::TypedId::zip(1, 0, backend);
+            let id = wgc::id::Id::zip(1, 0, backend);
             let (_, _, error) = gfx_select!(adapter => global.adapter_request_device(
                 adapter,
                 &desc,
                 None,
                 id,
-                id
+                id.transmute()
             ));
             if let Some(e) = error {
                 panic!("{:?}", e);

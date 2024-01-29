@@ -8,10 +8,7 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{
-        AdapterId, BufferId, DeviceId, QuerySetId, SamplerId, StagingBufferId, SurfaceId,
-        TextureId, TextureViewId, TypedId,
-    },
+    id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId},
     identity::{GlobalIdentityHandlerFactory, IdentityManager},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
@@ -59,9 +56,9 @@ use std::{
 /// [`Device`]: crate::device::resource::Device
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
-pub struct ResourceInfo<Id: TypedId> {
-    id: Option<Id>,
-    identity: Option<Arc<IdentityManager<Id>>>,
+pub struct ResourceInfo<T: Resource> {
+    id: Option<Id<T::Marker>>,
+    identity: Option<Arc<IdentityManager<T::Marker>>>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -75,7 +72,7 @@ pub struct ResourceInfo<Id: TypedId> {
     pub(crate) label: String,
 }
 
-impl<Id: TypedId> Drop for ResourceInfo<Id> {
+impl<T: Resource> Drop for ResourceInfo<T> {
     fn drop(&mut self) {
         if let Some(identity) = self.identity.as_ref() {
             let id = self.id.as_ref().unwrap();
@@ -84,7 +81,7 @@ impl<Id: TypedId> Drop for ResourceInfo<Id> {
     }
 }
 
-impl<Id: TypedId> ResourceInfo<Id> {
+impl<T: Resource> ResourceInfo<T> {
     #[allow(unused_variables)]
     pub(crate) fn new(label: &str) -> Self {
         Self {
@@ -97,7 +94,7 @@ impl<Id: TypedId> ResourceInfo<Id> {
 
     pub(crate) fn label(&self) -> &dyn Debug
     where
-        Id: Debug,
+        Id<T::Marker>: Debug,
     {
         if !self.label.is_empty() {
             return &self.label;
@@ -110,11 +107,11 @@ impl<Id: TypedId> ResourceInfo<Id> {
         &""
     }
 
-    pub(crate) fn id(&self) -> Id {
+    pub(crate) fn id(&self) -> Id<T::Marker> {
         self.id.unwrap()
     }
 
-    pub(crate) fn set_id(&mut self, id: Id, identity: &Arc<IdentityManager<Id>>) {
+    pub(crate) fn set_id(&mut self, id: Id<T::Marker>, identity: &Arc<IdentityManager<T::Marker>>) {
         self.id = Some(id);
         self.identity = Some(identity.clone());
     }
@@ -133,10 +130,11 @@ impl<Id: TypedId> ResourceInfo<Id> {
 
 pub(crate) type ResourceType = &'static str;
 
-pub trait Resource<Id: TypedId>: 'static + WasmNotSendSync {
+pub trait Resource: 'static + Sized + WasmNotSendSync {
+    type Marker: Marker;
     const TYPE: ResourceType;
-    fn as_info(&self) -> &ResourceInfo<Id>;
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Id>;
+    fn as_info(&self) -> &ResourceInfo<Self>;
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self>;
     fn label(&self) -> String {
         self.as_info().label.clone()
     }
@@ -377,7 +375,7 @@ pub struct Buffer<A: HalApi> {
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: RwLock<BufferInitTracker>,
     pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
-    pub(crate) info: ResourceInfo<BufferId>,
+    pub(crate) info: ResourceInfo<Buffer<A>>,
     pub(crate) map_state: Mutex<BufferMapState<A>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
 }
@@ -592,14 +590,16 @@ pub enum CreateBufferError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-impl<A: HalApi> Resource<BufferId> for Buffer<A> {
+impl<A: HalApi> Resource for Buffer<A> {
     const TYPE: ResourceType = "Buffer";
 
-    fn as_info(&self) -> &ResourceInfo<BufferId> {
+    type Marker = crate::id::markers::Buffer;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<BufferId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -693,7 +693,7 @@ pub struct StagingBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
-    pub(crate) info: ResourceInfo<StagingBufferId>,
+    pub(crate) info: ResourceInfo<StagingBuffer<A>>,
 }
 
 impl<A: HalApi> Drop for StagingBuffer<A> {
@@ -708,14 +708,16 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
     }
 }
 
-impl<A: HalApi> Resource<StagingBufferId> for StagingBuffer<A> {
+impl<A: HalApi> Resource for StagingBuffer<A> {
     const TYPE: ResourceType = "StagingBuffer";
 
-    fn as_info(&self) -> &ResourceInfo<StagingBufferId> {
+    type Marker = crate::id::markers::StagingBuffer;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<StagingBufferId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 
@@ -773,7 +775,7 @@ pub struct Texture<A: HalApi> {
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
-    pub(crate) info: ResourceInfo<TextureId>,
+    pub(crate) info: ResourceInfo<Texture<A>>,
     pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
     pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
@@ -1166,14 +1168,16 @@ pub enum CreateTextureError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-impl<A: HalApi> Resource<TextureId> for Texture<A> {
+impl<A: HalApi> Resource for Texture<A> {
     const TYPE: ResourceType = "Texture";
 
-    fn as_info(&self) -> &ResourceInfo<TextureId> {
+    type Marker = crate::id::markers::Texture;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<TextureId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -1251,7 +1255,7 @@ pub struct TextureView<A: HalApi> {
     pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
-    pub(crate) info: ResourceInfo<TextureViewId>,
+    pub(crate) info: ResourceInfo<TextureView<A>>,
 }
 
 impl<A: HalApi> Drop for TextureView<A> {
@@ -1329,14 +1333,16 @@ pub enum CreateTextureViewError {
 #[non_exhaustive]
 pub enum TextureViewDestroyError {}
 
-impl<A: HalApi> Resource<TextureViewId> for TextureView<A> {
+impl<A: HalApi> Resource for TextureView<A> {
     const TYPE: ResourceType = "TextureView";
 
-    fn as_info(&self) -> &ResourceInfo<TextureViewId> {
+    type Marker = crate::id::markers::TextureView;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<TextureViewId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -1374,7 +1380,7 @@ pub struct SamplerDescriptor<'a> {
 pub struct Sampler<A: HalApi> {
     pub(crate) raw: Option<A::Sampler>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<SamplerId>,
+    pub(crate) info: ResourceInfo<Self>,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
     /// `true` if this is a filtering sampler
@@ -1448,14 +1454,16 @@ pub enum CreateSamplerError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
-impl<A: HalApi> Resource<SamplerId> for Sampler<A> {
+impl<A: HalApi> Resource for Sampler<A> {
     const TYPE: ResourceType = "Sampler";
 
-    fn as_info(&self) -> &ResourceInfo<SamplerId> {
+    type Marker = crate::id::markers::Sampler;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<SamplerId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -1479,7 +1487,7 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 pub struct QuerySet<A: HalApi> {
     pub(crate) raw: Option<A::QuerySet>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<QuerySetId>,
+    pub(crate) info: ResourceInfo<Self>,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
@@ -1500,14 +1508,16 @@ impl<A: HalApi> Drop for QuerySet<A> {
     }
 }
 
-impl<A: HalApi> Resource<QuerySetId> for QuerySet<A> {
+impl<A: HalApi> Resource for QuerySet<A> {
     const TYPE: ResourceType = "QuerySet";
 
-    fn as_info(&self) -> &ResourceInfo<QuerySetId> {
+    type Marker = crate::id::markers::QuerySet;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<QuerySetId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }

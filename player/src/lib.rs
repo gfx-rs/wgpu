@@ -14,10 +14,10 @@ use std::{borrow::Cow, fs, path::Path};
 
 pub struct IdentityPassThroughFactory;
 
-impl<I: wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I> for IdentityPassThroughFactory {
-    type Input = I;
+impl<T: wgc::id::Marker> wgc::identity::IdentityHandlerFactory<T> for IdentityPassThroughFactory {
+    type Input = wgc::id::Id<T>;
 
-    fn input_to_id(id_in: Self::Input) -> I {
+    fn input_to_id(id_in: Self::Input) -> wgc::id::Id<T> {
         id_in
     }
 
@@ -38,7 +38,7 @@ pub trait GlobalPlay {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
     );
 }
 
@@ -153,7 +153,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
     ) {
         use wgc::device::trace::Action;
         log::debug!("action {:?}", action);
@@ -350,7 +350,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
                 if queued {
-                    self.queue_write_buffer::<A>(device, id, range.start, &bin)
+                    self.queue_write_buffer::<A>(device.transmute(), id, range.start, &bin)
                         .unwrap();
                 } else {
                     self.device_wait_for_buffer::<A>(device, id).unwrap();
@@ -365,23 +365,24 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 size,
             } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
-                self.queue_write_texture::<A>(device, &to, &bin, &layout, &size)
+                self.queue_write_texture::<A>(device.transmute(), &to, &bin, &layout, &size)
                     .unwrap();
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                self.queue_submit::<A>(device, &[]).unwrap();
+                self.queue_submit::<A>(device.transmute(), &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    comb_manager.process(device.backend()),
+                    comb_manager.process(device.backend()).transmute(),
                 );
                 if let Some(e) = error {
                     panic!("{e}");
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
-                self.queue_submit::<A>(device, &[cmdbuf]).unwrap();
+                self.queue_submit::<A>(device.transmute(), &[cmdbuf])
+                    .unwrap();
             }
         }
     }

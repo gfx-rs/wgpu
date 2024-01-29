@@ -23,6 +23,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label,
+    id::markers,
     id::{SurfaceId, TextureId},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
@@ -125,13 +126,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn surface_get_current_texture<A: HalApi>(
         &self,
         surface_id: SurfaceId,
-        texture_id_in: Input<G, TextureId>,
+        texture_id_in: Input<G, markers::Texture>,
     ) -> Result<SurfaceOutput, SurfaceError> {
         profiling::scope!("SwapChain::get_next_texture");
 
         let hub = A::hub(self);
 
-        let fid = hub.textures.prepare::<G>(texture_id_in);
+        let fid = hub.textures.prepare::<G, _>(texture_id_in);
 
         let surface = self
             .surfaces
