@@ -378,18 +378,33 @@ struct VertexState {
 
 impl VertexState {
     fn update_limits(&mut self) {
-        // TODO: This isn't entirely spec-compliant.
-        // We currently require that the buffer range can fit `stride` * count bytes.
-        // The spec, however, lets a buffer be a bit smaller as long as the size of the
-        // last element fits in it (the last element can be smaller than the stride between
-        // elements).
+        // Implements the validation from https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw
+        // Except that the formula is shuffled to extract the number of vertices in order
+        // to carry the bulk of the computation when changing states intead of when producing
+        // draws. Draw calls tend to happen at a higher frequency. Here we determine vertex
+        // limits that can be cheaply checked for each draw call.
         self.vertex_limit = u32::MAX as u64;
         self.instance_limit = u32::MAX as u64;
         for (idx, vbs) in self.inputs.iter().enumerate() {
-            if vbs.step.stride == 0 || !vbs.bound {
+            if !vbs.bound {
                 continue;
             }
-            let limit = vbs.total_size / vbs.step.stride;
+
+            let limit = if vbs.total_size < vbs.step.last_stride {
+                // The buffer cannot fit the last vertex.
+                0
+            } else {
+                if vbs.step.stride == 0 {
+                    // We already checked that the last stride fits, the same
+                    // vertex will be repeated so this slot can accomodate any number of
+                    // vertices.
+                    continue;
+                }
+
+                // The general case.
+                (vbs.total_size - vbs.step.last_stride) / vbs.step.stride + 1
+            };
+
             match vbs.step.mode {
                 VertexStepMode::Vertex => {
                     if limit < self.vertex_limit {
