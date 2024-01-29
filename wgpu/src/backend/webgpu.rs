@@ -2009,6 +2009,7 @@ impl crate::context::Context for ContextWebGpu {
         device_data.0.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => web_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => web_sys::GpuErrorFilter::Validation,
+            crate::ErrorFilter::Internal => web_sys::GpuErrorFilter::Internal,
         });
     }
 

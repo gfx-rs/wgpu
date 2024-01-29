@@ -2959,6 +2959,7 @@ impl ErrorSinkRaw {
         let filter = match err {
             crate::Error::OutOfMemory { .. } => crate::ErrorFilter::OutOfMemory,
             crate::Error::Validation { .. } => crate::ErrorFilter::Validation,
+            crate::Error::Internal { .. } => crate::ErrorFilter::Internal,
         };
         match self
             .scopes
