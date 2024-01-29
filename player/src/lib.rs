@@ -12,21 +12,6 @@ use wgc::device::trace;
 
 use std::{borrow::Cow, fs, path::Path};
 
-pub struct IdentityPassThroughFactory;
-
-impl<I: wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I> for IdentityPassThroughFactory {
-    type Input = I;
-
-    fn input_to_id(id_in: Self::Input) -> I {
-        id_in
-    }
-
-    fn autogenerate_ids() -> bool {
-        false
-    }
-}
-impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
-
 pub trait GlobalPlay {
     fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
@@ -38,11 +23,11 @@ pub trait GlobalPlay {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
     );
 }
 
-impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
+impl GlobalPlay for wgc::global::Global {
     fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
@@ -153,7 +138,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
     ) {
         use wgc::device::trace::Action;
         log::debug!("action {:?}", action);
@@ -169,7 +154,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             }
             Action::CreateBuffer(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_buffer::<A>(device, &desc, id);
+                let (_, error) = self.device_create_buffer::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -182,7 +167,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             }
             Action::CreateTexture(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_texture::<A>(device, &desc, id);
+                let (_, error) = self.device_create_texture::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -199,7 +184,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 desc,
             } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.texture_create_view::<A>(parent_id, &desc, id);
+                let (_, error) = self.texture_create_view::<A>(parent_id, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -209,7 +194,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             }
             Action::CreateSampler(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_sampler::<A>(device, &desc, id);
+                let (_, error) = self.device_create_sampler::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -219,13 +204,13 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             }
             Action::GetSurfaceTexture { id, parent_id } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.surface_get_current_texture::<A>(parent_id, id)
+                self.surface_get_current_texture::<A>(parent_id, Some(id))
                     .unwrap()
                     .texture_id
                     .unwrap();
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                let (_, error) = self.device_create_bind_group_layout::<A>(device, &desc, id);
+                let (_, error) = self.device_create_bind_group_layout::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -235,7 +220,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             }
             Action::CreatePipelineLayout(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_pipeline_layout::<A>(device, &desc, id);
+                let (_, error) = self.device_create_pipeline_layout::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -245,7 +230,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             }
             Action::CreateBindGroup(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_bind_group::<A>(device, &desc, id);
+                let (_, error) = self.device_create_bind_group::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -264,7 +249,8 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 } else {
                     panic!("Unknown shader {}", data);
                 };
-                let (_, error) = self.device_create_shader_module::<A>(device, &desc, source, id);
+                let (_, error) =
+                    self.device_create_shader_module::<A>(device, &desc, source, Some(id));
                 if let Some(e) = error {
                     println!("shader compilation error:\n---{code}\n---\n{e}");
                 }
@@ -282,11 +268,11 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                     implicit_context
                         .as_ref()
                         .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: ic.root_id,
-                            group_ids: &ic.group_ids,
+                            root_id: Some(ic.root_id),
+                            group_ids: wgc::id::as_option_slice(&ic.group_ids),
                         });
                 let (_, error) =
-                    self.device_create_compute_pipeline::<A>(device, &desc, id, implicit_ids);
+                    self.device_create_compute_pipeline::<A>(device, &desc, Some(id), implicit_ids);
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -304,11 +290,11 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                     implicit_context
                         .as_ref()
                         .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: ic.root_id,
-                            group_ids: &ic.group_ids,
+                            root_id: Some(ic.root_id),
+                            group_ids: wgc::id::as_option_slice(&ic.group_ids),
                         });
                 let (_, error) =
-                    self.device_create_render_pipeline::<A>(device, &desc, id, implicit_ids);
+                    self.device_create_render_pipeline::<A>(device, &desc, Some(id), implicit_ids);
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -322,7 +308,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 let (_, error) = self.render_bundle_encoder_finish::<A>(
                     bundle,
                     &wgt::RenderBundleDescriptor { label: desc.label },
-                    id,
+                    Some(id),
                 );
                 if let Some(e) = error {
                     panic!("{e}");
@@ -333,7 +319,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             }
             Action::CreateQuerySet { id, desc } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_query_set::<A>(device, &desc, id);
+                let (_, error) = self.device_create_query_set::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -350,7 +336,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
                 if queued {
-                    self.queue_write_buffer::<A>(device, id, range.start, &bin)
+                    self.queue_write_buffer::<A>(device.transmute(), id, range.start, &bin)
                         .unwrap();
                 } else {
                     self.device_wait_for_buffer::<A>(device, id).unwrap();
@@ -365,23 +351,24 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 size,
             } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
-                self.queue_write_texture::<A>(device, &to, &bin, &layout, &size)
+                self.queue_write_texture::<A>(device.transmute(), &to, &bin, &layout, &size)
                     .unwrap();
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                self.queue_submit::<A>(device, &[]).unwrap();
+                self.queue_submit::<A>(device.transmute(), &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    comb_manager.process(device.backend()),
+                    Some(comb_manager.process(device.backend()).transmute()),
                 );
                 if let Some(e) = error {
                     panic!("{e}");
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
-                self.queue_submit::<A>(device, &[cmdbuf]).unwrap();
+                self.queue_submit::<A>(device.transmute(), &[cmdbuf])
+                    .unwrap();
             }
         }
     }

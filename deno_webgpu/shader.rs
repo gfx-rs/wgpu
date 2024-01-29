@@ -49,6 +49,6 @@ pub fn op_webgpu_create_shader_module(
     device,
     &descriptor,
     source,
-    ()
+    None
   ) => state, WebGpuShaderModule)
 }

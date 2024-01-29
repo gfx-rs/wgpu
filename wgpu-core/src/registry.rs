@@ -4,8 +4,8 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
 use crate::{
-    id,
-    identity::{IdentityHandlerFactory, IdentityManager},
+    id::Id,
+    identity::IdentityManager,
     resource::Resource,
     storage::{Element, InvalidId, Storage},
 };
@@ -37,40 +37,40 @@ impl RegistryReport {
 /// any other dependent resource
 ///
 #[derive(Debug)]
-pub struct Registry<I: id::TypedId, T: Resource<I>> {
-    identity: Arc<IdentityManager<I>>,
-    storage: RwLock<Storage<T, I>>,
+pub struct Registry<T: Resource> {
+    identity: Arc<IdentityManager<T::Marker>>,
+    storage: RwLock<Storage<T>>,
     backend: Backend,
 }
 
-impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
-    pub(crate) fn new<F: IdentityHandlerFactory<I>>(backend: Backend, factory: &F) -> Self {
+impl<T: Resource> Registry<T> {
+    pub(crate) fn new(backend: Backend) -> Self {
         Self {
-            identity: factory.spawn(),
+            identity: Arc::new(IdentityManager::new()),
             storage: RwLock::new(Storage::new()),
             backend,
         }
     }
 
-    pub(crate) fn without_backend<F: IdentityHandlerFactory<I>>(factory: &F) -> Self {
-        Self::new(Backend::Empty, factory)
+    pub(crate) fn without_backend() -> Self {
+        Self::new(Backend::Empty)
     }
 }
 
 #[must_use]
-pub(crate) struct FutureId<'a, I: id::TypedId, T: Resource<I>> {
-    id: I,
-    identity: Arc<IdentityManager<I>>,
-    data: &'a RwLock<Storage<T, I>>,
+pub(crate) struct FutureId<'a, T: Resource> {
+    id: Id<T::Marker>,
+    identity: Arc<IdentityManager<T::Marker>>,
+    data: &'a RwLock<Storage<T>>,
 }
 
-impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
+impl<T: Resource> FutureId<'_, T> {
     #[allow(dead_code)]
-    pub fn id(&self) -> I {
+    pub fn id(&self) -> Id<T::Marker> {
         self.id
     }
 
-    pub fn into_id(self) -> I {
+    pub fn into_id(self) -> Id<T::Marker> {
         self.id
     }
 
@@ -82,7 +82,7 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry, and fills out the resource info.
-    pub fn assign(self, value: T) -> (I, Arc<T>) {
+    pub fn assign(self, value: T) -> (Id<T::Marker>, Arc<T>) {
         let mut data = self.data.write();
         data.insert(self.id, self.init(value));
         (self.id, data.get(self.id).unwrap().clone())
@@ -94,73 +94,73 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     ///
     /// This _will_ leak the ID, and it will not be recycled again.
     /// See https://github.com/gfx-rs/wgpu/issues/4912.
-    pub fn assign_existing(self, value: &Arc<T>) -> I {
+    pub fn assign_existing(self, value: &Arc<T>) -> Id<T::Marker> {
         let mut data = self.data.write();
         debug_assert!(!data.contains(self.id));
         data.insert(self.id, value.clone());
         self.id
     }
 
-    pub fn assign_error(self, label: &str) -> I {
+    pub fn assign_error(self, label: &str) -> Id<T::Marker> {
         self.data.write().insert_error(self.id, label);
         self.id
     }
 }
 
-impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
-    pub(crate) fn prepare<F>(&self, id_in: F::Input) -> FutureId<I, T>
-    where
-        F: IdentityHandlerFactory<I>,
-    {
+impl<T: Resource> Registry<T> {
+    pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<T> {
         FutureId {
-            id: if F::autogenerate_ids() {
-                self.identity.process(self.backend)
-            } else {
-                self.identity.mark_as_used(F::input_to_id(id_in))
+            id: match id_in {
+                Some(id_in) => {
+                    self.identity.mark_as_used(id_in);
+                    id_in
+                }
+                None => self.identity.process(self.backend),
             },
             identity: self.identity.clone(),
             data: &self.storage,
         }
     }
-    pub(crate) fn request(&self) -> FutureId<I, T> {
+
+    pub(crate) fn request(&self) -> FutureId<T> {
         FutureId {
             id: self.identity.process(self.backend),
             identity: self.identity.clone(),
             data: &self.storage,
         }
     }
-    pub(crate) fn try_get(&self, id: I) -> Result<Option<Arc<T>>, InvalidId> {
+    pub(crate) fn try_get(&self, id: Id<T::Marker>) -> Result<Option<Arc<T>>, InvalidId> {
         self.read().try_get(id).map(|o| o.cloned())
     }
-    pub(crate) fn get(&self, id: I) -> Result<Arc<T>, InvalidId> {
+    pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
         self.read().get_owned(id)
     }
-    pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T, I>> {
+    pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
         self.storage.read()
     }
-    pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T, I>> {
+    pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub fn unregister_locked(&self, id: I, storage: &mut Storage<T, I>) -> Option<Arc<T>> {
+    pub fn unregister_locked(&self, id: Id<T::Marker>, storage: &mut Storage<T>) -> Option<Arc<T>> {
         storage.remove(id)
     }
-    pub fn force_replace(&self, id: I, mut value: T) {
+    pub fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
         let mut storage = self.storage.write();
         value.as_info_mut().set_id(id, &self.identity);
         storage.force_replace(id, value)
     }
-    pub fn force_replace_with_error(&self, id: I, label: &str) {
+    pub fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
         let mut storage = self.storage.write();
         storage.remove(id);
         storage.insert_error(id, label);
     }
-    pub(crate) fn unregister(&self, id: I) -> Option<Arc<T>> {
+    pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
         let value = self.storage.write().remove(id);
         //Returning None is legal if it's an error ID
         value
     }
 
-    pub fn label_for_resource(&self, id: I) -> String {
+    pub fn label_for_resource(&self, id: Id<T::Marker>) -> String {
         let guard = self.storage.read();
 
         let type_name = guard.kind();

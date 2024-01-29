@@ -83,7 +83,7 @@ pub fn op_webgpu_create_texture(
     let (val, maybe_err) = gfx_select!(device => instance.device_create_texture(
       device,
       &descriptor,
-      ()
+      None
     ));
 
     let rid = state.resource_table.add(WebGpuTexture {
@@ -128,6 +128,6 @@ pub fn op_webgpu_create_texture_view(
     gfx_put!(texture => instance.texture_create_view(
     texture,
     &descriptor,
-    ()
+    None
   ) => state, WebGpuTextureView)
 }

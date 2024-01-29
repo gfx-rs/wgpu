@@ -61,7 +61,7 @@ pub fn op_webgpu_create_command_encoder(
     gfx_put!(device => instance.device_create_command_encoder(
     device,
     &descriptor,
-    ()
+    None
   ) => state, WebGpuCommandEncoder)
 }
 

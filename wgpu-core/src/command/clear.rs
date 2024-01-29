@@ -10,7 +10,6 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{BufferId, CommandEncoderId, DeviceId, TextureId},
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Resource, Texture, TextureClearMode},
     track::{TextureSelector, TextureTracker},
@@ -71,7 +70,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     Device(#[from] DeviceError),
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_clear_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,

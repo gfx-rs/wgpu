@@ -7,7 +7,7 @@ use crate::{
     },
     hal_api::HalApi,
     id::{
-        self, BindGroupId, BindGroupLayoutId, BufferId, ComputePipelineId, PipelineLayoutId,
+        self, BindGroupId, BindGroupLayoutId, BufferId, ComputePipelineId, Id, PipelineLayoutId,
         QuerySetId, RenderBundleId, RenderPipelineId, SamplerId, StagingBufferId, TextureId,
         TextureViewId,
     },
@@ -419,15 +419,14 @@ impl<A: HalApi> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
-    fn triage_resources<Id, R>(
-        resources_map: &mut FastHashMap<Id, Arc<R>>,
+    fn triage_resources<R>(
+        resources_map: &mut FastHashMap<Id<R::Marker>, Arc<R>>,
         active: &mut [ActiveSubmission<A>],
-        trackers: &mut impl ResourceTracker<Id, R>,
-        get_resource_map: impl Fn(&mut ResourceMaps<A>) -> &mut FastHashMap<Id, Arc<R>>,
+        trackers: &mut impl ResourceTracker<R>,
+        get_resource_map: impl Fn(&mut ResourceMaps<A>) -> &mut FastHashMap<Id<R::Marker>, Arc<R>>,
     ) -> Vec<Arc<R>>
     where
-        Id: id::TypedId,
-        R: Resource<Id>,
+        R: Resource,
     {
         let mut removed_resources = Vec::new();
         resources_map.retain(|&id, resource| {

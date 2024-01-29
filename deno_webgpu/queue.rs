@@ -32,7 +32,7 @@ pub fn op_webgpu_queue_submit(
         })
         .collect::<Result<Vec<_>, AnyError>>()?;
 
-    let maybe_err = gfx_select!(queue => instance.queue_submit(queue, &ids)).err();
+    let maybe_err = gfx_select!(queue => instance.queue_submit(queue.transmute(), &ids)).err();
 
     for rid in command_buffers {
         let resource = state.resource_table.take::<WebGpuCommandBuffer>(rid)?;
@@ -84,7 +84,7 @@ pub fn op_webgpu_write_buffer(
         None => &buf[data_offset..],
     };
     let maybe_err = gfx_select!(queue => instance.queue_write_buffer(
-      queue,
+      queue.transmute(),
       buffer,
       buffer_offset,
       data
@@ -120,7 +120,7 @@ pub fn op_webgpu_write_texture(
     let data_layout = data_layout.into();
 
     gfx_ok!(queue => instance.queue_write_texture(
-      queue,
+      queue.transmute(),
       &destination,
       buf,
       &data_layout,
