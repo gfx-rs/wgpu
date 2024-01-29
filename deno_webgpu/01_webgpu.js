@@ -6915,6 +6915,7 @@ webidl.converters["GPUErrorFilter"] = webidl.createEnumConverter(
   [
     "out-of-memory",
     "validation",
+    "internal"
   ],
 );
 

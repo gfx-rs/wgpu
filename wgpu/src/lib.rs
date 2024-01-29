@@ -163,6 +163,8 @@ pub enum ErrorFilter {
     OutOfMemory,
     /// Catch only validation errors.
     Validation,
+    /// Catch only internal errors.
+    Internal,
 }
 static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
@@ -5143,6 +5145,21 @@ pub enum Error {
         /// Description of the validation error.
         description: String,
     },
+    /// Internal error. Used for signalling any failures not explicitly expected by WebGPU.
+    ///
+    /// These could be due to internal implementation or system limits being reached.
+    Internal {
+        /// Lower level source of the error.
+        #[cfg(send_sync)]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
+        source: Box<dyn error::Error + Send + 'static>,
+        /// Lower level source of the error.
+        #[cfg(not(send_sync))]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
+        source: Box<dyn error::Error + 'static>,
+        /// Description of the internal GPU error.
+        description: String,
+    },
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Error: Send);
@@ -5152,6 +5169,7 @@ impl error::Error for Error {
         match self {
             Error::OutOfMemory { source } => Some(source.as_ref()),
             Error::Validation { source, .. } => Some(source.as_ref()),
+            Error::Internal { source, .. } => Some(source.as_ref()),
         }
     }
 }
@@ -5161,6 +5179,7 @@ impl fmt::Display for Error {
         match self {
             Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
             Error::Validation { description, .. } => f.write_str(description),
+            Error::Internal { description, .. } => f.write_str(description),
         }
     }
 }
