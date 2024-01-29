@@ -22,10 +22,7 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_api::HalApi,
-    hal_label,
-    id::markers,
-    id::{SurfaceId, TextureId},
-    identity::{GlobalIdentityHandlerFactory, Input},
+    hal_label, id,
     init_tracker::TextureInitTracker,
     resource::{self, ResourceInfo},
     snatch::Snatchable,
@@ -43,7 +40,7 @@ const FRAME_TIMEOUT_MS: u32 = 1000;
 pub(crate) struct Presentation {
     pub(crate) device: AnyDevice,
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
-    pub(crate) acquired_texture: Option<TextureId>,
+    pub(crate) acquired_texture: Option<id::TextureId>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -119,20 +116,20 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
 #[derive(Debug)]
 pub struct SurfaceOutput {
     pub status: Status,
-    pub texture_id: Option<TextureId>,
+    pub texture_id: Option<id::TextureId>,
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn surface_get_current_texture<A: HalApi>(
         &self,
-        surface_id: SurfaceId,
-        texture_id_in: Input<G, markers::Texture>,
+        surface_id: id::SurfaceId,
+        texture_id_in: Option<id::TextureId>,
     ) -> Result<SurfaceOutput, SurfaceError> {
         profiling::scope!("SwapChain::get_next_texture");
 
         let hub = A::hub(self);
 
-        let fid = hub.textures.prepare::<G, _>(texture_id_in);
+        let fid = hub.textures.prepare(texture_id_in);
 
         let surface = self
             .surfaces
@@ -281,7 +278,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_present<A: HalApi>(
         &self,
-        surface_id: SurfaceId,
+        surface_id: id::SurfaceId,
     ) -> Result<Status, SurfaceError> {
         profiling::scope!("SwapChain::present");
 
@@ -379,7 +376,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_texture_discard<A: HalApi>(
         &self,
-        surface_id: SurfaceId,
+        surface_id: id::SurfaceId,
     ) -> Result<(), SurfaceError> {
         profiling::scope!("SwapChain::discard");
 

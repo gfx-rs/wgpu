@@ -289,7 +289,7 @@ define_backend_caller! { gfx_if_empty, gfx_if_empty_hidden, "empty" if all(
 /// where the `device_create_buffer` method is defined like this:
 ///
 /// ```ignore
-/// impl<...> Global<...> {
+/// impl Global {
 ///    pub fn device_create_buffer<A: HalApi>(&self, ...) -> ...
 ///    { ... }
 /// }

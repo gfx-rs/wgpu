@@ -10,7 +10,7 @@
 !*/
 #![cfg(not(target_arch = "wasm32"))]
 
-use player::{GlobalPlay, IdentityPassThroughFactory};
+use player::GlobalPlay;
 use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
@@ -100,7 +100,7 @@ impl Test<'_> {
     fn run(
         self,
         dir: &Path,
-        global: &wgc::global::Global<IdentityPassThroughFactory>,
+        global: &wgc::global::Global,
         adapter: wgc::id::AdapterId,
         test_num: u32,
     ) {
@@ -114,8 +114,8 @@ impl Test<'_> {
                 required_limits: wgt::Limits::default(),
             },
             None,
-            device_id,
-            device_id.transmute()
+            Some(device_id),
+            Some(device_id.transmute())
         ));
         if let Some(e) = error {
             panic!("{:?}", e);
@@ -203,7 +203,6 @@ impl Corpus {
 
         let global = wgc::global::Global::new(
             "test",
-            IdentityPassThroughFactory,
             wgt::InstanceDescriptor {
                 backends: corpus.backends,
                 flags: wgt::InstanceFlags::debugging(),
@@ -221,9 +220,7 @@ impl Corpus {
                     force_fallback_adapter: false,
                     compatible_surface: None,
                 },
-                wgc::instance::AdapterInputs::IdSet(&[wgc::id::Id::zip(0, 0, backend)], |id| {
-                    id.backend()
-                }),
+                wgc::instance::AdapterInputs::IdSet(&[wgc::id::Id::zip(0, 0, backend)]),
             ) {
                 Ok(adapter) => adapter,
                 Err(_) => continue,

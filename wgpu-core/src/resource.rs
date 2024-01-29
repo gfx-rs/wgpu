@@ -9,7 +9,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId},
-    identity::{GlobalIdentityHandlerFactory, IdentityManager},
+    identity::IdentityManager,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
@@ -926,7 +926,7 @@ impl<A: HalApi> Texture<A> {
     }
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
