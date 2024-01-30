@@ -552,8 +552,11 @@ impl super::Adapter {
                 || extensions.contains("OES_texture_float_linear"),
         );
 
-        if es_ver.is_none() {
+        if let Some(full_ver) = full_ver {
             features |= wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT;
+            if full_ver >= (4, 3) {
+                features |= wgt::Features::VERTEX_ATTRIBUTE_64BIT;
+            }
         }
 
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
