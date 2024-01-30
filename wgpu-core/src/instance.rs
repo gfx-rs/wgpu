@@ -471,6 +471,15 @@ pub enum RequestAdapterError {
     InvalidSurface(SurfaceId),
 }
 
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreateSurfaceError {
+    #[error("No backend is available")]
+    NoSupportedBackend,
+    #[error(transparent)]
+    InstanceError(#[from] hal::InstanceError),
+}
+
 impl Global {
     /// # Safety
     ///
@@ -483,7 +492,7 @@ impl Global {
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
         id_in: Option<SurfaceId>,
-    ) -> Result<SurfaceId, hal::InstanceError> {
+    ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface");
 
         fn init<A: HalApi>(
@@ -521,8 +530,7 @@ impl Global {
             hal_surface = init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle);
         }
 
-        //  This is only None if there's no instance at all.
-        let hal_surface = hal_surface.unwrap()?;
+        let hal_surface = hal_surface.ok_or(CreateSurfaceError::NoSupportedBackend)??;
 
         let surface = Surface {
             presentation: Mutex::new(None),
