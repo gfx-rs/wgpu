@@ -226,7 +226,7 @@ impl crate::framework::Example for Example {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float64x4,
+                    format: wgpu::VertexFormat::Float32x4,
                     offset: 0,
                     shader_location: 0,
                 },
