@@ -73,9 +73,14 @@ static_assertions::assert_impl_all!(VertexBufferLayout<'_>: Send, Sync);
 pub struct VertexState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a vertex-stage shader entry point with this name in `module`.
+    /// Otherwise, expect exactly one vertex-stage entry point in `module`, which will be
+    /// selected.
+    // NOTE: keep phrasing in sync. with `ComputePipelineDescriptor::entry_point`
+    // NOTE: keep phrasing in sync. with `FragmentState::entry_point`
+    pub entry_point: Option<&'a str>,
     /// Advanced options for when this pipeline is compiled
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
@@ -96,9 +101,14 @@ static_assertions::assert_impl_all!(VertexState<'_>: Send, Sync);
 pub struct FragmentState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a `@fragment` shader entry point with this name in `module`.
+    /// Otherwise, expect exactly one fragment-stage entry point in `module`, which will be
+    /// selected.
+    // NOTE: keep phrasing in sync. with `ComputePipelineDescriptor::entry_point`
+    // NOTE: keep phrasing in sync. with `VertexState::entry_point`
+    pub entry_point: Option<&'a str>,
     /// Advanced options for when this pipeline is compiled
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`

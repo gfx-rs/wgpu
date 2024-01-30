@@ -79,7 +79,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: Some("pipeline read"),
                 layout: Some(&pll),
                 module: &sm,
-                entry_point: "read",
+                entry_point: Some("read"),
                 compilation_options: Default::default(),
                 cache: None,
             });
@@ -90,7 +90,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: Some("pipeline write"),
                 layout: None,
                 module: &sm,
-                entry_point: "write",
+                entry_point: Some("write"),
                 compilation_options: Default::default(),
                 cache: None,
             });

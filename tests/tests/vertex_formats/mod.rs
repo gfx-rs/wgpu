@@ -250,7 +250,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
                     attributes: test.attributes,
                 }],
                 module: &shader,
-                entry_point: test.entry_point,
+                entry_point: Some(test.entry_point),
                 compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -258,7 +258,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fragment_main",
+                entry_point: Some("fragment_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,

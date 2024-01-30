@@ -89,7 +89,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
             label: None,
             layout: Some(&pipeline_layout),
             module: &module,
-            entry_point: "no_resources",
+            entry_point: Some("no_resources"),
             compilation_options: Default::default(),
             cache: None,
         };
@@ -219,7 +219,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
             label: None,
             layout: Some(&pipeline_layout),
             module: &module,
-            entry_point: "no_resources",
+            entry_point: Some("no_resources"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -266,7 +266,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             label: None,
             layout: None,
             module: &module,
-            entry_point: "resources",
+            entry_point: Some("resources"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -338,7 +338,7 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
         label: None,
         layout: None,
         module: &module,
-        entry_point: "resources",
+        entry_point: Some("resources"),
         compilation_options: Default::default(),
         cache: None,
     };
@@ -405,7 +405,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
             label: None,
             layout: None,
             module: &module,
-            entry_point: "resources",
+            entry_point: Some("resources"),
             compilation_options: Default::default(),
             cache: None,
         });

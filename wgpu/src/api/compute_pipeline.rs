@@ -62,9 +62,14 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// and no return value in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a compute shader entry point with this name in `module`.
+    /// Otherwise, expect exactly one compute shader entry point in `module`, which will be
+    /// selected.
+    // NOTE: keep phrasing in sync. with `FragmentState::entry_point`
+    // NOTE: keep phrasing in sync. with `VertexState::entry_point`
+    pub entry_point: Option<&'a str>,
     /// Advanced options for when this pipeline is compiled
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`

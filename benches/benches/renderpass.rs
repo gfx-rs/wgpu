@@ -186,7 +186,7 @@ impl RenderpassState {
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &sm,
-                        entry_point: "vs_main",
+                        entry_point: Some("vs_main"),
                         buffers: &vertex_buffer_layouts,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
@@ -203,7 +203,7 @@ impl RenderpassState {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &sm,
-                        entry_point: "fs_main",
+                        entry_point: Some("fs_main"),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: wgpu::TextureFormat::Rgba8UnormSrgb,
                             blend: None,
@@ -284,7 +284,7 @@ impl RenderpassState {
                     layout: Some(&bindless_pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &bindless_shader_module,
-                        entry_point: "vs_main",
+                        entry_point: Some("vs_main"),
                         buffers: &vertex_buffer_layouts,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
@@ -301,7 +301,7 @@ impl RenderpassState {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &bindless_shader_module,
-                        entry_point: "fs_main",
+                        entry_point: Some("fs_main"),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: wgpu::TextureFormat::Rgba8UnormSrgb,
                             blend: None,

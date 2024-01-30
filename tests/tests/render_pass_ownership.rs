@@ -498,7 +498,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &sm,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: 4,
@@ -508,7 +508,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &sm,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(target_format.into())],
             }),

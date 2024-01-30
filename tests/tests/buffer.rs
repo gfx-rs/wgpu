@@ -225,7 +225,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                         label: None,
                         layout: Some(&pipeline_layout),
                         module: &shader_module,
-                        entry_point: "main",
+                        entry_point: Some("main"),
                         compilation_options: Default::default(),
                         cache: None,
                     });
@@ -297,7 +297,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader_module,
-                entry_point: "main",
+                entry_point: Some("main"),
                 compilation_options: Default::default(),
                 cache: None,
             });

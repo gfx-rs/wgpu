@@ -499,7 +499,7 @@ impl crate::framework::Example for Example {
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_bake",
+                    entry_point: Some("vs_bake"),
                     compilation_options: Default::default(),
                     buffers: &[vb_desc.clone()],
                 },
@@ -633,17 +633,17 @@ impl crate::framework::Example for Example {
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[vb_desc],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: if supports_storage_resources {
+                    entry_point: Some(if supports_storage_resources {
                         "fs_main"
                     } else {
                         "fs_main_without_storage"
-                    },
+                    }),
                     compilation_options: Default::default(),
                     targets: &[Some(config.view_formats[0].into())],
                 }),

@@ -29,7 +29,7 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
                             label: Some("mandelbrot compute pipeline"),
                             layout: None,
                             module: &module,
-                            entry_point: "doesn't exist",
+                            entry_point: Some("doesn't exist"),
                             compilation_options: Default::default(),
                             cache: None,
                         });
@@ -66,7 +66,7 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
                                 module: &ctx
                                     .device
                                     .create_shader_module(TRIVIAL_VERTEX_SHADER_DESC),
-                                entry_point: "main",
+                                entry_point: Some("main"),
                                 compilation_options: Default::default(),
                                 buffers: &[],
                             },
