@@ -68,7 +68,7 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             label: None,
             layout: Some(&pipeline_layout),
             module: &cs_module,
-            entry_point: "main",
+            entry_point: Some("main"),
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {

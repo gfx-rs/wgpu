@@ -99,7 +99,7 @@ async fn run(_path: Option<String>) {
         label: None,
         layout: Some(&pipeline_layout),
         module: &shader,
-        entry_point: "main",
+        entry_point: Some("main"),
     });
 
     log::info!("Wgpu context set up.");

@@ -27,7 +27,7 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
                     label: Some("mandelbrot compute pipeline"),
                     layout: None,
                     module: &module,
-                    entry_point: "doesn't exist",
+                    entry_point: Some("doesn't exist"),
                 });
 
             pipeline.get_bind_group_layout(0);

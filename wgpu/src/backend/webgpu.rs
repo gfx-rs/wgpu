@@ -1696,7 +1696,9 @@ impl crate::context::Context for ContextWebGpu {
         let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.vertex.module.data.as_ref());
         let mut mapped_vertex_state = webgpu_sys::GpuVertexState::new(&module.0);
-        mapped_vertex_state.entry_point(desc.vertex.entry_point);
+        if let Some(ep) = desc.vertex.entry_point {
+            mapped_vertex_state.entry_point(ep);
+        }
 
         let buffers = desc
             .vertex
@@ -1771,7 +1773,9 @@ impl crate::context::Context for ContextWebGpu {
             let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
                 downcast_ref(frag.module.data.as_ref());
             let mut mapped_fragment_desc = webgpu_sys::GpuFragmentState::new(&module.0, &targets);
-            mapped_fragment_desc.entry_point(frag.entry_point);
+            if let Some(ep) = frag.entry_point {
+                mapped_fragment_desc.entry_point(ep);
+            }
             mapped_desc.fragment(&mapped_fragment_desc);
         }
 
@@ -1795,8 +1799,10 @@ impl crate::context::Context for ContextWebGpu {
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         let shader_module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.module.data.as_ref());
-        let mut mapped_compute_stage = webgpu_sys::GpuProgrammableStage::new(&shader_module.0);
-        mapped_compute_stage.entry_point(desc.entry_point);
+        let mut mapped_compute_stage = webgpu::GpuProgrammableStage::new(&shader_module.0);
+        if let Some(ep) = desc.entry_point {
+            mapped_compute_stage.entry_point(ep);
+        }
         let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
         let mut mapped_desc = webgpu_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {

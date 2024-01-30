@@ -265,14 +265,14 @@ async fn vertex_index_common(ctx: TestingContext) {
         layout: Some(&ppl),
         vertex: wgpu::VertexState {
             buffers: &[],
-            entry_point: "vs_main_builtin",
+            entry_point: Some("vs_main_builtin"),
             module: &shader,
         },
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             module: &shader,
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba8Unorm,
@@ -283,7 +283,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         multiview: None,
     };
     let builtin_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc.vertex.entry_point = "vs_main_buffers";
+    pipeline_desc.vertex.entry_point = Some("vs_main_buffers");
     pipeline_desc.vertex.buffers = &[
         wgpu::VertexBufferLayout {
             array_stride: 4,

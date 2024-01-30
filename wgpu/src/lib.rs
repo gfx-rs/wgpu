@@ -1464,9 +1464,12 @@ static_assertions::assert_impl_all!(VertexBufferLayout<'_>: Send, Sync);
 pub struct VertexState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a function with this name and no return value in the shader.
+    /// Otherwise, there must be exactly one `@compute` entry point in the provided `module`, which
+    /// will be used for the pipeline.
+    pub entry_point: Option<&'a str>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
@@ -1483,9 +1486,12 @@ static_assertions::assert_impl_all!(VertexState<'_>: Send, Sync);
 pub struct FragmentState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a function with this name and no return value in the shader.
+    /// Otherwise, there must be exactly one `@compute` entry point in the provided `module`, which
+    /// will be used for the pipeline.
+    pub entry_point: Option<&'a str>,
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
@@ -1572,9 +1578,12 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// and no return value in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a function with this name and no return value in the shader.
+    /// Otherwise, there must be exactly one `@compute` entry point in the provided `module`, which
+    /// will be used for the pipeline.
+    pub entry_point: Option<&'a str>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);

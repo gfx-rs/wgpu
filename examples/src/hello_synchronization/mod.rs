@@ -102,13 +102,13 @@ async fn execute(
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "patient_main",
+        entry_point: Some("patient_main"),
     });
     let hasty_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "hasty_main",
+        entry_point: Some("hasty_main"),
     });
 
     //----------------------------------------------------------

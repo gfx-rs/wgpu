@@ -108,7 +108,7 @@ async fn execute_gpu_inner(
         label: None,
         layout: None,
         module: &cs_module,
-        entry_point: "main",
+        entry_point: Some("main"),
     });
 
     // Instantiates the bind group, once again specifying the binding of buffers.
