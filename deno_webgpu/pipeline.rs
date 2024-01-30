@@ -110,7 +110,7 @@ pub fn op_webgpu_create_compute_pipeline(
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
             module: compute_shader_module_resource.1,
-            entry_point: Cow::from(compute.entry_point),
+            entry_point: Some(Cow::from(compute.entry_point)),
             // TODO(lucacasonato): support args.compute.constants
         },
     };
@@ -355,7 +355,7 @@ pub fn op_webgpu_create_render_pipeline(
         Some(wgpu_core::pipeline::FragmentState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: fragment_shader_module_resource.1,
-                entry_point: Cow::from(fragment.entry_point),
+                entry_point: Some(Cow::from(fragment.entry_point)),
             },
             targets: Cow::from(fragment.targets),
         })
@@ -377,7 +377,7 @@ pub fn op_webgpu_create_render_pipeline(
         vertex: wgpu_core::pipeline::VertexState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: vertex_shader_module_resource.1,
-                entry_point: Cow::Owned(args.vertex.entry_point),
+                entry_point: Some(Cow::Owned(args.vertex.entry_point)),
             },
             buffers: Cow::Owned(vertex_buffers),
         },
