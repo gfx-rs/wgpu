@@ -1826,13 +1826,13 @@ impl Instance {
     /// # Panics
     ///
     /// If no backend feature for the active target platform is enabled,
-    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
+    /// this method will panic, see [`Instance::enabled_backend_features()`].
     #[allow(unreachable_code)]
     pub fn new(_instance_desc: InstanceDescriptor) -> Self {
         if Self::enabled_backend_features().is_empty() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \
-                 See `wgpu::Instance::any_backend_feature_enabled()` for more information."
+                 See `wgpu::Instance::enabled_backend_features()` for more information."
             );
         }
 
@@ -1858,7 +1858,7 @@ impl Instance {
         }
 
         unreachable!(
-            "Earlier check of `any_backend_feature_enabled` should have prevented getting here!"
+            "Earlier check of `enabled_backend_features` should have prevented getting here!"
         );
     }
 
