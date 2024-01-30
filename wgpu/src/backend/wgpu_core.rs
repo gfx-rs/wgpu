@@ -1995,27 +1995,6 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
-    fn command_encoder_write_timestamp(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        query_set: &Self::QuerySetId,
-        _query_set_data: &Self::QuerySetData,
-        query_index: u32,
-    ) {
-        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_write_timestamp(
-            *encoder,
-            *query_set,
-            query_index
-        )) {
-            self.handle_error_nolabel(
-                &encoder_data.error_sink,
-                cause,
-                "CommandEncoder::write_timestamp",
-            );
-        }
-    }
-
     fn command_encoder_resolve_query_set(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -2327,17 +2306,6 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
     ) {
         wgpu_compute_pass_pop_debug_group(pass_data);
-    }
-
-    fn compute_pass_write_timestamp(
-        &self,
-        _pass: &mut Self::ComputePassId,
-        pass_data: &mut Self::ComputePassData,
-        query_set: &Self::QuerySetId,
-        _query_set_data: &Self::QuerySetData,
-        query_index: u32,
-    ) {
-        wgpu_compute_pass_write_timestamp(pass_data, *query_set, query_index)
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -2844,17 +2812,6 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
     ) {
         wgpu_render_pass_pop_debug_group(pass_data);
-    }
-
-    fn render_pass_write_timestamp(
-        &self,
-        _pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-        query_set: &Self::QuerySetId,
-        _query_set_data: &Self::QuerySetData,
-        query_index: u32,
-    ) {
-        wgpu_render_pass_write_timestamp(pass_data, *query_set, query_index)
     }
 
     fn render_pass_begin_occlusion_query(
