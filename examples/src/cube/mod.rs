@@ -5,13 +5,13 @@ use wgpu::util::DeviceExt;
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
-    _pos: [f64; 4],
+    _pos: [f32; 4],
     _tex_coord: [f32; 2],
 }
 
 fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
     Vertex {
-        _pos: [pos[0] as f64, pos[1] as f64, pos[2] as f64, 1.0],
+        _pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
         _tex_coord: [tc[0] as f32, tc[1] as f32],
     }
 }
@@ -104,7 +104,7 @@ impl Example {
 
 impl crate::framework::Example for Example {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::VERTEX_ATTRIBUTE_64BIT
+        wgpu::Features::POLYGON_MODE_LINE
     }
 
     fn init(
@@ -232,7 +232,7 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::VertexAttribute {
                     format: wgpu::VertexFormat::Float32x2,
-                    offset: 4 * 8,
+                    offset: 4 * 4,
                     shader_location: 1,
                 },
             ],
