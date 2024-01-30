@@ -236,7 +236,7 @@ impl ComputepassState {
                     label: Some("Compute Pipeline"),
                     layout: Some(&pipeline_layout),
                     module: &sm,
-                    entry_point: "cs_main",
+                    entry_point: Some("cs_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     cache: None,
                 });
@@ -331,7 +331,7 @@ impl ComputepassState {
                         label: Some("Compute Pipeline bindless"),
                         layout: Some(&bindless_pipeline_layout),
                         module: &bindless_sm,
-                        entry_point: "cs_main",
+                        entry_point: Some("cs_main"),
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         cache: None,
                     });

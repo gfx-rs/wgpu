@@ -298,7 +298,7 @@ fn compute_pass(
         label: None,
         layout: None,
         module,
-        entry_point: "main_cs",
+        entry_point: Some("main_cs"),
         compilation_options: Default::default(),
         cache: None,
     });
@@ -354,13 +354,13 @@ fn render_pass(
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(format.into())],
         }),
