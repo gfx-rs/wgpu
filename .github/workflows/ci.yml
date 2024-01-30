@@ -92,18 +92,18 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-12
+            os: macos-14
             target: x86_64-apple-darwin
             kind: native
 
           - name: MacOS aarch64
-            os: macos-12
+            os: macos-14
             target: aarch64-apple-darwin
             kind: native
 
           # IOS
           - name: IOS aarch64
-            os: macos-12
+            os: macos-14
             target: aarch64-apple-ios
             kind: native
 
@@ -249,7 +249,7 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-12
+            os: macos-14
             target: x86_64-apple-darwin
 
           # Linux
@@ -383,7 +383,7 @@ jobs:
 
           # Mac
           - name: Mac aarch64
-            os: macos-13-xlarge
+            os: macos-14
 
           # Linux
           - name: Linux x86_64
