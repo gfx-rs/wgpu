@@ -44,8 +44,6 @@ impl NativeTest {
                 //
                 // We don't do this in the instance initializer as we don't want to enable
                 // validation layers for the entire process, or other instances.
-                //
-                // We do not enable metal validation when running on moltenvk.
                 let metal_validation = backend == wgpu::Backend::Metal;
 
                 let env_value = if metal_validation { "1" } else { "0" };

@@ -13,9 +13,9 @@ env:
   #
 
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  VULKAN_SDK_VERSION: "1.3.268"
+  VULKAN_SDK_VERSION: "1.3.275"
   # Sourced from https://vulkan.lunarg.com/sdk/home#mac
-  VULKAN_SDK_MAC_VERSION: "1.3.268.1"
+  VULKAN_SDK_MAC_VERSION: "1.3.275.0"
 
   # Sourced from https://www.nuget.org/packages/Microsoft.Direct3D.WARP
   WARP_VERSION: "1.0.8"
@@ -476,11 +476,11 @@ jobs:
           hdiutil mount vulkansdk-macos-$VULKAN_SDK_MAC_VERSION.dmg
 
           ls /Volumes
-          sudo /Volumes/vulkansdk-macos-$VULKAN_SDK_MAC_VERSION/InstallVulkan.app/Contents/MacOS/InstallVulkan --root ~/VulkanSDK/$VULKAN_SDK_MAC_VERSION --accept-licenses --default-answer --confirm-command install
+          sudo /Volumes/vulkansdk-macos-$VULKAN_SDK_MAC_VERSION/InstallVulkan.app/Contents/MacOS/InstallVulkan --root $HOME/VulkanSDK/$VULKAN_SDK_MAC_VERSION --accept-licenses --default-answer --confirm-command install
 
           hdiutil unmount /Volumes/vulkansdk-macos-$VULKAN_SDK_MAC_VERSION
 
-          VULKAN_SDK="~/VulkanSDK/$VULKAN_SDK_MAC_VERSION/macOS"
+          VULKAN_SDK="$HOME/VulkanSDK/$VULKAN_SDK_MAC_VERSION/macOS"
           echo VULKAN_SDK="$VULKAN_SDK" >> "$GITHUB_ENV"
           echo $VULKAN_SDK/bin >> "$GITHUB_PATH"
           echo DYLD_LIBRARY_PATH="$VULKAN_SDK/lib:${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
@@ -494,7 +494,7 @@ jobs:
         run: |
           set -e
 
-          ~/VulkanSDK/$VULKAN_SDK_MAC_VERSION/macOS/bin/vulkaninfo
+          $HOME/VulkanSDK/$VULKAN_SDK_MAC_VERSION/macOS/bin/vulkaninfo
 
       - name: (linux) install vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
