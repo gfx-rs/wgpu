@@ -23,11 +23,12 @@ pub enum NameKey {
 /// that may need identifiers in a textual backend.
 #[derive(Default)]
 pub struct Namer {
+    pub(crate) allow_numeric_end: bool,
     /// The last numeric suffix used for each base name. Zero means "no suffix".
-    unique: FastHashMap<String, u32>,
-    keywords: FastHashSet<&'static str>,
-    keywords_case_insensitive: FastHashSet<AsciiUniCase<&'static str>>,
-    reserved_prefixes: Vec<&'static str>,
+    pub(crate) unique: FastHashMap<String, u32>,
+    pub(crate) keywords: FastHashSet<&'static str>,
+    pub(crate) keywords_case_insensitive: FastHashSet<AsciiUniCase<&'static str>>,
+    pub(crate) reserved_prefixes: Vec<&'static str>,
 }
 
 impl Namer {
@@ -112,7 +113,7 @@ impl Namer {
             }
             None => {
                 let mut suffixed = base.to_string();
-                if base.ends_with(char::is_numeric)
+                if (base.ends_with(char::is_numeric) && !self.allow_numeric_end)
                     || self.keywords.contains(base.as_ref())
                     || self
                         .keywords_case_insensitive
@@ -244,7 +245,7 @@ impl Namer {
 }
 
 /// A string wrapper type with an ascii case insensitive Eq and Hash impl
-struct AsciiUniCase<S: AsRef<str> + ?Sized>(S);
+pub(crate) struct AsciiUniCase<S: AsRef<str> + ?Sized>(S);
 
 impl<S: AsRef<str>> PartialEq<Self> for AsciiUniCase<S> {
     #[inline]
@@ -276,6 +277,19 @@ fn test() {
     assert_eq!(namer.call("x"), "x");
     assert_eq!(namer.call("x"), "x_1");
     assert_eq!(namer.call("x1"), "x1_");
+    assert_eq!(namer.call("__x"), "_x");
+    assert_eq!(namer.call("1___x"), "_x_1");
+}
+
+#[test]
+fn test_numeric_end() {
+    let mut namer = Namer {
+        allow_numeric_end: true,
+        ..Default::default()
+    };
+    assert_eq!(namer.call("x"), "x");
+    assert_eq!(namer.call("x"), "x_1");
+    assert_eq!(namer.call("x1"), "x1");
     assert_eq!(namer.call("__x"), "_x");
     assert_eq!(namer.call("1___x"), "_x_1");
 }
