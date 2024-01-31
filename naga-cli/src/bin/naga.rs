@@ -655,6 +655,23 @@ fn write_output(
             .unwrap_pretty();
             fs::write(output_path, wgsl)?;
         }
+        "rs" => {
+            use naga::back::rust;
+
+            let rust = rust::write_string(
+                module,
+                info.as_ref().ok_or(CliError(
+                    "Generating Rust output requires validation to \
+                     succeed, and it failed in a previous step",
+                ))?,
+                // TODO: expose target via CLI.
+                rust::Target::Gpu,
+                rust::WriterFlags::empty(),
+            )
+            .unwrap_pretty();
+
+            fs::write(output_path, rust)?;
+        }
         other => {
             println!("Unknown output extension: {other}");
         }

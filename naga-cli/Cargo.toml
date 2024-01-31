@@ -29,15 +29,16 @@ version = "0.19"
 path = "../naga"
 features = [
     "compact",
-    "wgsl-in",
-    "wgsl-out",
+    "dot-out",
     "glsl-in",
     "glsl-out",
-    "spv-in",
-    "spv-out",
     "msl-out",
     "hlsl-out",
-    "dot-out",
+    "rust-out",
+    "spv-in",
+    "spv-out",
+    "wgsl-in",
+    "wgsl-out",
     "serialize",
     "deserialize",
 ]
