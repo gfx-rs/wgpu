@@ -3433,6 +3433,11 @@ impl<A: HalApi> Device<A> {
             current_index,
             self.command_allocator.lock().as_mut().unwrap(),
         );
+        if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
+            // It's important to not hold the lock while calling the closure.
+            drop(life_tracker);
+            device_lost_closure.call(DeviceLostReason::Dropped, "Device is dying.".to_string());
+        }
         #[cfg(feature = "trace")]
         {
             *self.trace.lock() = None;
