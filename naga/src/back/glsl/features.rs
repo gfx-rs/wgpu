@@ -1,8 +1,8 @@
 use super::{BackendResult, Error, Version, Writer};
 use crate::{
     back::glsl::{Options, WriterFlags},
-    AddressSpace, Binding, Expression, Handle, ImageClass, ImageDimension, Interpolation, Sampling,
-    Scalar, ScalarKind, ShaderStage, StorageFormat, Type, TypeInner,
+    AddressSpace, Binding, Expression, Handle, ImageClass, ImageDimension, Interpolation,
+    SampleLevel, Sampling, Scalar, ScalarKind, ShaderStage, StorageFormat, Type, TypeInner,
 };
 use std::fmt::Write;
 
@@ -48,6 +48,8 @@ bitflags::bitflags! {
         ///
         /// We can always support this, either through the language or a polyfill
         const INSTANCE_INDEX = 1 << 22;
+        /// Sample specific LODs of cube / array shadow textures
+        const TEXTURE_SHADOW_LOD = 1 << 23;
     }
 }
 
@@ -125,6 +127,7 @@ impl FeaturesManager {
         check_feature!(TEXTURE_SAMPLES, 150);
         check_feature!(TEXTURE_LEVELS, 130);
         check_feature!(IMAGE_SIZE, 430, 310);
+        check_feature!(TEXTURE_SHADOW_LOD, 200, 300);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -249,6 +252,11 @@ impl FeaturesManager {
                 // https://registry.khronos.org/OpenGL/extensions/ARB/ARB_shader_draw_parameters.txt
                 writeln!(out, "#extension GL_ARB_shader_draw_parameters : require")?;
             }
+        }
+
+        if self.0.contains(Features::TEXTURE_SHADOW_LOD) {
+            // https://registry.khronos.org/OpenGL/extensions/EXT/EXT_texture_shadow_lod.txt
+            writeln!(out, "#extension GL_EXT_texture_shadow_lod : require")?;
         }
 
         Ok(())
@@ -466,6 +474,48 @@ impl<'a, W> Writer<'a, W> {
 
                         if level.is_some() {
                             features.request(Features::TEXTURE_LEVELS)
+                        }
+                    }
+                }
+                Expression::ImageSample { image, level, offset, .. } => {
+                    if let TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class: ImageClass::Depth { .. },
+                    } = *info[image].ty.inner_with(&module.types) {
+                        let lod = matches!(level, SampleLevel::Zero | SampleLevel::Exact(_));
+                        let bias =  matches!(level, SampleLevel::Bias(_));
+                        let cube =  dim == ImageDimension::Cube;
+                        let array2d = dim == ImageDimension::D2 && arrayed;
+
+                        // We have an workaround for cases other than samplerCubeArrayShadow,
+                        // so we don't *need* this extension for those cases.
+                        // But if we we're explicitly allowed to use it (`WriterFlags::TEXTURE_SHADOW_LOD`),
+                        // we prefer it over the workaround.
+                        let use_grad_workaround = !(
+                            self.options.writer_flags.contains(WriterFlags::TEXTURE_SHADOW_LOD)
+                            || (cube && arrayed)
+                        );
+
+                        let mut is_used = false;
+
+                        // float texture(sampler2DArrayShadow sampler, vec4 P [, float bias])
+                        is_used |= array2d && bias && !use_grad_workaround;
+
+                        // float texture(samplerCubeArrayShadow sampler, vec4 P, float compare [, float bias])
+                        is_used |= cube && bias;
+
+                        // float textureOffset(sampler2DArrayShadow sampler, vec4 P, ivec2 offset [, float bias])
+                        is_used |= array2d && offset.is_some() && !use_grad_workaround;
+
+                        // float textureLod(sampler2DArrayShadow sampler, vec4 P, float lod)
+                        // float textureLodOffset(sampler2DArrayShadow sampler, vec4 P, float lod, ivec2 offset)
+                        // float textureLod(samplerCubeShadow sampler, vec4 P, float lod)
+                        // float textureLod(samplerCubeArrayShadow sampler, vec4 P, float compare, float lod)
+                        is_used |= (cube || array2d) && lod && !use_grad_workaround;
+
+                        if is_used {
+                            features.request(Features::TEXTURE_SHADOW_LOD);
                         }
                     }
                 }

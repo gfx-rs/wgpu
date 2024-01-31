@@ -646,16 +646,6 @@ impl<'a, W: Write> Writer<'a, W> {
         // preprocessor not the processor ¯\_(ツ)_/¯
         self.features.write(self.options, &mut self.out)?;
 
-        // Write the additional extensions
-        if self
-            .options
-            .writer_flags
-            .contains(WriterFlags::TEXTURE_SHADOW_LOD)
-        {
-            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shadow_lod.txt
-            writeln!(self.out, "#extension GL_EXT_texture_shadow_lod : require")?;
-        }
-
         // glsl es requires a precision to be specified for floats and ints
         // TODO: Should this be user configurable?
         if es {
