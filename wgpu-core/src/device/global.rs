@@ -645,7 +645,7 @@ impl Global {
                 RwLock::new(TextureInitTracker::new(desc.mip_level_count, 0));
 
             let (id, resource) = fid.assign(texture);
-            api_log!("Device::create_texture -> {id:?}");
+            api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             device.trackers.lock().textures.insert_single(
                 id,
@@ -2339,7 +2339,7 @@ impl Global {
         range: Range<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
-        api_log!("Buffer::map_async {buffer_id:?}");
+        api_log!("Buffer::map_async {buffer_id:?} range {range:?} op: {op:?}");
 
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
@@ -2466,7 +2466,7 @@ impl Global {
         size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
-        api_log!("Buffer::get_mapped_range {buffer_id:?}");
+        api_log!("Buffer::get_mapped_range {buffer_id:?} offset {offset:?} size {size:?}");
 
         let hub = A::hub(self);
 
