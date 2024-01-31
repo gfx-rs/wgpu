@@ -94,7 +94,11 @@ Bottom level categories:
   - As with other instance flags, this flag can be changed in calls to `InstanceFlags::with_env` with the new `WGPU_GPU_BASED_VALIDATION` environment variable.
 
   By @ErichDonGubler in [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
-
+- `wgpu::Instance` can now report which `wgpu::Backends` are available based on the build configuration. By @wumpf [#5167](https://github.com/gfx-rs/wgpu/pull/5167)
+```diff
+-wgpu::Instance::any_backend_feature_enabled()
++!wgpu::Instance::enabled_backend_features().is_empty()
+```
 
 ### Bug Fixes
 

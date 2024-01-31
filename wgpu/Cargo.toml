@@ -29,7 +29,7 @@ default = ["wgsl", "dx12", "metal", "webgpu"]
 #! ### Backends
 # --------------------------------------------------------------------
 #! ⚠️ WIP: Not all backends can be manually configured today.
-#! On Windows & Linux the Vulkan & GLES backends are always enabled.
+#! On Windows, Linux & Android the Vulkan & GLES backends are always enabled.
 #! See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more details.
 
 ## Enables the DX12 backend on Windows.

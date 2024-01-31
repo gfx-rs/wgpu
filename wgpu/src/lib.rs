@@ -1748,39 +1748,62 @@ impl Default for Instance {
     /// # Panics
     ///
     /// If no backend feature for the active target platform is enabled,
-    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
+    /// this method will panic, see [`Instance::enabled_backend_features()`].
     fn default() -> Self {
         Self::new(InstanceDescriptor::default())
     }
 }
 
 impl Instance {
-    /// Returns `true` if any backend feature is enabled for the current build configuration.
+    /// Returns which backends can be picked for the current build configuration.
     ///
-    /// Which feature makes this method return true depends on the target platform:
-    /// * MacOS/iOS: `metal`, `vulkan-portability` or `angle`
-    /// * Wasm32: `webgpu`, `webgl` or Emscripten target.
-    /// * All other: Always returns true
+    /// The returned set depends on a combination of target platform and enabled features.
+    /// This does *not* do any runtime checks and is exclusively based on compile time information.
     ///
-    /// TODO: Right now it's otherwise not possible yet to opt-out of all features on most platforms.
+    /// `InstanceDescriptor::backends` does not need to be a subset of this,
+    /// but any backend that is not in this set, will not be picked.
+    ///
+    /// TODO: Right now it's otherwise not possible yet to opt-out of all features on some platforms.
     /// See <https://github.com/gfx-rs/wgpu/issues/3514>
-    /// * Windows: always enables Vulkan and GLES with no way to opt out
-    /// * Linux: always enables Vulkan and GLES with no way to opt out
-    pub const fn any_backend_feature_enabled() -> bool {
-        // Method intentionally kept verbose to keep it a bit easier to follow!
+    /// * Windows/Linux/Android: always enables Vulkan and GLES with no way to opt out
+    pub const fn enabled_backend_features() -> Backends {
+        let mut backends = Backends::empty();
 
-        // On macOS and iOS, at least one of Metal, Vulkan or GLES backend must be enabled.
-        let is_mac_or_ios = cfg!(target_os = "macos") || cfg!(target_os = "ios");
-        if is_mac_or_ios {
-            cfg!(feature = "metal")
-                || cfg!(feature = "vulkan-portability")
-                || cfg!(feature = "angle")
-        // On the web, either WebGPU or WebGL must be enabled.
-        } else if cfg!(target_arch = "wasm32") {
-            cfg!(feature = "webgpu") || cfg!(feature = "webgl") || cfg!(target_os = "emscripten")
+        if cfg!(native) {
+            if cfg!(metal) {
+                backends = backends.union(Backends::METAL);
+            }
+            if cfg!(dx12) {
+                backends = backends.union(Backends::DX12);
+            }
+
+            // Windows, Android, Linux currently always enable Vulkan and OpenGL.
+            // See <https://github.com/gfx-rs/wgpu/issues/3514>
+            if cfg!(target_os = "windows") || cfg!(unix) {
+                backends = backends.union(Backends::VULKAN).union(Backends::GL);
+            }
+
+            // Vulkan on Mac/iOS is only available through vulkan-portability.
+            if (cfg!(target_os = "ios") || cfg!(target_os = "macos"))
+                && cfg!(feature = "vulkan-portability")
+            {
+                backends = backends.union(Backends::VULKAN);
+            }
+
+            // GL Vulkan on Mac is only available through angle.
+            if cfg!(target_os = "macos") && cfg!(feature = "angle") {
+                backends = backends.union(Backends::VULKAN);
+            }
         } else {
-            true
+            if cfg!(webgpu) {
+                backends = backends.union(Backends::BROWSER_WEBGPU);
+            }
+            if cfg!(webgl) {
+                backends = backends.union(Backends::GL);
+            }
         }
+
+        backends
     }
 
     /// Create an new instance of wgpu.
@@ -1802,13 +1825,13 @@ impl Instance {
     /// # Panics
     ///
     /// If no backend feature for the active target platform is enabled,
-    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
+    /// this method will panic, see [`Instance::enabled_backend_features()`].
     #[allow(unreachable_code)]
     pub fn new(_instance_desc: InstanceDescriptor) -> Self {
-        if !Self::any_backend_feature_enabled() {
+        if Self::enabled_backend_features().is_empty() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \
-                 See `wgpu::Instance::any_backend_feature_enabled()` for more information."
+                 See `wgpu::Instance::enabled_backend_features()` for more information."
             );
         }
 
@@ -1834,7 +1857,7 @@ impl Instance {
         }
 
         unreachable!(
-            "Earlier check of `any_backend_feature_enabled` should have prevented getting here!"
+            "Earlier check of `enabled_backend_features` should have prevented getting here!"
         );
     }
 
