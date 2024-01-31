@@ -13,8 +13,7 @@ pub const RESERVED: &[&str] = &[
     "const", "static", "mut", "ref", "box", "move", "as", "trait", "type", "unsafe", "async",
     "await", "dyn", "loop", "for", "while", "if", "else", "return", "break", "continue", "default",
     "where", "macro", // Macros and special symbols.
-    "println!", "print!", "format!", "vec!",
-    // Additional control flow keywords.
+    "println!", "print!", "format!", "vec!", // Additional control flow keywords.
     "in", "try", "catch", // Future reserved keywords (as of Rust 2021 Edition).
     "abstract", "become", "do", "final", "macro", "override", "priv", "typeof", "unsized",
     "virtual", "yield", // Additional keywords.
