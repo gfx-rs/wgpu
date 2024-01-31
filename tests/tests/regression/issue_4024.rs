@@ -36,7 +36,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         // Submit the work.
         ctx.queue.submit(Some(encoder.finish()));
         // Ensure the work is finished.
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollInfo::wait()).await.panic_on_incomplete();
 
         #[derive(Debug)]
         struct OrderingContext {
@@ -74,7 +74,9 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         });
 
         // No GPU work is happening at this point, but we want to process callbacks.
-        ctx.async_poll(MaintainBase::Poll).await.panic_on_timeout();
+        ctx.async_poll(MaintainBase::poll())
+            .await
+            .panic_on_incomplete();
 
         // Extract the ordering out of the arc.
         let ordering = Arc::into_inner(ordering).unwrap().into_inner();

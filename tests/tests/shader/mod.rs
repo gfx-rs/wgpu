@@ -9,7 +9,7 @@ use std::{borrow::Cow, fmt::Debug};
 use wgpu::{
     Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, Maintain, MapMode, PipelineLayoutDescriptor, PushConstantRange,
+    ComputePipelineDescriptor, MapMode, PipelineLayoutDescriptor, PollInfo, PushConstantRange,
     ShaderModuleDescriptor, ShaderSource, ShaderStages,
 };
 
@@ -355,7 +355,7 @@ async fn shader_input_output_test(
         ctx.queue.submit(Some(encoder.finish()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollInfo::wait()).await.panic_on_incomplete();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 

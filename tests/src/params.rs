@@ -29,7 +29,19 @@ pub struct TestParameters {
 impl Default for TestParameters {
     fn default() -> Self {
         Self {
-            required_features: Features::empty(),
+            // This is a bit of kludge. We don't want to need to manually enable
+            // this feature for all tests on native, so we do it in the default.
+            //
+            // For the test or two where we want to test without the feature, we have
+            // a separate default which does not enable this.
+            //
+            // When we have auto-polling on native we can use true async polling
+            // and remove this kludge.
+            required_features: if cfg!(target_arch = "wasm32") {
+                Features::empty()
+            } else {
+                Features::NON_ZERO_POLL_TIMEOUT
+            },
             required_downlevel_caps: LOWEST_DOWNLEVEL_PROPERTIES,
             required_limits: Limits::downlevel_webgl2_defaults(),
             skips: Vec::new(),
@@ -40,6 +52,15 @@ impl Default for TestParameters {
 
 // Builder pattern to make it easier
 impl TestParameters {
+    /// Same as [`TestParameters::default`], but does not enable the
+    /// `NON_ZERO_POLL_TIMEOUT` feature.
+    pub fn async_poll_only() -> Self {
+        Self {
+            required_features: Features::empty(),
+            ..Default::default()
+        }
+    }
+
     /// Set of common features that most internal tests require for compute and readback.
     pub fn test_features_limits(self) -> Self {
         self.downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)

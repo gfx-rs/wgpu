@@ -323,9 +323,9 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 readback_buffer
                     .slice(..)
                     .map_async(wgpu::MapMode::Read, |_| ());
-                ctx.async_poll(wgpu::Maintain::wait())
+                ctx.async_poll(wgpu::PollInfo::wait())
                     .await
-                    .panic_on_timeout();
+                    .panic_on_incomplete();
 
                 let buffer = readback_buffer.slice(..).get_mapped_range();
 

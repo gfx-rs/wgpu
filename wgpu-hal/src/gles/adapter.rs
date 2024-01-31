@@ -437,6 +437,10 @@ impl super::Adapter {
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::PUSH_CONSTANTS;
         features.set(
+            wgt::Features::NON_ZERO_POLL_TIMEOUT,
+            !cfg!(target_arch = "wasm32"),
+        );
+        features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
             extensions.contains("GL_EXT_texture_border_clamp")
                 || extensions.contains("GL_ARB_texture_border_clamp"),

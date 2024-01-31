@@ -98,16 +98,20 @@ pub enum ConfigureSurfaceError {
     },
     #[error("Requested usage is not supported")]
     UnsupportedUsage,
-    #[error("Gpu got stuck :(")]
-    StuckGpu,
+    #[error("Failed to wait for GPU idle. Timeout of {:?} exceeded", wgt::PollInfo::<()>::DEFAULT_TIMEOUT)]
+    GpuWaitForIdleTimeout,
 }
 
 impl From<WaitIdleError> for ConfigureSurfaceError {
     fn from(e: WaitIdleError) -> Self {
         match e {
             WaitIdleError::Device(d) => ConfigureSurfaceError::Device(d),
-            WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
-            WaitIdleError::StuckGpu => ConfigureSurfaceError::StuckGpu,
+            WaitIdleError::GpuWaitForIdleTimeout
+            | WaitIdleError::MissingFeatures(..)
+            | WaitIdleError::WrongSubmissionIndex(..)
+            | WaitIdleError::ExcessiveTimeout(..) => {
+                unreachable!("{e}");
+            }
         }
     }
 }

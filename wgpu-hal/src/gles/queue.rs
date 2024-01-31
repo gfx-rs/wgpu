@@ -807,6 +807,7 @@ impl super::Queue {
                         None => {
                             buffer_data = dst.data.as_ref().unwrap().lock().unwrap();
                             let dst_data = &mut buffer_data.as_mut_slice()[offset as usize..];
+
                             glow::PixelPackData::Slice(dst_data)
                         }
                     };
@@ -1789,6 +1790,10 @@ impl crate::Queue<super::Api> for super::Queue {
                 .map_err(|_| crate::DeviceError::OutOfMemory)?;
             fence.pending.push((value, sync));
         }
+
+        // This is extremely important. If we don't flush, the above fences may never
+        // be signaled, particularly in headless contexts.
+        unsafe { gl.flush() };
 
         Ok(())
     }

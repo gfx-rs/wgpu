@@ -825,7 +825,8 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
-            | F::BGRA8UNORM_STORAGE;
+            | F::BGRA8UNORM_STORAGE
+            | F::NON_ZERO_POLL_TIMEOUT;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(

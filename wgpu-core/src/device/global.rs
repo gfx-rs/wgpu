@@ -2030,9 +2030,18 @@ impl Global {
                 // Wait for all work to finish before configuring the surface.
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                match device.maintain(fence, wgt::Maintain::Wait) {
-                    Ok((closures, _)) => {
+                match device.maintain(fence, wgt::PollInfo::wait()) {
+                    Ok((closures, maintain_result)) => {
                         user_callbacks = closures;
+
+                        // WebGL doesn't support waiting for idle, so this will always throw a timeout.
+                        //
+                        // WebGL on the other hand doesn't actually require us wait for idle to change
+                        // the surface. As such we just ignore the timeout if we're on web and move on.
+                        let is_webgl = cfg!(target_arch = "wasm32");
+                        if !is_webgl && maintain_result.is_incomplete() {
+                            break present::ConfigureSurfaceError::GpuWaitForIdleTimeout;
+                        }
                     }
                     Err(e) => {
                         break e.into();
@@ -2108,12 +2117,18 @@ impl Global {
     pub fn device_poll<A: HalApi>(
         &self,
         device_id: DeviceId,
-        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
-    ) -> Result<bool, WaitIdleError> {
+        maintain: wgt::PollInfo<queue::WrappedSubmissionIndex>,
+    ) -> Result<wgt::SubmissionStatus, WaitIdleError> {
         api_log!("Device::poll");
 
-        let (closures, queue_empty) = {
-            if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
+        let (closures, maintain_result) = {
+            let hub = A::hub(self);
+            let device = hub
+                .devices
+                .get(device_id)
+                .map_err(|_| DeviceError::Invalid)?;
+
+            if let Some(submission_index) = maintain.submission_index {
                 if submission_index.queue_id != device_id.transmute() {
                     return Err(WaitIdleError::WrongSubmissionIndex(
                         submission_index.queue_id,
@@ -2122,11 +2137,10 @@ impl Global {
                 }
             }
 
-            let hub = A::hub(self);
-            let device = hub
-                .devices
-                .get(device_id)
-                .map_err(|_| DeviceError::Invalid)?;
+            if !maintain.is_poll() {
+                device.require_features(wgt::Features::NON_ZERO_POLL_TIMEOUT)?;
+            }
+
             let fence = device.fence.read();
             let fence = fence.as_ref().unwrap();
             device.maintain(fence, maintain)?
@@ -2134,7 +2148,7 @@ impl Global {
 
         closures.fire();
 
-        Ok(queue_empty)
+        Ok(maintain_result)
     }
 
     /// Poll all devices belonging to the backend `A`.
@@ -2157,14 +2171,17 @@ impl Global {
 
             for (_id, device) in device_guard.iter(A::VARIANT) {
                 let maintain = if force_wait {
-                    wgt::Maintain::Wait
+                    device.require_features(wgt::Features::NON_ZERO_POLL_TIMEOUT)?;
+
+                    wgt::PollInfo::wait()
                 } else {
-                    wgt::Maintain::Poll
+                    wgt::PollInfo::poll()
                 };
+
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                let (cbs, queue_empty) = device.maintain(fence, maintain)?;
-                all_queue_empty = all_queue_empty && queue_empty;
+                let (cbs, maintain_result) = device.maintain(fence, maintain)?;
+                all_queue_empty = all_queue_empty && maintain_result.is_queue_empty();
 
                 closures.extend(cbs);
             }
@@ -2250,6 +2267,11 @@ impl Global {
             if let Some(closure) = device_lost_closure {
                 closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
             }
+
+            // TODO: NO!
+            let _ = device
+                .maintain(device.fence.read().as_ref().unwrap(), wgt::PollInfo::wait())
+                .unwrap();
 
             // The things `Device::prepare_to_die` takes care are mostly
             // unnecessary here. We know our queue is empty, so we don't

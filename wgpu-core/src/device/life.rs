@@ -3,7 +3,7 @@ use crate::{
     command::RenderBundle,
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
-        DeviceError, DeviceLostClosure,
+        DeviceError, DeviceLostClosure, MissingFeatures,
     },
     hal_api::HalApi,
     id::{
@@ -22,7 +22,7 @@ use crate::{
 use smallvec::SmallVec;
 
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
@@ -165,10 +165,14 @@ struct ActiveSubmission<A: HalApi> {
 pub enum WaitIdleError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Tried to wait using a submission index from the wrong device. Submission index is from device {0:?}. Called poll on device {1:?}.")]
+    #[error("Tried to poll using a submission index from the wrong device. Submission index is from device {0:?}. Called poll on device {1:?}.")]
     WrongSubmissionIndex(id::QueueId, id::DeviceId),
-    #[error("GPU got stuck :(")]
-    StuckGpu,
+    #[error("Tried to wait for a submission when the NON_ZERO_POLL_TIMEOUT feature was not enabled on the device")]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error("Timeout of {0:?} exceededs maximum timeout of u32::MAX milliseconds.")]
+    ExcessiveTimeout(Duration),
+    #[error("Failed to wait for GPU idle. Timeout of {:?} exceeded", wgt::PollInfo::<()>::DEFAULT_TIMEOUT)]
+    GpuWaitForIdleTimeout,
 }
 
 /// Resource tracking for a device.

@@ -111,8 +111,8 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // `Maintain::Wait` will cause the thread to wait on native but not on WebGpu.
     context
         .device
-        .poll(wgpu::Maintain::wait())
-        .panic_on_timeout();
+        .poll(wgpu::PollInfo::wait())
+        .panic_on_incomplete();
     log::info!("Device polled.");
     // Now we await the receiving and panic if anything went wrong because we're lazy.
     receiver.recv_async().await.unwrap().unwrap();

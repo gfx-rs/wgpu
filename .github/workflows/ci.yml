@@ -347,7 +347,6 @@ jobs:
     
     name: Test WebAssembly
     runs-on: ubuntu-latest
-    needs: [check]
 
     steps:
       - name: checkout repo

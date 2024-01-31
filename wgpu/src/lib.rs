@@ -99,14 +99,14 @@ pub use wgt::{
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
-    InstanceFlags, Limits, MaintainResult, MultisampleState, Origin2d, Origin3d,
-    PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
-    PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
-    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
-    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
+    InstanceFlags, Limits, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes,
+    PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp,
+    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
+    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
+    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SubmissionStatus,
     SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
     TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WaitDuration, WasmNotSend,
     WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
     MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
     QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
@@ -1307,11 +1307,12 @@ static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(QuerySetDescriptor<'_>: Send, Sync);
-pub use wgt::Maintain as MaintainBase;
-/// Passed to [`Device::poll`] to control how and if it should block.
-pub type Maintain = wgt::Maintain<SubmissionIndex>;
+pub use wgt::PollInfo as MaintainBase;
+/// Passed to [`Device::poll`] to control the submission to wait for
+/// and how long to wait for it.
+pub type PollInfo = wgt::PollInfo<SubmissionIndex>;
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(Maintain: Send, Sync);
+static_assertions::assert_impl_all!(PollInfo: Send, Sync);
 
 /// Describes a [`TextureView`].
 ///
@@ -2084,7 +2085,7 @@ impl Instance {
 
     /// Polls all devices.
     ///
-    /// If `force_wait` is true and this is not running on the web, then this
+    /// If `force_wait` is true then this
     /// function will block until all in-flight buffers have been mapped and
     /// all submitted commands have finished execution.
     ///
@@ -2095,7 +2096,8 @@ impl Instance {
     /// it. `Queue`s can be shared between threads, and other threads could
     /// submit new work at any time.)
     ///
-    /// On the web, this is a no-op. `Device`s are automatically polled.
+    /// If the feature [`Features::NON_ZERO_POLL_TIMEOUT`] is not enabled on all devices and
+    /// force_wait is true, this will panic.
     ///
     /// [`Queue`s]: Queue
     pub fn poll_all(&self, force_wait: bool) -> bool {
@@ -2315,7 +2317,7 @@ impl Adapter {
 }
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
+    /// Check for resource cleanups and mapping callbacks. Will behave acording to [`PollInfo`]
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -2324,8 +2326,8 @@ impl Device {
     /// other threads could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
-        DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
+    pub fn poll(&self, poll_info: PollInfo) -> SubmissionStatus {
+        DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), poll_info)
     }
 
     /// The features which can be used on this device.

@@ -3,12 +3,12 @@
 use js_sys::Promise;
 use std::{
     any::Any,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fmt,
     future::Future,
     marker::PhantomData,
     num::NonZeroU64,
-    ops::Range,
+    ops::{Deref, DerefMut, Range},
     pin::Pin,
     rc::Rc,
     sync::atomic::{AtomicU64, Ordering},
@@ -61,6 +61,20 @@ pub(crate) struct Sendable<T>(T);
 unsafe impl<T> Send for Sendable<T> {}
 #[cfg(send_sync)]
 unsafe impl<T> Sync for Sendable<T> {}
+
+impl<T> Deref for Sendable<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for Sendable<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct Identified<T>(std::num::NonZeroU64, PhantomData<T>);
@@ -809,17 +823,20 @@ fn future_request_device(
     result: JsFutureResult,
 ) -> Result<
     (
-        Identified<web_sys::GpuDevice>,
-        Sendable<web_sys::GpuDevice>,
-        Identified<web_sys::GpuQueue>,
-        Sendable<web_sys::GpuQueue>,
+        Identified<Rc<WebGPUDevice>>,
+        Sendable<Rc<WebGPUDevice>>,
+        Identified<Rc<WebGPUDevice>>,
+        Sendable<Rc<WebGPUDevice>>,
     ),
     crate::RequestDeviceError,
 > {
     result
         .map(|js_value| {
-            let (device_id, device_data) = create_identified(web_sys::GpuDevice::from(js_value));
-            let (queue_id, queue_data) = create_identified(device_data.0.queue());
+            let device = web_sys::GpuDevice::from(js_value);
+            let wrapped = WebGPUDevice::new(device);
+
+            let (device_id, device_data) = create_identified(wrapped.clone());
+            let (queue_id, queue_data) = create_identified(wrapped);
 
             (device_id, device_data, queue_id, queue_data)
         })
@@ -838,46 +855,55 @@ fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
     }
 }
 
-/// Calls `callback(success_value)` when the promise completes successfully, calls `callback(failure_value)`
-/// when the promise completes unsuccessfully.
-fn register_then_closures<F, T>(promise: &Promise, callback: F, success_value: T, failure_value: T)
-where
-    F: FnOnce(T) + 'static,
-    T: 'static,
-{
-    // Both the 'success' and 'rejected' closures need access to callback, but only one
-    // of them will ever run. We have them both hold a reference to a `Rc<RefCell<Option<impl FnOnce...>>>`,
-    // and then take ownership of callback when invoked.
-    //
-    // We also only need Rc's because these will only ever be called on our thread.
-    //
-    // We also store the actual closure types inside this Rc, as the closures need to be kept alive
-    // until they are actually called by the callback. It is valid to drop a closure inside of a callback.
-    // This allows us to keep the closures alive without leaking them.
-    let rc_callback: Rc<RefCell<Option<(_, _, F)>>> = Rc::new(RefCell::new(None));
+trait PromiseExt {
+    /// Calls `callback(success_value)` when the promise completes successfully, calls `callback(failure_value)`
+    /// when the promise completes unsuccessfully.
+    fn map<F, T>(&self, success_value: T, failure_value: T, callback: F)
+    where
+        F: FnOnce(T) + 'static,
+        T: 'static;
+}
 
-    let rc_callback_clone1 = rc_callback.clone();
-    let rc_callback_clone2 = rc_callback.clone();
-    let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
-        let (success_closure, rejection_closure, callback) =
-            rc_callback_clone1.borrow_mut().take().unwrap();
-        callback(success_value);
-        // drop the closures, including ourselves, which will free any captured memory.
-        drop((success_closure, rejection_closure));
-    });
-    let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
-        let (success_closure, rejection_closure, callback) =
-            rc_callback_clone2.borrow_mut().take().unwrap();
-        callback(failure_value);
-        // drop the closures, including ourselves, which will free any captured memory.
-        drop((success_closure, rejection_closure));
-    });
+impl PromiseExt for Promise {
+    fn map<F, T>(&self, success_value: T, failure_value: T, callback: F)
+    where
+        F: FnOnce(T) + 'static,
+        T: 'static,
+    {
+        // Both the 'success' and 'rejected' closures need access to callback, but only one
+        // of them will ever run. We have them both hold a reference to a `Rc<RefCell<Option<impl FnOnce...>>>`,
+        // and then take ownership of callback when invoked.
+        //
+        // We also only need Rc's because these will only ever be called on our thread.
+        //
+        // We also store the actual closure types inside this Rc, as the closures need to be kept alive
+        // until they are actually called by the callback. It is valid to drop a closure inside of a callback.
+        // This allows us to keep the closures alive without leaking them.
+        let rc_callback: Rc<RefCell<Option<(_, _, F)>>> = Rc::new(RefCell::new(None));
 
-    // Calling then before setting the value in the Rc seems like a race, but it isn't
-    // because the promise callback will run on this thread, so there is no race.
-    let _ = promise.then2(&closure_success, &closure_rejected);
+        let rc_callback_clone1 = rc_callback.clone();
+        let rc_callback_clone2 = rc_callback.clone();
+        let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
+            let (success_closure, rejection_closure, callback) =
+                rc_callback_clone1.borrow_mut().take().unwrap();
+            callback(success_value);
+            // drop the closures, including ourselves, which will free any captured memory.
+            drop((success_closure, rejection_closure));
+        });
+        let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
+            let (success_closure, rejection_closure, callback) =
+                rc_callback_clone2.borrow_mut().take().unwrap();
+            callback(failure_value);
+            // drop the closures, including ourselves, which will free any captured memory.
+            drop((success_closure, rejection_closure));
+        });
 
-    *rc_callback.borrow_mut() = Some((closure_success, closure_rejected, callback));
+        // Calling then before setting the value in the Rc seems like a race, but it isn't
+        // because the promise callback will run on this thread, so there is no race.
+        let _ = self.then2(&closure_success, &closure_rejected);
+
+        *rc_callback.borrow_mut() = Some((closure_success, closure_rejected, callback));
+    }
 }
 
 impl ContextWebGpu {
@@ -988,13 +1014,54 @@ pub fn get_browser_gpu_property() -> Option<web_sys::Gpu> {
     }
 }
 
+#[derive(Debug)]
+pub struct WebGPUDevice {
+    device: web_sys::GpuDevice,
+    queue: web_sys::GpuQueue,
+    next_submission_index: Cell<u64>,
+    finished_submission_index: Cell<u64>,
+}
+
+impl WebGPUDevice {
+    fn new(device: web_sys::GpuDevice) -> Rc<Self> {
+        Rc::new(Self {
+            queue: device.queue(),
+            device,
+            next_submission_index: Cell::new(0),
+            finished_submission_index: Cell::new(0),
+        })
+    }
+
+    fn register_new_submission(self: &Rc<Self>) -> u64 {
+        let submission_index = self.next_submission_index.get();
+        self.next_submission_index.set(submission_index + 1);
+
+        let self_clone = Rc::clone(self);
+
+        // Register a promise on submitted work done which will update the finished submission index
+        // when the promise resolves.
+        self.queue
+            .on_submitted_work_done()
+            .map(true, false, move |success| {
+                if success {
+                    self_clone.finished_submission_index.set(submission_index);
+                } else {
+                    // TODO: Handle submission failure
+                    unimplemented!("Handle queue submission failure");
+                }
+            });
+
+        submission_index
+    }
+}
+
 impl crate::context::Context for ContextWebGpu {
     type AdapterId = Identified<web_sys::GpuAdapter>;
     type AdapterData = Sendable<web_sys::GpuAdapter>;
-    type DeviceId = Identified<web_sys::GpuDevice>;
-    type DeviceData = Sendable<web_sys::GpuDevice>;
-    type QueueId = Identified<web_sys::GpuQueue>;
-    type QueueData = Sendable<web_sys::GpuQueue>;
+    type DeviceId = Identified<Rc<WebGPUDevice>>;
+    type DeviceData = Sendable<Rc<WebGPUDevice>>;
+    type QueueId = Identified<Rc<WebGPUDevice>>;
+    type QueueData = Sendable<Rc<WebGPUDevice>>;
     type ShaderModuleId = Identified<web_sys::GpuShaderModule>;
     type ShaderModuleData = Sendable<web_sys::GpuShaderModule>;
     type BindGroupLayoutId = Identified<web_sys::GpuBindGroupLayout>;
@@ -1034,7 +1101,7 @@ impl crate::context::Context for ContextWebGpu {
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
     type SubmissionIndex = Unused;
-    type SubmissionIndexData = ();
+    type SubmissionIndexData = u64;
 
     type RequestAdapterFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -1326,8 +1393,10 @@ impl crate::context::Context for ContextWebGpu {
             wgt::CompositeAlphaMode::PreMultiplied => web_sys::GpuCanvasAlphaMode::Premultiplied,
             _ => web_sys::GpuCanvasAlphaMode::Opaque,
         };
-        let mut mapped =
-            web_sys::GpuCanvasConfiguration::new(&device_data.0, map_texture_format(config.format));
+        let mut mapped = web_sys::GpuCanvasConfiguration::new(
+            &device_data.device,
+            map_texture_format(config.format),
+        );
         mapped.usage(config.usage.bits());
         mapped.alpha_mode(alpha_mode);
         let mapped_view_formats = config
@@ -1375,7 +1444,7 @@ impl crate::context::Context for ContextWebGpu {
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
     ) -> wgt::Features {
-        map_wgt_features(device_data.0.features())
+        map_wgt_features(device_data.device.features())
     }
 
     fn device_limits(
@@ -1383,7 +1452,7 @@ impl crate::context::Context for ContextWebGpu {
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
     ) -> wgt::Limits {
-        map_wgt_limits(device_data.0.limits())
+        map_wgt_limits(device_data.device.limits())
     }
 
     fn device_downlevel_properties(
@@ -1487,7 +1556,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             descriptor.label(label);
         }
-        create_identified(device_data.0.create_shader_module(&descriptor))
+        create_identified(device_data.device.create_shader_module(&descriptor))
     }
 
     unsafe fn device_create_shader_module_spirv(
@@ -1596,7 +1665,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_bind_group_layout(&mapped_desc))
+        create_identified(device_data.device.create_bind_group_layout(&mapped_desc))
     }
 
     fn device_create_bind_group(
@@ -1656,7 +1725,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_bind_group(&mapped_desc))
+        create_identified(device_data.device.create_bind_group(&mapped_desc))
     }
 
     fn device_create_pipeline_layout(
@@ -1678,7 +1747,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_pipeline_layout(&mapped_desc))
+        create_identified(device_data.device.create_pipeline_layout(&mapped_desc))
     }
 
     fn device_create_render_pipeline(
@@ -1778,7 +1847,7 @@ impl crate::context::Context for ContextWebGpu {
         let mapped_primitive = map_primitive_state(&desc.primitive);
         mapped_desc.primitive(&mapped_primitive);
 
-        create_identified(device_data.0.create_render_pipeline(&mapped_desc))
+        create_identified(device_data.device.create_render_pipeline(&mapped_desc))
     }
 
     fn device_create_compute_pipeline(
@@ -1806,7 +1875,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_compute_pipeline(&mapped_desc))
+        create_identified(device_data.device.create_compute_pipeline(&mapped_desc))
     }
 
     fn device_create_buffer(
@@ -1822,7 +1891,7 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.label(label);
         }
         create_identified(WebBuffer::new(
-            device_data.0.create_buffer(&mapped_desc),
+            device_data.device.create_buffer(&mapped_desc),
             desc,
         ))
     }
@@ -1850,7 +1919,7 @@ impl crate::context::Context for ContextWebGpu {
             .map(|format| JsValue::from(map_texture_format(*format)))
             .collect::<js_sys::Array>();
         mapped_desc.view_formats(&mapped_view_formats);
-        create_identified(device_data.0.create_texture(&mapped_desc))
+        create_identified(device_data.device.create_texture(&mapped_desc))
     }
 
     fn device_create_sampler(
@@ -1876,7 +1945,11 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_sampler_with_descriptor(&mapped_desc))
+        create_identified(
+            device_data
+                .device
+                .create_sampler_with_descriptor(&mapped_desc),
+        )
     }
 
     fn device_create_query_set(
@@ -1894,7 +1967,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_query_set(&mapped_desc))
+        create_identified(device_data.device.create_query_set(&mapped_desc))
     }
 
     fn device_create_command_encoder(
@@ -1909,7 +1982,7 @@ impl crate::context::Context for ContextWebGpu {
         }
         create_identified(
             device_data
-                .0
+                .device
                 .create_command_encoder_with_descriptor(&mapped_desc),
         )
     }
@@ -1938,7 +2011,11 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.stencil_read_only(ds.stencil_read_only);
         }
         mapped_desc.sample_count(desc.sample_count);
-        create_identified(device_data.0.create_render_bundle_encoder(&mapped_desc))
+        create_identified(
+            device_data
+                .device
+                .create_render_bundle_encoder(&mapped_desc),
+        )
     }
 
     fn device_drop(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
@@ -1946,7 +2023,7 @@ impl crate::context::Context for ContextWebGpu {
     }
 
     fn device_destroy(&self, _buffer: &Self::DeviceId, device_data: &Self::DeviceData) {
-        device_data.0.destroy();
+        device_data.device.destroy();
     }
 
     fn device_mark_lost(
@@ -1976,11 +2053,37 @@ impl crate::context::Context for ContextWebGpu {
     fn device_poll(
         &self,
         _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
-        _maintain: crate::Maintain,
-    ) -> crate::MaintainResult {
-        // Device is polled automatically
-        crate::MaintainResult::SubmissionQueueEmpty
+        device_data: &Self::DeviceData,
+        poll_info: crate::PollInfo,
+    ) -> crate::SubmissionStatus {
+        if !poll_info.is_poll() {
+            panic!("Tried to wait for a submission when the NON_ZERO_POLL_TIMEOUT feature was not enabled on the device");
+        }
+
+        let finished_submission_index = device_data.finished_submission_index.get();
+        let Some(previous_submission_index) = device_data.next_submission_index.get().checked_sub(1) else {
+            // There have never been any submissions
+            return crate::SubmissionStatus::QueueEmpty;
+        };
+
+        if finished_submission_index == previous_submission_index {
+            // This covers the poll_info.submission_index == None case, as we are "fully caught up"
+            return crate::SubmissionStatus::QueueEmpty;
+        }
+
+        let polled_submission_index: u64 = *poll_info
+            .submission_index
+            .expect("Unreachable; see above comment")
+            .1
+            .as_ref()
+            .downcast_ref()
+            .unwrap();
+
+        if finished_submission_index >= polled_submission_index {
+            crate::SubmissionStatus::Complete
+        } else {
+            crate::SubmissionStatus::Incomplete
+        }
     }
 
     fn device_on_uncaptured_error(
@@ -1994,7 +2097,7 @@ impl crate::context::Context for ContextWebGpu {
             handler(error);
         }) as Box<dyn FnMut(_)>);
         device_data
-            .0
+            .device
             .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
         // TODO: This will leak the memory associated with the error handler by default.
         f.forget();
@@ -2006,7 +2109,7 @@ impl crate::context::Context for ContextWebGpu {
         device_data: &Self::DeviceData,
         filter: crate::ErrorFilter,
     ) {
-        device_data.0.push_error_scope(match filter {
+        device_data.device.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => web_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => web_sys::GpuErrorFilter::Validation,
             crate::ErrorFilter::Internal => web_sys::GpuErrorFilter::Internal,
@@ -2018,7 +2121,7 @@ impl crate::context::Context for ContextWebGpu {
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
     ) -> Self::PopErrorScopeFuture {
-        let error_promise = device_data.0.pop_error_scope();
+        let error_promise = device_data.device.pop_error_scope();
         MakeSendFuture::new(
             wasm_bindgen_futures::JsFuture::from(error_promise),
             future_pop_error_scope,
@@ -2041,7 +2144,7 @@ impl crate::context::Context for ContextWebGpu {
 
         buffer_data.0.set_mapped_range(range);
 
-        register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
+        map_promise.map(Ok(()), Err(crate::BufferAsyncError), callback);
     }
 
     fn buffer_get_mapped_range(
@@ -2562,7 +2665,7 @@ impl crate::context::Context for ContextWebGpu {
         );
         */
         queue_data
-            .0
+            .queue
             .write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
                 &buffer_data.0.buffer,
                 offset as f64,
@@ -2671,7 +2774,7 @@ impl crate::context::Context for ContextWebGpu {
         );
         */
         queue_data
-            .0
+            .queue
             .write_texture_with_buffer_source_and_gpu_extent_3d_dict(
                 &map_texture_copy_view(texture),
                 &js_sys::Uint8Array::from(data).buffer(),
@@ -2689,7 +2792,7 @@ impl crate::context::Context for ContextWebGpu {
         size: wgt::Extent3d,
     ) {
         queue_data
-            .0
+            .queue
             .copy_external_image_to_texture_with_gpu_extent_3d_dict(
                 &map_external_texture_copy_view(source),
                 &map_tagged_texture_copy_view(dest),
@@ -2707,9 +2810,12 @@ impl crate::context::Context for ContextWebGpu {
             .map(|(_, data)| data.0)
             .collect::<js_sys::Array>();
 
-        queue_data.0.submit(&temp_command_buffers);
+        queue_data.queue.submit(&temp_command_buffers);
 
-        (Unused, ())
+        // Bump submission index and register callbacks
+        let submission_index = queue_data.register_new_submission();
+
+        (Unused, submission_index)
     }
 
     fn queue_get_timestamp_period(
@@ -2724,10 +2830,13 @@ impl crate::context::Context for ContextWebGpu {
     fn queue_on_submitted_work_done(
         &self,
         _queue: &Self::QueueId,
-        _queue_data: &Self::QueueData,
-        _callback: crate::context::SubmittedWorkDoneCallback,
+        queue_data: &Self::QueueData,
+        callback: crate::context::SubmittedWorkDoneCallback,
     ) {
-        unimplemented!()
+        let promise = queue_data.queue.on_submitted_work_done();
+
+        // TODO: The api cannot deal with promise rejection.
+        promise.map((), (), |()| callback());
     }
 
     fn device_start_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
