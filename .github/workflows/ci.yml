@@ -14,6 +14,9 @@ env:
 
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
   VULKAN_SDK_VERSION: "1.3.268"
+  # Sourced from https://vulkan.lunarg.com/sdk/home#mac
+  VULKAN_SDK_MAC_VERSION: "1.3.268.1"
+
   # Sourced from https://www.nuget.org/packages/Microsoft.Direct3D.WARP
   WARP_VERSION: "1.0.8"
 
@@ -391,7 +394,6 @@ jobs:
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [check]
 
     steps:
       - name: checkout repo
@@ -461,6 +463,38 @@ jobs:
           # We need to use cygpath to convert PWD to a windows path as we're using bash.
           echo "VK_DRIVER_FILES=`cygpath --windows $PWD/mesa/lvp_icd.x86_64.json`" >> "$GITHUB_ENV"
           echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+
+      - name: (mac) install vulkan sdk
+        if: matrix.os == 'macos-14'
+        shell: bash
+        run: |
+          set -e
+
+          curl -L --retry 5 https://sdk.lunarg.com/sdk/download/$VULKAN_SDK_MAC_VERSION/mac/vulkansdk-macos-$VULKAN_SDK_MAC_VERSION.dmg -o vulkansdk-macos-$VULKAN_SDK_MAC_VERSION.dmg
+          
+          # This always gets mounted with the name the dmg was created with, so renaming the file locally doesn't matter.
+          hdiutil mount vulkansdk-macos-$VULKAN_SDK_MAC_VERSION.dmg
+
+          ls /Volumes
+          sudo /Volumes/vulkansdk-macos-$VULKAN_SDK_MAC_VERSION/InstallVulkan.app/Contents/MacOS/InstallVulkan --root ~/VulkanSDK/$VULKAN_SDK_MAC_VERSION --accept-licenses --default-answer --confirm-command install
+
+          hdiutil unmount /Volumes/vulkansdk-macos-$VULKAN_SDK_MAC_VERSION
+
+          VULKAN_SDK="~/VulkanSDK/$VULKAN_SDK_MAC_VERSION/macOS"
+          echo VULKAN_SDK="$VULKAN_SDK" >> "$GITHUB_ENV"
+          echo $VULKAN_SDK/bin >> "$GITHUB_PATH"
+          echo DYLD_LIBRARY_PATH="$VULKAN_SDK/lib:${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+          echo VK_ADD_LAYER_PATH="$VULKAN_SDK/share/vulkan/explicit_layer.d" >> "$GITHUB_ENV"
+          echo VK_ICD_FILENAMES="$VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json" >> "$GITHUB_ENV"
+          echo VK_DRIVER_FILES="$VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json" >> "$GITHUB_ENV"
+
+      - name: (mac) check vulkan sdk
+        if: matrix.os == 'macos-14'
+        shell: bash
+        run: |
+          set -e
+
+          ~/VulkanSDK/$VULKAN_SDK_MAC_VERSION/macOS/bin/vulkaninfo
 
       - name: (linux) install vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
