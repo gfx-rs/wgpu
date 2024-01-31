@@ -2610,27 +2610,19 @@ impl<'a, W: Write> Writer<'a, W> {
                 level,
                 depth_ref,
             } => {
-                let dim = match *ctx.resolve_type(image, &self.module.types) {
-                    TypeInner::Image { dim, .. } => dim,
+                let (dim, class) = match *ctx.resolve_type(image, &self.module.types) {
+                    TypeInner::Image { dim, class, .. } => (dim, class),
                     _ => unreachable!(),
                 };
 
                 if dim == crate::ImageDimension::Cube
                     && array_index.is_some()
-                    && depth_ref.is_some()
+                    && matches!(class, crate::ImageClass::Depth { .. })
+                    && matches!(level, crate::SampleLevel::Gradient { .. })
                 {
-                    match level {
-                        crate::SampleLevel::Zero
-                        | crate::SampleLevel::Exact(_)
-                        | crate::SampleLevel::Gradient { .. }
-                        | crate::SampleLevel::Bias(_) => {
-                            return Err(Error::Custom(String::from(
-                                "gsamplerCubeArrayShadow isn't supported in textureGrad, \
-                                 textureLod or texture with bias",
-                            )))
-                        }
-                        crate::SampleLevel::Auto => {}
-                    }
+                    return Err(Error::Custom(String::from(
+                        "samplerCubeArrayShadow isn't supported in textureGrad",
+                    )));
                 }
 
                 // textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL.
@@ -2639,10 +2631,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     || dim == crate::ImageDimension::Cube)
                     && depth_ref.is_some()
                     && gather.is_none()
-                    && !self
-                        .options
-                        .writer_flags
-                        .contains(WriterFlags::TEXTURE_SHADOW_LOD);
+                    && !self.features.contains(Features::TEXTURE_SHADOW_LOD);
 
                 //Write the function to be used depending on the sample level
                 let fun_name = match level {
