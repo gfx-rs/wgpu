@@ -166,6 +166,7 @@ optional = true
 [dependencies]
 arrayvec.workspace = true
 cfg-if.workspace = true
+document-features.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true

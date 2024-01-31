@@ -101,6 +101,7 @@ bit-vec = "0.6"
 bitflags = "2"
 bytemuck = { version = "1.14", optional = true }
 codespan-reporting = "0.11"
+document-features.workspace = true
 indexmap = "2"
 log = "0.4"
 once_cell = "1"
