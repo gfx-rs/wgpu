@@ -736,6 +736,7 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("cubeArrayShadow", Targets::GLSL),
+        ("sample-cube-array-depth-lod", Targets::GLSL),
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
