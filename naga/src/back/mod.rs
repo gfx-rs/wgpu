@@ -11,6 +11,8 @@ pub mod glsl;
 pub mod hlsl;
 #[cfg(feature = "msl-out")]
 pub mod msl;
+#[cfg(feature = "rust-out")]
+pub mod rust;
 #[cfg(feature = "spv-out")]
 pub mod spv;
 #[cfg(feature = "wgsl-out")]
