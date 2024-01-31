@@ -2266,8 +2266,8 @@ impl Global {
         }
     }
 
-    // This closure will be called exactly once during "lose the device"
-    // or when the device is dropped, if it was never lost.
+    // This closure will be called exactly once during "lose the device",
+    // or when it is replaced.
     pub fn device_set_device_lost_closure<A: HalApi>(
         &self,
         device_id: DeviceId,
@@ -2277,6 +2277,12 @@ impl Global {
 
         if let Ok(device) = hub.devices.get(device_id) {
             let mut life_tracker = device.lock_life();
+            if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
+                // It's important to not hold the lock while calling the closure.
+                drop(life_tracker);
+                existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
+                life_tracker = device.lock_life();
+            }
             life_tracker.device_lost_closure = Some(device_lost_closure);
         }
     }
