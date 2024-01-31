@@ -82,6 +82,9 @@ Bottom level categories:
 #### DX12
 - Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
 
+#### OpenGL
+- Fix internal format for the `Etc2Rgba8Unorm` format. By @andristarr in [#5178](https://github.com/gfx-rs/wgpu/pull/5178)
+
 #### `glsl-in`
 
 - Fix code generation from nested loops. By @cwfitzgerald and @teoxoy in [#5311](https://github.com/gfx-rs/wgpu/pull/5311)
