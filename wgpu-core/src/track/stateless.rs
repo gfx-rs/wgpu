@@ -8,10 +8,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use crate::{
-    hal_api::HalApi, id::Id, resource::Resource, resource_log, storage::Storage,
-    track::ResourceMetadata,
-};
+use crate::{id::Id, resource::Resource, resource_log, storage::Storage, track::ResourceMetadata};
 
 use super::ResourceTracker;
 
@@ -73,11 +70,11 @@ impl<T: Resource> StatelessBindGroupSate<T> {
 
 /// Stores all resource state within a command buffer or device.
 #[derive(Debug)]
-pub(crate) struct StatelessTracker<A: HalApi, T: Resource> {
-    metadata: ResourceMetadata<A, T>,
+pub(crate) struct StatelessTracker<T: Resource> {
+    metadata: ResourceMetadata<T>,
 }
 
-impl<A: HalApi, T: Resource> ResourceTracker<T> for StatelessTracker<A, T> {
+impl<T: Resource> ResourceTracker<T> for StatelessTracker<T> {
     /// Try to remove the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
@@ -120,7 +117,7 @@ impl<A: HalApi, T: Resource> ResourceTracker<T> for StatelessTracker<A, T> {
     }
 }
 
-impl<A: HalApi, T: Resource> StatelessTracker<A, T> {
+impl<T: Resource> StatelessTracker<T> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
