@@ -352,9 +352,9 @@ pub(crate) struct RenderBundleScope<A: HalApi> {
     pub buffers: RwLock<BufferUsageScope<A>>,
     pub textures: RwLock<TextureUsageScope<A>>,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
-    pub bind_groups: RwLock<StatelessTracker<A, binding_model::BindGroup<A>>>,
-    pub render_pipelines: RwLock<StatelessTracker<A, pipeline::RenderPipeline<A>>>,
-    pub query_sets: RwLock<StatelessTracker<A, resource::QuerySet<A>>>,
+    pub bind_groups: RwLock<StatelessTracker<binding_model::BindGroup<A>>>,
+    pub render_pipelines: RwLock<StatelessTracker<pipeline::RenderPipeline<A>>>,
+    pub query_sets: RwLock<StatelessTracker<resource::QuerySet<A>>>,
 }
 
 impl<A: HalApi> RenderBundleScope<A> {
@@ -489,13 +489,13 @@ where
 pub(crate) struct Tracker<A: HalApi> {
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
-    pub views: StatelessTracker<A, resource::TextureView<A>>,
-    pub samplers: StatelessTracker<A, resource::Sampler<A>>,
-    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>>,
-    pub compute_pipelines: StatelessTracker<A, pipeline::ComputePipeline<A>>,
-    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>>,
-    pub bundles: StatelessTracker<A, command::RenderBundle<A>>,
-    pub query_sets: StatelessTracker<A, resource::QuerySet<A>>,
+    pub views: StatelessTracker<resource::TextureView<A>>,
+    pub samplers: StatelessTracker<resource::Sampler<A>>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
+    pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline<A>>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
+    pub bundles: StatelessTracker<command::RenderBundle<A>>,
+    pub query_sets: StatelessTracker<resource::QuerySet<A>>,
 }
 
 impl<A: HalApi> Tracker<A> {
