@@ -104,7 +104,7 @@ pub enum Backend {
     Metal = 2,
     /// Direct3D-12 (Windows)
     Dx12 = 3,
-    /// OpenGL ES-3 (Linux, Android, WebGL, Windows, MacOS via Angle)
+    /// OpenGL 3.3+ (Windows), OpenGL ES 3.0+ (Linux, Android, MacOS via Angle), and WebGL2
     Gl = 4,
     /// WebGPU in the browser
     BrowserWebGpu = 5,
