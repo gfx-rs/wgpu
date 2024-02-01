@@ -115,3 +115,22 @@ impl crate::TextureCopy {
         self.size = self.size.min(&max_src_size).min(&max_dst_size);
     }
 }
+
+pub(crate) struct RequestedValidation {
+    pub gpu_based_validation: bool,
+}
+
+impl RequestedValidation {
+    pub(crate) fn from_flags(instance_flags: wgt::InstanceFlags) -> Option<Self> {
+        let any_validation_requested = instance_flags
+            .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION);
+        if any_validation_requested {
+            Some(Self {
+                gpu_based_validation: instance_flags
+                    .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION),
+            })
+        } else {
+            None
+        }
+    }
+}
