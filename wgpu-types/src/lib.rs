@@ -98,13 +98,13 @@ pub const QUERY_SIZE: u32 = 8;
 pub enum Backend {
     /// Dummy backend, used for testing.
     Empty = 0,
-    /// Vulkan API
+    /// Vulkan API (Windows, Linux, Android, MacOS via `vulkan-portability`/MoltenVK)
     Vulkan = 1,
     /// Metal API (Apple platforms)
     Metal = 2,
     /// Direct3D-12 (Windows)
     Dx12 = 3,
-    /// OpenGL ES-3 (Linux, Android)
+    /// OpenGL 3.3+ (Windows), OpenGL ES 3.0+ (Linux, Android, MacOS via Angle), and WebGL2
     Gl = 4,
     /// WebGPU in the browser
     BrowserWebGpu = 5,
@@ -112,7 +112,7 @@ pub enum Backend {
 
 impl Backend {
     /// Returns the string name of the backend.
-    pub fn to_str(self) -> &'static str {
+    pub const fn to_str(self) -> &'static str {
         match self {
             Backend::Empty => "empty",
             Backend::Vulkan => "vulkan",
@@ -121,6 +121,12 @@ impl Backend {
             Backend::Gl => "gl",
             Backend::BrowserWebGpu => "webgpu",
         }
+    }
+}
+
+impl std::fmt::Display for Backend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.to_str())
     }
 }
 

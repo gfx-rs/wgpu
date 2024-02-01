@@ -183,7 +183,7 @@ pub async fn compare_image_output(
     let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
     let renderer = format!(
         "{}-{}-{}",
-        adapter_info.backend.to_str(),
+        adapter_info.backend,
         sanitize_for_path(&adapter_info.name),
         sanitize_for_path(&adapter_info.driver)
     );
