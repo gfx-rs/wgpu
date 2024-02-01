@@ -904,8 +904,8 @@ bitflags::bitflags! {
         /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
         /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
         const ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER = 1 << 3;
-        /// Enable GPU-based validation. Currently, this only changes behavior on the DX12 and
-        /// Vulkan backends.
+        /// Enable GPU-based validation. Implies [`Self::VALIDATION`]. Currently, this only changes
+        /// behavior on the DX12 and Vulkan backends.
         ///
         /// Supported platforms:
         ///
