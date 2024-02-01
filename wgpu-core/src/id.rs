@@ -19,10 +19,16 @@ pub const EPOCH_MASK: u32 = (1 << (EPOCH_BITS)) - 1;
 
 /// The raw underlying representation of an identifier.
 #[repr(transparent)]
-#[cfg_attr(any(feature = "serde", feature = "trace"), derive(serde::Serialize))]
-#[cfg_attr(any(feature = "serde", feature = "replay"), derive(serde::Deserialize))]
-#[cfg_attr(feature = "trace", serde(into = "SerialId"))]
-#[cfg_attr(feature = "replay", serde(from = "SerialId"))]
+#[cfg_attr(
+    any(feature = "serde", feature = "trace"),
+    derive(serde::Serialize),
+    serde(into = "SerialId")
+)]
+#[cfg_attr(
+    any(feature = "serde", feature = "replay"),
+    derive(serde::Deserialize),
+    serde(from = "SerialId")
+)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RawId(NonZeroId);
 
@@ -129,7 +135,6 @@ enum SerialId {
     Id(Index, Epoch, Backend),
 }
 
-#[cfg(feature = "trace")]
 impl From<RawId> for SerialId {
     fn from(id: RawId) -> Self {
         let (index, epoch, backend) = id.unzip();
@@ -137,7 +142,6 @@ impl From<RawId> for SerialId {
     }
 }
 
-#[cfg(feature = "replay")]
 impl From<SerialId> for RawId {
     fn from(id: SerialId) -> Self {
         match id {
