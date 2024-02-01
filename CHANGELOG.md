@@ -63,6 +63,11 @@ Bottom level categories:
 
 ## v0.19.2 (2024-02-29)
 
+### Added/New Features
+
+#### General
+- `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
+
 ### Bug Fixes
 
 #### General
