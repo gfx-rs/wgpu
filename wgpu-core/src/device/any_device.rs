@@ -92,7 +92,7 @@ impl Drop for AnyDevice {
 
 impl fmt::Debug for AnyDevice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "AnyDevice")
+        write!(f, "AnyDevice<{}>", self.vtable.backend)
     }
 }
 

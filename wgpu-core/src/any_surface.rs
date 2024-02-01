@@ -85,9 +85,7 @@ impl Drop for AnySurface {
 
 impl fmt::Debug for AnySurface {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("AnySurface")
-            .field(&self.vtable.backend)
-            .finish()
+        write!(f, "AnySurface<{}>", self.vtable.backend)
     }
 }
 
