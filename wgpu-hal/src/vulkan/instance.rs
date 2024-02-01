@@ -656,6 +656,27 @@ impl crate::Instance<super::Api> for super::Instance {
         let validation_layer_name =
             CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
         let validation_layer_properties = find_layer(&instance_layers, validation_layer_name);
+        let validation_features_are_enabled = || {
+            validation_layer_properties.is_some().then(|| {
+                let exts = Self::enumerate_instance_extension_properties(
+                    &entry,
+                    Some(validation_layer_name),
+                )?;
+                let mut ext_names = exts
+                    .iter()
+                    .filter_map(|ext| cstr_from_bytes_until_nul(&ext.extension_name));
+                let found =
+                    ext_names.any(|ext_name| ext_name == vk::ExtValidationFeaturesFn::name());
+                Ok(found)
+            })
+        };
+        let requested_validation = crate::auxil::RequestedValidation::from_flags(desc.flags);
+        let should_enable_gpu_based_validation = requested_validation
+            .as_ref()
+            .map_or(false, |rv| rv.gpu_based_validation)
+            && validation_features_are_enabled()
+                .transpose()?
+                .unwrap_or(false);
 
         // Determine if VK_EXT_validation_features is available, so we can enable
         // GPU assisted validation and synchronization validation.
@@ -697,9 +718,7 @@ impl crate::Instance<super::Api> for super::Instance {
         });
 
         // Request validation layer if asked.
-        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION)
-            || should_enable_gpu_based_validation
-        {
+        if requested_validation.is_some() {
             if let Some(layer_properties) = validation_layer_properties {
                 layers.push(validation_layer_name);
 

@@ -136,3 +136,22 @@ pub(crate) fn cstr_from_bytes_until_nul(bytes: &[std::os::raw::c_char]) -> Optio
         None
     }
 }
+
+pub(crate) struct RequestedValidation {
+    pub gpu_based_validation: bool,
+}
+
+impl RequestedValidation {
+    pub(crate) fn from_flags(instance_flags: wgt::InstanceFlags) -> Option<Self> {
+        let any_validation_requested = instance_flags
+            .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION);
+        if any_validation_requested {
+            Some(Self {
+                gpu_based_validation: instance_flags
+                    .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION),
+            })
+        } else {
+            None
+        }
+    }
+}
