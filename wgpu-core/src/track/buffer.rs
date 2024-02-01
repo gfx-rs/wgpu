@@ -20,7 +20,7 @@ use crate::{
     },
 };
 use hal::{BufferBarrier, BufferUses};
-use parking_lot::Mutex;
+use wgs::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 impl ResourceUses for BufferUses {

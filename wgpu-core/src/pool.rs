@@ -5,7 +5,7 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
+use wgs::Mutex;
 
 use crate::{PreHashedKey, PreHashedMap};
 

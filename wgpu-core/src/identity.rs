@@ -1,4 +1,4 @@
-use parking_lot::Mutex;
+use wgs::Mutex;
 use wgt::Backend;
 
 use crate::{

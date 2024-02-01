@@ -119,6 +119,9 @@ pub use wgt::{
 #[doc(inline)]
 pub use ::wgc as core;
 
+#[doc(inline)]
+pub use ::wgs as sync;
+
 /// Re-export of our `wgpu-hal` dependency.
 ///
 ///

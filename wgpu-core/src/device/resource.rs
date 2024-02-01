@@ -36,7 +36,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use wgs::{Mutex, MutexGuard, RwLock};
 
 use smallvec::SmallVec;
 use thiserror::Error;

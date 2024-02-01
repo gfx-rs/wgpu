@@ -1,7 +1,7 @@
 #![allow(unused)]
 
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::cell::UnsafeCell;
+use wgs::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// A guard that provides read access to snatchable data.
 pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);

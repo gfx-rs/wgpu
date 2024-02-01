@@ -19,9 +19,9 @@ use crate::{
 };
 
 use hal::CommandEncoder;
-use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
+use wgs::{Mutex, RwLock};
 use wgt::WasmNotSendSync;
 
 use std::{

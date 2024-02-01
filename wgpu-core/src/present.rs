@@ -30,8 +30,8 @@ use crate::{
 };
 
 use hal::{Queue as _, Surface as _};
-use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
+use wgs::{Mutex, RwLock};
 use wgt::SurfaceStatus as Status;
 
 const FRAME_TIMEOUT_MS: u32 = 1000;

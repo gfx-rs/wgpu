@@ -21,9 +21,9 @@ use crate::{
 };
 use smallvec::SmallVec;
 
-use parking_lot::Mutex;
 use std::sync::Arc;
 use thiserror::Error;
+use wgs::Mutex;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Default)]

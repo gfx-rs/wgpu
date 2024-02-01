@@ -51,7 +51,7 @@ strict_asserts = ["wgt/strict_asserts"]
 serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enable API tracing.
-trace = ["ron", "serde", "naga/serialize"]
+trace = ["ron", "serde", "naga/serialize", "wgs/trace"]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
@@ -104,8 +104,6 @@ codespan-reporting = "0.11"
 indexmap = "2"
 log = "0.4"
 once_cell = "1"
-# parking_lot 0.12 switches from `winapi` to `windows`; permit either
-parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", optional = true }
 ron = { version = "0.8", optional = true }
@@ -127,6 +125,12 @@ version = "0.19.0"
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
+version = "0.19.0"
+default_features = false
+
+[dependencies.wgs]
+package = "wgpu-sync"
+path = "../wgpu-sync"
 version = "0.19.0"
 default_features = false
 

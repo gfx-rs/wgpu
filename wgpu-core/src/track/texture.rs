@@ -35,7 +35,7 @@ use hal::TextureUses;
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
 
-use parking_lot::Mutex;
+use wgs::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};

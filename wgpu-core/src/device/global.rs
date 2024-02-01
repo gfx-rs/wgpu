@@ -20,7 +20,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use hal::Device as _;
-use parking_lot::RwLock;
+use wgs::RwLock;
 
 use wgt::{BufferAddress, TextureFormat};
 

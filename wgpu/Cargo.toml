@@ -83,7 +83,7 @@ serde = ["dep:serde", "wgc/serde"]
 
 ## Allow writing of trace capture files.
 ## See [`Adapter::request_device`].
-trace = ["serde", "wgc/trace"]
+trace = ["serde", "wgc/trace", "wgs/trace"]
 
 ## Allow deserializing of trace capture files that were written with the `trace` feature.
 ## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
@@ -141,6 +141,10 @@ features = ["gles"]
 
 [dependencies.wgt]
 workspace = true
+
+[dependencies.wgs]
+workspace = true
+optional = true
 
 # We need wgpu-hal unless we're targeting the web APIs.
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies]

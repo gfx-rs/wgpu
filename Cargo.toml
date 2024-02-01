@@ -18,6 +18,7 @@ members = [
     "wgpu-info",
     "wgpu-macros",
     "wgpu-types",
+    "wgpu-sync",
     "wgpu",
 ]
 exclude = []
@@ -56,6 +57,11 @@ version = "0.19.0"
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
+version = "0.19.0"
+
+[workspace.dependencies.wgs]
+package = "wgpu-sync"
+path = "./wgpu-sync"
 version = "0.19.0"
 
 [workspace.dependencies.hal]

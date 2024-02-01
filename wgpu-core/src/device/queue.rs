@@ -22,8 +22,8 @@ use crate::{
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
-use parking_lot::Mutex;
 use smallvec::SmallVec;
+use wgs::Mutex;
 
 use std::{
     iter, mem, ptr,

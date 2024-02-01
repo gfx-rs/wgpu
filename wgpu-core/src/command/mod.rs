@@ -30,8 +30,8 @@ use crate::track::{Tracker, UsageScope};
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
 use hal::CommandEncoder as _;
-use parking_lot::Mutex;
 use thiserror::Error;
+use wgs::Mutex;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;

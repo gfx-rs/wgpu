@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use wgs::Mutex;
 
 use crate::{id::Id, resource::Resource, resource_log, storage::Storage, track::ResourceMetadata};
 

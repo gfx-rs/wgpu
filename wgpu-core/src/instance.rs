@@ -13,7 +13,7 @@ use crate::{
     resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use parking_lot::Mutex;
+use wgs::Mutex;
 use wgt::{Backend, Backends, PowerPreference};
 
 use hal::{Adapter as _, Instance as _, OpenDevice};

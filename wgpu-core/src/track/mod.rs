@@ -110,9 +110,9 @@ use crate::{
     storage::Storage,
 };
 
-use parking_lot::RwLock;
 use std::{fmt, ops};
 use thiserror::Error;
+use wgs::RwLock;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
