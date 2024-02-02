@@ -91,7 +91,7 @@ Bottom level categories:
 - `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available
   on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU).
-  By @wumpf in [#](??)
+  By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 
 ### Bug Fixes
 
