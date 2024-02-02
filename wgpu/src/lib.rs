@@ -3490,7 +3490,7 @@ impl CommandEncoder {
     }
 }
 
-/// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
+/// [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
     /// Issue a timestamp command at this point in the queue.
     /// The timestamp will be written to the specified query set, at the specified index.
@@ -3499,6 +3499,11 @@ impl CommandEncoder {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
+    ///
+    /// Attention: Since commands within a command recorder may be reordered,
+    /// there is no strict guarantee that timestamps are taken after all commands
+    /// recorded so far and all before all commands recorded after.
+    /// This may depend both on the backend and the driver.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::command_encoder_write_timestamp(
             &*self.context,

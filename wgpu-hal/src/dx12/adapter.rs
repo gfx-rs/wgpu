@@ -242,6 +242,7 @@ impl super::Adapter {
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
             | wgt::Features::TEXTURE_COMPRESSION_BC
             | wgt::Features::CLEAR_TEXTURE
