@@ -1,7 +1,7 @@
-use crate::back;
 use crate::back::rust::Target;
 use crate::proc::{self, NameKey};
 use crate::ShaderStage;
+use crate::{back, AddressSpace, GlobalVariable};
 use crate::{valid, Binding};
 use crate::{
     Arena, BinaryOperator, Constant, Expression, Function, Handle, Literal, LocalVariable,
@@ -10,7 +10,7 @@ use crate::{
 };
 use crate::{BuiltIn, Interpolation, Sampling};
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::{
     self, token, Attribute, BinOp, Block as SynBlock, Expr, ExprArray, ExprAssign, ExprCall,
@@ -466,6 +466,7 @@ impl Writer {
     fn get_expression_type(
         &mut self,
         types: &UniqueArena<Type>,
+        global_variables: &Arena<GlobalVariable>,
         local_variables: &Arena<LocalVariable>,
         expressions: &Arena<Expression>,
         expr: &Expression,
@@ -484,18 +485,29 @@ impl Writer {
             Expression::Access { base, .. } => {
                 log::trace!("Getting type for access expression");
                 // For Access expressions, the type is the type of the base expression.
-                self.get_expression_type(types, local_variables, expressions, &expressions[*base])
+                self.get_expression_type(
+                    types,
+                    global_variables,
+                    local_variables,
+                    expressions,
+                    &expressions[*base],
+                )
             }
             Expression::Load { pointer } => {
                 // Dereference the pointer to get the expression it refers to.
                 self.get_expression_type(
                     types,
+                    global_variables,
                     local_variables,
                     expressions,
                     &expressions[*pointer],
                 )
             }
-            Expression::GlobalVariable(_handle) => todo!(),
+            Expression::GlobalVariable(handle) => {
+                log::trace!("Getting type for global variable expression");
+                let global_var = &global_variables[*handle];
+                Ok(types[global_var.ty].clone())
+            }
             Expression::LocalVariable(handle) => {
                 log::trace!("Getting type for local variable expression");
                 let local_var = &local_variables[*handle];
@@ -504,7 +516,13 @@ impl Writer {
             Expression::Binary { left, .. } | Expression::Unary { expr: left, .. } => {
                 log::trace!("Getting type for binary or unary expression");
                 // For Binary and Unary expressions, the type is usually the type of the left operand.
-                self.get_expression_type(types, local_variables, expressions, &expressions[*left])
+                self.get_expression_type(
+                    types,
+                    global_variables,
+                    local_variables,
+                    expressions,
+                    &expressions[*left],
+                )
             }
             Expression::Literal(literal) => {
                 log::trace!("Getting type for literal expression");
@@ -564,6 +582,7 @@ impl Writer {
                 match fun {
                     Sin => self.get_expression_type(
                         types,
+                        global_variables,
                         local_variables,
                         expressions,
                         &expressions[*arg],
@@ -574,6 +593,7 @@ impl Writer {
             Expression::Splat { value, .. } => {
                 let ty = self.get_expression_type(
                     types,
+                    global_variables,
                     local_variables,
                     expressions,
                     &expressions[*value],
@@ -617,7 +637,8 @@ impl Writer {
                 let attrs = match arg.binding {
                     Some(Binding::BuiltIn(b)) => {
                         let attr_name = map_builtin_to_rust_gpu(&b);
-                        let tokens = quote!(#attr_name);
+                        let ident = Ident::new(&attr_name, Span::call_site());
+                        let tokens = ident.to_token_stream();
 
                         vec![Attribute {
                             pound_token: token::Pound::default(),
@@ -698,7 +719,18 @@ impl Writer {
                     None => vec![],
                 };
 
-                let arg_name = self.names[&func_ctx.argument_key(index as u32)].clone();
+                // For builtins we need to translate the name so we don't get names like
+                // "gl_Position".
+                let arg_name = match arg.binding {
+                    Some(Binding::BuiltIn(b)) => {
+                        let arg_name = map_builtin_to_rust_gpu(&b);
+                        let k = func_ctx.argument_key(index as u32);
+                        self.names.insert(k, arg_name.to_string());
+                        arg_name.to_string()
+                    }
+                    _ => self.names[&func_ctx.argument_key(index as u32)].clone(),
+                };
+
                 let ty = self.convert_type(&module.types, &arg.ty)?;
 
                 Ok(FnArg::Typed(PatType {
@@ -735,8 +767,6 @@ impl Writer {
                         for (i, member) in members.iter().enumerate() {
                             let member_type = self.convert_type(&module.types, &member.ty)?;
 
-                            //let member_name = member .name .as_ref()
-                            //    .ok_or(WriterError::MissingStructMemberName)?;
                             let member_name =
                                 self.names[&NameKey::StructMember(result.ty, i as u32)].clone();
 
@@ -1403,7 +1433,23 @@ impl Writer {
                 let global_var = &module.global_variables[*handle];
                 log::trace!("Global variable expression: {:?}", global_var);
 
-                let name: String = self.names[&NameKey::GlobalVariable(*handle)].clone();
+                // We need to translate names for builtins.
+                let name = match global_var.space {
+                    AddressSpace::Private => {
+                        log::trace!("Private address space");
+                        let name = match &global_var.name {
+                            Some(name) if name.as_str() == "gl_GlobalInvocationID" => {
+                                "global_invocation_id"
+                            }
+                            Some(x) => todo!("translate global builtin name: {}", x),
+                            None => unreachable!(),
+                        };
+                        let k = NameKey::GlobalVariable(*handle);
+                        self.names.insert(k, name.to_string());
+                        name.to_string()
+                    }
+                    _ => self.names[&NameKey::GlobalVariable(*handle)].clone(),
+                };
 
                 Ok(syn::Expr::Path(ExprPath {
                     attrs: vec![],
@@ -1420,6 +1466,7 @@ impl Writer {
 
                 let base_type = self.get_expression_type(
                     &module.types,
+                    &module.global_variables,
                     local_variables,
                     expressions,
                     &expressions[*base],
@@ -1508,6 +1555,7 @@ impl Writer {
 
                 let base_type = self.get_expression_type(
                     &module.types,
+                    &module.global_variables,
                     local_variables,
                     expressions,
                     &expressions[*base],
@@ -1604,6 +1652,7 @@ impl Writer {
 
                 let ty = self.get_expression_type(
                     &module.types,
+                    &module.global_variables,
                     local_variables,
                     expressions,
                     &expressions[*value],
@@ -1940,6 +1989,7 @@ impl Writer {
 
                 let arg_type = self.get_expression_type(
                     &module.types,
+                    &module.global_variables,
                     local_variables,
                     expressions,
                     &expressions[*arg],
@@ -2112,6 +2162,7 @@ impl Writer {
                         let factor_expr = &expressions[*factor_handle];
                         let ty = self.get_expression_type(
                             &module.types,
+                            &module.global_variables,
                             local_variables,
                             expressions,
                             &expressions[*factor_handle],
@@ -2146,6 +2197,7 @@ impl Writer {
                     });
                     let additional_arg_type = self.get_expression_type(
                         &module.types,
+                        &module.global_variables,
                         local_variables,
                         expressions,
                         &expressions[handle],
@@ -3273,6 +3325,27 @@ mod tests {
         let rust = r#"
             #[spirv(compute(threads(8, 4)))]
             fn main() {
+            }
+        "#;
+
+        assert_correct_translation(ShaderStage::Compute, glsl, rust);
+    }
+
+    #[test]
+    fn test_builtin_translation() {
+        let glsl = r#"
+            #version 450
+            layout(local_size_x = 256) in;
+            void main() {
+                uint idx = gl_GlobalInvocationID.x;
+            }
+        "#;
+
+        let rust = r#"
+            #[spirv(compute(threads(256)))]
+            fn main(#[spirv(global_invocation_id)] global_invocation_id: glam::UVec3) {
+                let mut idx: u32;
+                idx = global_invocation_id.x;
             }
         "#;
 
