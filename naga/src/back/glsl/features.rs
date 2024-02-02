@@ -484,37 +484,35 @@ impl<'a, W> Writer<'a, W> {
                         class: ImageClass::Depth { .. },
                     } = *info[image].ty.inner_with(&module.types) {
                         let lod = matches!(level, SampleLevel::Zero | SampleLevel::Exact(_));
-                        let bias =  matches!(level, SampleLevel::Bias(_));
-                        let cube =  dim == ImageDimension::Cube;
+                        let bias = matches!(level, SampleLevel::Bias(_));
+                        let cube = dim == ImageDimension::Cube;
                         let array2d = dim == ImageDimension::D2 && arrayed;
+                        let gles = self.options.version.is_es();
 
-                        // We have an workaround for cases other than samplerCubeArrayShadow,
+                        // We have a workaround of using `textureGrad` instead of `textureLod` if the LOD is zero,
                         // so we don't *need* this extension for those cases.
-                        // But if we we're explicitly allowed to use it (`WriterFlags::TEXTURE_SHADOW_LOD`),
-                        // we prefer it over the workaround.
-                        let use_grad_workaround = !(
-                            self.options.writer_flags.contains(WriterFlags::TEXTURE_SHADOW_LOD)
-                            || (cube && arrayed)
-                        );
+                        // But if we're explicitly allowed to use the extension (`WriterFlags::TEXTURE_SHADOW_LOD`),
+                        // we always use it instead of the workaround.
+                        let grad_workaround_applicable = (array2d || (cube && !arrayed)) && level == SampleLevel::Zero;
+                        let prefer_grad_workaround = grad_workaround_applicable && !self.options.writer_flags.contains(WriterFlags::TEXTURE_SHADOW_LOD);
 
-                        let mut is_used = false;
+                        let mut ext_used = false;
 
                         // float texture(sampler2DArrayShadow sampler, vec4 P [, float bias])
-                        is_used |= array2d && bias && !use_grad_workaround;
-
                         // float texture(samplerCubeArrayShadow sampler, vec4 P, float compare [, float bias])
-                        is_used |= cube && bias;
+                        ext_used |= (array2d || cube && arrayed) && bias;
 
+                        // The non `bias` version of this was standardized in GL 4.3, but never in GLES.
                         // float textureOffset(sampler2DArrayShadow sampler, vec4 P, ivec2 offset [, float bias])
-                        is_used |= array2d && offset.is_some() && !use_grad_workaround;
+                        ext_used |= array2d && (bias || gles) && offset.is_some();
 
                         // float textureLod(sampler2DArrayShadow sampler, vec4 P, float lod)
                         // float textureLodOffset(sampler2DArrayShadow sampler, vec4 P, float lod, ivec2 offset)
                         // float textureLod(samplerCubeShadow sampler, vec4 P, float lod)
                         // float textureLod(samplerCubeArrayShadow sampler, vec4 P, float compare, float lod)
-                        is_used |= (cube || array2d) && lod && !use_grad_workaround;
+                        ext_used |= (cube || array2d) && lod && !prefer_grad_workaround;
 
-                        if is_used {
+                        if ext_used {
                             features.request(Features::TEXTURE_SHADOW_LOD);
                         }
                     }
