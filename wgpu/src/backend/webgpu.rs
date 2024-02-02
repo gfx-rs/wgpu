@@ -2496,10 +2496,10 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_write_timestamp(
         &self,
         _encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
+        _encoder_data: &Self::CommandEncoderData,
         _query_set: &Self::QuerySetId,
-        query_set_data: &Self::QuerySetData,
-        query_index: u32,
+        _query_set_data: &Self::QuerySetData,
+        _query_index: u32,
     ) {
         // Not available on WebGPU.
         // This was part of the spec originally but got removed, see https://github.com/gpuweb/gpuweb/pull/4370
