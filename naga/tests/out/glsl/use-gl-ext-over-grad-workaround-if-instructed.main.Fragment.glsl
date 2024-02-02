@@ -1,4 +1,4 @@
-#version 300 es
+#version 320 es
 #extension GL_EXT_texture_shadow_lod : require
 
 precision highp float;
