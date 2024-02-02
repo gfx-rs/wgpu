@@ -275,10 +275,27 @@ impl Writer {
                 let tokens = match ep.stage {
                     ShaderStage::Vertex => quote!(vertex),
                     ShaderStage::Fragment => quote!(fragment),
-                    ShaderStage::Compute => quote!(compute),
-                };
+                    ShaderStage::Compute => {
+                        if !ep.workgroup_size.is_empty() {
+                            // Add workgroup_size attribute
+                            let x = ep.workgroup_size[0];
+                            let y = ep.workgroup_size[1];
+                            let z = ep.workgroup_size[2];
+                            let lit_x = syn::LitInt::new(&x.to_string(), Span::call_site());
+                            let lit_y = syn::LitInt::new(&y.to_string(), Span::call_site());
+                            let lit_z = syn::LitInt::new(&z.to_string(), Span::call_site());
 
-                // TODO: support workgroup size for compute.
+                            match (x, y, z) {
+                                (1, 1, 1) => quote!(compute(threads(1))),
+                                (_, 1, 1) => quote!(compute(threads(#lit_x))),
+                                (_, _, 1) => quote!(compute(threads(#lit_x, #lit_y))),
+                                (_, _, _) => quote!(compute(threads(#lit_x, #lit_y, #lit_z))),
+                            }
+                        } else {
+                            quote!(compute)
+                        }
+                    }
+                };
 
                 let meta = Meta::List(MetaList {
                     path: Path::from(Ident::new("spirv", Span::call_site())),
@@ -3170,5 +3187,95 @@ mod tests {
         "#;
 
         assert_correct_translation(ShaderStage::Fragment, glsl, rust);
+    }
+
+    #[test]
+    fn test_compute_shader_workgroup_size_x_only() {
+        let glsl = r#"
+            #version 450
+            layout(local_size_x = 32) in;
+            void main() {
+            }
+        "#;
+
+        let rust = r#"
+            #[spirv(compute(threads(32)))]
+            fn main() {
+            }
+        "#;
+
+        assert_correct_translation(ShaderStage::Compute, glsl, rust);
+    }
+
+    #[test]
+    fn test_compute_shader_workgroup_size_xy() {
+        let glsl = r#"
+            #version 450
+            layout(local_size_x = 16, local_size_y = 8) in;
+            void main() {
+            }
+        "#;
+
+        let rust = r#"
+            #[spirv(compute(threads(16, 8)))]
+            fn main() {
+            }
+        "#;
+
+        assert_correct_translation(ShaderStage::Compute, glsl, rust);
+    }
+
+    #[test]
+    fn test_compute_shader_workgroup_size_xyz() {
+        let glsl = r#"
+            #version 450
+            layout(local_size_x = 16, local_size_y = 4, local_size_z = 2) in;
+            void main() {
+            }
+        "#;
+
+        let rust = r#"
+            #[spirv(compute(threads(16, 4, 2)))]
+            fn main() {
+            }
+        "#;
+
+        assert_correct_translation(ShaderStage::Compute, glsl, rust);
+    }
+
+    #[test]
+    fn test_compute_shader_workgroup_size_x_with_trailing_ones() {
+        let glsl = r#"
+            #version 450
+            layout(local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
+            void main() {
+            }
+        "#;
+
+        let rust = r#"
+            #[spirv(compute(threads(16)))]
+            fn main() {
+            }
+        "#;
+
+        assert_correct_translation(ShaderStage::Compute, glsl, rust);
+    }
+
+    #[test]
+    fn test_compute_shader_workgroup_size_xy_with_trailing_one() {
+        let glsl = r#"
+            #version 450
+            layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+            void main() {
+            }
+        "#;
+
+        let rust = r#"
+            #[spirv(compute(threads(8, 4)))]
+            fn main() {
+            }
+        "#;
+
+        assert_correct_translation(ShaderStage::Compute, glsl, rust);
     }
 }
