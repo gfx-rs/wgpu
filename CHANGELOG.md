@@ -89,7 +89,9 @@ Bottom level categories:
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 - `wgpu-types`'s `trace` and `replay` features have been replaced by the `serde` feature. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
-
+- `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available
+  on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU).
+  By @wumpf in [#](??)
 
 ### Bug Fixes
 
