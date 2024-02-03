@@ -5,7 +5,6 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{self, BlasId, TlasId},
-    identity::{GlobalIdentityHandlerFactory, Input},
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
@@ -156,18 +155,18 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn device_create_blas<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
-        id_in: Input<G, BlasId>,
+        id_in: Option<BlasId>,
     ) -> (BlasId, Option<u64>, Option<CreateBlasError>) {
         profiling::scope!("Device::create_blas");
 
         let hub = A::hub(self);
-        let fid = hub.blas_s.prepare::<G>(id_in);
+        let fid = hub.blas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
         let error = loop {
@@ -210,12 +209,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         desc: &resource::TlasDescriptor,
-        id_in: Input<G, TlasId>,
+        id_in: Option<TlasId>,
     ) -> (TlasId, Option<CreateTlasError>) {
         profiling::scope!("Device::create_tlas");
 
         let hub = A::hub(self);
-        let fid = hub.tlas_s.prepare::<G>(id_in);
+        let fid = hub.tlas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
         let error = loop {

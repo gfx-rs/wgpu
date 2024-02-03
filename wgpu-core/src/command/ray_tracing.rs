@@ -3,8 +3,7 @@ use crate::{
     device::queue::TempResource,
     global::Global,
     hal_api::HalApi,
-    id::{BlasId, CommandEncoderId, TlasId},
-    identity::GlobalIdentityHandlerFactory,
+    id::CommandEncoderId,
     init_tracker::MemoryInitKind,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
@@ -32,7 +31,7 @@ use super::BakedCommands;
 // This should be queried from the device, maybe the the hal api should pre aline it, since I am unsure how else we can idiomatically get this value.
 const SCRATCH_BUFFER_ALIGNMENT: u32 = 256;
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_build_acceleration_structures_unsafe_tlas<'a, A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
@@ -1557,7 +1556,7 @@ impl<A: HalApi> BakedCommands<A> {
     // makes sure a blas is build before it is used
     pub(crate) fn validate_blas_actions(
         &mut self,
-        blas_guard: &mut Storage<Blas<A>, BlasId>,
+        blas_guard: &mut Storage<Blas<A>>,
     ) -> Result<(), ValidateBlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_blas_actions");
         let mut built = FastHashSet::default();
@@ -1588,8 +1587,8 @@ impl<A: HalApi> BakedCommands<A> {
     // makes sure a tlas is build before it is used
     pub(crate) fn validate_tlas_actions(
         &mut self,
-        blas_guard: &Storage<Blas<A>, BlasId>,
-        tlas_guard: &mut Storage<Tlas<A>, TlasId>,
+        blas_guard: &Storage<Blas<A>>,
+        tlas_guard: &mut Storage<Tlas<A>>,
     ) -> Result<(), ValidateTlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
         for action in self.tlas_actions.drain(..) {

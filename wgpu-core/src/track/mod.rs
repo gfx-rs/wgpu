@@ -320,7 +320,7 @@ pub(crate) struct BindGroupStates<A: HalApi> {
     pub textures: TextureBindGroupState<A>,
     pub views: StatelessBindGroupSate<resource::TextureView<A>>,
     pub samplers: StatelessBindGroupSate<resource::Sampler<A>>,
-    pub acceleration_structures: StatelessBindGroupSate<id::TlasId, resource::Tlas<A>>,
+    pub acceleration_structures: StatelessBindGroupSate<resource::Tlas<A>>,
 }
 
 impl<A: HalApi> BindGroupStates<A> {
@@ -492,13 +492,15 @@ where
 pub(crate) struct Tracker<A: HalApi> {
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
-    pub views: StatelessTracker<A, id::TextureViewId, resource::TextureView<A>>,
-    pub samplers: StatelessTracker<A, id::SamplerId, resource::Sampler<A>>,
-    pub bind_groups: StatelessTracker<A, id::BindGroupId, binding_model::BindGroup<A>>,
-    pub compute_pipelines: StatelessTracker<A, id::ComputePipelineId, pipeline::ComputePipeline<A>>,
-    pub render_pipelines: StatelessTracker<A, id::RenderPipelineId, pipeline::RenderPipeline<A>>,
-    pub bundles: StatelessTracker<A, id::RenderBundleId, command::RenderBundle<A>>,
-    pub query_sets: StatelessTracker<A, id::QuerySetId, resource::QuerySet<A>>,
+    pub views: StatelessTracker<resource::TextureView<A>>,
+    pub samplers: StatelessTracker<resource::Sampler<A>>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
+    pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline<A>>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
+    pub bundles: StatelessTracker<command::RenderBundle<A>>,
+    pub query_sets: StatelessTracker<resource::QuerySet<A>>,
+    pub blas_s: StatelessTracker<resource::Blas<A>>,
+    pub tlas_s: StatelessTracker<resource::Tlas<A>>,
 }
 
 impl<A: HalApi> Tracker<A> {
@@ -521,15 +523,17 @@ impl<A: HalApi> Tracker<A> {
     /// Pull the maximum IDs from the hubs.
     pub fn set_size(
         &mut self,
-        buffers: Option<&Storage<resource::Buffer<A>, id::BufferId>>,
-        textures: Option<&Storage<resource::Texture<A>, id::TextureId>>,
-        views: Option<&Storage<resource::TextureView<A>, id::TextureViewId>>,
-        samplers: Option<&Storage<resource::Sampler<A>, id::SamplerId>>,
-        bind_groups: Option<&Storage<binding_model::BindGroup<A>, id::BindGroupId>>,
-        compute_pipelines: Option<&Storage<pipeline::ComputePipeline<A>, id::ComputePipelineId>>,
-        render_pipelines: Option<&Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>>,
-        bundles: Option<&Storage<command::RenderBundle<A>, id::RenderBundleId>>,
-        query_sets: Option<&Storage<resource::QuerySet<A>, id::QuerySetId>>,
+        buffers: Option<&Storage<resource::Buffer<A>>>,
+        textures: Option<&Storage<resource::Texture<A>>>,
+        views: Option<&Storage<resource::TextureView<A>>>,
+        samplers: Option<&Storage<resource::Sampler<A>>>,
+        bind_groups: Option<&Storage<binding_model::BindGroup<A>>>,
+        compute_pipelines: Option<&Storage<pipeline::ComputePipeline<A>>>,
+        render_pipelines: Option<&Storage<pipeline::RenderPipeline<A>>>,
+        bundles: Option<&Storage<command::RenderBundle<A>>>,
+        query_sets: Option<&Storage<resource::QuerySet<A>>>,
+        blas_s: Option<&Storage<resource::Blas<A>>>,
+        tlas_s: Option<&Storage<resource::Tlas<A>>>,
     ) {
         if let Some(buffers) = buffers {
             self.buffers.set_size(buffers.len());

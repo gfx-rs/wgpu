@@ -36,7 +36,7 @@ use std::{
     },
 };
 
-use crate::id::{BlasId, TlasId};
+use crate::id::BlasId;
 use std::num::NonZeroU64;
 
 /// Information about the wgpu-core resource.
@@ -1544,7 +1544,7 @@ pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 pub struct Blas<A: HalApi> {
     pub(crate) raw: Option<A::AccelerationStructure>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<BlasId>,
+    pub(crate) info: ResourceInfo<Blas<A>>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
     pub(crate) flags: wgt::AccelerationStructureFlags,
@@ -1569,14 +1569,16 @@ impl<A: HalApi> Drop for Blas<A> {
     }
 }
 
-impl<A: HalApi> Resource<BlasId> for Blas<A> {
+impl<A: HalApi> Resource for Blas<A> {
     const TYPE: &'static str = "Blas";
 
-    fn as_info(&self) -> &ResourceInfo<BlasId> {
+    type Marker = crate::id::markers::Blas;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<BlasId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -1585,7 +1587,7 @@ impl<A: HalApi> Resource<BlasId> for Blas<A> {
 pub struct Tlas<A: HalApi> {
     pub(crate) raw: Option<A::AccelerationStructure>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<TlasId>,
+    pub(crate) info: ResourceInfo<Tlas<A>>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) max_instance_count: u32,
     pub(crate) flags: wgt::AccelerationStructureFlags,
@@ -1614,14 +1616,16 @@ impl<A: HalApi> Drop for Tlas<A> {
     }
 }
 
-impl<A: HalApi> Resource<TlasId> for Tlas<A> {
+impl<A: HalApi> Resource for Tlas<A> {
     const TYPE: &'static str = "Tlas";
 
-    fn as_info(&self) -> &ResourceInfo<TlasId> {
+    type Marker = crate::id::markers::Tlas;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<TlasId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
