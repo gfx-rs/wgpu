@@ -386,7 +386,6 @@ impl fmt::Debug for CommandEncoder {
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: d3d12::GraphicsCommandList,
-    closed: bool,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -660,13 +659,22 @@ impl crate::Surface<Api> for Surface {
 
         let non_srgb_format = auxil::dxgi::conv::map_texture_format_nosrgb(config.format);
 
+        // The range for `SetMaximumFrameLatency` is 1-16 so the maximum latency requested should be 15 because we add 1.
+        // https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
+        debug_assert!(config.maximum_frame_latency <= 15);
+
+        // Nvidia recommends to use 1-2 more buffers than the maximum latency
+        // https://developer.nvidia.com/blog/advanced-api-performance-swap-chains/
+        // For high latency extra buffers seems excessive, so go with a minimum of 3 and beyond that add 1.
+        let swap_chain_buffer = (config.maximum_frame_latency + 1).min(16);
+
         let swap_chain = match self.swap_chain.write().take() {
             //Note: this path doesn't properly re-initialize all of the things
             Some(sc) => {
                 let raw = unsafe { sc.release_resources() };
                 let result = unsafe {
                     raw.ResizeBuffers(
-                        config.swap_chain_size,
+                        swap_chain_buffer,
                         config.extent.width,
                         config.extent.height,
                         non_srgb_format,
@@ -693,7 +701,7 @@ impl crate::Surface<Api> for Surface {
                         quality: 0,
                     },
                     buffer_usage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                    buffer_count: config.swap_chain_size,
+                    buffer_count: swap_chain_buffer,
                     scaling: d3d12::Scaling::Stretch,
                     swap_effect: d3d12::SwapEffect::FlipDiscard,
                     flags,
@@ -797,11 +805,11 @@ impl crate::Surface<Api> for Surface {
             | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
-        unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };
+        unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) };
         let waitable = unsafe { swap_chain.GetFrameLatencyWaitableObject() };
 
-        let mut resources = Vec::with_capacity(config.swap_chain_size as usize);
-        for i in 0..config.swap_chain_size {
+        let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
+        for i in 0..swap_chain_buffer {
             let mut resource = d3d12::Resource::null();
             unsafe {
                 swap_chain.GetBuffer(i, &d3d12_ty::ID3D12Resource::uuidof(), resource.mut_void())
@@ -877,6 +885,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
+        _surface_textures: &[&Texture],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         let mut temp_lists = self.temp_lists.lock();
@@ -932,4 +941,16 @@ impl crate::Queue<Api> for Queue {
         unsafe { self.raw.GetTimestampFrequency(&mut frequency) };
         (1_000_000_000.0 / frequency as f64) as f32
     }
+}
+
+/// A shorthand for producing a `ResourceCreationFailed` error if a ComPtr is null.
+#[inline]
+pub fn null_comptr_check<T: winapi::Interface>(
+    ptr: &d3d12::ComPtr<T>,
+) -> Result<(), crate::DeviceError> {
+    if d3d12::ComPtr::is_null(ptr) {
+        return Err(crate::DeviceError::ResourceCreationFailed);
+    }
+
+    Ok(())
 }

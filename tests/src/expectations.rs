@@ -1,3 +1,5 @@
+use core::fmt;
+
 /// Conditions under which a test should fail or be skipped.
 ///
 /// By passing a `FailureCase` to [`TestParameters::expect_fail`][expect_fail], you can
@@ -15,7 +17,7 @@
 ///     vendor: None,
 ///     adapter: Some("RTX"),
 ///     driver: None,
-///     reasons: vec![FailureReason::ValidationError(Some("Some error substring"))],
+///     reasons: vec![FailureReason::validation_error().with_message("Some error substring")],
 ///     behavior: FailureBehavior::AssertFailure,
 /// }
 /// # ;
@@ -158,7 +160,7 @@ impl FailureCase {
     /// Return the reasons why this case should fail.
     pub fn reasons(&self) -> &[FailureReason] {
         if self.reasons.is_empty() {
-            std::array::from_ref(&FailureReason::Any)
+            std::array::from_ref(&FailureReason::ANY)
         } else {
             &self.reasons
         }
@@ -170,7 +172,8 @@ impl FailureCase {
     ///
     /// If multiple reasons are pushed, will match any of them.
     pub fn validation_error(mut self, msg: &'static str) -> Self {
-        self.reasons.push(FailureReason::ValidationError(Some(msg)));
+        self.reasons
+            .push(FailureReason::validation_error().with_message(msg));
         self
     }
 
@@ -180,7 +183,7 @@ impl FailureCase {
     ///
     /// If multiple reasons are pushed, will match any of them.
     pub fn panic(mut self, msg: &'static str) -> Self {
-        self.reasons.push(FailureReason::Panic(Some(msg)));
+        self.reasons.push(FailureReason::panic().with_message(msg));
         self
     }
 
@@ -247,43 +250,16 @@ impl FailureCase {
     /// Returns true if the given failure "satisfies" this failure case.
     pub(crate) fn matches_failure(&self, failure: &FailureResult) -> bool {
         for reason in self.reasons() {
-            let result = match (reason, failure) {
-                (FailureReason::Any, _) => {
-                    log::error!("Matched failure case: Wildcard");
-                    true
-                }
-                (FailureReason::ValidationError(None), FailureResult::ValidationError(_)) => {
-                    log::error!("Matched failure case: Any Validation Error");
-                    true
-                }
-                (
-                    FailureReason::ValidationError(Some(expected)),
-                    FailureResult::ValidationError(Some(actual)),
-                ) => {
-                    let result = actual.to_lowercase().contains(&expected.to_lowercase());
-                    if result {
-                        log::error!(
-                            "Matched failure case: Validation Error containing \"{}\"",
-                            expected
-                        );
-                    }
-                    result
-                }
-                (FailureReason::Panic(None), FailureResult::Panic(_)) => {
-                    log::error!("Matched failure case: Any Panic");
-                    true
-                }
-                (FailureReason::Panic(Some(expected)), FailureResult::Panic(Some(actual))) => {
-                    let result = actual.to_lowercase().contains(&expected.to_lowercase());
-                    if result {
-                        log::error!("Matched failure case: Panic containing \"{}\"", expected);
-                    }
-                    result
-                }
-                _ => false,
-            };
+            let kind_matched = reason.kind.map_or(true, |kind| kind == failure.kind);
 
-            if result {
+            let message_matched =
+                reason
+                    .message
+                    .map_or(true, |message| matches!(&failure.message, Some(actual) if actual.to_lowercase().contains(&message.to_lowercase())));
+
+            if kind_matched && message_matched {
+                let message = failure.message.as_deref().unwrap_or("*no message*");
+                log::error!("Matched {} {message}", failure.kind);
                 return true;
             }
         }
@@ -308,18 +284,54 @@ bitflags::bitflags! {
 ///
 /// If the test fails for a different reason, the given FailureCase will be ignored.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub enum FailureReason {
-    /// Matches any failure.
-    #[default]
-    Any,
-    /// Matches validation errors raised from the backend validation.
+pub struct FailureReason {
+    /// Match a particular kind of failure result.
     ///
-    /// If a string is provided, matches only validation errors that contain the string.
-    ValidationError(Option<&'static str>),
-    /// A panic was raised.
+    /// If `None`, match any result kind.
+    kind: Option<FailureResultKind>,
+    /// Match a particular message of a failure result.
     ///
-    /// If a string is provided, matches only panics that contain the string.
-    Panic(Option<&'static str>),
+    /// If `None`, matches any message. If `Some`, a case-insensitive sub-string
+    /// test is performed. Allowing `"error occured"` to match a message like
+    /// `"An unexpected Error occured!"`.
+    message: Option<&'static str>,
+}
+
+impl FailureReason {
+    /// Match any failure reason.
+    const ANY: Self = Self {
+        kind: None,
+        message: None,
+    };
+
+    /// Match a validation error.
+    #[allow(dead_code)] // Not constructed on wasm
+    pub fn validation_error() -> Self {
+        Self {
+            kind: Some(FailureResultKind::ValidationError),
+            message: None,
+        }
+    }
+
+    /// Match a panic.
+    pub fn panic() -> Self {
+        Self {
+            kind: Some(FailureResultKind::Panic),
+            message: None,
+        }
+    }
+
+    /// Match an error with a message.
+    ///
+    /// If specified, a case-insensitive sub-string test is performed. Allowing
+    /// `"error occured"` to match a message like `"An unexpected Error
+    /// occured!"`.
+    pub fn with_message(self, message: &'static str) -> Self {
+        Self {
+            message: Some(message),
+            ..self
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -336,11 +348,53 @@ pub enum FailureBehavior {
     Ignore,
 }
 
-#[derive(Debug)]
-pub(crate) enum FailureResult {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum FailureResultKind {
     #[allow(dead_code)] // Not constructed on wasm
-    ValidationError(Option<String>),
-    Panic(Option<String>),
+    ValidationError,
+    Panic,
+}
+
+impl fmt::Display for FailureResultKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FailureResultKind::ValidationError => write!(f, "Validation Error"),
+            FailureResultKind::Panic => write!(f, "Panic"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct FailureResult {
+    kind: FailureResultKind,
+    message: Option<String>,
+}
+
+impl FailureResult {
+    /// Failure result is a panic.
+    pub(super) fn panic() -> Self {
+        Self {
+            kind: FailureResultKind::Panic,
+            message: None,
+        }
+    }
+
+    /// Failure result is a validation error.
+    #[allow(dead_code)] // Not constructed on wasm
+    pub(super) fn validation_error() -> Self {
+        Self {
+            kind: FailureResultKind::ValidationError,
+            message: None,
+        }
+    }
+
+    /// Message associated with a failure result.
+    pub(super) fn with_message(self, message: impl fmt::Display) -> Self {
+        Self {
+            kind: self.kind,
+            message: Some(message.to_string()),
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -393,7 +447,8 @@ pub(crate) fn expectations_match_failures(
     if !actual.is_empty() {
         result = ExpectationMatchResult::Panic;
         for failure in actual {
-            log::error!("Unexpected failure due to: {:?}", failure);
+            let message = failure.message.as_deref().unwrap_or("*no message*");
+            log::error!("{}: {message}", failure.kind);
         }
     }
 
@@ -409,11 +464,11 @@ mod test {
     };
 
     fn validation_err(msg: &'static str) -> FailureResult {
-        FailureResult::ValidationError(Some(String::from(msg)))
+        FailureResult::validation_error().with_message(msg)
     }
 
     fn panic(msg: &'static str) -> FailureResult {
-        FailureResult::Panic(Some(String::from(msg)))
+        FailureResult::panic().with_message(msg)
     }
 
     #[test]
@@ -423,7 +478,7 @@ mod test {
         // -- Unexpected failure --
 
         let expectation = vec![];
-        let actual = vec![FailureResult::ValidationError(None)];
+        let actual = vec![FailureResult::validation_error()];
 
         assert_eq!(
             super::expectations_match_failures(&expectation, actual),
@@ -443,7 +498,7 @@ mod test {
         // -- Expected failure (validation) --
 
         let expectation = vec![FailureCase::always()];
-        let actual = vec![FailureResult::ValidationError(None)];
+        let actual = vec![FailureResult::validation_error()];
 
         assert_eq!(
             super::expectations_match_failures(&expectation, actual),
@@ -453,7 +508,7 @@ mod test {
         // -- Expected failure (panic) --
 
         let expectation = vec![FailureCase::always()];
-        let actual = vec![FailureResult::Panic(None)];
+        let actual = vec![FailureResult::panic()];
 
         assert_eq!(
             super::expectations_match_failures(&expectation, actual),
@@ -469,9 +524,9 @@ mod test {
 
         let expectation: Vec<FailureCase> =
             vec![FailureCase::always().validation_error("Some StrIng")];
-        let actual = vec![FailureResult::ValidationError(Some(String::from(
+        let actual = vec![FailureResult::validation_error().with_message(
             "a very long string that contains sOmE sTrInG of different capitalization",
-        )))];
+        )];
 
         assert_eq!(
             super::expectations_match_failures(&expectation, actual),

@@ -20,7 +20,7 @@ pub struct Token {
 ///
 /// This type is exported since it's returned in the
 /// [`InvalidToken`](super::ErrorKind::InvalidToken) error.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokenValue {
     Identifier(String),
 

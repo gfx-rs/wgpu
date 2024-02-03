@@ -488,9 +488,10 @@ fn parse_input(
                         },
                         &input,
                     )
-                    .unwrap_or_else(|errors| {
-                        let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                        emit_glsl_parser_error(errors, filename.unwrap_or("glsl"), &input);
+                    .unwrap_or_else(|error| {
+                        let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("glsl");
+                        let mut writer = StandardStream::stderr(ColorChoice::Auto);
+                        error.emit_to_writer_with_path(&mut writer, &input, filename);
                         std::process::exit(1);
                     }),
                 Some(input),
@@ -718,22 +719,6 @@ use codespan_reporting::{
     },
 };
 use naga::WithSpan;
-
-pub fn emit_glsl_parser_error(errors: Vec<naga::front::glsl::Error>, filename: &str, source: &str) {
-    let files = SimpleFile::new(filename, source);
-    let config = codespan_reporting::term::Config::default();
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-
-    for err in errors {
-        let mut diagnostic = Diagnostic::error().with_message(err.kind.to_string());
-
-        if let Some(range) = err.meta.to_range() {
-            diagnostic = diagnostic.with_labels(vec![Label::primary((), range)]);
-        }
-
-        term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
-    }
-}
 
 pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, source: &str) {
     let files = SimpleFile::new(filename, source);

@@ -14,7 +14,7 @@ use std::{
 use winit::window::WindowButtons;
 
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
-const DESIRED_FRAMES: u32 = 3;
+const DESIRED_MAX_LATENCY: u32 = 2;
 
 /// [D3D12_RAYTRACING_INSTANCE_DESC](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_instance_desc)
 /// [VkAccelerationStructureInstanceKHR](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkAccelerationStructureInstanceKHR.html)
@@ -264,9 +264,9 @@ impl<A: hal::Api> Example<A> {
             *surface_caps.formats.first().unwrap()
         };
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: DESIRED_FRAMES
-                .max(*surface_caps.swap_chain_sizes.start())
-                .min(*surface_caps.swap_chain_sizes.end()),
+            maximum_frame_latency: DESIRED_MAX_LATENCY
+                .max(*surface_caps.maximum_frame_latency.start())
+                .min(*surface_caps.maximum_frame_latency.end()),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
             format: surface_format,
@@ -755,7 +755,7 @@ impl<A: hal::Api> Example<A> {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
             queue
-                .submit(&[&init_cmd], Some((&mut fence, init_fence_value)))
+                .submit(&[&init_cmd], &[], Some((&mut fence, init_fence_value)))
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
             cmd_encoder.reset_all(iter::once(init_cmd));
@@ -960,7 +960,9 @@ impl<A: hal::Api> Example<A> {
             } else {
                 None
             };
-            self.queue.submit(&[&cmd_buf], fence_param).unwrap();
+            self.queue
+                .submit(&[&cmd_buf], &[&surface_tex], fence_param)
+                .unwrap();
             self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
@@ -999,7 +1001,7 @@ impl<A: hal::Api> Example<A> {
             {
                 let ctx = &mut self.contexts[self.context_index];
                 self.queue
-                    .submit(&[], Some((&mut ctx.fence, ctx.fence_value)))
+                    .submit(&[], &[], Some((&mut ctx.fence, ctx.fence_value)))
                     .unwrap();
             }
 

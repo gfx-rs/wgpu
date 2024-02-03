@@ -56,7 +56,7 @@ env:
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
-  RUSTDOCFLAGS: -Dwarnings
+  RUSTDOCFLAGS: --cfg=web_sys_unstable_apis -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
 
@@ -76,7 +76,9 @@ env:
 jobs:
   check:
     # runtime is normally 2-8 minutes
-    timeout-minutes: 15
+    #
+    # currently high due to documentation time problems on mac.
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -90,18 +92,18 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-12
+            os: macos-14
             target: x86_64-apple-darwin
             kind: native
 
           - name: MacOS aarch64
-            os: macos-12
+            os: macos-14
             target: aarch64-apple-darwin
             kind: native
 
           # IOS
           - name: IOS aarch64
-            os: macos-12
+            os: macos-14
             target: aarch64-apple-ios
             kind: native
 
@@ -161,8 +163,7 @@ jobs:
           debug = false" >> .cargo/config.toml
 
       - name: caching
-        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+        uses: Swatinem/rust-cache@v2
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
@@ -248,7 +249,7 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-12
+            os: macos-14
             target: x86_64-apple-darwin
 
           # Linux
@@ -278,8 +279,7 @@ jobs:
           debug = false" >> .cargo/config.toml
 
       - name: caching
-        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+        uses: Swatinem/rust-cache@v2
         with:
           key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
 
@@ -383,7 +383,7 @@ jobs:
 
           # Mac
           - name: Mac aarch64
-            os: macos-13-xlarge
+            os: macos-14
 
           # Linux
           - name: Linux x86_64
@@ -410,8 +410,7 @@ jobs:
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: caching
-        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+        uses: Swatinem/rust-cache@v2
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           workspaces: |
@@ -582,8 +581,7 @@ jobs:
           debug = 1" >> .cargo/config.toml
 
       - name: caching
-        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+        uses: Swatinem/rust-cache@v2
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
 
@@ -640,8 +638,7 @@ jobs:
           debug = 1" >> .cargo/config.toml
 
       - name: caching
-        # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-        uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+        uses: Swatinem/rust-cache@v2
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
 

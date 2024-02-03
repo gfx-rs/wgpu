@@ -2,13 +2,13 @@ use wgt::{Backends, PowerPreference, RequestAdapterOptions};
 
 use crate::{Adapter, Instance, Surface};
 
-#[cfg(not(webgpu))]
+#[cfg(wgpu_core)]
 #[cfg_attr(docsrs, doc(cfg(all())))]
 pub use wgc::instance::parse_backends_from_comma_list;
-/// Always returns WEBGPU on wasm over webgpu.
-#[cfg(webgpu)]
+/// Just return ALL, if wgpu_core is not enabled.
+#[cfg(not(wgpu_core))]
 pub fn parse_backends_from_comma_list(_string: &str) -> Backends {
-    Backends::BROWSER_WEBGPU
+    Backends::all()
 }
 
 /// Get a set of backend bits from the environment variable WGPU_BACKEND.

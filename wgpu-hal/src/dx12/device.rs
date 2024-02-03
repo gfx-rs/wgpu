@@ -1,9 +1,11 @@
 use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::shader_compilation,
+    DeviceError,
 };
+use d3d12::ComPtr;
 
-use super::{conv, descriptor, view};
+use super::{conv, descriptor, null_comptr_check, view};
 use parking_lot::Mutex;
 use std::{
     ffi, mem,
@@ -29,7 +31,7 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<d3d12::D3D12Lib>,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
-    ) -> Result<Self, crate::DeviceError> {
+    ) -> Result<Self, DeviceError> {
         let mem_allocator = if private_caps.suballocation_supported {
             super::suballocation::create_allocator_wrapper(&raw)?
         } else {
@@ -47,6 +49,8 @@ impl super::Device {
             )
         };
         hr.into_device_result("Idle fence creation")?;
+
+        null_comptr_check(&idle_fence)?;
 
         let mut zero_buffer = d3d12::Resource::null();
         unsafe {
@@ -88,6 +92,8 @@ impl super::Device {
                 zero_buffer.mut_void(),
             )
             .into_device_result("Zero buffer creation")?;
+
+            null_comptr_check(&zero_buffer)?;
 
             // Note: without `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`
             // this resource is zeroed by default.
@@ -138,11 +144,11 @@ impl super::Device {
         };
 
         let mut rtv_pool = descriptor::CpuPool::new(raw.clone(), d3d12::DescriptorHeapType::Rtv);
-        let null_rtv_handle = rtv_pool.alloc_handle();
+        let null_rtv_handle = rtv_pool.alloc_handle()?;
         // A null pResource is used to initialize a null descriptor,
         // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
         raw.create_render_target_view(
-            d3d12::ComPtr::null(),
+            ComPtr::null(),
             &d3d12::RenderTargetViewDesc::texture_2d(
                 winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
                 0,
@@ -185,10 +191,10 @@ impl super::Device {
     // Blocks until the dedicated present queue is finished with all of its work.
     //
     // Once this method completes, the surface is able to be resized or deleted.
-    pub(super) unsafe fn wait_for_present_queue_idle(&self) -> Result<(), crate::DeviceError> {
+    pub(super) unsafe fn wait_for_present_queue_idle(&self) -> Result<(), DeviceError> {
         let cur_value = self.idler.fence.get_value();
         if cur_value == !0 {
-            return Err(crate::DeviceError::Lost);
+            return Err(DeviceError::Lost);
         }
 
         let value = cur_value + 1;
@@ -326,7 +332,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<super::Buffer, DeviceError> {
         let mut resource = d3d12::Resource::null();
         let mut size = desc.size;
         if desc.usage.contains(crate::BufferUses::UNIFORM) {
@@ -381,11 +387,12 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         buffer: &super::Buffer,
         range: crate::MemoryRange,
-    ) -> Result<crate::BufferMapping, crate::DeviceError> {
+    ) -> Result<crate::BufferMapping, DeviceError> {
         let mut ptr = ptr::null_mut();
         // TODO: 0 for subresource should be fine here until map and unmap buffer is subresource aware?
         let hr = unsafe { (*buffer.resource).Map(0, ptr::null(), &mut ptr) };
         hr.into_device_result("Map buffer")?;
+
         Ok(crate::BufferMapping {
             ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize).cast::<u8>() })
                 .unwrap(),
@@ -395,7 +402,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
 
-    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), DeviceError> {
         unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
         Ok(())
     }
@@ -406,7 +413,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_texture(
         &self,
         desc: &crate::TextureDescriptor,
-    ) -> Result<super::Texture, crate::DeviceError> {
+    ) -> Result<super::Texture, DeviceError> {
         use super::suballocation::create_texture_resource;
 
         let mut resource = d3d12::Resource::null();
@@ -465,7 +472,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
-    ) -> Result<super::TextureView, crate::DeviceError> {
+    ) -> Result<super::TextureView, DeviceError> {
         let view_desc = desc.to_internal(texture);
 
         Ok(super::TextureView {
@@ -476,43 +483,47 @@ impl crate::Device<super::Api> for super::Device {
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
             ),
             handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
-                let raw_desc = unsafe { view_desc.to_srv() };
-                raw_desc.map(|raw_desc| {
-                    let handle = self.srv_uav_pool.lock().alloc_handle();
-                    unsafe {
-                        self.raw.CreateShaderResourceView(
-                            texture.resource.as_mut_ptr(),
-                            &raw_desc,
-                            handle.raw,
-                        )
-                    };
-                    handle
-                })
+                match unsafe { view_desc.to_srv() } {
+                    Some(raw_desc) => {
+                        let handle = self.srv_uav_pool.lock().alloc_handle()?;
+                        unsafe {
+                            self.raw.CreateShaderResourceView(
+                                texture.resource.as_mut_ptr(),
+                                &raw_desc,
+                                handle.raw,
+                            )
+                        };
+                        Some(handle)
+                    }
+                    None => None,
+                }
             } else {
                 None
             },
             handle_uav: if desc.usage.intersects(
                 crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
-                let raw_desc = unsafe { view_desc.to_uav() };
-                raw_desc.map(|raw_desc| {
-                    let handle = self.srv_uav_pool.lock().alloc_handle();
-                    unsafe {
-                        self.raw.CreateUnorderedAccessView(
-                            texture.resource.as_mut_ptr(),
-                            ptr::null_mut(),
-                            &raw_desc,
-                            handle.raw,
-                        )
-                    };
-                    handle
-                })
+                match unsafe { view_desc.to_uav() } {
+                    Some(raw_desc) => {
+                        let handle = self.srv_uav_pool.lock().alloc_handle()?;
+                        unsafe {
+                            self.raw.CreateUnorderedAccessView(
+                                texture.resource.as_mut_ptr(),
+                                ptr::null_mut(),
+                                &raw_desc,
+                                handle.raw,
+                            );
+                        }
+                        Some(handle)
+                    }
+                    None => None,
+                }
             } else {
                 None
             },
             handle_rtv: if desc.usage.intersects(crate::TextureUses::COLOR_TARGET) {
                 let raw_desc = unsafe { view_desc.to_rtv() };
-                let handle = self.rtv_pool.lock().alloc_handle();
+                let handle = self.rtv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw.CreateRenderTargetView(
                         texture.resource.as_mut_ptr(),
@@ -529,7 +540,7 @@ impl crate::Device<super::Api> for super::Device {
                 .intersects(crate::TextureUses::DEPTH_STENCIL_READ)
             {
                 let raw_desc = unsafe { view_desc.to_dsv(true) };
-                let handle = self.dsv_pool.lock().alloc_handle();
+                let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw.CreateDepthStencilView(
                         texture.resource.as_mut_ptr(),
@@ -546,7 +557,7 @@ impl crate::Device<super::Api> for super::Device {
                 .intersects(crate::TextureUses::DEPTH_STENCIL_WRITE)
             {
                 let raw_desc = unsafe { view_desc.to_dsv(false) };
-                let handle = self.dsv_pool.lock().alloc_handle();
+                let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw.CreateDepthStencilView(
                         texture.resource.as_mut_ptr(),
@@ -587,8 +598,8 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_sampler(
         &self,
         desc: &crate::SamplerDescriptor,
-    ) -> Result<super::Sampler, crate::DeviceError> {
-        let handle = self.sampler_pool.lock().alloc_handle();
+    ) -> Result<super::Sampler, DeviceError> {
+        let handle = self.sampler_pool.lock().alloc_handle()?;
 
         let reduction = match desc.compare {
             Some(_) => d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
@@ -629,7 +640,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<super::Api>,
-    ) -> Result<super::CommandEncoder, crate::DeviceError> {
+    ) -> Result<super::CommandEncoder, DeviceError> {
         let allocator = self
             .raw
             .create_command_allocator(d3d12::CmdListType::Direct)
@@ -661,7 +672,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
-    ) -> Result<super::BindGroupLayout, crate::DeviceError> {
+    ) -> Result<super::BindGroupLayout, DeviceError> {
         let (mut num_buffer_views, mut num_samplers, mut num_texture_views) = (0, 0, 0);
         for entry in desc.entries.iter() {
             let count = entry.count.map_or(1, NonZeroU32::get);
@@ -710,7 +721,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> Result<super::PipelineLayout, crate::DeviceError> {
+    ) -> Result<super::PipelineLayout, DeviceError> {
         use naga::back::hlsl;
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
@@ -1020,7 +1031,7 @@ impl crate::Device<super::Api> for super::Device {
             )
             .map_err(|e| {
                 log::error!("Unable to find serialization function: {:?}", e);
-                crate::DeviceError::Lost
+                DeviceError::Lost
             })?
             .into_device_result("Root signature serialization")?;
 
@@ -1029,7 +1040,7 @@ impl crate::Device<super::Api> for super::Device {
                 "Root signature serialization error: {:?}",
                 unsafe { error.as_c_str() }.to_str().unwrap()
             );
-            return Err(crate::DeviceError::Lost);
+            return Err(DeviceError::Lost);
         }
 
         let raw = self
@@ -1072,7 +1083,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
-    ) -> Result<super::BindGroup, crate::DeviceError> {
+    ) -> Result<super::BindGroup, DeviceError> {
         let mut cpu_views = desc
             .layout
             .cpu_heap_views
@@ -1433,6 +1444,8 @@ impl crate::Device<super::Api> for super::Device {
         hr.into_result()
             .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.into_owned()))?;
 
+        null_comptr_check(&raw)?;
+
         if let Some(name) = desc.label {
             let cwstr = conv::map_label(name);
             unsafe { raw.SetName(cwstr.as_ptr()) };
@@ -1470,6 +1483,8 @@ impl crate::Device<super::Api> for super::Device {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())
         })?;
 
+        null_comptr_check(&raw)?;
+
         if let Some(name) = desc.label {
             let cwstr = conv::map_label(name);
             unsafe { raw.SetName(cwstr.as_ptr()) };
@@ -1485,7 +1500,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
-    ) -> Result<super::QuerySet, crate::DeviceError> {
+    ) -> Result<super::QuerySet, DeviceError> {
         let (heap_ty, raw_ty) = match desc.ty {
             wgt::QueryType::Occlusion => (
                 d3d12::QueryHeapType::Occlusion,
@@ -1506,6 +1521,8 @@ impl crate::Device<super::Api> for super::Device {
             .create_query_heap(heap_ty, desc.count, 0)
             .into_device_result("Query heap creation")?;
 
+        null_comptr_check(&raw)?;
+
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
             unsafe { raw.SetName(cwstr.as_ptr()) };
@@ -1515,7 +1532,7 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_query_set(&self, _set: super::QuerySet) {}
 
-    unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
+    unsafe fn create_fence(&self) -> Result<super::Fence, DeviceError> {
         let mut raw = d3d12::Fence::null();
         let hr = unsafe {
             self.raw.CreateFence(
@@ -1526,13 +1543,15 @@ impl crate::Device<super::Api> for super::Device {
             )
         };
         hr.into_device_result("Fence creation")?;
+        null_comptr_check(&raw)?;
+
         Ok(super::Fence { raw })
     }
     unsafe fn destroy_fence(&self, _fence: super::Fence) {}
     unsafe fn get_fence_value(
         &self,
         fence: &super::Fence,
-    ) -> Result<crate::FenceValue, crate::DeviceError> {
+    ) -> Result<crate::FenceValue, DeviceError> {
         Ok(unsafe { fence.raw.GetCompletedValue() })
     }
     unsafe fn wait(
@@ -1540,7 +1559,7 @@ impl crate::Device<super::Api> for super::Device {
         fence: &super::Fence,
         value: crate::FenceValue,
         timeout_ms: u32,
-    ) -> Result<bool, crate::DeviceError> {
+    ) -> Result<bool, DeviceError> {
         let timeout_duration = Duration::from_millis(timeout_ms as u64);
 
         // We first check if the fence has already reached the value we're waiting for.
@@ -1598,7 +1617,7 @@ impl crate::Device<super::Api> for super::Device {
                 winbase::WAIT_OBJECT_0 => {}
                 winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => {
                     log::error!("Wait failed!");
-                    break Err(crate::DeviceError::Lost);
+                    break Err(DeviceError::Lost);
                 }
                 winerror::WAIT_TIMEOUT => {
                     log::trace!("Wait timed out!");
@@ -1606,7 +1625,7 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 other => {
                     log::error!("Unexpected wait status: 0x{:x}", other);
-                    break Err(crate::DeviceError::Lost);
+                    break Err(DeviceError::Lost);
                 }
             };
 
@@ -1660,7 +1679,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_acceleration_structure(
         &self,
         _desc: &crate::AccelerationStructureDescriptor,
-    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
+    ) -> Result<super::AccelerationStructure, DeviceError> {
         // Create a D3D12 resource as per-usual.
         todo!()
     }

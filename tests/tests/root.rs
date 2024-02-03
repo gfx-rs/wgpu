@@ -35,6 +35,7 @@ mod shader;
 mod shader_primitive_index;
 mod shader_view_format;
 mod texture_bounds;
+mod texture_view_creation;
 mod transfer;
 mod vertex_indices;
 mod write_texture;

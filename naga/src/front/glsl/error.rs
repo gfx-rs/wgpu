@@ -1,7 +1,11 @@
 use super::token::TokenValue;
 use crate::{proc::ConstantEvaluatorError, Span};
+use codespan_reporting::diagnostic::{Diagnostic, Label};
+use codespan_reporting::files::SimpleFile;
+use codespan_reporting::term;
 use pp_rs::token::PreprocessorError;
 use std::borrow::Cow;
+use termcolor::{NoColor, WriteColor};
 use thiserror::Error;
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
@@ -18,7 +22,7 @@ fn join_with_comma(list: &[ExpectedToken]) -> String {
 }
 
 /// One of the expected tokens returned in [`InvalidToken`](ErrorKind::InvalidToken).
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ExpectedToken {
     /// A specific token was expected.
     Token(TokenValue),
@@ -55,7 +59,7 @@ impl std::fmt::Display for ExpectedToken {
 }
 
 /// Information about the cause of an error.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ErrorKind {
     /// Whilst parsing as encountered an unexpected EOF.
@@ -123,7 +127,7 @@ impl From<ConstantEvaluatorError> for ErrorKind {
 }
 
 /// Error returned during shader parsing.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 #[error("{kind}")]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Error {
@@ -131,4 +135,57 @@ pub struct Error {
     pub kind: ErrorKind,
     /// Holds information about the range of the source code where the error happened.
     pub meta: Span,
+}
+
+/// A collection of errors returned during shader parsing.
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct ParseError {
+    pub errors: Vec<Error>,
+}
+
+impl ParseError {
+    pub fn emit_to_writer(&self, writer: &mut impl WriteColor, source: &str) {
+        self.emit_to_writer_with_path(writer, source, "glsl");
+    }
+
+    pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
+        let path = path.to_string();
+        let files = SimpleFile::new(path, source);
+        let config = codespan_reporting::term::Config::default();
+
+        for err in &self.errors {
+            let mut diagnostic = Diagnostic::error().with_message(err.kind.to_string());
+
+            if let Some(range) = err.meta.to_range() {
+                diagnostic = diagnostic.with_labels(vec![Label::primary((), range)]);
+            }
+
+            term::emit(writer, &config, &files, &diagnostic).expect("cannot write error");
+        }
+    }
+
+    pub fn emit_to_string(&self, source: &str) -> String {
+        let mut writer = NoColor::new(Vec::new());
+        self.emit_to_writer(&mut writer, source);
+        String::from_utf8(writer.into_inner()).unwrap()
+    }
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.errors.iter().try_for_each(|e| write!(f, "{e:?}"))
+    }
+}
+
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl From<Vec<Error>> for ParseError {
+    fn from(errors: Vec<Error>) -> Self {
+        Self { errors }
+    }
 }

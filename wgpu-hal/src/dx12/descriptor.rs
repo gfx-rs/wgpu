@@ -1,3 +1,4 @@
+use super::null_comptr_check;
 use crate::auxil::dxgi::result::HResult as _;
 use bit_set::BitSet;
 use parking_lot::Mutex;
@@ -52,6 +53,8 @@ impl GeneralHeap {
                 )
                 .into_device_result("Descriptor heap creation")?
         };
+
+        null_comptr_check(&raw)?;
 
         Ok(Self {
             raw: raw.clone(),
@@ -117,32 +120,42 @@ struct FixedSizeHeap {
 }
 
 impl FixedSizeHeap {
-    fn new(device: &d3d12::Device, ty: d3d12::DescriptorHeapType) -> Self {
-        let (heap, _hr) = device.create_descriptor_heap(
-            HEAP_SIZE_FIXED as _,
-            ty,
-            d3d12::DescriptorHeapFlags::empty(),
-            0,
-        );
+    fn new(
+        device: &d3d12::Device,
+        ty: d3d12::DescriptorHeapType,
+    ) -> Result<Self, crate::DeviceError> {
+        let heap = device
+            .create_descriptor_heap(
+                HEAP_SIZE_FIXED as _,
+                ty,
+                d3d12::DescriptorHeapFlags::empty(),
+                0,
+            )
+            .into_device_result("Descriptor heap creation")?;
 
-        Self {
+        null_comptr_check(&heap)?;
+
+        Ok(Self {
             handle_size: device.get_descriptor_increment_size(ty) as _,
             availability: !0, // all free!
             start: heap.start_cpu_descriptor(),
             _raw: heap,
-        }
+        })
     }
 
-    fn alloc_handle(&mut self) -> d3d12::CpuDescriptor {
+    fn alloc_handle(&mut self) -> Result<d3d12::CpuDescriptor, crate::DeviceError> {
         // Find first free slot.
         let slot = self.availability.trailing_zeros() as usize;
-        assert!(slot < HEAP_SIZE_FIXED);
+        if slot >= HEAP_SIZE_FIXED {
+            log::error!("Failed to allocate a handle form a fixed size heap");
+            return Err(crate::DeviceError::OutOfMemory);
+        }
         // Set the slot as occupied.
         self.availability ^= 1 << slot;
 
-        d3d12::CpuDescriptor {
+        Ok(d3d12::CpuDescriptor {
             ptr: self.start.ptr + self.handle_size * slot,
-        }
+        })
     }
 
     fn free_handle(&mut self, handle: d3d12::CpuDescriptor) {
@@ -189,29 +202,29 @@ impl CpuPool {
         }
     }
 
-    pub(super) fn alloc_handle(&mut self) -> Handle {
+    pub(super) fn alloc_handle(&mut self) -> Result<Handle, crate::DeviceError> {
         let heap_index = self
             .avaliable_heap_indices
             .iter()
             .next()
-            .unwrap_or_else(|| {
-                // Allocate a new heap
-                let id = self.heaps.len();
-                self.heaps.push(FixedSizeHeap::new(&self.device, self.ty));
-                self.avaliable_heap_indices.insert(id);
-                id
-            });
+            .unwrap_or(self.heaps.len());
+
+        // Allocate a new heap
+        if heap_index == self.heaps.len() {
+            self.heaps.push(FixedSizeHeap::new(&self.device, self.ty)?);
+            self.avaliable_heap_indices.insert(heap_index);
+        }
 
         let heap = &mut self.heaps[heap_index];
         let handle = Handle {
-            raw: heap.alloc_handle(),
+            raw: heap.alloc_handle()?,
             heap_index,
         };
         if heap.is_full() {
             self.avaliable_heap_indices.remove(heap_index);
         }
 
-        handle
+        Ok(handle)
     }
 
     pub(super) fn free_handle(&mut self, handle: Handle) {
@@ -245,6 +258,8 @@ impl CpuHeap {
         let raw = device
             .create_descriptor_heap(total, ty, d3d12::DescriptorHeapFlags::empty(), 0)
             .into_device_result("CPU descriptor heap creation")?;
+
+        null_comptr_check(&raw)?;
 
         Ok(Self {
             inner: Mutex::new(CpuHeapInner {

@@ -38,7 +38,7 @@ serde_json.workspace = true
 serde.workspace = true
 wgpu-macros.workspace = true
 wgpu.workspace = true
-wgt = { workspace = true, features = ["replay"] }
+wgt = { workspace = true, features = ["serde"] }
 glam.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

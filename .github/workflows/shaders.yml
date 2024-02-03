@@ -21,8 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-      - uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             naga/xtask -> naga/xtask/target
@@ -63,12 +62,11 @@ jobs:
 
   naga-validate-macos:
     name: "Validate: MSL"
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
-      # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-      - uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             naga/xtask -> naga/xtask/target
@@ -86,8 +84,7 @@ jobs:
       - name: Install tools
         run: sudo apt-get install spirv-tools glslang-tools graphviz
 
-      # Pin to 2.7.1 due to a bug in github actions cache action https://github.com/Swatinem/rust-cache/issues/182
-      - uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             naga/xtask -> naga/xtask/target

@@ -104,7 +104,7 @@ mod texture;
 use crate::{
     binding_model, command, conv,
     hal_api::HalApi,
-    id::{self, TypedId},
+    id::{self, Id},
     pipeline, resource,
     snatch::SnatchGuard,
     storage::Storage,
@@ -182,8 +182,6 @@ pub(crate) trait ResourceUses:
     /// All flags that are exclusive.
     const EXCLUSIVE: Self;
 
-    /// The relevant resource ID type.
-    type Id: Copy + fmt::Debug + TypedId;
     /// The selector used by this resource.
     type Selector: fmt::Debug;
 
@@ -320,8 +318,8 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
     pub textures: TextureBindGroupState<A>,
-    pub views: StatelessBindGroupSate<id::TextureViewId, resource::TextureView<A>>,
-    pub samplers: StatelessBindGroupSate<id::SamplerId, resource::Sampler<A>>,
+    pub views: StatelessBindGroupSate<resource::TextureView<A>>,
+    pub samplers: StatelessBindGroupSate<resource::Sampler<A>>,
     pub acceleration_structures: StatelessBindGroupSate<id::TlasId, resource::Tlas<A>>,
 }
 
@@ -357,20 +355,19 @@ pub(crate) struct RenderBundleScope<A: HalApi> {
     pub buffers: RwLock<BufferUsageScope<A>>,
     pub textures: RwLock<TextureUsageScope<A>>,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
-    pub bind_groups: RwLock<StatelessTracker<A, id::BindGroupId, binding_model::BindGroup<A>>>,
-    pub render_pipelines:
-        RwLock<StatelessTracker<A, id::RenderPipelineId, pipeline::RenderPipeline<A>>>,
-    pub query_sets: RwLock<StatelessTracker<A, id::QuerySetId, resource::QuerySet<A>>>,
+    pub bind_groups: RwLock<StatelessTracker<binding_model::BindGroup<A>>>,
+    pub render_pipelines: RwLock<StatelessTracker<pipeline::RenderPipeline<A>>>,
+    pub query_sets: RwLock<StatelessTracker<resource::QuerySet<A>>>,
 }
 
 impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
-        buffers: &Storage<resource::Buffer<A>, id::BufferId>,
-        textures: &Storage<resource::Texture<A>, id::TextureId>,
-        bind_groups: &Storage<binding_model::BindGroup<A>, id::BindGroupId>,
-        render_pipelines: &Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-        query_sets: &Storage<resource::QuerySet<A>, id::QuerySetId>,
+        buffers: &Storage<resource::Buffer<A>>,
+        textures: &Storage<resource::Texture<A>>,
+        bind_groups: &Storage<binding_model::BindGroup<A>>,
+        render_pipelines: &Storage<pipeline::RenderPipeline<A>>,
+        query_sets: &Storage<resource::QuerySet<A>>,
     ) -> Self {
         let value = Self {
             buffers: RwLock::new(BufferUsageScope::new()),
@@ -427,8 +424,8 @@ pub(crate) struct UsageScope<A: HalApi> {
 impl<A: HalApi> UsageScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
-        buffers: &Storage<resource::Buffer<A>, id::BufferId>,
-        textures: &Storage<resource::Texture<A>, id::TextureId>,
+        buffers: &Storage<resource::Buffer<A>>,
+        textures: &Storage<resource::Texture<A>>,
     ) -> Self {
         let mut value = Self {
             buffers: BufferUsageScope::new(),
@@ -484,12 +481,11 @@ impl<A: HalApi> UsageScope<A> {
     }
 }
 
-pub(crate) trait ResourceTracker<Id, R>
+pub(crate) trait ResourceTracker<R>
 where
-    Id: TypedId,
-    R: resource::Resource<Id>,
+    R: resource::Resource,
 {
-    fn remove_abandoned(&mut self, id: Id) -> bool;
+    fn remove_abandoned(&mut self, id: Id<R::Marker>) -> bool;
 }
 
 /// A full double sided tracker used by CommandBuffers and the Device.
@@ -503,8 +499,6 @@ pub(crate) struct Tracker<A: HalApi> {
     pub render_pipelines: StatelessTracker<A, id::RenderPipelineId, pipeline::RenderPipeline<A>>,
     pub bundles: StatelessTracker<A, id::RenderBundleId, command::RenderBundle<A>>,
     pub query_sets: StatelessTracker<A, id::QuerySetId, resource::QuerySet<A>>,
-    pub blas_s: StatelessTracker<A, id::BlasId, resource::Blas<A>>,
-    pub tlas_s: StatelessTracker<A, id::TlasId, resource::Tlas<A>>,
 }
 
 impl<A: HalApi> Tracker<A> {
@@ -536,8 +530,6 @@ impl<A: HalApi> Tracker<A> {
         render_pipelines: Option<&Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>>,
         bundles: Option<&Storage<command::RenderBundle<A>, id::RenderBundleId>>,
         query_sets: Option<&Storage<resource::QuerySet<A>, id::QuerySetId>>,
-        blas_s: Option<&Storage<resource::Blas<A>, id::BlasId>>,
-        tlas_s: Option<&Storage<resource::Tlas<A>, id::TlasId>>,
     ) {
         if let Some(buffers) = buffers {
             self.buffers.set_size(buffers.len());

@@ -6,8 +6,10 @@ skip-tree = [
 	{ name = "rustc_version", version = "0.2.3" },
 ]
 skip = [
+	{ name = "hlsl-snapshots", version = "0.1.0" },
 ]
 wildcards = "deny"
+allow-wildcard-paths = true
 
 [licenses]
 allow = [
@@ -26,7 +28,6 @@ allow = [
 [sources]
 allow-git = [
 	# Waiting on releases; used in examples only
-	"https://github.com/SiegeEngine/ddsfile",
 	"https://github.com/Razaekel/noise-rs",
 	
 	"https://github.com/grovesNL/glow",

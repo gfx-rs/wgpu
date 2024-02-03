@@ -4,24 +4,24 @@
  * distinction between a usage scope and a full tracker.
 !*/
 
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use crate::{
-    hal_api::HalApi, id::TypedId, resource::Resource, resource_log, storage::Storage,
-    track::ResourceMetadata,
-};
+use crate::{id::Id, resource::Resource, resource_log, storage::Storage, track::ResourceMetadata};
 
 use super::ResourceTracker;
 
+/// Satisfy clippy.
+type Pair<T> = (Id<<T as Resource>::Marker>, Arc<T>);
+
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
-pub(crate) struct StatelessBindGroupSate<Id: TypedId, T: Resource<Id>> {
-    resources: Mutex<Vec<(Id, Arc<T>)>>,
+pub(crate) struct StatelessBindGroupSate<T: Resource> {
+    resources: Mutex<Vec<Pair<T>>>,
 }
 
-impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
+impl<T: Resource> StatelessBindGroupSate<T> {
     pub fn new() -> Self {
         Self {
             resources: Mutex::new(Vec::new()),
@@ -58,7 +58,7 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(&self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(&self, storage: &'a Storage<T>, id: Id<T::Marker>) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
         let mut resources = self.resources.lock();
@@ -70,14 +70,11 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
 
 /// Stores all resource state within a command buffer or device.
 #[derive(Debug)]
-pub(crate) struct StatelessTracker<A: HalApi, Id: TypedId, T: Resource<Id>> {
-    metadata: ResourceMetadata<A, Id, T>,
-    _phantom: PhantomData<Id>,
+pub(crate) struct StatelessTracker<T: Resource> {
+    metadata: ResourceMetadata<T>,
 }
 
-impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
-    for StatelessTracker<A, Id, T>
-{
+impl<T: Resource> ResourceTracker<T> for StatelessTracker<T> {
     /// Try to remove the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
@@ -85,7 +82,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    fn remove_abandoned(&mut self, id: Id) -> bool {
+    fn remove_abandoned(&mut self, id: Id<T::Marker>) -> bool {
         let index = id.unzip().0 as usize;
 
         if index >= self.metadata.size() {
@@ -120,11 +117,10 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
     }
 }
 
-impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
+impl<T: Resource> StatelessTracker<T> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
-            _phantom: PhantomData,
         }
     }
 
@@ -164,7 +160,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, id: Id, resource: Arc<T>) {
+    pub fn insert_single(&mut self, id: Id<T::Marker>, resource: Arc<T>) {
         let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
@@ -181,7 +177,11 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a Arc<T>> {
+    pub fn add_single<'a>(
+        &mut self,
+        storage: &'a Storage<T>,
+        id: Id<T::Marker>,
+    ) -> Option<&'a Arc<T>> {
         let resource = storage.get(id).ok()?;
 
         let (index32, _epoch, _) = id.unzip();
@@ -222,7 +222,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
         }
     }
 
-    pub fn get(&self, id: Id) -> Option<&Arc<T>> {
+    pub fn get(&self, id: Id<T::Marker>) -> Option<&Arc<T>> {
         let index = id.unzip().0 as usize;
         if index > self.metadata.size() {
             return None;

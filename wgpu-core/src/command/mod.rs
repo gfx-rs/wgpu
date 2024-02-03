@@ -29,10 +29,7 @@ use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{BlasAction, TlasAction};
 use crate::resource::{Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
-use crate::{
-    api_log, global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory,
-    resource_log, Label,
-};
+use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
 use hal::CommandEncoder as _;
 use parking_lot::Mutex;
@@ -146,7 +143,7 @@ pub struct CommandBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     limits: wgt::Limits,
     support_clear_texture: bool,
-    pub(crate) info: ResourceInfo<CommandBufferId>,
+    pub(crate) info: ResourceInfo<CommandBuffer<A>>,
     pub(crate) data: Mutex<Option<CommandBufferMutable<A>>>,
 }
 
@@ -264,7 +261,7 @@ impl<A: HalApi> CommandBuffer<A> {
         id: id::CommandEncoderId,
     ) -> Result<Arc<Self>, CommandEncoderError> {
         let storage = hub.command_buffers.read();
-        match storage.get(id) {
+        match storage.get(id.transmute()) {
             Ok(cmd_buf) => match cmd_buf.data.lock().as_ref().unwrap().status {
                 CommandEncoderStatus::Recording => Ok(cmd_buf.clone()),
                 CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
@@ -307,14 +304,16 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
-impl<A: HalApi> Resource<CommandBufferId> for CommandBuffer<A> {
+impl<A: HalApi> Resource for CommandBuffer<A> {
     const TYPE: ResourceType = "CommandBuffer";
 
-    fn as_info(&self) -> &ResourceInfo<CommandBufferId> {
+    type Marker = crate::id::markers::CommandBuffer;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<CommandBufferId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 
@@ -349,14 +348,7 @@ pub struct BasePassRef<'a, C> {
 /// [`InsertDebugMarker`]: RenderCommand::InsertDebugMarker
 #[doc(hidden)]
 #[derive(Debug)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
-    derive(serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasePass<C> {
     pub label: Option<String>,
 
@@ -426,7 +418,7 @@ pub enum CommandEncoderError {
     Device(#[from] DeviceError),
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_finish<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -436,7 +428,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let error = match hub.command_buffers.get(encoder_id) {
+        let error = match hub.command_buffers.get(encoder_id.transmute()) {
             Ok(cmd_buf) => {
                 let mut cmd_buf_data = cmd_buf.data.lock();
                 let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -462,7 +454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(_) => Some(CommandEncoderError::Invalid),
         };
 
-        (encoder_id, error)
+        (encoder_id.transmute(), error)
     }
 
     pub fn command_encoder_push_debug_group<A: HalApi>(
@@ -718,7 +710,7 @@ impl PrettyError for PassErrorScope {
         // This error is not in the error chain, only notes are needed
         match *self {
             Self::Pass(id) => {
-                fmt.command_buffer_label(&id);
+                fmt.command_buffer_label(&id.transmute());
             }
             Self::SetBindGroup(id) => {
                 fmt.bind_group_label(&id);

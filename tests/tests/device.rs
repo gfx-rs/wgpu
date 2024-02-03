@@ -531,8 +531,8 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         let callback = Box::new(move |reason, message| {
             was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(
-                matches!(reason, wgt::DeviceLostReason::Unknown),
-                "Device lost info reason should match DeviceLostReason::Unknown."
+                matches!(reason, wgt::DeviceLostReason::Dropped),
+                "Device lost info reason should match DeviceLostReason::Dropped."
             );
             assert!(
                 message == "Device dropped.",
@@ -544,6 +544,72 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         // Drop the device.
         drop(ctx.device);
 
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });
+
+#[gpu_test]
+static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        // This test checks that a device_lost_callback is called when it is
+        // replaced by another callback.
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+
+        // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
+        let callback = Box::new(move |reason, _m| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                matches!(reason, wgt::DeviceLostReason::ReplacedCallback),
+                "Device lost info reason should match DeviceLostReason::ReplacedCallback."
+            );
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        // Replace the callback.
+        let replacement_callback = Box::new(move |_r, _m| {});
+        ctx.device.set_device_lost_callback(replacement_callback);
+
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });
+
+#[gpu_test]
+static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().skip(FailureCase::always()))
+    .run_sync(|ctx| {
+        // What we want to do is to drop the Global, forcing a code path that
+        // eventually calls Device.prepare_to_die, without having first dropped
+        // the device. This models what might happen in a user agent that kills
+        // wgpu without providing a more orderly shutdown. In such a case, the
+        // device lost callback should be invoked with the message "Device is
+        // dying."
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+
+        // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
+        let callback = Box::new(move |reason, message| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                matches!(reason, wgt::DeviceLostReason::Dropped),
+                "Device lost info reason should match DeviceLostReason::Dropped."
+            );
+            assert!(
+                message == "Device is dying.",
+                "Device lost info message is \"{}\" and it should be \"Device is dying.\".",
+                message
+            );
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        // TODO: Drop the Global, somehow.
+
+        // Confirm that the callback was invoked.
         assert!(
             was_called.load(std::sync::atomic::Ordering::SeqCst),
             "Device lost callback should have been called."

@@ -3,16 +3,15 @@ use wgt::{Backend, WasmNotSendSync};
 use crate::{
     global::Global,
     hub::Hub,
-    identity::GlobalIdentityHandlerFactory,
-    instance::{HalSurface, Instance, Surface},
+    instance::{Instance, Surface},
 };
 
 pub trait HalApi: hal::Api + 'static + WasmNotSendSync {
     const VARIANT: Backend;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self>;
-    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>>;
+    fn hub(global: &Global) -> &Hub<Self>;
+    fn get_surface(surface: &Surface) -> Option<&Self::Surface>;
 }
 
 impl HalApi for hal::api::Empty {
@@ -23,10 +22,10 @@ impl HalApi for hal::api::Empty {
     fn instance_as_hal(_: &Instance) -> Option<&Self::Instance> {
         unimplemented!("called empty api")
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(_: &Global<G>) -> &Hub<Self> {
+    fn hub(_: &Global) -> &Hub<Self> {
         unimplemented!("called empty api")
     }
-    fn get_surface(_: &Surface) -> Option<&HalSurface<Self>> {
+    fn get_surface(_: &Surface) -> Option<&Self::Surface> {
         unimplemented!("called empty api")
     }
 }
@@ -44,11 +43,11 @@ impl HalApi for hal::api::Vulkan {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.vulkan.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
+    fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.vulkan
     }
-    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.raw.downcast_ref()
+    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
+        surface.raw.downcast_ref::<Self>()
     }
 }
 
@@ -65,11 +64,11 @@ impl HalApi for hal::api::Metal {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.metal.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
+    fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.metal
     }
-    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.raw.downcast_ref()
+    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
+        surface.raw.downcast_ref::<Self>()
     }
 }
 
@@ -86,11 +85,11 @@ impl HalApi for hal::api::Dx12 {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.dx12.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
+    fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.dx12
     }
-    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.raw.downcast_ref()
+    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
+        surface.raw.downcast_ref::<Self>()
     }
 }
 
@@ -108,10 +107,10 @@ impl HalApi for hal::api::Gles {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
         instance.gl.as_ref()
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
+    fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.gl
     }
-    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.raw.downcast_ref()
+    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
+        surface.raw.downcast_ref::<Self>()
     }
 }

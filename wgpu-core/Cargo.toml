@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -47,17 +47,23 @@ renderdoc = ["hal/renderdoc"]
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
 
+## Enables serialization via `serde` on common wgpu types.
+serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
+
 ## Enable API tracing.
-trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
+trace = ["ron", "serde", "naga/serialize"]
 
 ## Enable API replaying
-replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
-
-## Enable serializable compute/render passes, and bundle encoders.
-serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
+replay = ["serde", "naga/deserialize"]
 
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
+
+## Enable `ShaderModuleSource::Glsl`
+glsl = ["naga/glsl-in"]
+
+## Enable `ShaderModuleSource::SpirV`
+spirv = ["naga/spv-in", "dep:bytemuck"]
 
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
@@ -93,6 +99,7 @@ dx12 = ["hal/dx12"]
 arrayvec = "0.7"
 bit-vec = "0.6"
 bitflags = "2"
+bytemuck = { version = "1.14", optional = true }
 codespan-reporting = "0.11"
 indexmap = "2"
 log = "0.4"
@@ -109,22 +116,22 @@ thiserror = "1"
 
 [dependencies.naga]
 path = "../naga"
-version = "0.14.0"
+version = "0.19.0"
 features = ["clone"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.18.0"
+version = "0.19.0"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.18.0"
+version = "0.19.0"
 default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.66", features = [
+web-sys = { version = "0.3.67", features = [
     "HtmlCanvasElement",
     "OffscreenCanvas",
 ] }

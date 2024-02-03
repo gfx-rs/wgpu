@@ -12,7 +12,7 @@ use crate::{
     hal_api::HalApi,
     hal_label,
     hub::Hub,
-    id::{self, DeviceId, QueueId},
+    id::QueueId,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
@@ -90,7 +90,7 @@ pub struct Device<A: HalApi> {
     pub(crate) queue_id: RwLock<Option<QueueId>>,
     queue_to_drop: RwLock<Option<A::Queue>>,
     pub(crate) zero_buffer: Option<A::Buffer>,
-    pub(crate) info: ResourceInfo<DeviceId>,
+    pub(crate) info: ResourceInfo<Device<A>>,
 
     pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
     //Note: The submission index here corresponds to the last submission that is done.
@@ -382,7 +382,7 @@ impl<A: HalApi> Device<A> {
         let mut device_lost_invocations = SmallVec::new();
         if !self.is_valid() && life_tracker.queue_empty() {
             // We can release gpu resources associated with this device.
-            life_tracker.release_gpu_resources();
+            self.release_gpu_resources();
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
@@ -582,6 +582,7 @@ impl<A: HalApi> Device<A> {
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
+            bind_groups: Mutex::new(Vec::new()),
         })
     }
 
@@ -611,6 +612,8 @@ impl<A: HalApi> Device<A> {
             },
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             clear_mode: RwLock::new(clear_mode),
+            views: Mutex::new(Vec::new()),
+            bind_groups: Mutex::new(Vec::new()),
         }
     }
 
@@ -630,6 +633,7 @@ impl<A: HalApi> Device<A> {
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
+            bind_groups: Mutex::new(Vec::new()),
         }
     }
 
@@ -1193,8 +1197,8 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(TextureView {
-            raw: Some(raw),
-            parent: RwLock::new(Some(texture.clone())),
+            raw: Snatchable::new(raw),
+            parent: texture.clone(),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
                 texture_format: texture.desc.format,
@@ -1325,9 +1329,35 @@ impl<A: HalApi> Device<A> {
         let (module, source) = match source {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
-                profiling::scope!("naga::wgsl::parse_str");
+                profiling::scope!("naga::front::wgsl::parse_str");
                 let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
                     pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
+                        source: code.to_string(),
+                        label: desc.label.as_ref().map(|l| l.to_string()),
+                        inner: Box::new(inner),
+                    })
+                })?;
+                (Cow::Owned(module), code.into_owned())
+            }
+            #[cfg(feature = "spirv")]
+            pipeline::ShaderModuleSource::SpirV(spv, options) => {
+                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
+                profiling::scope!("naga::front::spv::Frontend");
+                let module = parser.parse().map_err(|inner| {
+                    pipeline::CreateShaderModuleError::ParsingSpirV(pipeline::ShaderError {
+                        source: String::new(),
+                        label: desc.label.as_ref().map(|l| l.to_string()),
+                        inner: Box::new(inner),
+                    })
+                })?;
+                (Cow::Owned(module), String::new())
+            }
+            #[cfg(feature = "glsl")]
+            pipeline::ShaderModuleSource::Glsl(code, options) => {
+                let mut parser = naga::front::glsl::Frontend::default();
+                profiling::scope!("naga::front::glsl::Frontend.parse");
+                let module = parser.parse(&options, &code).map_err(|inner| {
+                    pipeline::CreateShaderModuleError::ParsingGlsl(pipeline::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
@@ -1775,7 +1805,7 @@ impl<A: HalApi> Device<A> {
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates<A>,
-        storage: &'a Storage<Buffer<A>, id::BufferId>,
+        storage: &'a Storage<Buffer<A>>,
         limits: &wgt::Limits,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
@@ -1912,17 +1942,13 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
     ) -> Result<(), binding_model::CreateBindGroupError> {
-        let texture = view.parent.read();
-        let texture_id = texture.as_ref().unwrap().as_info().id();
+        let texture = &view.parent;
+        let texture_id = texture.as_info().id();
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
         let texture = used
             .textures
-            .add_single(
-                texture.as_ref().unwrap(),
-                Some(view.selector.clone()),
-                internal_use,
-            )
+            .add_single(texture, Some(view.selector.clone()), internal_use)
             .ok_or(binding_model::CreateBindGroupError::InvalidTexture(
                 texture_id,
             ))?;
@@ -2126,7 +2152,9 @@ impl<A: HalApi> Device<A> {
                     )?;
                     let res_index = hal_textures.len();
                     hal_textures.push(hal::TextureBinding {
-                        view: view.raw(),
+                        view: view
+                            .raw(&snatch_guard)
+                            .ok_or(Error::InvalidTextureView(id))?,
                         usage: internal_use,
                     });
                     (res_index, 1)
@@ -2152,7 +2180,9 @@ impl<A: HalApi> Device<A> {
                             &mut used_texture_ranges,
                         )?;
                         hal_textures.push(hal::TextureBinding {
-                            view: view.raw(),
+                            view: view
+                                .raw(&snatch_guard)
+                                .ok_or(Error::InvalidTextureView(id))?,
                             usage: internal_use,
                         });
                     }
@@ -2206,7 +2236,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(binding_model::BindGroup {
-            raw: Some(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             layout: layout.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
@@ -2390,7 +2420,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::PipelineLayoutDescriptor,
-        bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
+        bgl_registry: &Registry<BindGroupLayout<A>>,
     ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
@@ -2503,8 +2533,8 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         implicit_context: Option<ImplicitPipelineContext>,
         mut derived_group_layouts: ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>,
-        bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
-        pipeline_layout_registry: &Registry<id::PipelineLayoutId, binding_model::PipelineLayout<A>>,
+        bgl_registry: &Registry<BindGroupLayout<A>>,
+        pipeline_layout_registry: &Registry<binding_model::PipelineLayout<A>>,
     ) -> Result<Arc<binding_model::PipelineLayout<A>>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
@@ -2721,8 +2751,13 @@ impl<A: HalApi> Device<A> {
         let mut shader_expects_dual_source_blending = false;
         let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
+            let mut last_stride = 0;
+            for attribute in vb_state.attributes.iter() {
+                last_stride = last_stride.max(attribute.offset + attribute.format.size());
+            }
             vertex_steps.push(pipeline::VertexStep {
                 stride: vb_state.array_stride,
+                last_stride,
                 mode: vb_state.step_mode,
             });
             if vb_state.attributes.is_empty() {
@@ -3365,7 +3400,6 @@ impl<A: HalApi> Device<A> {
             // It's important to not hold the lock while calling the closure.
             drop(life_lock);
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
-            life_lock = self.lock_life();
         }
 
         // 2) Complete any outstanding mapAsync() steps.
@@ -3377,7 +3411,26 @@ impl<A: HalApi> Device<A> {
         // until they are cleared, and then drop the device.
 
         // Eagerly release GPU resources.
-        life_lock.release_gpu_resources();
+        self.release_gpu_resources();
+    }
+
+    pub(crate) fn release_gpu_resources(&self) {
+        // This is called when the device is lost, which makes every associated
+        // resource invalid and unusable. This is an opportunity to release all of
+        // the underlying gpu resources, even though the objects remain visible to
+        // the user agent. We purge this memory naturally when resources have been
+        // moved into the appropriate buckets, so this function just needs to
+        // initiate movement into those buckets, and it can do that by calling
+        // "destroy" on all the resources we know about.
+
+        // During these iterations, we discard all errors. We don't care!
+        let trackers = self.trackers.lock();
+        for buffer in trackers.buffers.used_resources() {
+            let _ = buffer.destroy();
+        }
+        for texture in trackers.textures.used_resources() {
+            let _ = texture.destroy();
+        }
     }
 }
 
@@ -3414,6 +3467,11 @@ impl<A: HalApi> Device<A> {
             current_index,
             self.command_allocator.lock().as_mut().unwrap(),
         );
+        if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
+            // It's important to not hold the lock while calling the closure.
+            drop(life_tracker);
+            device_lost_closure.call(DeviceLostReason::Dropped, "Device is dying.".to_string());
+        }
         #[cfg(feature = "trace")]
         {
             *self.trace.lock() = None;
@@ -3421,14 +3479,16 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-impl<A: HalApi> Resource<DeviceId> for Device<A> {
+impl<A: HalApi> Resource for Device<A> {
     const TYPE: ResourceType = "Device";
 
-    fn as_info(&self) -> &ResourceInfo<DeviceId> {
+    type Marker = crate::id::markers::Device;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<DeviceId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }

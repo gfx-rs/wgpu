@@ -45,27 +45,27 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.18.0"
+version = "0.19.0"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.18.0"
+version = "0.19.0"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.18.0"
+version = "0.19.0"
 
 [workspace.dependencies.naga]
 path = "./naga"
-version = "0.14.0"
+version = "0.19.0"
 
 [workspace.dependencies]
 anyhow = "1.0"
@@ -105,7 +105,7 @@ pico-args = { version = "0.5.0", features = [
     "short-space-opt",
     "combined-flags",
 ] }
-png = "0.17.10"
+png = "0.17.11"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.6"
@@ -117,12 +117,12 @@ serde_json = "1.0.111"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.18.0", path = "./wgpu" }
-wgpu-core = { version = "0.18.0", path = "./wgpu-core" }
-wgpu-example = { version = "0.18.0", path = "./examples/common" }
-wgpu-macros = { version = "0.18.0", path = "./wgpu-macros" }
-wgpu-test = { version = "0.18.0", path = "./tests" }
-wgpu-types = { version = "0.18.0", path = "./wgpu-types" }
+wgpu = { version = "0.19.0", path = "./wgpu" }
+wgpu-core = { version = "0.19.0", path = "./wgpu-core" }
+wgpu-example = { version = "0.19.0", path = "./examples/common" }
+wgpu-macros = { version = "0.19.0", path = "./wgpu-macros" }
+wgpu-test = { version = "0.19.0", path = "./tests" }
+wgpu-types = { version = "0.19.0", path = "./wgpu-types" }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
@@ -150,17 +150,17 @@ hassle-rs = "0.11.0"
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.12.3"
+glow = "0.13.1"
 glutin = "0.29.1"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"
-js-sys = "0.3.66"
+js-sys = "0.3.67"
 wasm-bindgen = "0.2.87"
-wasm-bindgen-futures = "0.4.39"
+wasm-bindgen-futures = "0.4.40"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.66"
+web-sys = "0.3.67"
 web-time = "0.2.4"
 
 # deno dependencies

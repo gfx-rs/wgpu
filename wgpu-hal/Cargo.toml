@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -85,12 +85,12 @@ rustc-hash = "1.1"
 log = "0.4"
 
 # backend: Gles
-glow = { version = "0.13", git = "https://github.com/grovesNL/glow.git", rev = "29ff917a2b2ff7ce0a81b2cc5681de6d4735b36e", optional = true }
+glow = { version = "0.13.1", optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.18.0"
+version = "0.19.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
@@ -127,7 +127,7 @@ winapi = { version = "0.3", features = [
     "winuser",
     "dcomp",
 ] }
-d3d12 = { path = "../d3d12/", version = "0.7.0", optional = true, features = [
+d3d12 = { path = "../d3d12/", version = "0.19.0", optional = true, features = [
     "libloading",
 ] }
 
@@ -141,13 +141,13 @@ core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = "0.2.87"
-web-sys = { version = "0.3.66", features = [
+web-sys = { version = "0.3.67", features = [
     "Window",
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = "0.3.66"
+js-sys = "0.3.67"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -157,7 +157,7 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 path = "../naga"
-version = "0.14.0"
+version = "0.19.0"
 features = ["clone"]
 
 [build-dependencies]
@@ -166,14 +166,14 @@ cfg_aliases.workspace = true
 # DEV dependencies
 [dev-dependencies.naga]
 path = "../naga"
-version = "0.14.0"
+version = "0.19.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]
 cfg-if = "1"
 env_logger = "0.10"
 glam = "0.25.0" # for ray-traced-triangle example
-winit = { version = "0.29.9", features = [
+winit = { version = "0.29.10", features = [
     "android-native-activity",
 ] } # for "halmark" example
 

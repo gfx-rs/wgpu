@@ -8,7 +8,7 @@ use crate::{
     track::UsageConflict,
     validation::{MissingBufferUsageError, MissingTextureUsageError},
 };
-use wgt::{BufferAddress, BufferSize, Color};
+use wgt::{BufferAddress, BufferSize, Color, VertexStepMode};
 
 use std::num::NonZeroU32;
 use thiserror::Error;
@@ -31,6 +31,13 @@ pub enum DrawError {
     VertexBeyondLimit {
         last_vertex: u64,
         vertex_limit: u64,
+        slot: u32,
+    },
+    #[error("{step_mode:?} buffer out of bounds at slot {slot}. Offset {offset} beyond limit {limit}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
+    VertexOutOfBounds {
+        step_mode: VertexStepMode,
+        offset: u64,
+        limit: u64,
         slot: u32,
     },
     #[error("Instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
@@ -119,14 +126,7 @@ impl crate::error::PrettyError for RenderCommandError {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
-    derive(serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rect<T> {
     pub x: T,
     pub y: T,
@@ -136,14 +136,7 @@ pub struct Rect<T> {
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
-    derive(serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RenderCommand {
     SetBindGroup {
         index: u32,

@@ -24,12 +24,11 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::device::DeviceLostClosure;
-use wgc::id::TypedId;
 use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
 
-pub struct ContextWgpuCore(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
+pub struct ContextWgpuCore(wgc::global::Global);
 
 impl Drop for ContextWgpuCore {
     fn drop(&mut self) {
@@ -47,13 +46,7 @@ impl fmt::Debug for ContextWgpuCore {
 
 impl ContextWgpuCore {
     pub unsafe fn from_hal_instance<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
-        Self(unsafe {
-            wgc::global::Global::from_hal_instance::<A>(
-                "wgpu",
-                wgc::identity::IdentityManagerFactory,
-                hal_instance,
-            )
-        })
+        Self(unsafe { wgc::global::Global::from_hal_instance::<A>("wgpu", hal_instance) })
     }
 
     /// # Safety
@@ -64,25 +57,23 @@ impl ContextWgpuCore {
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
-        Self(unsafe {
-            wgc::global::Global::from_instance(wgc::identity::IdentityManagerFactory, core_instance)
-        })
+        Self(unsafe { wgc::global::Global::from_instance(core_instance) })
     }
 
-    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::identity::IdentityManagerFactory> {
+    pub(crate) fn global(&self) -> &wgc::global::Global {
         &self.0
     }
 
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
+            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| None))
     }
 
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
-        unsafe { self.0.create_adapter_from_hal(hal_adapter, ()) }
+        unsafe { self.0.create_adapter_from_hal(hal_adapter, None) }
     }
 
     pub unsafe fn adapter_as_hal<
@@ -107,15 +98,14 @@ impl ContextWgpuCore {
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
-        let global = &self.0;
         let (device_id, queue_id, error) = unsafe {
-            global.create_device_from_hal(
+            self.0.create_device_from_hal(
                 *adapter,
                 hal_device,
                 &desc.map_label(|l| l.map(Borrowed)),
                 trace_dir,
-                (),
-                (),
+                None,
+                None,
             )
         };
         if let Some(err) = error {
@@ -141,9 +131,10 @@ impl ContextWgpuCore {
         desc: &TextureDescriptor<'_>,
     ) -> Texture {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
-        let global = &self.0;
-        let (id, error) =
-            unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) };
+        let (id, error) = unsafe {
+            self.0
+                .create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, None)
+        };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -165,13 +156,12 @@ impl ContextWgpuCore {
         device: &Device,
         desc: &BufferDescriptor<'_>,
     ) -> (wgc::id::BufferId, Buffer) {
-        let global = &self.0;
         let (id, error) = unsafe {
-            global.create_buffer_from_hal::<A>(
+            self.0.create_buffer_from_hal::<A>(
                 hal_buffer,
                 device.id,
                 &desc.map_label(|l| l.map(Borrowed)),
-                (),
+                None,
             )
         };
         if let Some(cause) = error {
@@ -526,11 +516,7 @@ impl crate::Context for ContextWgpuCore {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
-        Self(wgc::global::Global::new(
-            "wgpu",
-            wgc::identity::IdentityManagerFactory,
-            instance_desc,
-        ))
+        Self(wgc::global::Global::new("wgpu", instance_desc))
     }
 
     unsafe fn instance_create_surface(
@@ -543,29 +529,29 @@ impl crate::Context for ContextWgpuCore {
                 raw_window_handle,
             } => unsafe {
                 self.0
-                    .instance_create_surface(raw_display_handle, raw_window_handle, ())?
+                    .instance_create_surface(raw_display_handle, raw_window_handle, None)?
             },
 
             #[cfg(metal)]
             SurfaceTargetUnsafe::CoreAnimationLayer(layer) => unsafe {
-                self.0.instance_create_surface_metal(layer, ())
+                self.0.instance_create_surface_metal(layer, None)
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::CompositionVisual(visual) => unsafe {
-                self.0.instance_create_surface_from_visual(visual, ())
+                self.0.instance_create_surface_from_visual(visual, None)
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::SurfaceHandle(surface_handle) => unsafe {
                 self.0
-                    .instance_create_surface_from_surface_handle(surface_handle, ())
+                    .instance_create_surface_from_surface_handle(surface_handle, None)
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::SwapChainPanel(swap_chain_panel) => unsafe {
                 self.0
-                    .instance_create_surface_from_swap_chain_panel(swap_chain_panel, ())
+                    .instance_create_surface_from_swap_chain_panel(swap_chain_panel, None)
             },
         };
 
@@ -588,7 +574,7 @@ impl crate::Context for ContextWgpuCore {
                 force_fallback_adapter: options.force_fallback_adapter,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id.into()),
             },
-            wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| ()),
+            wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| None),
         );
         ready(id.ok().map(|id| (id, ())))
     }
@@ -600,13 +586,12 @@ impl crate::Context for ContextWgpuCore {
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
-        let global = &self.0;
-        let (device_id, queue_id, error) = wgc::gfx_select!(*adapter => global.adapter_request_device(
+        let (device_id, queue_id, error) = wgc::gfx_select!(*adapter => self.0.adapter_request_device(
             *adapter,
             &desc.map_label(|l| l.map(Borrowed)),
             trace_dir,
-            (),
-            ()
+            None,
+            None
         ));
         if let Some(err) = error {
             return ready(Err(err.into()));
@@ -621,12 +606,11 @@ impl crate::Context for ContextWgpuCore {
             id: queue_id,
             error_sink,
         };
-        ready(Ok((device_id, device, device_id, queue)))
+        ready(Ok((device_id, device, device_id.transmute(), queue)))
     }
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
-        let global = &self.0;
-        match global.poll_all_devices(force_wait) {
+        match self.0.poll_all_devices(force_wait) {
             Ok(all_queue_empty) => all_queue_empty,
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
         }
@@ -639,8 +623,7 @@ impl crate::Context for ContextWgpuCore {
         surface: &Self::SurfaceId,
         _surface_data: &Self::SurfaceData,
     ) -> bool {
-        let global = &self.0;
-        match wgc::gfx_select!(adapter => global.adapter_is_surface_supported(*adapter, *surface)) {
+        match wgc::gfx_select!(adapter => self.0.adapter_is_surface_supported(*adapter, *surface)) {
             Ok(result) => result,
             Err(err) => self.handle_error_fatal(err, "Adapter::is_surface_supported"),
         }
@@ -651,8 +634,7 @@ impl crate::Context for ContextWgpuCore {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> Features {
-        let global = &self.0;
-        match wgc::gfx_select!(*adapter => global.adapter_features(*adapter)) {
+        match wgc::gfx_select!(*adapter => self.0.adapter_features(*adapter)) {
             Ok(features) => features,
             Err(err) => self.handle_error_fatal(err, "Adapter::features"),
         }
@@ -663,8 +645,7 @@ impl crate::Context for ContextWgpuCore {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> Limits {
-        let global = &self.0;
-        match wgc::gfx_select!(*adapter => global.adapter_limits(*adapter)) {
+        match wgc::gfx_select!(*adapter => self.0.adapter_limits(*adapter)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Adapter::limits"),
         }
@@ -675,8 +656,7 @@ impl crate::Context for ContextWgpuCore {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> DownlevelCapabilities {
-        let global = &self.0;
-        match wgc::gfx_select!(*adapter => global.adapter_downlevel_capabilities(*adapter)) {
+        match wgc::gfx_select!(*adapter => self.0.adapter_downlevel_capabilities(*adapter)) {
             Ok(downlevel) => downlevel,
             Err(err) => self.handle_error_fatal(err, "Adapter::downlevel_properties"),
         }
@@ -687,8 +667,7 @@ impl crate::Context for ContextWgpuCore {
         adapter: &wgc::id::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> AdapterInfo {
-        let global = &self.0;
-        match wgc::gfx_select!(*adapter => global.adapter_get_info(*adapter)) {
+        match wgc::gfx_select!(*adapter => self.0.adapter_get_info(*adapter)) {
             Ok(info) => info,
             Err(err) => self.handle_error_fatal(err, "Adapter::get_info"),
         }
@@ -700,8 +679,7 @@ impl crate::Context for ContextWgpuCore {
         _adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        let global = &self.0;
-        match wgc::gfx_select!(*adapter => global.adapter_get_texture_format_features(*adapter, format))
+        match wgc::gfx_select!(*adapter => self.0.adapter_get_texture_format_features(*adapter, format))
         {
             Ok(info) => info,
             Err(err) => self.handle_error_fatal(err, "Adapter::get_texture_format_features"),
@@ -713,8 +691,7 @@ impl crate::Context for ContextWgpuCore {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::PresentationTimestamp {
-        let global = &self.0;
-        match wgc::gfx_select!(*adapter => global.adapter_get_presentation_timestamp(*adapter)) {
+        match wgc::gfx_select!(*adapter => self.0.adapter_get_presentation_timestamp(*adapter)) {
             Ok(timestamp) => timestamp,
             Err(err) => self.handle_error_fatal(err, "Adapter::correlate_presentation_timestamp"),
         }
@@ -727,8 +704,7 @@ impl crate::Context for ContextWgpuCore {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
-        let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_capabilities(*surface, *adapter)) {
+        match wgc::gfx_select!(adapter => self.0.surface_get_capabilities(*surface, *adapter)) {
             Ok(caps) => caps,
             Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
                 wgt::SurfaceCapabilities::default()
@@ -745,8 +721,7 @@ impl crate::Context for ContextWgpuCore {
         _device_data: &Self::DeviceData,
         config: &crate::SurfaceConfiguration,
     ) {
-        let global = &self.0;
-        let error = wgc::gfx_select!(device => global.surface_configure(*surface, *device, config));
+        let error = wgc::gfx_select!(device => self.0.surface_configure(*surface, *device, config));
         if let Some(e) = error {
             self.handle_error_fatal(e, "Surface::configure");
         } else {
@@ -764,13 +739,12 @@ impl crate::Context for ContextWgpuCore {
         SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
-        let global = &self.0;
         let device_id = surface_data
             .configured_device
             .lock()
             .expect("Surface was not configured?");
         match wgc::gfx_select!(
-            device_id => global.surface_get_current_texture(*surface, ())
+            device_id => self.0.surface_get_current_texture(*surface, None)
         ) {
             Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
                 let (id, data) = {
@@ -797,8 +771,7 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail) {
-        let global = &self.0;
-        match wgc::gfx_select!(texture => global.surface_present(detail.surface_id)) {
+        match wgc::gfx_select!(texture => self.0.surface_present(detail.surface_id)) {
             Ok(_status) => (),
             Err(err) => self.handle_error_fatal(err, "Surface::present"),
         }
@@ -809,8 +782,7 @@ impl crate::Context for ContextWgpuCore {
         texture: &Self::TextureId,
         detail: &Self::SurfaceOutputDetail,
     ) {
-        let global = &self.0;
-        match wgc::gfx_select!(texture => global.surface_texture_discard(detail.surface_id)) {
+        match wgc::gfx_select!(texture => self.0.surface_texture_discard(detail.surface_id)) {
             Ok(_status) => (),
             Err(err) => self.handle_error_fatal(err, "Surface::discard_texture"),
         }
@@ -821,16 +793,14 @@ impl crate::Context for ContextWgpuCore {
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
     ) -> Features {
-        let global = &self.0;
-        match wgc::gfx_select!(device => global.device_features(*device)) {
+        match wgc::gfx_select!(device => self.0.device_features(*device)) {
             Ok(features) => features,
             Err(err) => self.handle_error_fatal(err, "Device::features"),
         }
     }
 
     fn device_limits(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) -> Limits {
-        let global = &self.0;
-        match wgc::gfx_select!(device => global.device_limits(*device)) {
+        match wgc::gfx_select!(device => self.0.device_limits(*device)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::limits"),
         }
@@ -841,8 +811,7 @@ impl crate::Context for ContextWgpuCore {
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
     ) -> DownlevelCapabilities {
-        let global = &self.0;
-        match wgc::gfx_select!(device => global.device_downlevel_properties(*device)) {
+        match wgc::gfx_select!(device => self.0.device_downlevel_properties(*device)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::downlevel_properties"),
         }
@@ -853,7 +822,7 @@ impl crate::Context for ContextWgpuCore {
             feature = "spirv",
             feature = "glsl",
             feature = "wgsl",
-            feature = "naga"
+            feature = "naga-ir"
         )),
         allow(unreachable_code, unused_variables)
     )]
@@ -864,7 +833,6 @@ impl crate::Context for ContextWgpuCore {
         desc: ShaderModuleDescriptor<'_>,
         shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
-        let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
             shader_bound_checks,
@@ -878,34 +846,25 @@ impl crate::Context for ContextWgpuCore {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
-                let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
+                wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv), options)
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
                 ref shader,
                 stage,
-                ref defines,
+                defines,
             } => {
-                // Parse the given shader code and store its representation.
-                let options = naga::front::glsl::Options {
-                    stage,
-                    defines: defines.clone(),
-                };
-                let mut parser = naga::front::glsl::Frontend::default();
-                let module = parser.parse(&options, shader).unwrap();
-
-                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
+                let options = naga::front::glsl::Options { stage, defines };
+                wgc::pipeline::ShaderModuleSource::Glsl(Borrowed(shader), options)
             }
             #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
-            #[cfg(feature = "naga")]
+            #[cfg(feature = "naga-ir")]
             ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
             ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
         let (id, error) = wgc::gfx_select!(
-            device => global.device_create_shader_module(*device, &descriptor, source, ())
+            device => self.0.device_create_shader_module(*device, &descriptor, source, None)
         );
         if let Some(cause) = error {
             self.handle_error(
@@ -925,7 +884,6 @@ impl crate::Context for ContextWgpuCore {
         device_data: &Self::DeviceData,
         desc: &ShaderModuleDescriptorSpirV<'_>,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
-        let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
             // Doesn't matter the value since spirv shaders aren't mutated to include
@@ -933,7 +891,7 @@ impl crate::Context for ContextWgpuCore {
             shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
         };
         let (id, error) = wgc::gfx_select!(
-            device => global.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), ())
+            device => self.0.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), None)
         );
         if let Some(cause) = error {
             self.handle_error(
@@ -953,13 +911,12 @@ impl crate::Context for ContextWgpuCore {
         device_data: &Self::DeviceData,
         desc: &BindGroupLayoutDescriptor<'_>,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        let global = &self.0;
         let descriptor = wgc::binding_model::BindGroupLayoutDescriptor {
             label: desc.label.map(Borrowed),
             entries: Borrowed(desc.entries),
         };
         let (id, error) = wgc::gfx_select!(
-            device => global.device_create_bind_group_layout(*device, &descriptor, ())
+            device => self.0.device_create_bind_group_layout(*device, &descriptor, None)
         );
         if let Some(cause) = error {
             self.handle_error(
@@ -1073,11 +1030,10 @@ impl crate::Context for ContextWgpuCore {
             entries: Borrowed(&entries),
         };
 
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_bind_group(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_bind_group(
             *device,
             &descriptor,
-            ()
+            None
         ));
         if let Some(cause) = error {
             self.handle_error(
@@ -1116,11 +1072,10 @@ impl crate::Context for ContextWgpuCore {
             push_constant_ranges: Borrowed(desc.push_constant_ranges),
         };
 
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_pipeline_layout(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_pipeline_layout(
             *device,
             &descriptor,
-            ()
+            None
         ));
         if let Some(cause) = error {
             self.handle_error(
@@ -1155,8 +1110,8 @@ impl crate::Context for ContextWgpuCore {
         let implicit_pipeline_ids = match desc.layout {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: (),
-                group_ids: &[(); wgc::MAX_BIND_GROUPS],
+                root_id: None,
+                group_ids: &[None; wgc::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::RenderPipelineDescriptor {
@@ -1182,11 +1137,10 @@ impl crate::Context for ContextWgpuCore {
             multiview: desc.multiview,
         };
 
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_render_pipeline(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_render_pipeline(
             *device,
             &descriptor,
-            (),
+            None,
             implicit_pipeline_ids
         ));
         if let Some(cause) = error {
@@ -1215,8 +1169,8 @@ impl crate::Context for ContextWgpuCore {
         let implicit_pipeline_ids = match desc.layout {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: (),
-                group_ids: &[(); wgc::MAX_BIND_GROUPS],
+                root_id: None,
+                group_ids: &[None; wgc::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::ComputePipelineDescriptor {
@@ -1228,11 +1182,10 @@ impl crate::Context for ContextWgpuCore {
             },
         };
 
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_compute_pipeline(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_compute_pipeline(
             *device,
             &descriptor,
-            (),
+            None,
             implicit_pipeline_ids
         ));
         if let Some(cause) = error {
@@ -1260,11 +1213,10 @@ impl crate::Context for ContextWgpuCore {
         device_data: &Self::DeviceData,
         desc: &crate::BufferDescriptor<'_>,
     ) -> (Self::BufferId, Self::BufferData) {
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_buffer(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_buffer(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ));
         if let Some(cause) = error {
             self.handle_error(
@@ -1289,11 +1241,10 @@ impl crate::Context for ContextWgpuCore {
         desc: &TextureDescriptor<'_>,
     ) -> (Self::TextureId, Self::TextureData) {
         let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_texture(
             *device,
             &wgt_desc,
-            ()
+            None
         ));
         if let Some(cause) = error {
             self.handle_error(
@@ -1335,11 +1286,10 @@ impl crate::Context for ContextWgpuCore {
             border_color: desc.border_color,
         };
 
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_sampler(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_sampler(
             *device,
             &descriptor,
-            ()
+            None
         ));
         if let Some(cause) = error {
             self.handle_error(
@@ -1358,11 +1308,10 @@ impl crate::Context for ContextWgpuCore {
         device_data: &Self::DeviceData,
         desc: &wgt::QuerySetDescriptor<Label<'_>>,
     ) -> (Self::QuerySetId, Self::QuerySetData) {
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_query_set(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_query_set(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ));
         if let Some(cause) = error {
             self.handle_error_nolabel(&device_data.error_sink, cause, "Device::create_query_set");
@@ -1375,11 +1324,10 @@ impl crate::Context for ContextWgpuCore {
         device_data: &Self::DeviceData,
         desc: &CommandEncoderDescriptor<'_>,
     ) -> (Self::CommandEncoderId, Self::CommandEncoderData) {
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_command_encoder(
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_command_encoder(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ));
         if let Some(cause) = error {
             self.handle_error(
@@ -1420,18 +1368,16 @@ impl crate::Context for ContextWgpuCore {
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         #[cfg(any(native, Emscripten))]
         {
-            let global = &self.0;
-            match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::wait())) {
+            match wgc::gfx_select!(device => self.0.device_poll(*device, wgt::Maintain::wait())) {
                 Ok(_) => {}
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
-            wgc::gfx_select!(device => global.device_drop(*device));
+            wgc::gfx_select!(device => self.0.device_drop(*device));
         }
     }
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     fn queue_drop(&self, queue: &Self::QueueId, _device_data: &Self::QueueData) {
-        let global = &self.0;
-        wgc::gfx_select!(queue => global.queue_drop(*queue));
+        wgc::gfx_select!(queue => self.0.queue_drop(*queue));
     }
     fn device_set_device_lost_callback(
         &self,
@@ -1439,13 +1385,11 @@ impl crate::Context for ContextWgpuCore {
         _device_data: &Self::DeviceData,
         device_lost_callback: crate::context::DeviceLostCallback,
     ) {
-        let global = &self.0;
         let device_lost_closure = DeviceLostClosure::from_rust(device_lost_callback);
-        wgc::gfx_select!(device => global.device_set_device_lost_closure(*device, device_lost_closure));
+        wgc::gfx_select!(device => self.0.device_set_device_lost_closure(*device, device_lost_closure));
     }
     fn device_destroy(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        let global = &self.0;
-        wgc::gfx_select!(device => global.device_destroy(*device));
+        wgc::gfx_select!(device => self.0.device_destroy(*device));
     }
     fn device_mark_lost(
         &self,
@@ -1455,8 +1399,7 @@ impl crate::Context for ContextWgpuCore {
     ) {
         // We do not provide a reason to device_lose, because all reasons other than
         // destroyed (which this is not) are "unknown".
-        let global = &self.0;
-        wgc::gfx_select!(device => global.device_mark_lost(*device, message));
+        wgc::gfx_select!(device => self.0.device_mark_lost(*device, message));
     }
     fn device_poll(
         &self,
@@ -1464,9 +1407,8 @@ impl crate::Context for ContextWgpuCore {
         _device_data: &Self::DeviceData,
         maintain: crate::Maintain,
     ) -> wgt::MaintainResult {
-        let global = &self.0;
         let maintain_inner = maintain.map_index(|i| *i.1.as_ref().downcast_ref().unwrap());
-        match wgc::gfx_select!(device => global.device_poll(
+        match wgc::gfx_select!(device => self.0.device_poll(
             *device,
             maintain_inner
         )) {
@@ -1529,8 +1471,7 @@ impl crate::Context for ContextWgpuCore {
             ))),
         };
 
-        let global = &self.0;
-        match wgc::gfx_select!(buffer => global.buffer_map_async(*buffer, range, operation)) {
+        match wgc::gfx_select!(buffer => self.0.buffer_map_async(*buffer, range, operation)) {
             Ok(()) => (),
             Err(cause) => {
                 self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async")
@@ -1544,8 +1485,7 @@ impl crate::Context for ContextWgpuCore {
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
         let size = sub_range.end - sub_range.start;
-        let global = &self.0;
-        match wgc::gfx_select!(buffer => global.buffer_get_mapped_range(
+        match wgc::gfx_select!(buffer => self.0.buffer_get_mapped_range(
             *buffer,
             sub_range.start,
             Some(size)
@@ -1559,8 +1499,7 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
-        let global = &self.0;
-        match wgc::gfx_select!(buffer => global.buffer_unmap(*buffer)) {
+        match wgc::gfx_select!(buffer => self.0.buffer_unmap(*buffer)) {
             Ok(()) => (),
             Err(cause) => {
                 self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::buffer_unmap")
@@ -1586,9 +1525,8 @@ impl crate::Context for ContextWgpuCore {
                 array_layer_count: desc.array_layer_count,
             },
         };
-        let global = &self.0;
         let (id, error) = wgc::gfx_select!(
-            texture => global.texture_create_view(*texture, &descriptor, ())
+            texture => self.0.texture_create_view(*texture, &descriptor, None)
         );
         if let Some(cause) = error {
             self.handle_error(
@@ -1607,30 +1545,25 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn adapter_drop(&self, adapter: &Self::AdapterId, _adapter_data: &Self::AdapterData) {
-        let global = &self.0;
-        wgc::gfx_select!(*adapter => global.adapter_drop(*adapter))
+        wgc::gfx_select!(*adapter => self.0.adapter_drop(*adapter))
     }
 
     fn buffer_destroy(&self, buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
         // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let global = &self.0;
-        let _ = wgc::gfx_select!(buffer => global.buffer_destroy(*buffer));
+        let _ = wgc::gfx_select!(buffer => self.0.buffer_destroy(*buffer));
     }
 
     fn buffer_drop(&self, buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
-        let global = &self.0;
-        wgc::gfx_select!(buffer => global.buffer_drop(*buffer, false))
+        wgc::gfx_select!(buffer => self.0.buffer_drop(*buffer, false))
     }
 
     fn texture_destroy(&self, texture: &Self::TextureId, _texture_data: &Self::TextureData) {
         // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let global = &self.0;
-        let _ = wgc::gfx_select!(texture => global.texture_destroy(*texture));
+        let _ = wgc::gfx_select!(texture => self.0.texture_destroy(*texture));
     }
 
     fn texture_drop(&self, texture: &Self::TextureId, _texture_data: &Self::TextureData) {
-        let global = &self.0;
-        wgc::gfx_select!(texture => global.texture_drop(*texture, false))
+        wgc::gfx_select!(texture => self.0.texture_drop(*texture, false))
     }
 
     fn texture_view_drop(
@@ -1638,18 +1571,15 @@ impl crate::Context for ContextWgpuCore {
         texture_view: &Self::TextureViewId,
         __texture_view_data: &Self::TextureViewData,
     ) {
-        let global = &self.0;
-        let _ = wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view, false));
+        let _ = wgc::gfx_select!(*texture_view => self.0.texture_view_drop(*texture_view, false));
     }
 
     fn sampler_drop(&self, sampler: &Self::SamplerId, _sampler_data: &Self::SamplerData) {
-        let global = &self.0;
-        wgc::gfx_select!(*sampler => global.sampler_drop(*sampler))
+        wgc::gfx_select!(*sampler => self.0.sampler_drop(*sampler))
     }
 
     fn query_set_drop(&self, query_set: &Self::QuerySetId, _query_set_data: &Self::QuerySetData) {
-        let global = &self.0;
-        wgc::gfx_select!(*query_set => global.query_set_drop(*query_set))
+        wgc::gfx_select!(*query_set => self.0.query_set_drop(*query_set))
     }
 
     fn bind_group_drop(
@@ -1657,8 +1587,7 @@ impl crate::Context for ContextWgpuCore {
         bind_group: &Self::BindGroupId,
         _bind_group_data: &Self::BindGroupData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*bind_group => global.bind_group_drop(*bind_group))
+        wgc::gfx_select!(*bind_group => self.0.bind_group_drop(*bind_group))
     }
 
     fn bind_group_layout_drop(
@@ -1666,8 +1595,7 @@ impl crate::Context for ContextWgpuCore {
         bind_group_layout: &Self::BindGroupLayoutId,
         _bind_group_layout_data: &Self::BindGroupLayoutData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*bind_group_layout => global.bind_group_layout_drop(*bind_group_layout))
+        wgc::gfx_select!(*bind_group_layout => self.0.bind_group_layout_drop(*bind_group_layout))
     }
 
     fn pipeline_layout_drop(
@@ -1675,16 +1603,14 @@ impl crate::Context for ContextWgpuCore {
         pipeline_layout: &Self::PipelineLayoutId,
         _pipeline_layout_data: &Self::PipelineLayoutData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*pipeline_layout => global.pipeline_layout_drop(*pipeline_layout))
+        wgc::gfx_select!(*pipeline_layout => self.0.pipeline_layout_drop(*pipeline_layout))
     }
     fn shader_module_drop(
         &self,
         shader_module: &Self::ShaderModuleId,
         _shader_module_data: &Self::ShaderModuleData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*shader_module => global.shader_module_drop(*shader_module))
+        wgc::gfx_select!(*shader_module => self.0.shader_module_drop(*shader_module))
     }
     fn command_encoder_drop(
         &self,
@@ -1692,8 +1618,7 @@ impl crate::Context for ContextWgpuCore {
         command_encoder_data: &Self::CommandEncoderData,
     ) {
         if command_encoder_data.open {
-            let global = &self.0;
-            wgc::gfx_select!(command_encoder => global.command_encoder_drop(*command_encoder))
+            wgc::gfx_select!(command_encoder => self.0.command_encoder_drop(*command_encoder))
         }
     }
 
@@ -1702,8 +1627,7 @@ impl crate::Context for ContextWgpuCore {
         command_buffer: &Self::CommandBufferId,
         _command_buffer_data: &Self::CommandBufferData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*command_buffer => global.command_buffer_drop(*command_buffer))
+        wgc::gfx_select!(*command_buffer => self.0.command_buffer_drop(*command_buffer))
     }
 
     fn render_bundle_drop(
@@ -1711,8 +1635,7 @@ impl crate::Context for ContextWgpuCore {
         render_bundle: &Self::RenderBundleId,
         _render_bundle_data: &Self::RenderBundleData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*render_bundle => global.render_bundle_drop(*render_bundle))
+        wgc::gfx_select!(*render_bundle => self.0.render_bundle_drop(*render_bundle))
     }
 
     fn compute_pipeline_drop(
@@ -1720,8 +1643,7 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::ComputePipelineId,
         _pipeline_data: &Self::ComputePipelineData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*pipeline => global.compute_pipeline_drop(*pipeline))
+        wgc::gfx_select!(*pipeline => self.0.compute_pipeline_drop(*pipeline))
     }
 
     fn render_pipeline_drop(
@@ -1729,8 +1651,7 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::RenderPipelineId,
         _pipeline_data: &Self::RenderPipelineData,
     ) {
-        let global = &self.0;
-        wgc::gfx_select!(*pipeline => global.render_pipeline_drop(*pipeline))
+        wgc::gfx_select!(*pipeline => self.0.render_pipeline_drop(*pipeline))
     }
 
     fn compute_pipeline_get_bind_group_layout(
@@ -1739,8 +1660,7 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::ComputePipelineData,
         index: u32,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(*pipeline => global.compute_pipeline_get_bind_group_layout(*pipeline, index, ()));
+        let (id, error) = wgc::gfx_select!(*pipeline => self.0.compute_pipeline_get_bind_group_layout(*pipeline, index, None));
         if let Some(err) = error {
             panic!("Error reflecting bind group {index}: {err}");
         }
@@ -1753,8 +1673,7 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::RenderPipelineData,
         index: u32,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(*pipeline => global.render_pipeline_get_bind_group_layout(*pipeline, index, ()));
+        let (id, error) = wgc::gfx_select!(*pipeline => self.0.render_pipeline_get_bind_group_layout(*pipeline, index, None));
         if let Some(err) = error {
             panic!("Error reflecting bind group {index}: {err}");
         }
@@ -1773,8 +1692,7 @@ impl crate::Context for ContextWgpuCore {
         destination_offset: wgt::BufferAddress,
         copy_size: wgt::BufferAddress,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_buffer_to_buffer(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_copy_buffer_to_buffer(
             *encoder,
             *source,
             source_offset,
@@ -1798,8 +1716,7 @@ impl crate::Context for ContextWgpuCore {
         destination: crate::ImageCopyTexture<'_>,
         copy_size: wgt::Extent3d,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_buffer_to_texture(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_copy_buffer_to_texture(
             *encoder,
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
@@ -1821,8 +1738,7 @@ impl crate::Context for ContextWgpuCore {
         destination: crate::ImageCopyBuffer<'_>,
         copy_size: wgt::Extent3d,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_texture_to_buffer(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_copy_texture_to_buffer(
             *encoder,
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
@@ -1844,8 +1760,7 @@ impl crate::Context for ContextWgpuCore {
         destination: crate::ImageCopyTexture<'_>,
         copy_size: wgt::Extent3d,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_texture_to_texture(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_copy_texture_to_texture(
             *encoder,
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
@@ -1892,11 +1807,11 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        let global = &self.0;
         if let Err(cause) = wgc::gfx_select!(
-            encoder => global.command_encoder_run_compute_pass(*encoder, pass_data)
+            encoder => self.0.command_encoder_run_compute_pass(*encoder, pass_data)
         ) {
-            let name = wgc::gfx_select!(encoder => global.command_buffer_label(*encoder));
+            let name =
+                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
@@ -1976,11 +1891,11 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        let global = &self.0;
         if let Err(cause) =
-            wgc::gfx_select!(encoder => global.command_encoder_run_render_pass(*encoder, pass_data))
+            wgc::gfx_select!(encoder => self.0.command_encoder_run_render_pass(*encoder, pass_data))
         {
-            let name = wgc::gfx_select!(encoder => global.command_buffer_label(*encoder));
+            let name =
+                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
@@ -1998,9 +1913,8 @@ impl crate::Context for ContextWgpuCore {
     ) -> (Self::CommandBufferId, Self::CommandBufferData) {
         let descriptor = wgt::CommandBufferDescriptor::default();
         encoder_data.open = false; // prevent the drop
-        let global = &self.0;
         let (id, error) =
-            wgc::gfx_select!(encoder => global.command_encoder_finish(encoder, &descriptor));
+            wgc::gfx_select!(encoder => self.0.command_encoder_finish(encoder, &descriptor));
         if let Some(cause) = error {
             self.handle_error_nolabel(&encoder_data.error_sink, cause, "a CommandEncoder");
         }
@@ -2014,8 +1928,7 @@ impl crate::Context for ContextWgpuCore {
         texture: &crate::Texture,
         subresource_range: &wgt::ImageSubresourceRange,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_clear_texture(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_clear_texture(
             *encoder,
             texture.id.into(),
             subresource_range
@@ -2036,8 +1949,7 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_clear_buffer(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_clear_buffer(
             *encoder,
             buffer.id.into(),
             offset, size
@@ -2056,9 +1968,8 @@ impl crate::Context for ContextWgpuCore {
         encoder_data: &Self::CommandEncoderData,
         label: &str,
     ) {
-        let global = &self.0;
         if let Err(cause) =
-            wgc::gfx_select!(encoder => global.command_encoder_insert_debug_marker(*encoder, label))
+            wgc::gfx_select!(encoder => self.0.command_encoder_insert_debug_marker(*encoder, label))
         {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
@@ -2074,9 +1985,8 @@ impl crate::Context for ContextWgpuCore {
         encoder_data: &Self::CommandEncoderData,
         label: &str,
     ) {
-        let global = &self.0;
         if let Err(cause) =
-            wgc::gfx_select!(encoder => global.command_encoder_push_debug_group(*encoder, label))
+            wgc::gfx_select!(encoder => self.0.command_encoder_push_debug_group(*encoder, label))
         {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
@@ -2091,9 +2001,8 @@ impl crate::Context for ContextWgpuCore {
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
     ) {
-        let global = &self.0;
         if let Err(cause) =
-            wgc::gfx_select!(encoder => global.command_encoder_pop_debug_group(*encoder))
+            wgc::gfx_select!(encoder => self.0.command_encoder_pop_debug_group(*encoder))
         {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
@@ -2111,8 +2020,7 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_write_timestamp(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_write_timestamp(
             *encoder,
             *query_set,
             query_index
@@ -2137,8 +2045,7 @@ impl crate::Context for ContextWgpuCore {
         _destination_data: &Self::BufferData,
         destination_offset: wgt::BufferAddress,
     ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_resolve_query_set(
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.command_encoder_resolve_query_set(
             *encoder,
             *query_set,
             first_query,
@@ -2160,11 +2067,10 @@ impl crate::Context for ContextWgpuCore {
         encoder_data: Self::RenderBundleEncoderData,
         desc: &crate::RenderBundleDescriptor<'_>,
     ) -> (Self::RenderBundleId, Self::RenderBundleData) {
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(encoder_data.parent() => global.render_bundle_encoder_finish(
+        let (id, error) = wgc::gfx_select!(encoder_data.parent() => self.0.render_bundle_encoder_finish(
             encoder_data,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ));
         if let Some(err) = error {
             self.handle_error_fatal(err, "RenderBundleEncoder::finish");
@@ -2181,9 +2087,8 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         data: &[u8],
     ) {
-        let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_write_buffer(*queue, *buffer, offset, data)
+            *queue => self.0.queue_write_buffer(*queue, *buffer, offset, data)
         ) {
             Ok(()) => (),
             Err(err) => {
@@ -2201,9 +2106,8 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
     ) -> Option<()> {
-        let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_validate_write_buffer(*queue, *buffer, offset, size.get())
+            *queue => self.0.queue_validate_write_buffer(*queue, *buffer, offset, size.get())
         ) {
             Ok(()) => Some(()),
             Err(err) => {
@@ -2219,9 +2123,8 @@ impl crate::Context for ContextWgpuCore {
         queue_data: &Self::QueueData,
         size: wgt::BufferSize,
     ) -> Option<Box<dyn crate::context::QueueWriteBuffer>> {
-        let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_create_staging_buffer(*queue, size, ())
+            *queue => self.0.queue_create_staging_buffer(*queue, size, None)
         ) {
             Ok((buffer_id, ptr)) => Some(Box::new(QueueWriteBuffer {
                 buffer_id,
@@ -2246,13 +2149,12 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         staging_buffer: &dyn crate::context::QueueWriteBuffer,
     ) {
-        let global = &self.0;
         let staging_buffer = staging_buffer
             .as_any()
             .downcast_ref::<QueueWriteBuffer>()
             .unwrap();
         match wgc::gfx_select!(
-            *queue => global.queue_write_staging_buffer(*queue, *buffer, offset, staging_buffer.buffer_id)
+            *queue => self.0.queue_write_staging_buffer(*queue, *buffer, offset, staging_buffer.buffer_id)
         ) {
             Ok(()) => (),
             Err(err) => {
@@ -2270,8 +2172,7 @@ impl crate::Context for ContextWgpuCore {
         data_layout: wgt::ImageDataLayout,
         size: wgt::Extent3d,
     ) {
-        let global = &self.0;
-        match wgc::gfx_select!(*queue => global.queue_write_texture(
+        match wgc::gfx_select!(*queue => self.0.queue_write_texture(
             *queue,
             &map_texture_copy_view(texture),
             data,
@@ -2294,8 +2195,7 @@ impl crate::Context for ContextWgpuCore {
         dest: crate::ImageCopyTextureTagged<'_>,
         size: wgt::Extent3d,
     ) {
-        let global = &self.0;
-        match wgc::gfx_select!(*queue => global.queue_copy_external_image_to_texture(
+        match wgc::gfx_select!(*queue => self.0.queue_copy_external_image_to_texture(
             *queue,
             source,
             map_texture_tagged_copy_view(dest),
@@ -2320,8 +2220,7 @@ impl crate::Context for ContextWgpuCore {
             .map(|(i, _)| i)
             .collect::<SmallVec<[_; 4]>>();
 
-        let global = &self.0;
-        let index = match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers))
+        let index = match wgc::gfx_select!(*queue => self.0.queue_submit(*queue, &temp_command_buffers))
         {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
@@ -2335,8 +2234,7 @@ impl crate::Context for ContextWgpuCore {
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
     ) -> f32 {
-        let global = &self.0;
-        let res = wgc::gfx_select!(queue => global.queue_get_timestamp_period(
+        let res = wgc::gfx_select!(queue => self.0.queue_get_timestamp_period(
             *queue
         ));
         match res {
@@ -2355,21 +2253,18 @@ impl crate::Context for ContextWgpuCore {
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
-        let global = &self.0;
-        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(*queue, closure));
+        let res = wgc::gfx_select!(queue => self.0.queue_on_submitted_work_done(*queue, closure));
         if let Err(cause) = res {
             self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
         }
     }
 
     fn device_start_capture(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        let global = &self.0;
-        wgc::gfx_select!(device => global.device_start_capture(*device));
+        wgc::gfx_select!(device => self.0.device_start_capture(*device));
     }
 
     fn device_stop_capture(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        let global = &self.0;
-        wgc::gfx_select!(device => global.device_stop_capture(*device));
+        wgc::gfx_select!(device => self.0.device_stop_capture(*device));
     }
 
     fn compute_pass_set_pipeline(
@@ -3239,10 +3134,10 @@ impl crate::Context for ContextWgpuCore {
 
 impl<T> From<ObjectId> for wgc::id::Id<T>
 where
-    T: 'static + WasmNotSendSync,
+    T: wgc::id::Marker,
 {
     fn from(id: ObjectId) -> Self {
-        let id = id.id();
+        let id = wgc::id::RawId::from_non_zero(id.id());
         // SAFETY: The id was created via the impl below
         unsafe { Self::from_raw(id) }
     }
@@ -3250,10 +3145,10 @@ where
 
 impl<T> From<wgc::id::Id<T>> for ObjectId
 where
-    T: 'static + WasmNotSendSync,
+    T: wgc::id::Marker,
 {
     fn from(id: wgc::id::Id<T>) -> Self {
-        let id = id.into_raw();
+        let id = id.into_raw().into_non_zero();
         Self::from_global_id(id)
     }
 }
@@ -3287,6 +3182,7 @@ impl ErrorSinkRaw {
         let filter = match err {
             crate::Error::OutOfMemory { .. } => crate::ErrorFilter::OutOfMemory,
             crate::Error::Validation { .. } => crate::ErrorFilter::Validation,
+            crate::Error::Internal { .. } => crate::ErrorFilter::Internal,
         };
         match self
             .scopes

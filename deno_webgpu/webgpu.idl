@@ -1176,6 +1176,7 @@ interface GPUOutOfMemoryError
 enum GPUErrorFilter {
     "validation",
     "out-of-memory",
+    "internal"
 };
 
 partial interface GPUDevice {
