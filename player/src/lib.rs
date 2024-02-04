@@ -460,7 +460,7 @@ impl GlobalPlay for wgc::global::Global {
             }
             Action::CreateBlas { id, desc, sizes } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_blas::<A>(device, &desc, sizes, id);
+                self.device_create_blas::<A>(device, &desc, sizes, Some(id));
             }
             Action::FreeBlas(id) => {
                 self.blas_destroy::<A>(id).unwrap();
@@ -470,7 +470,7 @@ impl GlobalPlay for wgc::global::Global {
             }
             Action::CreateTlas { id, desc } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_tlas::<A>(device, &desc, id);
+                self.device_create_tlas::<A>(device, &desc, Some(id));
             }
             Action::FreeTlas(id) => {
                 self.tlas_destroy::<A>(id).unwrap();

@@ -2938,7 +2938,7 @@ impl crate::Context for ContextWgpuCore {
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
             sizes,
-            ()
+            None,
         ));
         if let Some(cause) = error {
             self.handle_error(
@@ -2968,7 +2968,7 @@ impl crate::Context for ContextWgpuCore {
         let (id, error) = wgc::gfx_select!(device => global.device_create_tlas(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None,
         ));
         if let Some(cause) = error {
             self.handle_error(
