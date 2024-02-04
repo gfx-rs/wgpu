@@ -4,7 +4,7 @@ use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameter
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::always()))
     .run_async(|ctx| async move {
-        // Create a bind group uisng a layout from another device. This should be a validation
+        // Create a bind group using a layout from another device. This should be a validation
         // error but currently crashes.
         let (device2, _) =
             pollster::block_on(ctx.adapter.request_device(&Default::default(), None)).unwrap();
@@ -116,7 +116,7 @@ async fn request_device_error_message() {
 // This is a test of device behavior after device.destroy. Specifically, all operations
 // should trigger errors since the device is lost.
 //
-// On DX12 this test fails with a validation error in the very artifical actions taken
+// On DX12 this test fails with a validation error in the very artificial actions taken
 // after lose the device. The error is "ID3D12CommandAllocator::Reset: The command
 // allocator cannot be reset because a command list is currently being recorded with the
 // allocator." That may indicate that DX12 doesn't like opened command buffers staying
@@ -265,7 +265,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // TODO: change these fail calls to check for the specific errors which indicate that
         // the device is not valid.
 
-        // Creating a commmand encoder should fail.
+        // Creating a command encoder should fail.
         fail(&ctx.device, || {
             ctx.device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());

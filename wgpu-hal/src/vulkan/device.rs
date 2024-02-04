@@ -2149,7 +2149,7 @@ impl crate::Device<super::Api> for super::Device {
                         .geometry(vk::AccelerationStructureGeometryDataKHR {
                             triangles: *triangle_data,
                         })
-                        .flags(conv::map_acceleration_structure_geomety_flags(
+                        .flags(conv::map_acceleration_structure_geometry_flags(
                             triangles.flags,
                         ));
 
@@ -2171,7 +2171,7 @@ impl crate::Device<super::Api> for super::Device {
                     let geometry = vk::AccelerationStructureGeometryKHR::builder()
                         .geometry_type(vk::GeometryTypeKHR::AABBS)
                         .geometry(vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data })
-                        .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+                        .flags(conv::map_acceleration_structure_geometry_flags(aabb.flags));
 
                     geometries.push(*geometry);
                     primitive_counts.push(aabb.count);

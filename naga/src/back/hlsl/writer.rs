@@ -2269,7 +2269,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         index: u32,
                     ) -> BackendResult {
                         match *resolved {
-                            // We specifcally lift the ValuePointer to this case. While `[0]` is valid
+                            // We specifically lift the ValuePointer to this case. While `[0]` is valid
                             // HLSL for any vector behind a value pointer, FXC completely miscompiles
                             // it and generates completely nonsensical DXBC.
                             //

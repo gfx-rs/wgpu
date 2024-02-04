@@ -189,7 +189,7 @@ pub(super) struct CpuPool {
     device: d3d12::Device,
     ty: d3d12::DescriptorHeapType,
     heaps: Vec<FixedSizeHeap>,
-    avaliable_heap_indices: BitSet,
+    available_heap_indices: BitSet,
 }
 
 impl CpuPool {
@@ -198,13 +198,13 @@ impl CpuPool {
             device,
             ty,
             heaps: Vec::new(),
-            avaliable_heap_indices: BitSet::new(),
+            available_heap_indices: BitSet::new(),
         }
     }
 
     pub(super) fn alloc_handle(&mut self) -> Result<Handle, crate::DeviceError> {
         let heap_index = self
-            .avaliable_heap_indices
+            .available_heap_indices
             .iter()
             .next()
             .unwrap_or(self.heaps.len());
@@ -212,7 +212,7 @@ impl CpuPool {
         // Allocate a new heap
         if heap_index == self.heaps.len() {
             self.heaps.push(FixedSizeHeap::new(&self.device, self.ty)?);
-            self.avaliable_heap_indices.insert(heap_index);
+            self.available_heap_indices.insert(heap_index);
         }
 
         let heap = &mut self.heaps[heap_index];
@@ -221,7 +221,7 @@ impl CpuPool {
             heap_index,
         };
         if heap.is_full() {
-            self.avaliable_heap_indices.remove(heap_index);
+            self.available_heap_indices.remove(heap_index);
         }
 
         Ok(handle)
@@ -229,7 +229,7 @@ impl CpuPool {
 
     pub(super) fn free_handle(&mut self, handle: Handle) {
         self.heaps[handle.heap_index].free_handle(handle.raw);
-        self.avaliable_heap_indices.insert(handle.heap_index);
+        self.available_heap_indices.insert(handle.heap_index);
     }
 }
 

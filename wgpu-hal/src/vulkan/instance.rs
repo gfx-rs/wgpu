@@ -53,7 +53,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     // Silence Vulkan Validation error "VUID-VkRenderPassBeginInfo-framebuffer-04627"
     // if the OBS layer is enabled. This is a bug in the OBS layer. As the OBS layer
     // does not have a version number they increment, there is no way to qualify the
-    // supression of the error to a specific version of the OBS layer.
+    // suppression of the error to a specific version of the OBS layer.
     //
     // See https://github.com/obsproject/obs-studio/issues/9353
     const VUID_VKRENDERPASSBEGININFO_FRAMEBUFFER_04627: i32 = 0x45125641;
@@ -279,7 +279,7 @@ impl super::Instance {
         }
 
         // VK_EXT_swapchain_colorspace
-        // Provid wide color gamut
+        // Provides wide color gamut
         extensions.push(vk::ExtSwapchainColorspaceFn::name());
 
         // VK_KHR_get_physical_device_properties2
@@ -968,7 +968,7 @@ impl crate::Surface<super::Api> for super::Surface {
         sc.next_surface_index += 1;
         sc.next_surface_index %= sc.surface_semaphores.len();
 
-        // special case for Intel Vulkan returning bizzare values (ugh)
+        // special case for Intel Vulkan returning bizarre values (ugh)
         if sc.device.vendor_id == crate::auxil::db::intel::VENDOR && index > 0x100 {
             return Err(crate::SurfaceError::Outdated);
         }

@@ -748,7 +748,7 @@ impl crate::Device<super::Api> for super::Device {
         // (bind group [2]) - Space=0
         // Special constant buffer: Space=0
 
-        //TODO: put lower bind group indices futher down the root signature. See:
+        //TODO: put lower bind group indices further down the root signature. See:
         // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#binding-model
         // Currently impossible because wgpu-core only re-binds the descriptor sets based
         // on Vulkan-like layout compatibility rules.

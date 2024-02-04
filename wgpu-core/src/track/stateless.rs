@@ -31,7 +31,7 @@ impl<T: Resource> StatelessBindGroupSate<T> {
     /// Optimize the buffer bind group state by sorting it by ID.
     ///
     /// When this list of states is merged into a tracker, the memory
-    /// accesses will be in a constant assending order.
+    /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&self) {
         let mut resources = self.resources.lock();
         resources.sort_unstable_by_key(|&(id, _)| id.unzip().0);

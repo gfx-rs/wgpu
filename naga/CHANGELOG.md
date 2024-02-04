@@ -363,7 +363,7 @@ SPV-IN
 - Fix clippy lints for 1.63 by @JCapucho in https://github.com/gfx-rs/naga/pull/2026
 - Saturate by @evahop in https://github.com/gfx-rs/naga/pull/2025
 - Use `Option::as_deref` as appropriate. by @jimblandy in https://github.com/gfx-rs/naga/pull/2040
-- Explicitely enable std for indexmap by @maxammann in https://github.com/gfx-rs/naga/pull/2062
+- Explicitly enable std for indexmap by @maxammann in https://github.com/gfx-rs/naga/pull/2062
 - Fix compiler warning by @Gordon-F in https://github.com/gfx-rs/naga/pull/2074
 
 API
@@ -466,7 +466,7 @@ Main breaking changes
   - `findLsb` -> `firstTrailingBit`
   - `findMsb` -> `firstLeadingBit`
 
-Specification Changes (relavant changes have also been applied to the WGSL backend)
+Specification Changes (relevant changes have also been applied to the WGSL backend)
 
 - Add support for `break if` ([#1993](https://github.com/gfx-rs/naga/pull/1993)) **@JCapucho**
 - Update number literal format ([#1863](https://github.com/gfx-rs/naga/pull/1863)) **@teoxoy**
@@ -479,7 +479,7 @@ Specification Changes (relavant changes have also been applied to the WGSL backe
 - Use commas to separate struct members instead of semicolons ([#1773](https://github.com/gfx-rs/naga/pull/1773)) **@Gordon-F**
 - Rename `findLsb`/`findMsb` to `firstTrailingBit`/`firstLeadingBit` ([#1735](https://github.com/gfx-rs/naga/pull/1735)) **@kvark**
 - Make parenthesis optional for `if` and `switch` statements ([#1725](https://github.com/gfx-rs/naga/pull/1725)) **@Gordon-F**
-- Declare attribtues with `@attrib` instead of `[[attrib]]` ([#1676](https://github.com/gfx-rs/naga/pull/1676)) **@kvark**
+- Declare attributes with `@attrib` instead of `[[attrib]]` ([#1676](https://github.com/gfx-rs/naga/pull/1676)) **@kvark**
 - Allow non-structure buffer types ([#1682](https://github.com/gfx-rs/naga/pull/1682)) **@kvark**
 - Remove `stride` attribute ([#1681](https://github.com/gfx-rs/naga/pull/1681)) **@kvark**
 
@@ -516,7 +516,7 @@ SPV-IN
 GLSL-IN
 
 - Don't allow empty last case in switch ([#1981](https://github.com/gfx-rs/naga/pull/1981)) **@JCapucho**
-- Fix last case falltrough and empty switch ([#1981](https://github.com/gfx-rs/naga/pull/1981)) **@JCapucho**
+- Fix last case fallthrough and empty switch ([#1981](https://github.com/gfx-rs/naga/pull/1981)) **@JCapucho**
 - Splat inputs for smoothstep if needed ([#1976](https://github.com/gfx-rs/naga/pull/1976)) **@JCapucho**
 - Fix parameter not changing to depth ([#1967](https://github.com/gfx-rs/naga/pull/1967)) **@JCapucho**
 - Fix matrix multiplication check ([#1953](https://github.com/gfx-rs/naga/pull/1953)) **@JCapucho**

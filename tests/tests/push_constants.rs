@@ -5,7 +5,7 @@ use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 /// We want to test that partial updates to push constants work as expected.
 ///
 /// As such, we dispatch two compute passes, one which writes the values
-/// before a parital update, and one which writes the values after the partial update.
+/// before a partial update, and one which writes the values after the partial update.
 ///
 /// If the update code is working correctly, the values not written to by the second update
 /// will remain unchanged.

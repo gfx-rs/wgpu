@@ -412,7 +412,7 @@ pub trait Queue<A: Api>: WasmNotSendSync {
     /// Valid usage:
     /// - all of the command buffers were created from command pools
     ///   that are associated with this queue.
-    /// - all of the command buffers had `CommadBuffer::finish()` called.
+    /// - all of the command buffers had `CommandBuffer::finish()` called.
     /// - all surface textures that the command buffers write to must be
     ///   passed to the surface_textures argument.
     unsafe fn submit(
@@ -512,7 +512,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     // pass common
 
     /// Sets the bind group at `index` to `group`, assuming the layout
-    /// of all the preceeding groups to be taken from `layout`.
+    /// of all the preceding groups to be taken from `layout`.
     unsafe fn set_bind_group(
         &mut self,
         layout: &A::PipelineLayout,
@@ -1465,7 +1465,7 @@ impl ValidationCanary {
         self.inner.lock().push(msg);
     }
 
-    /// Returns any API validation errors that hav occurred in this process
+    /// Returns any API validation errors that have occurred in this process
     /// since the last call to this function.
     pub fn get_and_reset(&self) -> Vec<String> {
         self.inner.lock().drain(..).collect()

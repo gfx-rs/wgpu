@@ -50,7 +50,7 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct Options {
     /// The shader stage in the pipeline.
     pub stage: ShaderStage,
-    /// Preprocesor definitions to be used, akin to having
+    /// Preprocessor definitions to be used, akin to having
     /// ```glsl
     /// #define key value
     /// ```

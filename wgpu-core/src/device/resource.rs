@@ -71,7 +71,7 @@ use super::{
 /// 1. `self.trace` is locked last (unenforced)
 ///
 /// Right now avoid locking twice same resource or registry in a call execution
-/// and minimize the locking to the minimum scope possibile
+/// and minimize the locking to the minimum scope possible
 /// Unless otherwise specified, no lock may be acquired while holding another lock.
 /// This means that you must inspect function calls made while a lock is held
 /// to see what locks the callee may try to acquire.

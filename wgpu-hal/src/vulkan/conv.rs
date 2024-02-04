@@ -924,7 +924,7 @@ pub fn map_acceleration_structure_flags(
     vk_flags
 }
 
-pub fn map_acceleration_structure_geomety_flags(
+pub fn map_acceleration_structure_geometry_flags(
     flags: crate::AccelerationStructureGeometryFlags,
 ) -> vk::GeometryFlagsKHR {
     let mut vk_flags = vk::GeometryFlagsKHR::empty();

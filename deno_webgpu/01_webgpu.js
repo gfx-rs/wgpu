@@ -108,7 +108,7 @@ function assertDeviceMatch(
   const resourceDevice = assertDevice(resource, prefix, resourceContext);
   if (resourceDevice.rid !== self.rid) {
     throw new DOMException(
-      `${prefix}: ${resourceContext} belongs to a diffent device than ${selfContext}.`,
+      `${prefix}: ${resourceContext} belongs to a different device than ${selfContext}.`,
       "OperationError",
     );
   }
@@ -1918,7 +1918,7 @@ class GPUBuffer {
     device.pushErrorPromise(promise);
     const err = await promise;
     if (err) {
-      throw new DOMException("validation error occured", "OperationError");
+      throw new DOMException("validation error occurred", "OperationError");
     }
     this[_state] = "mapped";
     this[_mappingRange] = [offset, offset + rangeSize];

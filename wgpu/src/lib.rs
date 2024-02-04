@@ -4936,7 +4936,7 @@ impl Surface<'_> {
 pub struct Id<T>(NonZeroU64, PhantomData<*mut T>);
 
 impl<T> Id<T> {
-    /// For testing use only. We provide no guarentees about the actual value of the ids.
+    /// For testing use only. We provide no guarantees about the actual value of the ids.
     #[doc(hidden)]
     pub fn inner(&self) -> u64 {
         self.0.get()

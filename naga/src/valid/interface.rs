@@ -619,7 +619,7 @@ impl super::Validator {
             ctx.validate(fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
             if ctx.second_blend_source {
-                // Only the first location may be used whhen dual source blending
+                // Only the first location may be used when dual source blending
                 if ctx.location_mask.len() == 1 && ctx.location_mask.contains(0) {
                     info.dual_source_blending = true;
                 } else {

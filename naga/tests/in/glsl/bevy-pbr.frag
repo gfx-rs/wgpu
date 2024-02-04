@@ -296,7 +296,7 @@ vec3 point_light(PointLight light, float roughness, float NdotV, vec3 N, vec3 V,
     // f(v,l) = (f_d(v,l) + f_r(v,l)) * light_color
     // Φ is light intensity
 
-    // our rangeAttentuation = 1 / d^2 multiplied with an attenuation factor for smoothing at the edge of the non-physical maximum light radius
+    // our rangeAttenuation = 1 / d^2 multiplied with an attenuation factor for smoothing at the edge of the non-physical maximum light radius
     // It's not 100% clear where the 1/4π goes in the derivation, but we follow the filament shader and leave it out
 
     // See https://google.github.io/filament/Filament.html#mjx-eqn-pointLightLuminanceEquation

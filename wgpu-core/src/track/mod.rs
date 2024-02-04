@@ -205,7 +205,7 @@ fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
 /// a barrier.
 fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     // If the state didn't change and all the usages are ordered, the hardware
-    // will guarentee the order of accesses, so we do not need to issue a barrier at all
+    // will guarantee the order of accesses, so we do not need to issue a barrier at all
     old_state == new_state && old_state.all_ordered()
 }
 
@@ -313,7 +313,7 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 /// and may include conflicting uses. This is fully compliant by the WebGPU spec.
 ///
 /// All bind group states are sorted by their ID so that when adding to a tracker,
-/// they are added in the most efficient order possible (assending order).
+/// they are added in the most efficient order possible (ascending order).
 #[derive(Debug)]
 pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
@@ -335,7 +335,7 @@ impl<A: HalApi> BindGroupStates<A> {
     /// Optimize the bind group states by sorting them by ID.
     ///
     /// When this list of states is merged into a tracker, the memory
-    /// accesses will be in a constant assending order.
+    /// accesses will be in a constant ascending order.
     pub fn optimize(&mut self) {
         self.buffers.optimize();
         self.textures.optimize();
