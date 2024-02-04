@@ -153,8 +153,7 @@ pub struct BlasBuildEntry<'a> {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TlasBuildEntry {
     pub tlas_id: TlasId,
     pub instance_buffer_id: BufferId,
@@ -203,8 +202,7 @@ pub(crate) struct TlasAction {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TraceBlasTriangleGeometry {
     pub size: wgt::BlasTriangleGeometrySizeDescriptor,
     pub vertex_buffer: BufferId,
@@ -217,23 +215,20 @@ pub struct TraceBlasTriangleGeometry {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TraceBlasGeometries {
     TriangleGeometries(Vec<TraceBlasTriangleGeometry>),
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TraceBlasBuildEntry {
     pub blas_id: BlasId,
     pub geometries: TraceBlasGeometries,
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TraceTlasInstance {
     pub blas_id: BlasId,
     pub transform: [f32; 12],
@@ -242,8 +237,7 @@ pub struct TraceTlasInstance {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TraceTlasPackage {
     pub tlas_id: TlasId,
     pub instances: Vec<Option<TraceTlasInstance>>,
