@@ -36,6 +36,9 @@ api_log_info = []
 ## Log resource lifecycle management at info instead of trace level.
 resource_log_info = []
 
+## Panic when the device is lost.
+device_lost_panic = []
+
 ## Use static linking for libraries. Disale to manually link. Enabled by default.
 link = ["hal/link"]
 
