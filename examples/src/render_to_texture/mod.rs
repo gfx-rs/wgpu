@@ -131,7 +131,7 @@ async fn run(_path: Option<String>) {
     let buffer_slice = output_staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
-    device.poll(wgpu::Maintain::wait()).panic_on_timeout();
+    device.poll(wgpu::PollInfo::wait()).panic_on_incomplete();
     receiver.recv_async().await.unwrap().unwrap();
     log::info!("Output buffer mapped.");
     {

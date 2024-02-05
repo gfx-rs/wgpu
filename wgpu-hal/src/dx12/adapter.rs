@@ -250,7 +250,8 @@ impl super::Adapter {
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
-            | wgt::Features::TEXTURE_FORMAT_NV12;
+            | wgt::Features::TEXTURE_FORMAT_NV12
+            | wgt::Features::NON_ZERO_POLL_TIMEOUT;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.

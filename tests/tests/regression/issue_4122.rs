@@ -32,9 +32,9 @@ async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
 
     ctx.queue.submit(Some(encoder.finish()));
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollInfo::wait())
         .await
-        .panic_on_timeout();
+        .panic_on_incomplete();
 
     let buffer_slice = cpu_buffer.slice(..);
     let buffer_data = buffer_slice.get_mapped_range();

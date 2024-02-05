@@ -110,7 +110,7 @@ impl Test<'_> {
             adapter,
             &wgt::DeviceDescriptor {
                 label: None,
-                required_features: self.features,
+                required_features: self.features | wgt::Features::NON_ZERO_POLL_TIMEOUT,
                 required_limits: wgt::Limits::default(),
             },
             None,
@@ -143,8 +143,9 @@ impl Test<'_> {
         }
 
         println!("\t\t\tWaiting...");
-        wgc::gfx_select!(device_id => global.device_poll(device_id, wgt::Maintain::wait()))
-            .unwrap();
+        wgc::gfx_select!(device_id => global.device_poll(device_id, wgt::PollInfo::wait()))
+            .unwrap()
+            .panic_on_incomplete();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);

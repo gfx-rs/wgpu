@@ -4,7 +4,7 @@ use wgpu::{
     include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferBinding, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, DownlevelFlags, Limits, Maintain, MapMode, PipelineLayoutDescriptor,
+    ComputePipelineDescriptor, DownlevelFlags, Limits, MapMode, PipelineLayoutDescriptor, PollInfo,
     ShaderStages,
 };
 
@@ -134,7 +134,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
         ctx.queue.submit(Some(encoder.finish()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollInfo::wait()).await.panic_on_incomplete();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 

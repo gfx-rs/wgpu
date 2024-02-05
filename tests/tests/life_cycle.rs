@@ -14,9 +14,9 @@ static BUFFER_DESTROY: GpuTestConfiguration =
 
         buffer.destroy();
 
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
 
         fail(&ctx.device, || {
             buffer
@@ -26,9 +26,9 @@ static BUFFER_DESTROY: GpuTestConfiguration =
 
         buffer.destroy();
 
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
 
         buffer.destroy();
 
@@ -50,9 +50,9 @@ static BUFFER_DESTROY: GpuTestConfiguration =
         }
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
         {
@@ -61,16 +61,16 @@ static BUFFER_DESTROY: GpuTestConfiguration =
             let buffer = ctx.device.create_buffer(&descriptor);
             buffer.destroy();
             let buffer = ctx.device.create_buffer(&descriptor);
-            ctx.async_poll(wgpu::Maintain::wait())
+            ctx.async_poll(wgpu::PollInfo::wait())
                 .await
-                .panic_on_timeout();
+                .panic_on_incomplete();
             buffer.destroy();
         }
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
     });
 
 #[gpu_test]
@@ -95,15 +95,15 @@ static TEXTURE_DESTROY: GpuTestConfiguration =
 
         texture.destroy();
 
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
 
         texture.destroy();
 
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
 
         texture.destroy();
 

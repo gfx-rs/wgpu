@@ -4,7 +4,7 @@ use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandBuffer, CommandEncoderDescriptor, ComputePassDescriptor,
-    Maintain, ShaderStages,
+    PollInfo, ShaderStages,
 };
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
@@ -72,7 +72,7 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_async(|ctx| 
     let data = DummyWorkData::new(&ctx);
 
     ctx.queue.submit(Some(data.cmd_buf));
-    ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+    ctx.async_poll(PollInfo::wait()).await.panic_on_incomplete();
 });
 
 #[gpu_test]
@@ -81,8 +81,8 @@ static DOUBLE_WAIT: GpuTestConfiguration =
         let data = DummyWorkData::new(&ctx);
 
         ctx.queue.submit(Some(data.cmd_buf));
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollInfo::wait()).await.panic_on_incomplete();
+        ctx.async_poll(PollInfo::wait()).await.panic_on_incomplete();
     });
 
 #[gpu_test]
@@ -91,9 +91,9 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration =
         let data = DummyWorkData::new(&ctx);
 
         let index = ctx.queue.submit(Some(data.cmd_buf));
-        ctx.async_poll(Maintain::wait_for(index))
+        ctx.async_poll(PollInfo::wait_for(index))
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
     });
 
 #[gpu_test]
@@ -102,12 +102,12 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
         let data = DummyWorkData::new(&ctx);
 
         let index = ctx.queue.submit(Some(data.cmd_buf));
-        ctx.async_poll(Maintain::wait_for(index.clone()))
+        ctx.async_poll(PollInfo::wait_for(index.clone()))
             .await
-            .panic_on_timeout();
-        ctx.async_poll(Maintain::wait_for(index))
+            .panic_on_incomplete();
+        ctx.async_poll(PollInfo::wait_for(index))
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
     });
 
 #[gpu_test]
@@ -118,10 +118,10 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
 
         let index1 = ctx.queue.submit(Some(data1.cmd_buf));
         let index2 = ctx.queue.submit(Some(data2.cmd_buf));
-        ctx.async_poll(Maintain::wait_for(index2))
+        ctx.async_poll(PollInfo::wait_for(index2))
             .await
-            .panic_on_timeout();
-        ctx.async_poll(Maintain::wait_for(index1))
+            .panic_on_incomplete();
+        ctx.async_poll(PollInfo::wait_for(index1))
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
     });

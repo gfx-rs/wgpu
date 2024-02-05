@@ -10,11 +10,12 @@
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
 #[cfg(any(feature = "serde", test))]
-use serde::Deserialize;
-#[cfg(any(feature = "serde", test))]
-use serde::Serialize;
-use std::hash::{Hash, Hasher};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::{
+    hash::{Hash, Hasher},
+    time::Duration,
+};
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
@@ -162,12 +163,7 @@ bitflags::bitflags! {
         const METAL = 1 << Backend::Metal as u32;
         /// Supported on Windows 10 and later
         const DX12 = 1 << Backend::Dx12 as u32;
-        /// Supported when targeting the web through webassembly with the `webgpu` feature enabled.
-        ///
-        /// The WebGPU backend is special in several ways:
-        /// It is not not implemented by `wgpu_core` and instead by the higher level `wgpu` crate.
-        /// Whether WebGPU is targeted is decided upon the creation of the `wgpu::Instance`,
-        /// *not* upon adapter creation. See `wgpu::Instance::new`.
+        /// Supported when targeting the web through webassembly
         const BROWSER_WEBGPU = 1 << Backend::BrowserWebGpu as u32;
         /// All the apis that wgpu offers first tier of support for.
         ///
@@ -801,8 +797,24 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 56;
-
-        // 57 available
+        /// Allows calls to device.poll() to block for a non-zero timeout
+        /// waiting for work submitted to the device to complete.
+        ///
+        /// If this is not present, all poll calls must use the Poll variant,
+        /// or a duration of zero.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        /// - OpenGL
+        ///
+        /// Unsupported platforms:
+        /// - WebGPU
+        /// - WebGL
+        ///
+        /// This is a native-only feature.
+        const NON_ZERO_POLL_TIMEOUT = 1 << 57;
 
         // Shader:
 
@@ -4289,79 +4301,151 @@ impl Default for ColorWrites {
     }
 }
 
-/// Passed to `Device::poll` to control how and if it should block.
-#[derive(Clone)]
-pub enum Maintain<T> {
-    /// On wgpu-core based backends, block until the given submission has
-    /// completed execution, and any callbacks have been invoked.
+/// How long a poll can wait before timing out.
+#[derive(Debug, Copy, Clone)]
+pub enum WaitDuration {
+    /// Wait as long as possible for the submission to complete.
     ///
-    /// On WebGPU, this has no effect. Callbacks are invoked from the
-    /// window event loop.
-    WaitForSubmissionIndex(T),
-    /// Same as WaitForSubmissionIndex but waits for the most recent submission.
-    Wait,
-    /// Check the device for a single time without blocking.
-    Poll,
+    /// This is allowed to never return.
+    Unlimited,
+    /// Wait for a given duration for the submission to complete.
+    ///
+    /// The duration must be less than u32::MAX milliseconds (~2 hours).
+    Duration(Duration),
+    /// Do not wait for the submission to complete, just check its status.
+    Zero,
 }
 
-impl<T> Maintain<T> {
-    /// Construct a wait variant
+/// Passed to `Device::poll` to control the submission to wait for
+/// and how long to wait for it.
+#[derive(Debug, Copy, Clone)]
+pub struct PollInfo<SubmissionIndex> {
+    /// The submission index to check for. If `None` is specified
+    pub submission_index: Option<SubmissionIndex>,
+    /// How long the poll call should wait for the submission to complete.
+    ///
+    /// If `Zero`, the poll will not wait for the submission to complete.
+    pub wait_duration: WaitDuration,
+}
+
+impl<T> PollInfo<T> {
+    /// The default timeout used by [`Maintain::wait`].
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+    /// Returns no wait.
+    pub fn poll() -> Self {
+        Self {
+            submission_index: None,
+            wait_duration: WaitDuration::Zero,
+        }
+    }
+
+    /// Returns a poll for the given submission index.
+    pub fn poll_for(submission_index: T) -> Self {
+        Self {
+            submission_index: Some(submission_index),
+            wait_duration: WaitDuration::Zero,
+        }
+    }
+
+    /// Returns a wait with a reasonable maximum timeout.
     pub fn wait() -> Self {
-        // This function seems a little silly, but it is useful to allow
-        // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
-        // it has meaning in that PR.
-        Self::Wait
+        Self {
+            submission_index: None,
+            wait_duration: WaitDuration::Duration(Self::DEFAULT_TIMEOUT),
+        }
     }
 
-    /// Construct a WaitForSubmissionIndex variant
+    /// Returns a wait for the given submission index with a reasonable maximum timeout.
     pub fn wait_for(submission_index: T) -> Self {
-        // This function seems a little silly, but it is useful to allow
-        // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
-        // it has meaning in that PR.
-        Self::WaitForSubmissionIndex(submission_index)
-    }
-
-    /// This maintain represents a wait of some kind.
-    pub fn is_wait(&self) -> bool {
-        match *self {
-            Self::WaitForSubmissionIndex(..) | Self::Wait => true,
-            Self::Poll => false,
+        Self {
+            submission_index: Some(submission_index),
+            wait_duration: WaitDuration::Duration(Self::DEFAULT_TIMEOUT),
         }
     }
 
     /// Map on the wait index type.
-    pub fn map_index<U, F>(self, func: F) -> Maintain<U>
+    pub fn map_index<U, F>(self, func: F) -> PollInfo<U>
     where
         F: FnOnce(T) -> U,
     {
-        match self {
-            Self::WaitForSubmissionIndex(i) => Maintain::WaitForSubmissionIndex(func(i)),
-            Self::Wait => Maintain::Wait,
-            Self::Poll => Maintain::Poll,
+        let Self {
+            submission_index,
+            wait_duration: timeout,
+        } = self;
+
+        PollInfo {
+            submission_index: submission_index.map(func),
+            wait_duration: timeout,
         }
+    }
+
+    /// Returns the expected duration value for the wait.
+    ///
+    /// Returns `None` if this duration is Zero.
+    pub fn effective_wait_duration(&self) -> Option<Duration> {
+        match self.wait_duration {
+            WaitDuration::Unlimited => Some(Duration::from_millis(u32::MAX as _)),
+            WaitDuration::Duration(dur) if dur.is_zero() => None,
+            WaitDuration::Duration(dur) => Some(dur),
+            WaitDuration::Zero => None,
+        }
+    }
+
+    /// Returns `true` if the maintain only polls the device.
+    #[must_use]
+    pub fn is_poll(&self) -> bool {
+        self.effective_wait_duration().is_none()
     }
 }
 
-/// Result of a maintain operation.
-pub enum MaintainResult {
-    /// There are no active submissions in flight as of the beginning of the poll call.
+/// Status of a submission as returned by Device::poll
+#[must_use]
+#[derive(Clone, Copy, Debug)]
+pub enum SubmissionStatus {
+    /// There are no active submissions in flight when we checked the queue status.
     /// Other submissions may have been queued on other threads at the same time.
     ///
     /// This implies that the given poll is complete.
-    SubmissionQueueEmpty,
-    /// More information coming soon <https://github.com/gfx-rs/wgpu/pull/5012>
-    Ok,
+    QueueEmpty,
+    /// The submission requested in the poll has completed.
+    ///
+    /// Other submissions may be in flight.
+    Complete,
+    /// The submission requested in the wait has not completed.
+    Incomplete,
 }
 
-impl MaintainResult {
-    /// Returns true if the result is [`Self::SubmissionQueueEmpty`]`.
-    pub fn is_queue_empty(&self) -> bool {
-        matches!(self, Self::SubmissionQueueEmpty)
+impl SubmissionStatus {
+    /// Panics if the result is [`Self::Incomplete`].
+    pub fn panic_on_incomplete(self) {
+        if let Self::Incomplete = self {
+            panic!("Poll(Wait) timed out!");
+        }
     }
 
-    /// Panics if the MaintainResult is not Ok.
-    pub fn panic_on_timeout(self) {
-        let _ = self;
+    /// Returns true if the queue is empty as of the beginning of the poll call.
+    pub fn is_queue_empty(&self) -> bool {
+        match self {
+            Self::QueueEmpty => true,
+            Self::Complete | Self::Incomplete => false,
+        }
+    }
+
+    /// Returns true if the poll is complete.
+    pub fn is_complete(&self) -> bool {
+        match self {
+            Self::QueueEmpty | Self::Complete => true,
+            Self::Incomplete => false,
+        }
+    }
+
+    /// Returns true if the poll is not complete.
+    pub fn is_incomplete(&self) -> bool {
+        match self {
+            Self::Incomplete => true,
+            Self::QueueEmpty | Self::Complete => false,
+        }
     }
 }
 

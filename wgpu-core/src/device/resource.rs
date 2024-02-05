@@ -313,38 +313,49 @@ impl<A: HalApi> Device<A> {
     ///   submissions still in flight. (We have to take the locks needed to
     ///   produce this information for other reasons, so we might as well just
     ///   return it to our callers.)
-    pub(crate) fn maintain<'this>(
-        &'this self,
+    pub(crate) fn maintain(
+        &self,
         fence: &A::Fence,
-        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
-    ) -> Result<(UserClosures, bool), WaitIdleError> {
+        maintain: wgt::PollInfo<queue::WrappedSubmissionIndex>,
+    ) -> Result<(UserClosures, wgt::SubmissionStatus), WaitIdleError> {
         profiling::scope!("Device::maintain");
-        let last_done_index = if maintain.is_wait() {
-            let index_to_wait_for = match maintain {
-                wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
-                    // We don't need to check to see if the queue id matches
-                    // as we already checked this from inside the poll call.
-                    submission_index.index
-                }
-                _ => self.active_submission_index.load(Ordering::Relaxed),
-            };
+
+        let index_to_wait_for = maintain.submission_index.map_or_else(
+            || self.active_submission_index.load(Ordering::Relaxed),
+            |submission_index| submission_index.index,
+        );
+
+        if let Some(wait_duration) = maintain.effective_wait_duration() {
+            // If we are not given a submission index, we get the most recently submitted
+            // index and we wait for that.
+            let timeout_ms: u32 = wait_duration
+                .as_millis()
+                .try_into()
+                .map_err(|_| WaitIdleError::ExcessiveTimeout(wait_duration))?;
+
             unsafe {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .wait(fence, index_to_wait_for, CLEANUP_WAIT_MS)
+                    .wait(fence, index_to_wait_for, timeout_ms)
                     .map_err(DeviceError::from)?
             };
-            index_to_wait_for
-        } else {
-            unsafe {
-                self.raw
-                    .as_ref()
-                    .unwrap()
-                    .get_fence_value(fence)
-                    .map_err(DeviceError::from)?
-            }
         };
+
+        // In the None case, we check to see how far the fence has gotten, and
+        // handle those finished submissions.
+        let last_done_index = unsafe {
+            self.raw
+                .as_ref()
+                .unwrap()
+                .get_fence_value(fence)
+                .map_err(DeviceError::from)?
+        };
+
+        log::trace!(
+            "Maintaining to current submission fence value: {}",
+            last_done_index
+        );
 
         let mut life_tracker = self.lock_life();
         let submission_closures = life_tracker.triage_submissions(
@@ -393,12 +404,25 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        let maintain_result = if life_tracker.queue_empty() {
+            debug_assert!(
+                last_done_index >= index_to_wait_for,
+                "{last_done_index} < {index_to_wait_for} but queue is empty"
+            );
+
+            wgt::SubmissionStatus::QueueEmpty
+        } else if last_done_index >= index_to_wait_for {
+            wgt::SubmissionStatus::Complete
+        } else {
+            wgt::SubmissionStatus::Incomplete
+        };
+
         let closures = UserClosures {
             mappings: mapping_closures,
             submissions: submission_closures,
             device_lost_invocations,
         };
-        Ok((closures, life_tracker.queue_empty()))
+        Ok((closures, maintain_result))
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {

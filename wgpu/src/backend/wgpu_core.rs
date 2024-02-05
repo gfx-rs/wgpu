@@ -1350,10 +1350,6 @@ impl crate::Context for ContextWgpuCore {
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         #[cfg(any(native, Emscripten))]
         {
-            match wgc::gfx_select!(device => self.0.device_poll(*device, wgt::Maintain::wait())) {
-                Ok(_) => {}
-                Err(err) => self.handle_error_fatal(err, "Device::drop"),
-            }
             wgc::gfx_select!(device => self.0.device_drop(*device));
         }
     }
@@ -1386,19 +1382,19 @@ impl crate::Context for ContextWgpuCore {
     fn device_poll(
         &self,
         device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
-        maintain: crate::Maintain,
-    ) -> wgt::MaintainResult {
-        let maintain_inner = maintain.map_index(|i| *i.1.as_ref().downcast_ref().unwrap());
+        device_data: &Self::DeviceData,
+        poll_info: crate::PollInfo,
+    ) -> wgt::SubmissionStatus {
+        let maintain_inner = poll_info.map_index(|i| *i.1.as_ref().downcast_ref().unwrap());
         match wgc::gfx_select!(device => self.0.device_poll(
             *device,
             maintain_inner
         )) {
-            Ok(done) => match done {
-                true => wgt::MaintainResult::SubmissionQueueEmpty,
-                false => wgt::MaintainResult::Ok,
-            },
-            Err(err) => self.handle_error_fatal(err, "Device::poll"),
+            Ok(maintain_result) => maintain_result,
+            Err(err) => {
+                self.handle_error_nolabel(&device_data.error_sink, err, "Device::poll");
+                wgt::SubmissionStatus::Incomplete
+            }
         }
     }
     fn device_on_uncaptured_error(

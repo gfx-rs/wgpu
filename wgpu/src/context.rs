@@ -10,11 +10,11 @@ use wgt::{
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain,
-    MaintainResult, MapMode, PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
+    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, MapMode,
+    PipelineLayoutDescriptor, PollInfo, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
+    ShaderModuleDescriptorSpirV, SubmissionStatus, SurfaceTargetUnsafe, Texture, TextureDescriptor,
     TextureViewDescriptor, UncapturedErrorHandler,
 };
 
@@ -286,8 +286,8 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        maintain: Maintain,
-    ) -> MaintainResult;
+        poll_info: PollInfo,
+    ) -> SubmissionStatus;
     fn device_on_uncaptured_error(
         &self,
         device: &Self::DeviceId,
@@ -1307,8 +1307,8 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        maintain: Maintain,
-    ) -> MaintainResult;
+        poll_info: PollInfo,
+    ) -> SubmissionStatus;
     fn device_on_uncaptured_error(
         &self,
         device: &ObjectId,
@@ -2389,11 +2389,11 @@ where
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        maintain: Maintain,
-    ) -> MaintainResult {
+        poll_info: PollInfo,
+    ) -> SubmissionStatus {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        Context::device_poll(self, &device, device_data, maintain)
+        Context::device_poll(self, &device, device_data, poll_info)
     }
 
     fn device_on_uncaptured_error(

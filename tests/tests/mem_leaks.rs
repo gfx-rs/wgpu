@@ -241,9 +241,9 @@ async fn draw_test_with_reports(
     let report = global_report.hub_report(ctx.adapter_info.backend);
     assert_eq!(report.command_buffers.num_allocated, 0);
 
-    ctx.async_poll(wgpu::Maintain::wait_for(submit_index))
+    ctx.async_poll(wgpu::PollInfo::wait_for(submit_index))
         .await
-        .panic_on_timeout();
+        .panic_on_incomplete();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);

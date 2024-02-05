@@ -84,9 +84,9 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
         let data: Vec<u8> = slice.get_mapped_range().to_vec();
 
         for byte in &data[..(size as usize * 2)] {
@@ -179,9 +179,9 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollInfo::wait())
             .await
-            .panic_on_timeout();
+            .panic_on_incomplete();
         let data: Vec<u8> = slice.get_mapped_range().to_vec();
 
         for byte in &data[..((size * size) as usize * 2)] {

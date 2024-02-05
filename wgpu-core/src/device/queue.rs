@@ -1511,11 +1511,15 @@ impl Global {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll) {
+            let (closures, _) = match device.maintain(fence, wgt::PollInfo::poll()) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
-                Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
-                Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
+                Err(
+                    WaitIdleError::WrongSubmissionIndex(..)
+                    | WaitIdleError::ExcessiveTimeout(..)
+                    | WaitIdleError::MissingFeatures(..)
+                    | WaitIdleError::GpuWaitForIdleTimeout,
+                ) => unreachable!(),
             };
 
             // pending_write_resources has been drained, so it's empty, but we

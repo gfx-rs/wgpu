@@ -126,9 +126,9 @@ async fn bgl_dedupe(ctx: TestingContext) {
         }
     }
 
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollInfo::wait())
         .await
-        .panic_on_timeout();
+        .panic_on_incomplete();
 
     if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
         // Now all of the BGL ids should be dead, so we should get the same ids again.
