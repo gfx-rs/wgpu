@@ -20,7 +20,7 @@ pub enum Origin {
 #[derive(Debug, Default, Clone, Eq)]
 pub struct EntryMap {
     /// We use a IndexMap here so that we can sort the entries by their binding index,
-    /// guarenteeing that the hash of equivilant layouts will be the same.
+    /// guaranteeing that the hash of equivalent layouts will be the same.
     inner: FastIndexMap<u32, wgt::BindGroupLayoutEntry>,
     /// We keep track of whether the map is sorted or not, so that we can assert that
     /// it is sorted, so that PartialEq and Hash will be stable.

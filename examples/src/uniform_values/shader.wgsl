@@ -1,6 +1,6 @@
 // Some credit to https://github.com/paulgb/wgsl-playground/tree/main.
 
-// We use seperate the x and y instead of using a vec2 to avoid wgsl padding.
+// We use separate the x and y instead of using a vec2 to avoid wgsl padding.
 struct AppState {
     pos_x: f32,
     pos_y: f32,

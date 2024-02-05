@@ -146,7 +146,7 @@ impl Version {
         }
     }
 
-    /// Returns true if targetting WebGL
+    /// Returns true if targeting WebGL
     const fn is_webgl(&self) -> bool {
         match *self {
             Version::Desktop(_) => false,
@@ -340,9 +340,9 @@ pub struct TextureMapping {
 ///
 /// Push constants are emulated using traditional uniforms in OpenGL.
 ///
-/// These are composed of a set of primatives (scalar, vector, matrix) that
+/// These are composed of a set of primitives (scalar, vector, matrix) that
 /// are given names. Because they are not backed by the concept of a buffer,
-/// we must do the work of calculating the offset of each primative in the
+/// we must do the work of calculating the offset of each primitive in the
 /// push constant block.
 #[derive(Debug, Clone)]
 pub struct PushConstantItem {
@@ -394,11 +394,11 @@ impl IdGenerator {
     }
 }
 
-/// Assorted options needed for generting varyings.
+/// Assorted options needed for generating varyings.
 #[derive(Clone, Copy)]
 struct VaryingOptions {
     output: bool,
-    targetting_webgl: bool,
+    targeting_webgl: bool,
     draw_parameters: bool,
 }
 
@@ -406,7 +406,7 @@ impl VaryingOptions {
     const fn from_writer_options(options: &Options, output: bool) -> Self {
         Self {
             output,
-            targetting_webgl: options.version.is_webgl(),
+            targeting_webgl: options.version.is_webgl(),
             draw_parameters: options.writer_flags.contains(WriterFlags::DRAW_PARAMETERS),
         }
     }
@@ -1849,7 +1849,7 @@ impl<'a, W: Write> Writer<'a, W> {
         size: usize,
         ctx: &back::FunctionCtx,
     ) -> BackendResult {
-        // Write parantheses around the dot product expression to prevent operators
+        // Write parentheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
         write!(self.out, "(")?;
 
@@ -3795,11 +3795,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // Sampled images inherit the policy from the user passed policies
             crate::ImageClass::Sampled { .. } => ("texelFetch", self.policies.image_load),
             crate::ImageClass::Storage { .. } => {
-                // OpenGL ES 3.1 mentiones in Chapter "8.22 Texture Image Loads and Stores" that:
+                // OpenGL ES 3.1 mentions in Chapter "8.22 Texture Image Loads and Stores" that:
                 // "Invalid image loads will return a vector where the value of R, G, and B components
                 // is 0 and the value of the A component is undefined."
                 //
-                // OpenGL 4.2 Core mentiones in Chapter "3.9.20 Texture Image Loads and Stores" that:
+                // OpenGL 4.2 Core mentions in Chapter "3.9.20 Texture Image Loads and Stores" that:
                 // "Invalid image loads will return zero."
                 //
                 // So, we only inject bounds checks for ES
@@ -3832,7 +3832,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // expressions so we can be sure that after we test a
             // condition it will be true for the next ones
 
-            // Write parantheses around the ternary operator to prevent problems with
+            // Write parentheses around the ternary operator to prevent problems with
             // expressions emitted before or after it having more precedence
             write!(self.out, "(",)?;
 
@@ -3856,7 +3856,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             // We now need to write the size checks for the coordinates and array index
-            // first we write the comparation function in case the image is 1D non arrayed
+            // first we write the comparison function in case the image is 1D non arrayed
             // (and no 1D to 2D hack was needed) we are comparing scalars so the less than
             // operator will suffice, but otherwise we'll be comparing two vectors so we'll
             // need to use the `lessThan` function but it returns a vector of booleans (one
@@ -3883,7 +3883,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // coordinates from the image size.
                 write!(self.out, ", ")?;
             } else {
-                // If we didn't use it (ie. 1D images) we perform the comparsion
+                // If we didn't use it (ie. 1D images) we perform the comparison
                 // using the less than operator.
                 write!(self.out, " < ")?;
             }
@@ -4002,7 +4002,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Get the kind of the output value.
             let kind = match class {
                 // Only sampled images can reach here since storage images
-                // don't need bounds checks and depth images aren't implmented
+                // don't need bounds checks and depth images aren't implemented
                 crate::ImageClass::Sampled { kind, .. } => kind,
                 _ => unreachable!(),
             };
@@ -4018,7 +4018,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_zero_init_scalar(kind)?;
             // Close the zero value constructor
             write!(self.out, ")")?;
-            // Close the parantheses surrounding our ternary
+            // Close the parentheses surrounding our ternary
             write!(self.out, ")")?;
         }
 
@@ -4376,7 +4376,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if options.targetting_webgl => "int(gl_ViewID_OVR)",
+        Bi::ViewIndex if options.targeting_webgl => "int(gl_ViewID_OVR)",
         Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
@@ -4387,7 +4387,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
             if options.draw_parameters {
                 "(uint(gl_InstanceID) + uint(gl_BaseInstanceARB))"
             } else {
-                // Must match FISRT_INSTANCE_BINDING
+                // Must match FIRST_INSTANCE_BINDING
                 "(uint(gl_InstanceID) + naga_vs_first_instance)"
             }
         }

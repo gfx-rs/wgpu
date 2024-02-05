@@ -71,7 +71,7 @@ use super::{
 /// 1. `self.trace` is locked last (unenforced)
 ///
 /// Right now avoid locking twice same resource or registry in a call execution
-/// and minimize the locking to the minimum scope possibile
+/// and minimize the locking to the minimum scope possible
 /// Unless otherwise specified, no lock may be acquired while holding another lock.
 /// This means that you must inspect function calls made while a lock is held
 /// to see what locks the callee may try to acquire.
@@ -372,15 +372,19 @@ impl<A: HalApi> Device<A> {
 
         let mapping_closures = life_tracker.handle_mapping(self.raw(), &self.trackers);
 
+        let queue_empty = life_tracker.queue_empty();
+
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
         // and we have a DeviceLostClosure, return the closure to be called by
         // our caller. This will complete the steps for both destroy and for
         // "lose the device".
         let mut device_lost_invocations = SmallVec::new();
-        if !self.is_valid() && life_tracker.queue_empty() {
-            // We can release gpu resources associated with this device.
-            self.release_gpu_resources();
+        let mut should_release_gpu_resource = false;
+        if !self.is_valid() && queue_empty {
+            // We can release gpu resources associated with this device (but not
+            // while holding the life_tracker lock).
+            should_release_gpu_resource = true;
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
@@ -393,12 +397,19 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        // Don't hold the lock while calling release_gpu_resources.
+        drop(life_tracker);
+
+        if should_release_gpu_resource {
+            self.release_gpu_resources();
+        }
+
         let closures = UserClosures {
             mappings: mapping_closures,
             submissions: submission_closures,
             device_lost_invocations,
         };
-        Ok((closures, life_tracker.queue_empty()))
+        Ok((closures, queue_empty))
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {

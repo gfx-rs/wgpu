@@ -533,7 +533,7 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 
 The instance descriptor grew two more fields: `flags` and `gles_minor_version`.
 
-`flags` allow you to toggle the underlying api validation layers, debug information about shaders and objects in capture programs, and the ability to discard lables
+`flags` allow you to toggle the underlying api validation layers, debug information about shaders and objects in capture programs, and the ability to discard labels
 
 `gles_minor_version` is a rather niche feature that allows you to force the GLES backend to use a specific minor version, this is useful to get ANGLE to enable more than GLES 3.0.
 
@@ -1109,11 +1109,11 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 #### `Queue::copy_external_image_to_texture` on WebAssembly
 
-A new api, `Queue::copy_external_image_to_texture`, allows you to create wgpu textures from various web image primitives. Specificically from `HtmlVideoElement`, `HtmlCanvasElement`, `OffscreenCanvas`, and `ImageBitmap`. This provides multiple low-copy ways of interacting with the browser. WebGL is also supported, though WebGL has some additional restrictions, represented by the `UNRESTRICTED_EXTERNAL_IMAGE_COPIES` downlevel flag. By @cwfitzgerald in [#3288](https://github.com/gfx-rs/wgpu/pull/3288)
+A new api, `Queue::copy_external_image_to_texture`, allows you to create wgpu textures from various web image primitives. Specifically from `HtmlVideoElement`, `HtmlCanvasElement`, `OffscreenCanvas`, and `ImageBitmap`. This provides multiple low-copy ways of interacting with the browser. WebGL is also supported, though WebGL has some additional restrictions, represented by the `UNRESTRICTED_EXTERNAL_IMAGE_COPIES` downlevel flag. By @cwfitzgerald in [#3288](https://github.com/gfx-rs/wgpu/pull/3288)
 
 #### Instance creation now takes `InstanceDescriptor` instead of `Backends`
 
-`Instance::new()` and `hub::Global::new()` now take an `InstanceDescriptor` struct which cointains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use.
+`Instance::new()` and `hub::Global::new()` now take an `InstanceDescriptor` struct which contains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use.
 
 ```diff
 - let instance = Instance::new(wgpu::Backends::all());
@@ -1424,7 +1424,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 - Free `StagingBuffers` even when an error occurs in the operation that consumes them. By @jimblandy in [#2961](https://github.com/gfx-rs/wgpu/pull/2961)
 - Avoid overflow when checking that texture copies fall within bounds. By @jimblandy in [#2963](https://github.com/gfx-rs/wgpu/pull/2963)
 - Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
-- Fix compilation errors when using wgpu-core in isolation while targetting `wasm32-unknown-unknown` by @Seamooo in [#2922](https://github.com/gfx-rs/wgpu/pull/2922)
+- Fix compilation errors when using wgpu-core in isolation while targeting `wasm32-unknown-unknown` by @Seamooo in [#2922](https://github.com/gfx-rs/wgpu/pull/2922)
 - Fixed opening of RenderDoc library by @abuffseagull in [#2930](https://github.com/gfx-rs/wgpu/pull/2930)
 - Added missing validation for `BufferUsages` mismatches when `Features::MAPPABLE_PRIMARY_BUFFERS` is not
   enabled. By @imberflur in [#3023](https://github.com/gfx-rs/wgpu/pull/3023)
@@ -1521,7 +1521,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 ### Full API Diff
 
-Manual concatination of `cargo public-api --diff-git-checkouts v0.13.2 v0.14.0 -p wgpu` and `cargo public-api --diff-git-checkouts v0.13.2 v0.14.0 -p wgpu-types`
+Manual concatenation of `cargo public-api --diff-git-checkouts v0.13.2 v0.14.0 -p wgpu` and `cargo public-api --diff-git-checkouts v0.13.2 v0.14.0 -p wgpu-types`
 
 ```diff
 Removed items from the public API
@@ -1798,7 +1798,7 @@ DeviceDescriptor {
 - Permit non-struct, non-array types as buffers. by @jimblandy in [#2584](https://github.com/gfx-rs/wgpu/pull/2584)
 - Return `queue_empty` for Device::poll by @xiaopengli89 in [#2643](https://github.com/gfx-rs/wgpu/pull/2643)
 - Add `SHADER_FLOAT16` feature by @jinleili in [#2646](https://github.com/gfx-rs/wgpu/pull/2646)
-- Add DEPTH32FLOAT_STENCIL8 featue by @jinleili in [#2664](https://github.com/gfx-rs/wgpu/pull/2664)
+- Add DEPTH32FLOAT_STENCIL8 feature by @jinleili in [#2664](https://github.com/gfx-rs/wgpu/pull/2664)
 - Add DEPTH24UNORM_STENCIL8 feature by @jinleili in [#2689](https://github.com/gfx-rs/wgpu/pull/2689)
 - Implement submission indexes by @cwfitzgerald in [#2700](https://github.com/gfx-rs/wgpu/pull/2700)
 - [WebGL] Add a downlevel capability for rendering to floating point textures by @expenses in [#2729](https://github.com/gfx-rs/wgpu/pull/2729)
@@ -1849,7 +1849,7 @@ DeviceDescriptor {
 #### Emscripten
 
 - feature: emscripten by @caiiiycuk in [#2422](https://github.com/gfx-rs/wgpu/pull/2422)
-- feature = emscripten, compability fixes for wgpu-native by @caiiiycuk in [#2450](https://github.com/gfx-rs/wgpu/pull/2450)
+- feature = emscripten, compatibility fixes for wgpu-native by @caiiiycuk in [#2450](https://github.com/gfx-rs/wgpu/pull/2450)
 
 ### Changes
 
@@ -2352,7 +2352,7 @@ DeviceDescriptor {
   - Updated default storage buffer/image limit to `8` from `4`.
 - Fixed:
   - `Buffer::get_mapped_range` can now have a range of zero.
-  - Fixed output spirv requiring the "kernal" capability.
+  - Fixed output spirv requiring the "kernel" capability.
   - Fixed segfault due to improper drop order.
   - Fixed incorrect dynamic stencil reference for Replace ops.
   - Fixed tracking of temporary resources.

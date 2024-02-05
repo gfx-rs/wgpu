@@ -1791,9 +1791,9 @@ impl Instance {
                 backends = backends.union(Backends::VULKAN);
             }
 
-            // GL Vulkan on Mac is only available through angle.
+            // GL on Mac is only available through angle.
             if cfg!(target_os = "macos") && cfg!(feature = "angle") {
-                backends = backends.union(Backends::VULKAN);
+                backends = backends.union(Backends::GL);
             }
         } else {
             if cfg!(webgpu) {
@@ -4936,7 +4936,7 @@ impl Surface<'_> {
 pub struct Id<T>(NonZeroU64, PhantomData<*mut T>);
 
 impl<T> Id<T> {
-    /// For testing use only. We provide no guarentees about the actual value of the ids.
+    /// For testing use only. We provide no guarantees about the actual value of the ids.
     #[doc(hidden)]
     pub fn inner(&self) -> u64 {
         self.0.get()

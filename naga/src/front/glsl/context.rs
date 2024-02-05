@@ -1057,7 +1057,7 @@ impl<'a> Context<'a> {
             //
             // The ternary operator is defined to only evaluate one of the two possible
             // expressions which means that it's behavior is that of an `if` statement,
-            // and it's merely syntatic sugar for it.
+            // and it's merely syntactic sugar for it.
             HirExprKind::Conditional {
                 condition,
                 accept,
@@ -1164,7 +1164,7 @@ impl<'a> Context<'a> {
                     meta,
                 );
 
-                // Note: `Expression::Load` must be emited before it's used so make
+                // Note: `Expression::Load` must be emitted before it's used so make
                 // sure the emitter is active here.
                 self.add_expression(
                     Expression::Load {

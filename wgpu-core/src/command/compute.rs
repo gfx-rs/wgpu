@@ -423,7 +423,7 @@ impl Global {
                 .map_pass_err(pass_scope)?;
 
             // Unlike in render passes we can't delay resetting the query sets since
-            // there is no auxillary pass.
+            // there is no auxiliary pass.
             let range = if let (Some(index_a), Some(index_b)) =
                 (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
             {

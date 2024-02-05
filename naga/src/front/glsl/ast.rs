@@ -98,9 +98,9 @@ pub struct EntryArg {
 #[derive(Debug, Clone)]
 pub struct VariableReference {
     pub expr: Handle<Expression>,
-    /// Wether the variable is of a pointer type (and needs loading) or not
+    /// Whether the variable is of a pointer type (and needs loading) or not
     pub load: bool,
-    /// Wether the value of the variable can be changed or not
+    /// Whether the value of the variable can be changed or not
     pub mutable: bool,
     pub constant: Option<(Handle<Constant>, Handle<Type>)>,
     pub entry_arg: Option<usize>,

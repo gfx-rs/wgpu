@@ -69,7 +69,7 @@ pub enum TransferError {
         dimension: TextureErrorDimension,
         side: CopySide,
     },
-    #[error("Unable to select texture aspect {aspect:?} from fromat {format:?}")]
+    #[error("Unable to select texture aspect {aspect:?} from format {format:?}")]
     InvalidTextureAspect {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
@@ -252,7 +252,7 @@ pub(crate) fn validate_linear_texture_data(
 ) -> Result<(BufferAddress, BufferAddress), TransferError> {
     // Convert all inputs to BufferAddress (u64) to avoid some of the overflow issues
     // Note: u64 is not always enough to prevent overflow, especially when multiplying
-    // something with a potentially large depth value, so it is preferrable to validate
+    // something with a potentially large depth value, so it is preferable to validate
     // the copy size before calling this function (for example via `validate_texture_copy_range`).
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;

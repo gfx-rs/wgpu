@@ -38,7 +38,7 @@ impl AnyDevice {
             }
         }
 
-        // SAFETY: The pointer returned by Arc::into_raw is gauranteed to be
+        // SAFETY: The pointer returned by Arc::into_raw is guaranteed to be
         // non-null.
         let data = unsafe { NonNull::new_unchecked(Arc::into_raw(device).cast_mut()) };
 

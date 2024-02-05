@@ -409,7 +409,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             Some(active) => {
                 active.work_done_closures.push(closure);
             }
-            // We must defer the closure until all previously occuring map_async closures
+            // We must defer the closure until all previously occurring map_async closures
             // have fired. This is required by the spec.
             None => {
                 self.work_done_closures.push(closure);
@@ -439,8 +439,8 @@ impl<A: HalApi> LifetimeTracker<A> {
             let is_removed = trackers.remove_abandoned(id);
             if is_removed {
                 removed_resources.push(resource.clone());
-                if let Some(ressources) = non_referenced_resources {
-                    get_resource_map(ressources).insert(id, resource.clone());
+                if let Some(resources) = non_referenced_resources {
+                    get_resource_map(resources).insert(id, resource.clone());
                 }
             }
             !is_removed

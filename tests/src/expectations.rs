@@ -292,8 +292,8 @@ pub struct FailureReason {
     /// Match a particular message of a failure result.
     ///
     /// If `None`, matches any message. If `Some`, a case-insensitive sub-string
-    /// test is performed. Allowing `"error occured"` to match a message like
-    /// `"An unexpected Error occured!"`.
+    /// test is performed. Allowing `"error occurred"` to match a message like
+    /// `"An unexpected Error occurred!"`.
     message: Option<&'static str>,
 }
 
@@ -324,8 +324,8 @@ impl FailureReason {
     /// Match an error with a message.
     ///
     /// If specified, a case-insensitive sub-string test is performed. Allowing
-    /// `"error occured"` to match a message like `"An unexpected Error
-    /// occured!"`.
+    /// `"error occurred"` to match a message like `"An unexpected Error
+    /// occurred!"`.
     pub fn with_message(self, message: &'static str) -> Self {
         Self {
             message: Some(message),
