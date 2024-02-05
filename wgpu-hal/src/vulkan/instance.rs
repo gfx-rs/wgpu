@@ -643,6 +643,10 @@ impl crate::Instance<super::Api> for super::Instance {
                 .find(|inst_layer| cstr_from_bytes_until_nul(&inst_layer.layer_name) == Some(name))
         }
 
+        let validation_layer_name =
+            CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
+        let validation_layer_properties = find_layer(&instance_layers, validation_layer_name);
+
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
         let has_nv_optimus = find_layer(&instance_layers, nv_optimus_layer).is_some();
 
@@ -654,9 +658,7 @@ impl crate::Instance<super::Api> for super::Instance {
         // Request validation layer if asked.
         let mut debug_utils = None;
         if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
-            let validation_layer_name =
-                CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
-            if let Some(layer_properties) = find_layer(&instance_layers, validation_layer_name) {
+            if let Some(layer_properties) = validation_layer_properties {
                 layers.push(validation_layer_name);
 
                 if extensions.contains(&ext::DebugUtils::name()) {
