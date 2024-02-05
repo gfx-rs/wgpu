@@ -1791,9 +1791,9 @@ impl Instance {
                 backends = backends.union(Backends::VULKAN);
             }
 
-            // GL Vulkan on Mac is only available through angle.
+            // GL on Mac is only available through angle.
             if cfg!(target_os = "macos") && cfg!(feature = "angle") {
-                backends = backends.union(Backends::VULKAN);
+                backends = backends.union(Backends::GL);
             }
         } else {
             if cfg!(webgpu) {
