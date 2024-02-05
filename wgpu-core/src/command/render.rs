@@ -1677,7 +1677,7 @@ impl Global {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
-                        check_buffer_usage(buffer.usage, BufferUsages::INDEX)
+                        check_buffer_usage(buffer_id, buffer.usage, BufferUsages::INDEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
@@ -1739,7 +1739,7 @@ impl Global {
                             .map_pass_err(scope);
                         }
 
-                        check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
+                        check_buffer_usage(buffer_id, buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
@@ -2036,8 +2036,12 @@ impl Global {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
-                        check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
-                            .map_pass_err(scope)?;
+                        check_buffer_usage(
+                            buffer_id,
+                            indirect_buffer.usage,
+                            BufferUsages::INDIRECT,
+                        )
+                        .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
                             .get(&snatch_guard)
@@ -2108,8 +2112,12 @@ impl Global {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
-                        check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
-                            .map_pass_err(scope)?;
+                        check_buffer_usage(
+                            buffer_id,
+                            indirect_buffer.usage,
+                            BufferUsages::INDIRECT,
+                        )
+                        .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
                             .get(&snatch_guard)
@@ -2125,7 +2133,7 @@ impl Global {
                                 hal::BufferUses::INDIRECT,
                             )
                             .map_pass_err(scope)?;
-                        check_buffer_usage(count_buffer.usage, BufferUsages::INDIRECT)
+                        check_buffer_usage(buffer_id, count_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let count_raw = count_buffer
                             .raw

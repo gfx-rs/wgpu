@@ -1907,7 +1907,7 @@ impl<A: HalApi> Device<A> {
             .add_single(storage, bb.buffer_id, internal_use)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
 
-        check_buffer_usage(buffer.usage, pub_usage)?;
+        check_buffer_usage(bb.buffer_id, buffer.usage, pub_usage)?;
         let raw_buffer = buffer
             .raw
             .get(snatch_guard)

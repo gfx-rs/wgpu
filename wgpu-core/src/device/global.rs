@@ -381,7 +381,7 @@ impl Global {
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
+        check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
@@ -444,7 +444,7 @@ impl Global {
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
+        check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
         let raw_buf = buffer
@@ -2417,7 +2417,7 @@ impl Global {
                 return Err((op, DeviceError::Lost.into()));
             }
 
-            if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
+            if let Err(e) = check_buffer_usage(buffer.info.id(), buffer.usage, pub_usage) {
                 return Err((op, e.into()));
             }
 

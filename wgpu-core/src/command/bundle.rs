@@ -499,7 +499,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
+                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
 
                     let end = match size {
@@ -538,7 +538,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
+                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
 
                     let end = match size {
@@ -660,7 +660,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
+                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
@@ -699,7 +699,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
+                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
