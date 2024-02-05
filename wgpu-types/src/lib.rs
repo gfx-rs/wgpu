@@ -171,7 +171,10 @@ bitflags::bitflags! {
         const BROWSER_WEBGPU = 1 << Backend::BrowserWebGpu as u32;
         /// All the apis that wgpu offers first tier of support for.
         ///
-        /// Vulkan + Metal + DX12 + Browser WebGPU
+        /// * [`Backends::VULKAN`]
+        /// * [`Backends::METAL`]
+        /// * [`Backends::DX12`]
+        /// * [`Backends::BROWSER_WEBGPU`]
         const PRIMARY = Self::VULKAN.bits()
             | Self::METAL.bits()
             | Self::DX12.bits()
@@ -179,7 +182,7 @@ bitflags::bitflags! {
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
         ///
-        /// OpenGL
+        /// * [`Backends::GL`]
         const SECONDARY = Self::GL.bits();
     }
 }
