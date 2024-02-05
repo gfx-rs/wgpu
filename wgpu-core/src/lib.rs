@@ -7,7 +7,7 @@
 //!
 //! - **`api_log_info`** --- Log all API entry points at info instead of trace level.
 //! - **`resource_log_info`** --- Log resource lifecycle management at info instead of trace level.
-//! - **`link`** _(enabled by default)_ --- Use static linking for libraries. Disale to manually
+//! - **`link`** _(enabled by default)_ --- Use static linking for libraries. Disable to manually
 //!   link. Enabled by default.
 //! - **`renderdoc`** --- Support the Renderdoc graphics debugger:
 //!   [https://renderdoc.org/](https://renderdoc.org/)
@@ -58,7 +58,7 @@
     clippy::needless_lifetimes,
     // No need for defaults in the internal types.
     clippy::new_without_default,
-    // Needless updates are more scaleable, easier to play with features.
+    // Needless updates are more scalable, easier to play with features.
     clippy::needless_update,
     // Need many arguments for some core functions to be able to re-use code in many situations.
     clippy::too_many_arguments,

@@ -379,7 +379,7 @@ impl VertexState {
     fn update_limits(&mut self) {
         // Implements the validation from https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw
         // Except that the formula is shuffled to extract the number of vertices in order
-        // to carry the bulk of the computation when changing states intead of when producing
+        // to carry the bulk of the computation when changing states instead of when producing
         // draws. Draw calls tend to happen at a higher frequency. Here we determine vertex
         // limits that can be cheaply checked for each draw call.
         self.vertex_limit = u32::MAX as u64;
@@ -395,7 +395,7 @@ impl VertexState {
             } else {
                 if vbs.step.stride == 0 {
                     // We already checked that the last stride fits, the same
-                    // vertex will be repeated so this slot can accomodate any number of
+                    // vertex will be repeated so this slot can accommodate any number of
                     // vertices.
                     continue;
                 }
@@ -1640,7 +1640,7 @@ impl Global {
 
                         // Initialize each `vertex.inputs[i].step` from
                         // `pipeline.vertex_steps[i]`.  Enlarge `vertex.inputs`
-                        // as necessary to accomodate all slots in the
+                        // as necessary to accommodate all slots in the
                         // pipeline. If `vertex.inputs` is longer, fill the
                         // extra entries with default `VertexStep`s.
                         while state.vertex.inputs.len() < vertex_steps_len {

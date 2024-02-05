@@ -10,12 +10,12 @@ use winapi::{
 // lock everyone out until we have registered or unregistered the
 // exception handler, otherwise really nasty races could happen.
 //
-// By routing all the registration through these functions we can guarentee
+// By routing all the registration through these functions we can guarantee
 // there is either 1 or 0 exception handlers registered, not multiple.
-static EXCEPTION_HANLDER_COUNT: Mutex<usize> = Mutex::const_new(parking_lot::RawMutex::INIT, 0);
+static EXCEPTION_HANDLER_COUNT: Mutex<usize> = Mutex::const_new(parking_lot::RawMutex::INIT, 0);
 
 pub fn register_exception_handler() {
-    let mut count_guard = EXCEPTION_HANLDER_COUNT.lock();
+    let mut count_guard = EXCEPTION_HANDLER_COUNT.lock();
     if *count_guard == 0 {
         unsafe {
             errhandlingapi::AddVectoredExceptionHandler(0, Some(output_debug_string_handler))
@@ -25,7 +25,7 @@ pub fn register_exception_handler() {
 }
 
 pub fn unregister_exception_handler() {
-    let mut count_guard = EXCEPTION_HANLDER_COUNT.lock();
+    let mut count_guard = EXCEPTION_HANDLER_COUNT.lock();
     if *count_guard == 1 {
         unsafe {
             errhandlingapi::RemoveVectoredExceptionHandler(output_debug_string_handler as *mut _)

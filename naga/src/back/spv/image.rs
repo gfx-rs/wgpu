@@ -64,7 +64,7 @@ trait Access {
     /// the level of detail, and `sample_id` is the index of the sample to
     /// access in a multisampled texel.
     ///
-    /// Ths method assumes that `coordinates_id` has already had the image array
+    /// This method assumes that `coordinates_id` has already had the image array
     /// index, if any, folded in, as done by `write_image_coordinates`.
     ///
     /// Return the value id produced by the instruction, if any.

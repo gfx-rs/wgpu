@@ -538,7 +538,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             .geometry(vk::AccelerationStructureGeometryDataKHR {
                                 triangles: *triangle_data,
                             })
-                            .flags(conv::map_acceleration_structure_geomety_flags(
+                            .flags(conv::map_acceleration_structure_geometry_flags(
                                 triangles.flags,
                             ));
 
@@ -570,7 +570,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             .geometry(vk::AccelerationStructureGeometryDataKHR {
                                 aabbs: *aabbs_data,
                             })
-                            .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+                            .flags(conv::map_acceleration_structure_geometry_flags(aabb.flags));
 
                         geometries.push(*geometry);
                         ranges.push(*range);

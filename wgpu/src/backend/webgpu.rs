@@ -254,10 +254,10 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
                 wgt::AstcBlock::B12x12 => tf::Astc12x12UnormSrgb,
             },
             wgt::AstcChannel::Hdr => {
-                unimplemented!("Format {texture_format:?} has no WebGPU equivilant")
+                unimplemented!("Format {texture_format:?} has no WebGPU equivalent")
             }
         },
-        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivilant"),
+        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivalent"),
     }
 }
 
@@ -2152,7 +2152,7 @@ impl crate::context::Context for ContextWebGpu {
         _pipeline_layout: &Self::PipelineLayoutId,
         _pipeline_layout_data: &Self::PipelineLayoutData,
     ) {
-        // Dropped automaticaly
+        // Dropped automatically
     }
 
     fn shader_module_drop(

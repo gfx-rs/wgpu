@@ -222,7 +222,7 @@ pub async fn compare_image_output(
             all_passed &= check.check(&mut pool);
         }
 
-        // Convert the error values to a false color reprensentation
+        // Convert the error values to a false color representation
         let magma_image = error_map_flip
             .apply_color_lut(&nv_flip::magma_lut())
             .to_vec();
