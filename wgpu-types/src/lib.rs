@@ -160,7 +160,7 @@ bitflags::bitflags! {
         const GL = 1 << Backend::Gl as u32;
         /// Supported on macOS/iOS
         const METAL = 1 << Backend::Metal as u32;
-        /// Supported on Windows 10
+        /// Supported on Windows 10 and later
         const DX12 = 1 << Backend::Dx12 as u32;
         /// Supported when targeting the web through webassembly with the `webgpu` feature enabled.
         ///
