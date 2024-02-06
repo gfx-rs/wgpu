@@ -8,6 +8,14 @@ static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync
     drop(encoder);
 });
 
+#[gpu_test]
+static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
+        let device = ctx.device.clone();
+        drop(ctx);
+        let _encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    });
+
 // This test crashes on DX12 with the exception:
 //
 // ID3D12CommandAllocator::Reset: The command allocator cannot be reset because a
