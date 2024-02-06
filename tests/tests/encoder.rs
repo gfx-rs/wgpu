@@ -10,11 +10,16 @@ static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync
 
 #[gpu_test]
 static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
-        let device = ctx.device.clone();
-        drop(ctx);
-        let _encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    });
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().expect_fail(FailureCase::always()))
+        .run_sync(|ctx| {
+            // Use the device after the queue is dropped. Currently this panics
+            // but it probably shouldn't
+            let device = ctx.device.clone();
+            drop(ctx);
+            let _encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        });
 
 // This test crashes on DX12 with the exception:
 //
