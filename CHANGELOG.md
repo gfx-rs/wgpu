@@ -118,6 +118,7 @@ Bottom level categories:
 
 - Fix intermittent crashes on Linux in the `multithreaded_compute` test. By @jimblandy in [#5129](https://github.com/gfx-rs/wgpu/pull/5129).
 - Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @rodolphito in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
+- Add test that verifies that we can drop the queue before using the device to create a command encoder. By @Davidster in [#5211](https://github.com/gfx-rs/wgpu/pull/5211)
 
 ## v0.19.0 (2024-01-17)
 
