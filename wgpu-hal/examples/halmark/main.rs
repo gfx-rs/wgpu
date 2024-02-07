@@ -254,6 +254,7 @@ impl<A: hal::Api> Example<A> {
                 entry_point: "vs_main",
                 constants: &constants,
                 zero_initialize_workgroup_memory: true,
+                vertex_pulling_transform: false,
             },
             vertex_buffers: &[],
             fragment_stage: Some(hal::ProgrammableStage {
@@ -261,6 +262,7 @@ impl<A: hal::Api> Example<A> {
                 entry_point: "fs_main",
                 constants: &constants,
                 zero_initialize_workgroup_memory: true,
+                vertex_pulling_transform: false,
             }),
             primitive: wgt::PrimitiveState {
                 topology: wgt::PrimitiveTopology::TriangleStrip,

@@ -890,6 +890,7 @@ fn convert_wgsl() {
             "overrides-ray-query",
             Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
+        ("vertex-pulling-transform", Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {
