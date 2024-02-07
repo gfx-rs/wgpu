@@ -1,0 +1,76 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct _mslBufferSizes {
+    uint buffer_size1;
+    uint buffer_size2;
+};
+
+struct VertexOutput {
+    metal::float4 position;
+    metal::float4 color;
+    metal::float2 texcoord;
+};
+struct VertexInput {
+    metal::float4 position;
+    metal::float3 normal;
+    metal::float2 texcoord;
+};
+float unpackFloat32_(uint b0, uint b1, uint b2, uint b3) {
+    return as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0);
+}
+metal::float4 unpackFloat32x4_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7, uint b8, uint b9, uint b10, uint b11, uint b12, uint b13, uint b14, uint b15) {
+    return metal::float4(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4), as_type<float>(b11 << 24 | b10 << 16 | b9 << 8 | b8), as_type<float>(b15 << 24 | b14 << 16 | b13 << 8 | b12));
+}
+metal::float2 unpackFloat32x2_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7) {
+    return metal::float2(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4));
+}
+
+metal::float4 do_lighting(
+    metal::float4 position,
+    metal::float3 normal
+) {
+    return metal::float4(0.0);
+}
+
+struct render_vertexOutput {
+    metal::float4 position [[position]];
+    metal::float4 color [[user(loc0), center_perspective]];
+    metal::float2 texcoord [[user(loc1), center_perspective]];
+};
+struct vb_1_type { metal::uchar data[20]; };
+struct vb_2_type { metal::uchar data[16]; };
+vertex render_vertexOutput render_vertex(
+  uint v_existing_id [[vertex_id]]
+, constant metal::float4x4& mvp_matrix [[user(fake0)]]
+, uint i_id [[instance_id]]
+, const device vb_1_type* vb_1_in [[buffer(1)]]
+, const device vb_2_type* vb_2_in [[buffer(2)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+) {
+    metal::float4 position_1 = {};
+    metal::float3 normal_1 = {};
+    if (v_existing_id < (_buffer_sizes.buffer_size1 / 20)) {
+        const vb_1_type vb_1_elem = vb_1_in[v_existing_id];
+        position_1 = metal::float4(unpackFloat32_(vb_1_elem.data[0], vb_1_elem.data[1], vb_1_elem.data[2], vb_1_elem.data[3]), 0.0, 0.0, 1.0);
+        normal_1 = metal::float3(unpackFloat32x4_(vb_1_elem.data[4], vb_1_elem.data[5], vb_1_elem.data[6], vb_1_elem.data[7], vb_1_elem.data[8], vb_1_elem.data[9], vb_1_elem.data[10], vb_1_elem.data[11], vb_1_elem.data[12], vb_1_elem.data[13], vb_1_elem.data[14], vb_1_elem.data[15], vb_1_elem.data[16], vb_1_elem.data[17], vb_1_elem.data[18], vb_1_elem.data[19]));
+    }
+    metal::float2 texcoord = {};
+    if (i_id < (_buffer_sizes.buffer_size2 / 16)) {
+        const vb_2_type vb_2_elem = vb_2_in[i_id];
+        texcoord = unpackFloat32x2_(vb_2_elem.data[0], vb_2_elem.data[1], vb_2_elem.data[2], vb_2_elem.data[3], vb_2_elem.data[4], vb_2_elem.data[5], vb_2_elem.data[6], vb_2_elem.data[7]);
+    }
+    const VertexInput v_in = { position_1, normal_1, texcoord };
+    VertexOutput v_out = {};
+    metal::float4x4 _e6 = mvp_matrix;
+    v_out.position = v_in.position * _e6;
+    metal::float4 _e11 = do_lighting(v_in.position, v_in.normal);
+    v_out.color = _e11;
+    v_out.texcoord = v_in.texcoord;
+    VertexOutput _e14 = v_out;
+    const auto _tmp = _e14;
+    return render_vertexOutput { _tmp.position, _tmp.color, _tmp.texcoord };
+}

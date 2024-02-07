@@ -166,6 +166,8 @@ pub struct ProgrammableStageDescriptor<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
+    pub vertex_pulling_transform: bool,
 }
 
 /// Number of implicit bind groups derived at pipeline creation.
