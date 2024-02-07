@@ -3532,7 +3532,7 @@ impl TextureFormat {
     }
 
     /// The number of bytes occupied per pixel in a color attachment
-    /// https://gpuweb.github.io/gpuweb/#render-target-pixel-byte-cost
+    /// <https://gpuweb.github.io/gpuweb/#render-target-pixel-byte-cost>
     pub fn target_pixel_byte_cost(&self) -> Option<u32> {
         match *self {
             Self::R8Unorm | Self::R8Uint | Self::R8Sint => Some(1),
@@ -3569,7 +3569,7 @@ impl TextureFormat {
         }
     }
 
-    /// See https://gpuweb.github.io/gpuweb/#render-target-component-alignment
+    /// See <https://gpuweb.github.io/gpuweb/#render-target-component-alignment>
     pub fn target_component_alignment(&self) -> Option<u32> {
         match self {
             Self::R8Unorm
