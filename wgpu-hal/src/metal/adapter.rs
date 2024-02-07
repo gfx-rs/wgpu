@@ -913,6 +913,14 @@ impl super::PrivateCapabilities {
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
+        // Per https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+        let max_color_attachment_bytes_per_sample = if device.supports_family(MTLGPUFamily::Apple4)
+        {
+            64
+        } else {
+            32
+        };
+
         let base = wgt::Limits::default();
         crate::Capabilities {
             limits: wgt::Limits {
@@ -940,6 +948,10 @@ impl super::PrivateCapabilities {
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
                 max_inter_stage_shader_components: self.max_varying_components,
+                max_color_attachments: self
+                    .max_color_render_targets
+                    .min(crate::MAX_COLOR_ATTACHMENTS as u32),
+                max_color_attachment_bytes_per_sample,
                 max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
                 max_compute_invocations_per_workgroup: self.max_threads_per_group,
                 max_compute_workgroup_size_x: self.max_threads_per_group,

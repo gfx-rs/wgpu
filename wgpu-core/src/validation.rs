@@ -1246,3 +1246,29 @@ impl Interface {
             .map(|ep| ep.dual_source_blending)
     }
 }
+
+// https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample
+pub fn validate_color_attachment_bytes_per_sample(
+    attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
+    limit: u32,
+) -> Result<(), u32> {
+    let mut total_bytes_per_sample = 0;
+    for format in attachment_formats {
+        let Some(format) = format else { continue; };
+
+        let byte_cost = format.target_pixel_byte_cost().unwrap();
+        let alignment = format.target_component_alignment().unwrap();
+
+        let rem = total_bytes_per_sample % alignment;
+        if rem != 0 {
+            total_bytes_per_sample += alignment - rem;
+        }
+        total_bytes_per_sample += byte_cost;
+    }
+
+    if total_bytes_per_sample > limit {
+        return Err(total_bytes_per_sample);
+    }
+
+    Ok(())
+}

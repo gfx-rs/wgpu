@@ -531,6 +531,8 @@ pub enum ColorAttachmentError {
     InvalidFormat(wgt::TextureFormat),
     #[error("The number of color attachments {given} exceeds the limit {limit}")]
     TooMany { given: usize, limit: usize },
+    #[error("The total number of bytes per sample in color attachments {total} exceeds the limit {limit}")]
+    TooManyBytesPerSample { total: u32, limit: u32 },
 }
 
 /// Error encountered when performing a render pass.
