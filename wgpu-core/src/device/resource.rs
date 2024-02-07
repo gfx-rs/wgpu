@@ -312,7 +312,7 @@ impl<A: HalApi> Device<A> {
     /// Destroying the resources requires taking a write lock on the device's snatch lock,
     /// so a good reason for deferring resource destruction is when we dont' know for sure
     /// how risky it is to take the lock (typically, it shouldn't be taken from the drop
-    /// impementation of a reference-counted strucure).
+    /// implementation of a reference-counted structure).
     /// The snatch lock must not be held while this function is called.
     pub(crate) fn deferred_resource_destruction(&self) {
         while let Some(item) = self.deferred_destroy.lock().pop() {
