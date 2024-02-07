@@ -2129,7 +2129,7 @@ impl Global {
         };
 
         // Some deferred destroys are scheduled in maintain so run this right after
-        // to avoid holding on to them until next the device is polled.
+        // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
         closures.fire();
