@@ -2107,6 +2107,12 @@ impl Global {
     ) -> Result<bool, WaitIdleError> {
         api_log!("Device::poll");
 
+        let hub = A::hub(self);
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::Invalid)?;
+
         let (closures, queue_empty) = {
             if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
                 if submission_index.queue_id != device_id.transmute() {
@@ -2117,15 +2123,14 @@ impl Global {
                 }
             }
 
-            let hub = A::hub(self);
-            let device = hub
-                .devices
-                .get(device_id)
-                .map_err(|_| DeviceError::Invalid)?;
             let fence = device.fence.read();
             let fence = fence.as_ref().unwrap();
             device.maintain(fence, maintain)?
         };
+
+        // Some deferred destroys are scheduled in maintain so run this right after
+        // to avoid holding on to them until next the device is polled.
+        device.deferred_resource_destruction();
 
         closures.fire();
 
