@@ -220,6 +220,40 @@ impl Default for Options {
     }
 }
 
+/// A mapping of vertex buffers and their attributes to shader
+/// locations.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct AttributeMapping {
+    /// Shader location associated with this attribute
+    pub id: u32,
+    /// Offset in bytes from start of vertex buffer structure
+    pub offset: u32,
+    /// Format code to help us unpack the attribute into the type
+    /// used by the shader. Codes correspond to a 0-based index of
+    /// <https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat>.
+    /// The conversion process is described by
+    /// <https://gpuweb.github.io/gpuweb/#vertex-processing>.
+    pub format: u32,
+}
+
+/// A description of a vertex buffer with all the information we
+/// need to address the attributes within it.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct VertexBufferMapping {
+    /// Shader location associated with this buffer
+    pub id: u32,
+    /// Number of elements in this buffer
+    pub count: u32,
+    /// Size of the structure in bytes
+    pub stride: u32,
+    /// Vec of the attributes within the structure
+    pub attributes: Vec<AttributeMapping>,
+}
+
 /// A subset of options that are meant to be changed per pipeline.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -232,6 +266,17 @@ pub struct PipelineOptions {
     ///
     /// Enable this for vertex shaders with point primitive topologies.
     pub allow_and_force_point_size: bool,
+
+    /// Experimental
+    /// If set, when generating the Metal vertex shader, transform it
+    /// to receive the vertex buffers, lengths, and vertex id as args,
+    /// and bounds-check the vertex id and use the index into the
+    /// vertex buffers to access attributes, rather than using Metal's
+    /// [[stage-in]] assembled attribute data.
+    pub experimental_vertex_pulling_transform: bool,
+
+    /// Only used if experimental_vertex_pulling_transform is set.
+    pub vertex_buffer_mappings: Vec<VertexBufferMapping>,
 }
 
 impl Options {

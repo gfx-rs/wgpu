@@ -3926,6 +3926,7 @@ impl<W: Write> Writer<W> {
             // `<fun>Output`.
             let stage_out_name = format!("{fun_name}Output");
             let result_member_name = self.namer.call("member");
+            let result_return_statement: &str;
             let result_type_name = match fun.result {
                 Some(ref result) => {
                     let mut result_members = Vec::new();
@@ -3995,10 +3996,41 @@ impl<W: Write> Writer<W> {
                         )?;
                     }
                     writeln!(self.out, "}};")?;
+                    result_return_statement = "return {}";
                     &stage_out_name
                 }
-                None => "void",
+                None => {
+                    result_return_statement = "return";
+                    "void"
+                }
             };
+
+            // If we're doing a vertex pulling transform, generate the names
+            // we need: a vertex index arg, a name and type name for each buffer,
+            // based on the buffer id, then generate the structs associated with
+            // each buffer.
+            let v_id = self.namer.call("v_id");
+            let mut buffer_names = Vec::<String>::new();
+            let mut buffer_ty_names = Vec::<String>::new();
+            if pipeline_options.experimental_vertex_pulling_transform {
+                for mapping in pipeline_options.vertex_buffer_mappings.iter() {
+                    let buffer_id = mapping.id;
+                    let buffer_stride = mapping.stride;
+                    let buffer_name = self.namer.call(format!("v_{buffer_id}_in").as_str());
+                    let buffer_ty = self.namer.call(format!("v_{buffer_id}_in_type").as_str());
+
+                    // Define a structure of bytes of the appropriate size.
+                    // When we access the attributes, we'll be unpacking these
+                    // bytes at some offset.
+                    writeln!(
+                        self.out,
+                        "struct {buffer_ty} {{ metal::uchar data[{buffer_stride}]; }};"
+                    )?;
+
+                    buffer_names.push(buffer_name);
+                    buffer_ty_names.push(buffer_ty);
+                }
+            }
 
             // Write the entry point function's name, and begin its argument list.
             writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
@@ -4232,16 +4264,37 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
+            if pipeline_options.experimental_vertex_pulling_transform {
+                let separator = if is_first_argument {
+                    is_first_argument = false;
+                    ' '
+                } else {
+                    ','
+                };
+
+                // Write the [[vertex_id]] argument.
+                writeln!(self.out, "{separator} uint {v_id} [[vertex_id]]")?;
+
+                // Read the pipeline options we specified earlier, output one
+                // argument for every vertex buffer, using the names and type
+                // names we generated earlier.
+                for (i, vbm) in pipeline_options.vertex_buffer_mappings.iter().enumerate() {
+                    let buffer_name = &buffer_names[i];
+                    let buffer_ty_name = &buffer_ty_names[i];
+                    let buffer_id = vbm.id;
+                    writeln!(
+                        self.out,
+                        "{separator} constant {buffer_ty_name} *{buffer_name} [[buffer({buffer_id})]]"
+                    )?;
+                }
+            }
+
             // If this entry uses any variable-length arrays, their sizes are
             // passed as a final struct-typed argument.
             if supports_array_length {
                 // this is checked earlier
                 let resolved = options.resolve_sizes_buffer(ep).unwrap();
-                let separator = if module.global_variables.is_empty() {
-                    ' '
-                } else {
-                    ','
-                };
+                let separator = if is_first_argument { ' ' } else { ',' };
                 write!(
                     self.out,
                     "{separator} constant _mslBufferSizes& _buffer_sizes",
@@ -4252,6 +4305,19 @@ impl<W: Write> Writer<W> {
 
             // end of the entry point argument list
             writeln!(self.out, ") {{")?;
+
+            if pipeline_options.experimental_vertex_pulling_transform {
+                // Output the bounds check.
+                let mut min_count = u32::MAX;
+                for vbm in pipeline_options.vertex_buffer_mappings.iter() {
+                    min_count = min_count.min(vbm.count);
+                }
+                writeln!(
+                    self.out,
+                    "{}if ({v_id} >= {min_count}) {{ {result_return_statement}; }}",
+                    back::Level(1)
+                )?;
+            }
 
             if need_workgroup_variables_initialization {
                 self.write_workgroup_variables_initialization(
