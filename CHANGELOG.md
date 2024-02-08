@@ -43,7 +43,7 @@ Bottom level categories:
 
 #### WebGPU
 
-- Naga: validation error if a member uses the location attribute, but has type other than numeric scalar or numeric vector. By @ted-dokos in PENDING.
+- Naga: validation error if a member uses the location attribute, but has type other than numeric scalar or numeric vector. By @ted-dokos in [#5223](https://github.com/gfx-rs/wgpu/pull/5223).
 
 ### Documentation
 
