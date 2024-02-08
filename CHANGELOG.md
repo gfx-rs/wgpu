@@ -39,6 +39,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### WebGPU
+
+- Naga: validation error if a member uses the location attribute, but has type other than numeric scalar or numeric vector. By @ted-dokos in PENDING.
+
 ### Documentation
 
 - Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
