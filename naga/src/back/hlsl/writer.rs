@@ -4,7 +4,7 @@ use super::{
     BackendResult, Error, Options,
 };
 use crate::{
-    back,
+    back::{self, hlsl::WriterFlags},
     proc::{self, NameKey},
     valid, Handle, Module, ScalarKind, ShaderStage, TypeInner,
 };
@@ -2000,6 +2000,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, "{level}}}")?
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::DebugPrintf {
+                ref format,
+                ref arguments,
+            } => {
+                if self.options.flags.contains(WriterFlags::EMIT_DEBUG_PRINTF) {
+                    write!(self.out, "{level}")?;
+                    write!(self.out, "printf(\"{format}\",")?;
+                    for (index, argument) in arguments.iter().enumerate() {
+                        if index != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        self.write_expr(module, *argument, func_ctx)?;
+                    }
+                    writeln!(self.out, ");")?
+                }
+            }
         }
 
         Ok(())

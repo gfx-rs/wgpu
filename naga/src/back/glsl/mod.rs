@@ -252,6 +252,8 @@ bitflags::bitflags! {
         /// The variable gl_PointSize is intended for a shader to write the size of the point to be rasterized. It is measured in pixels.
         /// If gl_PointSize is not written to, its value is undefined in subsequent pipe stages.
         const FORCE_POINT_SIZE = 0x20;
+        /// Emit debug printf statements
+        const EMIT_DEBUG_PRINTF = 0x40;
     }
 }
 
@@ -2379,6 +2381,21 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::DebugPrintf {
+                ref format,
+                ref arguments,
+            } => {
+                if self
+                    .options
+                    .writer_flags
+                    .contains(WriterFlags::EMIT_DEBUG_PRINTF)
+                {
+                    write!(self.out, "{level}")?;
+                    write!(self.out, "debugPrintfEXT(\"{format}\",")?;
+                    self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
+                    writeln!(self.out, ");")?
+                }
+            }
         }
 
         Ok(())

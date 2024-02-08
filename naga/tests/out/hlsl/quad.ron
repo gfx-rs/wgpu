@@ -3,16 +3,19 @@
         (
             entry_point:"vert_main",
             target_profile:"vs_5_1",
+            debug_printf:false,
         ),
     ],
     fragment:[
         (
             entry_point:"frag_main",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"fs_extra",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
     ],
     compute:[

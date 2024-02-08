@@ -37,7 +37,8 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             | S::RayQuery { .. }
             | S::Atomic { .. }
             | S::WorkGroupUniformLoad { .. }
-            | S::Barrier(_)),
+            | S::Barrier(_)
+            | S::DebugPrintf { .. }),
         )
         | None => block.push(S::Return { value: None }, Default::default()),
     }

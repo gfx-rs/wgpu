@@ -3040,6 +3040,9 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
+                crate::Statement::DebugPrintf { .. } => {
+                    // metal doesn't provide a debug printf implementation
+                }
             }
         }
 

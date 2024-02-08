@@ -482,6 +482,11 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(vk::ExtConservativeRasterizationFn::name()),
         );
 
+        features.set(
+            F::DEBUG_PRINTF,
+            caps.supports_extension(vk::KhrShaderNonSemanticInfoFn::name()),
+        );
+
         let intel_windows = caps.properties.vendor_id == db::intel::VENDOR && cfg!(windows);
 
         if let Some(ref descriptor_indexing) = self.descriptor_indexing {
@@ -796,6 +801,11 @@ impl PhysicalDeviceCapabilities {
         // Require `VK_EXT_conservative_rasterization` if the associated feature was requested
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
+        }
+
+        // Require `VK_KHR_shader_non_semantic_info` if the associated feature was requested
+        if requested_features.contains(wgt::Features::DEBUG_PRINTF) {
+            extensions.push(vk::KhrShaderNonSemanticInfoFn::name());
         }
 
         // Require `VK_KHR_portability_subset` on macOS/iOS
@@ -1459,6 +1469,10 @@ impl super::Adapter {
                 // and we know exactly that the primitive topology is not `PointList`.
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
+            );
+            flags.set(
+                spv::WriterFlags::EMIT_DEBUG_PRINTF,
+                features.contains(wgt::Features::DEBUG_PRINTF),
             );
             spv::Options {
                 lang_version: (1, 0),

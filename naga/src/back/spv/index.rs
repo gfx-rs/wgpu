@@ -199,8 +199,8 @@ impl<'w> BlockContext<'w> {
         // One or the other of the index or length is dynamic, so emit code for
         // BoundsCheckPolicy::Restrict.
         let restricted_index_id = self.gen_id();
-        block.body.push(Instruction::ext_inst(
-            self.writer.gl450_ext_inst_id,
+        block.body.push(Instruction::ext_inst_glsl_std(
+            self.writer.extension_inst_import("GLSL.std.450"),
             spirv::GLOp::UMin,
             self.writer.get_uint_type_id(),
             restricted_index_id,

@@ -603,6 +603,7 @@ pub struct Writer {
     /// The set of spirv extensions used.
     extensions_used: crate::FastIndexSet<&'static str>,
 
+    strings: Vec<Instruction>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
@@ -623,14 +624,16 @@ pub struct Writer {
     // retain the table here between functions to save heap allocations.
     saved_cached: CachedExpressions,
 
-    gl450_ext_inst_id: Word,
+    ext_inst_ids: crate::FastHashMap<&'static str, Word>,
 
     // Just a temporary list of SPIR-V ids
     temp_list: Vec<Word>,
 }
 
 bitflags::bitflags! {
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
     pub struct WriterFlags: u32 {
         /// Include debug labels for everything.
         const DEBUG = 0x1;
@@ -645,6 +648,8 @@ bitflags::bitflags! {
         const FORCE_POINT_SIZE = 0x8;
         /// Clamp `BuiltIn::FragDepth` output between 0 and 1.
         const CLAMP_FRAG_DEPTH = 0x10;
+        /// Emit debug printf statements
+        const EMIT_DEBUG_PRINTF = 0x20;
     }
 }
 

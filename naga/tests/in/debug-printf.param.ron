@@ -1,0 +1,16 @@
+(
+    god_mode: true,
+	spv: (
+        version: (1, 1),
+        emit_debug_printf: true,
+    ),
+	wgsl: (
+        emit_debug_printf: true,
+    ),
+	glsl: (
+		version: Desktop(450),
+		writer_flags: ("EMIT_DEBUG_PRINTF"),
+		binding_map: {},
+		zero_initialize_workgroup_memory: true,
+    ),
+)

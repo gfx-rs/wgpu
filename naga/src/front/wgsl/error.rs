@@ -269,6 +269,8 @@ pub enum Error<'a> {
         scalar: String,
         inner: ConstantEvaluatorError,
     },
+    /// String literals are only used with debugPrintf
+    UnexpectedStringLiteral(Span),
 }
 
 impl<'a> Error<'a> {
@@ -283,6 +285,7 @@ impl<'a> Error<'a> {
                             Token::Attribute => "@".to_string(),
                             Token::Number(_) => "number".to_string(),
                             Token::Word(s) => s.to_string(),
+                            Token::String(_) => "string".to_string(),
                             Token::Operation(c) => format!("operation ('{c}')"),
                             Token::LogicalOperation(c) => format!("logical operation ('{c}')"),
                             Token::ShiftOperation(c) => format!("bitshift ('{c}{c}')"),
@@ -769,6 +772,14 @@ impl<'a> Error<'a> {
                 notes: vec![
                     format!("the expression should have been converted to have {} scalar type", scalar),
                 ]
+            },
+            Error::UnexpectedStringLiteral(span) => ParseError {
+                message: "unexpected string literal".to_string(),
+                labels: vec![(
+                    span,
+                    "string literals can only be used as the first argument to debugPrintf".into(),
+                )],
+                notes: vec![],
             },
         }
     }

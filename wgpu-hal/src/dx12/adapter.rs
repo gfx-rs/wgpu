@@ -297,6 +297,10 @@ impl super::Adapter {
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
 
+        // DXC lacks support for printf, so only enable it on FXC
+        // see https://github.com/microsoft/DirectXShaderCompiler/issues/357
+        features.set(wgt::Features::DEBUG_PRINTF, dxc_container.is_none());
+
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 

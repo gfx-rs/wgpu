@@ -121,9 +121,19 @@ impl super::Instruction {
         instruction
     }
 
-    pub(super) fn ext_inst(
+    pub(super) fn ext_inst_glsl_std(
         set_id: Word,
         op: spirv::GLOp,
+        result_type_id: Word,
+        id: Word,
+        operands: &[Word],
+    ) -> Self {
+        Self::ext_inst(set_id, op as Word, result_type_id, id, operands)
+    }
+
+    pub(super) fn ext_inst(
+        set_id: Word,
+        op: Word,
         result_type_id: Word,
         id: Word,
         operands: &[Word],
@@ -132,7 +142,7 @@ impl super::Instruction {
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(set_id);
-        instruction.add_operand(op as u32);
+        instruction.add_operand(op);
         for operand in operands {
             instruction.add_operand(*operand)
         }

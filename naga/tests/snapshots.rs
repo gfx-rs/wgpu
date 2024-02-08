@@ -49,6 +49,8 @@ struct SpirvOutParameters {
     #[serde(default)]
     separate_entry_points: bool,
     #[serde(default)]
+    emit_debug_printf: bool,
+    #[serde(default)]
     #[cfg(all(feature = "deserialize", feature = "spv-out"))]
     binding_map: naga::back::spv::BindingMap,
 }
@@ -57,6 +59,8 @@ struct SpirvOutParameters {
 struct WgslOutParameters {
     #[serde(default)]
     explicit_types: bool,
+    #[serde(default)]
+    emit_debug_printf: bool,
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -408,6 +412,10 @@ fn write_output_spv(
     );
     flags.set(spv::WriterFlags::FORCE_POINT_SIZE, params.force_point_size);
     flags.set(spv::WriterFlags::CLAMP_FRAG_DEPTH, params.clamp_frag_depth);
+    flags.set(
+        spv::WriterFlags::EMIT_DEBUG_PRINTF,
+        params.emit_debug_printf,
+    );
 
     let options = spv::Options {
         lang_version: (params.version.0, params.version.1),
@@ -541,7 +549,7 @@ fn write_output_hlsl(
     info: &naga::valid::ModuleInfo,
     options: &naga::back::hlsl::Options,
 ) {
-    use naga::back::hlsl;
+    use naga::back::hlsl::{self, WriterFlags};
     use std::fmt::Write as _;
 
     println!("generating HLSL");
@@ -568,6 +576,8 @@ fn write_output_hlsl(
         }
         .push(hlsl_snapshots::ConfigItem {
             entry_point: name.clone(),
+            // Skip DXC until it supports debug printf
+            debug_printf: options.flags.contains(WriterFlags::EMIT_DEBUG_PRINTF),
             target_profile: format!(
                 "{}_{}",
                 ep.stage.to_hlsl_str(),
@@ -592,6 +602,10 @@ fn write_output_wgsl(
 
     let mut flags = wgsl::WriterFlags::empty();
     flags.set(wgsl::WriterFlags::EXPLICIT_TYPES, params.explicit_types);
+    flags.set(
+        wgsl::WriterFlags::EMIT_DEBUG_PRINTF,
+        params.emit_debug_printf,
+    );
 
     let string = wgsl::write_string(module, info, flags).expect("WGSL write failed");
 
@@ -802,6 +816,10 @@ fn convert_wgsl() {
             "abstract-types-operators",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        (
+            "debug-printf",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -880,6 +898,11 @@ fn convert_spv_all() {
         "do-while",
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv(
+        "debug-printf-s",
+        false,
+        Targets::GLSL | Targets::WGSL | Targets::HLSL,
     );
 }
 

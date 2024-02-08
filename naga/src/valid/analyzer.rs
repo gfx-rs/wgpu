@@ -982,6 +982,15 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::DebugPrintf {
+                    format: _,
+                    ref arguments,
+                } => {
+                    for &argument in arguments {
+                        let _ = self.add_ref(argument);
+                    }
+                    FunctionUniformity::new()
+                }
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

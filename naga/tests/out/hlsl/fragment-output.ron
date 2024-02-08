@@ -5,10 +5,12 @@
         (
             entry_point:"main_vec4vec3_",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
         (
             entry_point:"main_vec2scalar",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
     ],
     compute:[

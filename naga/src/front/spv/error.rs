@@ -23,10 +23,12 @@ pub enum Error {
     UnsupportedExtension(String),
     #[error("unsupported extension set {0}")]
     UnsupportedExtSet(String),
-    #[error("unsupported extension instantiation set %{0}")]
-    UnsupportedExtInstSet(spirv::Word),
-    #[error("unsupported extension instantiation %{0}")]
-    UnsupportedExtInst(spirv::Word),
+    #[error("unsupported extension instantiation instruction id %{0} from set %{1}")]
+    UnsupportedExtInst(spirv::Word, &'static str),
+    #[error(
+        "extension instantiation references id %{0} which is not an imported extension instantation set"
+    )]
+    InvalidExtInst(spirv::Word),
     #[error("unsupported type {0:?}")]
     UnsupportedType(Handle<crate::Type>),
     #[error("unsupported execution model %{0}")]

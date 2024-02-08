@@ -7,6 +7,7 @@
         (
             entry_point:"main",
             target_profile:"cs_5_1",
+            debug_printf:false,
         ),
     ],
 )

@@ -279,6 +279,12 @@ impl StatementGraph {
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
                 }
+                S::DebugPrintf { ref arguments, .. } => {
+                    for &arg in arguments {
+                        self.dependencies.push((id, arg, "arg"));
+                    }
+                    "DebugPrintf"
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;

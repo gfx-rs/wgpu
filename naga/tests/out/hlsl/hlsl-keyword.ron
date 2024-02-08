@@ -5,6 +5,7 @@
         (
             entry_point:"fs_main",
             target_profile:"ps_5_1",
+            debug_printf:false,
         ),
     ],
     compute:[

@@ -802,10 +802,18 @@ bitflags::bitflags! {
         /// This is a native-only feature.
         const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 56;
 
-        // 57 available
-
         // Shader:
 
+        /// Enables support for debugPrintf in WGSL shaders.
+        ///
+        /// Supported Platforms:
+        /// - DX11 (fxc only)
+        /// - DX12 (fxc only)
+        /// - Vulkan
+        /// - OpenGL
+        ///
+        /// This is a native only feature
+        const DEBUG_PRINTF = 1 << 57;
         /// Allows for the creation of ray-tracing queries within shaders.
         ///
         /// Supported platforms:

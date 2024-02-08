@@ -48,6 +48,8 @@ bitflags::bitflags! {
         ///
         /// We can always support this, either through the language or a polyfill
         const INSTANCE_INDEX = 1 << 22;
+        /// Debug Printf
+        const DEBUG_PRINTF = 1 << 23;
     }
 }
 
@@ -243,6 +245,10 @@ impl FeaturesManager {
             // https://registry.khronos.org/OpenGL/extensions/EXT/EXT_blend_func_extended.txt
             writeln!(out, "#extension GL_EXT_blend_func_extended : require")?;
         }
+        if self.0.contains(Features::DEBUG_PRINTF) {
+            // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GLSL_EXT_debug_printf.txt
+            writeln!(out, "#extension GL_EXT_debug_printf : enable")?;
+        }
 
         if self.0.contains(Features::INSTANCE_INDEX) {
             if options.writer_flags.contains(WriterFlags::DRAW_PARAMETERS) {
@@ -419,6 +425,22 @@ impl<'a, W> Writer<'a, W> {
             ref policies,
             ..
         } = self;
+
+        for block in module
+            .functions
+            .iter()
+            .map(|(_, f)| &f.body)
+            .chain(std::iter::once(&entry_point.function.body))
+        {
+            for statement in block.iter() {
+                match *statement {
+                    crate::Statement::DebugPrintf { .. } => {
+                        features.request(Features::DEBUG_PRINTF)
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         // Loop trough all expressions in both functions and the entry point
         // to check for needed features

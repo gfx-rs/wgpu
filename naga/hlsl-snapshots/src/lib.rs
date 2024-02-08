@@ -94,4 +94,5 @@ pub struct ConfigItem {
     /// See also
     /// <https://learn.microsoft.com/en-us/windows/win32/direct3dtools/dx-graphics-tools-fxc-using>.
     pub target_profile: String,
+    pub debug_printf: bool,
 }

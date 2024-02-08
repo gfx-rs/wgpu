@@ -135,6 +135,13 @@ pub enum FunctionError {
     InvalidRayDescriptor(Handle<crate::Expression>),
     #[error("Ray Query {0:?} does not have a matching type")]
     InvalidRayQueryType(Handle<crate::Type>),
+    #[error("Printf value argument {index} expression is invalid")]
+    InvalidPrintfArgument {
+        index: usize,
+        source: ExpressionError,
+    },
+    #[error("Capability {0:?} is required")]
+    MissingCapability(super::Capabilities),
     #[error(
         "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
     )]
@@ -902,6 +909,25 @@ impl super::Validator {
                             self.emit_expression(result, context)?;
                         }
                         crate::RayQueryFunction::Terminate => {}
+                    }
+                }
+                S::DebugPrintf { ref arguments, .. } => {
+                    if !self
+                        .capabilities
+                        .contains(super::Capabilities::DEBUG_PRINTF)
+                    {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::DEBUG_PRINTF,
+                        )
+                        .with_span_static(span, "debugPrintf"));
+                    }
+                    for (index, &expr) in arguments.iter().enumerate() {
+                        context
+                            .resolve_type_impl(expr, &self.valid_expression_set)
+                            .map_err_inner(|source| {
+                                FunctionError::InvalidPrintfArgument { index, source }
+                                    .with_span_handle(expr, context.expressions)
+                            })?;
                     }
                 }
             }
