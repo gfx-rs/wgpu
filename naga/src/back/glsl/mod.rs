@@ -2631,9 +2631,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 if gather.is_some() && level != crate::SampleLevel::Zero {
                     err = Some("textureGather doesn't support LOD parameters");
                 }
-                if dim == crate::ImageDimension::D3 && arrayed {
-                    err = Some("3d array textures don't support sampling");
-                }
                 if let Some(err) = err {
                     return Err(Error::Custom(String::from(err)));
                 }
@@ -2643,9 +2640,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 // But if the target LOD is zero, we can emulate that by using `textureGrad[Offset]` with a constant gradient of 0.
                 let workaround_lod_with_grad = (dim == crate::ImageDimension::Cube && !arrayed)
                     || (dim == crate::ImageDimension::D2 && arrayed)
-                    && level == crate::SampleLevel::Zero
-                    && matches!(class, crate::ImageClass::Depth { .. })
-                    && !self.features.contains(Features::TEXTURE_SHADOW_LOD);
+                        && level == crate::SampleLevel::Zero
+                        && matches!(class, crate::ImageClass::Depth { .. })
+                        && !self.features.contains(Features::TEXTURE_SHADOW_LOD);
 
                 // Write the function to be used depending on the sample level
                 let fun_name = match level {
