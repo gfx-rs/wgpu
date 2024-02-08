@@ -91,6 +91,7 @@ Bottom level categories:
 #### OpenGL
 - Fix internal format for the `Etc2Rgba8Unorm` format. By @andristarr in [#5178](https://github.com/gfx-rs/wgpu/pull/5178)
 - Try to load `libX11.so.6` in addition to `libX11.so` on linux. [#5307](https://github.com/gfx-rs/wgpu/pull/5307)
+- Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
 
 #### `glsl-in`
 
