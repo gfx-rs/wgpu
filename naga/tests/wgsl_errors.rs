@@ -2100,7 +2100,7 @@ fn compaction_preserves_spans() {
 }
 
 #[test]
-fn invalid_member_with_location_attribute(){
+fn invalid_member_with_location_attribute() {
     check_validation! {
         "
         struct X { x:f32, }
