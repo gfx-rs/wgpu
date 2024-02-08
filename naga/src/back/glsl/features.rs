@@ -485,6 +485,7 @@ impl<'a, W> Writer<'a, W> {
                     } = *info[image].ty.inner_with(&module.types) {
                         let lod = matches!(level, SampleLevel::Zero | SampleLevel::Exact(_));
                         let bias = matches!(level, SampleLevel::Bias(_));
+                        let auto = matches!(level, SampleLevel::Auto);
                         let cube = dim == ImageDimension::Cube;
                         let array2d = dim == ImageDimension::D2 && arrayed;
                         let gles = self.options.version.is_es();
@@ -504,7 +505,7 @@ impl<'a, W> Writer<'a, W> {
 
                         // The non `bias` version of this was standardized in GL 4.3, but never in GLES.
                         // float textureOffset(sampler2DArrayShadow sampler, vec4 P, ivec2 offset [, float bias])
-                        ext_used |= array2d && (bias || gles) && offset.is_some();
+                        ext_used |= array2d && (bias || (gles && auto)) && offset.is_some();
 
                         // float textureLod(sampler2DArrayShadow sampler, vec4 P, float lod)
                         // float textureLodOffset(sampler2DArrayShadow sampler, vec4 P, float lod, ivec2 offset)
