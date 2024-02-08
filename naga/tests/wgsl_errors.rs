@@ -2098,3 +2098,27 @@ fn compaction_preserves_spans() {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }
 }
+
+#[test]
+fn invalid_member_with_location_attribute(){
+    check_validation! {
+        "
+        struct X { x:f32, }
+        struct Y { @location(0) x: X }
+        ":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::LocationMemberUsingInvalidType{struct_type: _},
+        ..})
+    }
+
+    check_validation! {
+        "
+        struct X { x: f32, }
+        struct Y { @location(0) y: X }
+        @vertex fn main(in : Y) -> @builtin(position) vec4f { return vec4f(); }
+        ":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::LocationMemberUsingInvalidType{struct_type: _},
+        ..})
+    }
+}

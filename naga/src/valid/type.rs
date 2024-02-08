@@ -41,8 +41,7 @@ bitflags::bitflags! {
         /// Can be be used for user-defined IO between pipeline stages.
         ///
         /// This covers anything that can be in [`Location`] binding:
-        /// non-bool scalars and vectors, matrices, and structs and
-        /// arrays containing only interface types.
+        /// numeric scalars and numeric vectors.
         const IO_SHAREABLE = 0x8;
 
         /// Can be used for host-shareable structures.
@@ -128,6 +127,8 @@ pub enum TypeError {
     EmptyStruct,
     #[error(transparent)]
     WidthError(#[from] WidthError),
+    #[error("The type {struct_type} cannot be used for a member with the location attribute. Members with the location attribute must be a numeric scalar or a numeric vector.")]
+    LocationMemberUsingInvalidType { struct_type: String },
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -479,7 +480,6 @@ impl super::Validator {
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
                         | TypeFlags::HOST_SHAREABLE
-                        | TypeFlags::IO_SHAREABLE
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE,
                     Alignment::ONE,
@@ -581,6 +581,26 @@ impl super::Validator {
                         if ti.uniform_layout.is_ok() {
                             ti.uniform_layout =
                                 Err((handle, Disalignment::UnsizedMember { index: i as u32 }));
+                        }
+                    }
+                    if member.binding.is_some()
+                        && !base_info.flags.contains(TypeFlags::IO_SHAREABLE)
+                    {
+                        match member.binding.as_ref().unwrap() {
+                            crate::Binding::BuiltIn(_) => { // do nothing
+                            }
+                            crate::Binding::Location {
+                                location: _,
+                                second_blend_source: _,
+                                interpolation: _,
+                                sampling: _,
+                            } => {
+                                let default = std::format!("{}", member.ty.index());
+                                let st = gctx.types[member.ty].name.as_ref().unwrap_or(&default);
+                                return Err(TypeError::LocationMemberUsingInvalidType {
+                                    struct_type: std::format!("[{}]", st),
+                                });
+                            }
                         }
                     }
                 }
