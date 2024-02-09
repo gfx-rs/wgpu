@@ -376,34 +376,33 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     // See the docs for `Frontend::gl_per_vertex_builtin_access`.
                     {
                         let ty = &module.types[result.ty];
-                        match ty.inner {
-                            crate::TypeInner::Struct {
-                                members: ref original_members,
-                                span,
-                            } if ty.name.as_deref() == Some("gl_PerVertex") => {
-                                let mut new_members = original_members.clone();
-                                for member in &mut new_members {
-                                    if let Some(crate::Binding::BuiltIn(built_in)) = member.binding
-                                    {
-                                        if !self.gl_per_vertex_builtin_access.contains(&built_in) {
-                                            member.binding = None
-                                        }
+                        if let crate::TypeInner::Struct {
+                            members: ref original_members,
+                            span,
+                        } = ty.inner
+                        {
+                            let mut new_members = None;
+                            for (idx, member) in original_members.iter().enumerate() {
+                                if let Some(crate::Binding::BuiltIn(built_in)) = member.binding {
+                                    if !self.gl_per_vertex_builtin_access.contains(&built_in) {
+                                        new_members
+                                            .get_or_insert_with(|| original_members.clone())[idx]
+                                            .binding = None;
                                     }
                                 }
-                                if &new_members != original_members {
-                                    module.types.replace(
-                                        result.ty,
-                                        crate::Type {
-                                            name: ty.name.clone(),
-                                            inner: crate::TypeInner::Struct {
-                                                members: new_members,
-                                                span,
-                                            },
-                                        },
-                                    );
-                                }
                             }
-                            _ => {}
+                            if let Some(new_members) = new_members {
+                                module.types.replace(
+                                    result.ty,
+                                    crate::Type {
+                                        name: ty.name.clone(),
+                                        inner: crate::TypeInner::Struct {
+                                            members: new_members,
+                                            span,
+                                        },
+                                    },
+                                );
+                            }
                         }
                     }
 

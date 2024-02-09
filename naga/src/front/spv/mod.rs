@@ -1561,12 +1561,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                     span,
                                 );
 
-                                if ty.name.as_deref() == Some("gl_PerVertex") {
-                                    if let Some(crate::Binding::BuiltIn(built_in)) =
-                                        members[index as usize].binding
-                                    {
-                                        self.gl_per_vertex_builtin_access.insert(built_in);
-                                    }
+                                if let Some(crate::Binding::BuiltIn(built_in)) =
+                                    members[index as usize].binding
+                                {
+                                    self.gl_per_vertex_builtin_access.insert(built_in);
                                 }
 
                                 AccessExpression {
