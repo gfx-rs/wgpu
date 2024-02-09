@@ -724,6 +724,8 @@ fn map_wgt_limits(limits: web_sys::GpuSupportedLimits) -> wgt::Limits {
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
         max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+        max_color_attachments: limits.max_color_attachments(),
+        max_color_attachment_bytes_per_sample: limits.max_color_attachment_bytes_per_sample(),
         max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
         max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
         max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),

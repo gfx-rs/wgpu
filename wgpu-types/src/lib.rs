@@ -1078,6 +1078,11 @@ pub struct Limits {
     /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
     /// Higher is "better".
     pub max_inter_stage_shader_components: u32,
+    /// The maximum allowed number of color attachments.
+    pub max_color_attachments: u32,
+    /// The maximum number of bytes necessary to hold one sample (pixel or subpixel) of render
+    /// pipeline output data, across all color attachments.
+    pub max_color_attachment_bytes_per_sample: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
     /// 16352. Higher is "better".
     pub max_compute_workgroup_storage_size: u32,
@@ -1139,6 +1144,8 @@ impl Default for Limits {
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
             max_inter_stage_shader_components: 60,
+            max_color_attachments: 8,
+            max_color_attachment_bytes_per_sample: 32,
             max_compute_workgroup_storage_size: 16384,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
@@ -1180,6 +1187,8 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 60,
+    ///     max_color_attachments: 8,
+    ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16352,
     ///     max_compute_invocations_per_workgroup: 256,
     ///     max_compute_workgroup_size_x: 256,
@@ -1214,6 +1223,8 @@ impl Limits {
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
             max_inter_stage_shader_components: 60,
+            max_color_attachments: 8,
+            max_color_attachment_bytes_per_sample: 32,
             max_compute_workgroup_storage_size: 16352,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
@@ -1254,6 +1265,8 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 31,
+    ///     max_color_attachments: 8,
+    ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 0, // +
     ///     max_compute_invocations_per_workgroup: 0, // +
     ///     max_compute_workgroup_size_x: 0, // +
@@ -3519,6 +3532,87 @@ impl TextureFormat {
             | Self::EacRg11Snorm => Some(16),
 
             Self::Astc { .. } => Some(16),
+        }
+    }
+
+    /// The number of bytes occupied per pixel in a color attachment
+    /// <https://gpuweb.github.io/gpuweb/#render-target-pixel-byte-cost>
+    pub fn target_pixel_byte_cost(&self) -> Option<u32> {
+        match *self {
+            Self::R8Unorm | Self::R8Uint | Self::R8Sint => Some(1),
+            Self::Rg8Unorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Float => Some(2),
+            Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Float
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float => Some(4),
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float
+            | Self::Rgb10a2Uint
+            | Self::Rgb10a2Unorm
+            | Self::Rg11b10Float => Some(8),
+            Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
+            Self::Rgba8Snorm | Self::Rg8Snorm | Self::R8Snorm => None,
+            _ => None,
+        }
+    }
+
+    /// See <https://gpuweb.github.io/gpuweb/#render-target-component-alignment>
+    pub fn target_component_alignment(&self) -> Option<u32> {
+        match self {
+            Self::R8Unorm
+            | Self::R8Snorm
+            | Self::R8Uint
+            | Self::R8Sint
+            | Self::Rg8Unorm
+            | Self::Rg8Snorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
+            | Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb => Some(1),
+            Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Float
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Float
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Float => Some(2),
+            Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float
+            | Self::Rgba32Uint
+            | Self::Rgba32Sint
+            | Self::Rgba32Float
+            | Self::Rgb10a2Uint
+            | Self::Rgb10a2Unorm
+            | Self::Rg11b10Float => Some(4),
+            _ => None,
         }
     }
 
