@@ -3,7 +3,7 @@ use wgt::Backend;
 
 use crate::{
     id::{Id, Marker},
-    Epoch, FastHashMap, Index,
+    Epoch, Index,
 };
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -37,9 +37,12 @@ use std::{fmt::Debug, marker::PhantomData};
 #[derive(Debug, Default)]
 pub(super) struct IdentityValues {
     free: Vec<(Index, Epoch)>,
-    //sorted by Index
-    used: FastHashMap<Epoch, Vec<Index>>,
+    next_index: Index,
     count: usize,
+    // Sanity check: The allocation logic works under the assumption that we don't
+    // do a mix of allocating ids from here and providing ids manually for the same
+    // storage container.
+    allocate_ids: Option<bool>,
 }
 
 impl IdentityValues {
@@ -48,28 +51,32 @@ impl IdentityValues {
     /// The backend is incorporated into the id, so that ids allocated with
     /// different `backend` values are always distinct.
     pub fn alloc<T: Marker>(&mut self, backend: Backend) -> Id<T> {
+        assert!(
+            self.allocate_ids != Some(false),
+            "Mix of internally allocated and externally provided IDs"
+        );
+        self.allocate_ids = Some(true);
+
         self.count += 1;
         match self.free.pop() {
             Some((index, epoch)) => Id::zip(index, epoch + 1, backend),
             None => {
+                let index = self.next_index;
+                self.next_index += 1;
                 let epoch = 1;
-                let used = self.used.entry(epoch).or_insert_with(Default::default);
-                let index = if let Some(i) = used.iter().max_by_key(|v| *v) {
-                    i + 1
-                } else {
-                    0
-                };
-                used.push(index);
                 Id::zip(index, epoch, backend)
             }
         }
     }
 
     pub fn mark_as_used<T: Marker>(&mut self, id: Id<T>) -> Id<T> {
+        assert!(
+            self.allocate_ids != Some(true),
+            "Mix of internally allocated and externally provided IDs"
+        );
+        self.allocate_ids = Some(false);
+
         self.count += 1;
-        let (index, epoch, _backend) = id.unzip();
-        let used = self.used.entry(epoch).or_insert_with(Default::default);
-        used.push(index);
         id
     }
 
@@ -106,7 +113,12 @@ impl<T: Marker> IdentityManager<T> {
 impl<T: Marker> IdentityManager<T> {
     pub fn new() -> Self {
         Self {
-            values: Mutex::new(IdentityValues::default()),
+            values: Mutex::new(IdentityValues {
+                free: Vec::new(),
+                next_index: 0,
+                count: 0,
+                allocate_ids: None,
+            }),
             _phantom: PhantomData,
         }
     }
@@ -115,15 +127,11 @@ impl<T: Marker> IdentityManager<T> {
 #[test]
 fn test_epoch_end_of_life() {
     use crate::id;
-
     let man = IdentityManager::<id::markers::Buffer>::new();
-    let forced_id = man.mark_as_used(id::BufferId::zip(0, 1, Backend::Empty));
-    assert_eq!(forced_id.unzip().0, 0);
     let id1 = man.process(Backend::Empty);
-    assert_eq!(id1.unzip().0, 1);
+    assert_eq!(id1.unzip(), (0, 1, Backend::Empty));
     man.free(id1);
     let id2 = man.process(Backend::Empty);
     // confirm that the epoch 1 is no longer re-used
-    assert_eq!(id2.unzip().0, 1);
-    assert_eq!(id2.unzip().1, 2);
+    assert_eq!(id2.unzip(), (0, 2, Backend::Empty));
 }
