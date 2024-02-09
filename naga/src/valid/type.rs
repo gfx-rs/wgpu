@@ -586,9 +586,8 @@ impl super::Validator {
                     if member.binding.is_some()
                         && !base_info.flags.contains(TypeFlags::IO_SHAREABLE)
                     {
-                        match member.binding.as_ref().unwrap() {
-                            crate::Binding::BuiltIn(_) => { // do nothing
-                            }
+                        match *member.binding.as_ref().unwrap() {
+                            crate::Binding::BuiltIn(_) => {}
                             crate::Binding::Location {
                                 location: _,
                                 second_blend_source: _,
