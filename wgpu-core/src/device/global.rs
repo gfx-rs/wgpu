@@ -26,9 +26,7 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{
     borrow::Cow,
-    iter,
-    ops::Range,
-    ptr,
+    iter, ptr,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -2107,6 +2105,12 @@ impl Global {
     ) -> Result<bool, WaitIdleError> {
         api_log!("Device::poll");
 
+        let hub = A::hub(self);
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::Invalid)?;
+
         let (closures, queue_empty) = {
             if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
                 if submission_index.queue_id != device_id.transmute() {
@@ -2117,15 +2121,14 @@ impl Global {
                 }
             }
 
-            let hub = A::hub(self);
-            let device = hub
-                .devices
-                .get(device_id)
-                .map_err(|_| DeviceError::Invalid)?;
             let fence = device.fence.read();
             let fence = fence.as_ref().unwrap();
             device.maintain(fence, maintain)?
         };
+
+        // Some deferred destroys are scheduled in maintain so run this right after
+        // to avoid holding on to them until the next device poll.
+        device.deferred_resource_destruction();
 
         closures.fire();
 
@@ -2331,15 +2334,18 @@ impl Global {
     pub fn buffer_map_async<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
-        range: Range<BufferAddress>,
+        offset: BufferAddress,
+        size: Option<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
-        api_log!("Buffer::map_async {buffer_id:?} range {range:?} op: {op:?}");
+        api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
-        if let Err((mut operation, err)) = self.buffer_map_async_inner::<A>(buffer_id, range, op) {
+        if let Err((mut operation, err)) =
+            self.buffer_map_async_inner::<A>(buffer_id, offset, size, op)
+        {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
@@ -2355,7 +2361,8 @@ impl Global {
     fn buffer_map_async_inner<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
-        range: Range<BufferAddress>,
+        offset: BufferAddress,
+        size: Option<BufferAddress>,
         op: BufferMapOperation,
     ) -> Result<(), (BufferMapOperation, BufferAccessError)> {
         profiling::scope!("Buffer::map_async");
@@ -2367,22 +2374,43 @@ impl Global {
             HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
         };
 
-        if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err((op, BufferAccessError::UnalignedRange));
-        }
-
         let buffer = {
-            let buffer = hub
-                .buffers
-                .get(buffer_id)
-                .map_err(|_| BufferAccessError::Invalid);
+            let buffer = hub.buffers.get(buffer_id);
 
             let buffer = match buffer {
                 Ok(b) => b,
-                Err(e) => {
-                    return Err((op, e));
+                Err(_) => {
+                    return Err((op, BufferAccessError::Invalid));
                 }
             };
+            {
+                let snatch_guard = buffer.device.snatchable_lock.read();
+                if buffer.is_destroyed(&snatch_guard) {
+                    return Err((op, BufferAccessError::Destroyed));
+                }
+            }
+
+            let range_size = if let Some(size) = size {
+                size
+            } else if offset > buffer.size {
+                0
+            } else {
+                buffer.size - offset
+            };
+
+            if offset % wgt::MAP_ALIGNMENT != 0 {
+                return Err((op, BufferAccessError::UnalignedOffset { offset }));
+            }
+            if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+                return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
+            }
+
+            let range = offset..(offset + range_size);
+
+            if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
+            {
+                return Err((op, BufferAccessError::UnalignedRange));
+            }
 
             let device = &buffer.device;
             if !device.is_valid() {
@@ -2412,11 +2440,6 @@ impl Global {
                 ));
             }
 
-            let snatch_guard = device.snatchable_lock.read();
-            if buffer.is_destroyed(&snatch_guard) {
-                return Err((op, BufferAccessError::Destroyed));
-            }
-
             {
                 let map_state = &mut *buffer.map_state.lock();
                 *map_state = match *map_state {
@@ -2436,6 +2459,8 @@ impl Global {
                     }
                 };
             }
+
+            let snatch_guard = buffer.device.snatchable_lock.read();
 
             {
                 let mut trackers = buffer.device.as_ref().trackers.lock();

@@ -109,16 +109,21 @@ Bottom level categories:
 - Fix the validation of vertex and index ranges. By @nical in [#5144](https://github.com/gfx-rs/wgpu/pull/5144) and [#5156](https://github.com/gfx-rs/wgpu/pull/5156)
 - Device lost callbacks are invoked when replaced and when global is dropped. By @bradwerth in [#5168](https://github.com/gfx-rs/wgpu/pull/5168)
 - Fix panic when creating a surface while no backend is available. By @wumpf [#5166](https://github.com/gfx-rs/wgpu/pull/5166)
+- Correctly compute minimum buffer size for array-typed `storage` and `uniform` vars. By @jimblandy [#5222](https://github.com/gfx-rs/wgpu/pull/5222)
 - Fix timeout when presenting a surface where no work has been done. By @waywardmonkeys in [#5200](https://github.com/gfx-rs/wgpu/pull/5200)
 
 #### WGL
 
 - In Surface::configure and Surface::present, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
 
+#### Naga
+- Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
+
 #### Tests
 
 - Fix intermittent crashes on Linux in the `multithreaded_compute` test. By @jimblandy in [#5129](https://github.com/gfx-rs/wgpu/pull/5129).
 - Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @rodolphito in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
+- Add test that verifies that we can drop the queue before using the device to create a command encoder. By @Davidster in [#5211](https://github.com/gfx-rs/wgpu/pull/5211)
 
 ## v0.19.0 (2024-01-17)
 

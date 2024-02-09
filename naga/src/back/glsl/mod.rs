@@ -646,16 +646,6 @@ impl<'a, W: Write> Writer<'a, W> {
         // preprocessor not the processor ¯\_(ツ)_/¯
         self.features.write(self.options, &mut self.out)?;
 
-        // Write the additional extensions
-        if self
-            .options
-            .writer_flags
-            .contains(WriterFlags::TEXTURE_SHADOW_LOD)
-        {
-            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shadow_lod.txt
-            writeln!(self.out, "#extension GL_EXT_texture_shadow_lod : require")?;
-        }
-
         // glsl es requires a precision to be specified for floats and ints
         // TODO: Should this be user configurable?
         if es {
@@ -2620,51 +2610,49 @@ impl<'a, W: Write> Writer<'a, W> {
                 level,
                 depth_ref,
             } => {
-                let dim = match *ctx.resolve_type(image, &self.module.types) {
-                    TypeInner::Image { dim, .. } => dim,
+                let (dim, class, arrayed) = match *ctx.resolve_type(image, &self.module.types) {
+                    TypeInner::Image {
+                        dim,
+                        class,
+                        arrayed,
+                        ..
+                    } => (dim, class, arrayed),
                     _ => unreachable!(),
                 };
-
-                if dim == crate::ImageDimension::Cube
-                    && array_index.is_some()
-                    && depth_ref.is_some()
-                {
-                    match level {
-                        crate::SampleLevel::Zero
-                        | crate::SampleLevel::Exact(_)
-                        | crate::SampleLevel::Gradient { .. }
-                        | crate::SampleLevel::Bias(_) => {
-                            return Err(Error::Custom(String::from(
-                                "gsamplerCubeArrayShadow isn't supported in textureGrad, \
-                                 textureLod or texture with bias",
-                            )))
-                        }
-                        crate::SampleLevel::Auto => {}
+                let mut err = None;
+                if dim == crate::ImageDimension::Cube {
+                    if offset.is_some() {
+                        err = Some("gsamplerCube[Array][Shadow] doesn't support texture sampling with offsets");
+                    }
+                    if arrayed
+                        && matches!(class, crate::ImageClass::Depth { .. })
+                        && matches!(level, crate::SampleLevel::Gradient { .. })
+                    {
+                        err = Some("samplerCubeArrayShadow don't support textureGrad");
                     }
                 }
+                if gather.is_some() && level != crate::SampleLevel::Zero {
+                    err = Some("textureGather doesn't support LOD parameters");
+                }
+                if let Some(err) = err {
+                    return Err(Error::Custom(String::from(err)));
+                }
 
-                // textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL.
-                // To emulate this, we will have to use textureGrad with a constant gradient of 0.
-                let workaround_lod_array_shadow_as_grad = (array_index.is_some()
-                    || dim == crate::ImageDimension::Cube)
-                    && depth_ref.is_some()
-                    && gather.is_none()
-                    && !self
-                        .options
-                        .writer_flags
-                        .contains(WriterFlags::TEXTURE_SHADOW_LOD);
+                // `textureLod[Offset]` on `sampler2DArrayShadow` and `samplerCubeShadow` does not exist in GLSL,
+                // unless `GL_EXT_texture_shadow_lod` is present.
+                // But if the target LOD is zero, we can emulate that by using `textureGrad[Offset]` with a constant gradient of 0.
+                let workaround_lod_with_grad = ((dim == crate::ImageDimension::Cube && !arrayed)
+                    || (dim == crate::ImageDimension::D2 && arrayed))
+                    && level == crate::SampleLevel::Zero
+                    && matches!(class, crate::ImageClass::Depth { .. })
+                    && !self.features.contains(Features::TEXTURE_SHADOW_LOD);
 
-                //Write the function to be used depending on the sample level
+                // Write the function to be used depending on the sample level
                 let fun_name = match level {
                     crate::SampleLevel::Zero if gather.is_some() => "textureGather",
+                    crate::SampleLevel::Zero if workaround_lod_with_grad => "textureGrad",
                     crate::SampleLevel::Auto | crate::SampleLevel::Bias(_) => "texture",
-                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => {
-                        if workaround_lod_array_shadow_as_grad {
-                            "textureGrad"
-                        } else {
-                            "textureLod"
-                        }
-                    }
+                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => "textureLod",
                     crate::SampleLevel::Gradient { .. } => "textureGrad",
                 };
                 let offset_name = match offset {
@@ -2727,7 +2715,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::SampleLevel::Auto => (),
                     // Zero needs level set to 0
                     crate::SampleLevel::Zero => {
-                        if workaround_lod_array_shadow_as_grad {
+                        if workaround_lod_with_grad {
                             let vec_dim = match dim {
                                 crate::ImageDimension::Cube => 3,
                                 _ => 2,
@@ -2739,13 +2727,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     // Exact and bias require another argument
                     crate::SampleLevel::Exact(expr) => {
-                        if workaround_lod_array_shadow_as_grad {
-                            log::warn!("Unable to `textureLod` a shadow array, ignoring the LOD");
-                            write!(self.out, ", vec2(0,0), vec2(0,0)")?;
-                        } else {
-                            write!(self.out, ", ")?;
-                            self.write_expr(expr, ctx)?;
-                        }
+                        write!(self.out, ", ")?;
+                        self.write_expr(expr, ctx)?;
                     }
                     crate::SampleLevel::Bias(_) => {
                         // This needs to be done after the offset writing

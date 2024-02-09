@@ -1,12 +1,13 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{self, BindGroupLayout, BindGroupLayoutEntryError},
+    binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
-    device::life::{LifetimeTracker, WaitIdleError},
-    device::queue::PendingWrites,
     device::{
-        bgl, AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
+        bgl,
+        life::{LifetimeTracker, WaitIdleError},
+        queue::PendingWrites,
+        AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
@@ -21,16 +22,17 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     registry::Registry,
-    resource::ResourceInfo,
     resource::{
-        self, Buffer, QuerySet, Resource, ResourceType, Sampler, Texture, TextureView,
-        TextureViewNotRenderableReason,
+        self, Buffer, QuerySet, Resource, ResourceInfo, ResourceType, Sampler, Texture,
+        TextureView, TextureViewNotRenderableReason,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     storage::Storage,
     track::{BindGroupStates, TextureSelector, Tracker},
-    validation::{self, check_buffer_usage, check_texture_usage},
+    validation::{
+        self, check_buffer_usage, check_texture_usage, validate_color_attachment_bytes_per_sample,
+    },
     FastHashMap, LabelHelpers as _, SubmissionIndex,
 };
 
@@ -48,7 +50,7 @@ use std::{
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        Arc, Weak,
     },
 };
 
@@ -129,8 +131,14 @@ pub struct Device<A: HalApi> {
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
+    pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
+}
+
+pub(crate) enum DeferredDestroy<A: HalApi> {
+    TextureView(Weak<TextureView<A>>),
+    BindGroup(Weak<BindGroup<A>>),
 }
 
 impl<A: HalApi> std::fmt::Debug for Device<A> {
@@ -285,6 +293,7 @@ impl<A: HalApi> Device<A> {
             downlevel,
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
+            deferred_destroy: Mutex::new(Vec::new()),
         })
     }
 
@@ -298,6 +307,56 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker<A>> {
         self.life_tracker.lock()
+    }
+
+    /// Run some destroy operations that were deferred.
+    ///
+    /// Destroying the resources requires taking a write lock on the device's snatch lock,
+    /// so a good reason for deferring resource destruction is when we don't know for sure
+    /// how risky it is to take the lock (typically, it shouldn't be taken from the drop
+    /// implementation of a reference-counted structure).
+    /// The snatch lock must not be held while this function is called.
+    pub(crate) fn deferred_resource_destruction(&self) {
+        while let Some(item) = self.deferred_destroy.lock().pop() {
+            match item {
+                DeferredDestroy::TextureView(view) => {
+                    let Some(view) = view.upgrade() else {
+                        continue;
+                    };
+                    let Some(raw_view) = view.raw.snatch(self.snatchable_lock.write()) else {
+                        continue;
+                    };
+
+                    resource_log!("Destroy raw TextureView (destroyed) {:?}", view.label());
+                    #[cfg(feature = "trace")]
+                    if let Some(t) = self.trace.lock().as_mut() {
+                        t.add(trace::Action::DestroyTextureView(view.info.id()));
+                    }
+                    unsafe {
+                        use hal::Device;
+                        self.raw().destroy_texture_view(raw_view);
+                    }
+                }
+                DeferredDestroy::BindGroup(bind_group) => {
+                    let Some(bind_group) = bind_group.upgrade() else {
+                        continue;
+                    };
+                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write()) else {
+                        continue;
+                    };
+
+                    resource_log!("Destroy raw BindGroup (destroyed) {:?}", bind_group.label());
+                    #[cfg(feature = "trace")]
+                    if let Some(t) = self.trace.lock().as_mut() {
+                        t.add(trace::Action::DestroyBindGroup(bind_group.info.id()));
+                    }
+                    unsafe {
+                        use hal::Device;
+                        self.raw().destroy_bind_group(raw_bind_group);
+                    }
+                }
+            }
+        }
     }
 
     /// Check this device for completed commands.
@@ -1972,7 +2031,7 @@ impl<A: HalApi> Device<A> {
         layout: &Arc<BindGroupLayout<A>>,
         desc: &binding_model::BindGroupDescriptor,
         hub: &Hub<A>,
-    ) -> Result<binding_model::BindGroup<A>, binding_model::CreateBindGroupError> {
+    ) -> Result<BindGroup<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
         {
             // Check that the number of entries in the descriptor matches
@@ -2212,7 +2271,7 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
-        Ok(binding_model::BindGroup {
+        Ok(BindGroup {
             raw: Snatchable::new(raw),
             device: self.clone(),
             layout: layout.clone(),
@@ -2692,11 +2751,12 @@ impl<A: HalApi> Device<A> {
         let mut shader_binding_sizes = FastHashMap::default();
 
         let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
-        if num_attachments > hal::MAX_COLOR_ATTACHMENTS {
+        let max_attachments = self.limits.max_color_attachments as usize;
+        if num_attachments > max_attachments {
             return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
                 command::ColorAttachmentError::TooMany {
                     given: num_attachments,
-                    limit: hal::MAX_COLOR_ATTACHMENTS,
+                    limit: max_attachments,
                 },
             ));
         }
@@ -2902,12 +2962,23 @@ impl<A: HalApi> Device<A> {
                             }
                         }
                     }
+
                     break None;
                 };
                 if let Some(e) = error {
                     return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
                 }
             }
+        }
+
+        let limit = self.limits.max_color_attachment_bytes_per_sample;
+        let formats = color_targets
+            .iter()
+            .map(|cs| cs.as_ref().map(|cs| cs.format));
+        if let Err(total) = validate_color_attachment_bytes_per_sample(formats, limit) {
+            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
+                command::ColorAttachmentError::TooManyBytesPerSample { total, limit },
+            ));
         }
 
         if let Some(ds) = depth_stencil_state {
