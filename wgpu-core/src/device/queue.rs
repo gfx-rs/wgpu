@@ -1222,13 +1222,7 @@ impl Global {
                                         return Err(QueueSubmitError::DestroyedTexture(id));
                                     }
                                     Some(TextureInner::Native { .. }) => false,
-                                    Some(TextureInner::Surface {
-                                        ref has_work,
-                                        ref raw,
-                                        ..
-                                    }) => {
-                                        has_work.store(true, Ordering::Relaxed);
-
+                                    Some(TextureInner::Surface { ref raw, .. }) => {
                                         if raw.is_some() {
                                             submit_surface_textures_owned.push(texture.clone());
                                         }
@@ -1423,13 +1417,7 @@ impl Global {
                             return Err(QueueSubmitError::DestroyedTexture(id));
                         }
                         Some(TextureInner::Native { .. }) => {}
-                        Some(TextureInner::Surface {
-                            ref has_work,
-                            ref raw,
-                            ..
-                        }) => {
-                            has_work.store(true, Ordering::Relaxed);
-
+                        Some(TextureInner::Surface { ref raw, .. }) => {
                             if raw.is_some() {
                                 submit_surface_textures_owned.push(texture.clone());
                             }
