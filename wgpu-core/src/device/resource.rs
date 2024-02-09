@@ -13,7 +13,6 @@ use crate::{
     hal_api::HalApi,
     hal_label,
     hub::Hub,
-    id::QueueId,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
@@ -56,7 +55,7 @@ use std::{
 
 use super::{
     life::{self, ResourceMaps},
-    queue::{self},
+    queue::{self, Queue},
     DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, ENTRYPOINT_FAILURE_ERROR,
     IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL, ZERO_BUFFER_SIZE,
 };
@@ -89,7 +88,7 @@ use super::{
 pub struct Device<A: HalApi> {
     raw: Option<A::Device>,
     pub(crate) adapter: Arc<Adapter<A>>,
-    pub(crate) queue_id: RwLock<Option<QueueId>>,
+    pub(crate) queue: RwLock<Option<Weak<Queue<A>>>>,
     queue_to_drop: RwLock<Option<A::Queue>>,
     pub(crate) zero_buffer: Option<A::Buffer>,
     pub(crate) info: ResourceInfo<Device<A>>,
@@ -260,7 +259,7 @@ impl<A: HalApi> Device<A> {
         Ok(Self {
             raw: Some(raw_device),
             adapter: adapter.clone(),
-            queue_id: RwLock::new(None),
+            queue: RwLock::new(None),
             queue_to_drop: RwLock::new(None),
             zero_buffer: Some(zero_buffer),
             info: ResourceInfo::new("<device>"),
@@ -357,6 +356,14 @@ impl<A: HalApi> Device<A> {
                 }
             }
         }
+    }
+
+    pub fn get_queue(&self) -> Option<Arc<Queue<A>>> {
+        self.queue.read().as_ref()?.upgrade()
+    }
+
+    pub fn set_queue(&self, queue: Arc<Queue<A>>) {
+        self.queue.write().replace(Arc::downgrade(&queue));
     }
 
     /// Check this device for completed commands.

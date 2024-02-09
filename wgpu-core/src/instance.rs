@@ -1072,10 +1072,10 @@ impl Global {
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
-            let (queue_id, _) = queue_fid.assign(queue);
+            let (queue_id, queue) = queue_fid.assign(queue);
             resource_log!("Created Queue {:?}", queue_id);
 
-            device.queue_id.write().replace(queue_id);
+            device.set_queue(queue);
 
             return (device_id, queue_id, None);
         };
@@ -1124,10 +1124,10 @@ impl Global {
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
-            let (queue_id, _) = queues_fid.assign(queue);
+            let (queue_id, queue) = queues_fid.assign(queue);
             resource_log!("Created Queue {:?}", queue_id);
 
-            device.queue_id.write().replace(queue_id);
+            device.set_queue(queue);
 
             return (device_id, queue_id, None);
         };

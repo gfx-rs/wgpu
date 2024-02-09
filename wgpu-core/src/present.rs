@@ -294,8 +294,7 @@ impl Global {
         if !device.is_valid() {
             return Err(DeviceError::Lost.into());
         }
-        let queue_id = device.queue_id.read().unwrap();
-        let queue = hub.queues.get(queue_id).unwrap();
+        let queue = device.get_queue().unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
