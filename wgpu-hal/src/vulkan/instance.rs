@@ -211,6 +211,22 @@ impl super::Instance {
         &self.shared
     }
 
+    fn enumerate_instance_extension_properties(
+        entry: &ash::Entry,
+        layer_name: Option<&CStr>,
+    ) -> Result<Vec<vk::ExtensionProperties>, crate::InstanceError> {
+        let instance_extensions = {
+            profiling::scope!("vkEnumerateInstanceExtensionProperties");
+            entry.enumerate_instance_extension_properties(layer_name)
+        };
+        instance_extensions.map_err(|e| {
+            crate::InstanceError::with_source(
+                String::from("enumerate_instance_extension_properties() failed"),
+                e,
+            )
+        })
+    }
+
     /// Return the instance extension names wgpu would like to enable.
     ///
     /// Return a vector of the names of instance extensions actually available
@@ -229,16 +245,7 @@ impl super::Instance {
         _instance_api_version: u32,
         flags: wgt::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
-        let instance_extensions = {
-            profiling::scope!("vkEnumerateInstanceExtensionProperties");
-            entry.enumerate_instance_extension_properties(None)
-        };
-        let instance_extensions = instance_extensions.map_err(|e| {
-            crate::InstanceError::with_source(
-                String::from("enumerate_instance_extension_properties() failed"),
-                e,
-            )
-        })?;
+        let instance_extensions = Self::enumerate_instance_extension_properties(entry, None)?;
 
         // Check our extensions against the available extensions
         let mut extensions: Vec<&'static CStr> = Vec::new();
