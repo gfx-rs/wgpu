@@ -292,13 +292,13 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         );
 
         if let Some(ep) = self.lookup_entry_point.remove(&fun_id) {
-            self.process_entry_point(module, ep, fun_id)?;
+            self.deferred_entry_points.push((ep, fun_id));
         }
 
         Ok(())
     }
 
-    fn process_entry_point(
+    pub(super) fn process_entry_point(
         &mut self,
         module: &mut crate::Module,
         ep: super::EntryPoint,
