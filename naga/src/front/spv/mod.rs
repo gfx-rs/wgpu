@@ -3954,6 +3954,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }?;
         }
 
+        // TODO: clear unused builtin's here?
+
         log::info!("Patching...");
         {
             let mut nodes = petgraph::algo::toposort(&self.function_call_graph, None)
