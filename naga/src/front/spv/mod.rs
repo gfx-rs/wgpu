@@ -577,6 +577,9 @@ pub struct Frontend<I> {
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, LookupFunction>,
     lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
+    // When parsing functions, each entry point function gets an entry here so that additional
+    // processing for them can be performed after all function parsing.
+    deferred_entry_points: Vec<(EntryPoint, spirv::Word)>,
     //Note: each `OpFunctionCall` gets a single entry here, indexed by the
     // dummy `Handle<crate::Function>` of the call site.
     deferred_function_calls: Vec<spirv::Word>,
@@ -628,6 +631,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
             lookup_entry_point: FastHashMap::default(),
+            deferred_entry_points: Vec::default(),
             deferred_function_calls: Vec::default(),
             dummy_functions: Arena::new(),
             function_call_graph: GraphMap::new(),
@@ -3954,7 +3958,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }?;
         }
 
-        // TODO: clear unused builtin's here?
+        // Do entry point specific processing after all functions are parsed so that we can
+        // cull unused problematic builtins of gl_PerVertex.
+        for (ep, fun_id) in core::mem::take(&mut self.deferred_entry_points) {
+            self.process_entry_point(&mut module, ep, fun_id)?;
+        }
 
         log::info!("Patching...");
         {
