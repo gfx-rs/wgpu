@@ -373,10 +373,10 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> web_sys::GpuStencilFa
 
 fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> web_sys::GpuDepthStencilState {
     let mut mapped = web_sys::GpuDepthStencilState::new(
-        map_compare_function(desc.depth_compare),
-        desc.depth_write_enabled,
         map_texture_format(desc.format),
     );
+    mapped.depth_compare(map_compare_function(desc.depth_compare));
+    mapped.depth_write_enabled(desc.depth_write_enabled);
     mapped.depth_bias(desc.bias.constant);
     mapped.depth_bias_clamp(desc.bias.clamp);
     mapped.depth_bias_slope_scale(desc.bias.slope_scale);
@@ -479,7 +479,7 @@ fn map_vertex_format(format: wgt::VertexFormat) -> web_sys::GpuVertexFormat {
         VertexFormat::Sint32x2 => vf::Sint32x2,
         VertexFormat::Sint32x3 => vf::Sint32x3,
         VertexFormat::Sint32x4 => vf::Sint32x4,
-        VertexFormat::Unorm10_10_10_2 => vf::Unorm10_10_10_2,
+        VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
@@ -1693,8 +1693,9 @@ impl crate::context::Context for ContextWebGpu {
         let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.vertex.module.data.as_ref());
         let mut mapped_vertex_state =
-            web_sys::GpuVertexState::new(desc.vertex.entry_point, &module.0);
-
+            web_sys::GpuVertexState::new(&module.0);
+        mapped_vertex_state.entry_point(desc.vertex.entry_point);
+        
         let buffers = desc
             .vertex
             .buffers
@@ -1767,8 +1768,9 @@ impl crate::context::Context for ContextWebGpu {
                 .collect::<js_sys::Array>();
             let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
                 downcast_ref(frag.module.data.as_ref());
-            let mapped_fragment_desc =
-                web_sys::GpuFragmentState::new(frag.entry_point, &module.0, &targets);
+            let mut mapped_fragment_desc =
+                web_sys::GpuFragmentState::new(&module.0, &targets);
+            mapped_fragment_desc.entry_point(frag.entry_point);
             mapped_desc.fragment(&mapped_fragment_desc);
         }
 
@@ -1792,8 +1794,9 @@ impl crate::context::Context for ContextWebGpu {
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         let shader_module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.module.data.as_ref());
-        let mapped_compute_stage =
-            web_sys::GpuProgrammableStage::new(desc.entry_point, &shader_module.0);
+        let mut mapped_compute_stage =
+            web_sys::GpuProgrammableStage::new(&shader_module.0);
+        mapped_compute_stage.entry_point(desc.entry_point);
         let auto_layout = wasm_bindgen::JsValue::from(web_sys::GpuAutoLayoutMode::Auto);
         let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {
@@ -2495,18 +2498,19 @@ impl crate::context::Context for ContextWebGpu {
         // Not available in gecko yet
         // encoder.pop_debug_group();
     }
-
     fn command_encoder_write_timestamp(
         &self,
         _encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
+        _encoder_data: &Self::CommandEncoderData,
         _query_set: &Self::QuerySetId,
-        query_set_data: &Self::QuerySetData,
-        query_index: u32,
+        _query_set_data: &Self::QuerySetData,
+        _query_index: u32,
     ) {
-        encoder_data
-            .0
-            .write_timestamp(&query_set_data.0, query_index);
+        //encoder_data
+            //.0
+            //.write_timestamp(&query_set_data.0, query_index);
+
+        // This function is officially removed from the WebGPU spec.
     }
 
     fn command_encoder_resolve_query_set(
