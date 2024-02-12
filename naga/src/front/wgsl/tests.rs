@@ -17,6 +17,7 @@ fn parse_comment() {
 #[test]
 fn parse_types() {
     parse_str("const a : i32 = 2;").unwrap();
+    parse_str("const a : u64 = 2lu;").unwrap();
     assert!(parse_str("const a : x32 = 2;").is_err());
     parse_str("var t: texture_2d<f32>;").unwrap();
     parse_str("var t: texture_cube_array<i32>;").unwrap();

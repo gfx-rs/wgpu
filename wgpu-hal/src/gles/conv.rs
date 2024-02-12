@@ -58,6 +58,8 @@ impl super::AdapterShared {
             Tf::Rgba16Unorm => (glow::RGBA16, glow::RGBA, glow::UNSIGNED_SHORT),
             Tf::Rgba16Snorm => (glow::RGBA16_SNORM, glow::RGBA, glow::SHORT),
             Tf::Rgba16Float => (glow::RGBA16F, glow::RGBA, glow::HALF_FLOAT),
+            Tf::R64Uint => unreachable!(),
+            Tf::R64Sint => unreachable!(),
             Tf::Rgba32Uint => (glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT),
             Tf::Rgba32Sint => (glow::RGBA32I, glow::RGBA_INTEGER, glow::INT),
             Tf::Rgba32Float => (glow::RGBA32F, glow::RGBA, glow::FLOAT),

@@ -1105,6 +1105,9 @@ impl<W: Write> Writer<W> {
                 crate::Literal::I64(_) => {
                     return Err(Error::Custom("unsupported i64 literal".to_string()));
                 }
+                crate::Literal::U64(_) => {
+                    return Err(Error::Custom("unsupported u64 literal".to_string()));
+                }
                 crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
                     return Err(Error::Custom(
                         "Abstract types should not appear in IR presented to backends".into(),

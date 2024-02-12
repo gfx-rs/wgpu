@@ -53,6 +53,8 @@ pub fn map_texture_format_failable(format: wgt::TextureFormat) -> Option<dxgifor
         Tf::Rgba16Unorm => DXGI_FORMAT_R16G16B16A16_UNORM,
         Tf::Rgba16Snorm => DXGI_FORMAT_R16G16B16A16_SNORM,
         Tf::Rgba16Float => DXGI_FORMAT_R16G16B16A16_FLOAT,
+        Tf::R64Uint => DXGI_FORMAT_R32G32_UINT,
+        Tf::R64Sint => DXGI_FORMAT_R32G32_SINT,
         Tf::Rgba32Uint => DXGI_FORMAT_R32G32B32A32_UINT,
         Tf::Rgba32Sint => DXGI_FORMAT_R32G32B32A32_SINT,
         Tf::Rgba32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,

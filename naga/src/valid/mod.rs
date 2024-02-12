@@ -77,7 +77,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u16 {
+    pub struct Capabilities: u32 {
         /// Support for [`AddressSpace:PushConstant`].
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
@@ -108,6 +108,10 @@ bitflags::bitflags! {
         const DUAL_SOURCE_BLENDING = 0x2000;
         /// Support for arrayed cube textures.
         const CUBE_ARRAY_TEXTURES = 0x4000;
+        /// Support for 64-bit signed and unsigned integers.
+        const SHADER_I64 = 0x8000;
+        /// Support for atomic operations on R64Sint and R64Uint read_write storage textures from within compute shaders.
+        const SHADER_I64_TEXTURE_ATOMIC = 0x10000;
     }
 }
 
