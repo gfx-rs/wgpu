@@ -60,7 +60,6 @@ impl<T: Resource> Registry<T> {
 #[must_use]
 pub(crate) struct FutureId<'a, T: Resource> {
     id: Id<T::Marker>,
-    identity: Arc<IdentityManager<T::Marker>>,
     data: &'a RwLock<Storage<T>>,
 }
 
@@ -75,7 +74,7 @@ impl<T: Resource> FutureId<'_, T> {
     }
 
     pub fn init(&self, mut value: T) -> Arc<T> {
-        value.as_info_mut().set_id(self.id, &self.identity);
+        value.as_info_mut().set_id(self.id);
         Arc::new(value)
     }
 
@@ -117,7 +116,6 @@ impl<T: Resource> Registry<T> {
                 }
                 None => self.identity.process(self.backend),
             },
-            identity: self.identity.clone(),
             data: &self.storage,
         }
     }
@@ -125,7 +123,6 @@ impl<T: Resource> Registry<T> {
     pub(crate) fn request(&self) -> FutureId<T> {
         FutureId {
             id: self.identity.process(self.backend),
-            identity: self.identity.clone(),
             data: &self.storage,
         }
     }
@@ -147,7 +144,7 @@ impl<T: Resource> Registry<T> {
     }
     pub fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
         let mut storage = self.storage.write();
-        value.as_info_mut().set_id(id, &self.identity);
+        value.as_info_mut().set_id(id);
         storage.force_replace(id, value)
     }
     pub fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {

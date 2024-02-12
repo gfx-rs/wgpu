@@ -9,11 +9,10 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId},
-    identity::IdentityManager,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
-    track::TextureSelector,
+    track::{TextureSelector, TrackerIndex, TrackerIndexAllocator},
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
 };
@@ -58,7 +57,8 @@ use std::{
 #[derive(Debug)]
 pub struct ResourceInfo<T: Resource> {
     id: Option<Id<T::Marker>>,
-    identity: Option<Arc<IdentityManager<T::Marker>>>,
+    tracker_index: TrackerIndex,
+    tracker_indices: Option<Arc<Mutex<TrackerIndexAllocator>>>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -72,12 +72,28 @@ pub struct ResourceInfo<T: Resource> {
     pub(crate) label: String,
 }
 
+impl<T: Resource> Drop for ResourceInfo<T> {
+    fn drop(&mut self) {
+        if let Some(indices) = &self.tracker_indices {
+            indices.lock().free(self.tracker_index);
+        }
+    }
+}
+
 impl<T: Resource> ResourceInfo<T> {
     #[allow(unused_variables)]
-    pub(crate) fn new(label: &str) -> Self {
+    pub(crate) fn new(
+        label: &str,
+        tracker_indices: Option<Arc<Mutex<TrackerIndexAllocator>>>,
+    ) -> Self {
+        let tracker_index = tracker_indices
+            .as_ref()
+            .map(|indices| indices.lock().alloc())
+            .unwrap_or(TrackerIndex::MAX);
         Self {
             id: None,
-            identity: None,
+            tracker_index,
+            tracker_indices,
             submission_index: AtomicUsize::new(0),
             label: label.to_string(),
         }
@@ -102,9 +118,13 @@ impl<T: Resource> ResourceInfo<T> {
         self.id.unwrap()
     }
 
-    pub(crate) fn set_id(&mut self, id: Id<T::Marker>, identity: &Arc<IdentityManager<T::Marker>>) {
+    pub(crate) fn tracker_index(&self) -> TrackerIndex {
+        debug_assert!(self.tracker_index != TrackerIndex::MAX);
+        self.tracker_index
+    }
+
+    pub(crate) fn set_id(&mut self, id: Id<T::Marker>) {
         self.id = Some(id);
-        self.identity = Some(identity.clone());
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -542,6 +562,7 @@ impl<A: HalApi> Buffer<A> {
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
                 id: self.info.id.unwrap(),
+                tracker_index: self.info.tracker_index(),
                 label: self.info.label.clone(),
                 bind_groups,
             }))
@@ -602,6 +623,7 @@ pub struct DestroyedBuffer<A: HalApi> {
     device: Arc<Device<A>>,
     label: String,
     pub(crate) id: BufferId,
+    pub(crate) tracker_index: TrackerIndex,
     pub(crate) submission_index: u64,
     bind_groups: Vec<Weak<BindGroup<A>>>,
 }
@@ -876,6 +898,7 @@ impl<A: HalApi> Texture<A> {
                 views,
                 bind_groups,
                 device: Arc::clone(&self.device),
+                tracker_index: self.info.tracker_index(),
                 submission_index: self.info.submission_index(),
                 id: self.info.id.unwrap(),
                 label: self.info.label.clone(),
@@ -993,6 +1016,7 @@ pub struct DestroyedTexture<A: HalApi> {
     device: Arc<Device<A>>,
     label: String,
     pub(crate) id: TextureId,
+    pub(crate) tracker_index: TrackerIndex,
     pub(crate) submission_index: u64,
 }
 
