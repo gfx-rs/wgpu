@@ -72,15 +72,6 @@ pub struct ResourceInfo<T: Resource> {
     pub(crate) label: String,
 }
 
-impl<T: Resource> Drop for ResourceInfo<T> {
-    fn drop(&mut self) {
-        if let Some(identity) = self.identity.as_ref() {
-            let id = self.id.as_ref().unwrap();
-            identity.free(*id);
-        }
-    }
-}
-
 impl<T: Resource> ResourceInfo<T> {
     #[allow(unused_variables)]
     pub(crate) fn new(label: &str) -> Self {

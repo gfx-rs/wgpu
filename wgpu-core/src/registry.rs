@@ -142,6 +142,7 @@ impl<T: Resource> Registry<T> {
         self.storage.write()
     }
     pub fn unregister_locked(&self, id: Id<T::Marker>, storage: &mut Storage<T>) -> Option<Arc<T>> {
+        self.identity.free(id);
         storage.remove(id)
     }
     pub fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
@@ -155,6 +156,7 @@ impl<T: Resource> Registry<T> {
         storage.insert_error(id, label);
     }
     pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
+        self.identity.free(id);
         let value = self.storage.write().remove(id);
         //Returning None is legal if it's an error ID
         value
