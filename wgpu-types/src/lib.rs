@@ -246,7 +246,7 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Default)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct Features: u128 {
+    pub struct Features: u128 { // TODO(https://github.com/gfx-rs/wgpu/issues/5247): consider making this an `enumset`
         //
         // ---- Start numbering at 1 << 0 ----
         //
