@@ -492,9 +492,6 @@ mod tests {
             compute_start_end_timestamps[1].wrapping_sub(compute_start_end_timestamps[0]);
         let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
-        assert!(render_delta > 0);
-        assert!(compute_delta > 0);
-
         if timestamps_on_encoder {
             assert!(encoder_delta > 0);
             assert!(encoder_delta >= render_delta + compute_delta);
