@@ -454,7 +454,7 @@ mod tests {
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
                 ),
         )
-        .run_sync(|ctx| test_timestamps(ctx, false, true));
+        .run_sync(|ctx| test_timestamps(ctx, true, false));
 
     #[gpu_test]
     static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
