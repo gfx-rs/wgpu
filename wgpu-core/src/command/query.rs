@@ -360,7 +360,7 @@ impl Global {
 
         cmd_buf
             .device
-            .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)?;
+            .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
