@@ -941,7 +941,12 @@ impl Default for InstanceFlags {
 impl InstanceFlags {
     /// Enable recommended debugging and validation flags.
     pub fn debugging() -> Self {
-        InstanceFlags::DEBUG | InstanceFlags::VALIDATION | InstanceFlags::GPU_BASED_VALIDATION
+        InstanceFlags::DEBUG | InstanceFlags::VALIDATION
+    }
+
+    /// Enable advanced debugging and validation flags (potentially very slow).
+    pub fn advanced_debugging() -> Self {
+        Self::debugging() | InstanceFlags::GPU_BASED_VALIDATION
     }
 
     /// Infer good defaults from the build type
