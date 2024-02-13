@@ -663,11 +663,7 @@ impl crate::Device<super::Api> for super::Device {
             end_of_pass_timer_query: None,
         })
     }
-    unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
-        if let Some(list) = encoder.list {
-            list.close();
-        }
-    }
+    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
