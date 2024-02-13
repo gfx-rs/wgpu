@@ -202,8 +202,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
             (value, crate::ScalarKind::Sint, 4) => Some(Self::I32(value as _)),
             (value, crate::ScalarKind::Sint, 8) => Some(Self::I64(value as _)),
-            (1, crate::ScalarKind::Bool, 4) => Some(Self::Bool(true)),
-            (0, crate::ScalarKind::Bool, 4) => Some(Self::Bool(false)),
+            (1, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(true)),
+            (0, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(false)),
             _ => None,
         }
     }
