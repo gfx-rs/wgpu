@@ -93,6 +93,13 @@ impl super::CommandBuffer {
     }
 }
 
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        use crate::CommandEncoder;
+        unsafe { self.discard_encoding() }
+    }
+}
+
 impl super::CommandEncoder {
     fn rebind_stencil_func(&mut self) {
         fn make(s: &super::StencilSide, face: u32) -> C {
