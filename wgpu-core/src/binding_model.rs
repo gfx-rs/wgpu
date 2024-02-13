@@ -580,7 +580,7 @@ pub enum PushConstantUploadError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PipelineLayoutDescriptor<'a> {
-    /// Debug label of the pipeine layout.
+    /// Debug label of the pipeline layout.
     ///
     /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,

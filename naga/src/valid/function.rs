@@ -106,7 +106,7 @@ pub enum FunctionError {
     MissingDefaultCase,
     #[error("Multiple `default` cases are present")]
     MultipleDefaultCases,
-    #[error("The last `switch` case contains a `falltrough`")]
+    #[error("The last `switch` case contains a `fallthrough`")]
     LastCaseFallTrough,
     #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
     InvalidStorePointer(Handle<crate::Expression>),

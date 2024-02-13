@@ -21,11 +21,6 @@ use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 type HalInstance<A> = <A as hal::Api>::Instance;
-//TODO: remove this
-#[derive(Clone)]
-pub struct HalSurface<A: HalApi> {
-    pub raw: Arc<A::Surface>,
-}
 
 #[derive(Clone, Debug, Error)]
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
@@ -118,30 +113,22 @@ impl Instance {
     }
 
     pub(crate) fn destroy_surface(&self, surface: Surface) {
-        fn destroy<A: HalApi>(_: A, instance: &Option<A::Instance>, surface: AnySurface) {
+        fn destroy<A: HalApi>(instance: &Option<A::Instance>, surface: AnySurface) {
             unsafe {
-                if let Some(surface) = surface.take::<A>() {
-                    if let Some(suf) = Arc::into_inner(surface) {
-                        if let Some(raw) = Arc::into_inner(suf.raw) {
-                            instance.as_ref().unwrap().destroy_surface(raw);
-                        } else {
-                            panic!("Surface cannot be destroyed because is still in use");
-                        }
-                    } else {
-                        panic!("Surface cannot be destroyed because is still in use");
-                    }
+                if let Some(suf) = surface.take::<A>() {
+                    instance.as_ref().unwrap().destroy_surface(suf);
                 }
             }
         }
         match surface.raw.backend() {
             #[cfg(vulkan)]
-            Backend::Vulkan => destroy(hal::api::Vulkan, &self.vulkan, surface.raw),
+            Backend::Vulkan => destroy::<hal::api::Vulkan>(&self.vulkan, surface.raw),
             #[cfg(metal)]
-            Backend::Metal => destroy(hal::api::Metal, &self.metal, surface.raw),
+            Backend::Metal => destroy::<hal::api::Metal>(&self.metal, surface.raw),
             #[cfg(dx12)]
-            Backend::Dx12 => destroy(hal::api::Dx12, &self.dx12, surface.raw),
+            Backend::Dx12 => destroy::<hal::api::Dx12>(&self.dx12, surface.raw),
             #[cfg(gles)]
-            Backend::Gl => destroy(hal::api::Gles, &self.gl, surface.raw),
+            Backend::Gl => destroy::<hal::api::Gles>(&self.gl, surface.raw),
             _ => unreachable!(),
         }
     }
@@ -182,7 +169,7 @@ impl Surface {
             adapter
                 .raw
                 .adapter
-                .surface_capabilities(&suf.raw)
+                .surface_capabilities(suf)
                 .ok_or(GetSurfaceSupportError::Unsupported)?
         };
 
@@ -223,7 +210,7 @@ impl<A: HalApi> Adapter<A> {
         // This could occur if the user is running their app on Wayland but Vulkan does not support
         // VK_KHR_wayland_surface.
         match suf {
-            Some(suf) => unsafe { self.raw.adapter.surface_capabilities(&suf.raw) }.is_some(),
+            Some(suf) => unsafe { self.raw.adapter.surface_capabilities(suf) }.is_some(),
             None => false,
         }
     }
@@ -471,6 +458,15 @@ pub enum RequestAdapterError {
     InvalidSurface(SurfaceId),
 }
 
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreateSurfaceError {
+    #[error("No backend is available")]
+    NoSupportedBackend,
+    #[error(transparent)]
+    InstanceError(#[from] hal::InstanceError),
+}
+
 impl Global {
     /// # Safety
     ///
@@ -483,7 +479,7 @@ impl Global {
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
         id_in: Option<SurfaceId>,
-    ) -> Result<SurfaceId, hal::InstanceError> {
+    ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface");
 
         fn init<A: HalApi>(
@@ -493,7 +489,7 @@ impl Global {
         ) -> Option<Result<AnySurface, hal::InstanceError>> {
             inst.as_ref().map(|inst| unsafe {
                 match inst.create_surface(display_handle, window_handle) {
-                    Ok(raw) => Ok(AnySurface::new(HalSurface::<A> { raw: Arc::new(raw) })),
+                    Ok(raw) => Ok(AnySurface::new::<A>(raw)),
                     Err(e) => Err(e),
                 }
             })
@@ -521,8 +517,7 @@ impl Global {
             hal_surface = init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle);
         }
 
-        //  This is only None if there's no instance at all.
-        let hal_surface = hal_surface.unwrap()?;
+        let hal_surface = hal_surface.ok_or(CreateSurfaceError::NoSupportedBackend)??;
 
         let surface = Surface {
             presentation: Mutex::new(None),
@@ -549,19 +544,17 @@ impl Global {
             presentation: Mutex::new(None),
             info: ResourceInfo::new("<Surface>"),
             raw: {
-                let hal_surface: HalSurface<hal::api::Metal> = self
+                let hal_surface = self
                     .instance
                     .metal
                     .as_ref()
-                    .map(|inst| HalSurface {
-                        raw: Arc::new(
-                            // we don't want to link to metal-rs for this
-                            #[allow(clippy::transmute_ptr_to_ref)]
-                            inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) }),
-                        ), //acquired_texture: None,
+                    .map(|inst| {
+                        // we don't want to link to metal-rs for this
+                        #[allow(clippy::transmute_ptr_to_ref)]
+                        inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
                     })
                     .unwrap();
-                AnySurface::new(hal_surface)
+                AnySurface::new::<hal::api::Metal>(hal_surface)
             },
         };
 
@@ -584,15 +577,13 @@ impl Global {
             presentation: Mutex::new(None),
             info: ResourceInfo::new("<Surface>"),
             raw: {
-                let hal_surface: HalSurface<hal::api::Dx12> = self
+                let hal_surface = self
                     .instance
                     .dx12
                     .as_ref()
-                    .map(|inst| HalSurface {
-                        raw: Arc::new(unsafe { inst.create_surface_from_visual(visual as _) }),
-                    })
+                    .map(|inst| unsafe { inst.create_surface_from_visual(visual as _) })
                     .unwrap();
-                AnySurface::new(hal_surface)
+                AnySurface::new::<hal::api::Dx12>(hal_surface)
             },
         };
 
@@ -615,17 +606,13 @@ impl Global {
             presentation: Mutex::new(None),
             info: ResourceInfo::new("<Surface>"),
             raw: {
-                let hal_surface: HalSurface<hal::api::Dx12> = self
+                let hal_surface = self
                     .instance
                     .dx12
                     .as_ref()
-                    .map(|inst| HalSurface {
-                        raw: Arc::new(unsafe {
-                            inst.create_surface_from_surface_handle(surface_handle)
-                        }),
-                    })
+                    .map(|inst| unsafe { inst.create_surface_from_surface_handle(surface_handle) })
                     .unwrap();
-                AnySurface::new(hal_surface)
+                AnySurface::new::<hal::api::Dx12>(hal_surface)
             },
         };
 
@@ -648,17 +635,15 @@ impl Global {
             presentation: Mutex::new(None),
             info: ResourceInfo::new("<Surface>"),
             raw: {
-                let hal_surface: HalSurface<hal::api::Dx12> = self
+                let hal_surface = self
                     .instance
                     .dx12
                     .as_ref()
-                    .map(|inst| HalSurface {
-                        raw: Arc::new(unsafe {
-                            inst.create_surface_from_swap_chain_panel(swap_chain_panel as _)
-                        }),
+                    .map(|inst| unsafe {
+                        inst.create_surface_from_swap_chain_panel(swap_chain_panel as _)
                     })
                     .unwrap();
-                AnySurface::new(hal_surface)
+                AnySurface::new::<hal::api::Dx12>(hal_surface)
             },
         };
 
@@ -806,7 +791,7 @@ impl Global {
                             surface.is_some()
                                 && exposed
                                     .adapter
-                                    .surface_capabilities(&surface.unwrap().raw)
+                                    .surface_capabilities(surface.unwrap())
                                     .is_some()
                         });
                     }

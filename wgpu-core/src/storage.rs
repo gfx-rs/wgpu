@@ -165,7 +165,7 @@ where
     }
 
     pub(crate) fn insert_error(&mut self, id: Id<T::Marker>, label: &str) {
-        log::trace!("User is insering as error {}{:?}", T::TYPE, id);
+        log::trace!("User is inserting as error {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
         self.insert_impl(
             index as usize,

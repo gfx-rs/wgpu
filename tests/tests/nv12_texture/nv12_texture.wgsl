@@ -21,9 +21,9 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 @group(0) @binding(2) var tex_uv: texture_2d<f32>;
 
 @fragment
-fn fs_main(v_ouput: VertexOutput) -> @location(0) vec4<f32> {
-    let luminance = textureSample(tex_y, s, v_ouput.uv).r;
-    let chrominance = textureSample(tex_uv, s, v_ouput.uv).rg;
+fn fs_main(v_output: VertexOutput) -> @location(0) vec4<f32> {
+    let luminance = textureSample(tex_y, s, v_output.uv).r;
+    let chrominance = textureSample(tex_uv, s, v_output.uv).rg;
     let rgb = mat3x3<f32>(
         1.000000, 1.000000, 1.000000,
         0.000000,-0.187324, 1.855600,

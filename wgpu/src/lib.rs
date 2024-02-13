@@ -3,55 +3,7 @@
 //! To start using the API, create an [`Instance`].
 //!
 //! ## Feature flags
-// NOTE: feature docs. below should be kept in sync. with `Cargo.toml`!
-//!
-//! ### Backends
-//!
-//! ⚠️ WIP: Not all backends can be manually configured today. On Windows & Linux the **Vulkan & GLES
-//! backends are always enabled**. See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more
-//! details.
-//!
-//! - **`dx12`** _(enabled by default)_ ---   Enables the DX12 backend on Windows.
-//! - **`metal`** _(enabled by default)_ --- Enables the Metal backend on macOS & iOS.
-//! - **`webgpu`** _(enabled by default)_ --- Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
-//! - **`angle`** --- Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS.
-//! - **`vulkan-portability`** --- Enables the Vulkan backend on macOS & iOS.
-//! - **`webgl`** --- Enables the GLES backend on Wasm.
-//!     - ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-//!
-//! **Note:** In the documentation, if you see that an item depends on a backend,
-//! it means that the item is only available when that backend is enabled _and_ the backend
-//! is supported on the current platform.
-//!
-//! ### Shading language support
-//!
-//! - **`wgsl`** _(enabled by default)_ --- Enable accepting WGSL shaders as input.
-//! - **`spirv`** --- Enable accepting SPIR-V shaders as input.
-//! - **`glsl`** --- Enable accepting GLSL shaders as input.
-//! - **`naga-ir`** --- Enable accepting Naga IR shaders as input.
-//!
-//! ### Logging & Tracing
-//!
-//! The following features do not have any effect on the WebGPU backend.
-//!
-//! - **`strict_asserts`** --- Apply run-time checks, even in release builds. These are in addition
-//!   to the validation carried out at public APIs in all builds.
-//! - **`api_log_info`** --- Log all API entry points at info instead of trace level.
-//! - **`serde`** --- Enables serialization via `serde` on common wgpu types.
-//! - **`trace`** --- Allow writing of trace capture files. See [`Adapter::request_device`].
-//! - **`replay`** --- Allow deserializing of trace capture files that were written with the `trace`
-//!   feature. To replay a trace file use the [wgpu
-//!   player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
-//!
-//! ### Other
-//!
-//! - **`fragile-send-sync-non-atomic-wasm`** --- Implement `Send` and `Sync` on Wasm, but only if
-//!   atomics are not enabled.
-//!
-//!   WebGL/WebGPU objects can not be shared between threads. However, it can be useful to
-//!   artificially mark them as `Send` and `Sync` anyways to make it easier to write cross-platform
-//!   code. This is technically _very_ unsafe in a multithreaded environment, but on a wasm binary
-//!   compiled without atomics we know we are definitely not in a multithreaded environment.
+#![doc = document_features::document_features!()]
 //!
 //! ### Feature Aliases
 //!
@@ -75,6 +27,7 @@ mod macros;
 use std::{
     any::Any,
     borrow::Cow,
+    cmp::Ordering,
     error, fmt,
     future::Future,
     marker::PhantomData,
@@ -1748,39 +1701,62 @@ impl Default for Instance {
     /// # Panics
     ///
     /// If no backend feature for the active target platform is enabled,
-    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
+    /// this method will panic, see [`Instance::enabled_backend_features()`].
     fn default() -> Self {
         Self::new(InstanceDescriptor::default())
     }
 }
 
 impl Instance {
-    /// Returns `true` if any backend feature is enabled for the current build configuration.
+    /// Returns which backends can be picked for the current build configuration.
     ///
-    /// Which feature makes this method return true depends on the target platform:
-    /// * MacOS/iOS: `metal`, `vulkan-portability` or `angle`
-    /// * Wasm32: `webgpu`, `webgl` or Emscripten target.
-    /// * All other: Always returns true
+    /// The returned set depends on a combination of target platform and enabled features.
+    /// This does *not* do any runtime checks and is exclusively based on compile time information.
     ///
-    /// TODO: Right now it's otherwise not possible yet to opt-out of all features on most platforms.
+    /// `InstanceDescriptor::backends` does not need to be a subset of this,
+    /// but any backend that is not in this set, will not be picked.
+    ///
+    /// TODO: Right now it's otherwise not possible yet to opt-out of all features on some platforms.
     /// See <https://github.com/gfx-rs/wgpu/issues/3514>
-    /// * Windows: always enables Vulkan and GLES with no way to opt out
-    /// * Linux: always enables Vulkan and GLES with no way to opt out
-    pub const fn any_backend_feature_enabled() -> bool {
-        // Method intentionally kept verbose to keep it a bit easier to follow!
+    /// * Windows/Linux/Android: always enables Vulkan and GLES with no way to opt out
+    pub const fn enabled_backend_features() -> Backends {
+        let mut backends = Backends::empty();
 
-        // On macOS and iOS, at least one of Metal, Vulkan or GLES backend must be enabled.
-        let is_mac_or_ios = cfg!(target_os = "macos") || cfg!(target_os = "ios");
-        if is_mac_or_ios {
-            cfg!(feature = "metal")
-                || cfg!(feature = "vulkan-portability")
-                || cfg!(feature = "angle")
-        // On the web, either WebGPU or WebGL must be enabled.
-        } else if cfg!(target_arch = "wasm32") {
-            cfg!(feature = "webgpu") || cfg!(feature = "webgl") || cfg!(target_os = "emscripten")
+        if cfg!(native) {
+            if cfg!(metal) {
+                backends = backends.union(Backends::METAL);
+            }
+            if cfg!(dx12) {
+                backends = backends.union(Backends::DX12);
+            }
+
+            // Windows, Android, Linux currently always enable Vulkan and OpenGL.
+            // See <https://github.com/gfx-rs/wgpu/issues/3514>
+            if cfg!(target_os = "windows") || cfg!(unix) {
+                backends = backends.union(Backends::VULKAN).union(Backends::GL);
+            }
+
+            // Vulkan on Mac/iOS is only available through vulkan-portability.
+            if (cfg!(target_os = "ios") || cfg!(target_os = "macos"))
+                && cfg!(feature = "vulkan-portability")
+            {
+                backends = backends.union(Backends::VULKAN);
+            }
+
+            // GL on Mac is only available through angle.
+            if cfg!(target_os = "macos") && cfg!(feature = "angle") {
+                backends = backends.union(Backends::GL);
+            }
         } else {
-            true
+            if cfg!(webgpu) {
+                backends = backends.union(Backends::BROWSER_WEBGPU);
+            }
+            if cfg!(webgl) {
+                backends = backends.union(Backends::GL);
+            }
         }
+
+        backends
     }
 
     /// Create an new instance of wgpu.
@@ -1802,13 +1778,13 @@ impl Instance {
     /// # Panics
     ///
     /// If no backend feature for the active target platform is enabled,
-    /// this method will panic, see [`Instance::any_backend_feature_enabled()`].
+    /// this method will panic, see [`Instance::enabled_backend_features()`].
     #[allow(unreachable_code)]
     pub fn new(_instance_desc: InstanceDescriptor) -> Self {
-        if !Self::any_backend_feature_enabled() {
+        if Self::enabled_backend_features().is_empty() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \
-                 See `wgpu::Instance::any_backend_feature_enabled()` for more information."
+                 See `wgpu::Instance::enabled_backend_features()` for more information."
             );
         }
 
@@ -1834,7 +1810,7 @@ impl Instance {
         }
 
         unreachable!(
-            "Earlier check of `any_backend_feature_enabled` should have prevented getting here!"
+            "Earlier check of `enabled_backend_features` should have prevented getting here!"
         );
     }
 
@@ -2812,7 +2788,7 @@ pub struct CreateSurfaceError {
 enum CreateSurfaceErrorKind {
     /// Error from [`wgpu_hal`].
     #[cfg(wgpu_core)]
-    Hal(hal::InstanceError),
+    Hal(wgc::instance::CreateSurfaceError),
 
     /// Error from WebGPU surface creation.
     #[allow(dead_code)] // may be unused depending on target and features
@@ -2847,8 +2823,8 @@ impl error::Error for CreateSurfaceError {
 }
 
 #[cfg(wgpu_core)]
-impl From<hal::InstanceError> for CreateSurfaceError {
-    fn from(e: hal::InstanceError) -> Self {
+impl From<wgc::instance::CreateSurfaceError> for CreateSurfaceError {
+    fn from(e: wgc::instance::CreateSurfaceError) -> Self {
         Self {
             inner: CreateSurfaceErrorKind::Hal(e),
         }
@@ -4917,7 +4893,7 @@ impl Surface<'_> {
 pub struct Id<T>(NonZeroU64, PhantomData<*mut T>);
 
 impl<T> Id<T> {
-    /// For testing use only. We provide no guarentees about the actual value of the ids.
+    /// For testing use only. We provide no guarantees about the actual value of the ids.
     #[doc(hidden)]
     pub fn inner(&self) -> u64 {
         self.0.get()
@@ -4952,6 +4928,18 @@ impl<T> PartialEq for Id<T> {
 }
 
 impl<T> Eq for Id<T> {}
+
+impl<T> PartialOrd for Id<T> {
+    fn partial_cmp(&self, other: &Id<T>) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T> Ord for Id<T> {
+    fn cmp(&self, other: &Id<T>) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
 
 impl<T> std::hash::Hash for Id<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

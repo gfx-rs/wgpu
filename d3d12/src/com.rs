@@ -121,7 +121,7 @@ impl<T: Interface> Hash for ComPtr<T> {
 /// Three function names need to be attached to each variant. The examples are given for the MyComObject1 variant below:
 /// - the from function (`ComPtr<actual::ComObject1> -> Self`)
 /// - the as function (`&self -> Option<ComPtr<actual::ComObject1>>`)
-/// - the unwrap function (`&self -> ComPtr<actual::ComObject1>` panicing on failure to cast)
+/// - the unwrap function (`&self -> ComPtr<actual::ComObject1>` panicking on failure to cast)
 ///
 /// ```rust
 /// # pub use d3d12::weak_com_inheritance_chain;

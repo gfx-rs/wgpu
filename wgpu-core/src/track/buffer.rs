@@ -60,7 +60,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
     /// Optimize the buffer bind group state by sorting it by ID.
     ///
     /// When this list of states is merged into a tracker, the memory
-    /// accesses will be in a constant assending order.
+    /// accesses will be in a constant ascending order.
     #[allow(clippy::pattern_type_mismatch)]
     pub(crate) fn optimize(&self) {
         let mut buffers = self.buffers.lock();
@@ -109,7 +109,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
 pub(crate) struct BufferUsageScope<A: HalApi> {
     state: Vec<BufferUses>,
 
-    metadata: ResourceMetadata<A, Buffer<A>>,
+    metadata: ResourceMetadata<Buffer<A>>,
 }
 
 impl<A: HalApi> BufferUsageScope<A> {
@@ -287,7 +287,7 @@ pub(crate) struct BufferTracker<A: HalApi> {
     start: Vec<BufferUses>,
     end: Vec<BufferUses>,
 
-    metadata: ResourceMetadata<A, Buffer<A>>,
+    metadata: ResourceMetadata<Buffer<A>>,
 
     temp: Vec<PendingTransition<BufferUses>>,
 }
@@ -653,11 +653,11 @@ impl BufferStateProvider<'_> {
 unsafe fn insert_or_merge<A: HalApi>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
-    resource_metadata: &mut ResourceMetadata<A, Buffer<A>>,
+    resource_metadata: &mut ResourceMetadata<Buffer<A>>,
     index32: u32,
     index: usize,
     state_provider: BufferStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
 ) -> Result<(), UsageConflict> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
@@ -708,11 +708,11 @@ unsafe fn insert_or_merge<A: HalApi>(
 unsafe fn insert_or_barrier_update<A: HalApi>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
-    resource_metadata: &mut ResourceMetadata<A, Buffer<A>>,
+    resource_metadata: &mut ResourceMetadata<Buffer<A>>,
     index: usize,
     start_state_provider: BufferStateProvider<'_>,
     end_state_provider: Option<BufferStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
 ) {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
@@ -742,11 +742,11 @@ unsafe fn insert_or_barrier_update<A: HalApi>(
 unsafe fn insert<A: HalApi>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
-    resource_metadata: &mut ResourceMetadata<A, Buffer<A>>,
+    resource_metadata: &mut ResourceMetadata<Buffer<A>>,
     index: usize,
     start_state_provider: BufferStateProvider<'_>,
     end_state_provider: Option<BufferStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
 ) {
     let new_start_state = unsafe { start_state_provider.get_state(index) };
     let new_end_state =
@@ -776,7 +776,7 @@ unsafe fn merge<A: HalApi>(
     index32: u32,
     index: usize,
     state_provider: BufferStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
 ) -> Result<(), UsageConflict> {
     let current_state = unsafe { current_states.get_unchecked_mut(index) };
     let new_state = unsafe { state_provider.get_state(index) };

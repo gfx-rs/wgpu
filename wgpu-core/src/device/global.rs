@@ -26,9 +26,7 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{
     borrow::Cow,
-    iter,
-    ops::Range,
-    ptr,
+    iter, ptr,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -328,7 +326,7 @@ impl Global {
 
     /// Assign `id_in` an error with the given `label`.
     ///
-    /// See `create_buffer_error` for more context and explaination.
+    /// See `create_buffer_error` for more context and explanation.
     pub fn create_texture_error<A: HalApi>(&self, id_in: Option<id::TextureId>, label: Label) {
         let hub = A::hub(self);
         let fid = hub.textures.prepare(id_in);
@@ -645,7 +643,7 @@ impl Global {
                 RwLock::new(TextureInitTracker::new(desc.mip_level_count, 0));
 
             let (id, resource) = fid.assign(texture);
-            api_log!("Device::create_texture -> {id:?}");
+            api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             device.trackers.lock().textures.insert_single(
                 id,
@@ -1966,11 +1964,7 @@ impl Global {
                 let caps = unsafe {
                     let suf = A::get_surface(surface);
                     let adapter = &device.adapter;
-                    match adapter
-                        .raw
-                        .adapter
-                        .surface_capabilities(suf.unwrap().raw.as_ref())
-                    {
+                    match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
                         Some(caps) => caps,
                         None => break E::UnsupportedQueueFamily,
                     }
@@ -2055,7 +2049,6 @@ impl Global {
                 match unsafe {
                     A::get_surface(surface)
                         .unwrap()
-                        .raw
                         .configure(device.raw(), &hal_config)
                 } {
                     Ok(()) => (),
@@ -2089,7 +2082,7 @@ impl Global {
     }
 
     #[cfg(feature = "replay")]
-    /// Only triange suspected resource IDs. This helps us to avoid ID collisions
+    /// Only triangle suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.
     pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), InvalidDevice> {
         let hub = A::hub(self);
@@ -2112,6 +2105,12 @@ impl Global {
     ) -> Result<bool, WaitIdleError> {
         api_log!("Device::poll");
 
+        let hub = A::hub(self);
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::Invalid)?;
+
         let (closures, queue_empty) = {
             if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
                 if submission_index.queue_id != device_id.transmute() {
@@ -2122,15 +2121,14 @@ impl Global {
                 }
             }
 
-            let hub = A::hub(self);
-            let device = hub
-                .devices
-                .get(device_id)
-                .map_err(|_| DeviceError::Invalid)?;
             let fence = device.fence.read();
             let fence = fence.as_ref().unwrap();
             device.maintain(fence, maintain)?
         };
+
+        // Some deferred destroys are scheduled in maintain so run this right after
+        // to avoid holding on to them until the next device poll.
+        device.deferred_resource_destruction();
 
         closures.fire();
 
@@ -2266,8 +2264,8 @@ impl Global {
         }
     }
 
-    // This closure will be called exactly once during "lose the device"
-    // or when the device is dropped, if it was never lost.
+    // This closure will be called exactly once during "lose the device",
+    // or when it is replaced.
     pub fn device_set_device_lost_closure<A: HalApi>(
         &self,
         device_id: DeviceId,
@@ -2277,6 +2275,12 @@ impl Global {
 
         if let Ok(device) = hub.devices.get(device_id) {
             let mut life_tracker = device.lock_life();
+            if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
+                // It's important to not hold the lock while calling the closure.
+                drop(life_tracker);
+                existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
+                life_tracker = device.lock_life();
+            }
             life_tracker.device_lost_closure = Some(device_lost_closure);
         }
     }
@@ -2330,15 +2334,18 @@ impl Global {
     pub fn buffer_map_async<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
-        range: Range<BufferAddress>,
+        offset: BufferAddress,
+        size: Option<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
-        api_log!("Buffer::map_async {buffer_id:?}");
+        api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
-        if let Err((mut operation, err)) = self.buffer_map_async_inner::<A>(buffer_id, range, op) {
+        if let Err((mut operation, err)) =
+            self.buffer_map_async_inner::<A>(buffer_id, offset, size, op)
+        {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
@@ -2354,7 +2361,8 @@ impl Global {
     fn buffer_map_async_inner<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
-        range: Range<BufferAddress>,
+        offset: BufferAddress,
+        size: Option<BufferAddress>,
         op: BufferMapOperation,
     ) -> Result<(), (BufferMapOperation, BufferAccessError)> {
         profiling::scope!("Buffer::map_async");
@@ -2366,22 +2374,43 @@ impl Global {
             HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
         };
 
-        if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err((op, BufferAccessError::UnalignedRange));
-        }
-
         let buffer = {
-            let buffer = hub
-                .buffers
-                .get(buffer_id)
-                .map_err(|_| BufferAccessError::Invalid);
+            let buffer = hub.buffers.get(buffer_id);
 
             let buffer = match buffer {
                 Ok(b) => b,
-                Err(e) => {
-                    return Err((op, e));
+                Err(_) => {
+                    return Err((op, BufferAccessError::Invalid));
                 }
             };
+            {
+                let snatch_guard = buffer.device.snatchable_lock.read();
+                if buffer.is_destroyed(&snatch_guard) {
+                    return Err((op, BufferAccessError::Destroyed));
+                }
+            }
+
+            let range_size = if let Some(size) = size {
+                size
+            } else if offset > buffer.size {
+                0
+            } else {
+                buffer.size - offset
+            };
+
+            if offset % wgt::MAP_ALIGNMENT != 0 {
+                return Err((op, BufferAccessError::UnalignedOffset { offset }));
+            }
+            if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+                return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
+            }
+
+            let range = offset..(offset + range_size);
+
+            if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
+            {
+                return Err((op, BufferAccessError::UnalignedRange));
+            }
 
             let device = &buffer.device;
             if !device.is_valid() {
@@ -2411,11 +2440,6 @@ impl Global {
                 ));
             }
 
-            let snatch_guard = device.snatchable_lock.read();
-            if buffer.is_destroyed(&snatch_guard) {
-                return Err((op, BufferAccessError::Destroyed));
-            }
-
             {
                 let map_state = &mut *buffer.map_state.lock();
                 *map_state = match *map_state {
@@ -2435,6 +2459,8 @@ impl Global {
                     }
                 };
             }
+
+            let snatch_guard = buffer.device.snatchable_lock.read();
 
             {
                 let mut trackers = buffer.device.as_ref().trackers.lock();
@@ -2460,7 +2486,7 @@ impl Global {
         size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
-        api_log!("Buffer::get_mapped_range {buffer_id:?}");
+        api_log!("Buffer::get_mapped_range {buffer_id:?} offset {offset:?} size {size:?}");
 
         let hub = A::hub(self);
 
@@ -2518,7 +2544,7 @@ impl Global {
                     });
                 }
                 // ptr points to the beginning of the range we mapped in map_async
-                // rather thant the beginning of the buffer.
+                // rather than the beginning of the buffer.
                 let relative_offset = (offset - range.start) as isize;
                 unsafe { Ok((ptr.as_ptr().offset(relative_offset), range_size)) }
             }

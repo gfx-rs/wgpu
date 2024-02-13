@@ -1,10 +1,10 @@
 /*! Texture Trackers
  *
- * Texture trackers are signifigantly more complicated than
+ * Texture trackers are significantly more complicated than
  * the buffer trackers because textures can be in a "complex"
  * state where each individual subresource can potentially be
  * in a different state from every other subtresource. These
- * complex states are stored seperately from the simple states
+ * complex states are stored separately from the simple states
  * because they are signifignatly more difficult to track and
  * most resources spend the vast majority of their lives in
  * simple states.
@@ -170,7 +170,7 @@ impl<A: HalApi> TextureBindGroupState<A> {
     /// Optimize the texture bind group state by sorting it by ID.
     ///
     /// When this list of states is merged into a tracker, the memory
-    /// accesses will be in a constant assending order.
+    /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&self) {
         let mut textures = self.textures.lock();
         textures.sort_unstable_by_key(|v| v.texture.as_info().id().unzip().0);
@@ -231,7 +231,7 @@ impl TextureStateSet {
 #[derive(Debug)]
 pub(crate) struct TextureUsageScope<A: HalApi> {
     set: TextureStateSet,
-    metadata: ResourceMetadata<A, Texture<A>>,
+    metadata: ResourceMetadata<Texture<A>>,
 }
 
 impl<A: HalApi> TextureUsageScope<A> {
@@ -386,7 +386,7 @@ pub(crate) struct TextureTracker<A: HalApi> {
     start_set: TextureStateSet,
     end_set: TextureStateSet,
 
-    metadata: ResourceMetadata<A, Texture<A>>,
+    metadata: ResourceMetadata<Texture<A>>,
 
     temp: Vec<PendingTransition<TextureUses>>,
 
@@ -863,10 +863,10 @@ impl<'a> TextureStateProvider<'a> {
 unsafe fn insert_or_merge<A: HalApi>(
     texture_selector: &TextureSelector,
     current_state_set: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<A, Texture<A>>,
+    resource_metadata: &mut ResourceMetadata<Texture<A>>,
     index: usize,
     state_provider: TextureStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
 ) -> Result<(), UsageConflict> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
@@ -919,11 +919,11 @@ unsafe fn insert_or_barrier_update<A: HalApi>(
     texture_selector: &TextureSelector,
     start_state: Option<&mut TextureStateSet>,
     current_state_set: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<A, Texture<A>>,
+    resource_metadata: &mut ResourceMetadata<Texture<A>>,
     index: usize,
     start_state_provider: TextureStateProvider<'_>,
     end_state_provider: Option<TextureStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
     barriers: &mut Vec<PendingTransition<TextureUses>>,
 ) {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
@@ -972,11 +972,11 @@ unsafe fn insert<A: HalApi>(
     texture_selector: Option<&TextureSelector>,
     start_state: Option<&mut TextureStateSet>,
     end_state: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<A, Texture<A>>,
+    resource_metadata: &mut ResourceMetadata<Texture<A>>,
     index: usize,
     start_state_provider: TextureStateProvider<'_>,
     end_state_provider: Option<TextureStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
 ) {
     let start_layers = unsafe { start_state_provider.get_state(texture_selector, index) };
     match start_layers {
@@ -1026,7 +1026,7 @@ unsafe fn insert<A: HalApi>(
 
                 log::trace!("\ttex {index}: insert end {state:?}");
 
-                // We only need to insert into the end, as there is guarenteed to be
+                // We only need to insert into the end, as there is guaranteed to be
                 // a start state provider.
                 unsafe { *end_state.simple.get_unchecked_mut(index) = state };
             }
@@ -1039,7 +1039,7 @@ unsafe fn insert<A: HalApi>(
 
                 log::trace!("\ttex {index}: insert end {complex:?}");
 
-                // We only need to insert into the end, as there is guarenteed to be
+                // We only need to insert into the end, as there is guaranteed to be
                 // a start state provider.
                 unsafe { *end_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX };
                 end_state.complex.insert(index, complex);
@@ -1059,7 +1059,7 @@ unsafe fn merge<A: HalApi>(
     current_state_set: &mut TextureStateSet,
     index: usize,
     state_provider: TextureStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, A, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
 ) -> Result<(), UsageConflict> {
     let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
     let current_state = if *current_simple == TextureUses::COMPLEX {

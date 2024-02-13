@@ -151,7 +151,7 @@ impl ops::Index<Handle<crate::Expression>> for Typifier {
 
 /// Type representing a lexical scope, associating a name to a single variable
 ///
-/// The scope is generic over the variable representation and name representaion
+/// The scope is generic over the variable representation and name representation
 /// in order to allow larger flexibility on the frontends on how they might
 /// represent them.
 type Scope<Name, Var> = FastHashMap<Name, Var>;

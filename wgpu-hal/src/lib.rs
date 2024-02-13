@@ -329,6 +329,9 @@ pub trait Device<A: Api>: WasmNotSendSync {
     unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
     unsafe fn destroy_sampler(&self, sampler: A::Sampler);
 
+    /// Create a fresh [`CommandEncoder`].
+    ///
+    /// The new `CommandEncoder` is in the "closed" state.
     unsafe fn create_command_encoder(
         &self,
         desc: &CommandEncoderDescriptor<A>,
@@ -412,7 +415,7 @@ pub trait Queue<A: Api>: WasmNotSendSync {
     /// Valid usage:
     /// - all of the command buffers were created from command pools
     ///   that are associated with this queue.
-    /// - all of the command buffers had `CommadBuffer::finish()` called.
+    /// - all of the command buffers had `CommandBuffer::finish()` called.
     /// - all surface textures that the command buffers write to must be
     ///   passed to the surface_textures argument.
     unsafe fn submit(
@@ -429,19 +432,95 @@ pub trait Queue<A: Api>: WasmNotSendSync {
     unsafe fn get_timestamp_period(&self) -> f32;
 }
 
-/// Encoder for commands in command buffers.
-/// Serves as a parent for all the encoded command buffers.
-/// Works in bursts of action: one or more command buffers are recorded,
-/// then submitted to a queue, and then it needs to be `reset_all()`.
+/// Encoder and allocation pool for `CommandBuffer`.
+///
+/// The life cycle of a `CommandBuffer` is as follows:
+///
+/// - Call [`Device::create_command_encoder`] to create a new
+///   `CommandEncoder`, in the "closed" state.
+///
+/// - Call `begin_encoding` on a closed `CommandEncoder` to begin
+///   recording commands. This puts the `CommandEncoder` in the
+///   "recording" state.
+///
+/// - Call methods like `copy_buffer_to_buffer`, `begin_render_pass`,
+///   etc. on a "recording" `CommandEncoder` to add commands to the
+///   list.
+///
+/// - Call `end_encoding` on a recording `CommandEncoder` to close the
+///   encoder and construct a fresh `CommandBuffer` consisting of the
+///   list of commands recorded up to that point.
+///
+/// - Call `discard_encoding` on a recording `CommandEncoder` to drop
+///   the commands recorded thus far and close the encoder.
+///
+/// - Call `reset_all` on a closed `CommandEncoder`, passing all the
+///   live `CommandBuffers` built from it. All the `CommandBuffer`s
+///   are destroyed, and their resources are freed.
+///
+/// # Safety
+///
+/// - The `CommandEncoder` must be in the states described above to
+///   make the given calls.
+///
+/// - A `CommandBuffer` that has been submitted for execution on the
+///   GPU must live until its execution is complete.
+///
+/// - A `CommandBuffer` must not outlive the `CommandEncoder` that
+///   built it.
+///
+/// - A `CommandEncoder` must not outlive its `Device`.
 pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     /// Begin encoding a new command buffer.
+    ///
+    /// This puts this `CommandEncoder` in the "recording" state.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "closed" state.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
-    /// Discard currently recorded list, if any.
+
+    /// Discard the command list under construction, if any.
+    ///
+    /// This puts this `CommandEncoder` in the "closed" state.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "recording" state.
     unsafe fn discard_encoding(&mut self);
+
+    /// Return a fresh [`CommandBuffer`] holding the recorded commands.
+    ///
+    /// The returned [`CommandBuffer`] holds all the commands recorded
+    /// on this `CommandEncoder` since the last call to
+    /// [`begin_encoding`].
+    ///
+    /// This puts this `CommandEncoder` in the "closed" state.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "recording" state.
+    ///
+    /// The returned [`CommandBuffer`] must not outlive this
+    /// `CommandEncoder`. Implementations are allowed to build
+    /// `CommandBuffer`s that depend on storage owned by this
+    /// `CommandEncoder`.
+    ///
+    /// [`CommandBuffer`]: Api::CommandBuffer
+    /// [`begin_encoding`]: CommandEncoder::begin_encoding
     unsafe fn end_encoding(&mut self) -> Result<A::CommandBuffer, DeviceError>;
-    /// Reclaims all resources that are allocated for this encoder.
-    /// Must get all of the produced command buffers back,
-    /// and they must not be used by GPU at this moment.
+
+    /// Reclaim all resources belonging to this `CommandEncoder`.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "closed" state.
+    ///
+    /// The `command_buffers` iterator must produce all the live
+    /// [`CommandBuffer`]s built using this `CommandEncoder` --- that
+    /// is, every extant `CommandBuffer` returned from `end_encoding`.
+    ///
+    /// [`CommandBuffer`]: Api::CommandBuffer
     unsafe fn reset_all<I>(&mut self, command_buffers: I)
     where
         I: Iterator<Item = A::CommandBuffer>;
@@ -512,7 +591,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     // pass common
 
     /// Sets the bind group at `index` to `group`, assuming the layout
-    /// of all the preceeding groups to be taken from `layout`.
+    /// of all the preceding groups to be taken from `layout`.
     unsafe fn set_bind_group(
         &mut self,
         layout: &A::PipelineLayout,
@@ -1465,7 +1544,7 @@ impl ValidationCanary {
         self.inner.lock().push(msg);
     }
 
-    /// Returns any API validation errors that hav occurred in this process
+    /// Returns any API validation errors that have occurred in this process
     /// since the last call to this function.
     pub fn get_and_reset(&self) -> Vec<String> {
         self.inner.lock().drain(..).collect()

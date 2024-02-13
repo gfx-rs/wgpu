@@ -653,6 +653,15 @@ impl super::Adapter {
             0
         };
 
+        let max_color_attachments = unsafe {
+            gl.get_parameter_i32(glow::MAX_COLOR_ATTACHMENTS)
+                .min(gl.get_parameter_i32(glow::MAX_DRAW_BUFFERS))
+                .min(crate::MAX_COLOR_ATTACHMENTS as i32) as u32
+        };
+
+        // TODO: programmatically determine this.
+        let max_color_attachment_bytes_per_sample = 32;
+
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
@@ -723,6 +732,8 @@ impl super::Adapter {
             max_inter_stage_shader_components: unsafe {
                 gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS)
             } as u32,
+            max_color_attachments,
+            max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: if supports_work_group_params {
                 (unsafe { gl.get_parameter_i32(glow::MAX_COMPUTE_SHARED_MEMORY_SIZE) } as u32)
             } else {

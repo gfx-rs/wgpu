@@ -22,7 +22,7 @@ cargo run --bin wgpu-examples hello_workgroups
   - No two workgroups can be guaranteed to be executed in parallel.
   - No two workgroups can be guaranteed NOT to be executed in parallel.
   - No set of workgroups can be guaranteed to execute in any predictable or reliable order in relation to each other.
-- Ths size of a workgroup is defined with the `@workgroup_size` attribute on a compute shader main function.
+- The size of a workgroup is defined with the `@workgroup_size` attribute on a compute shader main function.
 - The location of an invocation within its workgroup grid can be got with `@builtin(local_invocation_id)`.
 - The location of an invocation within the entire compute shader grid can be gotten with `@builtin(global_invocation_id)`.
 - The location of an invocation's workgroup within the dispatch grid can be gotten with `@builtin(workgroup_id)`.

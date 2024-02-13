@@ -776,7 +776,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         // There is nothing preventing the user from trying to update a single value within
         // a vector or matrix in the set_push_constant call, as to the user, all of this is
-        // just memory. However OpenGL does not allow parital uniform updates.
+        // just memory. However OpenGL does not allow partial uniform updates.
         //
         // As such, we locally keep a copy of the current state of the push constant memory
         // block. If the user tries to update a single value, we have the data to update the entirety

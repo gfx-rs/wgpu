@@ -181,7 +181,7 @@ fn type_not_constructible() {
 }
 
 #[test]
-fn type_not_inferrable() {
+fn type_not_inferable() {
     check(
         r#"
             fn x() {
