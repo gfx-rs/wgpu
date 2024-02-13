@@ -826,7 +826,25 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     height: 768,
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
-        .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
+        .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
+        // To be fixed in <https://github.com/gfx-rs/wgpu/issues/5231>.
+        .expect_fail(wgpu_test::FailureCase {
+            backends: Some(wgpu::Backends::VULKAN),
+            reasons: vec![
+                wgpu_test::FailureReason::validation_error().with_message(concat!(
+                    "vkCmdEndRenderPass: ",
+                    "Hazard WRITE_AFTER_READ in subpass 0 for attachment 1 depth aspect ",
+                    "during store with storeOp VK_ATTACHMENT_STORE_OP_STORE. ",
+                    "Access info (",
+                    "usage: SYNC_LATE_FRAGMENT_TESTS_DEPTH_STENCIL_ATTACHMENT_WRITE, ",
+                    "prior_usage: SYNC_FRAGMENT_SHADER_SHADER_SAMPLED_READ, ",
+                    "read_barriers: VkPipelineStageFlags2(0), ",
+                    "command: vkCmdDraw"
+                )),
+            ],
+            behavior: wgpu_test::FailureBehavior::AssertFailure,
+            ..Default::default()
+        }),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.01)],
     _phantom: std::marker::PhantomData::<Example>,
 };

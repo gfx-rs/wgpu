@@ -211,6 +211,22 @@ impl super::Instance {
         &self.shared
     }
 
+    fn enumerate_instance_extension_properties(
+        entry: &ash::Entry,
+        layer_name: Option<&CStr>,
+    ) -> Result<Vec<vk::ExtensionProperties>, crate::InstanceError> {
+        let instance_extensions = {
+            profiling::scope!("vkEnumerateInstanceExtensionProperties");
+            entry.enumerate_instance_extension_properties(layer_name)
+        };
+        instance_extensions.map_err(|e| {
+            crate::InstanceError::with_source(
+                String::from("enumerate_instance_extension_properties() failed"),
+                e,
+            )
+        })
+    }
+
     /// Return the instance extension names wgpu would like to enable.
     ///
     /// Return a vector of the names of instance extensions actually available
@@ -229,16 +245,7 @@ impl super::Instance {
         _instance_api_version: u32,
         flags: wgt::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
-        let instance_extensions = {
-            profiling::scope!("vkEnumerateInstanceExtensionProperties");
-            entry.enumerate_instance_extension_properties(None)
-        };
-        let instance_extensions = instance_extensions.map_err(|e| {
-            crate::InstanceError::with_source(
-                String::from("enumerate_instance_extension_properties() failed"),
-                e,
-            )
-        })?;
+        let instance_extensions = Self::enumerate_instance_extension_properties(entry, None)?;
 
         // Check our extensions against the available extensions
         let mut extensions: Vec<&'static CStr> = Vec::new();
@@ -643,6 +650,30 @@ impl crate::Instance<super::Api> for super::Instance {
                 .find(|inst_layer| cstr_from_bytes_until_nul(&inst_layer.layer_name) == Some(name))
         }
 
+        let validation_layer_name =
+            CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
+        let validation_layer_properties = find_layer(&instance_layers, validation_layer_name);
+        let validation_features_are_enabled = || {
+            validation_layer_properties.is_some().then(|| {
+                let exts = Self::enumerate_instance_extension_properties(
+                    &entry,
+                    Some(validation_layer_name),
+                )?;
+                let mut ext_names = exts
+                    .iter()
+                    .filter_map(|ext| cstr_from_bytes_until_nul(&ext.extension_name));
+                let found =
+                    ext_names.any(|ext_name| ext_name == vk::ExtValidationFeaturesFn::name());
+                Ok(found)
+            })
+        };
+        let should_enable_gpu_based_validation = desc
+            .flags
+            .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
+            && validation_features_are_enabled()
+                .transpose()?
+                .unwrap_or(false);
+
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
         let has_nv_optimus = find_layer(&instance_layers, nv_optimus_layer).is_some();
 
@@ -653,10 +684,10 @@ impl crate::Instance<super::Api> for super::Instance {
 
         // Request validation layer if asked.
         let mut debug_utils = None;
-        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
-            let validation_layer_name =
-                CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
-            if let Some(layer_properties) = find_layer(&instance_layers, validation_layer_name) {
+        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION)
+            || should_enable_gpu_based_validation
+        {
+            if let Some(layer_properties) = validation_layer_properties {
                 layers.push(validation_layer_name);
 
                 if extensions.contains(&ext::DebugUtils::name()) {
@@ -754,6 +785,16 @@ impl crate::Instance<super::Api> for super::Instance {
 
             if let Some(&mut (_, ref mut vk_create_info)) = debug_utils.as_mut() {
                 create_info = create_info.push_next(vk_create_info);
+            }
+
+            let mut gpu_assisted_validation = vk::ValidationFeaturesEXT::builder()
+                .enabled_validation_features(&[
+                    vk::ValidationFeatureEnableEXT::GPU_ASSISTED,
+                    vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT,
+                    vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION,
+                ]);
+            if should_enable_gpu_based_validation {
+                create_info = create_info.push_next(&mut gpu_assisted_validation);
             }
 
             unsafe {

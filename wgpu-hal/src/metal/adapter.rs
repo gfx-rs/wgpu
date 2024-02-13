@@ -839,7 +839,7 @@ impl super::PrivateCapabilities {
             self.indirect_draw_dispatch,
         );
         features.set(
-            F::TIMESTAMP_QUERY,
+            F::TIMESTAMP_QUERY | F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::STAGE_BOUNDARIES),
         );
