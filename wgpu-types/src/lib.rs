@@ -98,13 +98,13 @@ pub const QUERY_SIZE: u32 = 8;
 pub enum Backend {
     /// Dummy backend, used for testing.
     Empty = 0,
-    /// Vulkan API
+    /// Vulkan API (Windows, Linux, Android, MacOS via `vulkan-portability`/MoltenVK)
     Vulkan = 1,
     /// Metal API (Apple platforms)
     Metal = 2,
     /// Direct3D-12 (Windows)
     Dx12 = 3,
-    /// OpenGL ES-3 (Linux, Android)
+    /// OpenGL 3.3+ (Windows), OpenGL ES 3.0+ (Linux, Android, MacOS via Angle), and WebGL2
     Gl = 4,
     /// WebGPU in the browser
     BrowserWebGpu = 5,
@@ -112,7 +112,7 @@ pub enum Backend {
 
 impl Backend {
     /// Returns the string name of the backend.
-    pub fn to_str(self) -> &'static str {
+    pub const fn to_str(self) -> &'static str {
         match self {
             Backend::Empty => "empty",
             Backend::Vulkan => "vulkan",
@@ -121,6 +121,12 @@ impl Backend {
             Backend::Gl => "gl",
             Backend::BrowserWebGpu => "webgpu",
         }
+    }
+}
+
+impl std::fmt::Display for Backend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.to_str())
     }
 }
 
@@ -154,7 +160,7 @@ bitflags::bitflags! {
         const GL = 1 << Backend::Gl as u32;
         /// Supported on macOS/iOS
         const METAL = 1 << Backend::Metal as u32;
-        /// Supported on Windows 10
+        /// Supported on Windows 10 and later
         const DX12 = 1 << Backend::Dx12 as u32;
         /// Supported when targeting the web through webassembly with the `webgpu` feature enabled.
         ///
@@ -165,7 +171,10 @@ bitflags::bitflags! {
         const BROWSER_WEBGPU = 1 << Backend::BrowserWebGpu as u32;
         /// All the apis that wgpu offers first tier of support for.
         ///
-        /// Vulkan + Metal + DX12 + Browser WebGPU
+        /// * [`Backends::VULKAN`]
+        /// * [`Backends::METAL`]
+        /// * [`Backends::DX12`]
+        /// * [`Backends::BROWSER_WEBGPU`]
         const PRIMARY = Self::VULKAN.bits()
             | Self::METAL.bits()
             | Self::DX12.bits()
@@ -173,7 +182,7 @@ bitflags::bitflags! {
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
         ///
-        /// OpenGL
+        /// * [`Backends::GL`]
         const SECONDARY = Self::GL.bits();
     }
 }
@@ -901,6 +910,16 @@ bitflags::bitflags! {
         /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
         /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
         const ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER = 1 << 3;
+        /// Enable GPU-based validation. Implies [`Self::VALIDATION`]. Currently, this only changes
+        /// behavior on the DX12 and Vulkan backends.
+        ///
+        /// Supported platforms:
+        ///
+        /// - D3D12; called ["GPU-based validation", or
+        ///   "GBV"](https://web.archive.org/web/20230206120404/https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-d3d12-debug-layer-gpu-based-validation)
+        /// - Vulkan, via the `VK_LAYER_KHRONOS_validation` layer; called ["GPU-Assisted
+        ///   Validation"](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/e45aeb85079e0835694cb8f03e6681fd18ae72c9/docs/gpu_validation.md#gpu-assisted-validation)
+        const GPU_BASED_VALIDATION = 1 << 4;
     }
 }
 
@@ -911,9 +930,9 @@ impl Default for InstanceFlags {
 }
 
 impl InstanceFlags {
-    /// Enable debugging and validation flags.
+    /// Enable recommended debugging and validation flags.
     pub fn debugging() -> Self {
-        InstanceFlags::DEBUG | InstanceFlags::VALIDATION
+        InstanceFlags::DEBUG | InstanceFlags::VALIDATION | InstanceFlags::GPU_BASED_VALIDATION
     }
 
     /// Infer good defaults from the build type
@@ -955,6 +974,9 @@ impl InstanceFlags {
         }
         if let Some(bit) = env("WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER") {
             self.set(Self::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER, bit);
+        }
+        if let Some(bit) = env("WGPU_GPU_BASED_VALIDATION") {
+            self.set(Self::GPU_BASED_VALIDATION, bit);
         }
 
         self
@@ -1064,6 +1086,11 @@ pub struct Limits {
     /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
     /// Higher is "better".
     pub max_inter_stage_shader_components: u32,
+    /// The maximum allowed number of color attachments.
+    pub max_color_attachments: u32,
+    /// The maximum number of bytes necessary to hold one sample (pixel or subpixel) of render
+    /// pipeline output data, across all color attachments.
+    pub max_color_attachment_bytes_per_sample: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
     /// 16352. Higher is "better".
     pub max_compute_workgroup_storage_size: u32,
@@ -1125,6 +1152,8 @@ impl Default for Limits {
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
             max_inter_stage_shader_components: 60,
+            max_color_attachments: 8,
+            max_color_attachment_bytes_per_sample: 32,
             max_compute_workgroup_storage_size: 16384,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
@@ -1166,6 +1195,8 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 60,
+    ///     max_color_attachments: 8,
+    ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16352,
     ///     max_compute_invocations_per_workgroup: 256,
     ///     max_compute_workgroup_size_x: 256,
@@ -1200,6 +1231,8 @@ impl Limits {
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
             max_inter_stage_shader_components: 60,
+            max_color_attachments: 8,
+            max_color_attachment_bytes_per_sample: 32,
             max_compute_workgroup_storage_size: 16352,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
@@ -1240,6 +1273,8 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 31,
+    ///     max_color_attachments: 8,
+    ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 0, // +
     ///     max_compute_invocations_per_workgroup: 0, // +
     ///     max_compute_workgroup_size_x: 0, // +
@@ -1539,7 +1574,7 @@ bitflags::bitflags! {
         /// If this is false, calls to `CommandEncoder::resolve_query_set` will be performed on the device (i.e. cpu) timeline
         /// and will block that timeline until the query has data. You may work around this limitation by waiting until the submit
         /// whose queries you are resolving is fully finished (through use of `queue.on_submitted_work_done`) and only
-        /// then submitting the resolve_query_set command. The queries will be guarenteed finished, so will not block.
+        /// then submitting the resolve_query_set command. The queries will be guaranteed finished, so will not block.
         ///
         /// Supported by:
         /// - Vulkan,
@@ -3505,6 +3540,87 @@ impl TextureFormat {
             | Self::EacRg11Snorm => Some(16),
 
             Self::Astc { .. } => Some(16),
+        }
+    }
+
+    /// The number of bytes occupied per pixel in a color attachment
+    /// <https://gpuweb.github.io/gpuweb/#render-target-pixel-byte-cost>
+    pub fn target_pixel_byte_cost(&self) -> Option<u32> {
+        match *self {
+            Self::R8Unorm | Self::R8Uint | Self::R8Sint => Some(1),
+            Self::Rg8Unorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Float => Some(2),
+            Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Float
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float => Some(4),
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float
+            | Self::Rgb10a2Uint
+            | Self::Rgb10a2Unorm
+            | Self::Rg11b10Float => Some(8),
+            Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
+            Self::Rgba8Snorm | Self::Rg8Snorm | Self::R8Snorm => None,
+            _ => None,
+        }
+    }
+
+    /// See <https://gpuweb.github.io/gpuweb/#render-target-component-alignment>
+    pub fn target_component_alignment(&self) -> Option<u32> {
+        match self {
+            Self::R8Unorm
+            | Self::R8Snorm
+            | Self::R8Uint
+            | Self::R8Sint
+            | Self::Rg8Unorm
+            | Self::Rg8Snorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
+            | Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb => Some(1),
+            Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Float
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Float
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Float => Some(2),
+            Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float
+            | Self::Rgba32Uint
+            | Self::Rgba32Sint
+            | Self::Rgba32Float
+            | Self::Rgb10a2Uint
+            | Self::Rgb10a2Unorm
+            | Self::Rg11b10Float => Some(4),
+            _ => None,
         }
     }
 
@@ -6389,7 +6505,7 @@ impl<T> ImageCopyTexture<T> {
     }
 }
 
-/// View of an external texture that cna be used to copy to a texture.
+/// View of an external texture that can be used to copy to a texture.
 ///
 /// Corresponds to [WebGPU `GPUImageCopyExternalImage`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
@@ -6427,7 +6543,7 @@ pub enum ExternalImageSource {
     HTMLCanvasElement(web_sys::HtmlCanvasElement),
     /// Copy from a off-screen canvas.
     ///
-    /// Requies [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`]
+    /// Requires [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`]
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
@@ -7057,4 +7173,11 @@ pub enum DeviceLostReason {
     /// we invoke the callback on drop to help with managing memory owned by
     /// the callback.
     Dropped = 2,
+    /// After replacing the device_lost_callback
+    ///
+    /// WebGPU does not have a concept of a device lost callback, but wgpu
+    /// does. wgpu guarantees that any supplied callback will be invoked
+    /// exactly once before it is dropped, which helps with managing the
+    /// memory owned by the callback.
+    ReplacedCallback = 3,
 }

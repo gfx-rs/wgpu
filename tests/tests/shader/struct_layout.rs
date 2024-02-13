@@ -229,6 +229,11 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
                 FailureCase::backend(wgpu::Backends::VULKAN)
                     .validation_error("a matrix with stride 8 not satisfying alignment to 16"),
             )
+            .expect_fail(
+                FailureCase::backend(wgpu::Backends::VULKAN).validation_error(
+                    "Failure to instrument shader.  Proceeding with non-instrumented shader.",
+                ),
+            )
             .limits(Limits::downlevel_defaults()),
     )
     .run_async(|ctx| {

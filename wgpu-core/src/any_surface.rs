@@ -1,92 +1,91 @@
 use wgt::Backend;
 
-/// The `AnySurface` type: a `Arc` of a `HalSurface<A>` for any backend `A`.
+/// The `AnySurface` type: a `Arc` of a `A::Surface` for any backend `A`.
 use crate::hal_api::HalApi;
-use crate::instance::HalSurface;
 
-use std::any::Any;
 use std::fmt;
-use std::sync::Arc;
+use std::mem::ManuallyDrop;
+use std::ptr::NonNull;
 
-/// A `Arc` of a `HalSurface<A>`, for any backend `A`.
+struct AnySurfaceVtable {
+    // We oppurtunistically store the backend here, since we now it will be used
+    // with backend selection and it can be stored in static memory.
+    backend: Backend,
+    // Drop glue which knows how to drop the stored data.
+    drop: unsafe fn(*mut ()),
+}
+
+/// An `A::Surface`, for any backend `A`.
 ///
-/// Any `AnySurface` is just like an `Arc<HalSurface<A>>`, except that the
-/// `A` type parameter is erased. To access the `Surface`, you must
-/// downcast to a particular backend with the \[`downcast_ref`\] or
-/// \[`take`\] methods.
-pub struct AnySurface(Arc<dyn Any + 'static>);
+/// Any `AnySurface` is just like an `A::Surface`, except that the `A` type
+/// parameter is erased. To access the `Surface`, you must downcast to a
+/// particular backend with the \[`downcast_ref`\] or \[`take`\] methods.
+pub struct AnySurface {
+    data: NonNull<()>,
+    vtable: &'static AnySurfaceVtable,
+}
 
 impl AnySurface {
-    /// Return an `AnySurface` that holds an owning `Arc` to `HalSurface`.
-    pub fn new<A: HalApi>(surface: HalSurface<A>) -> AnySurface {
-        AnySurface(Arc::new(surface))
+    /// Construct an `AnySurface` that owns an `A::Surface`.
+    pub fn new<A: HalApi>(surface: A::Surface) -> AnySurface {
+        unsafe fn drop_glue<A: HalApi>(ptr: *mut ()) {
+            unsafe {
+                _ = Box::from_raw(ptr.cast::<A::Surface>());
+            }
+        }
+
+        let data = NonNull::from(Box::leak(Box::new(surface)));
+
+        AnySurface {
+            data: data.cast(),
+            vtable: &AnySurfaceVtable {
+                backend: A::VARIANT,
+                drop: drop_glue::<A>,
+            },
+        }
     }
 
+    /// Get the backend this surface was created through.
     pub fn backend(&self) -> Backend {
-        #[cfg(vulkan)]
-        if self.downcast_ref::<hal::api::Vulkan>().is_some() {
-            return Backend::Vulkan;
-        }
-        #[cfg(metal)]
-        if self.downcast_ref::<hal::api::Metal>().is_some() {
-            return Backend::Metal;
-        }
-        #[cfg(dx12)]
-        if self.downcast_ref::<hal::api::Dx12>().is_some() {
-            return Backend::Dx12;
-        }
-        #[cfg(gles)]
-        if self.downcast_ref::<hal::api::Gles>().is_some() {
-            return Backend::Gl;
-        }
-        Backend::Empty
+        self.vtable.backend
     }
 
-    /// If `self` is an `Arc<HalSurface<A>>`, return a reference to the
-    /// HalSurface.
-    pub fn downcast_ref<A: HalApi>(&self) -> Option<&HalSurface<A>> {
-        self.0.downcast_ref::<HalSurface<A>>()
+    /// If `self` refers to an `A::Surface`, returns a reference to it.
+    pub fn downcast_ref<A: HalApi>(&self) -> Option<&A::Surface> {
+        if A::VARIANT != self.vtable.backend {
+            return None;
+        }
+
+        // SAFETY: We just checked the instance above implicitly by the backend
+        // that it was statically constructed through.
+        Some(unsafe { &*self.data.as_ptr().cast::<A::Surface>() })
     }
 
-    /// If `self` is an `Arc<HalSurface<A>>`, returns that.
-    pub fn take<A: HalApi>(self) -> Option<Arc<HalSurface<A>>> {
-        // `Arc::downcast` returns `Arc<T>`, but requires that `T` be `Sync` and
-        // `Send`, and this is not the case for `HalSurface` in wasm builds.
-        //
-        // But as far as I can see, `Arc::downcast` has no particular reason to
-        // require that `T` be `Sync` and `Send`; the steps used here are sound.
-        if (self.0).is::<HalSurface<A>>() {
-            // Turn the `Arc`, which is a pointer to an `ArcInner` struct, into
-            // a pointer to the `ArcInner`'s `data` field. Carry along the
-            // vtable from the original `Arc`.
-            let raw_erased: *const (dyn Any + 'static) = Arc::into_raw(self.0);
-            // Remove the vtable, and supply the concrete type of the `data`.
-            let raw_typed: *const HalSurface<A> = raw_erased.cast::<HalSurface<A>>();
-            // Convert the pointer to the `data` field back into a pointer to
-            // the `ArcInner`, and restore reference-counting behavior.
-            let arc_typed: Arc<HalSurface<A>> = unsafe {
-                // Safety:
-                // - We checked that the `dyn Any` was indeed a `HalSurface<A>` above.
-                // - We're calling `Arc::from_raw` on the same pointer returned
-                //   by `Arc::into_raw`, except that we stripped off the vtable
-                //   pointer.
-                // - The pointer must still be live, because we've borrowed `self`,
-                //   which holds another reference to it.
-                // - The format of a `ArcInner<dyn Any>` must be the same as
-                //   that of an `ArcInner<HalSurface<A>>`, or else `AnyHalSurface::new`
-                //   wouldn't be possible.
-                Arc::from_raw(raw_typed)
-            };
-            Some(arc_typed)
-        } else {
-            None
+    /// If `self` is an `Arc<A::Surface>`, returns that.
+    pub fn take<A: HalApi>(self) -> Option<A::Surface> {
+        if A::VARIANT != self.vtable.backend {
+            return None;
         }
+
+        // Disable drop glue, since we're returning the owned surface. The
+        // caller will be responsible for dropping it.
+        let this = ManuallyDrop::new(self);
+
+        // SAFETY: We just checked the instance above implicitly by the backend
+        // that it was statically constructed through.
+        Some(unsafe { *Box::from_raw(this.data.as_ptr().cast::<A::Surface>()) })
+    }
+}
+
+impl Drop for AnySurface {
+    fn drop(&mut self) {
+        unsafe { (self.vtable.drop)(self.data.as_ptr()) }
     }
 }
 
 impl fmt::Debug for AnySurface {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("AnySurface")
+        write!(f, "AnySurface<{}>", self.vtable.backend)
     }
 }
 

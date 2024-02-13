@@ -765,7 +765,7 @@ pub enum TypeInner {
         space: AddressSpace,
     },
 
-    /// Homogenous list of elements.
+    /// Homogeneous list of elements.
     ///
     /// The `base` type must be a [`SIZED`], [`DATA`] type.
     ///

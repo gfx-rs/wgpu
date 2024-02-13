@@ -18,7 +18,6 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     id::DeviceId,
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
     resource::{self},
@@ -305,7 +304,7 @@ impl<A: HalApi> State<A> {
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut Tracker<A>,
-        bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
+        bind_group_guard: &Storage<BindGroup<A>>,
         indirect_buffer: Option<id::BufferId>,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), UsageConflict> {
@@ -340,7 +339,7 @@ impl<A: HalApi> State<A> {
 
 // Common routines between render/compute
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_run_compute_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -424,7 +423,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_pass_err(pass_scope)?;
 
             // Unlike in render passes we can't delay resetting the query sets since
-            // there is no auxillary pass.
+            // there is no auxiliary pass.
             let range = if let (Some(index_a), Some(index_b)) =
                 (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
             {

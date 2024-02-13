@@ -327,7 +327,7 @@ mod test {
             vec![900..1000]
         );
 
-        // Splitted ranges.
+        // Split ranges.
         assert_eq!(
             tracker.drain(5..1003).collect::<Vec<Range<u32>>>(),
             vec![5..21, 42..900, 1000..1003]

@@ -1166,7 +1166,7 @@ impl<W: Write> Writer<W> {
         size: usize,
         context: &ExpressionContext,
     ) -> BackendResult {
-        // Write parantheses around the dot product expression to prevent operators
+        // Write parentheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
         write!(self.out, "(")?;
 

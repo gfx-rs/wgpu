@@ -6,10 +6,7 @@ use crate::{
     },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
-    id::{
-        BindGroupId, BindGroupLayoutId, BufferId, PipelineLayoutId, SamplerId, TextureId,
-        TextureViewId,
-    },
+    id::{BindGroupLayoutId, BufferId, SamplerId, TextureId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log,
@@ -441,7 +438,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
-pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindGroupLayoutId>;
+pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>>;
 
 /// Bind group layout.
 #[derive(Debug)]
@@ -458,7 +455,7 @@ pub struct BindGroupLayout<A: HalApi> {
     pub(crate) origin: bgl::Origin,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
-    pub(crate) info: ResourceInfo<BindGroupLayoutId>,
+    pub(crate) info: ResourceInfo<BindGroupLayout<A>>,
     pub(crate) label: String,
 }
 
@@ -482,14 +479,16 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
     }
 }
 
-impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
+impl<A: HalApi> Resource for BindGroupLayout<A> {
     const TYPE: ResourceType = "BindGroupLayout";
 
-    fn as_info(&self) -> &ResourceInfo<BindGroupLayoutId> {
+    type Marker = crate::id::markers::BindGroupLayout;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<BindGroupLayoutId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 
@@ -581,7 +580,7 @@ pub enum PushConstantUploadError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PipelineLayoutDescriptor<'a> {
-    /// Debug label of the pipeine layout.
+    /// Debug label of the pipeline layout.
     ///
     /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -602,7 +601,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 pub struct PipelineLayout<A: HalApi> {
     pub(crate) raw: Option<A::PipelineLayout>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<PipelineLayoutId>,
+    pub(crate) info: ResourceInfo<PipelineLayout<A>>,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
@@ -716,14 +715,16 @@ impl<A: HalApi> PipelineLayout<A> {
     }
 }
 
-impl<A: HalApi> Resource<PipelineLayoutId> for PipelineLayout<A> {
+impl<A: HalApi> Resource for PipelineLayout<A> {
     const TYPE: ResourceType = "PipelineLayout";
 
-    fn as_info(&self) -> &ResourceInfo<PipelineLayoutId> {
+    type Marker = crate::id::markers::PipelineLayout;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<PipelineLayoutId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -830,7 +831,7 @@ pub struct BindGroup<A: HalApi> {
     pub(crate) raw: Snatchable<A::BindGroup>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<BindGroupLayout<A>>,
-    pub(crate) info: ResourceInfo<BindGroupId>,
+    pub(crate) info: ResourceInfo<BindGroup<A>>,
     pub(crate) used: BindGroupStates<A>,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction<A>>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction<A>>,
@@ -919,14 +920,16 @@ impl<A: HalApi> BindGroup<A> {
     }
 }
 
-impl<A: HalApi> Resource<BindGroupId> for BindGroup<A> {
+impl<A: HalApi> Resource for BindGroup<A> {
     const TYPE: ResourceType = "BindGroup";
 
-    fn as_info(&self) -> &ResourceInfo<BindGroupId> {
+    type Marker = crate::id::markers::BindGroup;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<BindGroupId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }

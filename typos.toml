@@ -1,0 +1,22 @@
+[files]
+extend-exclude = [
+    # spirv-asm isn't real source code
+    '*.spvasm'
+]
+
+# Corrections take the form of a key/value pair. The key is the incorrect word
+# and the value is the correct word. If the key and value are the same, the
+# word is treated as always correct. If the value is an empty string, the word
+# is treated as always incorrect.
+
+[default.extend-words]
+# Things that aren't typos
+lod = "lod"
+inout = "inout"
+derivate = "derivate"
+implace = "implace"
+Ded = "Ded" # This shows up in "ANDed"
+
+# Usernames
+Healthire = "Healthire"
+REASY = "REASY"

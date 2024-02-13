@@ -5,7 +5,7 @@ use crate::{
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
-    id::{ComputePipelineId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
+    id::{PipelineLayoutId, ShaderModuleId},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log, validation, Label,
 };
@@ -50,7 +50,7 @@ pub struct ShaderModule<A: HalApi> {
     pub(crate) raw: Option<A::ShaderModule>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
-    pub(crate) info: ResourceInfo<ShaderModuleId>,
+    pub(crate) info: ResourceInfo<ShaderModule<A>>,
     pub(crate) label: String,
 }
 
@@ -70,14 +70,16 @@ impl<A: HalApi> Drop for ShaderModule<A> {
     }
 }
 
-impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
+impl<A: HalApi> Resource for ShaderModule<A> {
     const TYPE: ResourceType = "ShaderModule";
 
-    fn as_info(&self) -> &ResourceInfo<ShaderModuleId> {
+    type Marker = crate::id::markers::ShaderModule;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<ShaderModuleId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 
@@ -267,7 +269,7 @@ pub struct ComputePipeline<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) _shader_module: Arc<ShaderModule<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) info: ResourceInfo<ComputePipelineId>,
+    pub(crate) info: ResourceInfo<ComputePipeline<A>>,
 }
 
 impl<A: HalApi> Drop for ComputePipeline<A> {
@@ -288,14 +290,16 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
     }
 }
 
-impl<A: HalApi> Resource<ComputePipelineId> for ComputePipeline<A> {
+impl<A: HalApi> Resource for ComputePipeline<A> {
     const TYPE: ResourceType = "ComputePipeline";
 
-    fn as_info(&self) -> &ResourceInfo<ComputePipelineId> {
+    type Marker = crate::id::markers::ComputePipeline;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<ComputePipelineId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -373,7 +377,7 @@ pub enum ColorStateError {
     FormatNotBlendable(wgt::TextureFormat),
     #[error("Format {0:?} does not have a color aspect")]
     FormatNotColor(wgt::TextureFormat),
-    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
@@ -395,7 +399,7 @@ pub enum DepthStencilStateError {
     FormatNotDepth(wgt::TextureFormat),
     #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
     FormatNotStencil(wgt::TextureFormat),
-    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
 }
 
@@ -515,7 +519,7 @@ pub struct RenderPipeline<A: HalApi> {
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
     pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) info: ResourceInfo<RenderPipelineId>,
+    pub(crate) info: ResourceInfo<RenderPipeline<A>>,
 }
 
 impl<A: HalApi> Drop for RenderPipeline<A> {
@@ -536,14 +540,16 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
     }
 }
 
-impl<A: HalApi> Resource<RenderPipelineId> for RenderPipeline<A> {
+impl<A: HalApi> Resource for RenderPipeline<A> {
     const TYPE: ResourceType = "RenderPipeline";
 
-    fn as_info(&self) -> &ResourceInfo<RenderPipelineId> {
+    type Marker = crate::id::markers::RenderPipeline;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<RenderPipelineId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }

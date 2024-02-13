@@ -254,10 +254,10 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
                 wgt::AstcBlock::B12x12 => tf::Astc12x12UnormSrgb,
             },
             wgt::AstcChannel::Hdr => {
-                unimplemented!("Format {texture_format:?} has no WebGPU equivilant")
+                unimplemented!("Format {texture_format:?} has no WebGPU equivalent")
             }
         },
-        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivilant"),
+        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivalent"),
     }
 }
 
@@ -724,6 +724,8 @@ fn map_wgt_limits(limits: web_sys::GpuSupportedLimits) -> wgt::Limits {
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
         max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+        max_color_attachments: limits.max_color_attachments(),
+        max_color_attachment_bytes_per_sample: limits.max_color_attachment_bytes_per_sample(),
         max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
         max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
         max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
@@ -2009,6 +2011,7 @@ impl crate::context::Context for ContextWebGpu {
         device_data.0.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => web_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => web_sys::GpuErrorFilter::Validation,
+            crate::ErrorFilter::Internal => web_sys::GpuErrorFilter::Internal,
         });
     }
 
@@ -2151,7 +2154,7 @@ impl crate::context::Context for ContextWebGpu {
         _pipeline_layout: &Self::PipelineLayoutId,
         _pipeline_layout_data: &Self::PipelineLayoutData,
     ) {
-        // Dropped automaticaly
+        // Dropped automatically
     }
 
     fn shader_module_drop(

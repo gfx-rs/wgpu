@@ -1,18 +1,19 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{self, BindGroupLayout, BindGroupLayoutEntryError},
+    binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
-    device::life::{LifetimeTracker, WaitIdleError},
-    device::queue::PendingWrites,
     device::{
-        bgl, AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
+        bgl,
+        life::{LifetimeTracker, WaitIdleError},
+        queue::PendingWrites,
+        AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
     hal_label,
     hub::Hub,
-    id::{self, DeviceId, QueueId},
+    id::QueueId,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
@@ -21,16 +22,17 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     registry::Registry,
-    resource::ResourceInfo,
     resource::{
-        self, Buffer, QuerySet, Resource, ResourceType, Sampler, Texture, TextureView,
-        TextureViewNotRenderableReason,
+        self, Buffer, QuerySet, Resource, ResourceInfo, ResourceType, Sampler, Texture,
+        TextureView, TextureViewNotRenderableReason,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     storage::Storage,
     track::{BindGroupStates, TextureSelector, Tracker},
-    validation::{self, check_buffer_usage, check_texture_usage},
+    validation::{
+        self, check_buffer_usage, check_texture_usage, validate_color_attachment_bytes_per_sample,
+    },
     FastHashMap, LabelHelpers as _, SubmissionIndex,
 };
 
@@ -48,7 +50,7 @@ use std::{
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        Arc, Weak,
     },
 };
 
@@ -71,7 +73,7 @@ use super::{
 /// 1. `self.trace` is locked last (unenforced)
 ///
 /// Right now avoid locking twice same resource or registry in a call execution
-/// and minimize the locking to the minimum scope possibile
+/// and minimize the locking to the minimum scope possible
 /// Unless otherwise specified, no lock may be acquired while holding another lock.
 /// This means that you must inspect function calls made while a lock is held
 /// to see what locks the callee may try to acquire.
@@ -90,7 +92,7 @@ pub struct Device<A: HalApi> {
     pub(crate) queue_id: RwLock<Option<QueueId>>,
     queue_to_drop: RwLock<Option<A::Queue>>,
     pub(crate) zero_buffer: Option<A::Buffer>,
-    pub(crate) info: ResourceInfo<DeviceId>,
+    pub(crate) info: ResourceInfo<Device<A>>,
 
     pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
     //Note: The submission index here corresponds to the last submission that is done.
@@ -129,8 +131,14 @@ pub struct Device<A: HalApi> {
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
+    pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
+}
+
+pub(crate) enum DeferredDestroy<A: HalApi> {
+    TextureView(Weak<TextureView<A>>),
+    BindGroup(Weak<BindGroup<A>>),
 }
 
 impl<A: HalApi> std::fmt::Debug for Device<A> {
@@ -285,6 +293,7 @@ impl<A: HalApi> Device<A> {
             downlevel,
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
+            deferred_destroy: Mutex::new(Vec::new()),
         })
     }
 
@@ -298,6 +307,56 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker<A>> {
         self.life_tracker.lock()
+    }
+
+    /// Run some destroy operations that were deferred.
+    ///
+    /// Destroying the resources requires taking a write lock on the device's snatch lock,
+    /// so a good reason for deferring resource destruction is when we don't know for sure
+    /// how risky it is to take the lock (typically, it shouldn't be taken from the drop
+    /// implementation of a reference-counted structure).
+    /// The snatch lock must not be held while this function is called.
+    pub(crate) fn deferred_resource_destruction(&self) {
+        while let Some(item) = self.deferred_destroy.lock().pop() {
+            match item {
+                DeferredDestroy::TextureView(view) => {
+                    let Some(view) = view.upgrade() else {
+                        continue;
+                    };
+                    let Some(raw_view) = view.raw.snatch(self.snatchable_lock.write()) else {
+                        continue;
+                    };
+
+                    resource_log!("Destroy raw TextureView (destroyed) {:?}", view.label());
+                    #[cfg(feature = "trace")]
+                    if let Some(t) = self.trace.lock().as_mut() {
+                        t.add(trace::Action::DestroyTextureView(view.info.id()));
+                    }
+                    unsafe {
+                        use hal::Device;
+                        self.raw().destroy_texture_view(raw_view);
+                    }
+                }
+                DeferredDestroy::BindGroup(bind_group) => {
+                    let Some(bind_group) = bind_group.upgrade() else {
+                        continue;
+                    };
+                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write()) else {
+                        continue;
+                    };
+
+                    resource_log!("Destroy raw BindGroup (destroyed) {:?}", bind_group.label());
+                    #[cfg(feature = "trace")]
+                    if let Some(t) = self.trace.lock().as_mut() {
+                        t.add(trace::Action::DestroyBindGroup(bind_group.info.id()));
+                    }
+                    unsafe {
+                        use hal::Device;
+                        self.raw().destroy_bind_group(raw_bind_group);
+                    }
+                }
+            }
+        }
     }
 
     /// Check this device for completed commands.
@@ -372,15 +431,19 @@ impl<A: HalApi> Device<A> {
 
         let mapping_closures = life_tracker.handle_mapping(self.raw(), &self.trackers);
 
+        let queue_empty = life_tracker.queue_empty();
+
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
         // and we have a DeviceLostClosure, return the closure to be called by
         // our caller. This will complete the steps for both destroy and for
         // "lose the device".
         let mut device_lost_invocations = SmallVec::new();
-        if !self.is_valid() && life_tracker.queue_empty() {
-            // We can release gpu resources associated with this device.
-            self.release_gpu_resources();
+        let mut should_release_gpu_resource = false;
+        if !self.is_valid() && queue_empty {
+            // We can release gpu resources associated with this device (but not
+            // while holding the life_tracker lock).
+            should_release_gpu_resource = true;
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
@@ -393,12 +456,19 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        // Don't hold the lock while calling release_gpu_resources.
+        drop(life_tracker);
+
+        if should_release_gpu_resource {
+            self.release_gpu_resources();
+        }
+
         let closures = UserClosures {
             mappings: mapping_closures,
             submissions: submission_closures,
             device_lost_invocations,
         };
-        Ok((closures, life_tracker.queue_empty()))
+        Ok((closures, queue_empty))
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
@@ -1789,7 +1859,7 @@ impl<A: HalApi> Device<A> {
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates<A>,
-        storage: &'a Storage<Buffer<A>, id::BufferId>,
+        storage: &'a Storage<Buffer<A>>,
         limits: &wgt::Limits,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
@@ -1965,7 +2035,7 @@ impl<A: HalApi> Device<A> {
         layout: &Arc<BindGroupLayout<A>>,
         desc: &binding_model::BindGroupDescriptor,
         hub: &Hub<A>,
-    ) -> Result<binding_model::BindGroup<A>, binding_model::CreateBindGroupError> {
+    ) -> Result<BindGroup<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
         {
             // Check that the number of entries in the descriptor matches
@@ -2205,7 +2275,7 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
-        Ok(binding_model::BindGroup {
+        Ok(BindGroup {
             raw: Snatchable::new(raw),
             device: self.clone(),
             layout: layout.clone(),
@@ -2390,7 +2460,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::PipelineLayoutDescriptor,
-        bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
+        bgl_registry: &Registry<BindGroupLayout<A>>,
     ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
@@ -2503,8 +2573,8 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         implicit_context: Option<ImplicitPipelineContext>,
         mut derived_group_layouts: ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>,
-        bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
-        pipeline_layout_registry: &Registry<id::PipelineLayoutId, binding_model::PipelineLayout<A>>,
+        bgl_registry: &Registry<BindGroupLayout<A>>,
+        pipeline_layout_registry: &Registry<binding_model::PipelineLayout<A>>,
     ) -> Result<Arc<binding_model::PipelineLayout<A>>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
@@ -2685,11 +2755,12 @@ impl<A: HalApi> Device<A> {
         let mut shader_binding_sizes = FastHashMap::default();
 
         let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
-        if num_attachments > hal::MAX_COLOR_ATTACHMENTS {
+        let max_attachments = self.limits.max_color_attachments as usize;
+        if num_attachments > max_attachments {
             return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
                 command::ColorAttachmentError::TooMany {
                     given: num_attachments,
-                    limit: hal::MAX_COLOR_ATTACHMENTS,
+                    limit: max_attachments,
                 },
             ));
         }
@@ -2895,12 +2966,23 @@ impl<A: HalApi> Device<A> {
                             }
                         }
                     }
+
                     break None;
                 };
                 if let Some(e) = error {
                     return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
                 }
             }
+        }
+
+        let limit = self.limits.max_color_attachment_bytes_per_sample;
+        let formats = color_targets
+            .iter()
+            .map(|cs| cs.as_ref().map(|cs| cs.format));
+        if let Err(total) = validate_color_attachment_bytes_per_sample(formats, limit) {
+            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
+                command::ColorAttachmentError::TooManyBytesPerSample { total, limit },
+            ));
         }
 
         if let Some(ds) = depth_stencil_state {
@@ -3366,9 +3448,11 @@ impl<A: HalApi> Device<A> {
         // 1) Resolve the GPUDevice device.lost promise.
         let mut life_lock = self.lock_life();
         let closure = life_lock.device_lost_closure.take();
+        // It's important to not hold the lock while calling the closure and while calling
+        // release_gpu_resources which may take the lock again.
+        drop(life_lock);
+
         if let Some(device_lost_closure) = closure {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_lock);
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
         }
 
@@ -3437,6 +3521,11 @@ impl<A: HalApi> Device<A> {
             current_index,
             self.command_allocator.lock().as_mut().unwrap(),
         );
+        if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
+            // It's important to not hold the lock while calling the closure.
+            drop(life_tracker);
+            device_lost_closure.call(DeviceLostReason::Dropped, "Device is dying.".to_string());
+        }
         #[cfg(feature = "trace")]
         {
             *self.trace.lock() = None;
@@ -3444,14 +3533,16 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-impl<A: HalApi> Resource<DeviceId> for Device<A> {
+impl<A: HalApi> Resource for Device<A> {
     const TYPE: ResourceType = "Device";
 
-    fn as_info(&self) -> &ResourceInfo<DeviceId> {
+    type Marker = crate::id::markers::Device;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<DeviceId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }

@@ -20,7 +20,6 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label, id,
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{Buffer, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
@@ -378,18 +377,33 @@ struct VertexState {
 
 impl VertexState {
     fn update_limits(&mut self) {
-        // TODO: This isn't entirely spec-compliant.
-        // We currently require that the buffer range can fit `stride` * count bytes.
-        // The spec, however, lets a buffer be a bit smaller as long as the size of the
-        // last element fits in it (the last element can be smaller than the stride between
-        // elements).
+        // Implements the validation from https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw
+        // Except that the formula is shuffled to extract the number of vertices in order
+        // to carry the bulk of the computation when changing states instead of when producing
+        // draws. Draw calls tend to happen at a higher frequency. Here we determine vertex
+        // limits that can be cheaply checked for each draw call.
         self.vertex_limit = u32::MAX as u64;
         self.instance_limit = u32::MAX as u64;
         for (idx, vbs) in self.inputs.iter().enumerate() {
-            if vbs.step.stride == 0 || !vbs.bound {
+            if !vbs.bound {
                 continue;
             }
-            let limit = vbs.total_size / vbs.step.stride;
+
+            let limit = if vbs.total_size < vbs.step.last_stride {
+                // The buffer cannot fit the last vertex.
+                0
+            } else {
+                if vbs.step.stride == 0 {
+                    // We already checked that the last stride fits, the same
+                    // vertex will be repeated so this slot can accommodate any number of
+                    // vertices.
+                    continue;
+                }
+
+                // The general case.
+                (vbs.total_size - vbs.step.last_stride) / vbs.step.stride + 1
+            };
+
             match vbs.step.mode {
                 VertexStepMode::Vertex => {
                     if limit < self.vertex_limit {
@@ -517,6 +531,8 @@ pub enum ColorAttachmentError {
     InvalidFormat(wgt::TextureFormat),
     #[error("The number of color attachments {given} exceeds the limit {limit}")]
     TooMany { given: usize, limit: usize },
+    #[error("The total number of bytes per sample in color attachments {total} exceeds the limit {limit}")]
+    TooManyBytesPerSample { total: u32, limit: u32 },
 }
 
 /// Error encountered when performing a render pass.
@@ -784,10 +800,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         trackers: &mut Tracker<A>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         pending_query_resets: &mut QueryResetMap<A>,
-        view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
-        buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &'a Storage<Texture<A>, id::TextureId>,
-        query_set_guard: &'a Storage<QuerySet<A>, id::QuerySetId>,
+        view_guard: &'a Storage<TextureView<A>>,
+        buffer_guard: &'a Storage<Buffer<A>>,
+        texture_guard: &'a Storage<Texture<A>>,
+        query_set_guard: &'a Storage<QuerySet<A>>,
         snatch_guard: &SnatchGuard<'a>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::start");
@@ -1288,7 +1304,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
 // Common routines between render/compute
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_run_render_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -1626,7 +1642,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         // Initialize each `vertex.inputs[i].step` from
                         // `pipeline.vertex_steps[i]`.  Enlarge `vertex.inputs`
-                        // as necessary to accomodate all slots in the
+                        // as necessary to accommodate all slots in the
                         // pipeline. If `vertex.inputs` is longer, fill the
                         // extra entries with default `VertexStep`s.
                         while state.vertex.inputs.len() < vertex_steps_len {
@@ -2391,7 +2407,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (trackers, pending_discard_init_fixups)
         };
 
-        let cmd_buf = hub.command_buffers.get(encoder_id).unwrap();
+        let cmd_buf = hub.command_buffers.get(encoder_id.transmute()).unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

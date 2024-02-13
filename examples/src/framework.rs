@@ -142,7 +142,7 @@ impl SurfaceWrapper {
     /// a surface (and hence a canvas) to be present to create the adapter.
     ///
     /// We cannot unconditionally create a surface here, as Android requires
-    /// us to wait until we recieve the `Resumed` event to do so.
+    /// us to wait until we receive the `Resumed` event to do so.
     fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
         if cfg!(target_arch = "wasm32") {
             self.surface = Some(instance.create_surface(window).unwrap());
@@ -160,7 +160,7 @@ impl SurfaceWrapper {
         }
     }
 
-    /// Called when an event which matches [`Self::start_condition`] is recieved.
+    /// Called when an event which matches [`Self::start_condition`] is received.
     ///
     /// On all native platforms, this is where we create the surface.
     ///

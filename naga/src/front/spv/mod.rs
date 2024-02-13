@@ -2559,7 +2559,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 Op::ShiftRightLogical => {
                     inst.expect(5)?;
-                    //TODO: convert input and result to usigned
+                    //TODO: convert input and result to unsigned
                     parse_expr_op!(crate::BinaryOperator::ShiftRight, SHIFT)?;
                 }
                 Op::ShiftRightArithmetic => {
@@ -3387,7 +3387,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                         // Check if any previous case already used this target block id, if so
                         // group them together to reorder them later so that no weird
-                        // falltrough cases happen.
+                        // fallthrough cases happen.
                         if let Some(&mut (_, ref mut literals)) = self.switch_cases.get_mut(&target)
                         {
                             literals.push(literal as i32);
@@ -3411,11 +3411,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Loop trough the collected target blocks creating a new case for each
                     // literal pointing to it, only one case will have the true body and all the
-                    // others will be empty falltrough so that they all execute the same body
+                    // others will be empty fallthrough so that they all execute the same body
                     // without duplicating code.
                     //
                     // Since `switch_cases` is an indexmap the order of insertion is preserved
-                    // this is needed because spir-v defines falltrough order in the switch
+                    // this is needed because spir-v defines fallthrough order in the switch
                     // instruction.
                     let mut cases = Vec::with_capacity((inst.wc as usize - 3) / 2);
                     for &(case_body_idx, ref literals) in self.switch_cases.values() {

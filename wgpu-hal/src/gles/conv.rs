@@ -115,12 +115,7 @@ impl super::AdapterShared {
                 glow::RGBA,
                 0,
             ),
-            Tf::Etc2Rgba8Unorm => (
-                //TODO: this is a lie, it's not sRGB
-                glow::COMPRESSED_SRGB8_ALPHA8_ETC2_EAC,
-                glow::RGBA,
-                0,
-            ),
+            Tf::Etc2Rgba8Unorm => (glow::COMPRESSED_RGBA8_ETC2_EAC, glow::RGBA, 0),
             Tf::Etc2Rgba8UnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ETC2_EAC, glow::RGBA, 0),
             Tf::EacR11Unorm => (glow::COMPRESSED_R11_EAC, glow::RED, 0),
             Tf::EacR11Snorm => (glow::COMPRESSED_SIGNED_R11_EAC, glow::RED, 0),
