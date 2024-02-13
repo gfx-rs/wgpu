@@ -49,7 +49,6 @@ void main()
     uint2 cit0_ = (0u).xx;
     float2x2 cit1_ = float2x2((0.0).xx, (0.0).xx);
     int cit2_[4] = Constructarray4_int_(0, 1, 2, 3);
-    bool ic0_ = bool((bool)0);
     uint2 ic4_ = uint2(0u, 0u);
     float2x3 ic5_ = float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
 }
