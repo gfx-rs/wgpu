@@ -2,11 +2,11 @@
 //!
 //! Timestamp queries are typically used to profile how long certain operations take on the GPU.
 //! wgpu has several ways of performing gpu timestamp queries:
-//! * `wgpu::Encoder::write_timestamp` writes a between any commands recorded on an encoder.
-//!     (enabled with wgpu::Features::TIMESTAMP_QUERY)
 //! * passing `wgpu::RenderPassTimestampWrites`/`wgpu::ComputePassTimestampWrites` during render/compute pass creation.
 //!     This writes timestamps for the beginning and end of a given pass.
 //!     (enabled with wgpu::Features::TIMESTAMP_QUERY)
+//! * `wgpu::CommandEncoder::write_timestamp` writes a between any commands recorded on an encoder.
+//!     (enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
 //! * `wgpu::RenderPass/ComputePass::write_timestamp` writes a timestamp within commands of a render pass.
 //!     Note that some GPU architectures do not support this.
 //!     (native only, enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
@@ -241,8 +241,13 @@ fn submit_render_and_compute_pass_with_queries(
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
-    encoder.write_timestamp(&queries.set, queries.next_unused_query);
-    queries.next_unused_query += 1;
+    if device
+        .features()
+        .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
+    {
+        encoder.write_timestamp(&queries.set, queries.next_unused_query);
+        queries.next_unused_query += 1;
+    }
 
     // Render two triangles and profile it.
     render_pass(
@@ -262,8 +267,13 @@ fn submit_render_and_compute_pass_with_queries(
         &mut queries.next_unused_query,
     );
 
-    encoder.write_timestamp(&queries.set, queries.next_unused_query);
-    queries.next_unused_query += 1;
+    if device
+        .features()
+        .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
+    {
+        encoder.write_timestamp(&queries.set, queries.next_unused_query);
+        queries.next_unused_query += 1;
+    }
 
     queries.resolve(&mut encoder);
     queue.submit(Some(encoder.finish()));
@@ -426,13 +436,25 @@ mod tests {
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
     #[gpu_test]
-    static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
+    static TIMESTAMPS_PASS_BOUNDARIES: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(wgpu::Features::TIMESTAMP_QUERY),
         )
-        .run_sync(|ctx| test_timestamps(ctx, false));
+        .run_sync(|ctx| test_timestamps(ctx, false, false));
+
+    #[gpu_test]
+    static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
+        .parameters(
+            wgpu_test::TestParameters::default()
+                .limits(wgpu::Limits::downlevel_defaults())
+                .features(
+                    wgpu::Features::TIMESTAMP_QUERY
+                        | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+                ),
+        )
+        .run_sync(|ctx| test_timestamps(ctx, true, false));
 
     #[gpu_test]
     static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -440,12 +462,18 @@ mod tests {
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(
-                    wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+                    wgpu::Features::TIMESTAMP_QUERY
+                        | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
+                        | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                 ),
         )
-        .run_sync(|ctx| test_timestamps(ctx, true));
+        .run_sync(|ctx| test_timestamps(ctx, true, true));
 
-    fn test_timestamps(ctx: wgpu_test::TestingContext, timestamps_inside_passes: bool) {
+    fn test_timestamps(
+        ctx: wgpu_test::TestingContext,
+        timestamps_on_encoder: bool,
+        timestamps_inside_passes: bool,
+    ) {
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);
         let raw_results = queries.wait_for_results(&ctx.device);
         let QueryResults {
@@ -464,9 +492,10 @@ mod tests {
             compute_start_end_timestamps[1].wrapping_sub(compute_start_end_timestamps[0]);
         let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
-        assert!(encoder_delta > 0);
-        assert!(encoder_delta >= render_delta + compute_delta);
-
+        if timestamps_on_encoder {
+            assert!(encoder_delta > 0);
+            assert!(encoder_delta >= render_delta + compute_delta);
+        }
         if let Some(render_inside_timestamp) = render_inside_timestamp {
             assert!(render_inside_timestamp >= render_start_end_timestamps[0]);
             assert!(render_inside_timestamp <= render_start_end_timestamps[1]);
