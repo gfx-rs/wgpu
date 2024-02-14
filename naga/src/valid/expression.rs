@@ -184,7 +184,7 @@ impl super::Validator {
         handle: Handle<crate::Expression>,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<(), ConstExpressionError> {
         use crate::Expression as E;
 
@@ -224,7 +224,7 @@ impl super::Validator {
         module: &crate::Module,
         info: &FunctionInfo,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<ShaderStages, ExpressionError> {
         use crate::{Expression as E, Scalar as Sc, ScalarKind as Sk, TypeInner as Ti};
 

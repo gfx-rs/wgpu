@@ -87,7 +87,7 @@ pub struct GlobalContext<'source, 'temp, 'out> {
 
     const_typifier: &'temp mut Typifier,
 
-    global_expression_kind_tracker: &'temp mut crate::proc::ExpressionConstnessTracker,
+    global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 }
 
 impl<'source> GlobalContext<'source, '_, '_> {
@@ -179,8 +179,8 @@ pub struct StatementContext<'source, 'temp, 'out> {
     /// with the form of the expressions; it is also tracking whether WGSL says
     /// we should consider them to be const. See the use of `force_non_const` in
     /// the code for lowering `let` bindings.
-    expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
-    global_expression_kind_tracker: &'temp mut crate::proc::ExpressionConstnessTracker,
+    local_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
+    global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 }
 
 impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
@@ -205,7 +205,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
                 block,
                 emitter,
                 typifier: self.typifier,
-                expression_constness: self.expression_constness,
+                local_expression_kind_tracker: self.local_expression_kind_tracker,
             }),
         }
     }
@@ -250,8 +250,8 @@ pub struct RuntimeExpressionContext<'temp, 'out> {
     /// Which `Expression`s in `self.naga_expressions` are const expressions, in
     /// the WGSL sense.
     ///
-    /// See [`StatementContext::expression_constness`] for details.
-    expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
+    /// See [`StatementContext::local_expression_kind_tracker`] for details.
+    local_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 }
 
 /// The type of Naga IR expression we are lowering an [`ast::Expression`] to.
@@ -337,7 +337,7 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
     ///
     /// [`module::const_expressions`]: crate::Module::const_expressions
     const_typifier: &'temp mut Typifier,
-    global_expression_kind_tracker: &'temp mut crate::proc::ExpressionConstnessTracker,
+    global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 
     /// Whether we are lowering a constant expression or a general
     /// runtime expression, and the data needed in each case.
@@ -373,7 +373,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             ExpressionContextType::Runtime(ref mut rctx) => ConstantEvaluator::for_wgsl_function(
                 self.module,
                 &mut rctx.function.expressions,
-                rctx.expression_constness,
+                rctx.local_expression_kind_tracker,
                 rctx.emitter,
                 rctx.block,
             ),
@@ -403,7 +403,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn const_access(&self, handle: Handle<crate::Expression>) -> Option<u32> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
-                if !ctx.expression_constness.is_const(handle) {
+                if !ctx.local_expression_kind_tracker.is_const(handle) {
                     return None;
                 }
 
@@ -455,7 +455,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<crate::SwizzleComponent, Error<'source>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref rctx) => {
-                if !rctx.expression_constness.is_const(expr) {
+                if !rctx.local_expression_kind_tracker.is_const(expr) {
                     return Err(Error::ExpectedConstExprConcreteIntegerScalar(
                         component_span,
                     ));
@@ -899,7 +899,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             types: &tu.types,
             module: &mut module,
             const_typifier: &mut Typifier::new(),
-            global_expression_kind_tracker: &mut crate::proc::ExpressionConstnessTracker::new(),
+            global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker::new(),
         };
 
         for decl_handle in self.index.visit_ordered() {
@@ -1097,7 +1097,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut local_table = FastHashMap::default();
         let mut expressions = Arena::new();
         let mut named_expressions = FastIndexMap::default();
-        let mut local_expression_kind_tracker = crate::proc::ExpressionConstnessTracker::new();
+        let mut local_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
         let arguments = f
             .arguments
@@ -1152,7 +1152,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             named_expressions: &mut named_expressions,
             types: ctx.types,
             module: ctx.module,
-            expression_constness: &mut local_expression_kind_tracker,
+            local_expression_kind_tracker: &mut local_expression_kind_tracker,
             global_expression_kind_tracker: ctx.global_expression_kind_tracker,
         };
         let mut body = self.block(&f.body, false, &mut stmt_ctx)?;
@@ -1232,7 +1232,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // affects when errors must be reported, so we can't even
                     // treat suitable `let` bindings as constant as an
                     // optimization.
-                    ctx.expression_constness.force_non_const(value);
+                    ctx.local_expression_kind_tracker.force_non_const(value);
 
                     let explicit_ty =
                         l.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx.as_global()))
@@ -1316,7 +1316,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 // - the initialization is not a constant
                                 //   expression, so its value depends on the
                                 //   state at the point of initialization.
-                                if is_inside_loop || !ctx.expression_constness.is_const(init) {
+                                if is_inside_loop
+                                    || !ctx.local_expression_kind_tracker.is_const(init)
+                                {
                                     (None, Some(init))
                                 } else {
                                     (Some(init), None)
@@ -1569,9 +1571,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     .function
                     .expressions
                     .append(crate::Expression::Binary { op, left, right }, stmt.span);
-                rctx.expression_constness
+                rctx.local_expression_kind_tracker
                     .insert(left, crate::proc::ExpressionKind::Runtime);
-                rctx.expression_constness
+                rctx.local_expression_kind_tracker
                     .insert(value, crate::proc::ExpressionKind::Runtime);
 
                 block.extend(emitter.finish(&ctx.function.expressions));
@@ -1946,7 +1948,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .function
                         .expressions
                         .append(crate::Expression::CallResult(function), span);
-                    rctx.expression_constness
+                    rctx.local_expression_kind_tracker
                         .insert(result, crate::proc::ExpressionKind::Runtime);
                     result
                 });

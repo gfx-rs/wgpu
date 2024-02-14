@@ -78,9 +78,9 @@ pub struct Context<'a> {
     pub module: &'a mut crate::Module,
     pub is_const: bool,
     /// Tracks the expression kind of `Expression`s residing in `self.expressions`
-    pub local_expression_kind_tracker: crate::proc::ExpressionConstnessTracker,
+    pub local_expression_kind_tracker: crate::proc::ExpressionKindTracker,
     /// Tracks the expression kind of `Expression`s residing in `self.module.const_expressions`
-    pub global_expression_kind_tracker: &'a mut crate::proc::ExpressionConstnessTracker,
+    pub global_expression_kind_tracker: &'a mut crate::proc::ExpressionKindTracker,
 }
 
 impl<'a> Context<'a> {
@@ -88,7 +88,7 @@ impl<'a> Context<'a> {
         frontend: &Frontend,
         module: &'a mut crate::Module,
         is_const: bool,
-        global_expression_kind_tracker: &'a mut crate::proc::ExpressionConstnessTracker,
+        global_expression_kind_tracker: &'a mut crate::proc::ExpressionKindTracker,
     ) -> Result<Self> {
         let mut this = Context {
             expressions: Arena::new(),
@@ -108,7 +108,7 @@ impl<'a> Context<'a> {
             body: Block::new(),
             module,
             is_const: false,
-            local_expression_kind_tracker: crate::proc::ExpressionConstnessTracker::new(),
+            local_expression_kind_tracker: crate::proc::ExpressionKindTracker::new(),
             global_expression_kind_tracker,
         };
 

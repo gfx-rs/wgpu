@@ -296,7 +296,7 @@ pub struct ConstantEvaluator<'a> {
     expressions: &'a mut Arena<Expression>,
 
     /// Tracks the constness of expressions residing in [`Self::expressions`]
-    expression_kind_tracker: &'a mut ExpressionConstnessTracker,
+    expression_kind_tracker: &'a mut ExpressionKindTracker,
 }
 
 #[derive(Debug)]
@@ -338,11 +338,11 @@ pub enum ExpressionKind {
 }
 
 #[derive(Debug)]
-pub struct ExpressionConstnessTracker {
+pub struct ExpressionKindTracker {
     inner: Vec<ExpressionKind>,
 }
 
-impl ExpressionConstnessTracker {
+impl ExpressionKindTracker {
     pub const fn new() -> Self {
         Self { inner: Vec::new() }
     }
@@ -529,7 +529,7 @@ impl<'a> ConstantEvaluator<'a> {
     /// Report errors according to WGSL's rules for constant evaluation.
     pub fn for_wgsl_module(
         module: &'a mut crate::Module,
-        global_expression_kind_tracker: &'a mut ExpressionConstnessTracker,
+        global_expression_kind_tracker: &'a mut ExpressionKindTracker,
         in_override_ctx: bool,
     ) -> Self {
         Self::for_module(
@@ -549,7 +549,7 @@ impl<'a> ConstantEvaluator<'a> {
     /// Report errors according to GLSL's rules for constant evaluation.
     pub fn for_glsl_module(
         module: &'a mut crate::Module,
-        global_expression_kind_tracker: &'a mut ExpressionConstnessTracker,
+        global_expression_kind_tracker: &'a mut ExpressionKindTracker,
     ) -> Self {
         Self::for_module(
             Behavior::Glsl(GlslRestrictions::Const),
@@ -561,7 +561,7 @@ impl<'a> ConstantEvaluator<'a> {
     fn for_module(
         behavior: Behavior<'a>,
         module: &'a mut crate::Module,
-        global_expression_kind_tracker: &'a mut ExpressionConstnessTracker,
+        global_expression_kind_tracker: &'a mut ExpressionKindTracker,
     ) -> Self {
         Self {
             behavior,
@@ -580,7 +580,7 @@ impl<'a> ConstantEvaluator<'a> {
     pub fn for_wgsl_function(
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
-        local_expression_kind_tracker: &'a mut ExpressionConstnessTracker,
+        local_expression_kind_tracker: &'a mut ExpressionKindTracker,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
     ) -> Self {
@@ -605,7 +605,7 @@ impl<'a> ConstantEvaluator<'a> {
     pub fn for_glsl_function(
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
-        local_expression_kind_tracker: &'a mut ExpressionConstnessTracker,
+        local_expression_kind_tracker: &'a mut ExpressionKindTracker,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
     ) -> Self {
@@ -2050,7 +2050,7 @@ mod tests {
         UniqueArena, VectorSize,
     };
 
-    use super::{Behavior, ConstantEvaluator, ExpressionConstnessTracker, WgslRestrictions};
+    use super::{Behavior, ConstantEvaluator, ExpressionKindTracker, WgslRestrictions};
 
     #[test]
     fn unary_op() {
@@ -2131,8 +2131,7 @@ mod tests {
             expr: expr1,
         };
 
-        let expression_kind_tracker =
-            &mut ExpressionConstnessTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
@@ -2218,8 +2217,7 @@ mod tests {
             convert: Some(crate::BOOL_WIDTH),
         };
 
-        let expression_kind_tracker =
-            &mut ExpressionConstnessTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
@@ -2337,8 +2335,7 @@ mod tests {
 
         let base = const_expressions.append(Expression::Constant(h), Default::default());
 
-        let expression_kind_tracker =
-            &mut ExpressionConstnessTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
@@ -2431,8 +2428,7 @@ mod tests {
 
         let h_expr = const_expressions.append(Expression::Constant(h), Default::default());
 
-        let expression_kind_tracker =
-            &mut ExpressionConstnessTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
@@ -2514,8 +2510,7 @@ mod tests {
 
         let h_expr = const_expressions.append(Expression::Constant(h), Default::default());
 
-        let expression_kind_tracker =
-            &mut ExpressionConstnessTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,

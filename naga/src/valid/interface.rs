@@ -397,7 +397,7 @@ impl super::Validator {
         var: &crate::GlobalVariable,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<(), GlobalVariableError> {
         use super::TypeFlags;
 
@@ -545,7 +545,7 @@ impl super::Validator {
         ep: &crate::EntryPoint,
         module: &crate::Module,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;

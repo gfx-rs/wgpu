@@ -12,7 +12,7 @@ mod r#type;
 
 use crate::{
     arena::Handle,
-    proc::{ExpressionConstnessTracker, LayoutError, Layouter, TypeResolution},
+    proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -364,7 +364,7 @@ impl Validator {
         handle: Handle<crate::Constant>,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
-        global_expr_kind: &ExpressionConstnessTracker,
+        global_expr_kind: &ExpressionKindTracker,
     ) -> Result<(), ConstantError> {
         let con = &gctx.constants[handle];
 
@@ -489,7 +489,7 @@ impl Validator {
             }
         }
 
-        let global_expr_kind = ExpressionConstnessTracker::from_arena(&module.const_expressions);
+        let global_expr_kind = ExpressionKindTracker::from_arena(&module.const_expressions);
 
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, _) in module.const_expressions.iter() {
