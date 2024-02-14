@@ -719,8 +719,12 @@ impl Global {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
-                    check_buffer_usage(indirect_buffer.usage, wgt::BufferUsages::INDIRECT)
-                        .map_pass_err(scope)?;
+                    check_buffer_usage(
+                        buffer_id,
+                        indirect_buffer.usage,
+                        wgt::BufferUsages::INDIRECT,
+                    )
+                    .map_pass_err(scope)?;
 
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
                     if end_offset > indirect_buffer.size {
