@@ -927,7 +927,7 @@ impl super::Validator {
         var: &crate::LocalVariable,
         gctx: crate::proc::GlobalCtx,
         fun_info: &FunctionInfo,
-        local_expr_kind: &crate::proc::ExpressionConstnessTracker,
+        local_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
         let type_info = self
@@ -959,11 +959,11 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
         entry_point: bool,
-        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
 
-        let local_expr_kind = crate::proc::ExpressionConstnessTracker::from_arena(&fun.expressions);
+        let local_expr_kind = crate::proc::ExpressionKindTracker::from_arena(&fun.expressions);
 
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, module.to_ctx(), &info, &local_expr_kind)

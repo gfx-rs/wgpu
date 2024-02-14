@@ -164,7 +164,7 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse(&mut self, frontend: &mut Frontend) -> Result<Module> {
         let mut module = Module::default();
-        let mut global_expression_kind_tracker = crate::proc::ExpressionConstnessTracker::new();
+        let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
         // Body and expression arena for global initialization
         let mut ctx = Context::new(
@@ -229,7 +229,7 @@ impl<'source> ParsingContext<'source> {
         &mut self,
         frontend: &mut Frontend,
         module: &mut Module,
-        global_expression_kind_tracker: &mut crate::proc::ExpressionConstnessTracker,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
     ) -> Result<(Handle<Expression>, Span)> {
         let mut ctx = Context::new(frontend, module, true, global_expression_kind_tracker)?;
 
