@@ -11,7 +11,7 @@ mod terminator;
 mod typifier;
 
 pub use constant_evaluator::{
-    ConstantEvaluator, ConstantEvaluatorError, ExpressionConstnessTracker,
+    ConstantEvaluator, ConstantEvaluatorError, ExpressionConstnessTracker, ExpressionKind,
 };
 pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};

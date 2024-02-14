@@ -256,7 +256,7 @@ pub enum Error {
     #[error("{0}")]
     Custom(String),
     #[error(transparent)]
-    PipelineConstant(#[from] back::pipeline_constants::PipelineConstantError),
+    PipelineConstant(#[from] Box<back::pipeline_constants::PipelineConstantError>),
 }
 
 #[derive(Default)]
