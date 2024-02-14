@@ -1075,7 +1075,7 @@ impl<W: Write> Writer<W> {
         self.write_possibly_const_expression(
             module,
             expr,
-            &module.const_expressions,
+            &module.global_expressions,
             |writer, expr| writer.write_const_expression(module, expr),
         )
     }

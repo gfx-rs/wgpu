@@ -895,7 +895,7 @@ pub struct Override {
 
     /// The default value of the pipeline-overridable constant.
     ///
-    /// This [`Handle`] refers to [`Module::const_expressions`], not
+    /// This [`Handle`] refers to [`Module::global_expressions`], not
     /// any [`Function::expressions`] arena.
     pub init: Option<Handle<Expression>>,
 }
@@ -911,7 +911,7 @@ pub struct Constant {
 
     /// The value of the constant.
     ///
-    /// This [`Handle`] refers to [`Module::const_expressions`], not
+    /// This [`Handle`] refers to [`Module::global_expressions`], not
     /// any [`Function::expressions`] arena.
     pub init: Handle<Expression>,
 }
@@ -978,7 +978,7 @@ pub struct GlobalVariable {
     pub ty: Handle<Type>,
     /// Initial value for this variable.
     ///
-    /// Expression handle lives in const_expressions
+    /// Expression handle lives in global_expressions
     pub init: Option<Handle<Expression>>,
 }
 
@@ -1425,7 +1425,7 @@ pub enum Expression {
         gather: Option<SwizzleComponent>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
-        /// Expression handle lives in const_expressions
+        /// Expression handle lives in global_expressions
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
@@ -2048,7 +2048,7 @@ pub struct Module {
     ///
     /// [Constant expressions]: index.html#constant-expressions
     /// [override expressions]: index.html#override-expressions
-    pub const_expressions: Arena<Expression>,
+    pub global_expressions: Arena<Expression>,
     /// Arena for the functions defined in this module.
     ///
     /// Each function must appear in this arena strictly before all its callers.

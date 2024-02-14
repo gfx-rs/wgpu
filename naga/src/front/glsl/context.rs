@@ -79,7 +79,7 @@ pub struct Context<'a> {
     pub is_const: bool,
     /// Tracks the expression kind of `Expression`s residing in `self.expressions`
     pub local_expression_kind_tracker: crate::proc::ExpressionKindTracker,
-    /// Tracks the expression kind of `Expression`s residing in `self.module.const_expressions`
+    /// Tracks the expression kind of `Expression`s residing in `self.module.global_expressions`
     pub global_expression_kind_tracker: &'a mut crate::proc::ExpressionKindTracker,
 }
 
@@ -1471,7 +1471,7 @@ impl Index<Handle<Expression>> for Context<'_> {
 
     fn index(&self, index: Handle<Expression>) -> &Self::Output {
         if self.is_const {
-            &self.module.const_expressions[index]
+            &self.module.global_expressions[index]
         } else {
             &self.expressions[index]
         }

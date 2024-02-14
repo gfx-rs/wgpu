@@ -158,8 +158,8 @@ fn resolve_const_expression_types(
 ) -> Result<Vec<TypeResolution>, crate::proc::ResolveError> {
     let t = crate::Arena::new();
     let resolve_context = crate::proc::ResolveContext::with_locals(module, &t, &[]);
-    let mut const_expression_types = Vec::with_capacity(module.const_expressions.len());
-    for (_, expr) in module.const_expressions.iter() {
+    let mut const_expression_types = Vec::with_capacity(module.global_expressions.len());
+    for (_, expr) in module.global_expressions.iter() {
         let ty = resolve_context.resolve(expr, |h| Ok(&const_expression_types[h.index()]))?;
         const_expression_types.push(ty);
     }
@@ -457,7 +457,7 @@ impl Validator {
             type_flags: Vec::with_capacity(module.types.len()),
             functions: Vec::with_capacity(module.functions.len()),
             entry_points: Vec::with_capacity(module.entry_points.len()),
-            const_expression_types: vec![placeholder; module.const_expressions.len()]
+            const_expression_types: vec![placeholder; module.global_expressions.len()]
                 .into_boxed_slice(),
         };
 
@@ -479,20 +479,20 @@ impl Validator {
         {
             let t = crate::Arena::new();
             let resolve_context = crate::proc::ResolveContext::with_locals(module, &t, &[]);
-            for (handle, _) in module.const_expressions.iter() {
+            for (handle, _) in module.global_expressions.iter() {
                 mod_info
                     .process_const_expression(handle, &resolve_context, module.to_ctx())
                     .map_err(|source| {
                         ValidationError::ConstExpression { handle, source }
-                            .with_span_handle(handle, &module.const_expressions)
+                            .with_span_handle(handle, &module.global_expressions)
                     })?
             }
         }
 
-        let global_expr_kind = ExpressionKindTracker::from_arena(&module.const_expressions);
+        let global_expr_kind = ExpressionKindTracker::from_arena(&module.global_expressions);
 
         if self.flags.contains(ValidationFlags::CONSTANTS) {
-            for (handle, _) in module.const_expressions.iter() {
+            for (handle, _) in module.global_expressions.iter() {
                 self.validate_const_expression(
                     handle,
                     module.to_ctx(),
@@ -501,7 +501,7 @@ impl Validator {
                 )
                 .map_err(|source| {
                     ValidationError::ConstExpression { handle, source }
-                        .with_span_handle(handle, &module.const_expressions)
+                        .with_span_handle(handle, &module.global_expressions)
                 })?
             }
 

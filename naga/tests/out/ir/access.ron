@@ -378,7 +378,7 @@
             init: None,
         ),
     ],
-    const_expressions: [
+    global_expressions: [
         Literal(U32(0)),
         Literal(U32(0)),
         Literal(U32(0)),

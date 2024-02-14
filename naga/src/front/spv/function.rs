@@ -129,7 +129,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             local_arena: &mut fun.local_variables,
             const_arena: &mut module.constants,
             overrides: &mut module.overrides,
-            const_expressions: &mut module.const_expressions,
+            global_expressions: &mut module.global_expressions,
             type_arena: &module.types,
             global_arena: &module.global_variables,
             arguments: &fun.arguments,
@@ -575,7 +575,7 @@ impl<'function> BlockContext<'function> {
             types: self.type_arena,
             constants: self.const_arena,
             overrides: self.overrides,
-            const_expressions: self.const_expressions,
+            global_expressions: self.global_expressions,
         }
     }
 

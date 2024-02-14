@@ -192,7 +192,7 @@ impl super::Validator {
             return Err(super::ConstExpressionError::NonConstOrOverride);
         }
 
-        match gctx.const_expressions[handle] {
+        match gctx.global_expressions[handle] {
             E::Literal(literal) => {
                 self.validate_literal(literal)?;
             }
@@ -1695,7 +1695,7 @@ fn validate_with_const_expression(
     use crate::span::Span;
 
     let mut module = crate::Module::default();
-    module.const_expressions.append(expr, Span::default());
+    module.global_expressions.append(expr, Span::default());
 
     let mut validator = super::Validator::new(super::ValidationFlags::CONSTANTS, caps);
 

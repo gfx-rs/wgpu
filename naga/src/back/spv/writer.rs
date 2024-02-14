@@ -1253,7 +1253,7 @@ impl Writer {
         ir_module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<Word, Error> {
-        let id = match ir_module.const_expressions[handle] {
+        let id = match ir_module.global_expressions[handle] {
             crate::Expression::Literal(literal) => self.get_constant_scalar(literal),
             crate::Expression::Constant(constant) => {
                 let constant = &ir_module.constants[constant];
@@ -1267,7 +1267,7 @@ impl Writer {
                 let component_ids: Vec<_> = crate::proc::flatten_compose(
                     ty,
                     components,
-                    &ir_module.const_expressions,
+                    &ir_module.global_expressions,
                     &ir_module.types,
                 )
                 .map(|component| self.constant_ids[component.index()])
@@ -1903,8 +1903,8 @@ impl Writer {
 
         // write all const-expressions as constants
         self.constant_ids
-            .resize(ir_module.const_expressions.len(), 0);
-        for (handle, _) in ir_module.const_expressions.iter() {
+            .resize(ir_module.global_expressions.len(), 0);
+        for (handle, _) in ir_module.global_expressions.iter() {
             self.write_constant_expr(handle, ir_module, mod_info)?;
         }
         debug_assert!(self.constant_ids.iter().all(|&id| id != 0));
