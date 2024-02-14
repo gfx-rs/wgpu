@@ -927,7 +927,7 @@ impl super::Validator {
         var: &crate::LocalVariable,
         gctx: crate::proc::GlobalCtx,
         fun_info: &FunctionInfo,
-        expression_constness: &crate::proc::ExpressionConstnessTracker,
+        local_expr_kind: &crate::proc::ExpressionConstnessTracker,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
         let type_info = self
@@ -945,7 +945,7 @@ impl super::Validator {
                 return Err(LocalVariableError::InitializerType);
             }
 
-            if !expression_constness.is_const(init) {
+            if !local_expr_kind.is_const(init) {
                 return Err(LocalVariableError::NonConstInitializer);
             }
         }
@@ -959,14 +959,14 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
         entry_point: bool,
+        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
 
-        let expression_constness =
-            crate::proc::ExpressionConstnessTracker::from_arena(&fun.expressions);
+        let local_expr_kind = crate::proc::ExpressionConstnessTracker::from_arena(&fun.expressions);
 
         for (var_handle, var) in fun.local_variables.iter() {
-            self.validate_local_var(var, module.to_ctx(), &info, &expression_constness)
+            self.validate_local_var(var, module.to_ctx(), &info, &local_expr_kind)
                 .map_err(|source| {
                     FunctionError::LocalVariable {
                         handle: var_handle,
@@ -1032,7 +1032,15 @@ impl super::Validator {
                 self.valid_expression_set.insert(handle.index());
             }
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
-                match self.validate_expression(handle, expr, fun, module, &info, mod_info) {
+                match self.validate_expression(
+                    handle,
+                    expr,
+                    fun,
+                    module,
+                    &info,
+                    mod_info,
+                    global_expr_kind,
+                ) {
                     Ok(stages) => info.available_stages &= stages,
                     Err(source) => {
                         return Err(FunctionError::Expression { handle, source }

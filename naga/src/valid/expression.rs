@@ -90,6 +90,8 @@ pub enum ExpressionError {
         sampler: bool,
         has_ref: bool,
     },
+    #[error("Sample offset must be a const-expression")]
+    InvalidSampleOffsetExprType,
     #[error("Sample offset constant {1:?} doesn't match the image dimension {0:?}")]
     InvalidSampleOffset(crate::ImageDimension, Handle<crate::Expression>),
     #[error("Depth reference {0:?} is not a scalar float")]
@@ -129,9 +131,10 @@ pub enum ExpressionError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ConstExpressionError {
-    #[error("The expression is not a constant expression")]
-    NonConst,
+    #[error("The expression is not a constant or override expression")]
+    NonConstOrOverride,
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
     #[error("Splatting {0:?} can't be done")]
@@ -184,8 +187,13 @@ impl super::Validator {
         handle: Handle<crate::Expression>,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
+        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
     ) -> Result<(), ConstExpressionError> {
         use crate::Expression as E;
+
+        if !global_expr_kind.is_const_or_override(handle) {
+            return Err(super::ConstExpressionError::NonConstOrOverride);
+        }
 
         match gctx.const_expressions[handle] {
             E::Literal(literal) => {
@@ -203,12 +211,14 @@ impl super::Validator {
                 crate::TypeInner::Scalar { .. } => {}
                 _ => return Err(super::ConstExpressionError::InvalidSplatType(value)),
             },
-            _ => return Err(super::ConstExpressionError::NonConst),
+            // the constant evaluator will report errors about override-expressions
+            _ => {}
         }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn validate_expression(
         &self,
         root: Handle<crate::Expression>,
@@ -217,6 +227,7 @@ impl super::Validator {
         module: &crate::Module,
         info: &FunctionInfo,
         mod_info: &ModuleInfo,
+        global_expr_kind: &crate::proc::ExpressionConstnessTracker,
     ) -> Result<ShaderStages, ExpressionError> {
         use crate::{Expression as E, Scalar as Sc, ScalarKind as Sk, TypeInner as Ti};
 
@@ -462,6 +473,10 @@ impl super::Validator {
 
                 // check constant offset
                 if let Some(const_expr) = offset {
+                    if !global_expr_kind.is_const(const_expr) {
+                        return Err(ExpressionError::InvalidSampleOffsetExprType);
+                    }
+
                     match *mod_info[const_expr].inner_with(&module.types) {
                         Ti::Scalar(Sc { kind: Sk::Sint, .. }) if num_components == 1 => {}
                         Ti::Vector {
