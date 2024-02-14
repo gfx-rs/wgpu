@@ -1354,6 +1354,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         if let Some(cmd_buf) = hub.command_buffers.unregister(command_encoder_id) {
+            cmd_buf.data.lock().as_mut().unwrap().encoder.discard();
+
             cmd_buf
                 .device
                 .untrack(&cmd_buf.data.lock().as_ref().unwrap().trackers);

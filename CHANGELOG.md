@@ -61,6 +61,14 @@ Bottom level categories:
         - `tan`
         - `tanh`
 
+## v0.19.3 (2024-03-01)
+
+### Bug Fixes
+
+#### General
+
+- Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
+
 ## v0.19.2 (2024-02-29)
 
 ### Added/New Features
