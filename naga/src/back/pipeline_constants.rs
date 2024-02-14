@@ -36,7 +36,7 @@ pub(super) fn process_overrides<'a>(
     let mut adjusted_const_expressions = Vec::with_capacity(module.const_expressions.len());
     let mut adjusted_constant_initializers = HashSet::with_capacity(module.constants.len());
 
-    let mut global_expression_kind_tracker = crate::proc::ExpressionConstnessTracker::new();
+    let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
     let mut override_iter = module.overrides.drain();
 
@@ -123,7 +123,7 @@ fn process_override(
     override_map: &mut Vec<Handle<Constant>>,
     adjusted_const_expressions: &[Handle<Expression>],
     adjusted_constant_initializers: &mut HashSet<Handle<Constant>>,
-    global_expression_kind_tracker: &mut crate::proc::ExpressionConstnessTracker,
+    global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
 ) -> Result<Handle<Constant>, PipelineConstantError> {
     let key = if let Some(id) = override_.id {
         Cow::Owned(id.to_string())
