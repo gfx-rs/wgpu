@@ -169,9 +169,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
         pipeline_options: &PipelineOptions,
     ) -> Result<super::ReflectionInfo, Error> {
-        let module =
-            back::pipeline_constants::process_overrides(module, &pipeline_options.constants)?;
+        let (module, module_info) = back::pipeline_constants::process_overrides(
+            module,
+            module_info,
+            &pipeline_options.constants,
+        )
+        .map_err(Box::new)?;
         let module = module.as_ref();
+        let module_info = module_info.as_ref();
 
         self.reset(module);
 

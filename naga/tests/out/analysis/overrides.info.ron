@@ -33,6 +33,12 @@
             kind: Float,
             width: 4,
         ))),
+        Handle(2),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+        Handle(2),
         Value(Scalar((
             kind: Float,
             width: 4,

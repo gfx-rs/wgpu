@@ -3223,9 +3223,11 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        let module =
-            back::pipeline_constants::process_overrides(module, &pipeline_options.constants)?;
+        let (module, info) =
+            back::pipeline_constants::process_overrides(module, info, &pipeline_options.constants)
+                .map_err(Box::new)?;
         let module = module.as_ref();
+        let info = info.as_ref();
 
         self.names.clear();
         self.namer.reset(

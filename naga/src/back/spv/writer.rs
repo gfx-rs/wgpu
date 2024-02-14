@@ -613,7 +613,7 @@ impl Writer {
             // Steal the Writer's temp list for a bit.
             temp_list: std::mem::take(&mut self.temp_list),
             writer: self,
-            expression_constness: crate::proc::ExpressionConstnessTracker::from_arena(
+            expression_constness: super::ExpressionConstnessTracker::from_arena(
                 &ir_function.expressions,
             ),
         };
@@ -2021,15 +2021,21 @@ impl Writer {
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
-        let ir_module = if let Some(pipeline_options) = pipeline_options {
+        let (ir_module, info) = if let Some(pipeline_options) = pipeline_options {
             crate::back::pipeline_constants::process_overrides(
                 ir_module,
+                info,
                 &pipeline_options.constants,
-            )?
+            )
+            .map_err(Box::new)?
         } else {
-            std::borrow::Cow::Borrowed(ir_module)
+            (
+                std::borrow::Cow::Borrowed(ir_module),
+                std::borrow::Cow::Borrowed(info),
+            )
         };
         let ir_module = ir_module.as_ref();
+        let info = info.as_ref();
 
         self.reset();
 

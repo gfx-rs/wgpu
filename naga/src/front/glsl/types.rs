@@ -330,7 +330,7 @@ impl Context<'_> {
         expr: Handle<Expression>,
     ) -> Result<Handle<Expression>> {
         let meta = self.expressions.get_span(expr);
-        Ok(match self.expressions[expr] {
+        let h = match self.expressions[expr] {
             ref expr @ (Expression::Literal(_)
             | Expression::Constant(_)
             | Expression::ZeroValue(_)) => self.module.const_expressions.append(expr.clone(), meta),
@@ -355,6 +355,9 @@ impl Context<'_> {
                     meta,
                 })
             }
-        })
+        };
+        self.global_expression_kind_tracker
+            .insert(h, crate::proc::ExpressionKind::Const);
+        Ok(h)
     }
 }
