@@ -12,7 +12,7 @@ mod r#type;
 
 use crate::{
     arena::Handle,
-    proc::{LayoutError, Layouter, TypeResolution},
+    proc::{ExpressionConstnessTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -129,7 +129,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {
@@ -137,6 +137,33 @@ pub struct ModuleInfo {
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
     const_expression_types: Box<[TypeResolution]>,
+}
+
+impl ModuleInfo {
+    pub(crate) fn update_const_expression_types(
+        &self,
+        module: &crate::Module,
+    ) -> Result<Self, crate::proc::ResolveError> {
+        Ok(Self {
+            type_flags: self.type_flags.clone(),
+            functions: self.functions.clone(),
+            entry_points: self.entry_points.clone(),
+            const_expression_types: resolve_const_expression_types(module)?.into_boxed_slice(),
+        })
+    }
+}
+
+fn resolve_const_expression_types(
+    module: &crate::Module,
+) -> Result<Vec<TypeResolution>, crate::proc::ResolveError> {
+    let t = crate::Arena::new();
+    let resolve_context = crate::proc::ResolveContext::with_locals(module, &t, &[]);
+    let mut const_expression_types = Vec::with_capacity(module.const_expressions.len());
+    for (_, expr) in module.const_expressions.iter() {
+        let ty = resolve_context.resolve(expr, |h| Ok(&const_expression_types[h.index()]))?;
+        const_expression_types.push(ty);
+    }
+    Ok(const_expression_types)
 }
 
 impl ops::Index<Handle<crate::Type>> for ModuleInfo {
@@ -177,6 +204,8 @@ pub struct Validator {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ConstantError {
+    #[error("Initializer must be a const-expression")]
+    InitializerExprType,
     #[error("The type doesn't match the constant")]
     InvalidType,
     #[error("The type is not constructible")]
@@ -189,6 +218,8 @@ pub enum OverrideError {
     MissingNameAndID,
     #[error("Override ID must be unique")]
     DuplicateID,
+    #[error("Initializer must be a const-expression or override-expression")]
+    InitializerExprType,
     #[error("The type doesn't match the override")]
     InvalidType,
     #[error("The type is not constructible")]
@@ -333,12 +364,17 @@ impl Validator {
         handle: Handle<crate::Constant>,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
+        global_expr_kind: &ExpressionConstnessTracker,
     ) -> Result<(), ConstantError> {
         let con = &gctx.constants[handle];
 
         let type_info = &self.types[con.ty.index()];
         if !type_info.flags.contains(TypeFlags::CONSTRUCTIBLE) {
             return Err(ConstantError::NonConstructibleType);
+        }
+
+        if !global_expr_kind.is_const(con.init) {
+            return Err(ConstantError::InitializerExprType);
         }
 
         let decl_ty = &gctx.types[con.ty].inner;
@@ -453,17 +489,24 @@ impl Validator {
             }
         }
 
+        let global_expr_kind = ExpressionConstnessTracker::from_arena(&module.const_expressions);
+
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, _) in module.const_expressions.iter() {
-                self.validate_const_expression(handle, module.to_ctx(), &mod_info)
-                    .map_err(|source| {
-                        ValidationError::ConstExpression { handle, source }
-                            .with_span_handle(handle, &module.const_expressions)
-                    })?
+                self.validate_const_expression(
+                    handle,
+                    module.to_ctx(),
+                    &mod_info,
+                    &global_expr_kind,
+                )
+                .map_err(|source| {
+                    ValidationError::ConstExpression { handle, source }
+                        .with_span_handle(handle, &module.const_expressions)
+                })?
             }
 
             for (handle, constant) in module.constants.iter() {
-                self.validate_constant(handle, module.to_ctx(), &mod_info)
+                self.validate_constant(handle, module.to_ctx(), &mod_info, &global_expr_kind)
                     .map_err(|source| {
                         ValidationError::Constant {
                             handle,
@@ -488,7 +531,7 @@ impl Validator {
         }
 
         for (var_handle, var) in module.global_variables.iter() {
-            self.validate_global_var(var, module.to_ctx(), &mod_info)
+            self.validate_global_var(var, module.to_ctx(), &mod_info, &global_expr_kind)
                 .map_err(|source| {
                     ValidationError::GlobalVariable {
                         handle: var_handle,
@@ -500,7 +543,7 @@ impl Validator {
         }
 
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info, false) {
+            match self.validate_function(fun, module, &mod_info, false, &global_expr_kind) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {
@@ -526,7 +569,7 @@ impl Validator {
                 .with_span()); // TODO: keep some EP span information?
             }
 
-            match self.validate_entry_point(ep, module, &mod_info) {
+            match self.validate_entry_point(ep, module, &mod_info, &global_expr_kind) {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {

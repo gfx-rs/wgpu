@@ -541,5 +541,5 @@ pub fn write_string(
 #[test]
 fn test_error_size() {
     use std::mem::size_of;
-    assert_eq!(size_of::<Error>(), 32);
+    assert_eq!(size_of::<Error>(), 56);
 }

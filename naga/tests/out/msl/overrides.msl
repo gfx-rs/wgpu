@@ -9,6 +9,7 @@ constant float specular_param = 2.3;
 constant float gain = 1.1;
 constant float width = 0.0;
 constant float depth = 2.3;
+constant float height = 4.6;
 constant float inferred_f32_ = 2.718;
 
 kernel void main_(

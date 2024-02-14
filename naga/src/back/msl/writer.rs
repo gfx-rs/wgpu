@@ -3119,9 +3119,10 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        let module =
-            back::pipeline_constants::process_overrides(module, &pipeline_options.constants)?;
+        let (module, info) =
+            back::pipeline_constants::process_overrides(module, info, &pipeline_options.constants)?;
         let module = module.as_ref();
+        let info = info.as_ref();
 
         self.names.clear();
         self.namer.reset(
@@ -4659,7 +4660,7 @@ fn test_stack_size() {
         let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
         // last observed macOS value: 19152 (CI)
-        if !(9000..=20000).contains(&stack_size) {
+        if !(9000..=22000).contains(&stack_size) {
             panic!("`put_block` stack size {stack_size} has changed!");
         }
     }

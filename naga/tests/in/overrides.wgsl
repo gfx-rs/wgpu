@@ -6,7 +6,7 @@
           override depth: f32;                    // Specified at the API level using
                                                   // the name "depth".
                                                   // Must be overridden.
-         // override height = 2 * depth;            // The default value
+          override height = 2 * depth;            // The default value
                                                   // (if not set at the API level),
                                                   // depends on another
                                                   // overridable constant.
