@@ -2410,7 +2410,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_const_expr(&mut self, expr: Handle<crate::Expression>) -> BackendResult {
         self.write_possibly_const_expr(
             expr,
-            &self.module.const_expressions,
+            &self.module.global_expressions,
             |expr| &self.info[expr],
             |writer, expr| writer.write_const_expr(expr),
         )

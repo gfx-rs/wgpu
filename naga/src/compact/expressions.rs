@@ -21,11 +21,11 @@ pub struct ExpressionTracer<'tracer> {
     /// the module's constant expression arena.
     pub expressions_used: &'tracer mut HandleSet<crate::Expression>,
 
-    /// The used set for the module's `const_expressions` arena.
+    /// The used set for the module's `global_expressions` arena.
     ///
     /// If `None`, we are already tracing the constant expressions,
     /// and `expressions_used` already refers to their handle set.
-    pub const_expressions_used: Option<&'tracer mut HandleSet<crate::Expression>>,
+    pub global_expressions_used: Option<&'tracer mut HandleSet<crate::Expression>>,
 }
 
 impl<'tracer> ExpressionTracer<'tracer> {
@@ -40,11 +40,11 @@ impl<'tracer> ExpressionTracer<'tracer> {
     /// marked.
     ///
     /// [fe]: crate::Function::expressions
-    /// [ce]: crate::Module::const_expressions
+    /// [ce]: crate::Module::global_expressions
     pub fn trace_expressions(&mut self) {
         log::trace!(
             "entering trace_expression of {}",
-            if self.const_expressions_used.is_some() {
+            if self.global_expressions_used.is_some() {
                 "function expressions"
             } else {
                 "const expressions"
@@ -84,7 +84,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     // and the constant refers to the initializer, it must
                     // precede `expr` in the arena.
                     let init = self.constants[handle].init;
-                    match self.const_expressions_used {
+                    match self.global_expressions_used {
                         Some(ref mut used) => used.insert(init),
                         None => self.expressions_used.insert(init),
                     }
@@ -122,7 +122,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     self.expressions_used
                         .insert_iter([image, sampler, coordinate]);
                     self.expressions_used.insert_iter(array_index);
-                    match self.const_expressions_used {
+                    match self.global_expressions_used {
                         Some(ref mut used) => used.insert_iter(offset),
                         None => self.expressions_used.insert_iter(offset),
                     }
@@ -276,7 +276,7 @@ impl ModuleMap {
                 adjust(coordinate);
                 operand_map.adjust_option(array_index);
                 if let Some(ref mut offset) = *offset {
-                    self.const_expressions.adjust(offset);
+                    self.global_expressions.adjust(offset);
                 }
                 self.adjust_sample_level(level, operand_map);
                 operand_map.adjust_option(depth_ref);

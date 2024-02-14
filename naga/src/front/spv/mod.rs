@@ -532,7 +532,7 @@ struct BlockContext<'function> {
     /// Constants arena of the module being processed
     const_arena: &'function mut Arena<crate::Constant>,
     overrides: &'function mut Arena<crate::Override>,
-    const_expressions: &'function mut Arena<crate::Expression>,
+    global_expressions: &'function mut Arena<crate::Expression>,
     /// Type arena of the module being processed
     type_arena: &'function UniqueArena<crate::Type>,
     /// Global arena of the module being processed
@@ -4916,7 +4916,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let span = self.span_from_with_op(start);
 
         let init = module
-            .const_expressions
+            .global_expressions
             .append(crate::Expression::Literal(literal), span);
         self.lookup_constant.insert(
             id,
@@ -4956,7 +4956,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let span = self.span_from_with_op(start);
             let constant = self.lookup_constant.lookup(component_id)?;
             let expr = module
-                .const_expressions
+                .global_expressions
                 .append(crate::Expression::Constant(constant.handle), span);
             components.push(expr);
         }
@@ -4966,7 +4966,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let span = self.span_from_with_op(start);
 
         let init = module
-            .const_expressions
+            .global_expressions
             .append(crate::Expression::Compose { ty, components }, span);
         self.lookup_constant.insert(
             id,
@@ -5003,7 +5003,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
         let init = module
-            .const_expressions
+            .global_expressions
             .append(crate::Expression::ZeroValue(ty), span);
         let handle = module.constants.append(
             crate::Constant {
@@ -5036,7 +5036,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
-        let init = module.const_expressions.append(
+        let init = module.global_expressions.append(
             crate::Expression::Literal(crate::Literal::Bool(value)),
             span,
         );
@@ -5075,7 +5075,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let span = self.span_from_with_op(start);
             let lconst = self.lookup_constant.lookup(init_id)?;
             let expr = module
-                .const_expressions
+                .global_expressions
                 .append(crate::Expression::Constant(lconst.handle), span);
             Some(expr)
         } else {
@@ -5197,7 +5197,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         match null::generate_default_built_in(
                             Some(built_in),
                             ty,
-                            &mut module.const_expressions,
+                            &mut module.global_expressions,
                             span,
                         ) {
                             Ok(handle) => Some(handle),
@@ -5219,14 +5219,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                 let handle = null::generate_default_built_in(
                                     built_in,
                                     member.ty,
-                                    &mut module.const_expressions,
+                                    &mut module.global_expressions,
                                     span,
                                 )?;
                                 components.push(handle);
                             }
                             Some(
                                 module
-                                    .const_expressions
+                                    .global_expressions
                                     .append(crate::Expression::Compose { ty, components }, span),
                             )
                         }
@@ -5295,7 +5295,7 @@ fn resolve_constant(
     gctx: crate::proc::GlobalCtx,
     constant: Handle<crate::Constant>,
 ) -> Option<u32> {
-    match gctx.const_expressions[gctx.constants[constant].init] {
+    match gctx.global_expressions[gctx.constants[constant].init] {
         crate::Expression::Literal(crate::Literal::U32(id)) => Some(id),
         crate::Expression::Literal(crate::Literal::I32(id)) => Some(id as u32),
         _ => None,

@@ -327,7 +327,7 @@ enum GlslRestrictions<'a> {
 #[derive(Debug)]
 struct FunctionLocalData<'a> {
     /// Global constant expressions
-    const_expressions: &'a Arena<Expression>,
+    global_expressions: &'a Arena<Expression>,
     emitter: &'a mut super::Emitter,
     block: &'a mut crate::Block,
 }
@@ -570,7 +570,7 @@ impl<'a> ConstantEvaluator<'a> {
             types: &mut module.types,
             constants: &module.constants,
             overrides: &module.overrides,
-            expressions: &mut module.const_expressions,
+            expressions: &mut module.global_expressions,
             expression_kind_tracker: global_expression_kind_tracker,
         }
     }
@@ -588,7 +588,7 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Self {
         Self {
             behavior: Behavior::Wgsl(WgslRestrictions::Runtime(FunctionLocalData {
-                const_expressions: &module.const_expressions,
+                global_expressions: &module.global_expressions,
                 emitter,
                 block,
             })),
@@ -613,7 +613,7 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Self {
         Self {
             behavior: Behavior::Glsl(GlslRestrictions::Runtime(FunctionLocalData {
-                const_expressions: &module.const_expressions,
+                global_expressions: &module.global_expressions,
                 emitter,
                 block,
             })),
@@ -630,8 +630,8 @@ impl<'a> ConstantEvaluator<'a> {
             types: self.types,
             constants: self.constants,
             overrides: self.overrides,
-            const_expressions: match self.function_local_data() {
-                Some(data) => data.const_expressions,
+            global_expressions: match self.function_local_data() {
+                Some(data) => data.global_expressions,
                 None => self.expressions,
             },
         }
@@ -657,7 +657,7 @@ impl<'a> ConstantEvaluator<'a> {
                     // Deep-copy the constant's value into our arena.
                     self.copy_from(
                         self.constants[c].init,
-                        function_local_data.const_expressions,
+                        function_local_data.global_expressions,
                     )
                 } else {
                     // "See through" the constant and use its initializer.
@@ -2202,7 +2202,7 @@ mod tests {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
         let overrides = Arena::new();
-        let mut const_expressions = Arena::new();
+        let mut global_expressions = Arena::new();
 
         let scalar_ty = types.insert(
             Type {
@@ -2227,7 +2227,7 @@ mod tests {
             Constant {
                 name: None,
                 ty: scalar_ty,
-                init: const_expressions
+                init: global_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
             },
             Default::default(),
@@ -2237,7 +2237,7 @@ mod tests {
             Constant {
                 name: None,
                 ty: scalar_ty,
-                init: const_expressions
+                init: global_expressions
                     .append(Expression::Literal(Literal::I32(8)), Default::default()),
             },
             Default::default(),
@@ -2247,7 +2247,7 @@ mod tests {
             Constant {
                 name: None,
                 ty: vec_ty,
-                init: const_expressions.append(
+                init: global_expressions.append(
                     Expression::Compose {
                         ty: vec_ty,
                         components: vec![constants[h].init, constants[h1].init],
@@ -2258,8 +2258,8 @@ mod tests {
             Default::default(),
         );
 
-        let expr = const_expressions.append(Expression::Constant(h), Default::default());
-        let expr1 = const_expressions.append(Expression::Constant(vec_h), Default::default());
+        let expr = global_expressions.append(Expression::Constant(h), Default::default());
+        let expr1 = global_expressions.append(Expression::Constant(vec_h), Default::default());
 
         let expr2 = Expression::Unary {
             op: UnaryOperator::Negate,
@@ -2276,13 +2276,13 @@ mod tests {
             expr: expr1,
         };
 
-        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
-            expressions: &mut const_expressions,
+            expressions: &mut global_expressions,
             expression_kind_tracker,
         };
 
@@ -2297,16 +2297,16 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            const_expressions[res1],
+            global_expressions[res1],
             Expression::Literal(Literal::I32(-4))
         );
 
         assert_eq!(
-            const_expressions[res2],
+            global_expressions[res2],
             Expression::Literal(Literal::I32(!4))
         );
 
-        let res3_inner = &const_expressions[res3];
+        let res3_inner = &global_expressions[res3];
 
         match *res3_inner {
             Expression::Compose {
@@ -2316,11 +2316,11 @@ mod tests {
                 assert_eq!(*ty, vec_ty);
                 let mut components_iter = components.iter().copied();
                 assert_eq!(
-                    const_expressions[components_iter.next().unwrap()],
+                    global_expressions[components_iter.next().unwrap()],
                     Expression::Literal(Literal::I32(!4))
                 );
                 assert_eq!(
-                    const_expressions[components_iter.next().unwrap()],
+                    global_expressions[components_iter.next().unwrap()],
                     Expression::Literal(Literal::I32(!8))
                 );
                 assert!(components_iter.next().is_none());
@@ -2334,7 +2334,7 @@ mod tests {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
         let overrides = Arena::new();
-        let mut const_expressions = Arena::new();
+        let mut global_expressions = Arena::new();
 
         let scalar_ty = types.insert(
             Type {
@@ -2348,13 +2348,13 @@ mod tests {
             Constant {
                 name: None,
                 ty: scalar_ty,
-                init: const_expressions
+                init: global_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
             },
             Default::default(),
         );
 
-        let expr = const_expressions.append(Expression::Constant(h), Default::default());
+        let expr = global_expressions.append(Expression::Constant(h), Default::default());
 
         let root = Expression::As {
             expr,
@@ -2362,13 +2362,13 @@ mod tests {
             convert: Some(crate::BOOL_WIDTH),
         };
 
-        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
-            expressions: &mut const_expressions,
+            expressions: &mut global_expressions,
             expression_kind_tracker,
         };
 
@@ -2377,7 +2377,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            const_expressions[res],
+            global_expressions[res],
             Expression::Literal(Literal::Bool(true))
         );
     }
@@ -2387,7 +2387,7 @@ mod tests {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
         let overrides = Arena::new();
-        let mut const_expressions = Arena::new();
+        let mut global_expressions = Arena::new();
 
         let matrix_ty = types.insert(
             Type {
@@ -2416,7 +2416,7 @@ mod tests {
         let mut vec2_components = Vec::with_capacity(3);
 
         for i in 0..3 {
-            let h = const_expressions.append(
+            let h = global_expressions.append(
                 Expression::Literal(Literal::F32(i as f32)),
                 Default::default(),
             );
@@ -2425,7 +2425,7 @@ mod tests {
         }
 
         for i in 3..6 {
-            let h = const_expressions.append(
+            let h = global_expressions.append(
                 Expression::Literal(Literal::F32(i as f32)),
                 Default::default(),
             );
@@ -2437,7 +2437,7 @@ mod tests {
             Constant {
                 name: None,
                 ty: vec_ty,
-                init: const_expressions.append(
+                init: global_expressions.append(
                     Expression::Compose {
                         ty: vec_ty,
                         components: vec1_components,
@@ -2452,7 +2452,7 @@ mod tests {
             Constant {
                 name: None,
                 ty: vec_ty,
-                init: const_expressions.append(
+                init: global_expressions.append(
                     Expression::Compose {
                         ty: vec_ty,
                         components: vec2_components,
@@ -2467,7 +2467,7 @@ mod tests {
             Constant {
                 name: None,
                 ty: matrix_ty,
-                init: const_expressions.append(
+                init: global_expressions.append(
                     Expression::Compose {
                         ty: matrix_ty,
                         components: vec![constants[vec1].init, constants[vec2].init],
@@ -2478,15 +2478,15 @@ mod tests {
             Default::default(),
         );
 
-        let base = const_expressions.append(Expression::Constant(h), Default::default());
+        let base = global_expressions.append(Expression::Constant(h), Default::default());
 
-        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
-            expressions: &mut const_expressions,
+            expressions: &mut global_expressions,
             expression_kind_tracker,
         };
 
@@ -2505,7 +2505,7 @@ mod tests {
             .try_eval_and_append(root2, Default::default())
             .unwrap();
 
-        match const_expressions[res1] {
+        match global_expressions[res1] {
             Expression::Compose {
                 ref ty,
                 ref components,
@@ -2513,15 +2513,15 @@ mod tests {
                 assert_eq!(*ty, vec_ty);
                 let mut components_iter = components.iter().copied();
                 assert_eq!(
-                    const_expressions[components_iter.next().unwrap()],
+                    global_expressions[components_iter.next().unwrap()],
                     Expression::Literal(Literal::F32(3.))
                 );
                 assert_eq!(
-                    const_expressions[components_iter.next().unwrap()],
+                    global_expressions[components_iter.next().unwrap()],
                     Expression::Literal(Literal::F32(4.))
                 );
                 assert_eq!(
-                    const_expressions[components_iter.next().unwrap()],
+                    global_expressions[components_iter.next().unwrap()],
                     Expression::Literal(Literal::F32(5.))
                 );
                 assert!(components_iter.next().is_none());
@@ -2530,7 +2530,7 @@ mod tests {
         }
 
         assert_eq!(
-            const_expressions[res2],
+            global_expressions[res2],
             Expression::Literal(Literal::F32(5.))
         );
     }
@@ -2540,7 +2540,7 @@ mod tests {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
         let overrides = Arena::new();
-        let mut const_expressions = Arena::new();
+        let mut global_expressions = Arena::new();
 
         let i32_ty = types.insert(
             Type {
@@ -2565,21 +2565,21 @@ mod tests {
             Constant {
                 name: None,
                 ty: i32_ty,
-                init: const_expressions
+                init: global_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
             },
             Default::default(),
         );
 
-        let h_expr = const_expressions.append(Expression::Constant(h), Default::default());
+        let h_expr = global_expressions.append(Expression::Constant(h), Default::default());
 
-        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
-            expressions: &mut const_expressions,
+            expressions: &mut global_expressions,
             expression_kind_tracker,
         };
 
@@ -2602,11 +2602,11 @@ mod tests {
             )
             .unwrap();
 
-        let pass = match const_expressions[solved_negate] {
+        let pass = match global_expressions[solved_negate] {
             Expression::Compose { ty, ref components } => {
                 ty == vec2_i32_ty
                     && components.iter().all(|&component| {
-                        let component = &const_expressions[component];
+                        let component = &global_expressions[component];
                         matches!(*component, Expression::Literal(Literal::I32(-4)))
                     })
             }
@@ -2622,7 +2622,7 @@ mod tests {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
         let overrides = Arena::new();
-        let mut const_expressions = Arena::new();
+        let mut global_expressions = Arena::new();
 
         let i32_ty = types.insert(
             Type {
@@ -2647,21 +2647,21 @@ mod tests {
             Constant {
                 name: None,
                 ty: i32_ty,
-                init: const_expressions
+                init: global_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
             },
             Default::default(),
         );
 
-        let h_expr = const_expressions.append(Expression::Constant(h), Default::default());
+        let h_expr = global_expressions.append(Expression::Constant(h), Default::default());
 
-        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&const_expressions);
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
             behavior: Behavior::Wgsl(WgslRestrictions::Const),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
-            expressions: &mut const_expressions,
+            expressions: &mut global_expressions,
             expression_kind_tracker,
         };
 
@@ -2684,11 +2684,11 @@ mod tests {
             )
             .unwrap();
 
-        let pass = match const_expressions[solved_negate] {
+        let pass = match global_expressions[solved_negate] {
             Expression::Compose { ty, ref components } => {
                 ty == vec2_i32_ty
                     && components.iter().all(|&component| {
-                        let component = &const_expressions[component];
+                        let component = &global_expressions[component];
                         matches!(*component, Expression::Literal(Literal::I32(-4)))
                     })
             }
