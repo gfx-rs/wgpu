@@ -539,7 +539,7 @@ fn constants() {
 
     let mut types = module.types.iter();
     let mut constants = module.constants.iter();
-    let mut const_expressions = module.const_expressions.iter();
+    let mut global_expressions = module.global_expressions.iter();
 
     let (ty_handle, ty) = types.next().unwrap();
     assert_eq!(
@@ -550,7 +550,7 @@ fn constants() {
         }
     );
 
-    let (init_handle, init) = const_expressions.next().unwrap();
+    let (init_handle, init) = global_expressions.next().unwrap();
     assert_eq!(init, &Expression::Literal(crate::Literal::F32(1.0)));
 
     assert_eq!(

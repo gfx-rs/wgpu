@@ -1248,7 +1248,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
-            &module.const_expressions,
+            &module.global_expressions,
             module,
             mod_info,
             &(module, mod_info),

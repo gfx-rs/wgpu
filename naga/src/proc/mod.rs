@@ -649,7 +649,7 @@ impl crate::Module {
             types: &self.types,
             constants: &self.constants,
             overrides: &self.overrides,
-            const_expressions: &self.const_expressions,
+            global_expressions: &self.global_expressions,
         }
     }
 }
@@ -665,17 +665,17 @@ pub struct GlobalCtx<'a> {
     pub types: &'a crate::UniqueArena<crate::Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
     pub overrides: &'a crate::Arena<crate::Override>,
-    pub const_expressions: &'a crate::Arena<crate::Expression>,
+    pub global_expressions: &'a crate::Arena<crate::Expression>,
 }
 
 impl GlobalCtx<'_> {
-    /// Try to evaluate the expression in `self.const_expressions` using its `handle` and return it as a `u32`.
+    /// Try to evaluate the expression in `self.global_expressions` using its `handle` and return it as a `u32`.
     #[allow(dead_code)]
     pub(super) fn eval_expr_to_u32(
         &self,
         handle: crate::Handle<crate::Expression>,
     ) -> Result<u32, U32EvalError> {
-        self.eval_expr_to_u32_from(handle, self.const_expressions)
+        self.eval_expr_to_u32_from(handle, self.global_expressions)
     }
 
     /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `u32`.
@@ -698,7 +698,7 @@ impl GlobalCtx<'_> {
         &self,
         handle: crate::Handle<crate::Expression>,
     ) -> Option<crate::Literal> {
-        self.eval_expr_to_literal_from(handle, self.const_expressions)
+        self.eval_expr_to_literal_from(handle, self.global_expressions)
     }
 
     fn eval_expr_to_literal_from(
@@ -722,7 +722,7 @@ impl GlobalCtx<'_> {
         }
         match arena[handle] {
             crate::Expression::Constant(c) => {
-                get(*self, self.constants[c].init, self.const_expressions)
+                get(*self, self.constants[c].init, self.global_expressions)
             }
             _ => get(*self, handle, arena),
         }

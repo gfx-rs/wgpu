@@ -227,7 +227,7 @@ mod tests {
             types: &types,
             constants: &crate::Arena::new(),
             overrides: &crate::Arena::new(),
-            const_expressions: &crate::Arena::new(),
+            global_expressions: &crate::Arena::new(),
         };
         let array = crate::TypeInner::Array {
             base: mytype1,

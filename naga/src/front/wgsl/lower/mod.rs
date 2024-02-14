@@ -333,9 +333,9 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
     /// [`Module`]: crate::Module
     module: &'out mut crate::Module,
 
-    /// Type judgments for [`module::const_expressions`].
+    /// Type judgments for [`module::global_expressions`].
     ///
-    /// [`module::const_expressions`]: crate::Module::const_expressions
+    /// [`module::global_expressions`]: crate::Module::global_expressions
     const_typifier: &'temp mut Typifier,
     global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 
@@ -421,7 +421,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => ctx.function.expressions.get_span(handle),
             ExpressionContextType::Constant | ExpressionContextType::Override => {
-                self.module.const_expressions.get_span(handle)
+                self.module.global_expressions.get_span(handle)
             }
         }
     }
@@ -554,7 +554,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             ExpressionContextType::Constant | ExpressionContextType::Override => {
                 resolve_ctx = ResolveContext::with_locals(self.module, &empty_arena, &[]);
                 typifier = self.const_typifier;
-                expressions = &self.module.const_expressions;
+                expressions = &self.module.global_expressions;
             }
         };
         typifier

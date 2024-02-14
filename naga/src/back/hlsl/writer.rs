@@ -243,7 +243,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.write_special_functions(module)?;
 
-        self.write_wrapped_compose_functions(module, &module.const_expressions)?;
+        self.write_wrapped_compose_functions(module, &module.global_expressions)?;
 
         // Write all named constants
         let mut constants = module
@@ -2007,7 +2007,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.write_possibly_const_expression(
             module,
             expr,
-            &module.const_expressions,
+            &module.global_expressions,
             |writer, expr| writer.write_const_expression(module, expr),
         )
     }
