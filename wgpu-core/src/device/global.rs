@@ -1377,6 +1377,7 @@ impl Global {
             .command_buffers
             .unregister(command_encoder_id.transmute())
         {
+            cmd_buf.data.lock().as_mut().unwrap().encoder.discard();
             cmd_buf
                 .device
                 .untrack(&cmd_buf.data.lock().as_ref().unwrap().trackers);
