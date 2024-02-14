@@ -522,7 +522,7 @@
             init: None,
         ),
     ],
-    const_expressions: [
+    global_expressions: [
         Literal(F32(0.0)),
         Literal(F32(1.0)),
         Literal(F32(0.5)),

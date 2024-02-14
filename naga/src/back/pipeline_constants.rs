@@ -33,14 +33,14 @@ pub(super) fn process_overrides<'a>(
 
     let mut module = module.clone();
     let mut override_map = Vec::with_capacity(module.overrides.len());
-    let mut adjusted_const_expressions = Vec::with_capacity(module.const_expressions.len());
+    let mut adjusted_global_expressions = Vec::with_capacity(module.global_expressions.len());
     let mut adjusted_constant_initializers = HashSet::with_capacity(module.constants.len());
 
     let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
     let mut override_iter = module.overrides.drain();
 
-    for (old_h, expr, span) in module.const_expressions.drain() {
+    for (old_h, expr, span) in module.global_expressions.drain() {
         let mut expr = match expr {
             Expression::Override(h) => {
                 let c_h = if let Some(new_h) = override_map.get(h.index()) {
@@ -54,7 +54,7 @@ pub(super) fn process_overrides<'a>(
                             pipeline_constants,
                             &mut module,
                             &mut override_map,
-                            &adjusted_const_expressions,
+                            &adjusted_global_expressions,
                             &mut adjusted_constant_initializers,
                             &mut global_expression_kind_tracker,
                         )?);
@@ -68,7 +68,7 @@ pub(super) fn process_overrides<'a>(
             }
             Expression::Constant(c_h) => {
                 adjusted_constant_initializers.insert(c_h);
-                module.constants[c_h].init = adjusted_const_expressions[c_h.index()];
+                module.constants[c_h].init = adjusted_global_expressions[c_h.index()];
                 expr
             }
             expr => expr,
@@ -78,10 +78,10 @@ pub(super) fn process_overrides<'a>(
             &mut global_expression_kind_tracker,
             false,
         );
-        adjust_expr(&adjusted_const_expressions, &mut expr);
+        adjust_expr(&adjusted_global_expressions, &mut expr);
         let h = evaluator.try_eval_and_append(expr, span)?;
-        debug_assert_eq!(old_h.index(), adjusted_const_expressions.len());
-        adjusted_const_expressions.push(h);
+        debug_assert_eq!(old_h.index(), adjusted_global_expressions.len());
+        adjusted_global_expressions.push(h);
     }
 
     for entry in override_iter {
@@ -90,7 +90,7 @@ pub(super) fn process_overrides<'a>(
             pipeline_constants,
             &mut module,
             &mut override_map,
-            &adjusted_const_expressions,
+            &adjusted_global_expressions,
             &mut adjusted_constant_initializers,
             &mut global_expression_kind_tracker,
         )?;
@@ -101,12 +101,12 @@ pub(super) fn process_overrides<'a>(
         .iter_mut()
         .filter(|&(c_h, _)| !adjusted_constant_initializers.contains(&c_h))
     {
-        c.init = adjusted_const_expressions[c.init.index()];
+        c.init = adjusted_global_expressions[c.init.index()];
     }
 
     for (_, v) in module.global_variables.iter_mut() {
         if let Some(ref mut init) = v.init {
-            *init = adjusted_const_expressions[init.index()];
+            *init = adjusted_global_expressions[init.index()];
         }
     }
 
@@ -121,7 +121,7 @@ fn process_override(
     pipeline_constants: &PipelineConstants,
     module: &mut Module,
     override_map: &mut Vec<Handle<Constant>>,
-    adjusted_const_expressions: &[Handle<Expression>],
+    adjusted_global_expressions: &[Handle<Expression>],
     adjusted_constant_initializers: &mut HashSet<Handle<Constant>>,
     global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
 ) -> Result<Handle<Constant>, PipelineConstantError> {
@@ -138,12 +138,12 @@ fn process_override(
             _ => unreachable!(),
         };
         let expr = module
-            .const_expressions
+            .global_expressions
             .append(Expression::Literal(literal), Span::UNDEFINED);
         global_expression_kind_tracker.insert(expr, crate::proc::ExpressionKind::Const);
         expr
     } else if let Some(init) = override_.init {
-        adjusted_const_expressions[init.index()]
+        adjusted_global_expressions[init.index()]
     } else {
         return Err(PipelineConstantError::MissingValue(key.to_string()));
     };

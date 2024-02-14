@@ -37,7 +37,7 @@ impl super::Validator {
             ref global_variables,
             ref types,
             ref special_types,
-            ref const_expressions,
+            ref global_expressions,
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
@@ -68,13 +68,13 @@ impl super::Validator {
             }
         }
 
-        for handle_and_expr in const_expressions.iter() {
+        for handle_and_expr in global_expressions.iter() {
             Self::validate_const_expression_handles(handle_and_expr, constants, overrides, types)?;
         }
 
         let validate_type = |handle| Self::validate_type_handle(handle, types);
         let validate_const_expr =
-            |handle| Self::validate_expression_handle(handle, const_expressions);
+            |handle| Self::validate_expression_handle(handle, global_expressions);
 
         for (_handle, constant) in constants.iter() {
             let &crate::Constant { name: _, ty, init } = constant;
@@ -150,7 +150,7 @@ impl super::Validator {
                     handle_and_expr,
                     constants,
                     overrides,
-                    const_expressions,
+                    global_expressions,
                     types,
                     local_variables,
                     global_variables,
@@ -256,7 +256,7 @@ impl super::Validator {
         (handle, expression): (Handle<crate::Expression>, &crate::Expression),
         constants: &Arena<crate::Constant>,
         overrides: &Arena<crate::Override>,
-        const_expressions: &Arena<crate::Expression>,
+        global_expressions: &Arena<crate::Expression>,
         types: &UniqueArena<crate::Type>,
         local_variables: &Arena<crate::LocalVariable>,
         global_variables: &Arena<crate::GlobalVariable>,
@@ -267,7 +267,7 @@ impl super::Validator {
         let validate_constant = |handle| Self::validate_constant_handle(handle, constants);
         let validate_override = |handle| Self::validate_override_handle(handle, overrides);
         let validate_const_expr =
-            |handle| Self::validate_expression_handle(handle, const_expressions);
+            |handle| Self::validate_expression_handle(handle, global_expressions);
         let validate_type = |handle| Self::validate_type_handle(handle, types);
 
         match *expression {

@@ -233,7 +233,7 @@ impl Context<'_> {
         };
 
         let expressions = if self.is_const {
-            &self.module.const_expressions
+            &self.module.global_expressions
         } else {
             &self.expressions
         };
@@ -333,20 +333,22 @@ impl Context<'_> {
         let h = match self.expressions[expr] {
             ref expr @ (Expression::Literal(_)
             | Expression::Constant(_)
-            | Expression::ZeroValue(_)) => self.module.const_expressions.append(expr.clone(), meta),
+            | Expression::ZeroValue(_)) => {
+                self.module.global_expressions.append(expr.clone(), meta)
+            }
             Expression::Compose { ty, ref components } => {
                 let mut components = components.clone();
                 for component in &mut components {
                     *component = self.lift_up_const_expression(*component)?;
                 }
                 self.module
-                    .const_expressions
+                    .global_expressions
                     .append(Expression::Compose { ty, components }, meta)
             }
             Expression::Splat { size, value } => {
                 let value = self.lift_up_const_expression(value)?;
                 self.module
-                    .const_expressions
+                    .global_expressions
                     .append(Expression::Splat { size, value }, meta)
             }
             _ => {

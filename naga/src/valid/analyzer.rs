@@ -1047,7 +1047,7 @@ impl ModuleInfo {
         gctx: crate::proc::GlobalCtx,
     ) -> Result<(), super::ConstExpressionError> {
         self.const_expression_types[handle.index()] =
-            resolve_context.resolve(&gctx.const_expressions[handle], |h| Ok(&self[h]))?;
+            resolve_context.resolve(&gctx.global_expressions[handle], |h| Ok(&self[h]))?;
         Ok(())
     }
 
