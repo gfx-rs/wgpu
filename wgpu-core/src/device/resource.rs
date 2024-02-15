@@ -13,7 +13,6 @@ use crate::{
     hal_api::HalApi,
     hal_label,
     hub::Hub,
-    id::QueueId,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
@@ -38,6 +37,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
+use once_cell::sync::OnceCell;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 
 use smallvec::SmallVec;
@@ -56,7 +56,7 @@ use std::{
 
 use super::{
     life::{self, ResourceMaps},
-    queue::{self},
+    queue::{self, Queue},
     DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, ENTRYPOINT_FAILURE_ERROR,
     IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL, ZERO_BUFFER_SIZE,
 };
@@ -89,8 +89,8 @@ use super::{
 pub struct Device<A: HalApi> {
     raw: Option<A::Device>,
     pub(crate) adapter: Arc<Adapter<A>>,
-    pub(crate) queue_id: RwLock<Option<QueueId>>,
-    queue_to_drop: RwLock<Option<A::Queue>>,
+    pub(crate) queue: OnceCell<Weak<Queue<A>>>,
+    queue_to_drop: OnceCell<A::Queue>,
     pub(crate) zero_buffer: Option<A::Buffer>,
     pub(crate) info: ResourceInfo<Device<A>>,
 
@@ -162,7 +162,7 @@ impl<A: HalApi> Drop for Device<A> {
         unsafe {
             raw.destroy_buffer(self.zero_buffer.take().unwrap());
             raw.destroy_fence(self.fence.write().take().unwrap());
-            let queue = self.queue_to_drop.write().take().unwrap();
+            let queue = self.queue_to_drop.take().unwrap();
             raw.exit(queue);
         }
     }
@@ -260,8 +260,8 @@ impl<A: HalApi> Device<A> {
         Ok(Self {
             raw: Some(raw_device),
             adapter: adapter.clone(),
-            queue_id: RwLock::new(None),
-            queue_to_drop: RwLock::new(None),
+            queue: OnceCell::new(),
+            queue_to_drop: OnceCell::new(),
             zero_buffer: Some(zero_buffer),
             info: ResourceInfo::new("<device>"),
             command_allocator: Mutex::new(Some(com_alloc)),
@@ -302,7 +302,7 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn release_queue(&self, queue: A::Queue) {
-        self.queue_to_drop.write().replace(queue);
+        assert!(self.queue_to_drop.set(queue).is_ok());
     }
 
     pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker<A>> {
@@ -357,6 +357,14 @@ impl<A: HalApi> Device<A> {
                 }
             }
         }
+    }
+
+    pub fn get_queue(&self) -> Option<Arc<Queue<A>>> {
+        self.queue.get().as_ref()?.upgrade()
+    }
+
+    pub fn set_queue(&self, queue: Arc<Queue<A>>) {
+        assert!(self.queue.set(Arc::downgrade(&queue)).is_ok());
     }
 
     /// Check this device for completed commands.

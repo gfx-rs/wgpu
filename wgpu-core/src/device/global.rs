@@ -1330,9 +1330,8 @@ impl Global {
             if !device.is_valid() {
                 break DeviceError::Lost;
             }
-            let queue = match hub.queues.get(device.queue_id.read().unwrap()) {
-                Ok(queue) => queue,
-                Err(_) => break DeviceError::InvalidQueueId,
+            let Some(queue) = device.get_queue() else {
+                break DeviceError::InvalidQueueId;
             };
             let encoder = match device
                 .command_allocator
