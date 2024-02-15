@@ -160,6 +160,9 @@ struct Inner {
     context: WglContext,
 }
 
+unsafe impl Send for Inner {}
+unsafe impl Sync for Inner {}
+
 pub struct Instance {
     srgb_capable: bool,
     inner: Arc<Mutex<Inner>>,
