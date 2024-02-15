@@ -89,8 +89,10 @@ impl IdentityValues {
 
     /// Free `id`. It will never be returned from `alloc` again.
     pub fn release<T: Marker>(&mut self, id: Id<T>) {
-        let (index, epoch, _backend) = id.unzip();
-        self.free.push((index, epoch));
+        if let IdSource::Allocated = self.id_source {
+            let (index, epoch, _backend) = id.unzip();
+            self.free.push((index, epoch));
+        }
         self.count -= 1;
     }
 
