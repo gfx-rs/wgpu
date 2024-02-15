@@ -149,20 +149,6 @@ impl<A: HalApi> BufferUsageScope<A> {
         resources.into_iter()
     }
 
-    pub fn get(&self, id: BufferId) -> Option<&Arc<Buffer<A>>> {
-        let index = id.unzip().0 as usize;
-        if index > self.metadata.size() {
-            return None;
-        }
-        self.tracker_assert_in_bounds(index);
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                return Some(self.metadata.get_resource_unchecked(index));
-            }
-        }
-        None
-    }
-
     /// Merge the list of buffer states in the given bind group into this usage scope.
     ///
     /// If any of the resulting states is invalid, stops the merge and returns a usage
