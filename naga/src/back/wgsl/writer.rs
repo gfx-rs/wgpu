@@ -109,7 +109,7 @@ impl<W: Write> Writer<W> {
         self.reset(module);
 
         // Save all ep result types
-        for (_, ep) in module.entry_points.iter().enumerate() {
+        for ep in &module.entry_points {
             if let Some(ref result) = ep.function.result {
                 self.ep_results.push((ep.stage, result.ty));
             }

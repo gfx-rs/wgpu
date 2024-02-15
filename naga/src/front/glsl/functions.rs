@@ -160,7 +160,7 @@ impl Frontend {
             } => self.matrix_one_arg(ctx, ty, columns, rows, scalar, (value, expr_meta), meta)?,
             TypeInner::Struct { ref members, .. } => {
                 let scalar_components = members
-                    .get(0)
+                    .first()
                     .and_then(|member| scalar_components(&ctx.module.types[member.ty].inner));
                 if let Some(scalar) = scalar_components {
                     ctx.implicit_conversion(&mut value, expr_meta, scalar)?;

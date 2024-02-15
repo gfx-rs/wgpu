@@ -1260,7 +1260,9 @@ pub fn validate_color_attachment_bytes_per_sample(
 ) -> Result<(), u32> {
     let mut total_bytes_per_sample = 0;
     for format in attachment_formats {
-        let Some(format) = format else { continue; };
+        let Some(format) = format else {
+            continue;
+        };
 
         let byte_cost = format.target_pixel_byte_cost().unwrap();
         let alignment = format.target_component_alignment().unwrap();
