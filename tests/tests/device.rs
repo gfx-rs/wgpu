@@ -38,7 +38,7 @@ fn device_lifetime_check() {
         backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
         dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
         gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
-        flags: wgpu::InstanceFlags::debugging().with_env(),
+        flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
     });
 
     let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)

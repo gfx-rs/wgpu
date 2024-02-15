@@ -221,18 +221,4 @@ impl<T: Resource> StatelessTracker<T> {
             }
         }
     }
-
-    pub fn get(&self, id: Id<T::Marker>) -> Option<&Arc<T>> {
-        let index = id.unzip().0 as usize;
-        if index > self.metadata.size() {
-            return None;
-        }
-        self.tracker_assert_in_bounds(index);
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                return Some(self.metadata.get_resource_unchecked(index));
-            }
-        }
-        None
-    }
 }

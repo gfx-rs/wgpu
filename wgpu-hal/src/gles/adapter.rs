@@ -472,6 +472,7 @@ impl super::Adapter {
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
+            features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES, true);
         }
         let gl_bcn_exts = [

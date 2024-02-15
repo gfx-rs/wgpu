@@ -1,4 +1,8 @@
-use crate::{device::bgl, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl,
+    id::{markers::Buffer, Id},
+    FastHashMap, FastHashSet,
+};
 use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
@@ -134,8 +138,11 @@ pub struct Interface {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("Buffer usage is {actual:?} which does not contain required usage {expected:?}")]
+#[error(
+    "Usage flags {actual:?} for buffer {id:?} do not contain required usage flags {expected:?}"
+)]
 pub struct MissingBufferUsageError {
+    pub(crate) id: Id<Buffer>,
     pub(crate) actual: wgt::BufferUsages,
     pub(crate) expected: wgt::BufferUsages,
 }
@@ -143,11 +150,16 @@ pub struct MissingBufferUsageError {
 /// Checks that the given buffer usage contains the required buffer usage,
 /// returns an error otherwise.
 pub fn check_buffer_usage(
+    id: Id<Buffer>,
     actual: wgt::BufferUsages,
     expected: wgt::BufferUsages,
 ) -> Result<(), MissingBufferUsageError> {
     if !actual.contains(expected) {
-        Err(MissingBufferUsageError { actual, expected })
+        Err(MissingBufferUsageError {
+            id,
+            actual,
+            expected,
+        })
     } else {
         Ok(())
     }

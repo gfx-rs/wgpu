@@ -381,7 +381,7 @@ impl Global {
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
+        check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
@@ -444,7 +444,7 @@ impl Global {
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
+        check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
         let raw_buf = buffer
@@ -1330,9 +1330,8 @@ impl Global {
             if !device.is_valid() {
                 break DeviceError::Lost;
             }
-            let queue = match hub.queues.get(device.queue_id.read().unwrap()) {
-                Ok(queue) => queue,
-                Err(_) => break DeviceError::InvalidQueueId,
+            let Some(queue) = device.get_queue() else {
+                break DeviceError::InvalidQueueId;
             };
             let encoder = match device
                 .command_allocator
@@ -1377,6 +1376,7 @@ impl Global {
             .command_buffers
             .unregister(command_encoder_id.transmute())
         {
+            cmd_buf.data.lock().as_mut().unwrap().encoder.discard();
             cmd_buf
                 .device
                 .untrack(&cmd_buf.data.lock().as_ref().unwrap().trackers);
@@ -2417,7 +2417,7 @@ impl Global {
                 return Err((op, DeviceError::Lost.into()));
             }
 
-            if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
+            if let Err(e) = check_buffer_usage(buffer.info.id(), buffer.usage, pub_usage) {
                 return Err((op, e.into()));
             }
 

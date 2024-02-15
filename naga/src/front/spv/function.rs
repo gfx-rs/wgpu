@@ -292,277 +292,285 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         );
 
         if let Some(ep) = self.lookup_entry_point.remove(&fun_id) {
-            // create a wrapping function
-            let mut function = crate::Function {
-                name: Some(format!("{}_wrap", ep.name)),
+            self.deferred_entry_points.push((ep, fun_id));
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn process_entry_point(
+        &mut self,
+        module: &mut crate::Module,
+        ep: super::EntryPoint,
+        fun_id: u32,
+    ) -> Result<(), Error> {
+        // create a wrapping function
+        let mut function = crate::Function {
+            name: Some(format!("{}_wrap", ep.name)),
+            arguments: Vec::new(),
+            result: None,
+            local_variables: Arena::new(),
+            expressions: Arena::new(),
+            named_expressions: crate::NamedExpressions::default(),
+            body: crate::Block::new(),
+        };
+
+        // 1. copy the inputs from arguments to privates
+        for &v_id in ep.variable_ids.iter() {
+            let lvar = self.lookup_variable.lookup(v_id)?;
+            if let super::Variable::Input(ref arg) = lvar.inner {
+                let span = module.global_variables.get_span(lvar.handle);
+                let arg_expr = function.expressions.append(
+                    crate::Expression::FunctionArgument(function.arguments.len() as u32),
+                    span,
+                );
+                let load_expr = if arg.ty == module.global_variables[lvar.handle].ty {
+                    arg_expr
+                } else {
+                    // The only case where the type is different is if we need to treat
+                    // unsigned integer as signed.
+                    let mut emitter = Emitter::default();
+                    emitter.start(&function.expressions);
+                    let handle = function.expressions.append(
+                        crate::Expression::As {
+                            expr: arg_expr,
+                            kind: crate::ScalarKind::Sint,
+                            convert: Some(4),
+                        },
+                        span,
+                    );
+                    function.body.extend(emitter.finish(&function.expressions));
+                    handle
+                };
+                function.body.push(
+                    crate::Statement::Store {
+                        pointer: function
+                            .expressions
+                            .append(crate::Expression::GlobalVariable(lvar.handle), span),
+                        value: load_expr,
+                    },
+                    span,
+                );
+
+                let mut arg = arg.clone();
+                if ep.stage == crate::ShaderStage::Fragment {
+                    if let Some(ref mut binding) = arg.binding {
+                        binding.apply_default_interpolation(&module.types[arg.ty].inner);
+                    }
+                }
+                function.arguments.push(arg);
+            }
+        }
+        // 2. call the wrapped function
+        let fake_id = !(module.entry_points.len() as u32); // doesn't matter, as long as it's not a collision
+        let dummy_handle = self.add_call(fake_id, fun_id);
+        function.body.push(
+            crate::Statement::Call {
+                function: dummy_handle,
                 arguments: Vec::new(),
                 result: None,
-                local_variables: Arena::new(),
-                expressions: Arena::new(),
-                named_expressions: crate::NamedExpressions::default(),
-                body: crate::Block::new(),
-            };
+            },
+            crate::Span::default(),
+        );
 
-            // 1. copy the inputs from arguments to privates
-            for &v_id in ep.variable_ids.iter() {
-                let lvar = self.lookup_variable.lookup(v_id)?;
-                if let super::Variable::Input(ref arg) = lvar.inner {
-                    let span = module.global_variables.get_span(lvar.handle);
-                    let arg_expr = function.expressions.append(
-                        crate::Expression::FunctionArgument(function.arguments.len() as u32),
+        // 3. copy the outputs from privates to the result
+        let mut members = Vec::new();
+        let mut components = Vec::new();
+        for &v_id in ep.variable_ids.iter() {
+            let lvar = self.lookup_variable.lookup(v_id)?;
+            if let super::Variable::Output(ref result) = lvar.inner {
+                let span = module.global_variables.get_span(lvar.handle);
+                let expr_handle = function
+                    .expressions
+                    .append(crate::Expression::GlobalVariable(lvar.handle), span);
+
+                // Cull problematic builtins of gl_PerVertex.
+                // See the docs for `Frontend::gl_per_vertex_builtin_access`.
+                {
+                    let ty = &module.types[result.ty];
+                    if let crate::TypeInner::Struct {
+                        members: ref original_members,
+                        span,
+                    } = ty.inner
+                    {
+                        let mut new_members = None;
+                        for (idx, member) in original_members.iter().enumerate() {
+                            if let Some(crate::Binding::BuiltIn(built_in)) = member.binding {
+                                if !self.gl_per_vertex_builtin_access.contains(&built_in) {
+                                    new_members.get_or_insert_with(|| original_members.clone())
+                                        [idx]
+                                        .binding = None;
+                                }
+                            }
+                        }
+                        if let Some(new_members) = new_members {
+                            module.types.replace(
+                                result.ty,
+                                crate::Type {
+                                    name: ty.name.clone(),
+                                    inner: crate::TypeInner::Struct {
+                                        members: new_members,
+                                        span,
+                                    },
+                                },
+                            );
+                        }
+                    }
+                }
+
+                match module.types[result.ty].inner {
+                    crate::TypeInner::Struct {
+                        members: ref sub_members,
+                        ..
+                    } => {
+                        for (index, sm) in sub_members.iter().enumerate() {
+                            if sm.binding.is_none() {
+                                continue;
+                            }
+                            let mut sm = sm.clone();
+
+                            if let Some(ref mut binding) = sm.binding {
+                                if ep.stage == crate::ShaderStage::Vertex {
+                                    binding.apply_default_interpolation(&module.types[sm.ty].inner);
+                                }
+                            }
+
+                            members.push(sm);
+
+                            components.push(function.expressions.append(
+                                crate::Expression::AccessIndex {
+                                    base: expr_handle,
+                                    index: index as u32,
+                                },
+                                span,
+                            ));
+                        }
+                    }
+                    ref inner => {
+                        let mut binding = result.binding.clone();
+                        if let Some(ref mut binding) = binding {
+                            if ep.stage == crate::ShaderStage::Vertex {
+                                binding.apply_default_interpolation(inner);
+                            }
+                        }
+
+                        members.push(crate::StructMember {
+                            name: None,
+                            ty: result.ty,
+                            binding,
+                            offset: 0,
+                        });
+                        // populate just the globals first, then do `Load` in a
+                        // separate step, so that we can get a range.
+                        components.push(expr_handle);
+                    }
+                }
+            }
+        }
+
+        for (member_index, member) in members.iter().enumerate() {
+            match member.binding {
+                Some(crate::Binding::BuiltIn(crate::BuiltIn::Position { .. }))
+                    if self.options.adjust_coordinate_space =>
+                {
+                    let mut emitter = Emitter::default();
+                    emitter.start(&function.expressions);
+                    let global_expr = components[member_index];
+                    let span = function.expressions.get_span(global_expr);
+                    let access_expr = function.expressions.append(
+                        crate::Expression::AccessIndex {
+                            base: global_expr,
+                            index: 1,
+                        },
                         span,
                     );
-                    let load_expr = if arg.ty == module.global_variables[lvar.handle].ty {
-                        arg_expr
-                    } else {
-                        // The only case where the type is different is if we need to treat
-                        // unsigned integer as signed.
-                        let mut emitter = Emitter::default();
-                        emitter.start(&function.expressions);
-                        let handle = function.expressions.append(
-                            crate::Expression::As {
-                                expr: arg_expr,
-                                kind: crate::ScalarKind::Sint,
-                                convert: Some(4),
-                            },
-                            span,
-                        );
-                        function.body.extend(emitter.finish(&function.expressions));
-                        handle
-                    };
+                    let load_expr = function.expressions.append(
+                        crate::Expression::Load {
+                            pointer: access_expr,
+                        },
+                        span,
+                    );
+                    let neg_expr = function.expressions.append(
+                        crate::Expression::Unary {
+                            op: crate::UnaryOperator::Negate,
+                            expr: load_expr,
+                        },
+                        span,
+                    );
+                    function.body.extend(emitter.finish(&function.expressions));
                     function.body.push(
                         crate::Statement::Store {
-                            pointer: function
-                                .expressions
-                                .append(crate::Expression::GlobalVariable(lvar.handle), span),
-                            value: load_expr,
+                            pointer: access_expr,
+                            value: neg_expr,
                         },
                         span,
                     );
-
-                    let mut arg = arg.clone();
-                    if ep.stage == crate::ShaderStage::Fragment {
-                        if let Some(ref mut binding) = arg.binding {
-                            binding.apply_default_interpolation(&module.types[arg.ty].inner);
-                        }
-                    }
-                    function.arguments.push(arg);
                 }
+                _ => {}
             }
-            // 2. call the wrapped function
-            let fake_id = !(module.entry_points.len() as u32); // doesn't matter, as long as it's not a collision
-            let dummy_handle = self.add_call(fake_id, fun_id);
-            function.body.push(
-                crate::Statement::Call {
-                    function: dummy_handle,
-                    arguments: Vec::new(),
-                    result: None,
-                },
-                crate::Span::default(),
-            );
-
-            // 3. copy the outputs from privates to the result
-            let mut members = Vec::new();
-            let mut components = Vec::new();
-            for &v_id in ep.variable_ids.iter() {
-                let lvar = self.lookup_variable.lookup(v_id)?;
-                if let super::Variable::Output(ref result) = lvar.inner {
-                    let span = module.global_variables.get_span(lvar.handle);
-                    let expr_handle = function
-                        .expressions
-                        .append(crate::Expression::GlobalVariable(lvar.handle), span);
-
-                    // Cull problematic builtins of gl_PerVertex.
-                    // See the docs for `Frontend::gl_per_vertex_builtin_access`.
-                    {
-                        let ty = &module.types[result.ty];
-                        match ty.inner {
-                            crate::TypeInner::Struct {
-                                members: ref original_members,
-                                span,
-                            } if ty.name.as_deref() == Some("gl_PerVertex") => {
-                                let mut new_members = original_members.clone();
-                                for member in &mut new_members {
-                                    if let Some(crate::Binding::BuiltIn(built_in)) = member.binding
-                                    {
-                                        if !self.gl_per_vertex_builtin_access.contains(&built_in) {
-                                            member.binding = None
-                                        }
-                                    }
-                                }
-                                if &new_members != original_members {
-                                    module.types.replace(
-                                        result.ty,
-                                        crate::Type {
-                                            name: ty.name.clone(),
-                                            inner: crate::TypeInner::Struct {
-                                                members: new_members,
-                                                span,
-                                            },
-                                        },
-                                    );
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    match module.types[result.ty].inner {
-                        crate::TypeInner::Struct {
-                            members: ref sub_members,
-                            ..
-                        } => {
-                            for (index, sm) in sub_members.iter().enumerate() {
-                                if sm.binding.is_none() {
-                                    continue;
-                                }
-                                let mut sm = sm.clone();
-
-                                if let Some(ref mut binding) = sm.binding {
-                                    if ep.stage == crate::ShaderStage::Vertex {
-                                        binding.apply_default_interpolation(
-                                            &module.types[sm.ty].inner,
-                                        );
-                                    }
-                                }
-
-                                members.push(sm);
-
-                                components.push(function.expressions.append(
-                                    crate::Expression::AccessIndex {
-                                        base: expr_handle,
-                                        index: index as u32,
-                                    },
-                                    span,
-                                ));
-                            }
-                        }
-                        ref inner => {
-                            let mut binding = result.binding.clone();
-                            if let Some(ref mut binding) = binding {
-                                if ep.stage == crate::ShaderStage::Vertex {
-                                    binding.apply_default_interpolation(inner);
-                                }
-                            }
-
-                            members.push(crate::StructMember {
-                                name: None,
-                                ty: result.ty,
-                                binding,
-                                offset: 0,
-                            });
-                            // populate just the globals first, then do `Load` in a
-                            // separate step, so that we can get a range.
-                            components.push(expr_handle);
-                        }
-                    }
-                }
-            }
-
-            for (member_index, member) in members.iter().enumerate() {
-                match member.binding {
-                    Some(crate::Binding::BuiltIn(crate::BuiltIn::Position { .. }))
-                        if self.options.adjust_coordinate_space =>
-                    {
-                        let mut emitter = Emitter::default();
-                        emitter.start(&function.expressions);
-                        let global_expr = components[member_index];
-                        let span = function.expressions.get_span(global_expr);
-                        let access_expr = function.expressions.append(
-                            crate::Expression::AccessIndex {
-                                base: global_expr,
-                                index: 1,
-                            },
-                            span,
-                        );
-                        let load_expr = function.expressions.append(
-                            crate::Expression::Load {
-                                pointer: access_expr,
-                            },
-                            span,
-                        );
-                        let neg_expr = function.expressions.append(
-                            crate::Expression::Unary {
-                                op: crate::UnaryOperator::Negate,
-                                expr: load_expr,
-                            },
-                            span,
-                        );
-                        function.body.extend(emitter.finish(&function.expressions));
-                        function.body.push(
-                            crate::Statement::Store {
-                                pointer: access_expr,
-                                value: neg_expr,
-                            },
-                            span,
-                        );
-                    }
-                    _ => {}
-                }
-            }
-
-            let mut emitter = Emitter::default();
-            emitter.start(&function.expressions);
-            for component in components.iter_mut() {
-                let load_expr = crate::Expression::Load {
-                    pointer: *component,
-                };
-                let span = function.expressions.get_span(*component);
-                *component = function.expressions.append(load_expr, span);
-            }
-
-            match members[..] {
-                [] => {}
-                [ref member] => {
-                    function.body.extend(emitter.finish(&function.expressions));
-                    let span = function.expressions.get_span(components[0]);
-                    function.body.push(
-                        crate::Statement::Return {
-                            value: components.first().cloned(),
-                        },
-                        span,
-                    );
-                    function.result = Some(crate::FunctionResult {
-                        ty: member.ty,
-                        binding: member.binding.clone(),
-                    });
-                }
-                _ => {
-                    let span = crate::Span::total_span(
-                        components.iter().map(|h| function.expressions.get_span(*h)),
-                    );
-                    let ty = module.types.insert(
-                        crate::Type {
-                            name: None,
-                            inner: crate::TypeInner::Struct {
-                                members,
-                                span: 0xFFFF, // shouldn't matter
-                            },
-                        },
-                        span,
-                    );
-                    let result_expr = function
-                        .expressions
-                        .append(crate::Expression::Compose { ty, components }, span);
-                    function.body.extend(emitter.finish(&function.expressions));
-                    function.body.push(
-                        crate::Statement::Return {
-                            value: Some(result_expr),
-                        },
-                        span,
-                    );
-                    function.result = Some(crate::FunctionResult { ty, binding: None });
-                }
-            }
-
-            module.entry_points.push(crate::EntryPoint {
-                name: ep.name,
-                stage: ep.stage,
-                early_depth_test: ep.early_depth_test,
-                workgroup_size: ep.workgroup_size,
-                function,
-            });
         }
+
+        let mut emitter = Emitter::default();
+        emitter.start(&function.expressions);
+        for component in components.iter_mut() {
+            let load_expr = crate::Expression::Load {
+                pointer: *component,
+            };
+            let span = function.expressions.get_span(*component);
+            *component = function.expressions.append(load_expr, span);
+        }
+
+        match members[..] {
+            [] => {}
+            [ref member] => {
+                function.body.extend(emitter.finish(&function.expressions));
+                let span = function.expressions.get_span(components[0]);
+                function.body.push(
+                    crate::Statement::Return {
+                        value: components.first().cloned(),
+                    },
+                    span,
+                );
+                function.result = Some(crate::FunctionResult {
+                    ty: member.ty,
+                    binding: member.binding.clone(),
+                });
+            }
+            _ => {
+                let span = crate::Span::total_span(
+                    components.iter().map(|h| function.expressions.get_span(*h)),
+                );
+                let ty = module.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Struct {
+                            members,
+                            span: 0xFFFF, // shouldn't matter
+                        },
+                    },
+                    span,
+                );
+                let result_expr = function
+                    .expressions
+                    .append(crate::Expression::Compose { ty, components }, span);
+                function.body.extend(emitter.finish(&function.expressions));
+                function.body.push(
+                    crate::Statement::Return {
+                        value: Some(result_expr),
+                    },
+                    span,
+                );
+                function.result = Some(crate::FunctionResult { ty, binding: None });
+            }
+        }
+
+        module.entry_points.push(crate::EntryPoint {
+            name: ep.name,
+            stage: ep.stage,
+            early_depth_test: ep.early_depth_test,
+            workgroup_size: ep.workgroup_size,
+            function,
+        });
 
         Ok(())
     }
