@@ -7,6 +7,13 @@ use crate::{
 };
 use std::{fmt::Debug, marker::PhantomData};
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum IdSource {
+    External,
+    Allocated,
+    None,
+}
+
 /// A simple structure to allocate [`Id`] identifiers.
 ///
 /// Calling [`alloc`] returns a fresh, never-before-seen id. Calling [`free`]
@@ -34,7 +41,7 @@ use std::{fmt::Debug, marker::PhantomData};
 /// [`Backend`]: wgt::Backend;
 /// [`alloc`]: IdentityManager::alloc
 /// [`free`]: IdentityManager::free
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct IdentityValues {
     free: Vec<(Index, Epoch)>,
     next_index: Index,
@@ -42,7 +49,7 @@ pub(super) struct IdentityValues {
     // Sanity check: The allocation logic works under the assumption that we don't
     // do a mix of allocating ids from here and providing ids manually for the same
     // storage container.
-    allocate_ids: Option<bool>,
+    id_source: IdSource,
 }
 
 impl IdentityValues {
@@ -52,10 +59,10 @@ impl IdentityValues {
     /// different `backend` values are always distinct.
     pub fn alloc<T: Marker>(&mut self, backend: Backend) -> Id<T> {
         assert!(
-            self.allocate_ids != Some(false),
+            self.id_source != IdSource::External,
             "Mix of internally allocated and externally provided IDs"
         );
-        self.allocate_ids = Some(true);
+        self.id_source = IdSource::Allocated;
 
         self.count += 1;
         match self.free.pop() {
@@ -71,10 +78,10 @@ impl IdentityValues {
 
     pub fn mark_as_used<T: Marker>(&mut self, id: Id<T>) -> Id<T> {
         assert!(
-            self.allocate_ids != Some(true),
+            self.id_source != IdSource::Allocated,
             "Mix of internally allocated and externally provided IDs"
         );
-        self.allocate_ids = Some(false);
+        self.id_source = IdSource::External;
 
         self.count += 1;
         id
@@ -117,7 +124,7 @@ impl<T: Marker> IdentityManager<T> {
                 free: Vec::new(),
                 next_index: 0,
                 count: 0,
-                allocate_ids: None,
+                id_source: IdSource::None,
             }),
             _phantom: PhantomData,
         }
