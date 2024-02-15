@@ -72,6 +72,7 @@ Bottom level categories:
 
 #### General
 - Device lost callbacks are invoked when replaced and when global is dropped. By @bradwerth in [#5168](https://github.com/gfx-rs/wgpu/pull/5168)
+- Fix performance regression when allocating a large amount of resources of the same type. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
 
 #### DX12
 - Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
