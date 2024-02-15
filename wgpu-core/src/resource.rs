@@ -89,7 +89,7 @@ impl<T: Resource> ResourceInfo<T> {
         let tracker_index = tracker_indices
             .as_ref()
             .map(|indices| indices.lock().alloc())
-            .unwrap_or(TrackerIndex::MAX);
+            .unwrap_or(TrackerIndex::INVALID);
         Self {
             id: None,
             tracker_index,
@@ -119,7 +119,7 @@ impl<T: Resource> ResourceInfo<T> {
     }
 
     pub(crate) fn tracker_index(&self) -> TrackerIndex {
-        debug_assert!(self.tracker_index != TrackerIndex::MAX);
+        debug_assert!(self.tracker_index != TrackerIndex::INVALID);
         self.tracker_index
     }
 

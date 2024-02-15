@@ -167,7 +167,7 @@ impl<A: HalApi> BufferUsageScope<A> {
     ) -> Result<(), UsageConflict> {
         let buffers = bind_group.buffers.lock();
         for &(ref resource, state) in &*buffers {
-            let index = resource.as_info().tracker_index() as usize;
+            let index = resource.as_info().tracker_index().as_usize();
 
             unsafe {
                 insert_or_merge(
@@ -241,7 +241,7 @@ impl<A: HalApi> BufferUsageScope<A> {
             .get(id)
             .map_err(|_| UsageConflict::BufferInvalid { id })?;
 
-        let index = buffer.info.tracker_index() as usize;
+        let index = buffer.info.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -300,7 +300,7 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
     /// [`self.metadata`]: BufferTracker::metadata
     /// [`Hub::buffers`]: crate::hub::Hub::buffers
     fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
-        let index = index as usize;
+        let index = index.as_usize();
 
         if index > self.metadata.size() {
             return false;
@@ -385,7 +385,7 @@ impl<A: HalApi> BufferTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn insert_single(&mut self, resource: Arc<Buffer<A>>, state: BufferUses) {
-        let index = resource.info.tracker_index() as usize;
+        let index = resource.info.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -420,7 +420,7 @@ impl<A: HalApi> BufferTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_single(&mut self, buffer: &Arc<Buffer<A>>, state: BufferUses) -> SetSingleResult<A> {
-        let index: usize = buffer.as_info().tracker_index() as usize;
+        let index: usize = buffer.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -549,7 +549,7 @@ impl<A: HalApi> BufferTracker<A> {
         }
 
         for index in index_source {
-            let index = index as usize;
+            let index = index.as_usize();
 
             scope.tracker_assert_in_bounds(index);
 
@@ -579,7 +579,7 @@ impl<A: HalApi> BufferTracker<A> {
 
     #[allow(dead_code)]
     pub fn get(&self, index: TrackerIndex) -> Option<&Arc<Buffer<A>>> {
-        let index = index as usize;
+        let index = index.as_usize();
         if index > self.metadata.size() {
             return None;
         }

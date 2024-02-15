@@ -83,7 +83,7 @@ impl<T: Resource> ResourceTracker for StatelessTracker<T> {
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
     fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
-        let index = index as usize;
+        let index = index.as_usize();
 
         if index >= self.metadata.size() {
             return false;
@@ -154,7 +154,7 @@ impl<T: Resource> StatelessTracker<T> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn insert_single(&mut self, resource: Arc<T>) {
-        let index = resource.as_info().tracker_index() as usize;
+        let index = resource.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -176,7 +176,7 @@ impl<T: Resource> StatelessTracker<T> {
     ) -> Option<&'a Arc<T>> {
         let resource = storage.get(id).ok()?;
 
-        let index = resource.as_info().tracker_index() as usize;
+        let index = resource.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 

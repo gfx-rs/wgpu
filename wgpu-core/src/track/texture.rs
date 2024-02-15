@@ -360,7 +360,7 @@ impl<A: HalApi> TextureUsageScope<A> {
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
-        let index = texture.as_info().tracker_index() as usize;
+        let index = texture.as_info().tracker_index().as_usize();
 
         self.tracker_assert_in_bounds(index);
 
@@ -403,7 +403,7 @@ impl<A: HalApi> ResourceTracker for TextureTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
     fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
-        let index = index as usize;
+        let index = index.as_usize();
 
         if index >= self.metadata.size() {
             return false;
@@ -514,7 +514,7 @@ impl<A: HalApi> TextureTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn insert_single(&mut self, resource: Arc<Texture<A>>, usage: TextureUses) {
-        let index = resource.info.tracker_index() as usize;
+        let index = resource.info.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -555,7 +555,7 @@ impl<A: HalApi> TextureTracker<A> {
         selector: TextureSelector,
         new_state: TextureUses,
     ) -> Option<Drain<'_, PendingTransition<TextureUses>>> {
-        let index = texture.as_info().tracker_index() as usize;
+        let index = texture.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -689,7 +689,7 @@ impl<A: HalApi> TextureTracker<A> {
 
         let textures = bind_group_state.textures.lock();
         for t in textures.iter() {
-            let index = t.texture.as_info().tracker_index() as usize;
+            let index = t.texture.as_info().tracker_index().as_usize();
             scope.tracker_assert_in_bounds(index);
 
             if unsafe { !scope.metadata.contains_unchecked(index) } {
@@ -723,7 +723,7 @@ impl<A: HalApi> TextureTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
     pub fn remove(&mut self, index: TrackerIndex) -> bool {
-        let index = index as usize;
+        let index = index.as_usize();
 
         if index >= self.metadata.size() {
             return false;

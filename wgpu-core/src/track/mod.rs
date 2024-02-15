@@ -118,7 +118,19 @@ pub(crate) use texture::{
 };
 use wgt::strict_assert_ne;
 
-pub type TrackerIndex = u32;
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct TrackerIndex(u32);
+
+impl TrackerIndex {
+    /// A dummy value to place in ResourceInfo for resources that are never tracked.
+    pub const INVALID: Self = TrackerIndex(u32::MAX);
+
+    pub fn as_usize(self) -> usize {
+        debug_assert!(self != Self::INVALID);
+        self.0 as usize
+    }
+}
 
 /// wgpu-core internally use some array-like storage for tracking resources.
 /// To that end, there needs to be a uniquely assigned index for each live resource
@@ -139,7 +151,7 @@ impl TrackerIndexAllocator {
     pub fn new() -> Self {
         TrackerIndexAllocator {
             unused: Vec::new(),
-            next_index: 0,
+            next_index: TrackerIndex(0),
         }
     }
 
@@ -149,7 +161,7 @@ impl TrackerIndexAllocator {
         }
 
         let index = self.next_index;
-        self.next_index += 1;
+        self.next_index.0 += 1;
 
         index
     }
@@ -160,7 +172,7 @@ impl TrackerIndexAllocator {
 
     // This is used to pre-allocate the tracker storage.
     pub fn size(&self) -> usize {
-        self.next_index as usize
+        self.next_index.0 as usize
     }
 }
 
