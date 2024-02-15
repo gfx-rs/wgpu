@@ -1,0 +1,73 @@
+;; Make sure that we don't have a validation error due to lacking capabilities
+;; for bulltins such as ClipDistance when those builtin are not actually used.
+;;
+;; This specifically doesn't name the gl_PerVertex struct to make sure we don't
+;; rely on checks for this name.
+;;
+;; See https://github.com/gfx-rs/wgpu/issues/4915
+;;
+;; Generated via `glslc -O` on this glsl code (taken from https://github.com/gfx-rs/wgpu/issues/4915):
+;;
+;; ```glsl
+;; #version 450
+;;
+;; void main()
+;; {
+;;     gl_Position = vec4(
+;;         (gl_VertexIndex == 0) ? -4.0 : 1.0,
+;;         (gl_VertexIndex == 2) ? 4.0 : -1.0,
+;;         0.0,
+;;         1.0
+;;     );
+;; } 
+;; ```
+;;
+; SPIR-V
+; Version: 1.0
+; Generator: Google Shaderc over Glslang; 11
+; Bound: 34
+; Schema: 0
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Vertex %4 "main" %13 %gl_VertexIndex
+               OpMemberDecorate %_struct_11 0 BuiltIn Position
+               OpMemberDecorate %_struct_11 1 BuiltIn PointSize
+               OpMemberDecorate %_struct_11 2 BuiltIn ClipDistance
+               OpMemberDecorate %_struct_11 3 BuiltIn CullDistance
+               OpDecorate %_struct_11 Block
+               OpDecorate %gl_VertexIndex BuiltIn VertexIndex
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+       %uint = OpTypeInt 32 0
+     %uint_1 = OpConstant %uint 1
+%_arr_float_uint_1 = OpTypeArray %float %uint_1
+ %_struct_11 = OpTypeStruct %v4float %float %_arr_float_uint_1 %_arr_float_uint_1
+%_ptr_Output__struct_11 = OpTypePointer Output %_struct_11
+         %13 = OpVariable %_ptr_Output__struct_11 Output
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+%_ptr_Input_int = OpTypePointer Input %int
+%gl_VertexIndex = OpVariable %_ptr_Input_int Input
+       %bool = OpTypeBool
+   %float_n4 = OpConstant %float -4
+    %float_1 = OpConstant %float 1
+      %int_2 = OpConstant %int 2
+    %float_4 = OpConstant %float 4
+   %float_n1 = OpConstant %float -1
+    %float_0 = OpConstant %float 0
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+          %4 = OpFunction %void None %3
+          %5 = OpLabel
+         %18 = OpLoad %int %gl_VertexIndex
+         %20 = OpIEqual %bool %18 %int_0
+         %23 = OpSelect %float %20 %float_n4 %float_1
+         %26 = OpIEqual %bool %18 %int_2
+         %29 = OpSelect %float %26 %float_4 %float_n1
+         %31 = OpCompositeConstruct %v4float %23 %29 %float_0 %float_1
+         %33 = OpAccessChain %_ptr_Output_v4float %13 %int_0
+               OpStore %33 %31
+               OpReturn
+               OpFunctionEnd

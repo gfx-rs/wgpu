@@ -56,6 +56,13 @@ impl super::Temp {
     }
 }
 
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        use crate::CommandEncoder;
+        unsafe { self.discard_encoding() }
+    }
+}
+
 impl super::CommandEncoder {
     unsafe fn begin_pass(&mut self, kind: super::PassKind, label: crate::Label) {
         let list = self.list.as_ref().unwrap();

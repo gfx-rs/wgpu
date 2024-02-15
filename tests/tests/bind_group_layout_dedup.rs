@@ -1,9 +1,6 @@
 use std::num::NonZeroU64;
 
-use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
-};
-use wgt::Backends;
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 const SHADER_SRC: &str = "
 @group(0) @binding(0)
@@ -307,18 +304,10 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
     ctx.queue.submit(Some(encoder.finish()));
 }
 
-const DX12_VALIDATION_ERROR: &str = "The command allocator cannot be reset because a command list is currently being recorded with the allocator.";
-
 #[gpu_test]
 static SEPARATE_PROGRAMS_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .test_features_limits()
-                .expect_fail(
-                    FailureCase::backend(Backends::DX12).validation_error(DX12_VALIDATION_ERROR),
-                ),
-        )
+        .parameters(TestParameters::default().test_features_limits())
         .run_sync(separate_programs_have_incompatible_derived_bgls);
 
 fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
@@ -376,13 +365,7 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
 #[gpu_test]
 static DERIVED_BGLS_INCOMPATIBLE_WITH_REGULAR_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .test_features_limits()
-                .expect_fail(
-                    FailureCase::backend(Backends::DX12).validation_error(DX12_VALIDATION_ERROR),
-                ),
-        )
+        .parameters(TestParameters::default().test_features_limits())
         .run_sync(derived_bgls_incompatible_with_regular_bgls);
 
 fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {

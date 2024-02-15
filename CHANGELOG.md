@@ -114,6 +114,7 @@ Bottom level categories:
 - Correctly compute minimum buffer size for array-typed `storage` and `uniform` vars. By @jimblandy [#5222](https://github.com/gfx-rs/wgpu/pull/5222)
 - Fix timeout when presenting a surface where no work has been done. By @waywardmonkeys in [#5200](https://github.com/gfx-rs/wgpu/pull/5200)
 - Simplify and speed up the allocation of internal IDs. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
+- Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
 
 #### WGL
 
@@ -121,6 +122,7 @@ Bottom level categories:
 
 #### Naga
 - Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
+- In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 
 #### Tests
 
