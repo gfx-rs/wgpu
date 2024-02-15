@@ -72,7 +72,6 @@ pub async fn execute_test(
         adapter,
         adapter_info,
         adapter_downlevel_capabilities,
-        #[allow(clippy::arc_with_non_send_sync)] // False positive on wasm
         device: Arc::new(device),
         device_features: config.params.required_features,
         device_limits: config.params.required_limits.clone(),
