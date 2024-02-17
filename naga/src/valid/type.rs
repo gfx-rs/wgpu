@@ -256,7 +256,7 @@ impl super::Validator {
                     if !self.capabilities.contains(Capabilities::SHADER_I64) {
                         return Err(WidthError::MissingCapability {
                             name: "i64",
-                            flag: "INT64",
+                            flag: "SHADER_I64",
                         });
                     }
                     true
@@ -269,7 +269,7 @@ impl super::Validator {
                     if !self.capabilities.contains(Capabilities::SHADER_I64) {
                         return Err(WidthError::MissingCapability {
                             name: "u64",
-                            flag: "INT64",
+                            flag: "SHADER_I64",
                         });
                     }
                     true

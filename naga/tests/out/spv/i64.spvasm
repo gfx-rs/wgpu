@@ -1,71 +1,81 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 52
+; Bound: 62
 OpCapability Shader
 OpCapability Int64
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %45 "main"
-OpExecutionMode %45 LocalSize 1 1 1
+OpEntryPoint GLCompute %55 "main"
+OpExecutionMode %55 LocalSize 1 1 1
 %2 = OpTypeVoid
 %3 = OpTypeInt 64 1
 %4 = OpTypeInt 64 0
-%5 = OpConstant  %3  1
-%6 = OpConstant  %4  20
-%8 = OpTypePointer Private %3
-%7 = OpVariable  %8  Private %5
-%12 = OpTypeFunction %3 %3
-%13 = OpConstant  %3  31
-%14 = OpConstant  %3  1002003004005006
-%15 = OpConstant  %3  5
-%16 = OpConstant  %3  20
-%17 = OpConstant  %3  50
-%19 = OpTypePointer Function %3
-%20 = OpConstantNull  %3
-%30 = OpTypeFunction %4 %4
-%31 = OpConstant  %4  31
-%32 = OpConstant  %4  1002003004005006
-%33 = OpConstant  %4  4
-%34 = OpConstant  %4  34
-%36 = OpTypePointer Function %4
-%37 = OpConstantNull  %4
-%46 = OpTypeFunction %2
-%47 = OpConstant  %4  67
-%48 = OpConstant  %3  60
-%11 = OpFunction  %3  None %12
-%10 = OpFunctionParameter  %3
-%9 = OpLabel
-%18 = OpVariable  %19  Function %20
-OpBranch %21
-%21 = OpLabel
-%22 = OpISub  %3  %13 %14
-%23 = OpIAdd  %3  %22 %15
-OpStore %18 %23
-%24 = OpIAdd  %3  %10 %22
-%25 = OpIAdd  %3  %24 %16
+%5 = OpTypeVector %4 3
+%6 = OpConstant  %3  1
+%7 = OpConstant  %4  20
+%9 = OpTypePointer Private %3
+%8 = OpVariable  %9  Private %6
+%13 = OpTypeFunction %3 %3
+%14 = OpConstant  %3  31
+%15 = OpConstant  %3  1002003004005006
+%16 = OpConstant  %3  5
+%17 = OpConstant  %3  20
+%18 = OpConstant  %3  50
+%20 = OpTypePointer Function %3
+%21 = OpConstantNull  %3
+%31 = OpTypeFunction %4 %4
+%32 = OpConstant  %4  31
+%33 = OpConstant  %4  1002003004005006
+%34 = OpConstant  %4  3
+%35 = OpConstant  %4  4
+%36 = OpConstant  %4  5
+%37 = OpConstantComposite  %5  %34 %35 %36
+%38 = OpConstant  %4  34
+%40 = OpTypePointer Function %4
+%41 = OpConstantNull  %4
+%56 = OpTypeFunction %2
+%57 = OpConstant  %4  67
+%58 = OpConstant  %3  60
+%12 = OpFunction  %3  None %13
+%11 = OpFunctionParameter  %3
+%10 = OpLabel
+%19 = OpVariable  %20  Function %21
+OpBranch %22
+%22 = OpLabel
+%23 = OpISub  %3  %14 %15
+%24 = OpIAdd  %3  %23 %16
+OpStore %19 %24
+%25 = OpIAdd  %3  %11 %23
 %26 = OpIAdd  %3  %25 %17
-OpReturnValue %26
+%27 = OpIAdd  %3  %26 %18
+OpReturnValue %27
 OpFunctionEnd
-%29 = OpFunction  %4  None %30
-%28 = OpFunctionParameter  %4
-%27 = OpLabel
-%35 = OpVariable  %36  Function %37
-OpBranch %38
-%38 = OpLabel
-%39 = OpIAdd  %4  %31 %32
-%40 = OpIAdd  %4  %39 %33
-OpStore %35 %40
-%41 = OpIAdd  %4  %28 %39
-%42 = OpIAdd  %4  %41 %6
-%43 = OpIAdd  %4  %42 %34
-OpReturnValue %43
+%30 = OpFunction  %4  None %31
+%29 = OpFunctionParameter  %4
+%28 = OpLabel
+%39 = OpVariable  %40  Function %41
+OpBranch %42
+%42 = OpLabel
+%43 = OpIAdd  %4  %32 %33
+%44 = OpIAdd  %4  %43 %35
+OpStore %39 %44
+%45 = OpIAdd  %4  %29 %43
+%46 = OpIAdd  %4  %45 %7
+%47 = OpIAdd  %4  %46 %38
+%48 = OpCompositeExtract  %4  %37 0
+%49 = OpIAdd  %4  %47 %48
+%50 = OpCompositeExtract  %4  %37 1
+%51 = OpIAdd  %4  %49 %50
+%52 = OpCompositeExtract  %4  %37 2
+%53 = OpIAdd  %4  %51 %52
+OpReturnValue %53
 OpFunctionEnd
-%45 = OpFunction  %2  None %46
-%44 = OpLabel
-OpBranch %49
-%49 = OpLabel
-%50 = OpFunctionCall  %4  %29 %47
-%51 = OpFunctionCall  %3  %11 %48
+%55 = OpFunction  %2  None %56
+%54 = OpLabel
+OpBranch %59
+%59 = OpLabel
+%60 = OpFunctionCall  %4  %30 %57
+%61 = OpFunctionCall  %3  %12 %58
 OpReturn
 OpFunctionEnd

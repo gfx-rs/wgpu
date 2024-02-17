@@ -21,8 +21,16 @@ impl crate::Scalar {
     /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-scalar>
     pub(super) const fn to_hlsl_str(self) -> Result<&'static str, Error> {
         match self.kind {
-            crate::ScalarKind::Sint => Ok("int"),
-            crate::ScalarKind::Uint => Ok("uint"),
+            crate::ScalarKind::Sint => match self.width {
+                4 => Ok("int"),
+                8 => Ok("int64_t"),
+                _ => Err(Error::UnsupportedScalar(self)),
+            },
+            crate::ScalarKind::Uint => match self.width {
+                4 => Ok("uint"),
+                8 => Ok("uint64_t"),
+                _ => Err(Error::UnsupportedScalar(self)),
+            },
             crate::ScalarKind::Float => match self.width {
                 2 => Ok("half"),
                 4 => Ok("float"),

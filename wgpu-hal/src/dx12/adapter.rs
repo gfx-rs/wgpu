@@ -294,7 +294,9 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
-        let int64_shader_ops_supported = {
+        // we must be using DXC because uint64_t was added with Shader Model 6
+        // and FXC only supports up to 5.1
+        let int64_shader_ops_supported = dxc_container.is_some() && {
             let mut features1: d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1 =
                 unsafe { mem::zeroed() };
             let hr = unsafe {

@@ -8,8 +8,9 @@ fn fi(x: i64) -> i64 {
 }
 fn fu(x: u64) -> u64 {
    let y: u64 = 31lu + 1002003004005006lu;
+   let v = vec3<u64>(3lu,4lu,5lu);
    var z = y + u64(4);
-   return x + y + k + 34lu;
+   return x + y + k + 34lu + v.x + v.y + v.z;
 }
 
 @compute @workgroup_size(1)

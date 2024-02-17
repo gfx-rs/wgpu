@@ -14,8 +14,9 @@ fn fu(x_1: u64) -> u64 {
     var z_1: u64;
 
     let y_1 = (31lu + 1002003004005006lu);
+    let v_1 = vec3<u64>(3lu, 4lu, 5lu);
     z_1 = (y_1 + 4lu);
-    return (((x_1 + y_1) + k) + 34lu);
+    return ((((((x_1 + y_1) + k) + 34lu) + v_1.x) + v_1.y) + v_1.z);
 }
 
 @compute @workgroup_size(1, 1, 1) 

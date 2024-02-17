@@ -219,6 +219,76 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     tests
 }
 
+fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
+    let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
+
+    let mut tests = Vec::new();
+
+    // 64 bit alignment tests
+    for ty in ["u64", "i64"] {
+        let members = format!("scalar: {ty},");
+        let direct = String::from(
+            "\
+            output[0] = u32(bitcast<u64>(input.scalar) & 0xFFFFFFFF);
+            output[1] = u32((bitcast<u64>(input.scalar) >> 32) & 0xFFFFFFFF);
+        ",
+        );
+
+        tests.push(ShaderTest::new(
+            format!("{ty} alignment"),
+            members,
+            direct,
+            &input_values,
+            &[0, 1],
+        ));
+    }
+
+    // Nested struct and array test.
+    //
+    // This tries to exploit all the weird edge cases of the struct layout algorithm.
+    {
+        let header =
+            String::from("struct Inner { scalar: u64, scalar32: u32, member: array<u64, 2> }");
+        let members = String::from("inner: Inner, vector: vec3<i64>");
+        let direct = String::from(
+            "\
+            output[0] = u32(bitcast<u64>(input.inner.scalar) & 0xFFFFFFFF);
+            output[1] = u32((bitcast<u64>(input.inner.scalar) >> 32) & 0xFFFFFFFF);
+            output[2] = bitcast<u32>(input.inner.scalar32);
+            output[3] = u32(bitcast<u64>(input.inner.member[0]) & 0xFFFFFFFF);
+            output[4] = u32((bitcast<u64>(input.inner.member[0]) >> 32) & 0xFFFFFFFF);
+            output[5] = u32(bitcast<u64>(input.inner.member[1]) & 0xFFFFFFFF);
+            output[6] = u32((bitcast<u64>(input.inner.member[1]) >> 32) & 0xFFFFFFFF);
+            output[7] = u32(bitcast<u64>(input.vector.x) & 0xFFFFFFFF);
+            output[8] = u32((bitcast<u64>(input.vector.x) >> 32) & 0xFFFFFFFF);
+            output[9] = u32(bitcast<u64>(input.vector.y) & 0xFFFFFFFF);
+            output[10] = u32((bitcast<u64>(input.vector.y) >> 32) & 0xFFFFFFFF);
+            output[11] = u32(bitcast<u64>(input.vector.z) & 0xFFFFFFFF);
+            output[12] = u32((bitcast<u64>(input.vector.z) >> 32) & 0xFFFFFFFF);
+        ",
+        );
+
+        tests.push(
+            ShaderTest::new(
+                String::from("nested struct and array"),
+                members,
+                direct,
+                &input_values,
+                &[
+                    0, 1, // inner.scalar
+                    2, // inner.scalar32
+                    4, 5, // inner.member[0]
+                    6, 7, // inner.member[1]
+                    8, 9, 10, 11, 12, 13, // vector
+                ],
+            )
+            .header(header),
+        );
+    }
+
+    tests
+}
+
 #[gpu_test]
 static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -275,5 +345,56 @@ static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
             ctx,
             InputStorageType::PushConstant,
             create_struct_layout_tests(InputStorageType::PushConstant),
+        )
+    });
+
+#[gpu_test]
+static UNIFORM_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_I64)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_64bit_struct_layout_tests(),
+        )
+    });
+
+#[gpu_test]
+static STORAGE_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_I64)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_64bit_struct_layout_tests(),
+        )
+    });
+
+#[gpu_test]
+static PUSH_CONSTANT_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_I64 | Features::PUSH_CONSTANTS)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits {
+                max_push_constant_size: MAX_BUFFER_SIZE as u32,
+                ..Limits::downlevel_defaults()
+            }),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::PushConstant,
+            create_64bit_struct_layout_tests(),
         )
     });

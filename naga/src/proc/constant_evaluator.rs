@@ -200,6 +200,8 @@ gen_component_wise_extractor! {
         AbstractInt => AbstractInt: i64,
         U32 => U32: u32,
         I32 => I32: i32,
+        U64 => U64: u64,
+        I64 => I64: i64,
     ],
     scalar_kinds: [
         Float,
@@ -847,6 +849,8 @@ impl<'a> ConstantEvaluator<'a> {
                     Scalar::AbstractInt([e]) => Ok(Scalar::AbstractInt([e.abs()])),
                     Scalar::I32([e]) => Ok(Scalar::I32([e.wrapping_abs()])),
                     Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
+                    Scalar::I64([e]) => Ok(Scalar::I64([e.wrapping_abs()])),
+                    Scalar::U64([e]) => Ok(Scalar::U64([e])),
                 })
             }
             crate::MathFunction::Min => {
