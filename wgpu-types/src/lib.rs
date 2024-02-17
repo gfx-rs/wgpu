@@ -823,7 +823,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
-        /// - DX12
+        /// - DX12 (DXC only)
         ///
         /// This is a native only feature.
         const SHADER_I64 = 1 << 58;

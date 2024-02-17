@@ -246,6 +246,8 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
     // Nested struct and array test.
     //
     // This tries to exploit all the weird edge cases of the struct layout algorithm.
+    // We dont go as all-out as the other nested struct test because
+    // all our primitives are twice as wide and we have only so much buffer to spare.
     {
         let header =
             String::from("struct Inner { scalar: u64, scalar32: u32, member: array<u64, 2> }");
