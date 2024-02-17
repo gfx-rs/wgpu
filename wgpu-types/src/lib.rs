@@ -826,7 +826,7 @@ bitflags::bitflags! {
         /// - DX12 (DXC only)
         ///
         /// This is a native only feature.
-        const SHADER_I64 = 1 << 58;
+        const SHADER_INT64 = 1 << 58;
         /// Allows for the creation of ray-tracing queries within shaders.
         ///
         /// Supported platforms:

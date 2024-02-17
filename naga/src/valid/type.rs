@@ -253,10 +253,10 @@ impl super::Validator {
             }
             crate::ScalarKind::Sint => {
                 if scalar.width == 8 {
-                    if !self.capabilities.contains(Capabilities::SHADER_I64) {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT64) {
                         return Err(WidthError::MissingCapability {
                             name: "i64",
-                            flag: "SHADER_I64",
+                            flag: "SHADER_INT64",
                         });
                     }
                     true
@@ -266,10 +266,10 @@ impl super::Validator {
             }
             crate::ScalarKind::Uint => {
                 if scalar.width == 8 {
-                    if !self.capabilities.contains(Capabilities::SHADER_I64) {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT64) {
                         return Err(WidthError::MissingCapability {
                             name: "u64",
-                            flag: "SHADER_I64",
+                            flag: "SHADER_INT64",
                         });
                     }
                     true

@@ -354,7 +354,7 @@ static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
 static UNIFORM_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::SHADER_I64)
+            .features(Features::SHADER_INT64)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
@@ -370,7 +370,7 @@ static UNIFORM_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
 static STORAGE_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::SHADER_I64)
+            .features(Features::SHADER_INT64)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
@@ -386,7 +386,7 @@ static STORAGE_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
 static PUSH_CONSTANT_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::SHADER_I64 | Features::PUSH_CONSTANTS)
+            .features(Features::SHADER_INT64 | Features::PUSH_CONSTANTS)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits {
                 max_push_constant_size: MAX_BUFFER_SIZE as u32,

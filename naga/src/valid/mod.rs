@@ -109,7 +109,7 @@ bitflags::bitflags! {
         /// Support for arrayed cube textures.
         const CUBE_ARRAY_TEXTURES = 0x4000;
         /// Support for 64-bit signed and unsigned integers.
-        const SHADER_I64 = 0x8000;
+        const SHADER_INT64 = 0x8000;
     }
 }
 

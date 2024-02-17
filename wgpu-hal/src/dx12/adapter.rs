@@ -309,7 +309,7 @@ impl super::Adapter {
             };
             hr == 0 && features1.Int64ShaderOps != 0
         };
-        features.set(wgt::Features::SHADER_I64, int64_shader_ops_supported);
+        features.set(wgt::Features::SHADER_INT64, int64_shader_ops_supported);
 
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
