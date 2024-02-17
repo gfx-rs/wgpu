@@ -75,7 +75,7 @@ impl<A: HalApi> CommandEncoder<A> {
         Ok(())
     }
 
-    fn discard(&mut self) {
+    pub(crate) fn discard(&mut self) {
         if self.is_open {
             self.is_open = false;
             unsafe { self.raw.discard_encoding() };
@@ -112,7 +112,7 @@ pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 pub struct CommandBufferMutable<A: HalApi> {
-    encoder: CommandEncoder<A>,
+    pub(crate) encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,

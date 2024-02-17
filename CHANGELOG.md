@@ -91,7 +91,7 @@ Bottom level categories:
 - `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - Added `InstanceFlags::GPU_BASED_VALIDATION`, which enables GPU-based validation for shaders. This is currently only supported on the DX12 and Vulkan backends; other platforms ignore this flag, for now.
   - When set, this flag implies `InstanceFlags::VALIDATION`.
-  - This has been added to the set of flags set by `InstanceFlags::debugging` and `InstanceFlags::from_build_config`. If you notice your graphics workloads running more slowly, this may be the culprit.
+  - This has been added to the set of flags set by `InstanceFlags::advanced_debugging`. Since the overhead is potentially very large, the flag is not enabled by default in debug builds when using `InstanceFlags::from_build_config`.
   - As with other instance flags, this flag can be changed in calls to `InstanceFlags::with_env` with the new `WGPU_GPU_BASED_VALIDATION` environment variable.
 
   By @ErichDonGubler in [#5146](https://github.com/gfx-rs/wgpu/pull/5146), [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
@@ -102,6 +102,7 @@ Bottom level categories:
 +!wgpu::Instance::enabled_backend_features().is_empty()
 ```
 - `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
+- `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU). By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 
 ### Bug Fixes
 
@@ -113,6 +114,8 @@ Bottom level categories:
 - Fix panic when creating a surface while no backend is available. By @wumpf [#5166](https://github.com/gfx-rs/wgpu/pull/5166)
 - Correctly compute minimum buffer size for array-typed `storage` and `uniform` vars. By @jimblandy [#5222](https://github.com/gfx-rs/wgpu/pull/5222)
 - Fix timeout when presenting a surface where no work has been done. By @waywardmonkeys in [#5200](https://github.com/gfx-rs/wgpu/pull/5200)
+- Simplify and speed up the allocation of internal IDs. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
+- Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
 
 #### WGL
 
@@ -120,6 +123,7 @@ Bottom level categories:
 
 #### Naga
 - Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
+- In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 
 #### Tests
 
