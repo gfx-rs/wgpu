@@ -3,6 +3,14 @@
 	spv: (
 		version: (1, 0),
 	),
+	hlsl: (
+		shader_model: V6_0,
+		binding_map: {},
+		fake_missing_bindings: true,
+		special_constants_binding: Some((space: 1, register: 0)),
+		push_constants_target: Some((space: 0, register: 0)),
+		zero_initialize_workgroup_memory: true,
+	),
 	glsl: (
 		version: Desktop(420),
 		writer_flags: (""),

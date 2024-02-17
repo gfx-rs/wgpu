@@ -1,3 +1,10 @@
+struct NagaConstants {
+    int first_vertex;
+    int first_instance;
+    uint other;
+};
+ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
+
 static const uint64_t k = 20uL;
 
 static int64_t v = 1L;

@@ -6,7 +6,7 @@
     compute:[
         (
             entry_point:"main",
-            target_profile:"cs_5_1",
+            target_profile:"cs_6_0",
         ),
     ],
 )
