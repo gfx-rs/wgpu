@@ -36,7 +36,7 @@ api_log_info = []
 ## Log resource lifecycle management at info instead of trace level.
 resource_log_info = []
 
-## Use static linking for libraries. Disale to manually link. Enabled by default.
+## Use static linking for libraries. Disable to manually link. Enabled by default.
 link = ["hal/link"]
 
 ## Support the Renderdoc graphics debugger:
@@ -101,6 +101,7 @@ bit-vec = "0.6"
 bitflags = "2"
 bytemuck = { version = "1.14", optional = true }
 codespan-reporting = "0.11"
+document-features.workspace = true
 indexmap = "2"
 log = "0.4"
 once_cell = "1"

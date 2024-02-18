@@ -577,6 +577,9 @@ pub struct Frontend<I> {
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, LookupFunction>,
     lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
+    // When parsing functions, each entry point function gets an entry here so that additional
+    // processing for them can be performed after all function parsing.
+    deferred_entry_points: Vec<(EntryPoint, spirv::Word)>,
     //Note: each `OpFunctionCall` gets a single entry here, indexed by the
     // dummy `Handle<crate::Function>` of the call site.
     deferred_function_calls: Vec<spirv::Word>,
@@ -628,6 +631,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
             lookup_entry_point: FastHashMap::default(),
+            deferred_entry_points: Vec::default(),
             deferred_function_calls: Vec::default(),
             dummy_functions: Arena::new(),
             function_call_graph: GraphMap::new(),
@@ -1561,12 +1565,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                     span,
                                 );
 
-                                if ty.name.as_deref() == Some("gl_PerVertex") {
-                                    if let Some(crate::Binding::BuiltIn(built_in)) =
-                                        members[index as usize].binding
-                                    {
-                                        self.gl_per_vertex_builtin_access.insert(built_in);
-                                    }
+                                if let Some(crate::Binding::BuiltIn(built_in)) =
+                                    members[index as usize].binding
+                                {
+                                    self.gl_per_vertex_builtin_access.insert(built_in);
                                 }
 
                                 AccessExpression {
@@ -2559,7 +2561,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 Op::ShiftRightLogical => {
                     inst.expect(5)?;
-                    //TODO: convert input and result to usigned
+                    //TODO: convert input and result to unsigned
                     parse_expr_op!(crate::BinaryOperator::ShiftRight, SHIFT)?;
                 }
                 Op::ShiftRightArithmetic => {
@@ -3387,7 +3389,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                         // Check if any previous case already used this target block id, if so
                         // group them together to reorder them later so that no weird
-                        // falltrough cases happen.
+                        // fallthrough cases happen.
                         if let Some(&mut (_, ref mut literals)) = self.switch_cases.get_mut(&target)
                         {
                             literals.push(literal as i32);
@@ -3411,11 +3413,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Loop trough the collected target blocks creating a new case for each
                     // literal pointing to it, only one case will have the true body and all the
-                    // others will be empty falltrough so that they all execute the same body
+                    // others will be empty fallthrough so that they all execute the same body
                     // without duplicating code.
                     //
                     // Since `switch_cases` is an indexmap the order of insertion is preserved
-                    // this is needed because spir-v defines falltrough order in the switch
+                    // this is needed because spir-v defines fallthrough order in the switch
                     // instruction.
                     let mut cases = Vec::with_capacity((inst.wc as usize - 3) / 2);
                     for &(case_body_idx, ref literals) in self.switch_cases.values() {
@@ -3954,6 +3956,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
             }?;
+        }
+
+        // Do entry point specific processing after all functions are parsed so that we can
+        // cull unused problematic builtins of gl_PerVertex.
+        for (ep, fun_id) in core::mem::take(&mut self.deferred_entry_points) {
+            self.process_entry_point(&mut module, ep, fun_id)?;
         }
 
         log::info!("Patching...");
@@ -5081,7 +5089,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             None
         };
         let span = self.span_from_with_op(start);
-        let mut dec = self.future_decor.remove(&id).unwrap_or_default();
+        let dec = self.future_decor.remove(&id).unwrap_or_default();
 
         let original_ty = self.lookup_type.lookup(type_id)?.handle;
         let mut ty = original_ty;
@@ -5126,17 +5134,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             Some(&access) => ExtendedClass::Global(crate::AddressSpace::Storage { access }),
             None => map_storage_class(storage_class)?,
         };
-
-        // Fix empty name for gl_PerVertex struct generated by glslang
-        if let crate::TypeInner::Pointer { .. } = module.types[original_ty].inner {
-            if ext_class == ExtendedClass::Input || ext_class == ExtendedClass::Output {
-                if let Some(ref dec_name) = dec.name {
-                    if dec_name.is_empty() {
-                        dec.name = Some("perVertexStruct".to_string())
-                    }
-                }
-            }
-        }
 
         let (inner, var) = match ext_class {
             ExtendedClass::Global(mut space) => {

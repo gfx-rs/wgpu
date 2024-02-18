@@ -31,7 +31,7 @@ impl<T: Resource> StatelessBindGroupSate<T> {
     /// Optimize the buffer bind group state by sorting it by ID.
     ///
     /// When this list of states is merged into a tracker, the memory
-    /// accesses will be in a constant assending order.
+    /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&self) {
         let mut resources = self.resources.lock();
         resources.sort_unstable_by_key(|&(id, _)| id.unzip().0);
@@ -220,19 +220,5 @@ impl<T: Resource> StatelessTracker<T> {
                 }
             }
         }
-    }
-
-    pub fn get(&self, id: Id<T::Marker>) -> Option<&Arc<T>> {
-        let index = id.unzip().0 as usize;
-        if index > self.metadata.size() {
-            return None;
-        }
-        self.tracker_assert_in_bounds(index);
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                return Some(self.metadata.get_resource_unchecked(index));
-            }
-        }
-        None
     }
 }

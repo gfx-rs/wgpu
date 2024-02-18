@@ -1471,7 +1471,8 @@ impl crate::Context for ContextWgpuCore {
             ))),
         };
 
-        match wgc::gfx_select!(buffer => self.0.buffer_map_async(*buffer, range, operation)) {
+        match wgc::gfx_select!(buffer => self.0.buffer_map_async(*buffer, range.start, Some(range.end-range.start), operation))
+        {
             Ok(()) => (),
             Err(cause) => {
                 self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async")

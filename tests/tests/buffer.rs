@@ -164,3 +164,165 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
         assert_eq!(*byte, 0);
     }
 });
+
+/// The WebGPU algorithm [validating shader binding][vsb] requires
+/// implementations to check that buffer bindings are large enough to
+/// hold the WGSL `storage` or `uniform` variables they're bound to.
+///
+/// This test tries to build a pipeline from a shader module with a
+/// 32-byte variable and a bindgroup layout with a min_binding_size of
+/// 16 for that variable's group/index. Pipeline creation should fail.
+#[gpu_test]
+static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
+        // Create a shader module that statically uses a storage buffer.
+        let shader_module = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                    r#"
+                        @group(0) @binding(0)
+                        var<storage, read_write> a: array<u32, 8>;
+                        @compute @workgroup_size(1)
+                        fn main() {
+                            a[0] = a[1];
+                        }
+            "#,
+                )),
+            });
+
+        let bind_group_layout =
+            ctx.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: std::num::NonZeroU64::new(16),
+                        },
+                        count: None,
+                    }],
+                });
+
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+        wgpu_test::fail(&ctx.device, || {
+            ctx.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: None,
+                    layout: Some(&pipeline_layout),
+                    module: &shader_module,
+                    entry_point: "main",
+                });
+        });
+    });
+
+/// The WebGPU algorithm [validating shader binding][vsb] requires
+/// implementations to check that buffer bindings are large enough to
+/// hold the WGSL `storage` or `uniform` variables they're bound to.
+///
+/// This test tries to dispatch a compute shader that uses a 32-byte
+/// variable with a bindgroup layout with a min_binding_size of zero
+/// (meaning, "validate at dispatch recording time") and a 16-byte
+/// binding. Command recording should fail.
+#[gpu_test]
+static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
+        // This test tries to use a bindgroup layout with a
+        // min_binding_size of 16 to an index whose WGSL type requires 32
+        // bytes. Pipeline creation should fail.
+
+        // Create a shader module that statically uses a storage buffer.
+        let shader_module = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                    r#"
+                        @group(0) @binding(0)
+                        var<storage, read_write> a: array<u32, 8>;
+                        @compute @workgroup_size(1)
+                        fn main() {
+                            a[0] = a[1];
+                        }
+            "#,
+                )),
+            });
+
+        let bind_group_layout =
+            ctx.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &shader_module,
+                entry_point: "main",
+            });
+
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 16, // too small for 32-byte var `a` in shader module
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+
+        wgpu_test::fail(&ctx.device, || {
+            let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_pipeline(&pipeline);
+            pass.dispatch_workgroups(1, 1, 1);
+
+            drop(pass);
+            let _ = encoder.finish();
+        });
+    });

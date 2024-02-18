@@ -146,7 +146,7 @@ impl Version {
         }
     }
 
-    /// Returns true if targetting WebGL
+    /// Returns true if targeting WebGL
     const fn is_webgl(&self) -> bool {
         match *self {
             Version::Desktop(_) => false,
@@ -340,9 +340,9 @@ pub struct TextureMapping {
 ///
 /// Push constants are emulated using traditional uniforms in OpenGL.
 ///
-/// These are composed of a set of primatives (scalar, vector, matrix) that
+/// These are composed of a set of primitives (scalar, vector, matrix) that
 /// are given names. Because they are not backed by the concept of a buffer,
-/// we must do the work of calculating the offset of each primative in the
+/// we must do the work of calculating the offset of each primitive in the
 /// push constant block.
 #[derive(Debug, Clone)]
 pub struct PushConstantItem {
@@ -394,11 +394,11 @@ impl IdGenerator {
     }
 }
 
-/// Assorted options needed for generting varyings.
+/// Assorted options needed for generating varyings.
 #[derive(Clone, Copy)]
 struct VaryingOptions {
     output: bool,
-    targetting_webgl: bool,
+    targeting_webgl: bool,
     draw_parameters: bool,
 }
 
@@ -406,7 +406,7 @@ impl VaryingOptions {
     const fn from_writer_options(options: &Options, output: bool) -> Self {
         Self {
             output,
-            targetting_webgl: options.version.is_webgl(),
+            targeting_webgl: options.version.is_webgl(),
             draw_parameters: options.writer_flags.contains(WriterFlags::DRAW_PARAMETERS),
         }
     }
@@ -645,16 +645,6 @@ impl<'a, W: Write> Writer<'a, W> {
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
         self.features.write(self.options, &mut self.out)?;
-
-        // Write the additional extensions
-        if self
-            .options
-            .writer_flags
-            .contains(WriterFlags::TEXTURE_SHADOW_LOD)
-        {
-            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shadow_lod.txt
-            writeln!(self.out, "#extension GL_EXT_texture_shadow_lod : require")?;
-        }
 
         // glsl es requires a precision to be specified for floats and ints
         // TODO: Should this be user configurable?
@@ -1849,7 +1839,7 @@ impl<'a, W: Write> Writer<'a, W> {
         size: usize,
         ctx: &back::FunctionCtx,
     ) -> BackendResult {
-        // Write parantheses around the dot product expression to prevent operators
+        // Write parentheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
         write!(self.out, "(")?;
 
@@ -2620,51 +2610,49 @@ impl<'a, W: Write> Writer<'a, W> {
                 level,
                 depth_ref,
             } => {
-                let dim = match *ctx.resolve_type(image, &self.module.types) {
-                    TypeInner::Image { dim, .. } => dim,
+                let (dim, class, arrayed) = match *ctx.resolve_type(image, &self.module.types) {
+                    TypeInner::Image {
+                        dim,
+                        class,
+                        arrayed,
+                        ..
+                    } => (dim, class, arrayed),
                     _ => unreachable!(),
                 };
-
-                if dim == crate::ImageDimension::Cube
-                    && array_index.is_some()
-                    && depth_ref.is_some()
-                {
-                    match level {
-                        crate::SampleLevel::Zero
-                        | crate::SampleLevel::Exact(_)
-                        | crate::SampleLevel::Gradient { .. }
-                        | crate::SampleLevel::Bias(_) => {
-                            return Err(Error::Custom(String::from(
-                                "gsamplerCubeArrayShadow isn't supported in textureGrad, \
-                                 textureLod or texture with bias",
-                            )))
-                        }
-                        crate::SampleLevel::Auto => {}
+                let mut err = None;
+                if dim == crate::ImageDimension::Cube {
+                    if offset.is_some() {
+                        err = Some("gsamplerCube[Array][Shadow] doesn't support texture sampling with offsets");
+                    }
+                    if arrayed
+                        && matches!(class, crate::ImageClass::Depth { .. })
+                        && matches!(level, crate::SampleLevel::Gradient { .. })
+                    {
+                        err = Some("samplerCubeArrayShadow don't support textureGrad");
                     }
                 }
+                if gather.is_some() && level != crate::SampleLevel::Zero {
+                    err = Some("textureGather doesn't support LOD parameters");
+                }
+                if let Some(err) = err {
+                    return Err(Error::Custom(String::from(err)));
+                }
 
-                // textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL.
-                // To emulate this, we will have to use textureGrad with a constant gradient of 0.
-                let workaround_lod_array_shadow_as_grad = (array_index.is_some()
-                    || dim == crate::ImageDimension::Cube)
-                    && depth_ref.is_some()
-                    && gather.is_none()
-                    && !self
-                        .options
-                        .writer_flags
-                        .contains(WriterFlags::TEXTURE_SHADOW_LOD);
+                // `textureLod[Offset]` on `sampler2DArrayShadow` and `samplerCubeShadow` does not exist in GLSL,
+                // unless `GL_EXT_texture_shadow_lod` is present.
+                // But if the target LOD is zero, we can emulate that by using `textureGrad[Offset]` with a constant gradient of 0.
+                let workaround_lod_with_grad = ((dim == crate::ImageDimension::Cube && !arrayed)
+                    || (dim == crate::ImageDimension::D2 && arrayed))
+                    && level == crate::SampleLevel::Zero
+                    && matches!(class, crate::ImageClass::Depth { .. })
+                    && !self.features.contains(Features::TEXTURE_SHADOW_LOD);
 
-                //Write the function to be used depending on the sample level
+                // Write the function to be used depending on the sample level
                 let fun_name = match level {
                     crate::SampleLevel::Zero if gather.is_some() => "textureGather",
+                    crate::SampleLevel::Zero if workaround_lod_with_grad => "textureGrad",
                     crate::SampleLevel::Auto | crate::SampleLevel::Bias(_) => "texture",
-                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => {
-                        if workaround_lod_array_shadow_as_grad {
-                            "textureGrad"
-                        } else {
-                            "textureLod"
-                        }
-                    }
+                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => "textureLod",
                     crate::SampleLevel::Gradient { .. } => "textureGrad",
                 };
                 let offset_name = match offset {
@@ -2727,7 +2715,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::SampleLevel::Auto => (),
                     // Zero needs level set to 0
                     crate::SampleLevel::Zero => {
-                        if workaround_lod_array_shadow_as_grad {
+                        if workaround_lod_with_grad {
                             let vec_dim = match dim {
                                 crate::ImageDimension::Cube => 3,
                                 _ => 2,
@@ -2739,13 +2727,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     // Exact and bias require another argument
                     crate::SampleLevel::Exact(expr) => {
-                        if workaround_lod_array_shadow_as_grad {
-                            log::warn!("Unable to `textureLod` a shadow array, ignoring the LOD");
-                            write!(self.out, ", vec2(0,0), vec2(0,0)")?;
-                        } else {
-                            write!(self.out, ", ")?;
-                            self.write_expr(expr, ctx)?;
-                        }
+                        write!(self.out, ", ")?;
+                        self.write_expr(expr, ctx)?;
                     }
                     crate::SampleLevel::Bias(_) => {
                         // This needs to be done after the offset writing
@@ -3795,11 +3778,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // Sampled images inherit the policy from the user passed policies
             crate::ImageClass::Sampled { .. } => ("texelFetch", self.policies.image_load),
             crate::ImageClass::Storage { .. } => {
-                // OpenGL ES 3.1 mentiones in Chapter "8.22 Texture Image Loads and Stores" that:
+                // OpenGL ES 3.1 mentions in Chapter "8.22 Texture Image Loads and Stores" that:
                 // "Invalid image loads will return a vector where the value of R, G, and B components
                 // is 0 and the value of the A component is undefined."
                 //
-                // OpenGL 4.2 Core mentiones in Chapter "3.9.20 Texture Image Loads and Stores" that:
+                // OpenGL 4.2 Core mentions in Chapter "3.9.20 Texture Image Loads and Stores" that:
                 // "Invalid image loads will return zero."
                 //
                 // So, we only inject bounds checks for ES
@@ -3832,7 +3815,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // expressions so we can be sure that after we test a
             // condition it will be true for the next ones
 
-            // Write parantheses around the ternary operator to prevent problems with
+            // Write parentheses around the ternary operator to prevent problems with
             // expressions emitted before or after it having more precedence
             write!(self.out, "(",)?;
 
@@ -3856,7 +3839,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             // We now need to write the size checks for the coordinates and array index
-            // first we write the comparation function in case the image is 1D non arrayed
+            // first we write the comparison function in case the image is 1D non arrayed
             // (and no 1D to 2D hack was needed) we are comparing scalars so the less than
             // operator will suffice, but otherwise we'll be comparing two vectors so we'll
             // need to use the `lessThan` function but it returns a vector of booleans (one
@@ -3883,7 +3866,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // coordinates from the image size.
                 write!(self.out, ", ")?;
             } else {
-                // If we didn't use it (ie. 1D images) we perform the comparsion
+                // If we didn't use it (ie. 1D images) we perform the comparison
                 // using the less than operator.
                 write!(self.out, " < ")?;
             }
@@ -4002,7 +3985,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Get the kind of the output value.
             let kind = match class {
                 // Only sampled images can reach here since storage images
-                // don't need bounds checks and depth images aren't implmented
+                // don't need bounds checks and depth images aren't implemented
                 crate::ImageClass::Sampled { kind, .. } => kind,
                 _ => unreachable!(),
             };
@@ -4018,7 +4001,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_zero_init_scalar(kind)?;
             // Close the zero value constructor
             write!(self.out, ")")?;
-            // Close the parantheses surrounding our ternary
+            // Close the parentheses surrounding our ternary
             write!(self.out, ")")?;
         }
 
@@ -4376,7 +4359,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if options.targetting_webgl => "int(gl_ViewID_OVR)",
+        Bi::ViewIndex if options.targeting_webgl => "int(gl_ViewID_OVR)",
         Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
@@ -4387,7 +4370,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
             if options.draw_parameters {
                 "(uint(gl_InstanceID) + uint(gl_BaseInstanceARB))"
             } else {
-                // Must match FISRT_INSTANCE_BINDING
+                // Must match FIRST_INSTANCE_BINDING
                 "(uint(gl_InstanceID) + naga_vs_first_instance)"
             }
         }

@@ -12,7 +12,7 @@ pub struct ExclusiveSnatchGuard<'a>(RwLockWriteGuard<'a, ()>);
 /// it early.
 ///
 /// In order to safely access the underlying data, the device's global snatchable
-/// lock must be taken. To guarentee it, methods take a read or write guard of that
+/// lock must be taken. To guarantee it, methods take a read or write guard of that
 /// special lock.
 pub struct Snatchable<T> {
     value: UnsafeCell<Option<T>>,
@@ -68,7 +68,7 @@ impl SnatchLock {
     /// The safety of `Snatchable::get` and `Snatchable::snatch` rely on their using of the
     /// right SnatchLock (the one associated to the same device). This method is unsafe
     /// to force force sers to think twice about creating a SnatchLock. The only place this
-    /// method sould be called is when creating the device.
+    /// method should be called is when creating the device.
     pub unsafe fn new() -> Self {
         SnatchLock {
             lock: RwLock::new(()),

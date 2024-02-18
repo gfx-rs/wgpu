@@ -369,6 +369,7 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
+            | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
@@ -827,6 +828,11 @@ impl PhysicalDeviceCapabilities {
                 u64::MAX
             };
 
+        // TODO: programmatically determine this, if possible. It's unclear whether we can
+        // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
+        // We could increase the limit when we aren't on a tiled GPU.
+        let max_color_attachment_bytes_per_sample = 32;
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -862,6 +868,10 @@ impl PhysicalDeviceCapabilities {
             max_inter_stage_shader_components: limits
                 .max_vertex_output_components
                 .min(limits.max_fragment_input_components),
+            max_color_attachments: limits
+                .max_color_attachments
+                .min(crate::MAX_COLOR_ATTACHMENTS as u32),
+            max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
             max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
             max_compute_workgroup_size_x: max_compute_workgroup_sizes[0],

@@ -254,10 +254,10 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
                 wgt::AstcBlock::B12x12 => tf::Astc12x12UnormSrgb,
             },
             wgt::AstcChannel::Hdr => {
-                unimplemented!("Format {texture_format:?} has no WebGPU equivilant")
+                unimplemented!("Format {texture_format:?} has no WebGPU equivalent")
             }
         },
-        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivilant"),
+        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivalent"),
     }
 }
 
@@ -724,6 +724,8 @@ fn map_wgt_limits(limits: web_sys::GpuSupportedLimits) -> wgt::Limits {
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
         max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+        max_color_attachments: limits.max_color_attachments(),
+        max_color_attachment_bytes_per_sample: limits.max_color_attachment_bytes_per_sample(),
         max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
         max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
         max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
@@ -2160,7 +2162,7 @@ impl crate::context::Context for ContextWebGpu {
         _pipeline_layout: &Self::PipelineLayoutId,
         _pipeline_layout_data: &Self::PipelineLayoutData,
     ) {
-        // Dropped automaticaly
+        // Dropped automatically
     }
 
     fn shader_module_drop(
@@ -2504,14 +2506,14 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_write_timestamp(
         &self,
         _encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
+        _encoder_data: &Self::CommandEncoderData,
         _query_set: &Self::QuerySetId,
-        query_set_data: &Self::QuerySetData,
-        query_index: u32,
+        _query_set_data: &Self::QuerySetData,
+        _query_index: u32,
     ) {
-        encoder_data
-            .0
-            .write_timestamp(&query_set_data.0, query_index);
+        // Not available on WebGPU.
+        // This was part of the spec originally but got removed, see https://github.com/gpuweb/gpuweb/pull/4370
+        panic!("TIMESTAMP_QUERY_INSIDE_ENCODERS feature must be enabled to call write_timestamp on a command encoder.")
     }
 
     fn command_encoder_resolve_query_set(
@@ -2822,7 +2824,7 @@ impl crate::context::Context for ContextWebGpu {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass.")
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -3400,7 +3402,7 @@ impl crate::context::Context for ContextWebGpu {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a render pass.")
     }
 
     fn render_pass_begin_occlusion_query(

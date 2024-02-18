@@ -377,7 +377,7 @@ pub enum ColorStateError {
     FormatNotBlendable(wgt::TextureFormat),
     #[error("Format {0:?} does not have a color aspect")]
     FormatNotColor(wgt::TextureFormat),
-    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
@@ -399,7 +399,7 @@ pub enum DepthStencilStateError {
     FormatNotDepth(wgt::TextureFormat),
     #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
     FormatNotStencil(wgt::TextureFormat),
-    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
 }
 

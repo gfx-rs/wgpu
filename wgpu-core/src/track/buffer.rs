@@ -60,7 +60,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
     /// Optimize the buffer bind group state by sorting it by ID.
     ///
     /// When this list of states is merged into a tracker, the memory
-    /// accesses will be in a constant assending order.
+    /// accesses will be in a constant ascending order.
     #[allow(clippy::pattern_type_mismatch)]
     pub(crate) fn optimize(&self) {
         let mut buffers = self.buffers.lock();
@@ -147,20 +147,6 @@ impl<A: HalApi> BufferUsageScope<A> {
         let resources = self.metadata.drain_resources();
         self.state.clear();
         resources.into_iter()
-    }
-
-    pub fn get(&self, id: BufferId) -> Option<&Arc<Buffer<A>>> {
-        let index = id.unzip().0 as usize;
-        if index > self.metadata.size() {
-            return None;
-        }
-        self.tracker_assert_in_bounds(index);
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                return Some(self.metadata.get_resource_unchecked(index));
-            }
-        }
-        None
     }
 
     /// Merge the list of buffer states in the given bind group into this usage scope.

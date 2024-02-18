@@ -1,4 +1,8 @@
-use crate::{device::bgl, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl,
+    id::{markers::Buffer, Id},
+    FastHashMap, FastHashSet,
+};
 use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
@@ -135,8 +139,11 @@ pub struct Interface {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("Buffer usage is {actual:?} which does not contain required usage {expected:?}")]
+#[error(
+    "Usage flags {actual:?} for buffer {id:?} do not contain required usage flags {expected:?}"
+)]
 pub struct MissingBufferUsageError {
+    pub(crate) id: Id<Buffer>,
     pub(crate) actual: wgt::BufferUsages,
     pub(crate) expected: wgt::BufferUsages,
 }
@@ -144,11 +151,16 @@ pub struct MissingBufferUsageError {
 /// Checks that the given buffer usage contains the required buffer usage,
 /// returns an error otherwise.
 pub fn check_buffer_usage(
+    id: Id<Buffer>,
     actual: wgt::BufferUsages,
     expected: wgt::BufferUsages,
 ) -> Result<(), MissingBufferUsageError> {
     if !actual.contains(expected) {
-        Err(MissingBufferUsageError { actual, expected })
+        Err(MissingBufferUsageError {
+            id,
+            actual,
+            expected,
+        })
     } else {
         Ok(())
     }
@@ -895,9 +907,15 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                naga::TypeInner::Array { stride, .. } => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(stride as u64).unwrap(),
-                },
+                naga::TypeInner::Array { stride, size, .. } => {
+                    let size = match size {
+                        naga::ArraySize::Constant(size) => size.get() * stride,
+                        naga::ArraySize::Dynamic => stride,
+                    };
+                    ResourceType::Buffer {
+                        size: wgt::BufferSize::new(size as u64).unwrap(),
+                    }
+                }
                 naga::TypeInner::AccelerationStructure => ResourceType::AccelerationStructure,
                 ref other => ResourceType::Buffer {
                     size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
@@ -1249,4 +1267,30 @@ impl Interface {
             .ok_or(StageError::MissingEntryPoint(pair.1))
             .map(|ep| ep.dual_source_blending)
     }
+}
+
+// https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample
+pub fn validate_color_attachment_bytes_per_sample(
+    attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
+    limit: u32,
+) -> Result<(), u32> {
+    let mut total_bytes_per_sample = 0;
+    for format in attachment_formats {
+        let Some(format) = format else { continue; };
+
+        let byte_cost = format.target_pixel_byte_cost().unwrap();
+        let alignment = format.target_component_alignment().unwrap();
+
+        let rem = total_bytes_per_sample % alignment;
+        if rem != 0 {
+            total_bytes_per_sample += alignment - rem;
+        }
+        total_bytes_per_sample += byte_cost;
+    }
+
+    if total_bytes_per_sample > limit {
+        return Err(total_bytes_per_sample);
+    }
+
+    Ok(())
 }

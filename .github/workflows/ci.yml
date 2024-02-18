@@ -596,7 +596,7 @@ jobs:
     # runtime is normally 15 seconds
     timeout-minutes: 2
 
-    name: Format
+    name: Format & Typos
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
@@ -612,6 +612,9 @@ jobs:
         run: |
           cargo fmt -- --check
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
+
+      - name: Check for typos
+        uses: crate-ci/typos@v1.18.2
 
   check-cts-runner:
     # runtime is normally 2 minutes

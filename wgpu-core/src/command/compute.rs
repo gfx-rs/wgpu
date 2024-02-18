@@ -424,7 +424,7 @@ impl Global {
                 .map_pass_err(pass_scope)?;
 
             // Unlike in render passes we can't delay resetting the query sets since
-            // there is no auxillary pass.
+            // there is no auxiliary pass.
             let range = if let (Some(index_a), Some(index_b)) =
                 (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
             {
@@ -736,8 +736,12 @@ impl Global {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
-                    check_buffer_usage(indirect_buffer.usage, wgt::BufferUsages::INDIRECT)
-                        .map_pass_err(scope)?;
+                    check_buffer_usage(
+                        buffer_id,
+                        indirect_buffer.usage,
+                        wgt::BufferUsages::INDIRECT,
+                    )
+                    .map_pass_err(scope)?;
 
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
                     if end_offset > indirect_buffer.size {

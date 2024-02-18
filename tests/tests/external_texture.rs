@@ -159,7 +159,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 // Layer count of the destination texture
                 let mut dest_layers = 1;
 
-                // If the test is suppoed to be valid call to copyExternal.
+                // If the test is supposed to be valid call to copyExternal.
                 let mut valid = true;
                 match case {
                     TestCase::Normal => {}

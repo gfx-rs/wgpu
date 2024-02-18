@@ -21,7 +21,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             .device
             .create_shader_module(include_wgsl!("issue_3457.wgsl"));
 
-        // We use two separate vertex buffers so we can delete one in between submisions
+        // We use two separate vertex buffers so we can delete one in between submissions
         let vertex_buffer1 = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("vertex buffer 1"),
             size: 3 * 16,

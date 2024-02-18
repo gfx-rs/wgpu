@@ -179,7 +179,7 @@ fn load_gl_func(name: &str, module: Option<HMODULE>) -> *const c_void {
     ptr.cast()
 }
 
-fn extensions(extra: &Wgl, dc: HDC) -> HashSet<String> {
+fn get_extensions(extra: &Wgl, dc: HDC) -> HashSet<String> {
     if extra.GetExtensionsStringARB.is_loaded() {
         unsafe { CStr::from_ptr(extra.GetExtensionsStringARB(dc as *const _)) }
             .to_str()
@@ -449,9 +449,9 @@ impl crate::Instance<super::Api> for Instance {
         })?;
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc);
+        let extensions = get_extensions(&extra, dc);
 
-        let can_use_profile = extentions.contains("WGL_ARB_create_context_profile")
+        let can_use_profile = extensions.contains("WGL_ARB_create_context_profile")
             && extra.CreateContextAttribsARB.is_loaded();
 
         let context = if can_use_profile {
@@ -494,10 +494,10 @@ impl crate::Instance<super::Api> for Instance {
         };
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc);
+        let extensions = get_extensions(&extra, dc);
 
-        let srgb_capable = extentions.contains("WGL_EXT_framebuffer_sRGB")
-            || extentions.contains("WGL_ARB_framebuffer_sRGB")
+        let srgb_capable = extensions.contains("WGL_EXT_framebuffer_sRGB")
+            || extensions.contains("WGL_ARB_framebuffer_sRGB")
             || gl
                 .supported_extensions()
                 .contains("GL_ARB_framebuffer_sRGB");
@@ -742,8 +742,8 @@ impl crate::Surface<super::Api> for Surface {
 
         // Setup presentation mode
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc.device);
-        if !(extentions.contains("WGL_EXT_swap_control") && extra.SwapIntervalEXT.is_loaded()) {
+        let extensions = get_extensions(&extra, dc.device);
+        if !(extensions.contains("WGL_EXT_swap_control") && extra.SwapIntervalEXT.is_loaded()) {
             log::error!("WGL_EXT_swap_control is unsupported");
             return Err(crate::SurfaceError::Other(
                 "WGL_EXT_swap_control is unsupported",

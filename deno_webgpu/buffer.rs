@@ -98,7 +98,8 @@ pub async fn op_webgpu_buffer_get_map_async(
         // TODO(lucacasonato): error handling
         let maybe_err = gfx_select!(buffer => instance.buffer_map_async(
             buffer,
-            offset..(offset + size),
+            offset,
+            Some(size),
             wgpu_core::resource::BufferMapOperation {
                 host: match mode {
                     1 => wgpu_core::device::HostMap::Read,

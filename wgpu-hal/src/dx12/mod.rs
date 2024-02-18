@@ -1,7 +1,7 @@
 /*!
 # DirectX12 API internals.
 
-Generally the mapping is straightforwad.
+Generally the mapping is straightforward.
 
 ## Resource transitions
 

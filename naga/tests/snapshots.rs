@@ -736,6 +736,11 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("cubeArrayShadow", Targets::GLSL),
+        ("sample-cube-array-depth-lod", Targets::GLSL),
+        (
+            "use-gl-ext-over-grad-workaround-if-instructed",
+            Targets::GLSL,
+        ),
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -881,6 +886,12 @@ fn convert_spv_all() {
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+    convert_spv(
+        "unnamed-gl-per-vertex",
+        true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
 }
 
 #[cfg(feature = "glsl-in")]
