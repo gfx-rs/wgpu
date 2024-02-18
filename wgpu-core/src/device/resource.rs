@@ -294,6 +294,8 @@ impl<A: HalApi> Device<A> {
             downlevel,
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
+            deferred_destroy: Mutex::new(Vec::new()),
+            last_acceleration_structure_build_command_index: AtomicU64::new(0),
         })
     }
 
