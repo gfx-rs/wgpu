@@ -161,7 +161,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                if scalar.width == 4 {
+                if scalar.width != 8 {
                     let cast = scalar.kind.to_hlsl_cast();
                     write!(self.out, "{cast}({var_name}.Load(")?;
                 } else {
@@ -170,7 +170,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 };
                 self.write_storage_address(module, &chain, func_ctx)?;
                 write!(self.out, ")")?;
-                if scalar.width == 4 {
+                if scalar.width != 8 {
                     write!(self.out, ")")?;
                 }
                 self.temp_access_chain = chain;
@@ -180,7 +180,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
                 let size = size as u8;
-                if scalar.width == 4 {
+                if scalar.width != 8 {
                     let cast = scalar.kind.to_hlsl_cast();
                     write!(self.out, "{cast}({var_name}.Load{size}(")?;
                 } else {
@@ -189,7 +189,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 };
                 self.write_storage_address(module, &chain, func_ctx)?;
                 write!(self.out, ")")?;
-                if scalar.width == 4 {
+                if scalar.width != 8 {
                     write!(self.out, ")")?;
                 }
                 self.temp_access_chain = chain;
