@@ -795,7 +795,7 @@ impl crate::Instance<super::Api> for super::Instance {
             if validation_features_are_enabled {
                 validation_feature_list = ArrayVec::new();
 
-                // Always enable syncronization validation
+                // Always enable synchronization validation
                 validation_feature_list
                     .push(vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION);
 
