@@ -28,7 +28,7 @@ pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, TypeError, TypeFlags};
+pub use r#type::{Disalignment, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 

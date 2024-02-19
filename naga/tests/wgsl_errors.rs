@@ -229,7 +229,7 @@ fn constructor_parameter_type_mismatch() {
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
   │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
-  │                     │            
+  │                     │
   │                     a value of type vec2<f32> is required here
 
 "#,
@@ -870,7 +870,26 @@ fn matrix_constructor_inferred() {
 macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
         let source = $source;
-        let error = validation_error($source);
+        let error = validation_error($source, naga::valid::Capabilities::default());
+        if ! matches!(&error, $pattern $( if $guard )? ) {
+            eprintln!("validation error does not match pattern:\n\
+                       source code: {}\n\
+                       \n\
+                       actual result:\n\
+                       {:#?}\n\
+                       \n\
+                       expected match for pattern:\n\
+                       {}",
+                      &source,
+                      error,
+                      stringify!($pattern));
+            $( eprintln!("if {}", stringify!($guard)); )?
+            panic!("validation error does not match pattern");
+        }
+    };
+    ( $source:expr, $pattern:pat $( if $guard:expr )?, $capabilities:expr ) => {
+        let source = $source;
+        let error = validation_error($source, $capabilities);
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
                        source code: {}\n\
@@ -900,14 +919,27 @@ macro_rules! check_validation {
             check_one_validation!($source, $pattern);
         )*
     };
+    ( $( $source:literal ),* : $pattern:pat, $capabilities:expr ) => {
+        $(
+            check_one_validation!($source, $pattern, $capabilities);
+        )*
+    };
     ( $( $source:literal ),* : $pattern:pat if $guard:expr ) => {
         $(
             check_one_validation!($source, $pattern if $guard);
         )*
+    };
+    ( $( $source:literal ),* : $pattern:pat if $guard:expr, $capabilities:expr ) => {
+        $(
+            check_one_validation!($source, $pattern if $guard, $capabilities);
+        )*
     }
 }
 
-fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+fn validation_error(
+    source: &str,
+    caps: naga::valid::Capabilities,
+) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
     let module = match naga::front::wgsl::parse_str(source) {
         Ok(module) => module,
         Err(err) => {
@@ -915,12 +947,21 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
             panic!("{}", err.emit_to_string(source));
         }
     };
-    naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::default(),
-    )
-    .validate(&module)
-    .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
+    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
+        .validate(&module)
+        .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
+}
+
+#[test]
+fn int64_capability() {
+    check_validation! {
+        "var input: u64;",
+        "var input: i64;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "SHADER_INT64",..}),
+            ..
+        })
+    }
 }
 
 #[test]
@@ -933,6 +974,16 @@ fn invalid_arrays() {
             source: naga::valid::TypeError::InvalidArrayBaseType(_),
             ..
         })
+    }
+
+    check_validation! {
+        "var<uniform> input: array<u64, 2>;",
+        "var<uniform> input: array<vec2<u32>, 2>;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::Alignment(naga::AddressSpace::Uniform,_,_),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT64
     }
 
     check_validation! {
@@ -1972,7 +2023,7 @@ fn function_param_redefinition_as_param() {
   │
 2 │         fn x(a: f32, a: vec2<f32>) {}
   │              ^       ^ redefinition of `a`
-  │              │        
+  │              │
   │              previous definition of `a`
 
 "###,
