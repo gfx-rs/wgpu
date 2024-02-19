@@ -2568,7 +2568,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 convert,
             } => {
                 let inner = func_ctx.resolve_type(expr, &module.types);
-                match convert {
+                let close_paren = match convert {
                     Some(dst_width) => {
                         let scalar = crate::Scalar {
                             kind,
@@ -2601,13 +2601,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 )));
                             }
                         };
+                        true
                     }
                     None => {
-                        write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
+                        if inner.scalar_kind() == Some(kind) {
+                            false
+                        } else {
+                            write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
+                            true
+                        }
                     }
-                }
+                };
                 self.write_expr(module, expr, func_ctx)?;
-                write!(self.out, ")")?;
+                if close_paren {
+                    write!(self.out, ")")?;
+                }
             }
             Expression::Math {
                 fun,

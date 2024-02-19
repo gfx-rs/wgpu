@@ -161,20 +161,37 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                let cast = scalar.kind.to_hlsl_cast();
-                write!(self.out, "{cast}({var_name}.Load(")?;
+                if scalar.width == 4 {
+                    let cast = scalar.kind.to_hlsl_cast();
+                    write!(self.out, "{cast}({var_name}.Load(")?;
+                } else {
+                    let ty = scalar.to_hlsl_str()?;
+                    write!(self.out, "{var_name}.Load<{ty}>(")?;
+                };
                 self.write_storage_address(module, &chain, func_ctx)?;
-                write!(self.out, "))")?;
+                write!(self.out, ")")?;
+                if scalar.width == 4 {
+                    write!(self.out, ")")?;
+                }
                 self.temp_access_chain = chain;
             }
             crate::TypeInner::Vector { size, scalar } => {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                let cast = scalar.kind.to_hlsl_cast();
-                write!(self.out, "{}({}.Load{}(", cast, var_name, size as u8)?;
+                let size = size as u8;
+                if scalar.width == 4 {
+                    let cast = scalar.kind.to_hlsl_cast();
+                    write!(self.out, "{cast}({var_name}.Load{size}(")?;
+                } else {
+                    let ty = scalar.to_hlsl_str()?;
+                    write!(self.out, "{var_name}.Load{size}<{ty}>(")?;
+                };
                 self.write_storage_address(module, &chain, func_ctx)?;
-                write!(self.out, "))")?;
+                write!(self.out, ")")?;
+                if scalar.width == 4 {
+                    write!(self.out, ")")?;
+                }
                 self.temp_access_chain = chain;
             }
             crate::TypeInner::Matrix {
