@@ -11,10 +11,4 @@
 		push_constants_target: Some((space: 0, register: 0)),
 		zero_initialize_workgroup_memory: true,
 	),
-	glsl: (
-		version: Desktop(420),
-		writer_flags: (""),
-		binding_map: { },
-		zero_initialize_workgroup_memory: true,
-	),
 )
