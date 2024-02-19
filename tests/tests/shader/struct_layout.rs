@@ -282,25 +282,28 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
     // This tries to exploit all the weird edge cases of the struct layout algorithm.
     // We dont go as all-out as the other nested struct test because
     // all our primitives are twice as wide and we have only so much buffer to spare.
-    /*{
-        let header =
-            String::from("struct Inner { scalar: u64, scalar32: u32, member: array<u64, 2> }");
-        let members = String::from("inner: Inner, vector: vec3<i64>");
+    {
+        let header = String::from(
+            "struct Inner { scalar: u64, scalar32: u32, member: array<vec3<u64>, 2> }",
+        );
+        let members = String::from("inner: Inner");
         let direct = String::from(
             "\
             output[0] = u32(bitcast<u64>(input.inner.scalar) & 0xFFFFFFFF);
             output[1] = u32((bitcast<u64>(input.inner.scalar) >> 32) & 0xFFFFFFFF);
             output[2] = bitcast<u32>(input.inner.scalar32);
-            output[3] = u32(bitcast<u64>(input.inner.member[0]) & 0xFFFFFFFF);
-            output[4] = u32((bitcast<u64>(input.inner.member[0]) >> 32) & 0xFFFFFFFF);
-            output[5] = u32(bitcast<u64>(input.inner.member[1]) & 0xFFFFFFFF);
-            output[6] = u32((bitcast<u64>(input.inner.member[1]) >> 32) & 0xFFFFFFFF);
-            output[7] = u32(bitcast<u64>(input.vector.x) & 0xFFFFFFFF);
-            output[8] = u32((bitcast<u64>(input.vector.x) >> 32) & 0xFFFFFFFF);
-            output[9] = u32(bitcast<u64>(input.vector.y) & 0xFFFFFFFF);
-            output[10] = u32((bitcast<u64>(input.vector.y) >> 32) & 0xFFFFFFFF);
-            output[11] = u32(bitcast<u64>(input.vector.z) & 0xFFFFFFFF);
-            output[12] = u32((bitcast<u64>(input.vector.z) >> 32) & 0xFFFFFFFF);
+            output[3] = u32(bitcast<u64>(input.inner.member[0].x) & 0xFFFFFFFF);
+            output[4] = u32((bitcast<u64>(input.inner.member[0].x) >> 32) & 0xFFFFFFFF);
+            output[5] = u32(bitcast<u64>(input.inner.member[0].y) & 0xFFFFFFFF);
+            output[6] = u32((bitcast<u64>(input.inner.member[0].y) >> 32) & 0xFFFFFFFF);
+            output[7] = u32(bitcast<u64>(input.inner.member[0].z) & 0xFFFFFFFF);
+            output[8] = u32((bitcast<u64>(input.inner.member[0].z) >> 32) & 0xFFFFFFFF);
+            output[9] = u32(bitcast<u64>(input.inner.member[1].x) & 0xFFFFFFFF);
+            output[10] = u32((bitcast<u64>(input.inner.member[1].x) >> 32) & 0xFFFFFFFF);
+            output[11] = u32(bitcast<u64>(input.inner.member[1].y) & 0xFFFFFFFF);
+            output[12] = u32((bitcast<u64>(input.inner.member[1].y) >> 32) & 0xFFFFFFFF);
+            output[13] = u32(bitcast<u64>(input.inner.member[1].z) & 0xFFFFFFFF);
+            output[14] = u32((bitcast<u64>(input.inner.member[1].z) >> 32) & 0xFFFFFFFF);
         ",
         );
 
@@ -313,14 +316,47 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
                 &[
                     0, 1, // inner.scalar
                     2, // inner.scalar32
-                    4, 5, // inner.member[0]
-                    6, 7, // inner.member[1]
+                    8, 9, 10, 11, 12, 13, // inner.member[0]
+                    16, 17, 18, 19, 20, 21, // inner.member[1]
+                ],
+            )
+            .header(header),
+        );
+    }
+    {
+        let header = String::from("struct Inner { scalar32: u32, scalar: u64, scalar32_2: u32 }");
+        let members = String::from("inner: Inner, vector: vec3<i64>");
+        let direct = String::from(
+            "\
+            output[0] = bitcast<u32>(input.inner.scalar32);
+            output[1] = u32(bitcast<u64>(input.inner.scalar) & 0xFFFFFFFF);
+            output[2] = u32((bitcast<u64>(input.inner.scalar) >> 32) & 0xFFFFFFFF);
+            output[3] = bitcast<u32>(input.inner.scalar32_2);
+            output[4] = u32(bitcast<u64>(input.vector.x) & 0xFFFFFFFF);
+            output[5] = u32((bitcast<u64>(input.vector.x) >> 32) & 0xFFFFFFFF);
+            output[6] = u32(bitcast<u64>(input.vector.y) & 0xFFFFFFFF);
+            output[7] = u32((bitcast<u64>(input.vector.y) >> 32) & 0xFFFFFFFF);
+            output[8] = u32(bitcast<u64>(input.vector.z) & 0xFFFFFFFF);
+            output[9] = u32((bitcast<u64>(input.vector.z) >> 32) & 0xFFFFFFFF);
+        ",
+        );
+
+        tests.push(
+            ShaderTest::new(
+                String::from("nested struct and array"),
+                members,
+                direct,
+                &input_values,
+                &[
+                    0, // inner.scalar32
+                    2, 3, // inner.scalar
+                    4, // inner.scalar32_2
                     8, 9, 10, 11, 12, 13, // vector
                 ],
             )
             .header(header),
         );
-    }*/
+    }
 
     tests
 }

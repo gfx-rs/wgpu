@@ -147,9 +147,6 @@ pub enum WidthError {
         flag: &'static str,
     },
 
-    #[error("64-bit integers are not yet supported")]
-    Unsupported64Bit,
-
     #[error("Abstract types may only appear in constant expressions")]
     Abstract,
 }
