@@ -527,6 +527,8 @@ jobs:
         run: |
           set -e
 
+          export WGPU_WGPU_GPU_BASED_VALIDATION=1
+
           cargo xtask test --llvm-cov
 
       - name: check naga snapshots
