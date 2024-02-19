@@ -6,6 +6,7 @@ use std::{
     thread,
 };
 
+use arrayvec::ArrayVec;
 use ash::{
     extensions::{ext, khr},
     vk,
@@ -653,26 +654,27 @@ impl crate::Instance<super::Api> for super::Instance {
         let validation_layer_name =
             CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
         let validation_layer_properties = find_layer(&instance_layers, validation_layer_name);
-        let validation_features_are_enabled = || {
-            validation_layer_properties.is_some().then(|| {
-                let exts = Self::enumerate_instance_extension_properties(
-                    &entry,
-                    Some(validation_layer_name),
-                )?;
-                let mut ext_names = exts
-                    .iter()
-                    .filter_map(|ext| cstr_from_bytes_until_nul(&ext.extension_name));
-                let found =
-                    ext_names.any(|ext_name| ext_name == vk::ExtValidationFeaturesFn::name());
-                Ok(found)
-            })
+
+        // Determine if VK_EXT_validation_features is available, so we can enable
+        // GPU assisted validation and synchronization validation.
+        let validation_features_are_enabled = if validation_layer_properties.is_some() {
+            // Get the all the instance extension properties.
+            let exts =
+                Self::enumerate_instance_extension_properties(&entry, Some(validation_layer_name))?;
+            // Convert all the names of the extensions into an iterator of CStrs.
+            let mut ext_names = exts
+                .iter()
+                .filter_map(|ext| cstr_from_bytes_until_nul(&ext.extension_name));
+            // Find the validation features extension.
+            ext_names.any(|ext_name| ext_name == vk::ExtValidationFeaturesFn::name())
+        } else {
+            false
         };
+
         let should_enable_gpu_based_validation = desc
             .flags
             .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
-            && validation_features_are_enabled()
-                .transpose()?
-                .unwrap_or(false);
+            && validation_features_are_enabled;
 
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
         let has_nv_optimus = find_layer(&instance_layers, nv_optimus_layer).is_some();
@@ -787,14 +789,26 @@ impl crate::Instance<super::Api> for super::Instance {
                 create_info = create_info.push_next(vk_create_info);
             }
 
-            let mut gpu_assisted_validation = vk::ValidationFeaturesEXT::builder()
-                .enabled_validation_features(&[
-                    vk::ValidationFeatureEnableEXT::GPU_ASSISTED,
-                    vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT,
-                    vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION,
-                ]);
-            if should_enable_gpu_based_validation {
-                create_info = create_info.push_next(&mut gpu_assisted_validation);
+            // Enable explicit validation features if available
+            let mut validation_features;
+            let mut validation_feature_list: ArrayVec<_, 3>;
+            if validation_features_are_enabled {
+                validation_feature_list = ArrayVec::new();
+
+                // Always enable synchronization validation
+                validation_feature_list
+                    .push(vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION);
+
+                // Only enable GPU assisted validation if requested.
+                if should_enable_gpu_based_validation {
+                    validation_feature_list.push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED);
+                    validation_feature_list
+                        .push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT);
+                }
+
+                validation_features = vk::ValidationFeaturesEXT::builder()
+                    .enabled_validation_features(&validation_feature_list);
+                create_info = create_info.push_next(&mut validation_features);
             }
 
             unsafe {
