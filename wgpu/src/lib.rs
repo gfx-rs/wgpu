@@ -403,7 +403,7 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
-/// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
+/// be presented. A `Surface` may be created with the function [`Instance::create_surface`].
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
