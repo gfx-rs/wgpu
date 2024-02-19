@@ -1202,7 +1202,7 @@ impl crate::Device<super::Api> for super::Device {
                     }
                     let (raw, target) = view.inner.as_native();
 
-                    super::Texture::validate_target_heuristics(view_dimension, target);
+                    super::Texture::log_failing_target_heuristics(view_dimension, target);
 
                     super::RawBinding::Texture {
                         raw,

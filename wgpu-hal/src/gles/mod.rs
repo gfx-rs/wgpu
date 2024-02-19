@@ -366,7 +366,8 @@ impl Texture {
     /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
     fn get_info_from_desc(desc: &TextureDescriptor) -> u32 {
         match desc.dimension {
-            // TODO: Why `TEXTURE_2D` rather than `TEXTURE_1D`?
+            // WebGL (1 and 2) as well as some GLES versions do not have 1D textures, so we are
+            // doing `TEXTURE_2D` instead
             wgt::TextureDimension::D1 => glow::TEXTURE_2D,
             wgt::TextureDimension::D2 => {
                 // HACK: detect a cube map; forces cube compatible textures to be cube textures
@@ -382,7 +383,7 @@ impl Texture {
     }
 
     /// More information can be found in issues #1614 and #1574
-    fn validate_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
+    fn log_failing_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
         let expected_target = match view_dimension {
             wgt::TextureViewDimension::D1 => glow::TEXTURE_2D,
             wgt::TextureViewDimension::D2 => glow::TEXTURE_2D,
