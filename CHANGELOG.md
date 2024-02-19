@@ -105,7 +105,7 @@ Bottom level categories:
 
 #### GLES
 
-- Long an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
+- Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
 
 ### Bug Fixes
 
