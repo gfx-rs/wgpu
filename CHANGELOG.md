@@ -68,6 +68,9 @@ Bottom level categories:
 #### General
 - `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
 
+#### OpenGL
+- Log an error when OpenGL texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
+
 #### `wgsl-out`
 - Learned to generate acceleration structure types. By @JMS55 in [#5261](https://github.com/gfx-rs/wgpu/pull/5261)
 
@@ -75,7 +78,6 @@ Bottom level categories:
 - Fix link in `wgpu::Instance::create_surface` documentation. By @HexoKnight in [#5280](https://github.com/gfx-rs/wgpu/pull/5280).
 - Fix typo in `wgpu::CommandEncoder::clear_buffer` documentation. By @PWhiddy in [#5281](https://github.com/gfx-rs/wgpu/pull/5281).
 - `Surface` configuration incorrectly claimed that `wgpu::Instance::create_surface` was unsafe. By @hackaugusto in [#5265](https://github.com/gfx-rs/wgpu/pull/5265).
-
 
 ### Bug Fixes
 
