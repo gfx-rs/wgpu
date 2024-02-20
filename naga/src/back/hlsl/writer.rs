@@ -3010,12 +3010,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     crate::VectorSize::Quad => ".xxxx",
                                 };
 
-                                let scalar_width_bytes = scalar.width * 8;
+                                let scalar_width_bits = scalar.width * 8;
 
                                 if scalar.kind == ScalarKind::Uint || scalar.width != 4 {
                                     write!(
                                         self.out,
-                                        "min(({scalar_width_bytes}u){s}, firstbitlow("
+                                        "min(({scalar_width_bits}u){s}, firstbitlow("
                                     )?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -3023,24 +3023,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     // This is only needed for the FXC path, on 32bit signed integers.
                                     write!(
                                         self.out,
-                                        "asint(min(({scalar_width_bytes}u){s}, firstbitlow("
+                                        "asint(min(({scalar_width_bits}u){s}, firstbitlow("
                                     )?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, ")))")?;
                                 }
                             }
                             TypeInner::Scalar(scalar) => {
-                                let scalar_width_bytes = scalar.width * 8;
+                                let scalar_width_bits = scalar.width * 8;
 
                                 if scalar.kind == ScalarKind::Uint || scalar.width != 4 {
-                                    write!(self.out, "min({scalar_width_bytes}u, firstbitlow(")?;
+                                    write!(self.out, "min({scalar_width_bits}u, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
                                 } else {
                                     // This is only needed for the FXC path, on 32bit signed integers.
                                     write!(
                                         self.out,
-                                        "asint(min({scalar_width_bytes}u, firstbitlow("
+                                        "asint(min({scalar_width_bits}u, firstbitlow("
                                     )?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, ")))")?;
