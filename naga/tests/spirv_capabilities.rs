@@ -176,3 +176,35 @@ fn storage_image_formats() {
         "#,
     );
 }
+
+#[test]
+fn float64() {
+    require(
+        &[Ca::Float64],
+        r#"
+            fn f(x: f64) -> f64 {
+                return x;
+            }
+        "#,
+    );
+}
+
+#[test]
+fn int64() {
+    require(
+        &[Ca::Int64],
+        r#"
+            fn f(x: i64) -> i64 {
+                return x;
+            }
+        "#,
+    );
+    require(
+        &[Ca::Int64],
+        r#"
+            fn f(x: u64) -> u64 {
+                return x;
+            }
+        "#,
+    );
+}
