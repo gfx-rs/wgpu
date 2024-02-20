@@ -100,6 +100,50 @@ fn create_int64_polyfill_test() -> Vec<ShaderTest> {
         tests.push(test);
     }
 
+    let u64_flb_values: &[(u64, u32)] = &[
+        (u64::MAX, 63),
+        (1, 0),
+        (2, 1),
+        (3, 1),
+        (1 << 63, 63),
+        (1 << 62, 62),
+        (0, u32::MAX),
+    ];
+
+    for &(input, output) in u64_flb_values {
+        let test = ShaderTest::new(
+            format!("firstLeadingBit({input}lu) == {output:?}"),
+            String::from("value: u64"),
+            String::from("output[0] = u32(firstLeadingBit(input.value));"),
+            &[input],
+            &[output],
+        );
+
+        tests.push(test);
+    }
+
+    let i64_flb_values: &[(i64, u32)] = &[
+        (i64::MAX, 62),
+        (i64::MIN, 62),
+        (1, 0),
+        (1 << 62, 62),
+        (-1 << 62, 61),
+        (0, u32::MAX),
+        (-1, u32::MAX),
+    ];
+
+    for &(input, output) in i64_flb_values {
+        let test = ShaderTest::new(
+            format!("firstLeadingBit({input}li) == {output:?}"),
+            String::from("value: i64"),
+            String::from("output[0] = u32(firstLeadingBit(input.value));"),
+            &[input],
+            &[output],
+        );
+
+        tests.push(test);
+    }
+
     tests
 }
 
