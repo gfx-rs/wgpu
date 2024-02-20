@@ -56,13 +56,8 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
 fn create_int64_polyfill_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
-    let u64_clz_values: &[(u64, u32)] = &[
-        (u64::MAX, 0),
-        (1, 63),
-        (1 << 63, 0),
-        (1 << 62, 1),
-        (0, u32::MAX),
-    ];
+    let u64_clz_values: &[(u64, u32)] =
+        &[(u64::MAX, 0), (1, 63), (1 << 63, 0), (1 << 62, 1), (0, 64)];
 
     for &(input, output) in u64_clz_values {
         let test = ShaderTest::new(
@@ -82,8 +77,8 @@ fn create_int64_polyfill_test() -> Vec<ShaderTest> {
         (1, 63),
         (1 << 62, 1),
         (-1 << 62, 1),
-        (0, u32::MAX),
-        (-1, u32::MAX),
+        (0, 64),
+        (-1, 64),
     ];
 
     for &(input, output) in i64_clz_values {
