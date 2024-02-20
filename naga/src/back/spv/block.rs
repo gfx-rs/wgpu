@@ -927,14 +927,16 @@ impl<'w> BlockContext<'w> {
                                 self.temp_list.clear();
                                 self.temp_list.resize(
                                     size as _,
-                                    self.writer.get_constant_scalar_with(32, scalar)?,
+                                    self.writer
+                                        .get_constant_scalar_with(scalar.width * 8, scalar)?,
                                 );
 
                                 self.writer.get_constant_composite(ty, &self.temp_list)
                             }
                             crate::TypeInner::Scalar(mut scalar) => {
                                 scalar.kind = crate::ScalarKind::Uint;
-                                self.writer.get_constant_scalar_with(32, scalar)?
+                                self.writer
+                                    .get_constant_scalar_with(scalar.width * 8, scalar)?
                             }
                             _ => unreachable!(),
                         };
@@ -957,7 +959,7 @@ impl<'w> BlockContext<'w> {
                         ))
                     }
                     Mf::CountLeadingZeros => {
-                        let (int_type_id, int_id) = match *arg_ty {
+                        let (int_type_id, int_id, width) = match *arg_ty {
                             crate::TypeInner::Vector { size, mut scalar } => {
                                 scalar.kind = crate::ScalarKind::Sint;
                                 let ty = LocalType::Value {
@@ -970,12 +972,14 @@ impl<'w> BlockContext<'w> {
                                 self.temp_list.clear();
                                 self.temp_list.resize(
                                     size as _,
-                                    self.writer.get_constant_scalar_with(31, scalar)?,
+                                    self.writer
+                                        .get_constant_scalar_with(scalar.width * 8 - 1, scalar)?,
                                 );
 
                                 (
                                     self.get_type_id(ty),
                                     self.writer.get_constant_composite(ty, &self.temp_list),
+                                    scalar.width,
                                 )
                             }
                             crate::TypeInner::Scalar(mut scalar) => {
@@ -986,19 +990,38 @@ impl<'w> BlockContext<'w> {
                                         scalar,
                                         pointer_space: None,
                                     })),
-                                    self.writer.get_constant_scalar_with(31, scalar)?,
+                                    self.writer
+                                        .get_constant_scalar_with(scalar.width * 8 - 1, scalar)?,
+                                    scalar.width,
                                 )
                             }
                             _ => unreachable!(),
                         };
 
+                        let maybe_rev_id = if width != 4 {
+                            let rev_id = self.gen_id();
+                            block.body.push(Instruction::unary(
+                                spirv::Op::BitReverse,
+                                result_type_id,
+                                rev_id,
+                                arg0_id,
+                            ));
+                            rev_id
+                        } else {
+                            arg0_id
+                        };
+
                         let msb_id = self.gen_id();
                         block.body.push(Instruction::ext_inst(
                             self.writer.gl450_ext_inst_id,
-                            spirv::GLOp::FindUMsb,
+                            if width != 4 {
+                                spirv::GLOp::FindILsb
+                            } else {
+                                spirv::GLOp::FindUMsb
+                            },
                             int_type_id,
                             msb_id,
-                            &[arg0_id],
+                            &[maybe_rev_id],
                         ));
 
                         MathOp::Custom(Instruction::binary(
@@ -1040,11 +1063,44 @@ impl<'w> BlockContext<'w> {
                         arg3_id,
                     )),
                     Mf::FindLsb => MathOp::Ext(spirv::GLOp::FindILsb),
-                    Mf::FindMsb => MathOp::Ext(match arg_scalar_kind {
-                        Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
-                        Some(crate::ScalarKind::Sint) => spirv::GLOp::FindSMsb,
-                        other => unimplemented!("Unexpected findMSB({:?})", other),
-                    }),
+                    Mf::FindMsb => {
+                        if arg_ty.scalar_width() == Some(32) {
+                            let thing = match arg_scalar_kind {
+                                Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
+                                Some(crate::ScalarKind::Sint) => spirv::GLOp::FindSMsb,
+                                other => unimplemented!("Unexpected findMSB({:?})", other),
+                            };
+                            MathOp::Ext(thing)
+                        } else {
+                            let rev_id = self.gen_id();
+                            block.body.push(Instruction::unary(
+                                spirv::Op::BitReverse,
+                                result_type_id,
+                                rev_id,
+                                arg0_id,
+                            ));
+                            let maybe_neg_id = if arg_scalar_kind == Some(crate::ScalarKind::Sint) {
+                                let neg_id = self.gen_id();
+                                block.body.push(Instruction::unary(
+                                    spirv::Op::SNegate,
+                                    result_type_id,
+                                    neg_id,
+                                    rev_id,
+                                ));
+                                neg_id
+                            } else {
+                                rev_id
+                            };
+
+                            MathOp::Custom(Instruction::ext_inst(
+                                self.writer.gl450_ext_inst_id,
+                                spirv::GLOp::FindILsb,
+                                result_type_id,
+                                id,
+                                &[maybe_neg_id],
+                            ))
+                        }
+                    }
                     Mf::Pack4x8unorm => MathOp::Ext(spirv::GLOp::PackUnorm4x8),
                     Mf::Pack4x8snorm => MathOp::Ext(spirv::GLOp::PackSnorm4x8),
                     Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),
