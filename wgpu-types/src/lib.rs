@@ -370,7 +370,7 @@ bitflags::bitflags! {
 
         /// Allows shaders to acquire the FP16 ability
         ///
-        /// Note: this is not supported in `naga` yet，only through `spirv-passthrough` right now.
+        /// Note: this is not supported in `naga` yet, only through `spirv-passthrough` right now.
         ///
         /// Supported Platforms:
         /// - Vulkan

@@ -35,7 +35,7 @@ needed once HLSL for the access has been generated.
 Note about DXC and Load/Store functions:
 
 DXC's HLSL has a generic [`Load` and `Store`] function for [`ByteAddressBuffer`] and
-[`RWByteAddressBuffer`]. This is not available in FXC's HLSL, so we use the
+[`RWByteAddressBuffer`]. This is not available in FXC's HLSL, so we use
 it only for types that are only available in DXC. Notably 64 and 16 bit types.
 
 FXC's HLSL has functions Load, Load2, Load3, and Load4 and Store, Store2, Store3, Store4.
