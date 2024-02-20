@@ -104,7 +104,7 @@ fn int64_function(x: i64) -> i64 {
     val = (_e142 + dot(vec2(_e137), vec2(_e139)));
     let _e144 = val;
     let _e148 = val;
-    val = (_e148 + extractBits(_e144, 8u, 32u));
+    val = (_e148 + extractBits(_e144, 15u, 28u));
     let _e150 = val;
     let _e152 = val;
     val = (_e152 + firstLeadingBit(_e150));
@@ -113,7 +113,7 @@ fn int64_function(x: i64) -> i64 {
     val = (_e156 + firstTrailingBit(_e154));
     let _e158 = val;
     let _e163 = val;
-    val = (_e163 + insertBits(_e158, 12li, 8u, 32u));
+    val = (_e163 + insertBits(_e158, 12li, 15u, 28u));
     let _e165 = val;
     let _e166 = val;
     let _e168 = val;
@@ -204,7 +204,7 @@ fn uint64_function(x_1: u64) -> u64 {
     val_1 = (_e142 + dot(vec2(_e137), vec2(_e139)));
     let _e144 = val_1;
     let _e148 = val_1;
-    val_1 = (_e148 + extractBits(_e144, 8u, 32u));
+    val_1 = (_e148 + extractBits(_e144, 15u, 28u));
     let _e150 = val_1;
     let _e152 = val_1;
     val_1 = (_e152 + firstLeadingBit(_e150));
@@ -213,7 +213,7 @@ fn uint64_function(x_1: u64) -> u64 {
     val_1 = (_e156 + firstTrailingBit(_e154));
     let _e158 = val_1;
     let _e163 = val_1;
-    val_1 = (_e163 + insertBits(_e158, 12lu, 8u, 32u));
+    val_1 = (_e163 + insertBits(_e158, 12lu, 15u, 28u));
     let _e165 = val_1;
     let _e166 = val_1;
     let _e168 = val_1;

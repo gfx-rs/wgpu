@@ -64,6 +64,9 @@ fn int64_function(x: i64) -> i64 {
 
    output_arrays.val_i64_array_2 = input_arrays.val_i64_array_2;
 
+   // We make sure not to use 32 in these arguments, so it's clear in the results which are builtin
+   // constants based on the size of the type, and which are arguments.
+
    // Numeric functions
    val += abs(val);
    val += clamp(val, val, val);
@@ -71,10 +74,10 @@ fn int64_function(x: i64) -> i64 {
    val += countOneBits(val);
    val += countTrailingZeros(val);
    val += dot(vec2(val), vec2(val));
-   val += extractBits(val, 8u, 32u);
+   val += extractBits(val, 15u, 28u);
    val += firstLeadingBit(val);
    val += firstTrailingBit(val);
-   val += insertBits(val, 12li, 8u, 32u);
+   val += insertBits(val, 12li, 15u, 28u);
    val += max(val, val);
    val += min(val, val);
    val += reverseBits(val);
@@ -110,6 +113,9 @@ fn uint64_function(x: u64) -> u64 {
 
    output_arrays.val_u64_array_2 = input_arrays.val_u64_array_2;
 
+   // We make sure not to use 32 in these arguments, so it's clear in the results which are builtin
+   // constants based on the size of the type, and which are arguments.
+
    // Numeric functions
    val += abs(val);
    val += clamp(val, val, val);
@@ -117,10 +123,10 @@ fn uint64_function(x: u64) -> u64 {
    val += countOneBits(val);
    val += countTrailingZeros(val);
    val += dot(vec2(val), vec2(val));
-   val += extractBits(val, 8u, 32u);
+   val += extractBits(val, 15u, 28u);
    val += firstLeadingBit(val);
    val += firstTrailingBit(val);
-   val += insertBits(val, 12lu, 8u, 32u);
+   val += insertBits(val, 12lu, 15u, 28u);
    val += max(val, val);
    val += min(val, val);
    val += reverseBits(val);

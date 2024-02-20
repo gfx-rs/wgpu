@@ -114,7 +114,7 @@ long int64_function(
     val = _e142 + ( + _e138.x * _e140.x + _e138.y * _e140.y);
     long _e144 = val;
     long _e148 = val;
-    val = _e148 + metal::extract_bits(_e144, 8u, 32u);
+    val = _e148 + metal::extract_bits(_e144, 15u, 28u);
     long _e150 = val;
     long _e152 = val;
     val = _e152 + metal::select(63 - metal::clz(metal::select(_e150, ~_e150, _e150 < 0)), long(-1), _e150 == 0 || _e150 == -1);
@@ -123,7 +123,7 @@ long int64_function(
     val = _e156 + (((metal::ctz(_e154) + 1) % 65) - 1);
     long _e158 = val;
     long _e163 = val;
-    val = _e163 + metal::insert_bits(_e158, 12L, 8u, 32u);
+    val = _e163 + metal::insert_bits(_e158, 12L, 15u, 28u);
     long _e165 = val;
     long _e166 = val;
     long _e168 = val;
@@ -222,7 +222,7 @@ ulong uint64_function(
     val_1 = _e142 + ( + _e138.x * _e140.x + _e138.y * _e140.y);
     ulong _e144 = val_1;
     ulong _e148 = val_1;
-    val_1 = _e148 + metal::extract_bits(_e144, 8u, 32u);
+    val_1 = _e148 + metal::extract_bits(_e144, 15u, 28u);
     ulong _e150 = val_1;
     ulong _e152 = val_1;
     val_1 = _e152 + metal::select(63 - metal::clz(_e150), ulong(-1), _e150 == 0 || _e150 == -1);
@@ -231,7 +231,7 @@ ulong uint64_function(
     val_1 = _e156 + (((metal::ctz(_e154) + 1) % 65) - 1);
     ulong _e158 = val_1;
     ulong _e163 = val_1;
-    val_1 = _e163 + metal::insert_bits(_e158, 12uL, 8u, 32u);
+    val_1 = _e163 + metal::insert_bits(_e158, 12uL, 15u, 28u);
     ulong _e165 = val_1;
     ulong _e166 = val_1;
     ulong _e168 = val_1;

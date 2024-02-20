@@ -136,7 +136,7 @@ int64_t int64_function(int64_t x)
     val = (_expr142 + dot((_expr137).xx, (_expr139).xx));
     int64_t _expr144 = val;
     int64_t _expr148 = val;
-    val = (_expr148 + (32u == 0 ? 0 : (_expr144 << (64 - 32u - 8u)) >> (64 - 32u)));
+    val = (_expr148 + (28u == 0 ? 0 : (_expr144 << (64 - 28u - 15u)) >> (64 - 28u)));
     int64_t _expr150 = val;
     int64_t _expr152 = val;
     val = (_expr152 + firstbithigh(_expr150));
@@ -145,7 +145,7 @@ int64_t int64_function(int64_t x)
     val = (_expr156 + firstbitlow(_expr154));
     int64_t _expr158 = val;
     int64_t _expr163 = val;
-    val = (_expr163 + (32u == 0 ? _expr158 : (_expr158 & ~((18446744073709551615u >> (64u - 32u)) << 8u)) | ((12L << 8u) & ((18446744073709551615u >> (64u - 32u)) << 8u))));
+    val = (_expr163 + (28u == 0 ? _expr158 : (_expr158 & ~((18446744073709551615u >> (64u - 28u)) << 15u)) | ((12L << 15u) & ((18446744073709551615u >> (64u - 28u)) << 15u))));
     int64_t _expr165 = val;
     int64_t _expr166 = val;
     int64_t _expr168 = val;
@@ -247,7 +247,7 @@ uint64_t uint64_function(uint64_t x_1)
     val_1 = (_expr142 + dot((_expr137).xx, (_expr139).xx));
     uint64_t _expr144 = val_1;
     uint64_t _expr148 = val_1;
-    val_1 = (_expr148 + (32u == 0 ? 0 : (_expr144 << (64 - 32u - 8u)) >> (64 - 32u)));
+    val_1 = (_expr148 + (28u == 0 ? 0 : (_expr144 << (64 - 28u - 15u)) >> (64 - 28u)));
     uint64_t _expr150 = val_1;
     uint64_t _expr152 = val_1;
     val_1 = (_expr152 + firstbithigh(_expr150));
@@ -256,7 +256,7 @@ uint64_t uint64_function(uint64_t x_1)
     val_1 = (_expr156 + firstbitlow(_expr154));
     uint64_t _expr158 = val_1;
     uint64_t _expr163 = val_1;
-    val_1 = (_expr163 + (32u == 0 ? _expr158 : (_expr158 & ~((18446744073709551615u >> (64u - 32u)) << 8u)) | ((12uL << 8u) & ((18446744073709551615u >> (64u - 32u)) << 8u))));
+    val_1 = (_expr163 + (28u == 0 ? _expr158 : (_expr158 & ~((18446744073709551615u >> (64u - 28u)) << 15u)) | ((12uL << 15u) & ((18446744073709551615u >> (64u - 28u)) << 15u))));
     uint64_t _expr165 = val_1;
     uint64_t _expr166 = val_1;
     uint64_t _expr168 = val_1;
