@@ -915,8 +915,7 @@ impl<'w> BlockContext<'w> {
                     )),
                     Mf::CountTrailingZeros => {
                         let uint_id = match *arg_ty {
-                            crate::TypeInner::Vector { size, mut scalar } => {
-                                scalar.kind = crate::ScalarKind::Uint;
+                            crate::TypeInner::Vector { size, scalar } => {
                                 let ty = LocalType::Value {
                                     vector_size: Some(size),
                                     scalar,
@@ -933,11 +932,9 @@ impl<'w> BlockContext<'w> {
 
                                 self.writer.get_constant_composite(ty, &self.temp_list)
                             }
-                            crate::TypeInner::Scalar(mut scalar) => {
-                                scalar.kind = crate::ScalarKind::Uint;
-                                self.writer
-                                    .get_constant_scalar_with(scalar.width * 8, scalar)?
-                            }
+                            crate::TypeInner::Scalar(scalar) => self
+                                .writer
+                                .get_constant_scalar_with(scalar.width * 8, scalar)?,
                             _ => unreachable!(),
                         };
 
@@ -960,8 +957,7 @@ impl<'w> BlockContext<'w> {
                     }
                     Mf::CountLeadingZeros => {
                         let (int_type_id, int_id, width) = match *arg_ty {
-                            crate::TypeInner::Vector { size, mut scalar } => {
-                                scalar.kind = crate::ScalarKind::Sint;
+                            crate::TypeInner::Vector { size, scalar } => {
                                 let ty = LocalType::Value {
                                     vector_size: Some(size),
                                     scalar,
@@ -982,19 +978,16 @@ impl<'w> BlockContext<'w> {
                                     scalar.width,
                                 )
                             }
-                            crate::TypeInner::Scalar(mut scalar) => {
-                                scalar.kind = crate::ScalarKind::Sint;
-                                (
-                                    self.get_type_id(LookupType::Local(LocalType::Value {
-                                        vector_size: None,
-                                        scalar,
-                                        pointer_space: None,
-                                    })),
-                                    self.writer
-                                        .get_constant_scalar_with(scalar.width * 8 - 1, scalar)?,
-                                    scalar.width,
-                                )
-                            }
+                            crate::TypeInner::Scalar(scalar) => (
+                                self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: None,
+                                    scalar,
+                                    pointer_space: None,
+                                })),
+                                self.writer
+                                    .get_constant_scalar_with(scalar.width * 8 - 1, scalar)?,
+                                scalar.width,
+                            ),
                             _ => unreachable!(),
                         };
 
@@ -1002,7 +995,7 @@ impl<'w> BlockContext<'w> {
                             let rev_id = self.gen_id();
                             block.body.push(Instruction::unary(
                                 spirv::Op::BitReverse,
-                                result_type_id,
+                                int_type_id,
                                 rev_id,
                                 arg0_id,
                             ));
@@ -1072,10 +1065,29 @@ impl<'w> BlockContext<'w> {
                             };
                             MathOp::Ext(thing)
                         } else {
+                            let int_type_id = match *arg_ty {
+                                crate::TypeInner::Vector { size, scalar } => self.get_type_id(
+                                    LocalType::Value {
+                                        vector_size: Some(size),
+                                        scalar,
+                                        pointer_space: None,
+                                    }
+                                    .into(),
+                                ),
+                                crate::TypeInner::Scalar(scalar) => {
+                                    self.get_type_id(LookupType::Local(LocalType::Value {
+                                        vector_size: None,
+                                        scalar,
+                                        pointer_space: None,
+                                    }))
+                                }
+                                _ => unreachable!(),
+                            };
+
                             let rev_id = self.gen_id();
                             block.body.push(Instruction::unary(
                                 spirv::Op::BitReverse,
-                                result_type_id,
+                                int_type_id,
                                 rev_id,
                                 arg0_id,
                             ));
@@ -1083,7 +1095,7 @@ impl<'w> BlockContext<'w> {
                                 let neg_id = self.gen_id();
                                 block.body.push(Instruction::unary(
                                     spirv::Op::SNegate,
-                                    result_type_id,
+                                    int_type_id,
                                     neg_id,
                                     rev_id,
                                 ));
