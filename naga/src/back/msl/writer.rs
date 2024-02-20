@@ -1870,15 +1870,23 @@ impl<W: Write> Writer<W> {
                     self.put_expression(arg1.unwrap(), context, false)?;
                     write!(self.out, ")")?;
                 } else if fun == Mf::FindLsb {
+                    let scalar = context.resolve_type(arg).scalar().unwrap();
+                    let constant = scalar.width * 8 + 1;
+
                     write!(self.out, "((({NAMESPACE}::ctz(")?;
                     self.put_expression(arg, context, true)?;
-                    write!(self.out, ") + 1) % 33) - 1)")?;
+                    write!(self.out, ") + 1) % {constant}) - 1)")?;
                 } else if fun == Mf::FindMsb {
                     let inner = context.resolve_type(arg);
+                    let scalar = inner.scalar().unwrap();
+                    let constant = scalar.width * 8 - 1;
 
-                    write!(self.out, "{NAMESPACE}::select(31 - {NAMESPACE}::clz(")?;
+                    write!(
+                        self.out,
+                        "{NAMESPACE}::select({constant} - {NAMESPACE}::clz("
+                    )?;
 
-                    if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                    if scalar.kind == crate::ScalarKind::Sint {
                         write!(self.out, "{NAMESPACE}::select(")?;
                         self.put_expression(arg, context, true)?;
                         write!(self.out, ", ~")?;
@@ -1896,18 +1904,12 @@ impl<W: Write> Writer<W> {
                     match *inner {
                         crate::TypeInner::Vector { size, scalar } => {
                             let size = back::vector_size_str(size);
-                            if let crate::ScalarKind::Sint = scalar.kind {
-                                write!(self.out, "int{size}")?;
-                            } else {
-                                write!(self.out, "uint{size}")?;
-                            }
+                            let name = scalar.to_msl_name();
+                            write!(self.out, "{name}{size}")?;
                         }
                         crate::TypeInner::Scalar(scalar) => {
-                            if let crate::ScalarKind::Sint = scalar.kind {
-                                write!(self.out, "int")?;
-                            } else {
-                                write!(self.out, "uint")?;
-                            }
+                            let name = scalar.to_msl_name();
+                            write!(self.out, "{name}")?;
                         }
                         _ => (),
                     }
