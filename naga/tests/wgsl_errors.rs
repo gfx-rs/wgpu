@@ -229,7 +229,7 @@ fn constructor_parameter_type_mismatch() {
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
   │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
-  │                     │
+  │                     │            
   │                     a value of type vec2<f32> is required here
 
 "#,
@@ -2023,7 +2023,7 @@ fn function_param_redefinition_as_param() {
   │
 2 │         fn x(a: f32, a: vec2<f32>) {}
   │              ^       ^ redefinition of `a`
-  │              │
+  │              │        
   │              previous definition of `a`
 
 "###,

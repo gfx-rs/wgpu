@@ -878,6 +878,10 @@ impl super::PrivateCapabilities {
         {
             features.insert(F::STORAGE_RESOURCE_BINDING_ARRAY);
         }
+        features.set(
+            F::SHADER_INT64,
+            self.msl_version >= MTLLanguageVersion::V2_3,
+        );
 
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,

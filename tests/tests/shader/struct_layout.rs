@@ -292,18 +292,12 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
             output[0] = u32(bitcast<u64>(input.inner.scalar) & 0xFFFFFFFF);
             output[1] = u32((bitcast<u64>(input.inner.scalar) >> 32) & 0xFFFFFFFF);
             output[2] = bitcast<u32>(input.inner.scalar32);
-            output[3] = u32(bitcast<u64>(input.inner.member[0].x) & 0xFFFFFFFF);
-            output[4] = u32((bitcast<u64>(input.inner.member[0].x) >> 32) & 0xFFFFFFFF);
-            output[5] = u32(bitcast<u64>(input.inner.member[0].y) & 0xFFFFFFFF);
-            output[6] = u32((bitcast<u64>(input.inner.member[0].y) >> 32) & 0xFFFFFFFF);
-            output[7] = u32(bitcast<u64>(input.inner.member[0].z) & 0xFFFFFFFF);
-            output[8] = u32((bitcast<u64>(input.inner.member[0].z) >> 32) & 0xFFFFFFFF);
-            output[9] = u32(bitcast<u64>(input.inner.member[1].x) & 0xFFFFFFFF);
-            output[10] = u32((bitcast<u64>(input.inner.member[1].x) >> 32) & 0xFFFFFFFF);
-            output[11] = u32(bitcast<u64>(input.inner.member[1].y) & 0xFFFFFFFF);
-            output[12] = u32((bitcast<u64>(input.inner.member[1].y) >> 32) & 0xFFFFFFFF);
-            output[13] = u32(bitcast<u64>(input.inner.member[1].z) & 0xFFFFFFFF);
-            output[14] = u32((bitcast<u64>(input.inner.member[1].z) >> 32) & 0xFFFFFFFF);
+            for (var index = 0u; index < 2u; index += 1u) {
+                for (var component = 0u; component < 3u; component += 1u) {
+                    output[3 + index * 6 + component * 2] = u32(bitcast<u64>(input.inner.member[index][component]) & 0xFFFFFFFF);
+                    output[4 + index * 6 + component * 2] = u32((bitcast<u64>(input.inner.member[index][component]) >> 32) & 0xFFFFFFFF);
+                }
+            }
         ",
         );
 
@@ -416,7 +410,7 @@ static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static UNIFORM_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
+static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(Features::SHADER_INT64)
@@ -432,7 +426,7 @@ static UNIFORM_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static STORAGE_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
+static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(Features::SHADER_INT64)
@@ -448,7 +442,7 @@ static STORAGE_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static PUSH_CONSTANT_INPUT_64: GpuTestConfiguration = GpuTestConfiguration::new()
+static PUSH_CONSTANT_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(Features::SHADER_INT64 | Features::PUSH_CONSTANTS)
