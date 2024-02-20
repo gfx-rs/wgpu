@@ -1250,6 +1250,12 @@ impl<'w> BlockContext<'w> {
                         (Sk::Uint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
                             Cast::Unary(spirv::Op::UConvert)
                         }
+                        (Sk::Uint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
+                            Cast::Unary(spirv::Op::SConvert)
+                        }
+                        (Sk::Sint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
+                            Cast::Unary(spirv::Op::UConvert)
+                        }
                         // We assume it's either an identity cast, or int-uint.
                         _ => Cast::Unary(spirv::Op::Bitcast),
                     }
