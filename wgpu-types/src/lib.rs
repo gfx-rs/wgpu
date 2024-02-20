@@ -878,6 +878,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - Vulkan
         /// - DX12 (DXC only)
+        /// - Metal (with MSL 2.3+)
         ///
         /// This is a native only feature.
         const SHADER_INT64 = 1 << 55;

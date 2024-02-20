@@ -56,12 +56,19 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
 fn create_int64_polyfill_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
-    let u64_clz_values: &[(u64, u32)] =
-        &[(u64::MAX, 0), (1, 63), (1 << 63, 0), (1 << 62, 1), (0, 64)];
+    let u64_clz_values: &[(u64, u32)] = &[
+        (u64::MAX, 0),
+        (1, 63),
+        (2, 62),
+        (3, 62),
+        (1 << 63, 0),
+        (1 << 62, 1),
+        (0, 64),
+    ];
 
     for &(input, output) in u64_clz_values {
         let test = ShaderTest::new(
-            format!("countLeadingZeros({input}) == {output:?}"),
+            format!("countLeadingZeros({input}lu) == {output:?}"),
             String::from("value: u64"),
             String::from("output[0] = u32(countLeadingZeros(input.value));"),
             &[input],
@@ -72,18 +79,18 @@ fn create_int64_polyfill_test() -> Vec<ShaderTest> {
     }
 
     let i64_clz_values: &[(i64, u32)] = &[
-        (i64::MAX, 0),
+        (i64::MAX, 1),
         (i64::MIN, 0),
         (1, 63),
         (1 << 62, 1),
-        (-1 << 62, 1),
+        (-1 << 62, 0),
         (0, 64),
-        (-1, 64),
+        (-1, 0),
     ];
 
     for &(input, output) in i64_clz_values {
         let test = ShaderTest::new(
-            format!("countLeadingZeros({input}) == {output:?}"),
+            format!("countLeadingZeros({input}li) == {output:?}"),
             String::from("value: i64"),
             String::from("output[0] = u32(countLeadingZeros(input.value));"),
             &[input],
