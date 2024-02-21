@@ -1,5 +1,4 @@
 use wgpu::{DownlevelFlags, Limits};
-use wgt::Features;
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
