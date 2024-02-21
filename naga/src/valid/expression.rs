@@ -1430,11 +1430,13 @@ impl super::Validator {
                         for &arg in [arg_ty, arg1_ty, arg2_ty, arg3_ty].iter() {
                             match *arg {
                                 Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => {
-                                    return Err(ExpressionError::UnsupportedWidth(
-                                        fun,
-                                        scalar.kind,
-                                        scalar.width,
-                                    ));
+                                    if scalar.width != 4 {
+                                        return Err(ExpressionError::UnsupportedWidth(
+                                            fun,
+                                            scalar.kind,
+                                            scalar.width,
+                                        ));
+                                    }
                                 }
                                 _ => {}
                             }
@@ -1484,11 +1486,13 @@ impl super::Validator {
                         for &arg in [arg_ty, arg1_ty, arg2_ty].iter() {
                             match *arg {
                                 Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => {
-                                    return Err(ExpressionError::UnsupportedWidth(
-                                        fun,
-                                        scalar.kind,
-                                        scalar.width,
-                                    ));
+                                    if scalar.width != 4 {
+                                        return Err(ExpressionError::UnsupportedWidth(
+                                            fun,
+                                            scalar.kind,
+                                            scalar.width,
+                                        ));
+                                    }
                                 }
                                 _ => {}
                             }

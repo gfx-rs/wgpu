@@ -53,6 +53,8 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
+// See https://github.com/gfx-rs/wgpu/issues/5276
+/*
 fn create_int64_polyfill_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
@@ -158,3 +160,4 @@ static INT64_POLYFILL: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| {
         shader_input_output_test(ctx, InputStorageType::Storage, create_int64_polyfill_test())
     });
+*/

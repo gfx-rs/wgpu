@@ -32,7 +32,7 @@ var<uniform> input_uniform: UniformCompatible;
 @group(0) @binding(1)
 var<storage> input_storage: UniformCompatible;
 @group(0) @binding(2)
-var<storage> input_arrays: StorageCompatible; 
+var<storage> input_arrays: StorageCompatible;
 @group(0) @binding(3)
 var<storage, read_write> output: UniformCompatible;
 @group(0) @binding(4)
@@ -70,17 +70,17 @@ fn int64_function(x: i64) -> i64 {
    // Numeric functions
    val += abs(val);
    val += clamp(val, val, val);
-   val += countLeadingZeros(val);
-   val += countOneBits(val);
+   //val += countLeadingZeros(val);
+   //val += countOneBits(val);
    val += countTrailingZeros(val);
    val += dot(vec2(val), vec2(val));
-   val += extractBits(val, 15u, 28u);
-   val += firstLeadingBit(val);
-   val += firstTrailingBit(val);
-   val += insertBits(val, 12li, 15u, 28u);
+   //val += extractBits(val, 15u, 28u);
+   //val += firstLeadingBit(val);
+   //val += firstTrailingBit(val);
+   //val += insertBits(val, 12li, 15u, 28u);
    val += max(val, val);
    val += min(val, val);
-   val += reverseBits(val);
+   //val += reverseBits(val);
    val += sign(val); // only for i64
 
    // Make sure all the variables are used.
@@ -119,17 +119,17 @@ fn uint64_function(x: u64) -> u64 {
    // Numeric functions
    val += abs(val);
    val += clamp(val, val, val);
-   val += countLeadingZeros(val);
-   val += countOneBits(val);
+   //val += countLeadingZeros(val);
+   //val += countOneBits(val);
    val += countTrailingZeros(val);
    val += dot(vec2(val), vec2(val));
-   val += extractBits(val, 15u, 28u);
-   val += firstLeadingBit(val);
-   val += firstTrailingBit(val);
-   val += insertBits(val, 12lu, 15u, 28u);
+   //val += extractBits(val, 15u, 28u);
+   //val += firstLeadingBit(val);
+   //val += firstTrailingBit(val);
+   //val += insertBits(val, 12lu, 15u, 28u);
    val += max(val, val);
    val += min(val, val);
-   val += reverseBits(val);
+   //val += reverseBits(val);
 
    // Make sure all the variables are used.
    return val;
