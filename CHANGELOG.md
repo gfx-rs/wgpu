@@ -85,6 +85,7 @@ Bottom level categories:
 - Fix docs.rs wasm32 builds. By @cwfitzgerald in [#5310](https://github.com/gfx-rs/wgpu/pull/5310)
 - Improve error message when binding count limit hit. By @hackaugusto in [#5298](https://github.com/gfx-rs/wgpu/pull/5298)
 - Remove an unnecessary `clone` during GLSL shader injestion. By @a1phyr in [#5118](https://github.com/gfx-rs/wgpu/pull/5118).
+- Fix missing validation for `Device::clear_buffer` where `offset + size > buffer.size` was not checked when `size` was omitted. By @ErichDonGubler in [#5282](https://github.com/gfx-rs/wgpu/pull/5282).
 
 #### DX12
 - Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
