@@ -1943,7 +1943,7 @@ impl Instance {
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
     /// See [`SurfaceTarget`] for what targets are supported.
-    /// See [`Instance::create_surface`] for surface creation with unsafe target variants.
+    /// See [`Instance::create_surface_unsafe`] for surface creation with unsafe target variants.
     ///
     /// Most commonly used are window handles (or provider of windows handles)
     /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
