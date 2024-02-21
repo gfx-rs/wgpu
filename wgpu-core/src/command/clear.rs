@@ -117,24 +117,20 @@ impl Global {
         if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(ClearError::UnalignedBufferOffset(offset));
         }
-        if let Some(size) = size {
-            if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-                return Err(ClearError::UnalignedFillSize(size));
-            }
-            let destination_end_offset = offset + size;
-            if destination_end_offset > dst_buffer.size {
-                return Err(ClearError::BufferOverrun {
-                    start_offset: offset,
-                    end_offset: destination_end_offset,
-                    buffer_size: dst_buffer.size,
-                });
-            }
+
+        let size = size.unwrap_or(dst_buffer.size.saturating_sub(offset));
+        if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(ClearError::UnalignedFillSize(size));
+        }
+        let end_offset = offset + size;
+        if end_offset > dst_buffer.size {
+            return Err(ClearError::BufferOverrun {
+                start_offset: offset,
+                end_offset,
+                buffer_size: dst_buffer.size,
+            });
         }
 
-        let end_offset = match size {
-            Some(size) => offset + size,
-            None => dst_buffer.size,
-        };
         if offset == end_offset {
             log::trace!("Ignoring fill_buffer of size 0");
             return Ok(());

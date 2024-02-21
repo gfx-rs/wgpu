@@ -326,3 +326,30 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             let _ = encoder.finish();
         });
     });
+
+#[gpu_test]
+static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        let size = 16;
+
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size,
+            usage: wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let out_of_bounds = size.checked_add(wgpu::COPY_BUFFER_ALIGNMENT).unwrap();
+
+        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        ctx.device
+            .create_command_encoder(&Default::default())
+            .clear_buffer(&buffer, out_of_bounds, None);
+        let err_msg = pollster::block_on(ctx.device.pop_error_scope())
+            .unwrap()
+            .to_string();
+        assert!(err_msg.contains(
+            "Clear of 20..20 would end up overrunning the bounds of the buffer of size 16"
+        ));
+    });
