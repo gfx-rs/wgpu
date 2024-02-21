@@ -1411,19 +1411,15 @@ impl Global {
             .map_pass_err(pass_scope)?;
 
             let indices = &device.tracker_indices;
-            tracker.buffers.set_size(indices.buffers.lock().size());
-            tracker.textures.set_size(indices.textures.lock().size());
-            tracker.views.set_size(indices.texture_views.lock().size());
-            tracker
-                .bind_groups
-                .set_size(indices.bind_groups.lock().size());
+            tracker.buffers.set_size(indices.buffers.size());
+            tracker.textures.set_size(indices.textures.size());
+            tracker.views.set_size(indices.texture_views.size());
+            tracker.bind_groups.set_size(indices.bind_groups.size());
             tracker
                 .render_pipelines
-                .set_size(indices.render_pipelines.lock().size());
-            tracker.bundles.set_size(indices.bundles.lock().size());
-            tracker
-                .query_sets
-                .set_size(indices.query_sets.lock().size());
+                .set_size(indices.render_pipelines.size());
+            tracker.bundles.set_size(indices.bundles.size());
+            tracker.query_sets.set_size(indices.query_sets.size());
 
             let raw = &mut encoder.raw;
 

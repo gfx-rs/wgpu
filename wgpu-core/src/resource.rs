@@ -12,7 +12,7 @@ use crate::{
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
-    track::{TextureSelector, TrackerIndex, TrackerIndexAllocator},
+    track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
 };
@@ -58,7 +58,7 @@ use std::{
 pub struct ResourceInfo<T: Resource> {
     id: Option<Id<T::Marker>>,
     tracker_index: TrackerIndex,
-    tracker_indices: Option<Arc<Mutex<TrackerIndexAllocator>>>,
+    tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -75,7 +75,7 @@ pub struct ResourceInfo<T: Resource> {
 impl<T: Resource> Drop for ResourceInfo<T> {
     fn drop(&mut self) {
         if let Some(indices) = &self.tracker_indices {
-            indices.lock().free(self.tracker_index);
+            indices.free(self.tracker_index);
         }
     }
 }
@@ -84,11 +84,11 @@ impl<T: Resource> ResourceInfo<T> {
     #[allow(unused_variables)]
     pub(crate) fn new(
         label: &str,
-        tracker_indices: Option<Arc<Mutex<TrackerIndexAllocator>>>,
+        tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
     ) -> Self {
         let tracker_index = tracker_indices
             .as_ref()
-            .map(|indices| indices.lock().alloc())
+            .map(|indices| indices.alloc())
             .unwrap_or(TrackerIndex::INVALID);
         Self {
             id: None,

@@ -142,7 +142,7 @@ impl TrackerIndex {
 /// per resource type. Indices have the same lifetime as the internal resource they
 /// are associated to (alloc happens when creating the resource and free is called when
 /// the resource is dropped).
-pub(crate) struct TrackerIndexAllocator {
+struct TrackerIndexAllocator {
     unused: Vec<TrackerIndex>,
     next_index: TrackerIndex,
 }
@@ -182,36 +182,62 @@ impl std::fmt::Debug for TrackerIndexAllocator {
     }
 }
 
+/// See TrackerIndexAllocator.
+#[derive(Debug)]
+pub(crate) struct SharedTrackerIndexAllocator {
+    inner: Mutex<TrackerIndexAllocator>,
+}
+
+impl SharedTrackerIndexAllocator {
+    pub fn new() -> Self {
+        SharedTrackerIndexAllocator {
+            inner: Mutex::new(TrackerIndexAllocator::new()),
+        }
+    }
+
+    pub fn alloc(&self) -> TrackerIndex {
+        self.inner.lock().alloc()
+    }
+
+    pub fn free(&self, index: TrackerIndex) {
+        self.inner.lock().free(index);
+    }
+
+    pub fn size(&self) -> usize {
+        self.inner.lock().size()
+    }
+}
+
 pub(crate) struct TrackerIndexAllocators {
-    pub buffers: Arc<Mutex<TrackerIndexAllocator>>,
-    pub staging_buffers: Arc<Mutex<TrackerIndexAllocator>>,
-    pub textures: Arc<Mutex<TrackerIndexAllocator>>,
-    pub texture_views: Arc<Mutex<TrackerIndexAllocator>>,
-    pub samplers: Arc<Mutex<TrackerIndexAllocator>>,
-    pub bind_groups: Arc<Mutex<TrackerIndexAllocator>>,
-    pub bind_group_layouts: Arc<Mutex<TrackerIndexAllocator>>,
-    pub compute_pipelines: Arc<Mutex<TrackerIndexAllocator>>,
-    pub render_pipelines: Arc<Mutex<TrackerIndexAllocator>>,
-    pub pipeline_layouts: Arc<Mutex<TrackerIndexAllocator>>,
-    pub bundles: Arc<Mutex<TrackerIndexAllocator>>,
-    pub query_sets: Arc<Mutex<TrackerIndexAllocator>>,
+    pub buffers: Arc<SharedTrackerIndexAllocator>,
+    pub staging_buffers: Arc<SharedTrackerIndexAllocator>,
+    pub textures: Arc<SharedTrackerIndexAllocator>,
+    pub texture_views: Arc<SharedTrackerIndexAllocator>,
+    pub samplers: Arc<SharedTrackerIndexAllocator>,
+    pub bind_groups: Arc<SharedTrackerIndexAllocator>,
+    pub bind_group_layouts: Arc<SharedTrackerIndexAllocator>,
+    pub compute_pipelines: Arc<SharedTrackerIndexAllocator>,
+    pub render_pipelines: Arc<SharedTrackerIndexAllocator>,
+    pub pipeline_layouts: Arc<SharedTrackerIndexAllocator>,
+    pub bundles: Arc<SharedTrackerIndexAllocator>,
+    pub query_sets: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
     pub fn new() -> Self {
         TrackerIndexAllocators {
-            buffers: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            staging_buffers: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            textures: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            texture_views: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            samplers: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            bind_groups: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            bind_group_layouts: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            compute_pipelines: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            render_pipelines: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            pipeline_layouts: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            bundles: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
-            query_sets: Arc::new(Mutex::new(TrackerIndexAllocator::new())),
+            buffers: Arc::new(SharedTrackerIndexAllocator::new()),
+            staging_buffers: Arc::new(SharedTrackerIndexAllocator::new()),
+            textures: Arc::new(SharedTrackerIndexAllocator::new()),
+            texture_views: Arc::new(SharedTrackerIndexAllocator::new()),
+            samplers: Arc::new(SharedTrackerIndexAllocator::new()),
+            bind_groups: Arc::new(SharedTrackerIndexAllocator::new()),
+            bind_group_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
+            compute_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
+            render_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
+            pipeline_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
+            bundles: Arc::new(SharedTrackerIndexAllocator::new()),
+            query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
 }
@@ -520,12 +546,8 @@ impl<A: HalApi> UsageScope<A> {
             textures: TextureUsageScope::new(),
         };
 
-        value
-            .buffers
-            .set_size(tracker_indices.buffers.lock().size());
-        value
-            .textures
-            .set_size(tracker_indices.textures.lock().size());
+        value.buffers.set_size(tracker_indices.buffers.size());
+        value.textures.set_size(tracker_indices.textures.size());
 
         value
     }
