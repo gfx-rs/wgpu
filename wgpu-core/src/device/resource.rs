@@ -1714,10 +1714,23 @@ impl<A: HalApi> Device<A> {
                             BindGroupLayoutEntryError::SampleTypeFloatFilterableBindingMultisampled,
                     });
                 }
-                Bt::Texture { .. } => (
-                    Some(wgt::Features::TEXTURE_BINDING_ARRAY),
-                    WritableStorage::No,
-                ),
+                Bt::Texture {
+                    multisampled,
+                    view_dimension,
+                    ..
+                } => {
+                    if multisampled && view_dimension != TextureViewDimension::D2 {
+                        return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error: BindGroupLayoutEntryError::Non2DMultisampled(view_dimension),
+                        });
+                    }
+
+                    (
+                        Some(wgt::Features::TEXTURE_BINDING_ARRAY),
+                        WritableStorage::No,
+                    )
+                }
                 Bt::StorageTexture {
                     access,
                     view_dimension,
