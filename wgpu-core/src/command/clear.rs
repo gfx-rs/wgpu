@@ -366,7 +366,7 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
         assert!(
             max_rows_per_copy > 0,
             "Zero buffer size is too small to fill a single row \
-                 of a texture with format {:?} and desc {:?}",
+            of a texture with format {:?} and desc {:?}",
             texture_desc.format,
             texture_desc.size
         );
