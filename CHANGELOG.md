@@ -71,6 +71,9 @@ Bottom level categories:
 #### `wgsl-out`
 - Learned to generate acceleration structure types. By @JMS55 in [#5261](https://github.com/gfx-rs/wgpu/pull/5261)
 
+### Documentation
+- Fix link in `wgpu::Instance::create_surface` documentation. By @HexoKnight in [#5280](https://github.com/gfx-rs/wgpu/pull/5280).
+
 ### Bug Fixes
 
 #### General
