@@ -124,6 +124,8 @@ pub enum ExpressionError {
     MissingCapabilities(super::Capabilities),
     #[error(transparent)]
     Literal(#[from] LiteralError),
+    #[error("{0:?} is not supported for Width {2} {1:?} arguments yet, see https://github.com/gfx-rs/wgpu/issues/5276")]
+    UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -1332,12 +1334,32 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
-                    Mf::CountTrailingZeros
-                    | Mf::CountLeadingZeros
+                    // Remove once fixed https://github.com/gfx-rs/wgpu/issues/5276
+                    Mf::CountLeadingZeros
                     | Mf::CountOneBits
                     | Mf::ReverseBits
-                    | Mf::FindLsb
-                    | Mf::FindMsb => {
+                    | Mf::FindMsb
+                    | Mf::FindLsb => {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
+                                Sk::Sint | Sk::Uint => {
+                                    if scalar.width != 4 {
+                                        return Err(ExpressionError::UnsupportedWidth(
+                                            fun,
+                                            scalar.kind,
+                                            scalar.width,
+                                        ));
+                                    }
+                                }
+                                _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                            },
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
+                    Mf::CountTrailingZeros => {
                         if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
@@ -1404,6 +1426,19 @@ impl super::Validator {
                                 ))
                             }
                         }
+                        // Remove once fixed https://github.com/gfx-rs/wgpu/issues/5276
+                        for &arg in [arg_ty, arg1_ty, arg2_ty, arg3_ty].iter() {
+                            match *arg {
+                                Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => {
+                                    return Err(ExpressionError::UnsupportedWidth(
+                                        fun,
+                                        scalar.kind,
+                                        scalar.width,
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                     Mf::ExtractBits => {
                         let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty, arg3_ty) {
@@ -1443,6 +1478,19 @@ impl super::Validator {
                                     2,
                                     arg2.unwrap(),
                                 ))
+                            }
+                        }
+                        // Remove once fixed https://github.com/gfx-rs/wgpu/issues/5276
+                        for &arg in [arg_ty, arg1_ty, arg2_ty].iter() {
+                            match *arg {
+                                Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => {
+                                    return Err(ExpressionError::UnsupportedWidth(
+                                        fun,
+                                        scalar.kind,
+                                        scalar.width,
+                                    ));
+                                }
+                                _ => {}
                             }
                         }
                     }

@@ -991,6 +991,7 @@ impl<'w> BlockContext<'w> {
                             _ => unreachable!(),
                         };
 
+                        // This polyfill doesn't work yet https://github.com/gfx-rs/wgpu/issues/5276
                         let maybe_rev_id = if width != 4 {
                             let rev_id = self.gen_id();
                             block.body.push(Instruction::unary(
@@ -1065,6 +1066,7 @@ impl<'w> BlockContext<'w> {
                             };
                             MathOp::Ext(thing)
                         } else {
+                            // This polyfill doesn't work yet https://github.com/gfx-rs/wgpu/issues/5276
                             let int_type_id = match *arg_ty {
                                 crate::TypeInner::Vector { size, scalar } => self.get_type_id(
                                     LocalType::Value {
@@ -1091,25 +1093,13 @@ impl<'w> BlockContext<'w> {
                                 rev_id,
                                 arg0_id,
                             ));
-                            let maybe_neg_id = if arg_scalar_kind == Some(crate::ScalarKind::Sint) {
-                                let neg_id = self.gen_id();
-                                block.body.push(Instruction::unary(
-                                    spirv::Op::SNegate,
-                                    int_type_id,
-                                    neg_id,
-                                    rev_id,
-                                ));
-                                neg_id
-                            } else {
-                                rev_id
-                            };
 
                             MathOp::Custom(Instruction::ext_inst(
                                 self.writer.gl450_ext_inst_id,
                                 spirv::GLOp::FindILsb,
                                 result_type_id,
                                 id,
-                                &[maybe_neg_id],
+                                &[rev_id],
                             ))
                         }
                     }
