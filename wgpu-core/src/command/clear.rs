@@ -39,6 +39,11 @@ pub enum ClearError {
     UnalignedFillSize(BufferAddress),
     #[error("Buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
+    #[error("Clear starts at offset {start_offset} with size of {requested_size}, but these added together exceed `u64::MAX`")]
+    OffsetPlusSizeExceeds64BitBounds {
+        start_offset: BufferAddress,
+        requested_size: BufferAddress,
+    },
     #[error("Clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
@@ -122,7 +127,13 @@ impl Global {
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(ClearError::UnalignedFillSize(size));
         }
-        let end_offset = offset + size;
+        let end_offset =
+            offset
+                .checked_add(size)
+                .ok_or(ClearError::OffsetPlusSizeExceeds64BitBounds {
+                    start_offset: offset,
+                    requested_size: size,
+                })?;
         if end_offset > dst_buffer.size {
             return Err(ClearError::BufferOverrun {
                 start_offset: offset,
