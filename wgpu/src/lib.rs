@@ -3400,7 +3400,7 @@ impl CommandEncoder {
     /// # Panics
     ///
     /// - Buffer does not have `COPY_DST` usage.
-    /// - Range it out of bounds
+    /// - Range is out of bounds
     pub fn clear_buffer(
         &mut self,
         buffer: &Buffer,
