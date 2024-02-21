@@ -131,11 +131,11 @@ impl Global {
             }
         }
 
-        let end = match size {
+        let end_offset = match size {
             Some(size) => offset + size,
             None => dst_buffer.size,
         };
-        if offset == end {
+        if offset == end_offset {
             log::trace!("Ignoring fill_buffer of size 0");
             return Ok(());
         }
@@ -144,7 +144,7 @@ impl Global {
         cmd_buf_data.buffer_memory_init_actions.extend(
             dst_buffer.initialization_status.read().create_action(
                 &dst_buffer,
-                offset..end,
+                offset..end_offset,
                 MemoryInitKind::ImplicitlyInitialized,
             ),
         );
@@ -154,7 +154,7 @@ impl Global {
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
-            cmd_buf_raw.clear_buffer(dst_raw, offset..end);
+            cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
         }
         Ok(())
     }
