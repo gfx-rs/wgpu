@@ -7,7 +7,9 @@ use parking_lot::Mutex;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
+    error::Error,
     ffi::{CStr, CString},
+    fs,
     num::NonZeroU32,
     ptr,
     sync::Arc,
@@ -701,6 +703,16 @@ impl super::Device {
             raw: vk_buffer,
             block: None,
         }
+    }
+
+    pub fn write_pipeline_cache(&self) -> Result<Option<()>, Box<dyn Error>> {
+        let cache_path = std::env::var("WGPU_VK_PIPELINE_UNSAFE_CACHE_PATH")?;
+        let Some(cache) = self.shared.pipeline_cache else {
+                return Ok(None);
+               };
+        let contents = unsafe { self.shared.raw.get_pipeline_cache_data(cache) }?;
+        fs::write(cache_path, contents)?;
+        Ok(Some(()))
     }
 
     fn create_shader_module_impl(
@@ -1850,7 +1862,13 @@ impl crate::Device<super::Api> for super::Device {
             unsafe {
                 self.shared
                     .raw
-                    .create_graphics_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                    .create_graphics_pipelines(
+                        self.shared
+                            .pipeline_cache
+                            .unwrap_or(vk::PipelineCache::null()),
+                        &vk_infos,
+                        None,
+                    )
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };
@@ -1902,7 +1920,13 @@ impl crate::Device<super::Api> for super::Device {
             unsafe {
                 self.shared
                     .raw
-                    .create_compute_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                    .create_compute_pipelines(
+                        self.shared
+                            .pipeline_cache
+                            .unwrap_or(vk::PipelineCache::null()),
+                        &vk_infos,
+                        None,
+                    )
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };

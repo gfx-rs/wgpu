@@ -337,6 +337,7 @@ struct DeviceShared {
     workarounds: Workarounds,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    pipeline_cache: Option<ash::vk::PipelineCache>,
 }
 
 pub struct Device {

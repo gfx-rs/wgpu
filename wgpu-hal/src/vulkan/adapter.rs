@@ -1,6 +1,9 @@
 use super::conv;
 
-use ash::{extensions::khr, vk};
+use ash::{
+    extensions::khr,
+    vk::{self, PipelineCacheCreateFlags},
+};
 use parking_lot::Mutex;
 
 use std::{
@@ -1349,6 +1352,7 @@ impl super::Adapter {
         features: wgt::Features,
         family_index: u32,
         queue_index: u32,
+        pipeline_cache: Option<ash::vk::PipelineCache>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
@@ -1529,6 +1533,7 @@ impl super::Adapter {
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
+            pipeline_cache,
         });
         let mut relay_semaphores = [vk::Semaphore::null(); 2];
         for sem in relay_semaphores.iter_mut() {
@@ -1638,6 +1643,22 @@ impl crate::Adapter<super::Api> for super::Adapter {
             unsafe { self.instance.raw.create_device(self.raw, &info, None)? }
         };
 
+        let pipeline_cache =
+            if let Ok(cache_path) = std::env::var("WGPU_VK_PIPELINE_UNSAFE_CACHE_PATH") {
+                let cache = vk::PipelineCacheCreateInfo::builder();
+                let data;
+                let cache = if let Ok(v) = std::fs::read(cache_path) {
+                    data = v;
+                    cache.initial_data(&data)
+                } else {
+                    cache
+                };
+                let cache = cache.flags(PipelineCacheCreateFlags::empty());
+                unsafe { dbg!(raw_device.create_pipeline_cache(&cache, None)).ok() }
+            } else {
+                None
+            };
+
         unsafe {
             self.device_from_raw(
                 raw_device,
@@ -1646,6 +1667,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 features,
                 family_info.queue_family_index,
                 0,
+                pipeline_cache,
             )
         }
     }
