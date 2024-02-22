@@ -368,9 +368,13 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
     pass.set_bind_group(0, &bg2, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
-    fail(&ctx.device, || {
-        drop(pass);
-    });
+    fail(
+        &ctx.device,
+        || {
+            drop(pass);
+        },
+        None,
+    );
 }
 
 #[gpu_test]
@@ -436,7 +440,11 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     pass.set_bind_group(0, &bg, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
-    fail(&ctx.device, || {
-        drop(pass);
-    })
+    fail(
+        &ctx.device,
+        || {
+            drop(pass);
+        },
+        None,
+    )
 }
