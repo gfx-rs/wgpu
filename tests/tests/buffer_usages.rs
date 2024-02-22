@@ -31,14 +31,19 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
         .iter()
         .flat_map(|&(expect_error, usages)| usages.iter().copied().map(move |u| (expect_error, u)))
     {
-        fail_if(&ctx.device, expect_validation_error, || {
-            let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: BUFFER_SIZE,
-                usage,
-                mapped_at_creation: false,
-            });
-        });
+        fail_if(
+            &ctx.device,
+            expect_validation_error,
+            || {
+                let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: BUFFER_SIZE,
+                    usage,
+                    mapped_at_creation: false,
+                });
+            },
+            None,
+        );
     }
 }
 
@@ -89,14 +94,19 @@ async fn map_test(
 
     let mut buffer = None;
 
-    fail_if(&ctx.device, buffer_creation_validation_error, || {
-        buffer = Some(ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size,
-            usage,
-            mapped_at_creation: false,
-        }));
-    });
+    fail_if(
+        &ctx.device,
+        buffer_creation_validation_error,
+        || {
+            buffer = Some(ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size,
+                usage,
+                mapped_at_creation: false,
+            }));
+        },
+        None,
+    );
     if buffer_creation_validation_error {
         return;
     }
@@ -107,9 +117,14 @@ async fn map_test(
         || (map_mode_type == Ma::Read && !usage.contains(Bu::MAP_READ))
         || (map_mode_type == Ma::Write && !usage.contains(Bu::MAP_WRITE));
 
-    fail_if(&ctx.device, map_async_validation_error, || {
-        buffer.slice(0..size).map_async(map_mode_type, |_| {});
-    });
+    fail_if(
+        &ctx.device,
+        map_async_validation_error,
+        || {
+            buffer.slice(0..size).map_async(map_mode_type, |_| {});
+        },
+        None,
+    );
 
     if map_async_validation_error {
         return;

@@ -35,31 +35,35 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         view_formats: &[],
     });
 
-    fail(&ctx.device, || {
-        // Validation should catch the silly selected z layer range without panicking.
-        encoder.copy_texture_to_texture(
-            wgpu::ImageCopyTexture {
-                texture: &t1,
-                mip_level: 1,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::ImageCopyTexture {
-                texture: &t2,
-                mip_level: 1,
-                origin: wgpu::Origin3d {
-                    x: 0,
-                    y: 0,
-                    z: 3824276442,
+    fail(
+        &ctx.device,
+        || {
+            // Validation should catch the silly selected z layer range without panicking.
+            encoder.copy_texture_to_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &t1,
+                    mip_level: 1,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
                 },
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::Extent3d {
-                width: 100,
-                height: 3,
-                depth_or_array_layers: 613286111,
-            },
-        );
-        ctx.queue.submit(Some(encoder.finish()));
-    });
+                wgpu::ImageCopyTexture {
+                    texture: &t2,
+                    mip_level: 1,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: 3824276442,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width: 100,
+                    height: 3,
+                    depth_or_array_layers: 613286111,
+                },
+            );
+            ctx.queue.submit(Some(encoder.finish()));
+        },
+        None,
+    );
 });
