@@ -13,23 +13,27 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
     .run_sync(|ctx| {
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
-        fail(&ctx.device, || {
-            let module = ctx
-                .device
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: None,
-                    source: wgpu::ShaderSource::Wgsl("not valid wgsl".into()),
-                });
+        fail(
+            &ctx.device,
+            || {
+                let module = ctx
+                    .device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Wgsl("not valid wgsl".into()),
+                    });
 
-            let pipeline = ctx
-                .device
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some("mandelbrot compute pipeline"),
-                    layout: None,
-                    module: &module,
-                    entry_point: "doesn't exist",
-                });
+                let pipeline =
+                    ctx.device
+                        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                            label: Some("mandelbrot compute pipeline"),
+                            layout: None,
+                            module: &module,
+                            entry_point: "doesn't exist",
+                        });
 
-            pipeline.get_bind_group_layout(0);
-        });
+                pipeline.get_bind_group_layout(0);
+            },
+            None,
+        );
     });
