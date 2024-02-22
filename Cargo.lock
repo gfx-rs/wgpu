@@ -2571,7 +2571,7 @@ checksum = "2900ede94e305130c13ddd391e0ab7cbaeb783945ae07a279c268cb05109c6cb"
 
 [[package]]
 name = "player"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3977,7 +3977,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "arrayvec 0.7.4",
  "cfg-if",
@@ -4030,7 +4030,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -4110,7 +4110,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "bitflags 2.4.2",
@@ -4124,7 +4124,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "heck",
  "quote",
@@ -4133,7 +4133,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.4",
