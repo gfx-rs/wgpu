@@ -3048,6 +3048,13 @@ impl<W: Write> Writer<W> {
         for statement in statements {
             if let crate::Statement::Emit(ref range) = *statement {
                 for handle in range.clone() {
+                    // `IndexMap::remove` was deprecated in `indexmap` 2.2.0,
+                    // with `swap_remove` as the appropriate replacement here.
+                    // Unfortunately, Naga can't adopt that until Firefox stops
+                    // kludging `indexmap` 2.0 to 1.0:
+                    //
+                    // https://searchfox.org/mozilla-central/rev/da49863c3d6f34038d00f5ba701b9a2ad9cbadba/Cargo.toml#156-157
+                    #[allow(deprecated)]
                     self.named_expressions.remove(&handle);
                 }
             }
