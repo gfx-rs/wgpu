@@ -81,6 +81,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
+        name: "multi_render_target",
+        function: wgpu_examples::multi_target_render::main,
+        webgl: false,
+        webgpu: true,
+    },
+    ExampleDesc {
         name: "render_to_texture",
         function: wgpu_examples::render_to_texture::main,
         webgl: false, // No canvas for WebGL
