@@ -5,18 +5,18 @@ use winit::{
     event_loop::EventLoop,
     window::Window,
 };
-use wgpu::{ColorTargetState, CommandEncoder, Device, Extent3d, Queue, RenderPassColorAttachment, RenderPipeline, ShaderModule, Texture, TextureAspect, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension};
+use wgpu::{BindGroup, BindGroupLayout, ColorTargetState, CommandEncoder, Device, Extent3d, Queue, RenderPassColorAttachment, RenderPipeline, Sampler, ShaderModule, SurfaceConfiguration, Texture, TextureAspect, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension};
 
 
-struct MultiRenderTarget {
+struct MultiTargetRenderer {
     pipeline: RenderPipeline,
     texture_view: TextureView,
     texture: Texture,
+    bindgroup: BindGroup,
 }
 
-impl MultiRenderTarget {
-
-    fn create_image_texture(device: &Device, queue: &Queue) -> (Texture, TextureView) {
+impl MultiTargetRenderer {
+    fn create_image_texture(device: &Device, queue: &Queue, format: TextureFormat) -> (Texture, TextureView) {
         fn create_halo_texture_data(width: usize, height: usize) -> Vec<u8> {
             let mut img_data = vec![];
             let center: Vec2 = Vec2::new(width as f32 * 0.5, height as f32 * 0.5);
@@ -43,15 +43,15 @@ impl MultiRenderTarget {
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
+            label: Some("data texture"),
             size: size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            // format: TextureFormat::R8Unorm,
             format: TextureFormat::R8Unorm,
+            // format: format,
             usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[TextureFormat::R8Unorm],
+            view_formats: &[],
         });
 
         queue.write_texture(
@@ -83,27 +83,15 @@ impl MultiRenderTarget {
 
         (texture, view)
     }
+    // , shader: &ShaderModule
+    fn init(device: &Device, queue: &Queue, target_states: &[ColorTargetState], format: TextureFormat) -> MultiTargetRenderer {
 
-    fn init(device: &Device, queue: &Queue, format: TextureFormat, shader: &ShaderModule) -> MultiRenderTarget {
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("mtr.wgsl"))),
         });
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            address_mode_w: wgpu::AddressMode::Repeat,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
-
         let texture_bind_group_layout =
-                device
+            device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
@@ -126,7 +114,27 @@ impl MultiRenderTarget {
                     label: None,
                 });
 
-        let (texture, texture_view) = Self::create_image_texture(device, queue);
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[
+                &texture_bind_group_layout,
+
+            ],
+            push_constant_ranges: &[],
+        });
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+
+        let (texture, texture_view) = Self::create_image_texture(device, queue, format);
 
         let bindgroup = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
@@ -140,8 +148,177 @@ impl MultiRenderTarget {
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
-            label: Some("texture array sprites blend light bind group depth"),
+            label: Some("aa"),
         });
+
+
+        let ts = target_states.iter().map(|x| Some(x.clone())).collect::<Vec<_>>();
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: ts.as_slice(),
+                //targets: &[Some(ColorTargetState {
+                //    format: format,
+                //    blend: None,
+                //    write_mask: Default::default(),
+                //})],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        });
+
+        Self {
+            pipeline: render_pipeline,
+            texture: texture,
+            texture_view: texture_view,
+            bindgroup: bindgroup,
+        }
+    }
+
+    fn draw<'tex>(&self, encoder: &mut CommandEncoder, targets: &[Option<RenderPassColorAttachment<'tex>>]) {
+
+            let mut rpass =
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    //color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    //    view: &view,
+                    //    resolve_target: None,
+                    //    ops: wgpu::Operations {
+                    //        load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    //        store: wgpu::StoreOp::Store,
+                    //    },
+                    //})],
+                    color_attachments: targets,
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            rpass.set_pipeline(&self.pipeline);
+            rpass.set_bind_group(0, &self.bindgroup, &[]);
+            rpass.draw(0..3, 0..1);
+
+    }
+
+
+    fn resize(&mut self, width: usize, height: usize) {
+
+    }
+}
+
+
+
+
+fn create_target_textures(device: &Device, format: TextureFormat, width: u32, height: u32) -> TextureTargets {
+    let size = Extent3d {
+        width: width as u32,
+        height: height as u32,
+        depth_or_array_layers: 1,
+    };
+
+    let a = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: format,
+        usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[format],
+    });
+    let b = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: format,
+        usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[format],
+    });
+    let a_view = a.create_view(&TextureViewDescriptor {
+        format: Some(format),
+        dimension: Some(TextureViewDimension::D2),
+        ..TextureViewDescriptor::default()
+    });
+    let b_view = b.create_view(&TextureViewDescriptor {
+        format: Some(format),
+        dimension: Some(TextureViewDimension::D2),
+        ..TextureViewDescriptor::default()
+    });
+    TextureTargets {
+        a: a,
+        a_view: a_view,
+        b: b,
+        b_view: b_view,
+    }
+}
+
+struct TargetRenderer {
+    pipeline: RenderPipeline,
+    bindgroup_layout: BindGroupLayout,
+    bindgroup_a: BindGroup,
+    sampler: Sampler,
+    bindgroup_b: BindGroup,
+}
+
+impl TargetRenderer {
+
+    fn init(device: &Device, queue: &Queue, format: TextureFormat, targets: &TextureTargets,) -> TargetRenderer {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+        });
+        let texture_bind_group_layout =
+            device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                multisampled: false,
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                    label: None,
+                });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&texture_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+
 
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -167,44 +344,96 @@ impl MultiRenderTarget {
             multiview: None,
         });
 
+        let (ba, bb) = Self::create_bindgroups(device, &texture_bind_group_layout, &targets, &sampler);
         Self {
             pipeline: render_pipeline,
-            texture: texture,
-            texture_view: texture_view,
+            bindgroup_layout: texture_bind_group_layout,
+            bindgroup_a: ba,
+            bindgroup_b: bb,
+            sampler: sampler,
         }
     }
+    fn create_bindgroups(device: &Device, layout: &BindGroupLayout, texture_targets: &TextureTargets, sampler: &Sampler) -> (BindGroup, BindGroup) {
+        let a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_targets.a_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: None,
+        });
 
-    fn draw<'tex>(&self, encoder: &mut CommandEncoder, targets: &[Option<RenderPassColorAttachment<'tex>>]) {
-
-        {
-            let mut rpass =
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    //color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    //    view: &view,
-                    //    resolve_target: None,
-                    //    ops: wgpu::Operations {
-                    //        load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                    //        store: wgpu::StoreOp::Store,
-                    //    },
-                    //})],
-                    color_attachments: targets,
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-            rpass.set_pipeline(&self.pipeline);
-            rpass.draw(0..3, 0..1);
-        }
-
+        let b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_targets.b_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: None,
+        });
+        (a,b)
     }
 
 
-    fn resize(&mut self, width: usize, height: usize) {
 
+    fn draw(&self, encoder: &mut CommandEncoder, surface_view: &TextureView, config: &SurfaceConfiguration) {
+        let mut rpass =
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &surface_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        rpass.set_pipeline(&self.pipeline);
+        rpass.set_bind_group(0, &self.bindgroup_a, &[]);
+
+        let width = (config.width as f32);
+        let height = (config.height as f32);
+        let half_w = (config.width as f32 * 0.5);
+        let half_h = (config.height as f32 * 0.5);
+
+        rpass.set_viewport(0.0, 0.0, half_w, height, 0.0, 1.0);
+        rpass.draw(0..3, 0..1);
+
+
+        rpass.set_viewport(half_w, 0.0, half_w, height, 0.0, 1.0);
+        rpass.set_bind_group(0, &self.bindgroup_b, &[]);
+        rpass.draw(0..3, 0..1);
     }
 
+    fn rebuild_resources(&mut self, device: &Device, texture_targets: &TextureTargets) {
+        (self.bindgroup_a, self.bindgroup_b) =
+            Self::create_bindgroups(device, &self.bindgroup_layout, texture_targets, &self.sampler)
+    }
+}
 
+
+
+struct TextureTargets {
+    a: Texture,
+    a_view: TextureView,
+    b: Texture,
+    b_view: TextureView,
 }
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
@@ -240,47 +469,30 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to create device");
 
-    // Load the shaders from disk
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
-
-
-
-
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[],
-        push_constant_ranges: &[],
-    });
-
     let swapchain_capabilities = surface.get_capabilities(&adapter);
     let swapchain_format = swapchain_capabilities.formats[0];
 
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: None,
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: "vs_main",
-            buffers: &[],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[Some(swapchain_format.into())],
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None,
-    });
 
     let mut config = surface
         .get_default_config(&adapter, size.width, size.height)
         .unwrap();
     surface.configure(&device, &config);
+
+    let mtr = MultiTargetRenderer::init(&device, &queue, &[
+        ColorTargetState {
+            format: config.format,
+            blend: None,
+            write_mask: Default::default(),
+        },
+        ColorTargetState {
+            format: config.format,
+            blend: None,
+            write_mask: Default::default(),
+        },
+    ], config.format);
+
+    let mut texture_targets = create_target_textures(&device, config.format, config.width, config.height);
+    let mut drawer = TargetRenderer::init(&device, &queue, config.format, &texture_targets);
 
     let window = &window;
     event_loop
@@ -288,7 +500,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             // Have the closure take ownership of the resources.
             // `event_loop.run` never returns, therefore we must do this to ensure
             // the resources are properly cleaned up.
-            let _ = (&instance, &adapter, &shader, &pipeline_layout);
+            let _ = (&instance, &adapter);
 
             if let Event::WindowEvent {
                 window_id: _,
@@ -301,6 +513,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         config.width = new_size.width.max(1);
                         config.height = new_size.height.max(1);
                         surface.configure(&device, &config);
+
+                        texture_targets = create_target_textures(&device, config.format, config.width, config.height);
+                        drawer.rebuild_resources(&device, &texture_targets);
+
                         // On macos the window needs to be redrawn manually after resizing
                         window.request_redraw();
                     }
@@ -315,25 +531,22 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                                 label: None,
                             });
-                        {
-                            let mut rpass =
-                                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                    label: None,
-                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                        view: &view,
-                                        resolve_target: None,
-                                        ops: wgpu::Operations {
-                                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                                            store: wgpu::StoreOp::Store,
-                                        },
-                                    })],
-                                    depth_stencil_attachment: None,
-                                    timestamp_writes: None,
-                                    occlusion_query_set: None,
-                                });
-                            rpass.set_pipeline(&render_pipeline);
-                            rpass.draw(0..3, 0..1);
-                        }
+
+                        mtr.draw(&mut encoder, &[
+                            Some(RenderPassColorAttachment {
+                                view: &texture_targets.a_view,
+                                resolve_target: None,
+                                ops: Default::default(),
+                            }),
+                            Some(RenderPassColorAttachment {
+                                view: &texture_targets.b_view,
+                                resolve_target: None,
+                                ops: Default::default(),
+                            })
+
+                        ]);
+
+                        drawer.draw(&mut encoder, &view, &config);
 
                         queue.submit(Some(encoder.finish()));
                         frame.present();
