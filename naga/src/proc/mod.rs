@@ -725,7 +725,7 @@ impl GlobalCtx<'_> {
 /// Normally, this would just be an iterator over `components`. However,
 /// `Compose` expressions can concatenate vectors, in which case the i'th
 /// value being composed is not generally the i'th element of `components`.
-/// This function consults `ty` to decide if this concatenation is occuring,
+/// This function consults `ty` to decide if this concatenation is occurring,
 /// and returns an iterator that produces the components of the result of
 /// the `Compose` expression in either case.
 pub fn flatten_compose<'arenas>(

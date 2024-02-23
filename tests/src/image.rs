@@ -183,7 +183,7 @@ pub async fn compare_image_output(
     let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
     let renderer = format!(
         "{}-{}-{}",
-        adapter_info.backend.to_str(),
+        adapter_info.backend,
         sanitize_for_path(&adapter_info.name),
         sanitize_for_path(&adapter_info.driver)
     );
@@ -222,7 +222,7 @@ pub async fn compare_image_output(
             all_passed &= check.check(&mut pool);
         }
 
-        // Convert the error values to a false color reprensentation
+        // Convert the error values to a false color representation
         let magma_image = error_map_flip
             .apply_color_lut(&nv_flip::magma_lut())
             .to_vec();
@@ -238,7 +238,7 @@ pub async fn compare_image_output(
     )
     .await;
     write_png(
-        difference_path,
+        &difference_path,
         width,
         height,
         &magma_image_with_alpha,
@@ -247,7 +247,7 @@ pub async fn compare_image_output(
     .await;
 
     if !all_passed {
-        panic!("Image data mismatch!")
+        panic!("Image data mismatch: {}", difference_path.display())
     }
 }
 

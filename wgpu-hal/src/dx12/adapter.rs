@@ -242,6 +242,7 @@ impl super::Adapter {
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
             | wgt::Features::TEXTURE_COMPRESSION_BC
             | wgt::Features::CLEAR_TEXTURE
@@ -306,6 +307,12 @@ impl super::Adapter {
         // https://github.com/gfx-rs/wgpu/issues/2471
         downlevel.flags -=
             wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+
+        // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
+        let max_color_attachments = 8;
+        // TODO: determine this programmatically if possible.
+        // https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447
+        let max_color_attachment_bytes_per_sample = 64;
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -377,6 +384,8 @@ impl super::Adapter {
                         d3d12_ty::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
                     max_inter_stage_shader_components: base.max_inter_stage_shader_components,
+                    max_color_attachments,
+                    max_color_attachment_bytes_per_sample,
                     max_compute_workgroup_storage_size: base.max_compute_workgroup_storage_size, //TODO?
                     max_compute_invocations_per_workgroup:
                         d3d12_ty::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,

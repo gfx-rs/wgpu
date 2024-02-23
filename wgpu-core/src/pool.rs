@@ -61,7 +61,7 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
 
             drop(map_guard);
 
-            // Some other thread may beat us to initializing the entry, but OnceCell guarentees that only one thread
+            // Some other thread may beat us to initializing the entry, but OnceCell guarantees that only one thread
             // will actually initialize the entry.
             //
             // We pass the strong reference outside of the closure to keep it alive while we're the only one keeping a reference to it.

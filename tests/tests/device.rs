@@ -4,7 +4,7 @@ use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameter
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::always()))
     .run_async(|ctx| async move {
-        // Create a bind group uisng a layout from another device. This should be a validation
+        // Create a bind group using a layout from another device. This should be a validation
         // error but currently crashes.
         let (device2, _) =
             pollster::block_on(ctx.adapter.request_device(&Default::default(), None)).unwrap();
@@ -38,7 +38,7 @@ fn device_lifetime_check() {
         backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
         dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
         gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
-        flags: wgpu::InstanceFlags::debugging().with_env(),
+        flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
     });
 
     let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
@@ -116,7 +116,7 @@ async fn request_device_error_message() {
 // This is a test of device behavior after device.destroy. Specifically, all operations
 // should trigger errors since the device is lost.
 //
-// On DX12 this test fails with a validation error in the very artifical actions taken
+// On DX12 this test fails with a validation error in the very artificial actions taken
 // after lose the device. The error is "ID3D12CommandAllocator::Reset: The command
 // allocator cannot be reset because a command list is currently being recorded with the
 // allocator." That may indicate that DX12 doesn't like opened command buffers staying
@@ -265,7 +265,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // TODO: change these fail calls to check for the specific errors which indicate that
         // the device is not valid.
 
-        // Creating a commmand encoder should fail.
+        // Creating a command encoder should fail.
         fail(&ctx.device, || {
             ctx.device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -531,8 +531,8 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         let callback = Box::new(move |reason, message| {
             was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(
-                matches!(reason, wgt::DeviceLostReason::Unknown),
-                "Device lost info reason should match DeviceLostReason::Unknown."
+                matches!(reason, wgt::DeviceLostReason::Dropped),
+                "Device lost info reason should match DeviceLostReason::Dropped."
             );
             assert!(
                 message == "Device dropped.",
@@ -544,6 +544,72 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         // Drop the device.
         drop(ctx.device);
 
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });
+
+#[gpu_test]
+static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        // This test checks that a device_lost_callback is called when it is
+        // replaced by another callback.
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+
+        // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
+        let callback = Box::new(move |reason, _m| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                matches!(reason, wgt::DeviceLostReason::ReplacedCallback),
+                "Device lost info reason should match DeviceLostReason::ReplacedCallback."
+            );
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        // Replace the callback.
+        let replacement_callback = Box::new(move |_r, _m| {});
+        ctx.device.set_device_lost_callback(replacement_callback);
+
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });
+
+#[gpu_test]
+static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().skip(FailureCase::always()))
+    .run_sync(|ctx| {
+        // What we want to do is to drop the Global, forcing a code path that
+        // eventually calls Device.prepare_to_die, without having first dropped
+        // the device. This models what might happen in a user agent that kills
+        // wgpu without providing a more orderly shutdown. In such a case, the
+        // device lost callback should be invoked with the message "Device is
+        // dying."
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+
+        // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
+        let callback = Box::new(move |reason, message| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                matches!(reason, wgt::DeviceLostReason::Dropped),
+                "Device lost info reason should match DeviceLostReason::Dropped."
+            );
+            assert!(
+                message == "Device is dying.",
+                "Device lost info message is \"{}\" and it should be \"Device is dying.\".",
+                message
+            );
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        // TODO: Drop the Global, somehow.
+
+        // Confirm that the callback was invoked.
         assert!(
             was_called.load(std::sync::atomic::Ordering::SeqCst),
             "Device lost callback should have been called."

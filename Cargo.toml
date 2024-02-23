@@ -77,6 +77,7 @@ cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ctor = "0.2"
+document-features = "0.2.8"
 encase = "0.7"
 env_logger = "0.10"
 fern = "0.6"
@@ -150,7 +151,7 @@ hassle-rs = "0.11.0"
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.12.3"
+glow = "0.13.1"
 glutin = "0.29.1"
 
 # wasm32 dependencies

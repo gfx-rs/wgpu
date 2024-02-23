@@ -9,10 +9,7 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{
-    borrow::Borrow,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::borrow::Borrow;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -22,9 +19,7 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_api::HalApi,
-    hal_label,
-    id::{SurfaceId, TextureId},
-    identity::{GlobalIdentityHandlerFactory, Input},
+    hal_label, id,
     init_tracker::TextureInitTracker,
     resource::{self, ResourceInfo},
     snatch::Snatchable,
@@ -32,7 +27,7 @@ use crate::{
 };
 
 use hal::{Queue as _, Surface as _};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use wgt::SurfaceStatus as Status;
 
@@ -42,7 +37,7 @@ const FRAME_TIMEOUT_MS: u32 = 1000;
 pub(crate) struct Presentation {
     pub(crate) device: AnyDevice,
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
-    pub(crate) acquired_texture: Option<TextureId>,
+    pub(crate) acquired_texture: Option<id::TextureId>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -118,20 +113,20 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
 #[derive(Debug)]
 pub struct SurfaceOutput {
     pub status: Status,
-    pub texture_id: Option<TextureId>,
+    pub texture_id: Option<id::TextureId>,
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn surface_get_current_texture<A: HalApi>(
         &self,
-        surface_id: SurfaceId,
-        texture_id_in: Input<G, TextureId>,
+        surface_id: id::SurfaceId,
+        texture_id_in: Option<id::TextureId>,
     ) -> Result<SurfaceOutput, SurfaceError> {
         profiling::scope!("SwapChain::get_next_texture");
 
         let hub = A::hub(self);
 
-        let fid = hub.textures.prepare::<G>(texture_id_in);
+        let fid = hub.textures.prepare(texture_id_in);
 
         let surface = self
             .surfaces
@@ -165,7 +160,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let suf = A::get_surface(surface.as_ref());
         let (texture_id, status) = match unsafe {
             suf.unwrap()
-                .raw
                 .acquire_texture(Some(std::time::Duration::from_millis(
                     FRAME_TIMEOUT_MS as u64,
                 )))
@@ -216,7 +210,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     inner: Snatchable::new(resource::TextureInner::Surface {
                         raw: Some(ast.texture),
                         parent_id: surface_id,
-                        has_work: AtomicBool::new(false),
                     }),
                     device: device.clone(),
                     desc: texture_desc,
@@ -231,6 +224,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     clear_mode: RwLock::new(resource::TextureClearMode::Surface {
                         clear_view: Some(clear_view),
                     }),
+                    views: Mutex::new(Vec::new()),
+                    bind_groups: Mutex::new(Vec::new()),
                 };
 
                 let (id, resource) = fid.assign(texture);
@@ -278,7 +273,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_present<A: HalApi>(
         &self,
-        surface_id: SurfaceId,
+        surface_id: id::SurfaceId,
     ) -> Result<Status, SurfaceError> {
         profiling::scope!("SwapChain::present");
 
@@ -299,8 +294,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !device.is_valid() {
             return Err(DeviceError::Lost.into());
         }
-        let queue_id = device.queue_id.read().unwrap();
-        let queue = hub.queues.get(queue_id).unwrap();
+        let queue = device.get_queue().unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
@@ -332,22 +326,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     resource::TextureInner::Surface {
                         ref mut raw,
                         ref parent_id,
-                        ref has_work,
                     } => {
                         if surface_id != *parent_id {
                             log::error!("Presented frame is from a different surface");
                             Err(hal::SurfaceError::Lost)
-                        } else if !has_work.load(Ordering::Relaxed) {
-                            log::error!("No work has been submitted for this frame");
-                            unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
-                            Err(hal::SurfaceError::Outdated)
                         } else {
                             unsafe {
                                 queue
                                     .raw
                                     .as_ref()
                                     .unwrap()
-                                    .present(&suf.unwrap().raw, raw.take().unwrap())
+                                    .present(suf.unwrap(), raw.take().unwrap())
                             }
                         }
                     }
@@ -376,7 +365,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_texture_discard<A: HalApi>(
         &self,
-        surface_id: SurfaceId,
+        surface_id: id::SurfaceId,
     ) -> Result<(), SurfaceError> {
         profiling::scope!("SwapChain::discard");
 
@@ -421,13 +410,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let suf = A::get_surface(&surface);
                 let exclusive_snatch_guard = device.snatchable_lock.write();
                 match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
-                    resource::TextureInner::Surface {
-                        mut raw,
-                        parent_id,
-                        has_work: _,
-                    } => {
+                    resource::TextureInner::Surface { mut raw, parent_id } => {
                         if surface_id == parent_id {
-                            unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
+                            unsafe { suf.unwrap().discard_texture(raw.take().unwrap()) };
                         } else {
                             log::warn!("Surface texture is outdated");
                         }

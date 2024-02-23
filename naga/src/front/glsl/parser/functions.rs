@@ -49,7 +49,7 @@ impl<'source> ParsingContext<'source> {
         }
 
         // Type names can identify either declaration statements or type constructors
-        // depending on wether the token following the type name is a `(` (LeftParen)
+        // depending on whether the token following the type name is a `(` (LeftParen)
         if self.peek_type_name(frontend) {
             // Start by consuming the type name so that we can peek the token after it
             let token = self.bump(frontend)?;

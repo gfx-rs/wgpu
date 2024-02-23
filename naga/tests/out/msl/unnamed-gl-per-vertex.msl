@@ -1,0 +1,42 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_3 {
+    float inner[1];
+};
+struct type_4 {
+    metal::float4 member;
+    float member_1;
+    type_3 member_2;
+    type_3 member_3;
+};
+
+void function(
+    thread type_4& global,
+    thread int& global_1
+) {
+    int _e9 = global_1;
+    global.member = metal::float4((_e9 == 0) ? -4.0 : 1.0, (_e9 == 2) ? 4.0 : -1.0, 0.0, 1.0);
+    return;
+}
+
+struct main_Input {
+};
+struct main_Output {
+    metal::float4 member [[position]];
+};
+vertex main_Output main_(
+  uint param [[vertex_id]]
+) {
+    type_4 global = type_4 {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_3 {}, type_3 {}};
+    int global_1 = {};
+    global_1 = static_cast<int>(param);
+    function(global, global_1);
+    float _e6 = global.member.y;
+    global.member.y = -(_e6);
+    metal::float4 _e8 = global.member;
+    return main_Output { _e8 };
+}

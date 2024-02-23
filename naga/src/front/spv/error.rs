@@ -1,5 +1,9 @@
 use super::ModuleState;
 use crate::arena::Handle;
+use codespan_reporting::diagnostic::Diagnostic;
+use codespan_reporting::files::SimpleFile;
+use codespan_reporting::term;
+use termcolor::{NoColor, WriteColor};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -126,4 +130,25 @@ pub enum Error {
          come from a binding)"
     )]
     NonBindingArrayOfImageOrSamplers,
+}
+
+impl Error {
+    pub fn emit_to_writer(&self, writer: &mut impl WriteColor, source: &str) {
+        self.emit_to_writer_with_path(writer, source, "glsl");
+    }
+
+    pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
+        let path = path.to_string();
+        let files = SimpleFile::new(path, source);
+        let config = codespan_reporting::term::Config::default();
+        let diagnostic = Diagnostic::error().with_message(format!("{self:?}"));
+
+        term::emit(writer, &config, &files, &diagnostic).expect("cannot write error");
+    }
+
+    pub fn emit_to_string(&self, source: &str) -> String {
+        let mut writer = NoColor::new(Vec::new());
+        self.emit_to_writer(&mut writer, source);
+        String::from_utf8(writer.into_inner()).unwrap()
+    }
 }

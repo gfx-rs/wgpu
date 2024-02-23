@@ -76,7 +76,9 @@ env:
 jobs:
   check:
     # runtime is normally 2-8 minutes
-    timeout-minutes: 15
+    #
+    # currently high due to documentation time problems on mac.
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -90,18 +92,18 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-12
+            os: macos-14
             target: x86_64-apple-darwin
             kind: native
 
           - name: MacOS aarch64
-            os: macos-12
+            os: macos-14
             target: aarch64-apple-darwin
             kind: native
 
           # IOS
           - name: IOS aarch64
-            os: macos-12
+            os: macos-14
             target: aarch64-apple-ios
             kind: native
 
@@ -247,7 +249,7 @@ jobs:
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-12
+            os: macos-14
             target: x86_64-apple-darwin
 
           # Linux
@@ -381,7 +383,7 @@ jobs:
 
           # Mac
           - name: Mac aarch64
-            os: macos-13-xlarge
+            os: macos-14
 
           # Linux
           - name: Linux x86_64
@@ -594,7 +596,7 @@ jobs:
     # runtime is normally 15 seconds
     timeout-minutes: 2
 
-    name: Format
+    name: Format & Typos
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
@@ -610,6 +612,9 @@ jobs:
         run: |
           cargo fmt -- --check
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
+
+      - name: Check for typos
+        uses: crate-ci/typos@v1.18.2
 
   check-cts-runner:
     # runtime is normally 2 minutes

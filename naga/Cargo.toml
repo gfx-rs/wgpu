@@ -42,7 +42,7 @@ harness = false
 
 [dependencies]
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
-bitflags = "2.2"
+bitflags = "2.4"
 bit-set = "0.5"
 termcolor = { version = "1.4.1" }
 # remove termcolor dep when updating to the next version of codespan-reporting
@@ -60,6 +60,7 @@ petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
+arrayvec.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = { version = "0.5", features = [] }
@@ -74,7 +75,7 @@ env_logger = "0.10"
 hlsl-snapshots = { path = "./hlsl-snapshots" }
 # Require at least version 0.7.1 of ron, this version changed how floating points are
 # serialized by forcing them to always have the decimal part, this makes it backwards
-# incompatible with our tests because we do a syntatic diff and not a semantic one.
+# incompatible with our tests because we do a syntactic diff and not a semantic one.
 ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { version = "1.0", features = ["derive"] }

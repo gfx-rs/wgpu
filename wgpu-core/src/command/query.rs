@@ -4,11 +4,10 @@ use hal::CommandEncoder as _;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    device::DeviceError,
+    device::{DeviceError, MissingFeatures},
     global::Global,
     hal_api::HalApi,
-    id::{self, Id, TypedId},
-    identity::GlobalIdentityHandlerFactory,
+    id::{self, Id},
     init_tracker::MemoryInitKind,
     resource::QuerySet,
     storage::Storage,
@@ -49,7 +48,7 @@ impl<A: HalApi> QueryResetMap<A> {
     pub fn reset_queries(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
-        query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
+        query_set_storage: &Storage<QuerySet<A>>,
         backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
         for (query_set_id, (state, epoch)) in self.map.drain() {
@@ -109,6 +108,8 @@ pub enum QueryError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+    #[error(transparent)]
+    MissingFeature(#[from] MissingFeatures),
     #[error("Error encountered while trying to use queries")]
     Use(#[from] QueryUseError),
     #[error("Error encountered while trying to resolve a query")]
@@ -314,7 +315,7 @@ impl<A: HalApi> QuerySet<A> {
 
 pub(super) fn end_occlusion_query<A: HalApi>(
     raw_encoder: &mut A::CommandEncoder,
-    storage: &Storage<QuerySet<A>, id::QuerySetId>,
+    storage: &Storage<QuerySet<A>>,
     active_query: &mut Option<(id::QuerySetId, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set_id, query_index)) = active_query.take() {
@@ -331,7 +332,7 @@ pub(super) fn end_occlusion_query<A: HalApi>(
 
 pub(super) fn end_pipeline_statistics_query<A: HalApi>(
     raw_encoder: &mut A::CommandEncoder,
-    storage: &Storage<QuerySet<A>, id::QuerySetId>,
+    storage: &Storage<QuerySet<A>>,
     active_query: &mut Option<(id::QuerySetId, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set_id, query_index)) = active_query.take() {
@@ -346,7 +347,7 @@ pub(super) fn end_pipeline_statistics_query<A: HalApi>(
     }
 }
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_write_timestamp<A: HalApi>(
         &self,
         command_encoder_id: id::CommandEncoderId,
@@ -356,6 +357,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+
+        cmd_buf
+            .device
+            .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

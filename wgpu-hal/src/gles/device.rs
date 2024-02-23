@@ -1194,13 +1194,16 @@ impl crate::Device<super::Api> for super::Device {
                     let sampler = desc.samplers[entry.resource_index as usize];
                     super::RawBinding::Sampler(sampler.raw)
                 }
-                wgt::BindingType::Texture { .. } => {
+                wgt::BindingType::Texture { view_dimension, .. } => {
                     let view = desc.textures[entry.resource_index as usize].view;
                     if view.array_layers.start != 0 {
                         log::error!("Unable to create a sampled texture binding for non-zero array layer.\n{}",
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
+
+                    super::Texture::log_failing_target_heuristics(view_dimension, target);
+
                     super::RawBinding::Texture {
                         raw,
                         target,

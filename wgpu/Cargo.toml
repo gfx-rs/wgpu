@@ -29,7 +29,7 @@ default = ["wgsl", "dx12", "metal", "webgpu"]
 #! ### Backends
 # --------------------------------------------------------------------
 #! ⚠️ WIP: Not all backends can be manually configured today.
-#! On Windows & Linux the Vulkan & GLES backends are always enabled.
+#! On Windows, Linux & Android the Vulkan & GLES backends are always enabled.
 #! See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more details.
 
 ## Enables the DX12 backend on Windows.
@@ -38,28 +38,32 @@ dx12 = ["wgc?/dx12"]
 ## Enables the Metal backend on macOS & iOS.
 metal = ["wgc?/metal"]
 
+## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
+webgpu = ["naga?/wgsl-out"]
+
 ## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
 angle = ["wgc?/gles"]
 
 ## Enables the Vulkan backend on macOS & iOS.
 vulkan-portability = ["wgc?/vulkan"]
 
-## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
-webgpu = ["naga?/wgsl-out"]
-
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
 webgl = ["hal", "wgc/gles"]
 
+#! **Note:** In the documentation, if you see that an item depends on a backend,
+#! it means that the item is only available when that backend is enabled _and_ the backend
+#! is supported on the current platform.
+
 #! ### Shading language support
 # --------------------------------------------------------------------
 
 ## Enable accepting SPIR-V shaders as input.
-spirv = ["naga/spv-in"]
+spirv = ["naga/spv-in", "wgc/spirv"]
 
 ## Enable accepting GLSL shaders as input.
-glsl = ["naga/glsl-in"]
+glsl = ["naga/glsl-in", "wgc/glsl"]
 
 ## Enable accepting WGSL shaders as input.
 wgsl = ["wgc?/wgsl"]
@@ -78,8 +82,10 @@ strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
 ## Log all API entry points at info instead of trace level.
 api_log_info = ["wgc/api_log_info"]
 
-## Allow writing of trace capture files.
-## See [`Adapter::request_device`].
+## Enables serialization via `serde` on common wgpu types.
+serde = ["dep:serde", "wgc/serde"]
+
+## Allow writing of trace capture files. See [`Adapter::request_device`].
 trace = ["serde", "wgc/trace"]
 
 ## Allow deserializing of trace capture files that were written with the `trace` feature.
@@ -160,6 +166,7 @@ optional = true
 [dependencies]
 arrayvec.workspace = true
 cfg-if.workspace = true
+document-features.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true

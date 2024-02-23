@@ -731,6 +731,12 @@ impl super::PrivateCapabilities {
             } else {
                 4
             },
+            // Per https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+            max_color_attachment_bytes_per_sample: if device.supports_family(MTLGPUFamily::Apple4) {
+                64
+            } else {
+                32
+            },
             max_varying_components: if device
                 .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
             {
@@ -833,7 +839,7 @@ impl super::PrivateCapabilities {
             self.indirect_draw_dispatch,
         );
         features.set(
-            F::TIMESTAMP_QUERY,
+            F::TIMESTAMP_QUERY | F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::STAGE_BOUNDARIES),
         );
@@ -940,6 +946,10 @@ impl super::PrivateCapabilities {
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
                 max_inter_stage_shader_components: self.max_varying_components,
+                max_color_attachments: (self.max_color_render_targets as u32)
+                    .min(crate::MAX_COLOR_ATTACHMENTS as u32),
+                max_color_attachment_bytes_per_sample: self.max_color_attachment_bytes_per_sample
+                    as u32,
                 max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
                 max_compute_invocations_per_workgroup: self.max_threads_per_group,
                 max_compute_workgroup_size_x: self.max_threads_per_group,

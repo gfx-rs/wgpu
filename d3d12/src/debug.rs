@@ -1,7 +1,10 @@
 use crate::com::ComPtr;
-use winapi::um::d3d12sdklayers;
 #[cfg(any(feature = "libloading", feature = "implicit-link"))]
 use winapi::Interface as _;
+use winapi::{
+    shared::{minwindef::TRUE, winerror::S_OK},
+    um::d3d12sdklayers,
+};
 
 pub type Debug = ComPtr<d3d12sdklayers::ID3D12Debug>;
 
@@ -39,5 +42,15 @@ impl Debug {
 
     pub fn enable_layer(&self) {
         unsafe { self.EnableDebugLayer() }
+    }
+
+    pub fn enable_gpu_based_validation(&self) -> bool {
+        let (ptr, hr) = unsafe { self.cast::<d3d12sdklayers::ID3D12Debug1>() };
+        if hr == S_OK {
+            unsafe { ptr.SetEnableGPUBasedValidation(TRUE) };
+            true
+        } else {
+            false
+        }
     }
 }

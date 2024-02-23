@@ -11,7 +11,7 @@ use wgpu::*;
 /// callback is invoked.
 ///
 /// We previously immediately invoked on_submitted_work_done callbacks if there was no active submission
-/// to add them to. This is incorrect, as we do not immediatley invoke map_async callbacks.
+/// to add them to. This is incorrect, as we do not immediately invoke map_async callbacks.
 #[gpu_test]
 static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {

@@ -1,11 +1,11 @@
 use core::fmt;
 use std::error::Error;
 
-use crate::{gfx_select, global::Global, identity::IdentityManagerFactory};
+use crate::{gfx_select, global::Global};
 
 pub struct ErrorFormatter<'a> {
     writer: &'a mut dyn fmt::Write,
-    global: &'a Global<IdentityManagerFactory>,
+    global: &'a Global,
 }
 
 impl<'a> ErrorFormatter<'a> {
@@ -94,7 +94,7 @@ pub trait PrettyError: Error + Sized {
 
 pub fn format_pretty_any(
     writer: &mut dyn fmt::Write,
-    global: &Global<IdentityManagerFactory>,
+    global: &Global,
     error: &(dyn Error + 'static),
 ) {
     let mut fmt = ErrorFormatter { writer, global };

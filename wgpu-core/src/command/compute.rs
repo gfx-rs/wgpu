@@ -18,7 +18,6 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     id::DeviceId,
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
     resource::{self},
@@ -29,9 +28,9 @@ use crate::{
 };
 
 use hal::CommandEncoder as _;
-#[cfg(any(feature = "serial-pass", feature = "replay"))]
+#[cfg(feature = "serde")]
 use serde::Deserialize;
-#[cfg(any(feature = "serial-pass", feature = "trace"))]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 use thiserror::Error;
@@ -40,14 +39,7 @@ use std::{fmt, mem, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
-    derive(serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ComputeCommand {
     SetBindGroup {
         index: u32,
@@ -98,16 +90,16 @@ pub enum ComputeCommand {
     EndPipelineStatisticsQuery,
 }
 
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ComputePass {
     base: BasePass<ComputeCommand>,
     parent_id: id::CommandEncoderId,
     timestamp_writes: Option<ComputePassTimestampWrites>,
 
     // Resource binding dedupe state.
-    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     current_bind_groups: BindGroupStateChange,
-    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     current_pipeline: StateChange<id::ComputePipelineId>,
 }
 
@@ -151,8 +143,7 @@ impl fmt::Debug for ComputePass {
 /// Describes the writing of timestamp values in a compute pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
-#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ComputePassTimestampWrites {
     /// The query set to write the timestamps to.
     pub query_set: id::QuerySetId,
@@ -313,7 +304,7 @@ impl<A: HalApi> State<A> {
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut Tracker<A>,
-        bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
+        bind_group_guard: &Storage<BindGroup<A>>,
         indirect_buffer: Option<id::BufferId>,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), UsageConflict> {
@@ -348,7 +339,7 @@ impl<A: HalApi> State<A> {
 
 // Common routines between render/compute
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn command_encoder_run_compute_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -432,7 +423,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_pass_err(pass_scope)?;
 
             // Unlike in render passes we can't delay resetting the query sets since
-            // there is no auxillary pass.
+            // there is no auxiliary pass.
             let range = if let (Some(index_a), Some(index_b)) =
                 (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
             {
@@ -728,8 +719,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
-                    check_buffer_usage(indirect_buffer.usage, wgt::BufferUsages::INDIRECT)
-                        .map_pass_err(scope)?;
+                    check_buffer_usage(
+                        buffer_id,
+                        indirect_buffer.usage,
+                        wgt::BufferUsages::INDIRECT,
+                    )
+                    .map_pass_err(scope)?;
 
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
                     if end_offset > indirect_buffer.size {

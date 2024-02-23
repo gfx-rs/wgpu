@@ -627,8 +627,16 @@ impl super::Device {
         let images =
             unsafe { functor.get_swapchain_images(raw) }.map_err(crate::DeviceError::from)?;
 
-        let vk_info = vk::FenceCreateInfo::builder().build();
-        let fence = unsafe { self.shared.raw.create_fence(&vk_info, None) }
+        // NOTE: It's important that we define at least images.len() + 1 wait
+        // semaphores, since we prospectively need to provide the call to
+        // acquire the next image with an unsignaled semaphore.
+        let surface_semaphores = (0..images.len() + 1)
+            .map(|_| unsafe {
+                self.shared
+                    .raw
+                    .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)
+            })
+            .collect::<Result<Vec<_>, _>>()
             .map_err(crate::DeviceError::from)?;
 
         Ok(super::Swapchain {
@@ -636,10 +644,11 @@ impl super::Device {
             raw_flags,
             functor,
             device: Arc::clone(&self.shared),
-            fence,
             images,
             config: config.clone(),
             view_formats: wgt_view_formats,
+            surface_semaphores,
+            next_surface_index: 0,
         })
     }
 
@@ -2140,7 +2149,7 @@ impl crate::Device<super::Api> for super::Device {
                         .geometry(vk::AccelerationStructureGeometryDataKHR {
                             triangles: *triangle_data,
                         })
-                        .flags(conv::map_acceleration_structure_geomety_flags(
+                        .flags(conv::map_acceleration_structure_geometry_flags(
                             triangles.flags,
                         ));
 
@@ -2162,7 +2171,7 @@ impl crate::Device<super::Api> for super::Device {
                     let geometry = vk::AccelerationStructureGeometryKHR::builder()
                         .geometry_type(vk::GeometryTypeKHR::AABBS)
                         .geometry(vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data })
-                        .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+                        .flags(conv::map_acceleration_structure_geometry_flags(aabb.flags));
 
                     geometries.push(*geometry);
                     primitive_counts.push(aabb.count);
