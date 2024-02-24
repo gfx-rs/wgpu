@@ -683,6 +683,8 @@ fn bulk_validate(args: Args, params: &Parameters) -> Result<(), Box<dyn std::err
 
         let mut validator =
             naga::valid::Validator::new(params.validation_flags, naga::valid::Capabilities::all());
+        validator.subgroup_stages(naga::valid::ShaderStages::all());
+        validator.subgroup_operations(naga::valid::SubgroupOperationSet::all());
 
         if let Err(error) = validator.validate(&module) {
             invalid.push(input_path.clone());
