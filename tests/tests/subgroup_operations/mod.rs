@@ -15,7 +15,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             .expect_fail(
                 // Expect metal to fail on tests involving operations in divergent control flow
                 wgpu_test::FailureCase::backend(wgpu::Backends::METAL)
-                    .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n"),
+                    .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n"),
             ),
     )
     .run_sync(|ctx| {
