@@ -141,7 +141,7 @@ bitflags::bitflags! {
         // /// Clustered
         // const CLUSTERED = 1 << 6;
         // /// Quad supported
-        // const QUAD_FRAMENT_COMPUTE = 1 << 7;
+        // const QUAD_FRAGMENT_COMPUTE = 1 << 7;
         // /// Quad supported in all stages
         // const QUAD_ALL_STAGES = 1 << 8;
     }
