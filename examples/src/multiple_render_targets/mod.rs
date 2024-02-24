@@ -15,8 +15,6 @@ use winit::{
 /// Renderer that draws its outputs to two output texture targets at the same time.
 struct MultiTargetRenderer {
     pipeline: RenderPipeline,
-    texture_view: TextureView,
-    texture: Texture,
     bindgroup: BindGroup,
 }
 
@@ -50,7 +48,7 @@ impl MultiTargetRenderer {
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("data texture"),
-            size: size,
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
@@ -69,7 +67,7 @@ impl MultiTargetRenderer {
             &create_halo_texture_data(width, height),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some((1 * width) as u32),
+                bytes_per_row: Some(width as u32),
                 rows_per_image: Some(height as u32),
             },
             size,
@@ -134,7 +132,7 @@ impl MultiTargetRenderer {
             ..Default::default()
         });
 
-        let (texture, texture_view) = Self::create_image_texture(device, queue);
+        let (_, texture_view) = Self::create_image_texture(device, queue);
 
         let bindgroup = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
@@ -155,16 +153,16 @@ impl MultiTargetRenderer {
             .iter()
             .map(|x| Some(x.clone()))
             .collect::<Vec<_>>();
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: shader,
                 entry_point: "vs_main",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: shader,
                 entry_point: "fs_multi_main",
                 // IMPORTANT: specify the color states for the outputs:
                 targets: ts.as_slice(),
@@ -176,18 +174,12 @@ impl MultiTargetRenderer {
         });
 
         Self {
-            pipeline: render_pipeline,
-            texture: texture,
-            texture_view: texture_view,
-            bindgroup: bindgroup,
+            pipeline,
+            bindgroup,
         }
     }
 
-    fn draw<'tex>(
-        &self,
-        encoder: &mut CommandEncoder,
-        targets: &[Option<RenderPassColorAttachment<'tex>>],
-    ) {
+    fn draw(&self, encoder: &mut CommandEncoder, targets: &[Option<RenderPassColorAttachment>]) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: targets,
@@ -208,18 +200,18 @@ fn create_target_textures(
     height: u32,
 ) -> TextureTargets {
     let size = Extent3d {
-        width: width as u32,
-        height: height as u32,
+        width,
+        height,
         depth_or_array_layers: 1,
     };
 
     let a = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
-        size: size,
+        size,
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
-        format: format,
+        format,
         usage: TextureUsages::COPY_DST
             | TextureUsages::TEXTURE_BINDING
             | TextureUsages::RENDER_ATTACHMENT,
@@ -227,11 +219,11 @@ fn create_target_textures(
     });
     let b = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
-        size: size,
+        size,
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
-        format: format,
+        format,
         usage: TextureUsages::COPY_DST
             | TextureUsages::TEXTURE_BINDING
             | TextureUsages::RENDER_ATTACHMENT,
@@ -247,12 +239,7 @@ fn create_target_textures(
         dimension: Some(TextureViewDimension::D2),
         ..TextureViewDescriptor::default()
     });
-    TextureTargets {
-        a: a,
-        a_view: a_view,
-        b: b,
-        b_view: b_view,
-    }
+    TextureTargets { a_view, b_view }
 }
 
 /// Renderer that displays results on the screen.
@@ -314,15 +301,15 @@ impl TargetRenderer {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: shader,
                 entry_point: "vs_main",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: shader,
                 entry_point: "fs_display_main",
                 targets: &[Some(ColorTargetState {
-                    format: format,
+                    format,
                     blend: None,
                     write_mask: Default::default(),
                 })],
@@ -334,13 +321,13 @@ impl TargetRenderer {
         });
 
         let (ba, bb) =
-            Self::create_bindgroups(device, &texture_bind_group_layout, &targets, &sampler);
+            Self::create_bindgroups(device, &texture_bind_group_layout, targets, &sampler);
         Self {
             pipeline: render_pipeline,
             bindgroup_layout: texture_bind_group_layout,
             bindgroup_a: ba,
             bindgroup_b: bb,
-            sampler: sampler,
+            sampler,
         }
     }
     fn create_bindgroups(
@@ -350,7 +337,7 @@ impl TargetRenderer {
         sampler: &Sampler,
     ) -> (BindGroup, BindGroup) {
         let a = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &layout,
+            layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -358,14 +345,14 @@ impl TargetRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
             label: None,
         });
 
         let b = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &layout,
+            layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -373,7 +360,7 @@ impl TargetRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
             label: None,
@@ -390,7 +377,7 @@ impl TargetRenderer {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &surface_view,
+                view: surface_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
@@ -404,8 +391,8 @@ impl TargetRenderer {
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bindgroup_a, &[]);
 
-        let height = (config.height as f32);
-        let half_w = (config.width as f32 * 0.5);
+        let height = config.height as f32;
+        let half_w = config.width as f32 * 0.5;
 
         // draw results in two separate viewports that split the screen:
 
@@ -428,9 +415,7 @@ impl TargetRenderer {
 }
 
 struct TextureTargets {
-    a: Texture,
     a_view: TextureView,
-    b: Texture,
     b_view: TextureView,
 }
 
