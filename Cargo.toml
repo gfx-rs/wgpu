@@ -45,102 +45,102 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.18.0"
+version = "0.19.0"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.18.0"
+version = "0.19.0"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.18.0"
+version = "0.19.0"
 
 [workspace.dependencies.naga]
 path = "./naga"
-version = "0.14.0"
+version = "0.19.0"
 
 [workspace.dependencies]
 anyhow = "1.0"
 arrayvec = "0.7"
-bitflags = "2"
 bit-vec = "0.6"
+bitflags = "2"
 bytemuck = { version = "1.14", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ctor = "0.2"
-encase = "0.6"
+document-features = "0.2.8"
+encase = "0.7"
 env_logger = "0.10"
 fern = "0.6"
 flume = "0.11"
 futures-lite = "2"
-rustc-hash = "1.1.0"
 getrandom = "0.2"
-glam = "0.24.2"
+glam = "0.25"
 heck = "0.4.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 ktx2 = "0.3"
+libc = "0.2"
 # libloading 0.8 switches from `winapi` to `windows-sys`; permit either
 libloading = ">=0.7, <0.9"
-libc = "0.2"
 libtest-mimic = "0.6"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
-nv-flip = "0.1"
-num-traits = { version = "0.2" }
 # https://github.com/Razaekel/noise-rs/issues/335 (Updated dependencies)
 noise = { version = "0.8", git = "https://github.com/Razaekel/noise-rs.git", rev = "c6942d4fb70af26db4441edcf41f90fa115333f2" }
+num-traits = { version = "0.2" }
+nv-flip = "0.1"
 obj = "0.10"
 once_cell = "1"
-# parking_lot 0.12 switches from `winapi` to `windows`; permit either
-parking_lot = ">=0.11,<0.13"
+parking_lot = ">=0.11,<0.13" # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 pico-args = { version = "0.5.0", features = [
     "eq-separator",
     "short-space-opt",
     "combined-flags",
 ] }
-png = "0.17.10"
+png = "0.17.11"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.6"
 renderdoc-sys = "1.0.0"
 ron = "0.8"
+rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.108"
+serde_json = "1.0.111"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.18.0", path = "./wgpu" }
-wgpu-core = { version = "0.18.0", path = "./wgpu-core" }
-wgpu-example = { version = "0.18.0", path = "./examples/common" }
-wgpu-macros = { version = "0.18.0", path = "./wgpu-macros" }
-wgpu-test = { version = "0.18.0", path = "./tests" }
-wgpu-types = { version = "0.18.0", path = "./wgpu-types" }
-winit = { version = "0.29", features = [ "android-native-activity" ] }
+wgpu = { version = "0.19.0", path = "./wgpu" }
+wgpu-core = { version = "0.19.0", path = "./wgpu-core" }
+wgpu-example = { version = "0.19.0", path = "./examples/common" }
+wgpu-macros = { version = "0.19.0", path = "./wgpu-macros" }
+wgpu-test = { version = "0.19.0", path = "./tests" }
+wgpu-types = { version = "0.19.0", path = "./wgpu-types" }
+winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
 block = "0.1"
+core-graphics-types = "0.1"
 metal = "0.27.0"
 objc = "0.2.5"
-core-graphics-types = "0.1"
 
 # Vulkan dependencies
+android_system_properties = "0.1.1"
 ash = "0.37.3"
 gpu-alloc = "0.6"
 gpu-descriptor = "0.2"
-android_system_properties = "0.1.1"
 
 # DX dependencies
 bit-set = "0.5"
-gpu-allocator = { version = "0.24", default_features = false, features = [
+gpu-allocator = { version = "0.25", default_features = false, features = [
     "d3d12",
     "public-winapi",
 ] }
@@ -151,28 +151,28 @@ hassle-rs = "0.11.0"
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.12.3"
+glow = "0.13.1"
 glutin = "0.29.1"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"
-js-sys = "0.3.65"
+js-sys = "0.3.67"
 wasm-bindgen = "0.2.87"
-wasm-bindgen-futures = "0.4.38"
+wasm-bindgen-futures = "0.4.40"
 wasm-bindgen-test = "0.3"
-web-time = "0.2.3"
-web-sys = "0.3.65"
+web-sys = "0.3.67"
+web-time = "0.2.4"
 
 # deno dependencies
-deno_console = "0.119.0"
-deno_core = "0.214.0"
-deno_url = "0.119.0"
-deno_web = "0.150.0"
-deno_webidl = "0.119.0"
+deno_console = "0.125.0"
+deno_core = "0.232.0"
+deno_url = "0.125.0"
+deno_web = "0.156.0"
+deno_webidl = "0.125.0"
 deno_webgpu = { version = "0.85.0", path = "./deno_webgpu" }
-tokio = "1.34.0"
-termcolor = "1.4.0"
+tokio = "1.35.1"
+termcolor = "1.4.1"
 
 [patch."https://github.com/gfx-rs/naga"]
 

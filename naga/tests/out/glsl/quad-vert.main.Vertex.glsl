@@ -17,7 +17,7 @@ vec2 v_uv = vec2(0.0);
 
 vec2 a_uv_1 = vec2(0.0);
 
-gen_gl_PerVertex perVertexStruct = gen_gl_PerVertex(vec4(0.0, 0.0, 0.0, 1.0), 1.0, float[1](0.0), float[1](0.0));
+gen_gl_PerVertex unnamed = gen_gl_PerVertex(vec4(0.0, 0.0, 0.0, 1.0), 1.0, float[1](0.0), float[1](0.0));
 
 vec2 a_pos_1 = vec2(0.0);
 
@@ -29,7 +29,7 @@ void main_1() {
     vec2 _e6 = a_uv_1;
     v_uv = _e6;
     vec2 _e7 = a_pos_1;
-    perVertexStruct.gen_gl_Position = vec4(_e7.x, _e7.y, 0.0, 1.0);
+    unnamed.gen_gl_Position = vec4(_e7.x, _e7.y, 0.0, 1.0);
     return;
 }
 
@@ -40,7 +40,7 @@ void main() {
     a_pos_1 = a_pos;
     main_1();
     vec2 _e7 = v_uv;
-    vec4 _e8 = perVertexStruct.gen_gl_Position;
+    vec4 _e8 = unnamed.gen_gl_Position;
     type_4 _tmp_return = type_4(_e7, _e8);
     _vs2fs_location0 = _tmp_return.member;
     gl_Position = _tmp_return.gen_gl_Position;

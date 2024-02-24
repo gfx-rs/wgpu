@@ -16,7 +16,7 @@ type BindGroupMask = u8;
 mod compat {
     use arrayvec::ArrayVec;
 
-    use crate::{binding_model::BindGroupLayout, hal_api::HalApi, resource::Resource};
+    use crate::{binding_model::BindGroupLayout, device::bgl, hal_api::HalApi, resource::Resource};
     use std::{ops::Range, sync::Arc};
 
     #[derive(Debug, Clone)]
@@ -52,6 +52,93 @@ mod compat {
 
         fn is_incompatible(&self) -> bool {
             self.expected.is_none() || !self.is_valid()
+        }
+
+        // Describe how bind group layouts are incompatible, for validation
+        // error message.
+        fn bgl_diff(&self) -> Vec<String> {
+            let mut diff = Vec::new();
+
+            if let Some(expected_bgl) = self.expected.as_ref() {
+                let expected_bgl_type = match expected_bgl.origin {
+                    bgl::Origin::Derived => "implicit",
+                    bgl::Origin::Pool => "explicit",
+                };
+                let expected_label = expected_bgl.label();
+                diff.push(format!(
+                    "Should be compatible an with an {expected_bgl_type} bind group layout {}",
+                    if expected_label.is_empty() {
+                        "without label".to_string()
+                    } else {
+                        format!("with label = `{}`", expected_label)
+                    }
+                ));
+                if let Some(assigned_bgl) = self.assigned.as_ref() {
+                    let assigned_bgl_type = match assigned_bgl.origin {
+                        bgl::Origin::Derived => "implicit",
+                        bgl::Origin::Pool => "explicit",
+                    };
+                    let assigned_label = assigned_bgl.label();
+                    diff.push(format!(
+                        "Assigned {assigned_bgl_type} bind group layout {}",
+                        if assigned_label.is_empty() {
+                            "without label".to_string()
+                        } else {
+                            format!("with label = `{}`", assigned_label)
+                        }
+                    ));
+                    for (id, e_entry) in expected_bgl.entries.iter() {
+                        if let Some(a_entry) = assigned_bgl.entries.get(*id) {
+                            if a_entry.binding != e_entry.binding {
+                                diff.push(format!(
+                                    "Entry {id} binding expected {}, got {}",
+                                    e_entry.binding, a_entry.binding
+                                ));
+                            }
+                            if a_entry.count != e_entry.count {
+                                diff.push(format!(
+                                    "Entry {id} count expected {:?}, got {:?}",
+                                    e_entry.count, a_entry.count
+                                ));
+                            }
+                            if a_entry.ty != e_entry.ty {
+                                diff.push(format!(
+                                    "Entry {id} type expected {:?}, got {:?}",
+                                    e_entry.ty, a_entry.ty
+                                ));
+                            }
+                            if a_entry.visibility != e_entry.visibility {
+                                diff.push(format!(
+                                    "Entry {id} visibility expected {:?}, got {:?}",
+                                    e_entry.visibility, a_entry.visibility
+                                ));
+                            }
+                        } else {
+                            diff.push(format!(
+                                "Entry {id} not found in assigned bind group layout"
+                            ))
+                        }
+                    }
+
+                    assigned_bgl.entries.iter().for_each(|(id, _e_entry)| {
+                        if !expected_bgl.entries.contains_key(*id) {
+                            diff.push(format!(
+                                "Entry {id} not found in expected bind group layout"
+                            ))
+                        }
+                    });
+
+                    if expected_bgl.origin != assigned_bgl.origin {
+                        diff.push(format!("Expected {expected_bgl_type} bind group layout, got {assigned_bgl_type}"))
+                    }
+                } else {
+                    diff.push("Assigned bind group layout not found (internal error)".to_owned());
+                }
+            } else {
+                diff.push("Expected bind group layout not found (internal error)".to_owned());
+            }
+
+            diff
         }
     }
 
@@ -120,6 +207,15 @@ mod compat {
                     mask | 1u8 << i
                 }
             })
+        }
+
+        pub fn bgl_diff(&self) -> Vec<String> {
+            for e in &self.entries {
+                if !e.is_valid() {
+                    return e.bgl_diff();
+                }
+            }
+            vec![String::from("No differences detected? (internal error)")]
         }
     }
 }
@@ -272,6 +368,10 @@ impl<A: HalApi> Binder<A> {
 
     pub(super) fn invalid_mask(&self) -> BindGroupMask {
         self.manager.invalid_mask()
+    }
+
+    pub(super) fn bgl_diff(&self) -> Vec<String> {
+        self.manager.bgl_diff()
     }
 
     /// Scan active buffer bindings corresponding to layouts without `min_binding_size` specified.

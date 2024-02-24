@@ -203,7 +203,7 @@ static TEXTURE_FORMATS_ASTC: &[wgpu::TextureFormat] = &[
     },
 ];
 
-fn single_texture_clear_test(
+async fn single_texture_clear_test(
     ctx: &TestingContext,
     format: wgpu::TextureFormat,
     size: wgpu::Extent3d,
@@ -259,12 +259,12 @@ fn single_texture_clear_test(
     ctx.queue.submit([encoder.finish()]);
 
     assert!(
-        readback_buffers.are_zero(&ctx.device),
+        readback_buffers.are_zero(ctx).await,
         "texture with format {format:?} was not fully cleared"
     );
 }
 
-fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
+async fn clear_texture_tests(ctx: TestingContext, formats: &'static [wgpu::TextureFormat]) {
     for &format in formats {
         let (block_width, block_height) = format.block_dimensions();
         let rounded_width = block_width * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
@@ -278,7 +278,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
         // 1D texture
         if supports_1d {
             single_texture_clear_test(
-                ctx,
+                &ctx,
                 format,
                 wgpu::Extent3d {
                     width: rounded_width,
@@ -286,11 +286,12 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
                     depth_or_array_layers: 1,
                 },
                 wgpu::TextureDimension::D1,
-            );
+            )
+            .await;
         }
         // 2D texture
         single_texture_clear_test(
-            ctx,
+            &ctx,
             format,
             wgpu::Extent3d {
                 width: rounded_width,
@@ -298,10 +299,11 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
                 depth_or_array_layers: 1,
             },
             wgpu::TextureDimension::D2,
-        );
+        )
+        .await;
         // 2D array texture
         single_texture_clear_test(
-            ctx,
+            &ctx,
             format,
             wgpu::Extent3d {
                 width: rounded_width,
@@ -309,11 +311,12 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
                 depth_or_array_layers: 4,
             },
             wgpu::TextureDimension::D2,
-        );
+        )
+        .await;
         if supports_3d {
             // volume texture
             single_texture_clear_test(
-                ctx,
+                &ctx,
                 format,
                 wgpu::Extent3d {
                     width: rounded_width,
@@ -321,7 +324,8 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
                     depth_or_array_layers: 16,
                 },
                 wgpu::TextureDimension::D3,
-            );
+            )
+            .await;
         }
     }
 }
@@ -333,9 +337,7 @@ static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfigurat
             .features(wgpu::Features::CLEAR_TEXTURE)
             .skip(FailureCase::webgl2()),
     )
-    .run_sync(|ctx| {
-        clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT);
-    });
+    .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT));
 
 #[gpu_test]
 static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -350,9 +352,7 @@ static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::
             )
             .features(wgpu::Features::CLEAR_TEXTURE),
     )
-    .run_sync(|ctx| {
-        clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED);
-    });
+    .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_UNCOMPRESSED));
 
 #[gpu_test]
 static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -362,23 +362,23 @@ static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
                 wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
                     | wgpu::DownlevelFlags::COMPUTE_SHADERS,
             )
+            // https://github.com/gfx-rs/wgpu/issues/5016
+            .skip(FailureCase::adapter("Apple Paravirtual device"))
             .skip(FailureCase::webgl2())
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::CLEAR_TEXTURE),
     )
-    .run_sync(|ctx| {
-        clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH);
-    });
+    .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_DEPTH));
 
 #[gpu_test]
 static CLEAR_TEXTURE_DEPTH32_STENCIL8: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8),
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8)
+            // https://github.com/gfx-rs/wgpu/issues/5016
+            .skip(FailureCase::adapter("Apple Paravirtual device")),
     )
-    .run_sync(|ctx| {
-        clear_texture_tests(&ctx, &[wgpu::TextureFormat::Depth32FloatStencil8]);
-    });
+    .run_async(|ctx| clear_texture_tests(ctx, &[wgpu::TextureFormat::Depth32FloatStencil8]));
 
 #[gpu_test]
 static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -390,9 +390,7 @@ static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration
             // compressed texture copy to buffer not yet implemented
             .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
-    .run_sync(|ctx| {
-        clear_texture_tests(&ctx, TEXTURE_FORMATS_BC);
-    });
+    .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_BC));
 
 #[gpu_test]
 static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -408,9 +406,7 @@ static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguratio
             // compressed texture copy to buffer not yet implemented
             .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
-    .run_sync(|ctx| {
-        clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC);
-    });
+    .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_ASTC));
 
 #[gpu_test]
 static CLEAR_TEXTURE_COMPRESSED_ETC2: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -422,6 +418,4 @@ static CLEAR_TEXTURE_COMPRESSED_ETC2: GpuTestConfiguration = GpuTestConfiguratio
             // compressed texture copy to buffer not yet implemented
             .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
-    .run_sync(|ctx| {
-        clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2);
-    });
+    .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_ETC2));

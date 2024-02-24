@@ -1,7 +1,7 @@
 //! Tests for buffer usages validation.
 
 use wgpu::{BufferUsages as Bu, MapMode as Ma};
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;
@@ -26,7 +26,7 @@ const NEEDS_MAPPABLE_PRIMARY_BUFFERS: &[Bu; 7] = &[
 const INVALID_BITS: Bu = Bu::from_bits_retain(0b1111111111111);
 const ALWAYS_FAIL: &[Bu; 2] = &[Bu::empty(), INVALID_BITS];
 
-fn try_create(ctx: wgpu_test::TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
+fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
     for (expect_validation_error, usage) in usages
         .iter()
         .flat_map(|&(expect_error, usages)| usages.iter().copied().map(move |u| (expect_error, u)))
@@ -69,7 +69,7 @@ static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration = GpuTestConf
     });
 
 async fn map_test(
-    device: &wgpu::Device,
+    ctx: &TestingContext,
     usage_type: &str,
     map_mode_type: Ma,
     before_unmap: bool,
@@ -89,8 +89,8 @@ async fn map_test(
 
     let mut buffer = None;
 
-    fail_if(device, buffer_creation_validation_error, || {
-        buffer = Some(device.create_buffer(&wgpu::BufferDescriptor {
+    fail_if(&ctx.device, buffer_creation_validation_error, || {
+        buffer = Some(ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size,
             usage,
@@ -107,7 +107,7 @@ async fn map_test(
         || (map_mode_type == Ma::Read && !usage.contains(Bu::MAP_READ))
         || (map_mode_type == Ma::Write && !usage.contains(Bu::MAP_WRITE));
 
-    fail_if(device, map_async_validation_error, || {
+    fail_if(&ctx.device, map_async_validation_error, || {
         buffer.slice(0..size).map_async(map_mode_type, |_| {});
     });
 
@@ -123,7 +123,9 @@ async fn map_test(
         buffer.destroy();
     }
 
-    device.poll(wgpu::MaintainBase::Wait);
+    ctx.async_poll(wgpu::Maintain::wait())
+        .await
+        .panic_on_timeout();
 
     if !before_unmap && !before_destroy {
         {
@@ -152,7 +154,7 @@ static BUFFER_MAP_ASYNC_MAP_STATE: GpuTestConfiguration = GpuTestConfiguration::
                         for after_unmap in [false, true] {
                             for after_destroy in [false, true] {
                                 map_test(
-                                    &ctx.device,
+                                    &ctx,
                                     usage_type,
                                     map_mode_type,
                                     before_unmap,

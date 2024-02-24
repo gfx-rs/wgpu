@@ -109,7 +109,7 @@ impl super::Queue {
             super::TextureInner::Texture { raw, target } => {
                 let num_layers = view.array_layers.end - view.array_layers.start;
                 if num_layers > 1 {
-                    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+                    #[cfg(webgl)]
                     unsafe {
                         gl.framebuffer_texture_multiview_ovr(
                             fbo_target,
@@ -143,7 +143,7 @@ impl super::Queue {
                     };
                 }
             }
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             super::TextureInner::ExternalFramebuffer { ref inner } => unsafe {
                 gl.bind_external_framebuffer(glow::FRAMEBUFFER, inner);
             },
@@ -432,7 +432,7 @@ impl super::Queue {
                     unsafe { gl.bind_buffer(copy_dst_target, None) };
                 }
             }
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             C::CopyExternalImageToTexture {
                 ref src,
                 dst,
@@ -1330,6 +1330,10 @@ impl super::Queue {
                         unsafe { gl.disable(glow::DEPTH_CLAMP) };
                     }
                 }
+                // POLYGON_MODE_LINE also implies POLYGON_MODE_POINT
+                if self.features.contains(wgt::Features::POLYGON_MODE_LINE) {
+                    unsafe { gl.polygon_mode(glow::FRONT_AND_BACK, state.polygon_mode) };
+                }
             }
             C::SetBlendConstant(c) => {
                 unsafe { gl.blend_color(c[0], c[1], c[2], c[3]) };
@@ -1744,6 +1748,7 @@ impl crate::Queue<super::Api> for super::Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&super::CommandBuffer],
+        _surface_textures: &[&super::Texture],
         signal_fence: Option<(&mut super::Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         let shared = Arc::clone(&self.shared);
@@ -1801,15 +1806,7 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 }
 
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for super::Queue {}
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for super::Queue {}

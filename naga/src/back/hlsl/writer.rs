@@ -2230,6 +2230,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                 crate::Literal::I64(value) => write!(self.out, "{}L", value)?,
                 crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                    return Err(Error::Custom(
+                        "Abstract types should not appear in IR presented to backends".into(),
+                    ));
+                }
             },
             Expression::Constant(handle) => {
                 let constant = &module.constants[handle];
@@ -2454,7 +2459,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         index: u32,
                     ) -> BackendResult {
                         match *resolved {
-                            // We specifcally lift the ValuePointer to this case. While `[0]` is valid
+                            // We specifically lift the ValuePointer to this case. While `[0]` is valid
                             // HLSL for any vector behind a value pointer, FXC completely miscompiles
                             // it and generates completely nonsensical DXBC.
                             //

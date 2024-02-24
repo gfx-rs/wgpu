@@ -247,6 +247,7 @@ impl super::Adapter {
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
             | wgt::Features::TEXTURE_COMPRESSION_BC
             | wgt::Features::CLEAR_TEXTURE
@@ -299,6 +300,9 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
+        // float32-filterable should always be available on d3d12
+        features.set(wgt::Features::FLOAT32_FILTERABLE, true);
+
         features.set(
             wgt::Features::SUBGROUP_COMPUTE | wgt::Features::SUBGROUP_FRAGMENT,
             shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_6_0,
@@ -313,6 +317,12 @@ impl super::Adapter {
         // https://github.com/gfx-rs/wgpu/issues/2471
         downlevel.flags -=
             wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+
+        // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
+        let max_color_attachments = 8;
+        // TODO: determine this programmatically if possible.
+        // https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447
+        let max_color_attachment_bytes_per_sample = 64;
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -384,6 +394,8 @@ impl super::Adapter {
                         d3d12_ty::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
                     max_inter_stage_shader_components: base.max_inter_stage_shader_components,
+                    max_color_attachments,
+                    max_color_attachment_bytes_per_sample,
                     max_compute_workgroup_storage_size: base.max_compute_workgroup_storage_size, //TODO?
                     max_compute_invocations_per_workgroup:
                         d3d12_ty::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,
@@ -633,19 +645,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 wgt::TextureFormat::Rgb10a2Unorm,
                 wgt::TextureFormat::Rgba16Float,
             ],
-            // we currently use a flip effect which supports 2..=16 buffers
-            swap_chain_sizes: 2..=16,
+            // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
+            maximum_frame_latency: 1..=16,
             current_extent,
-            // TODO: figure out the exact bounds
-            extents: wgt::Extent3d {
-                width: 16,
-                height: 16,
-                depth_or_array_layers: 1,
-            }..=wgt::Extent3d {
-                width: 4096,
-                height: 4096,
-                depth_or_array_layers: 1,
-            },
             usage: crate::TextureUses::COLOR_TARGET
                 | crate::TextureUses::COPY_SRC
                 | crate::TextureUses::COPY_DST,

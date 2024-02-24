@@ -101,15 +101,18 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // buffered and receiving will just pick that up.
     //
     // It may also be worth noting that although on native, the usage of asynchronous
-    // channels is wholely unnecessary, for the sake of portability to WASM (std channels
+    // channels is wholly unnecessary, for the sake of portability to WASM (std channels
     // don't work on WASM,) we'll use async channels that work on both native and WASM.
     let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     // In order for the mapping to be completed, one of three things must happen.
     // One of those can be calling `Device::poll`. This isn't necessary on the web as devices
     // are polled automatically but natively, we need to make sure this happens manually.
-    // `Maintain::Wait` will cause the thread to wait on native but not the web.
-    context.device.poll(wgpu::Maintain::Wait);
+    // `Maintain::Wait` will cause the thread to wait on native but not on WebGpu.
+    context
+        .device
+        .poll(wgpu::Maintain::wait())
+        .panic_on_timeout();
     log::info!("Device polled.");
     // Now we await the receiving and panic if anything went wrong because we're lazy.
     receiver.recv_async().await.unwrap().unwrap();
@@ -167,8 +170,8 @@ impl WgpuContext {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::downlevel_defaults(),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
                 },
                 None,
             )

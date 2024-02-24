@@ -9,7 +9,7 @@ use wgpu_test::{
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_AFTER_SUBMIT:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|mut ctx| {
+    .run_async(|mut ctx| async move {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
@@ -19,21 +19,21 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
         case.copy_texture_to_buffer();
         case.submit_command_encoder();
 
-        case.assert_buffers_are_zero();
+        case.assert_buffers_are_zero().await;
     });
 
 #[gpu_test]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|mut ctx| {
+    .run_async(|mut ctx| async move {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
         case.copy_texture_to_buffer();
         case.submit_command_encoder();
 
-        case.assert_buffers_are_zero();
+        case.assert_buffers_are_zero().await;
     });
 
 #[gpu_test]
@@ -46,7 +46,7 @@ static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
             )
             .limits(Limits::downlevel_defaults()),
     )
-    .run_sync(|mut ctx| {
+    .run_async(|mut ctx| async move {
         for format in [
             TextureFormat::Stencil8,
             TextureFormat::Depth16Unorm,
@@ -60,7 +60,7 @@ static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
             case.copy_texture_to_buffer();
             case.submit_command_encoder();
 
-            case.assert_buffers_are_zero();
+            case.assert_buffers_are_zero().await;
         }
     });
 
@@ -75,7 +75,7 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
                 )
                 .limits(Limits::downlevel_defaults()),
         )
-        .run_sync(|mut ctx| {
+        .run_async(|mut ctx| async move {
             for format in [
                 TextureFormat::Stencil8,
                 TextureFormat::Depth16Unorm,
@@ -96,7 +96,7 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
                 case.copy_texture_to_buffer();
                 case.submit_command_encoder();
 
-                case.assert_buffers_are_zero();
+                case.assert_buffers_are_zero().await;
             }
         });
 
@@ -310,9 +310,9 @@ impl<'ctx> TestCase<'ctx> {
         );
     }
 
-    pub fn assert_buffers_are_zero(&mut self) {
+    pub async fn assert_buffers_are_zero(&mut self) {
         assert!(
-            self.readback_buffers.are_zero(&self.ctx.device),
+            self.readback_buffers.are_zero(self.ctx).await,
             "texture was not fully cleared"
         );
     }

@@ -200,7 +200,7 @@ impl crate::ColorAttachment<'_, super::Api> {
             .view
             .attachment
             .view_format
-            .sample_type(None)
+            .sample_type(None, None)
             .unwrap()
         {
             wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {
@@ -222,7 +222,7 @@ pub fn derive_image_layout(
     format: wgt::TextureFormat,
 ) -> vk::ImageLayout {
     // Note: depth textures are always sampled with RODS layout
-    let is_color = crate::FormatAspects::from(format).contains(crate::FormatAspects::COLOR);
+    let is_color = !format.is_depth_stencil_format();
     match usage {
         crate::TextureUses::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUses::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -402,24 +402,25 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
     }
 }
 
-pub fn map_aspects(aspects: crate::FormatAspects, plane: Option<u32>) -> vk::ImageAspectFlags {
+pub fn map_aspects(aspects: crate::FormatAspects) -> vk::ImageAspectFlags {
     let mut flags = vk::ImageAspectFlags::empty();
-    match plane {
-        Some(0) => flags |= vk::ImageAspectFlags::PLANE_0,
-        Some(1) => flags |= vk::ImageAspectFlags::PLANE_1,
-        Some(2) => flags |= vk::ImageAspectFlags::PLANE_2,
-        Some(plane) => panic!("Unexpected plane {}", plane),
-        None => {
-            if aspects.contains(crate::FormatAspects::COLOR) {
-                flags |= vk::ImageAspectFlags::COLOR;
-            }
-        }
+    if aspects.contains(crate::FormatAspects::COLOR) {
+        flags |= vk::ImageAspectFlags::COLOR;
     }
     if aspects.contains(crate::FormatAspects::DEPTH) {
         flags |= vk::ImageAspectFlags::DEPTH;
     }
     if aspects.contains(crate::FormatAspects::STENCIL) {
         flags |= vk::ImageAspectFlags::STENCIL;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_0) {
+        flags |= vk::ImageAspectFlags::PLANE_0;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_1) {
+        flags |= vk::ImageAspectFlags::PLANE_1;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_2) {
+        flags |= vk::ImageAspectFlags::PLANE_2;
     }
     flags
 }
@@ -517,6 +518,16 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
     if usage.contains(crate::BufferUses::INDIRECT) {
         flags |= vk::BufferUsageFlags::INDIRECT_BUFFER;
     }
+    if usage.contains(crate::BufferUses::ACCELERATION_STRUCTURE_SCRATCH) {
+        flags |= vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    }
+    if usage.intersects(
+        crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
+            | crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+    ) {
+        flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    }
     flags
 }
 
@@ -569,6 +580,15 @@ pub fn map_buffer_usage_to_barrier(
         stages |= vk::PipelineStageFlags::DRAW_INDIRECT;
         access |= vk::AccessFlags::INDIRECT_COMMAND_READ;
     }
+    if usage.intersects(
+        crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
+            | crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
+            | crate::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+    ) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR
+            | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
+    }
 
     (stages, access)
 }
@@ -595,10 +615,9 @@ pub fn map_copy_extent(extent: &crate::CopyExtent) -> vk::Extent3D {
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
     format: wgt::TextureFormat,
-    plane: Option<u32>,
 ) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
-        aspect_mask: map_aspects(crate::FormatAspects::new(format, range.aspect), plane),
+        aspect_mask: map_aspects(crate::FormatAspects::new(format, range.aspect)),
         base_mip_level: range.base_mip_level,
         level_count: range.mip_level_count.unwrap_or(vk::REMAINING_MIP_LEVELS),
         base_array_layer: range.base_array_layer,
@@ -615,7 +634,7 @@ pub(super) fn map_subresource_range_combined_aspect(
     format: wgt::TextureFormat,
     private_caps: &super::PrivateCapabilities,
 ) -> vk::ImageSubresourceRange {
-    let mut range = map_subresource_range(range, format, None);
+    let mut range = map_subresource_range(range, format);
     if !private_caps.texture_s8 && format == wgt::TextureFormat::Stencil8 {
         range.aspect_mask |= vk::ImageAspectFlags::DEPTH;
     }
@@ -631,7 +650,7 @@ pub fn map_subresource_layers(
         z: base.origin.z as i32,
     };
     let subresource = vk::ImageSubresourceLayers {
-        aspect_mask: map_aspects(base.aspect, None),
+        aspect_mask: map_aspects(base.aspect),
         mip_level: base.mip_level,
         base_array_layer: base.array_layer,
         layer_count: 1,
@@ -720,6 +739,7 @@ pub fn map_binding_type(ty: wgt::BindingType) -> vk::DescriptorType {
         wgt::BindingType::Sampler { .. } => vk::DescriptorType::SAMPLER,
         wgt::BindingType::Texture { .. } => vk::DescriptorType::SAMPLED_IMAGE,
         wgt::BindingType::StorageTexture { .. } => vk::DescriptorType::STORAGE_IMAGE,
+        wgt::BindingType::AccelerationStructure => vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
     }
 }
 
@@ -850,4 +870,96 @@ pub fn map_pipeline_statistics(
         flags |= vk::QueryPipelineStatisticFlags::COMPUTE_SHADER_INVOCATIONS;
     }
     flags
+}
+
+pub fn map_acceleration_structure_format(
+    format: crate::AccelerationStructureFormat,
+) -> vk::AccelerationStructureTypeKHR {
+    match format {
+        crate::AccelerationStructureFormat::TopLevel => vk::AccelerationStructureTypeKHR::TOP_LEVEL,
+        crate::AccelerationStructureFormat::BottomLevel => {
+            vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL
+        }
+    }
+}
+
+pub fn map_acceleration_structure_build_mode(
+    format: crate::AccelerationStructureBuildMode,
+) -> vk::BuildAccelerationStructureModeKHR {
+    match format {
+        crate::AccelerationStructureBuildMode::Build => {
+            vk::BuildAccelerationStructureModeKHR::BUILD
+        }
+        crate::AccelerationStructureBuildMode::Update => {
+            vk::BuildAccelerationStructureModeKHR::UPDATE
+        }
+    }
+}
+
+pub fn map_acceleration_structure_flags(
+    flags: crate::AccelerationStructureBuildFlags,
+) -> vk::BuildAccelerationStructureFlagsKHR {
+    let mut vk_flags = vk::BuildAccelerationStructureFlagsKHR::empty();
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::PREFER_FAST_TRACE) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE;
+    }
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::PREFER_FAST_BUILD) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_BUILD;
+    }
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::ALLOW_UPDATE) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE;
+    }
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::LOW_MEMORY) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::LOW_MEMORY;
+    }
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::ALLOW_COMPACTION) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_COMPACTION
+    }
+
+    vk_flags
+}
+
+pub fn map_acceleration_structure_geometry_flags(
+    flags: crate::AccelerationStructureGeometryFlags,
+) -> vk::GeometryFlagsKHR {
+    let mut vk_flags = vk::GeometryFlagsKHR::empty();
+
+    if flags.contains(crate::AccelerationStructureGeometryFlags::OPAQUE) {
+        vk_flags |= vk::GeometryFlagsKHR::OPAQUE;
+    }
+
+    if flags.contains(crate::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION) {
+        vk_flags |= vk::GeometryFlagsKHR::NO_DUPLICATE_ANY_HIT_INVOCATION;
+    }
+
+    vk_flags
+}
+
+pub fn map_acceleration_structure_usage_to_barrier(
+    usage: crate::AccelerationStructureUses,
+) -> (vk::PipelineStageFlags, vk::AccessFlags) {
+    let mut stages = vk::PipelineStageFlags::empty();
+    let mut access = vk::AccessFlags::empty();
+
+    if usage.contains(crate::AccelerationStructureUses::BUILD_INPUT) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::BUILD_OUTPUT) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT) {
+        stages |= vk::PipelineStageFlags::VERTEX_SHADER
+            | vk::PipelineStageFlags::FRAGMENT_SHADER
+            | vk::PipelineStageFlags::COMPUTE_SHADER;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+
+    (stages, access)
 }

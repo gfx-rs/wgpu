@@ -72,7 +72,7 @@ pub fn compact(module: &mut crate::Module) {
         })
         .collect();
 
-    // Similiarly, observe what each entry point actually uses.
+    // Similarly, observe what each entry point actually uses.
     log::trace!("tracing entry points");
     let entry_point_maps: Vec<FunctionMap> = module
         .entry_points

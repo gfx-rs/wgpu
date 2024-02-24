@@ -13,17 +13,17 @@ use crate::{
     hal_api::HalApi,
     hal_label,
     id::{self, QueueId},
-    identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, ResourceType,
-        StagingBuffer, Texture, TextureInner,
+        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, Resource,
+        ResourceInfo, ResourceType, StagingBuffer, Texture, TextureInner,
     },
     resource_log, track, FastHashMap, SubmissionIndex,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
+use smallvec::SmallVec;
 
 use std::{
     iter, mem, ptr,
@@ -36,17 +36,19 @@ use super::Device;
 pub struct Queue<A: HalApi> {
     pub device: Option<Arc<Device<A>>>,
     pub raw: Option<A::Queue>,
-    pub info: ResourceInfo<QueueId>,
+    pub info: ResourceInfo<Queue<A>>,
 }
 
-impl<A: HalApi> Resource<QueueId> for Queue<A> {
+impl<A: HalApi> Resource for Queue<A> {
     const TYPE: ResourceType = "Queue";
 
-    fn as_info(&self) -> &ResourceInfo<QueueId> {
+    type Marker = crate::id::markers::Queue;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
     }
 
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<QueueId> {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
 }
@@ -71,13 +73,7 @@ pub struct SubmittedWorkDoneClosureC {
     pub user_data: *mut u8,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Send for SubmittedWorkDoneClosureC {}
 
 pub struct SubmittedWorkDoneClosure {
@@ -86,21 +82,9 @@ pub struct SubmittedWorkDoneClosure {
     inner: SubmittedWorkDoneClosureInner,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
+#[cfg(not(send_sync))]
 type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 
 enum SubmittedWorkDoneClosureInner {
@@ -163,6 +147,8 @@ pub struct WrappedSubmissionIndex {
 pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
     StagingBuffer(Arc<StagingBuffer<A>>),
+    DestroyedBuffer(Arc<DestroyedBuffer<A>>),
+    DestroyedTexture(Arc<DestroyedTexture<A>>),
     Texture(Arc<Texture<A>>),
 }
 
@@ -202,10 +188,17 @@ impl<A: HalApi> EncoderInFlight<A> {
 #[derive(Debug)]
 pub(crate) struct PendingWrites<A: HalApi> {
     pub command_encoder: A::CommandEncoder,
-    pub is_active: bool,
+
+    /// True if `command_encoder` is in the "recording" state, as
+    /// described in the docs for the [`wgpu_hal::CommandEncoder`]
+    /// trait.
+    pub is_recording: bool,
+
     pub temp_resources: Vec<TempResource<A>>,
     pub dst_buffers: FastHashMap<id::BufferId, Arc<Buffer<A>>>,
     pub dst_textures: FastHashMap<id::TextureId, Arc<Texture<A>>>,
+
+    /// All command buffers allocated from `command_encoder`.
     pub executing_command_buffers: Vec<A::CommandBuffer>,
 }
 
@@ -213,7 +206,7 @@ impl<A: HalApi> PendingWrites<A> {
     pub fn new(command_encoder: A::CommandEncoder) -> Self {
         Self {
             command_encoder,
-            is_active: false,
+            is_recording: false,
             temp_resources: Vec::new(),
             dst_buffers: FastHashMap::default(),
             dst_textures: FastHashMap::default(),
@@ -223,7 +216,7 @@ impl<A: HalApi> PendingWrites<A> {
 
     pub fn dispose(mut self, device: &A::Device) {
         unsafe {
-            if self.is_active {
+            if self.is_recording {
                 self.command_encoder.discard_encoding();
             }
             self.command_encoder
@@ -243,18 +236,18 @@ impl<A: HalApi> PendingWrites<A> {
             .push(TempResource::StagingBuffer(buffer));
     }
 
-    #[must_use]
-    fn pre_submit(&mut self) -> Option<&A::CommandBuffer> {
+    fn pre_submit(&mut self) -> Result<Option<&A::CommandBuffer>, DeviceError> {
         self.dst_buffers.clear();
         self.dst_textures.clear();
-        if self.is_active {
-            let cmd_buf = unsafe { self.command_encoder.end_encoding().unwrap() };
-            self.is_active = false;
+        if self.is_recording {
+            let cmd_buf = unsafe { self.command_encoder.end_encoding()? };
+            self.is_recording = false;
             self.executing_command_buffers.push(cmd_buf);
-            self.executing_command_buffers.last()
-        } else {
-            None
+
+            return Ok(self.executing_command_buffers.last());
         }
+
+        Ok(None)
     }
 
     #[must_use]
@@ -276,23 +269,23 @@ impl<A: HalApi> PendingWrites<A> {
     }
 
     pub fn activate(&mut self) -> &mut A::CommandEncoder {
-        if !self.is_active {
+        if !self.is_recording {
             unsafe {
                 self.command_encoder
                     .begin_encoding(Some("(wgpu internal) PendingWrites"))
                     .unwrap();
             }
-            self.is_active = true;
+            self.is_recording = true;
         }
         &mut self.command_encoder
     }
 
     pub fn deactivate(&mut self) {
-        if self.is_active {
+        if self.is_recording {
             unsafe {
                 self.command_encoder.discard_encoding();
             }
-            self.is_active = false;
+            self.is_recording = false;
         }
     }
 }
@@ -377,7 +370,7 @@ pub enum QueueSubmitError {
 
 //TODO: move out common parts of write_xxx.
 
-impl<G: GlobalIdentityHandlerFactory> Global<G> {
+impl Global {
     pub fn queue_write_buffer<A: HalApi>(
         &self,
         queue_id: QueueId,
@@ -451,7 +444,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: QueueId,
         buffer_size: wgt::BufferSize,
-        id_in: Input<G, id::StagingBufferId>,
+        id_in: Option<id::StagingBufferId>,
     ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
         profiling::scope!("Queue::create_staging_buffer");
         let hub = A::hub(self);
@@ -466,7 +459,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(device, buffer_size.get(), device.instance_flags)?;
 
-        let fid = hub.staging_buffers.prepare::<G>(id_in);
+        let fid = hub.staging_buffers.prepare(id_in);
         let (id, _) = fid.assign(staging_buffer);
         resource_log!("Queue::create_staging_buffer {id:?}");
 
@@ -593,9 +586,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .set_single(dst, hal::BufferUses::COPY_DST)
                 .ok_or(TransferError::InvalidBuffer(buffer_id))?
         };
+        let snatch_guard = device.snatchable_lock.read();
         let dst_raw = dst
             .raw
-            .as_ref()
+            .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
 
         if dst.device.as_info().id() != device.as_info().id() {
@@ -618,7 +612,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer: inner_buffer.as_ref().unwrap(),
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
-        .chain(transition.map(|pending| pending.into_hal(&dst)));
+        .chain(transition.map(|pending| pending.into_hal(&dst, &snatch_guard)));
         let encoder = pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
@@ -683,7 +677,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        if dst.device.as_info().id() != queue_id {
+        if dst.device.as_info().id() != queue_id.transmute() {
             return Err(DeviceError::WrongDevice.into());
         }
 
@@ -738,7 +732,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // doesn't really matter because we need this only if we copy
             // more than one layer, and then we validate for this being not
             // None
-            size.height,
+            height_blocks,
         );
 
         let block_size = dst
@@ -800,6 +794,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+        let snatch_guard = device.snatchable_lock.read();
+
         // Re-get `dst` immutably here, so that the mutable borrow of the
         // `texture_guard.get` above ends in time for the `clear_texture`
         // call above. Since we've held `texture_guard` the whole time, we know
@@ -808,11 +804,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let dst_inner = dst.inner();
-        let dst_raw = dst_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let dst_raw = dst
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let bytes_per_row = data_layout
@@ -895,9 +888,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
             unsafe {
-                encoder.transition_textures(
-                    transition.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())),
-                );
+                encoder.transition_textures(transition.map(|pending| pending.into_hal(dst_raw)));
                 encoder.transition_buffers(iter::once(barrier));
                 encoder.copy_buffer_to_texture(inner_buffer.as_ref().unwrap(), dst_raw, regions);
             }
@@ -911,7 +902,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(webgl)]
     pub fn queue_copy_external_image_to_texture<A: HalApi>(
         &self,
         queue_id: QueueId,
@@ -1074,11 +1065,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let dst_inner = dst.inner();
-        let dst_raw = dst_inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
+        let snatch_guard = device.snatchable_lock.read();
+        let dst_raw = dst
+            .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let regions = hal::TextureCopy {
@@ -1098,9 +1087,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .textures
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
-            encoder.transition_textures(
-                transitions.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())),
-            );
+            encoder.transition_textures(transitions.map(|pending| pending.into_hal(dst_raw)));
             encoder.copy_external_image_to_texture(
                 source,
                 dst_raw,
@@ -1137,7 +1124,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .fetch_add(1, Ordering::Relaxed)
                 + 1;
             let mut active_executions = Vec::new();
+
             let mut used_surface_textures = track::TextureUsageScope::new();
+
+            let snatch_guard = device.snatchable_lock.read();
+
+            let mut submit_surface_textures_owned = SmallVec::<[_; 2]>::new();
 
             {
                 let mut command_buffer_guard = hub.command_buffers.write();
@@ -1150,8 +1142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // a temporary one, since the chains are not finished.
                     let mut temp_suspected = device.temp_suspected.lock();
                     {
-                        let mut suspected =
-                            temp_suspected.replace(ResourceMaps::new::<A>()).unwrap();
+                        let mut suspected = temp_suspected.replace(ResourceMaps::new()).unwrap();
                         suspected.clear();
                     }
 
@@ -1161,15 +1152,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // it, so make sure to set_size on it.
                         used_surface_textures.set_size(hub.textures.read().len());
 
-                        // TODO: ideally we would use `get_and_mark_destroyed` but the code here
-                        // wants to consume the command buffer.
                         #[allow(unused_mut)]
                         let mut cmdbuf = match command_buffer_guard.replace_with_error(cmb_id) {
                             Ok(cmdbuf) => cmdbuf,
                             Err(_) => continue,
                         };
 
-                        if cmdbuf.device.as_info().id() != queue_id {
+                        if cmdbuf.device.as_info().id() != queue_id.transmute() {
                             return Err(DeviceError::WrongDevice.into());
                         }
 
@@ -1188,7 +1177,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ));
                         }
                         if !cmdbuf.is_finished() {
-                            if let Ok(cmdbuf) = Arc::try_unwrap(cmdbuf) {
+                            if let Some(cmdbuf) = Arc::into_inner(cmdbuf) {
                                 device.destroy_command_buffer(cmdbuf);
                             } else {
                                 panic!(
@@ -1207,8 +1196,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             // update submission IDs
                             for buffer in cmd_buf_trackers.buffers.used_resources() {
                                 let id = buffer.info.id();
-                                let raw_buf = match buffer.raw {
-                                    Some(ref raw) => raw,
+                                let raw_buf = match buffer.raw.get(&snatch_guard) {
+                                    Some(raw) => raw,
                                     None => {
                                         return Err(QueueSubmitError::DestroyedBuffer(id));
                                     }
@@ -1221,7 +1210,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         unsafe { device.raw().unmap_buffer(raw_buf) }
                                             .map_err(DeviceError::from)?;
                                     }
-                                    temp_suspected.as_mut().unwrap().insert(id, buffer.clone());
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .buffers
+                                        .insert(id, buffer.clone());
                                 } else {
                                     match *buffer.map_state.lock() {
                                         BufferMapState::Idle => (),
@@ -1231,19 +1224,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             for texture in cmd_buf_trackers.textures.used_resources() {
                                 let id = texture.info.id();
-                                let should_extend = match *texture.inner().as_ref().unwrap() {
-                                    TextureInner::Native { raw: None } => {
+                                let should_extend = match texture.inner.get(&snatch_guard) {
+                                    None => {
                                         return Err(QueueSubmitError::DestroyedTexture(id));
                                     }
-                                    TextureInner::Native { raw: Some(_) } => false,
-                                    TextureInner::Surface { ref has_work, .. } => {
-                                        has_work.store(true, Ordering::Relaxed);
+                                    Some(TextureInner::Native { .. }) => false,
+                                    Some(TextureInner::Surface { ref raw, .. }) => {
+                                        if raw.is_some() {
+                                            submit_surface_textures_owned.push(texture.clone());
+                                        }
+
                                         true
                                     }
                                 };
                                 texture.info.use_at(submit_index);
                                 if texture.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(id, texture.clone());
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .textures
+                                        .insert(id, texture.clone());
                                 }
                                 if should_extend {
                                     unsafe {
@@ -1259,6 +1259,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .texture_views
                                         .insert(texture_view.as_info().id(), texture_view.clone());
                                 }
                             }
@@ -1278,6 +1279,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         temp_suspected
                                             .as_mut()
                                             .unwrap()
+                                            .bind_groups
                                             .insert(bg.as_info().id(), bg.clone());
                                     }
                                 }
@@ -1288,7 +1290,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 compute_pipeline.info.use_at(submit_index);
                                 if compute_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(
+                                    temp_suspected.as_mut().unwrap().compute_pipelines.insert(
                                         compute_pipeline.as_info().id(),
                                         compute_pipeline.clone(),
                                     );
@@ -1299,7 +1301,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 render_pipeline.info.use_at(submit_index);
                                 if render_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(
+                                    temp_suspected.as_mut().unwrap().render_pipelines.insert(
                                         render_pipeline.as_info().id(),
                                         render_pipeline.clone(),
                                     );
@@ -1311,6 +1313,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .query_sets
                                         .insert(query_set.as_info().id(), query_set.clone());
                                 }
                             }
@@ -1331,6 +1334,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
+                                        .render_bundles
                                         .insert(bundle.as_info().id(), bundle.clone());
                                 }
                             }
@@ -1362,6 +1366,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &mut baked.encoder,
                             &mut *trackers,
                             &baked.trackers,
+                            &snatch_guard,
                         );
 
                         let transit = unsafe { baked.encoder.end_encoding().unwrap() };
@@ -1383,11 +1388,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             trackers
                                 .textures
                                 .set_from_usage_scope(&used_surface_textures);
-                            let (transitions, textures) = trackers.textures.drain_transitions();
+                            let (transitions, textures) =
+                                trackers.textures.drain_transitions(&snatch_guard);
                             let texture_barriers = transitions
                                 .into_iter()
                                 .enumerate()
-                                .map(|(i, p)| p.into_hal(textures[i].as_ref().unwrap()));
+                                .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
@@ -1411,17 +1417,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let pending_writes = pending_writes.as_mut().unwrap();
 
             {
-                let texture_guard = hub.textures.read();
-
-                used_surface_textures.set_size(texture_guard.len());
+                used_surface_textures.set_size(hub.textures.read().len());
                 for (&id, texture) in pending_writes.dst_textures.iter() {
-                    match *texture.inner().as_ref().unwrap() {
-                        TextureInner::Native { raw: None } => {
+                    match texture.inner.get(&snatch_guard) {
+                        None => {
                             return Err(QueueSubmitError::DestroyedTexture(id));
                         }
-                        TextureInner::Native { raw: Some(_) } => {}
-                        TextureInner::Surface { ref has_work, .. } => {
-                            has_work.store(true, Ordering::Relaxed);
+                        Some(TextureInner::Native { .. }) => {}
+                        Some(TextureInner::Surface { ref raw, .. }) => {
+                            if raw.is_some() {
+                                submit_surface_textures_owned.push(texture.clone());
+                            }
+
                             unsafe {
                                 used_surface_textures
                                     .merge_single(texture, None, hal::TextureUses::PRESENT)
@@ -1437,11 +1444,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     trackers
                         .textures
                         .set_from_usage_scope(&used_surface_textures);
-                    let (transitions, textures) = trackers.textures.drain_transitions();
+                    let (transitions, textures) =
+                        trackers.textures.drain_transitions(&snatch_guard);
                     let texture_barriers = transitions
                         .into_iter()
                         .enumerate()
-                        .map(|(i, p)| p.into_hal(textures[i].as_ref().unwrap()));
+                        .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
                     unsafe {
                         pending_writes
                             .command_encoder
@@ -1451,7 +1459,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let refs = pending_writes
-                .pre_submit()
+                .pre_submit()?
                 .into_iter()
                 .chain(
                     active_executions
@@ -1459,12 +1467,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
                 )
                 .collect::<Vec<_>>();
+
+            let mut submit_surface_textures =
+                SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
+
+            for texture in &submit_surface_textures_owned {
+                submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
+                    Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
+                    _ => None,
+                });
+            }
+
             unsafe {
                 queue
                     .raw
                     .as_ref()
                     .unwrap()
-                    .submit(&refs, Some((fence, submit_index)))
+                    .submit(&refs, &submit_surface_textures, Some((fence, submit_index)))
                     .map_err(DeviceError::from)?;
             }
 

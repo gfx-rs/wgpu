@@ -84,3 +84,6 @@ fn map_texture_kind(texture_kind: i32) -> u32 {
 fn compose_of_splat() {
     var x = vec4f(vec3f(1.0), 2.0).wzyx;
 }
+
+const add_vec = vec2(1.0f) + vec2(3.0f, 4.0f);
+const compare_vec = vec2(3.0f) == vec2(3.0f, 4.0f);

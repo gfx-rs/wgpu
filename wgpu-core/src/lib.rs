@@ -1,7 +1,10 @@
-/*! This library safely implements WebGPU on native platforms.
- *  It is designed for integration into browsers, as well as wrapping
- *  into other language-specific user-friendly libraries.
- */
+//! This library safely implements WebGPU on native platforms.
+//! It is designed for integration into browsers, as well as wrapping
+//! into other language-specific user-friendly libraries.
+//!
+//! ## Feature flags
+#![doc = document_features::document_features!()]
+//!
 
 // When we have no backends, we end up with a lot of dead or otherwise unreachable code.
 #![cfg_attr(
@@ -9,7 +12,6 @@
         not(all(feature = "vulkan", not(target_arch = "wasm32"))),
         not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
         not(all(feature = "dx12", windows)),
-        not(all(feature = "dx11", windows)),
         not(feature = "gles"),
     ),
     allow(unused, clippy::let_and_return)
@@ -28,24 +30,22 @@
     clippy::needless_lifetimes,
     // No need for defaults in the internal types.
     clippy::new_without_default,
-    // Needless updates are more scaleable, easier to play with features.
+    // Needless updates are more scalable, easier to play with features.
     clippy::needless_update,
     // Need many arguments for some core functions to be able to re-use code in many situations.
     clippy::too_many_arguments,
     // For some reason `rustc` can warn about these in const generics even
     // though they are required.
     unused_braces,
-    // Clashes with clippy::pattern_type_mismatch
-    clippy::needless_borrowed_reference,
+    // It gets in the way a lot and does not prevent bugs in practice.
+    clippy::pattern_type_mismatch,
 )]
 #![warn(
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,
     unused_extern_crates,
-    unused_qualifications,
-    // We don't match on a reference, unless required.
-    clippy::pattern_type_mismatch,
+    unused_qualifications
 )]
 
 pub mod any_surface;
@@ -56,22 +56,32 @@ pub mod device;
 pub mod error;
 pub mod global;
 pub mod hal_api;
+mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
 mod init_tracker;
 pub mod instance;
 pub mod pipeline;
+mod pool;
 pub mod present;
 pub mod registry;
 pub mod resource;
+mod snatch;
 pub mod storage;
 mod track;
-mod validation;
+// This is public for users who pre-compile shaders while still wanting to
+// preserve all run-time checks that `wgpu-core` does.
+// See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
+// made private again.
+pub mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
+pub use naga;
 
 use std::{borrow::Cow, os::raw::c_char};
+
+pub(crate) use hash_utils::*;
 
 /// The index of a queue submission.
 ///
@@ -217,8 +227,11 @@ macro_rules! define_backend_caller {
 define_backend_caller! { gfx_if_vulkan, gfx_if_vulkan_hidden, "vulkan" if all(feature = "vulkan", not(target_arch = "wasm32")) }
 define_backend_caller! { gfx_if_metal, gfx_if_metal_hidden, "metal" if all(feature = "metal", any(target_os = "macos", target_os = "ios")) }
 define_backend_caller! { gfx_if_dx12, gfx_if_dx12_hidden, "dx12" if all(feature = "dx12", windows) }
-define_backend_caller! { gfx_if_dx11, gfx_if_dx11_hidden, "dx11" if all(feature = "dx11", windows) }
 define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "gles" }
+define_backend_caller! { gfx_if_empty, gfx_if_empty_hidden, "empty" if all(
+    not(any(feature = "metal", feature = "vulkan", feature = "gles")),
+    any(target_os = "macos", target_os = "ios"),
+) }
 
 /// Dispatch on an [`Id`]'s backend to a backend-generic method.
 ///
@@ -248,7 +261,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// where the `device_create_buffer` method is defined like this:
 ///
 /// ```ignore
-/// impl<...> Global<...> {
+/// impl Global {
 ///    pub fn device_create_buffer<A: HalApi>(&self, ...) -> ...
 ///    { ... }
 /// }
@@ -267,13 +280,23 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// [`Id`]: id::Id
 #[macro_export]
 macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
+    // Simple two-component expression, like `self.0.method(..)`.
+    ($id:expr => $c0:ident.$c1:tt.$method:ident $params:tt) => {
+        $crate::gfx_select!($id => {$c0.$c1}, $method $params)
+    };
+
+    // Simple identifier-only expression, like `global.method(..)`.
+    ($id:expr => $c0:ident.$method:ident $params:tt) => {
+        $crate::gfx_select!($id => {$c0}, $method $params)
+    };
+
+    ($id:expr => {$($c:tt)*}, $method:ident $params:tt) => {
         match $id.backend() {
-            wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($global.$method::<$crate::api::Vulkan>( $($param),* )),
-            wgt::Backend::Metal => $crate::gfx_if_metal!($global.$method::<$crate::api::Metal>( $($param),* )),
-            wgt::Backend::Dx12 => $crate::gfx_if_dx12!($global.$method::<$crate::api::Dx12>( $($param),* )),
-            wgt::Backend::Dx11 => $crate::gfx_if_dx11!($global.$method::<$crate::api::Dx11>( $($param),* )),
-            wgt::Backend::Gl => $crate::gfx_if_gles!($global.$method::<$crate::api::Gles>( $($param),+ )),
+            wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($($c)*.$method::<$crate::api::Vulkan> $params),
+            wgt::Backend::Metal => $crate::gfx_if_metal!($($c)*.$method::<$crate::api::Metal> $params),
+            wgt::Backend::Dx12 => $crate::gfx_if_dx12!($($c)*.$method::<$crate::api::Dx12> $params),
+            wgt::Backend::Gl => $crate::gfx_if_gles!($($c)*.$method::<$crate::api::Gles> $params),
+            wgt::Backend::Empty => $crate::gfx_if_empty!($($c)*.$method::<$crate::api::Empty> $params),
             other => panic!("Unexpected backend {:?}", other),
         }
     };
@@ -298,13 +321,6 @@ macro_rules! resource_log {
     ($($arg:tt)+) => (log::trace!($($arg)+))
 }
 pub(crate) use resource_log;
-
-/// Fast hash map used internally.
-type FastHashMap<K, V> =
-    std::collections::HashMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
-/// Fast hash set used internally.
-type FastHashSet<K> =
-    std::collections::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 #[inline]
 pub(crate) fn get_lowest_common_denom(a: u32, b: u32) -> u32 {

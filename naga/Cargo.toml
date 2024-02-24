@@ -1,6 +1,6 @@
 [package]
 name = "naga"
-version = "0.14.0"
+version = "0.19.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Shader translation infrastructure"
@@ -9,7 +9,7 @@ keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 resolver = "2"
-rust-version = "1.65"
+rust-version = "1.70"
 autotests = false
 
 [[test]]
@@ -31,7 +31,7 @@ deserialize = ["serde", "bitflags/serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
-wgsl-in = ["hexf-parse", "unicode-xid"]
+wgsl-in = ["hexf-parse", "unicode-xid", "compact"]
 wgsl-out = []
 hlsl-out = []
 compact = []
@@ -42,9 +42,9 @@ harness = false
 
 [dependencies]
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
-bitflags = "2.2"
+bitflags = "2.4"
 bit-set = "0.5"
-termcolor = { version = "1.4.0" }
+termcolor = { version = "1.4.1" }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
@@ -53,13 +53,14 @@ rustc-hash = "1.1.0"
 indexmap = { version = "2", features = ["std"] }
 log = "0.4"
 num-traits = "0.2"
-spirv = { version = "0.2", optional = true }
-thiserror = "1.0.21"
-serde = { version = "1.0.193", features = ["derive"], optional = true }
+spirv = { version = "0.3", optional = true }
+thiserror = "1.0.56"
+serde = { version = "1.0.195", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
+arrayvec.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = { version = "0.5", features = [] }
@@ -68,11 +69,14 @@ criterion = { version = "0.5", features = [] }
 bincode = "1"
 diff = "0.1"
 env_logger = "0.10"
-hlsl-snapshots = { version = "0.1.0", path = "./hlsl-snapshots" }
+# This _cannot_ have a version specified. If it does, crates.io will look
+# for a version of the package on crates when we publish naga. Path dependencies
+# are allowed through though.
+hlsl-snapshots = { path = "./hlsl-snapshots" }
 # Require at least version 0.7.1 of ron, this version changed how floating points are
 # serialized by forcing them to always have the decimal part, this makes it backwards
-# incompatible with our tests because we do a syntatic diff and not a semantic one.
+# incompatible with our tests because we do a syntactic diff and not a semantic one.
 ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { version = "1.0", features = ["derive"] }
-spirv = { version = "0.2", features = ["deserialize"] }
+spirv = { version = "0.3", features = ["deserialize"] }

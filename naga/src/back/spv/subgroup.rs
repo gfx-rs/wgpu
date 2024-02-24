@@ -88,15 +88,15 @@ impl<'w> BlockContext<'w> {
             (sk::Sint, sg::Min) => spirv::Op::GroupNonUniformSMin,
             (sk::Uint, sg::Min) => spirv::Op::GroupNonUniformUMin,
             (sk::Float, sg::Min) => spirv::Op::GroupNonUniformFMin,
-            (sk::Bool, sg::Add | sg::Mul | sg::Min | sg::Max) => unimplemented!(),
+            (_, sg::Add | sg::Mul | sg::Min | sg::Max) => unimplemented!(),
 
             (sk::Sint | sk::Uint, sg::And) => spirv::Op::GroupNonUniformBitwiseAnd,
             (sk::Sint | sk::Uint, sg::Or) => spirv::Op::GroupNonUniformBitwiseOr,
             (sk::Sint | sk::Uint, sg::Xor) => spirv::Op::GroupNonUniformBitwiseXor,
-            (sk::Float, sg::And | sg::Or | sg::Xor) => unimplemented!(),
             (sk::Bool, sg::And) => spirv::Op::GroupNonUniformLogicalAnd,
             (sk::Bool, sg::Or) => spirv::Op::GroupNonUniformLogicalOr,
             (sk::Bool, sg::Xor) => spirv::Op::GroupNonUniformLogicalXor,
+            (_, sg::And | sg::Or | sg::Xor) => unimplemented!(),
         };
 
         let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);

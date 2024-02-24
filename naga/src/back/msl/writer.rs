@@ -338,6 +338,10 @@ impl crate::Scalar {
                 kind: Sk::Bool,
                 width: _,
             } => "bool",
+            Self {
+                kind: Sk::AbstractInt | Sk::AbstractFloat,
+                width: _,
+            } => unreachable!(),
         }
     }
 }
@@ -1162,7 +1166,7 @@ impl<W: Write> Writer<W> {
         size: usize,
         context: &ExpressionContext,
     ) -> BackendResult {
-        // Write parantheses around the dot product expression to prevent operators
+        // Write parentheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
         write!(self.out, "(")?;
 
@@ -1274,6 +1278,9 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Literal::Bool(value) => {
                     write!(self.out, "{value}")?;
+                }
+                crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                    return Err(Error::Validation);
                 }
             },
             crate::Expression::Constant(handle) => {

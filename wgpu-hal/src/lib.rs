@@ -11,7 +11,7 @@
  *  General design direction is to follow the majority by the following weights:
  *  - wgpu-core: 1.5
  *  - primary backends (Vulkan/Metal/DX12): 1.0 each
- *  - secondary backends (DX11/GLES): 0.5 each
+ *  - secondary backend (GLES): 0.5
  */
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
@@ -51,36 +51,31 @@
     clippy::pattern_type_mismatch,
 )]
 
-/// DirectX11 API internals.
-#[cfg(all(feature = "dx11", windows))]
-pub mod dx11;
 /// DirectX12 API internals.
-#[cfg(all(feature = "dx12", windows))]
+#[cfg(dx12)]
 pub mod dx12;
 /// A dummy API implementation.
 pub mod empty;
 /// GLES API internals.
-#[cfg(feature = "gles")]
+#[cfg(gles)]
 pub mod gles;
 /// Metal API internals.
-#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+#[cfg(metal)]
 pub mod metal;
 /// Vulkan API internals.
-#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+#[cfg(vulkan)]
 pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(all(feature = "dx11", windows))]
-    pub use super::dx11::Api as Dx11;
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(dx12)]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
-    #[cfg(feature = "gles")]
+    #[cfg(gles)]
     pub use super::gles::Api as Gles;
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(metal)]
     pub use super::metal::Api as Metal;
-    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+    #[cfg(vulkan)]
     pub use super::vulkan::Api as Vulkan;
 }
 
@@ -217,6 +212,8 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ShaderModule: fmt::Debug + WasmNotSendSync;
     type RenderPipeline: fmt::Debug + WasmNotSendSync;
     type ComputePipeline: fmt::Debug + WasmNotSendSync;
+
+    type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
 }
 
 pub trait Instance<A: Api>: Sized + WasmNotSendSync {
@@ -332,6 +329,9 @@ pub trait Device<A: Api>: WasmNotSendSync {
     unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
     unsafe fn destroy_sampler(&self, sampler: A::Sampler);
 
+    /// Create a fresh [`CommandEncoder`].
+    ///
+    /// The new `CommandEncoder` is in the "closed" state.
     unsafe fn create_command_encoder(
         &self,
         desc: &CommandEncoderDescriptor<A>,
@@ -390,6 +390,23 @@ pub trait Device<A: Api>: WasmNotSendSync {
 
     unsafe fn start_capture(&self) -> bool;
     unsafe fn stop_capture(&self);
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &AccelerationStructureDescriptor,
+    ) -> Result<A::AccelerationStructure, DeviceError>;
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        desc: &GetAccelerationStructureBuildSizesDescriptor<A>,
+    ) -> AccelerationStructureBuildSizes;
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &A::AccelerationStructure,
+    ) -> wgt::BufferAddress;
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: A::AccelerationStructure,
+    );
 }
 
 pub trait Queue<A: Api>: WasmNotSendSync {
@@ -398,10 +415,13 @@ pub trait Queue<A: Api>: WasmNotSendSync {
     /// Valid usage:
     /// - all of the command buffers were created from command pools
     ///   that are associated with this queue.
-    /// - all of the command buffers had `CommadBuffer::finish()` called.
+    /// - all of the command buffers had `CommandBuffer::finish()` called.
+    /// - all surface textures that the command buffers write to must be
+    ///   passed to the surface_textures argument.
     unsafe fn submit(
         &self,
         command_buffers: &[&A::CommandBuffer],
+        surface_textures: &[&A::SurfaceTexture],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
     ) -> Result<(), DeviceError>;
     unsafe fn present(
@@ -412,19 +432,95 @@ pub trait Queue<A: Api>: WasmNotSendSync {
     unsafe fn get_timestamp_period(&self) -> f32;
 }
 
-/// Encoder for commands in command buffers.
-/// Serves as a parent for all the encoded command buffers.
-/// Works in bursts of action: one or more command buffers are recorded,
-/// then submitted to a queue, and then it needs to be `reset_all()`.
+/// Encoder and allocation pool for `CommandBuffer`.
+///
+/// The life cycle of a `CommandBuffer` is as follows:
+///
+/// - Call [`Device::create_command_encoder`] to create a new
+///   `CommandEncoder`, in the "closed" state.
+///
+/// - Call `begin_encoding` on a closed `CommandEncoder` to begin
+///   recording commands. This puts the `CommandEncoder` in the
+///   "recording" state.
+///
+/// - Call methods like `copy_buffer_to_buffer`, `begin_render_pass`,
+///   etc. on a "recording" `CommandEncoder` to add commands to the
+///   list.
+///
+/// - Call `end_encoding` on a recording `CommandEncoder` to close the
+///   encoder and construct a fresh `CommandBuffer` consisting of the
+///   list of commands recorded up to that point.
+///
+/// - Call `discard_encoding` on a recording `CommandEncoder` to drop
+///   the commands recorded thus far and close the encoder.
+///
+/// - Call `reset_all` on a closed `CommandEncoder`, passing all the
+///   live `CommandBuffers` built from it. All the `CommandBuffer`s
+///   are destroyed, and their resources are freed.
+///
+/// # Safety
+///
+/// - The `CommandEncoder` must be in the states described above to
+///   make the given calls.
+///
+/// - A `CommandBuffer` that has been submitted for execution on the
+///   GPU must live until its execution is complete.
+///
+/// - A `CommandBuffer` must not outlive the `CommandEncoder` that
+///   built it.
+///
+/// - A `CommandEncoder` must not outlive its `Device`.
 pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     /// Begin encoding a new command buffer.
+    ///
+    /// This puts this `CommandEncoder` in the "recording" state.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "closed" state.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
-    /// Discard currently recorded list, if any.
+
+    /// Discard the command list under construction, if any.
+    ///
+    /// This puts this `CommandEncoder` in the "closed" state.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "recording" state.
     unsafe fn discard_encoding(&mut self);
+
+    /// Return a fresh [`CommandBuffer`] holding the recorded commands.
+    ///
+    /// The returned [`CommandBuffer`] holds all the commands recorded
+    /// on this `CommandEncoder` since the last call to
+    /// [`begin_encoding`].
+    ///
+    /// This puts this `CommandEncoder` in the "closed" state.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "recording" state.
+    ///
+    /// The returned [`CommandBuffer`] must not outlive this
+    /// `CommandEncoder`. Implementations are allowed to build
+    /// `CommandBuffer`s that depend on storage owned by this
+    /// `CommandEncoder`.
+    ///
+    /// [`CommandBuffer`]: Api::CommandBuffer
+    /// [`begin_encoding`]: CommandEncoder::begin_encoding
     unsafe fn end_encoding(&mut self) -> Result<A::CommandBuffer, DeviceError>;
-    /// Reclaims all resources that are allocated for this encoder.
-    /// Must get all of the produced command buffers back,
-    /// and they must not be used by GPU at this moment.
+
+    /// Reclaim all resources belonging to this `CommandEncoder`.
+    ///
+    /// # Safety
+    ///
+    /// This `CommandEncoder` must be in the "closed" state.
+    ///
+    /// The `command_buffers` iterator must produce all the live
+    /// [`CommandBuffer`]s built using this `CommandEncoder` --- that
+    /// is, every extant `CommandBuffer` returned from `end_encoding`.
+    ///
+    /// [`CommandBuffer`]: Api::CommandBuffer
     unsafe fn reset_all<I>(&mut self, command_buffers: I)
     where
         I: Iterator<Item = A::CommandBuffer>;
@@ -449,7 +545,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
@@ -495,7 +591,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     // pass common
 
     /// Sets the bind group at `index` to `group`, assuming the layout
-    /// of all the preceeding groups to be taken from `layout`.
+    /// of all the preceding groups to be taken from `layout`.
     unsafe fn set_bind_group(
         &mut self,
         layout: &A::PipelineLayout,
@@ -618,6 +714,26 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
 
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
+
+    /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
+    /// All buffers must be synchronized externally
+    /// All buffer regions, which are written to may only be passed once per function call,
+    /// with the exception of updates in the same descriptor.
+    /// Consequences of this limitation:
+    /// - scratch buffers need to be unique
+    /// - a tlas can't be build in the same call with a blas it contains
+    unsafe fn build_acceleration_structures<'a, T>(
+        &mut self,
+        descriptor_count: u32,
+        descriptors: T,
+    ) where
+        A: 'a,
+        T: IntoIterator<Item = BuildAccelerationStructureDescriptor<'a, A>>;
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        barrier: AccelerationStructureBarrier,
+    );
 }
 
 bitflags!(
@@ -691,6 +807,11 @@ bitflags!(
         const COLOR = 1 << 0;
         const DEPTH = 1 << 1;
         const STENCIL = 1 << 2;
+        const PLANE_0 = 1 << 3;
+        const PLANE_1 = 1 << 4;
+        const PLANE_2 = 1 << 5;
+
+        const DEPTH_STENCIL = Self::DEPTH.bits() | Self::STENCIL.bits();
     }
 );
 
@@ -700,6 +821,9 @@ impl FormatAspects {
             wgt::TextureAspect::All => Self::all(),
             wgt::TextureAspect::DepthOnly => Self::DEPTH,
             wgt::TextureAspect::StencilOnly => Self::STENCIL,
+            wgt::TextureAspect::Plane0 => Self::PLANE_0,
+            wgt::TextureAspect::Plane1 => Self::PLANE_1,
+            wgt::TextureAspect::Plane2 => Self::PLANE_2,
         };
         Self::from(format) & aspect_mask
     }
@@ -714,6 +838,9 @@ impl FormatAspects {
             Self::COLOR => wgt::TextureAspect::All,
             Self::DEPTH => wgt::TextureAspect::DepthOnly,
             Self::STENCIL => wgt::TextureAspect::StencilOnly,
+            Self::PLANE_0 => wgt::TextureAspect::Plane0,
+            Self::PLANE_1 => wgt::TextureAspect::Plane1,
+            Self::PLANE_2 => wgt::TextureAspect::Plane2,
             _ => unreachable!(),
         }
     }
@@ -727,8 +854,9 @@ impl From<wgt::TextureFormat> for FormatAspects {
             | wgt::TextureFormat::Depth32Float
             | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
-                Self::DEPTH | Self::STENCIL
+                Self::DEPTH_STENCIL
             }
+            wgt::TextureFormat::NV12 => Self::PLANE_0 | Self::PLANE_1,
             _ => Self::COLOR,
         }
     }
@@ -778,12 +906,15 @@ bitflags::bitflags! {
         const INDIRECT = 1 << 9;
         /// A buffer used to store query results.
         const QUERY_RESOLVE = 1 << 10;
+        const ACCELERATION_STRUCTURE_SCRATCH = 1 << 11;
+        const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
+        const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 13;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
-            Self::STORAGE_READ.bits() | Self::INDIRECT.bits();
+            Self::STORAGE_READ.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
         /// The combination of states that a buffer must exclusively be in.
-        const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits();
+        const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits() | Self::ACCELERATION_STRUCTURE_SCRATCH.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
@@ -873,19 +1004,17 @@ pub struct SurfaceCapabilities {
     /// Must be at least one.
     pub formats: Vec<wgt::TextureFormat>,
 
-    /// Range for the swap chain sizes.
+    /// Range for the number of queued frames.
     ///
-    /// - `swap_chain_sizes.start` must be at least 1.
-    /// - `swap_chain_sizes.end` must be larger or equal to `swap_chain_sizes.start`.
-    pub swap_chain_sizes: RangeInclusive<u32>,
+    /// This adjusts either the swapchain frame count to value + 1 - or sets SetMaximumFrameLatency to the value given,
+    /// or uses a wait-for-present in the acquire method to limit rendering such that it acts like it's a value + 1 swapchain frame set.
+    ///
+    /// - `maximum_frame_latency.start` must be at least 1.
+    /// - `maximum_frame_latency.end` must be larger or equal to `maximum_frame_latency.start`.
+    pub maximum_frame_latency: RangeInclusive<u32>,
 
     /// Current extent of the surface, if known.
     pub current_extent: Option<wgt::Extent3d>,
-
-    /// Range of supported extents.
-    ///
-    /// `current_extent` must be inside this range.
-    pub extents: RangeInclusive<wgt::Extent3d>,
 
     /// Supported texture usage flags.
     ///
@@ -981,7 +1110,6 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: wgt::TextureViewDimension,
     pub usage: TextureUses,
     pub range: wgt::ImageSubresourceRange,
-    pub plane: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -1096,6 +1224,7 @@ pub struct BindGroupDescriptor<'a, A: Api> {
     pub samplers: &'a [&'a A::Sampler],
     pub textures: &'a [TextureBinding<'a, A>],
     pub entries: &'a [BindGroupEntry],
+    pub acceleration_structures: &'a [&'a A::AccelerationStructure],
 }
 
 #[derive(Clone, Debug)]
@@ -1208,9 +1337,9 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
 
 #[derive(Debug, Clone)]
 pub struct SurfaceConfiguration {
-    /// Number of textures in the swap chain. Must be in
-    /// `SurfaceCapabilities::swap_chain_size` range.
-    pub swap_chain_size: u32,
+    /// Maximum number of queued frames. Must be in
+    /// `SurfaceCapabilities::maximum_frame_latency` range.
+    pub maximum_frame_latency: u32,
     /// Vertical synchronization mode.
     pub present_mode: wgt::PresentMode,
     /// Alpha composition mode.
@@ -1415,7 +1544,7 @@ impl ValidationCanary {
         self.inner.lock().push(msg);
     }
 
-    /// Returns any API validation errors that hav occurred in this process
+    /// Returns any API validation errors that have occurred in this process
     /// since the last call to this function.
     pub fn get_and_reset(&self) -> Vec<String> {
         self.inner.lock().drain(..).collect()
@@ -1426,4 +1555,135 @@ impl ValidationCanary {
 fn test_default_limits() {
     let limits = wgt::Limits::default();
     assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+}
+
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::BufferAddress,
+    pub format: AccelerationStructureFormat,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AccelerationStructureFormat {
+    TopLevel,
+    BottomLevel,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AccelerationStructureBuildMode {
+    Build,
+    Update,
+}
+
+/// Information of the required size for a corresponding entries struct (+ flags)
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct AccelerationStructureBuildSizes {
+    pub acceleration_structure_size: wgt::BufferAddress,
+    pub update_scratch_size: wgt::BufferAddress,
+    pub build_scratch_size: wgt::BufferAddress,
+}
+
+/// Updates use source_acceleration_structure if present, else the update will be performed in place.
+/// For updates, only the data is allowed to change (not the meta data or sizes).
+#[derive(Clone, Debug)]
+pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
+    pub entries: &'a AccelerationStructureEntries<'a, A>,
+    pub mode: AccelerationStructureBuildMode,
+    pub flags: AccelerationStructureBuildFlags,
+    pub source_acceleration_structure: Option<&'a A::AccelerationStructure>,
+    pub destination_acceleration_structure: &'a A::AccelerationStructure,
+    pub scratch_buffer: &'a A::Buffer,
+    pub scratch_buffer_offset: wgt::BufferAddress,
+}
+
+/// - All buffers, buffer addresses and offsets will be ignored.
+/// - The build mode will be ignored.
+/// - Reducing the amount of Instances, Triangle groups or AABB groups (or the number of Triangles/AABBs in corresponding groups),
+/// may result in reduced size requirements.
+/// - Any other change may result in a bigger or smaller size requirement.
+#[derive(Clone, Debug)]
+pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
+    pub entries: &'a AccelerationStructureEntries<'a, A>,
+    pub flags: AccelerationStructureBuildFlags,
+}
+
+/// Entries for a single descriptor
+/// * `Instances` - Multiple instances for a top level acceleration structure
+/// * `Triangles` - Multiple triangle meshes for a bottom level acceleration structure
+/// * `AABBs` - List of list of axis aligned bounding boxes for a bottom level acceleration structure
+#[derive(Debug)]
+pub enum AccelerationStructureEntries<'a, A: Api> {
+    Instances(AccelerationStructureInstances<'a, A>),
+    Triangles(Vec<AccelerationStructureTriangles<'a, A>>),
+    AABBs(Vec<AccelerationStructureAABBs<'a, A>>),
+}
+
+/// * `first_vertex` - offset in the vertex buffer (as number of vertices)
+/// * `indices` - optional index buffer with attributes
+/// * `transform` - optional transform
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureTriangles<'a, A: Api> {
+    pub vertex_buffer: Option<&'a A::Buffer>,
+    pub vertex_format: wgt::VertexFormat,
+    pub first_vertex: u32,
+    pub vertex_count: u32,
+    pub vertex_stride: wgt::BufferAddress,
+    pub indices: Option<AccelerationStructureTriangleIndices<'a, A>>,
+    pub transform: Option<AccelerationStructureTriangleTransform<'a, A>>,
+    pub flags: AccelerationStructureGeometryFlags,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureAABBs<'a, A: Api> {
+    pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
+    pub count: u32,
+    pub stride: wgt::BufferAddress,
+    pub flags: AccelerationStructureGeometryFlags,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureInstances<'a, A: Api> {
+    pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
+    pub count: u32,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureTriangleIndices<'a, A: Api> {
+    pub format: wgt::IndexFormat,
+    pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
+    pub count: u32,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
+    pub buffer: &'a A::Buffer,
+    pub offset: u32,
+}
+
+pub use wgt::AccelerationStructureFlags as AccelerationStructureBuildFlags;
+pub use wgt::AccelerationStructureGeometryFlags;
+
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct AccelerationStructureUses: u8 {
+        // For blas used as input for tlas
+        const BUILD_INPUT = 1 << 0;
+        // Target for acceleration structure build
+        const BUILD_OUTPUT = 1 << 1;
+        // Tlas used in a shader
+        const SHADER_INPUT = 1 << 2;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AccelerationStructureBarrier {
+    pub usage: Range<AccelerationStructureUses>,
 }

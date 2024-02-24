@@ -300,6 +300,9 @@ use serde::Serialize;
 /// Width of a boolean type, in bytes.
 pub const BOOL_WIDTH: Bytes = 1;
 
+/// Width of abstract types, in bytes.
+pub const ABSTRACT_WIDTH: Bytes = 8;
+
 /// Hash map that is faster but not resilient to DoS attacks.
 pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
 /// Hash set that is faster but not resilient to DoS attacks.
@@ -460,6 +463,10 @@ pub enum VectorSize {
     Quad = 4,
 }
 
+impl VectorSize {
+    const MAX: usize = Self::Quad as u8 as usize;
+}
+
 /// Primitive type for a scalar.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -475,6 +482,16 @@ pub enum ScalarKind {
     Float,
     /// Boolean type.
     Bool,
+
+    /// WGSL abstract integer type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractInt,
+
+    /// Abstract floating-point type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractFloat,
 }
 
 /// Characteristics of a scalar type.
@@ -675,8 +692,7 @@ pub enum ImageClass {
 }
 
 /// A data type declared in the module.
-#[derive(Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "clone", derive(Clone))]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -688,8 +704,7 @@ pub struct Type {
 }
 
 /// Enum with additional information, depending on the kind of type.
-#[derive(Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "clone", derive(Clone))]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -755,7 +770,7 @@ pub enum TypeInner {
         space: AddressSpace,
     },
 
-    /// Homogenous list of elements.
+    /// Homogeneous list of elements.
     ///
     /// The `base` type must be a [`SIZED`], [`DATA`] type.
     ///
@@ -876,6 +891,8 @@ pub enum Literal {
     I32(i32),
     I64(i64),
     Bool(bool),
+    AbstractInt(i64),
+    AbstractFloat(f64),
 }
 
 #[derive(Debug, PartialEq)]

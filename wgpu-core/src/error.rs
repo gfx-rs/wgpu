@@ -1,11 +1,11 @@
 use core::fmt;
 use std::error::Error;
 
-use crate::{gfx_select, global::Global, identity::IdentityManagerFactory};
+use crate::{gfx_select, global::Global};
 
 pub struct ErrorFormatter<'a> {
     writer: &'a mut dyn fmt::Write,
-    global: &'a Global<IdentityManagerFactory>,
+    global: &'a Global,
 }
 
 impl<'a> ErrorFormatter<'a> {
@@ -24,32 +24,27 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     pub fn bind_group_label(&mut self, id: &crate::id::BindGroupId) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.bind_group_label(*id));
+        let label: String = gfx_select!(id => self.global.bind_group_label(*id));
         self.label("bind group", &label);
     }
 
     pub fn bind_group_layout_label(&mut self, id: &crate::id::BindGroupLayoutId) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.bind_group_layout_label(*id));
+        let label: String = gfx_select!(id => self.global.bind_group_layout_label(*id));
         self.label("bind group layout", &label);
     }
 
     pub fn render_pipeline_label(&mut self, id: &crate::id::RenderPipelineId) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.render_pipeline_label(*id));
+        let label: String = gfx_select!(id => self.global.render_pipeline_label(*id));
         self.label("render pipeline", &label);
     }
 
     pub fn compute_pipeline_label(&mut self, id: &crate::id::ComputePipelineId) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.compute_pipeline_label(*id));
+        let label: String = gfx_select!(id => self.global.compute_pipeline_label(*id));
         self.label("compute pipeline", &label);
     }
 
     pub fn buffer_label_with_key(&mut self, id: &crate::id::BufferId, key: &str) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.buffer_label(*id));
+        let label: String = gfx_select!(id => self.global.buffer_label(*id));
         self.label(key, &label);
     }
 
@@ -58,8 +53,7 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     pub fn texture_label_with_key(&mut self, id: &crate::id::TextureId, key: &str) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.texture_label(*id));
+        let label: String = gfx_select!(id => self.global.texture_label(*id));
         self.label(key, &label);
     }
 
@@ -68,8 +62,7 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     pub fn texture_view_label_with_key(&mut self, id: &crate::id::TextureViewId, key: &str) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.texture_view_label(*id));
+        let label: String = gfx_select!(id => self.global.texture_view_label(*id));
         self.label(key, &label);
     }
 
@@ -78,20 +71,17 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     pub fn sampler_label(&mut self, id: &crate::id::SamplerId) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.sampler_label(*id));
+        let label: String = gfx_select!(id => self.global.sampler_label(*id));
         self.label("sampler", &label);
     }
 
     pub fn command_buffer_label(&mut self, id: &crate::id::CommandBufferId) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.command_buffer_label(*id));
+        let label: String = gfx_select!(id => self.global.command_buffer_label(*id));
         self.label("command buffer", &label);
     }
 
     pub fn query_set_label(&mut self, id: &crate::id::QuerySetId) {
-        let global = self.global;
-        let label: String = gfx_select!(id => global.query_set_label(*id));
+        let label: String = gfx_select!(id => self.global.query_set_label(*id));
         self.label("query set", &label);
     }
 }
@@ -104,7 +94,7 @@ pub trait PrettyError: Error + Sized {
 
 pub fn format_pretty_any(
     writer: &mut dyn fmt::Write,
-    global: &Global<IdentityManagerFactory>,
+    global: &Global,
     error: &(dyn Error + 'static),
 ) {
     let mut fmt = ErrorFormatter { writer, global };
@@ -162,21 +152,9 @@ pub fn format_pretty_any(
 #[derive(Debug)]
 pub struct ContextError {
     pub string: &'static str,
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        all(
-            feature = "fragile-send-sync-non-atomic-wasm",
-            not(target_feature = "atomics")
-        )
-    ))]
+    #[cfg(send_sync)]
     pub cause: Box<dyn Error + Send + Sync + 'static>,
-    #[cfg(not(any(
-        not(target_arch = "wasm32"),
-        all(
-            feature = "fragile-send-sync-non-atomic-wasm",
-            not(target_feature = "atomics")
-        )
-    )))]
+    #[cfg(not(send_sync))]
     pub cause: Box<dyn Error + 'static>,
     pub label_key: &'static str,
     pub label: String,

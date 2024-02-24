@@ -77,6 +77,24 @@ impl AdapterContext {
 
         AdapterContextLock { inner }
     }
+
+    /// Obtain a lock to the WGL context and get handle to the [`glow::Context`] that can be used to
+    /// do rendering.
+    ///
+    /// Unlike [`lock`](Self::lock), this accepts a device to pass to `make_current` and exposes the error
+    /// when `make_current` fails.
+    #[track_caller]
+    fn lock_with_dc(&self, device: HDC) -> Result<AdapterContextLock<'_>, Error> {
+        let inner = self
+            .inner
+            .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
+            .expect("Could not lock adapter context. This is most-likely a deadlock.");
+
+        inner
+            .context
+            .make_current(device)
+            .map(|()| AdapterContextLock { inner })
+    }
 }
 
 /// A guard containing a lock to an [`AdapterContext`]
@@ -161,7 +179,7 @@ fn load_gl_func(name: &str, module: Option<HMODULE>) -> *const c_void {
     ptr.cast()
 }
 
-fn extensions(extra: &Wgl, dc: HDC) -> HashSet<String> {
+fn get_extensions(extra: &Wgl, dc: HDC) -> HashSet<String> {
     if extra.GetExtensionsStringARB.is_loaded() {
         unsafe { CStr::from_ptr(extra.GetExtensionsStringARB(dc as *const _)) }
             .to_str()
@@ -431,9 +449,9 @@ impl crate::Instance<super::Api> for Instance {
         })?;
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc);
+        let extensions = get_extensions(&extra, dc);
 
-        let can_use_profile = extentions.contains("WGL_ARB_create_context_profile")
+        let can_use_profile = extensions.contains("WGL_ARB_create_context_profile")
             && extra.CreateContextAttribsARB.is_loaded();
 
         let context = if can_use_profile {
@@ -476,10 +494,10 @@ impl crate::Instance<super::Api> for Instance {
         };
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc);
+        let extensions = get_extensions(&extra, dc);
 
-        let srgb_capable = extentions.contains("WGL_EXT_framebuffer_sRGB")
-            || extentions.contains("WGL_ARB_framebuffer_sRGB")
+        let srgb_capable = extensions.contains("WGL_EXT_framebuffer_sRGB")
+            || extensions.contains("WGL_ARB_framebuffer_sRGB")
             || gl
                 .supported_extensions()
                 .contains("GL_ARB_framebuffer_sRGB");
@@ -603,16 +621,10 @@ impl Surface {
             window: self.window,
         };
 
-        let inner = context.inner.lock();
-
-        if let Err(e) = inner.context.make_current(dc.device) {
+        let gl = context.lock_with_dc(dc.device).map_err(|e| {
             log::error!("unable to make the OpenGL context current for surface: {e}",);
-            return Err(crate::SurfaceError::Other(
-                "unable to make the OpenGL context current for surface",
-            ));
-        }
-
-        let gl = &inner.gl;
+            crate::SurfaceError::Other("unable to make the OpenGL context current for surface")
+        })?;
 
         unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer)) };
@@ -693,16 +705,11 @@ impl crate::Surface<super::Api> for Surface {
         }
 
         let format_desc = device.shared.describe_texture_format(config.format);
-        let inner = &device.shared.context.inner.lock();
-
-        if let Err(e) = inner.context.make_current(dc.device) {
+        let gl = &device.shared.context.lock_with_dc(dc.device).map_err(|e| {
             log::error!("unable to make the OpenGL context current for surface: {e}",);
-            return Err(crate::SurfaceError::Other(
-                "unable to make the OpenGL context current for surface",
-            ));
-        }
+            crate::SurfaceError::Other("unable to make the OpenGL context current for surface")
+        })?;
 
-        let gl = &inner.gl;
         let renderbuffer = unsafe { gl.create_renderbuffer() }.map_err(|error| {
             log::error!("Internal swapchain renderbuffer creation failed: {error}");
             crate::DeviceError::OutOfMemory
@@ -735,8 +742,8 @@ impl crate::Surface<super::Api> for Surface {
 
         // Setup presentation mode
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc.device);
-        if !(extentions.contains("WGL_EXT_swap_control") && extra.SwapIntervalEXT.is_loaded()) {
+        let extensions = get_extensions(&extra, dc.device);
+        if !(extensions.contains("WGL_EXT_swap_control") && extra.SwapIntervalEXT.is_loaded()) {
             log::error!("WGL_EXT_swap_control is unsupported");
             return Err(crate::SurfaceError::Other(
                 "WGL_EXT_swap_control is unsupported",
@@ -744,7 +751,7 @@ impl crate::Surface<super::Api> for Surface {
         }
 
         let vsync = match config.present_mode {
-            wgt::PresentMode::Mailbox => false,
+            wgt::PresentMode::Immediate => false,
             wgt::PresentMode::Fifo => true,
             _ => {
                 log::error!("unsupported present mode: {:?}", config.present_mode);

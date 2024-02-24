@@ -396,7 +396,7 @@ impl crate::Device<super::Api> for super::Device {
             conv::map_texture_view_dimension(desc.dimension)
         };
 
-        let aspects = crate::FormatAspects::new(desc.format, desc.range.aspect);
+        let aspects = crate::FormatAspects::new(texture.format, desc.range.aspect);
 
         let raw_format = self
             .shared
@@ -637,6 +637,7 @@ impl crate::Device<super::Api> for super::Device {
                                 wgt::StorageTextureAccess::ReadWrite => true,
                             };
                         }
+                        wgt::BindingType::AccelerationStructure => unimplemented!(),
                     }
 
                     let br = naga::ResourceBinding {
@@ -768,6 +769,7 @@ impl crate::Device<super::Api> for super::Device {
                         );
                         counter.textures += size;
                     }
+                    wgt::BindingType::AccelerationStructure => unimplemented!(),
                 }
             }
         }
@@ -1217,5 +1219,33 @@ impl crate::Device<super::Api> for super::Device {
             default_capture_scope.end_scope();
         }
         shared_capture_manager.stop_capture();
+    }
+
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Api>,
+    ) -> crate::AccelerationStructureBuildSizes {
+        unimplemented!()
+    }
+
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &super::AccelerationStructure,
+    ) -> wgt::BufferAddress {
+        unimplemented!()
+    }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
+        unimplemented!()
+    }
+
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        _acceleration_structure: super::AccelerationStructure,
+    ) {
+        unimplemented!()
     }
 }

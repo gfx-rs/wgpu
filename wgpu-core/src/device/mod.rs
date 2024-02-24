@@ -2,8 +2,7 @@ use crate::{
     binding_model,
     hal_api::HalApi,
     hub::Hub,
-    id::{self},
-    identity::{GlobalIdentityHandlerFactory, Input},
+    id::{BindGroupLayoutId, PipelineLayoutId},
     resource::{Buffer, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation},
     resource_log, Label, DOWNLEVEL_ERROR_MESSAGE,
@@ -19,6 +18,7 @@ use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 use std::{iter, num::NonZeroU32, ptr};
 
 pub mod any_device;
+pub(crate) mod bgl;
 pub mod global;
 mod life;
 pub mod queue;
@@ -27,29 +27,28 @@ pub mod resource;
 pub mod trace;
 pub use {life::WaitIdleError, resource::Device};
 
-pub const SHADER_STAGE_COUNT: usize = 3;
+pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;
 // Should be large enough for the largest possible texture row. This
 // value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
 const CLEANUP_WAIT_MS: u32 = 5000;
 
-const IMPLICIT_FAILURE: &str = "failed implicit";
-const EP_FAILURE: &str = "EP is invalid";
+const IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL: &str = "Implicit BindGroupLayout in the Error State";
+const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HostMap {
     Read,
     Write,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
     pub colors: ArrayVec<Option<T>, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub resolves: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
@@ -73,7 +72,7 @@ pub enum RenderPassCompatibilityCheckType {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
     pub sample_count: u32,
@@ -204,37 +203,41 @@ impl UserClosures {
     }
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
-pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+#[cfg(send_sync)]
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
+
+pub struct DeviceLostClosureRust {
+    pub callback: DeviceLostCallback,
+    consumed: bool,
+}
+
+impl Drop for DeviceLostClosureRust {
+    fn drop(&mut self) {
+        if !self.consumed {
+            panic!("DeviceLostClosureRust must be consumed before it is dropped.");
+        }
+    }
+}
 
 #[repr(C)]
 pub struct DeviceLostClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
     pub user_data: *mut u8,
+    consumed: bool,
 }
 
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
+#[cfg(send_sync)]
 unsafe impl Send for DeviceLostClosureC {}
+
+impl Drop for DeviceLostClosureC {
+    fn drop(&mut self) {
+        if !self.consumed {
+            panic!("DeviceLostClosureC must be consumed before it is dropped.");
+        }
+    }
+}
 
 pub struct DeviceLostClosure {
     // We wrap this so creating the enum in the C variant can be unsafe,
@@ -249,14 +252,18 @@ pub struct DeviceLostInvocation {
 }
 
 enum DeviceLostClosureInner {
-    Rust { callback: DeviceLostCallback },
+    Rust { inner: DeviceLostClosureRust },
     C { inner: DeviceLostClosureC },
 }
 
 impl DeviceLostClosure {
     pub fn from_rust(callback: DeviceLostCallback) -> Self {
+        let inner = DeviceLostClosureRust {
+            callback,
+            consumed: false,
+        };
         Self {
-            inner: DeviceLostClosureInner::Rust { callback },
+            inner: DeviceLostClosureInner::Rust { inner },
         }
     }
 
@@ -267,7 +274,18 @@ impl DeviceLostClosure {
     ///
     /// - Both pointers must point to `'static` data, as the callback may happen at
     ///   an unspecified time.
-    pub unsafe fn from_c(inner: DeviceLostClosureC) -> Self {
+    pub unsafe fn from_c(mut closure: DeviceLostClosureC) -> Self {
+        // Build an inner with the values from closure, ensuring that
+        // inner.consumed is false.
+        let inner = DeviceLostClosureC {
+            callback: closure.callback,
+            user_data: closure.user_data,
+            consumed: false,
+        };
+
+        // Mark the original closure as consumed, so we can safely drop it.
+        closure.consumed = true;
+
         Self {
             inner: DeviceLostClosureInner::C { inner },
         }
@@ -275,9 +293,15 @@ impl DeviceLostClosure {
 
     pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
         match self.inner {
-            DeviceLostClosureInner::Rust { callback } => callback(reason, message),
+            DeviceLostClosureInner::Rust { mut inner } => {
+                inner.consumed = true;
+
+                (inner.callback)(reason, message)
+            }
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            DeviceLostClosureInner::C { inner } => unsafe {
+            DeviceLostClosureInner::C { mut inner } => unsafe {
+                inner.consumed = true;
+
                 // Ensure message is structured as a null-terminated C string. It only
                 // needs to live as long as the callback invocation.
                 let message = std::ffi::CString::new(message).unwrap();
@@ -294,14 +318,18 @@ fn map_buffer<A: HalApi>(
     size: BufferAddress,
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
+    let snatch_guard = buffer.device.snatchable_lock.read();
+    let raw_buffer = buffer
+        .raw(&snatch_guard)
+        .ok_or(BufferAccessError::Destroyed)?;
     let mapping = unsafe {
-        raw.map_buffer(buffer.raw(), offset..offset + size)
+        raw.map_buffer(raw_buffer, offset..offset + size)
             .map_err(DeviceError::from)?
     };
 
     *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
-            raw.invalidate_mapped_ranges(buffer.raw(), iter::once(offset..offset + size));
+            raw.invalidate_mapped_ranges(raw_buffer, iter::once(offset..offset + size));
             None
         },
         HostMap::Write if !mapping.is_coherent => Some(offset..offset + size),
@@ -341,7 +369,7 @@ fn map_buffer<A: HalApi>(
         mapped[fill_range].fill(0);
 
         if zero_init_needs_flush_now {
-            unsafe { raw.flush_mapped_ranges(buffer.raw(), iter::once(uninitialized)) };
+            unsafe { raw.flush_mapped_ranges(raw_buffer, iter::once(uninitialized)) };
         }
     }
 
@@ -427,26 +455,25 @@ pub struct MissingFeatures(pub wgt::Features);
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImplicitPipelineContext {
-    pub root_id: id::PipelineLayoutId,
-    pub group_ids: ArrayVec<id::BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
+    pub root_id: PipelineLayoutId,
+    pub group_ids: ArrayVec<BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
 }
 
-pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
-    pub root_id: Input<G, id::PipelineLayoutId>,
-    pub group_ids: &'a [Input<G, id::BindGroupLayoutId>],
+pub struct ImplicitPipelineIds<'a> {
+    pub root_id: Option<PipelineLayoutId>,
+    pub group_ids: &'a [Option<BindGroupLayoutId>],
 }
 
-impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
+impl ImplicitPipelineIds<'_> {
     fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare::<G>(self.root_id).into_id(),
+            root_id: hub.pipeline_layouts.prepare(self.root_id).into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare::<G>(*id_in).into_id())
+                .map(|id_in| hub.bind_group_layouts.prepare(*id_in).into_id())
                 .collect(),
         }
     }

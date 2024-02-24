@@ -1,8 +1,254 @@
+use std::iter;
+
+use arrayvec::ArrayVec;
+
 use crate::{
     arena::{Arena, Handle, UniqueArena},
     ArraySize, BinaryOperator, Constant, Expression, Literal, ScalarKind, Span, Type, TypeInner,
     UnaryOperator,
 };
+
+/// A macro that allows dollar signs (`$`) to be emitted by other macros. Useful for generating
+/// `macro_rules!` items that, in turn, emit their own `macro_rules!` items.
+///
+/// Technique stolen directly from
+/// <https://github.com/rust-lang/rust/issues/35853#issuecomment-415993963>.
+macro_rules! with_dollar_sign {
+    ($($body:tt)*) => {
+        macro_rules! __with_dollar_sign { $($body)* }
+        __with_dollar_sign!($);
+    }
+}
+
+macro_rules! gen_component_wise_extractor {
+    (
+        $ident:ident -> $target:ident,
+        literals: [$( $literal:ident => $mapping:ident: $ty:ident ),+ $(,)?],
+        scalar_kinds: [$( $scalar_kind:ident ),* $(,)?],
+    ) => {
+        /// A subset of [`Literal`]s intended to be used for implementing numeric built-ins.
+        enum $target<const N: usize> {
+            $(
+                #[doc = concat!(
+                    "Maps to [`Literal::",
+                    stringify!($mapping),
+                    "`]",
+                )]
+                $mapping([$ty; N]),
+            )+
+        }
+
+        impl From<$target<1>> for Expression {
+            fn from(value: $target<1>) -> Self {
+                match value {
+                    $(
+                        $target::$mapping([value]) => {
+                            Expression::Literal(Literal::$literal(value))
+                        }
+                    )+
+                }
+            }
+        }
+
+        #[doc = concat!(
+            "Attempts to evaluate multiple `exprs` as a combined [`",
+            stringify!($target),
+            "`] to pass to `handler`. ",
+        )]
+        /// If `exprs` are vectors of the same length, `handler` is called for each corresponding
+        /// component of each vector.
+        ///
+        /// `handler`'s output is registered as a new expression. If `exprs` are vectors of the
+        /// same length, a new vector expression is registered, composed of each component emitted
+        /// by `handler`.
+        fn $ident<const N: usize, const M: usize, F>(
+            eval: &mut ConstantEvaluator<'_>,
+            span: Span,
+            exprs: [Handle<Expression>; N],
+            mut handler: F,
+        ) -> Result<Handle<Expression>, ConstantEvaluatorError>
+        where
+            $target<M>: Into<Expression>,
+            F: FnMut($target<N>) -> Result<$target<M>, ConstantEvaluatorError> + Clone,
+        {
+            assert!(N > 0);
+            let err = ConstantEvaluatorError::InvalidMathArg;
+            let mut exprs = exprs.into_iter();
+
+            macro_rules! sanitize {
+                ($expr:expr) => {
+                    eval.eval_zero_value_and_splat($expr, span)
+                        .map(|expr| &eval.expressions[expr])
+                };
+            }
+
+            let new_expr = match sanitize!(exprs.next().unwrap())? {
+                $(
+                    &Expression::Literal(Literal::$literal(x)) => iter::once(Ok(x))
+                        .chain(exprs.map(|expr| {
+                            sanitize!(expr).and_then(|expr| match expr {
+                                &Expression::Literal(Literal::$literal(x)) => Ok(x),
+                                _ => Err(err.clone()),
+                            })
+                        }))
+                        .collect::<Result<ArrayVec<_, N>, _>>()
+                        .map(|a| a.into_inner().unwrap())
+                        .map($target::$mapping)
+                        .and_then(|comps| Ok(handler(comps)?.into())),
+                )+
+                &Expression::Compose { ty, ref components } => match &eval.types[ty].inner {
+                    &TypeInner::Vector { size, scalar } => match scalar.kind {
+                        $(ScalarKind::$scalar_kind)|* => {
+                            let first_ty = ty;
+                            let mut component_groups =
+                                ArrayVec::<ArrayVec<_, { crate::VectorSize::MAX }>, N>::new();
+                            component_groups.push(crate::proc::flatten_compose(
+                                first_ty,
+                                components,
+                                eval.expressions,
+                                eval.types,
+                            ).collect());
+                            component_groups.extend(
+                                exprs
+                                    .map(|expr| {
+                                        sanitize!(expr).and_then(|expr| match expr {
+                                            &Expression::Compose { ty, ref components }
+                                                if &eval.types[ty].inner
+                                                    == &eval.types[first_ty].inner =>
+                                            {
+                                                Ok(crate::proc::flatten_compose(
+                                                    ty,
+                                                    components,
+                                                    eval.expressions,
+                                                    eval.types,
+                                                ).collect())
+                                            }
+                                            _ => Err(err.clone()),
+                                        })
+                                    })
+                                    .collect::<Result<ArrayVec<_, { crate::VectorSize::MAX }>, _>>(
+                                    )?,
+                            );
+                            let component_groups = component_groups.into_inner().unwrap();
+                            let mut new_components =
+                                ArrayVec::<_, { crate::VectorSize::MAX }>::new();
+                            for idx in 0..(size as u8).into() {
+                                let group = component_groups
+                                    .iter()
+                                    .map(|cs| cs[idx])
+                                    .collect::<ArrayVec<_, N>>()
+                                    .into_inner()
+                                    .unwrap();
+                                new_components.push($ident(
+                                    eval,
+                                    span,
+                                    group,
+                                    handler.clone(),
+                                )?);
+                            }
+                            Ok(Expression::Compose {
+                                ty: first_ty,
+                                components: new_components.into_iter().collect(),
+                            })
+                        }
+                        _ => return Err(err),
+                    },
+                    _ => return Err(err),
+                },
+                _ => return Err(err),
+            }?;
+            eval.register_evaluated_expr(new_expr, span)
+        }
+
+        with_dollar_sign! {
+            ($d:tt) => {
+                #[allow(unused)]
+                #[doc = concat!(
+                    "A convenience macro for using the same RHS for each [`",
+                    stringify!($target),
+                    "`] variant in a call to [`",
+                    stringify!($ident),
+                    "`].",
+                )]
+                macro_rules! $ident {
+                    (
+                        $eval:expr,
+                        $span:expr,
+                        [$d ($d expr:expr),+ $d (,)?],
+                        |$d ($d arg:ident),+| $d tt:tt
+                    ) => {
+                        $ident($eval, $span, [$d ($d expr),+], |args| match args {
+                            $(
+                                $target::$mapping([$d ($d arg),+]) => {
+                                    let res = $d tt;
+                                    Result::map(res, $target::$mapping)
+                                },
+                            )+
+                        })
+                    };
+                }
+            };
+        }
+    };
+}
+
+gen_component_wise_extractor! {
+    component_wise_scalar -> Scalar,
+    literals: [
+        AbstractFloat => AbstractFloat: f64,
+        F32 => F32: f32,
+        AbstractInt => AbstractInt: i64,
+        U32 => U32: u32,
+        I32 => I32: i32,
+    ],
+    scalar_kinds: [
+        Float,
+        AbstractFloat,
+        Sint,
+        Uint,
+        AbstractInt,
+    ],
+}
+
+gen_component_wise_extractor! {
+    component_wise_float -> Float,
+    literals: [
+        AbstractFloat => Abstract: f64,
+        F32 => F32: f32,
+    ],
+    scalar_kinds: [
+        Float,
+        AbstractFloat,
+    ],
+}
+
+gen_component_wise_extractor! {
+    component_wise_concrete_int -> ConcreteInt,
+    literals: [
+        U32 => U32: u32,
+        I32 => I32: i32,
+    ],
+    scalar_kinds: [
+        Sint,
+        Uint,
+    ],
+}
+
+gen_component_wise_extractor! {
+    component_wise_signed -> Signed,
+    literals: [
+        AbstractFloat => AbstractFloat: f64,
+        AbstractInt => AbstractInt: i64,
+        F32 => F32: f32,
+        I32 => I32: i32,
+    ],
+    scalar_kinds: [
+        Sint,
+        AbstractInt,
+        Float,
+        AbstractFloat,
+    ],
+}
 
 #[derive(Debug)]
 enum Behavior {
@@ -143,8 +389,8 @@ pub enum ConstantEvaluatorError {
     InvalidAccessIndexTy,
     #[error("Constants don't support array length expressions")]
     ArrayLength,
-    #[error("Cannot cast type")]
-    InvalidCastArg,
+    #[error("Cannot cast scalar components of expression `{from}` to type `{to}`")]
+    InvalidCastArg { from: String, to: String },
     #[error("Cannot apply the unary op to the argument")]
     InvalidUnaryOpArg,
     #[error("Cannot apply the binary op to the arguments")]
@@ -169,6 +415,15 @@ pub enum ConstantEvaluatorError {
     NotImplemented(String),
     #[error("{0} operation overflowed")]
     Overflow(String),
+    #[error(
+        "the concrete type `{to_type}` cannot represent the abstract value `{value}` accurately"
+    )]
+    AutomaticConversionLossy {
+        value: String,
+        to_type: &'static str,
+    },
+    #[error("abstract floating-point values cannot be automatically converted to integers")]
+    AutomaticConversionFloatToInt { to_type: &'static str },
     #[error("Division by zero")]
     DivisionByZero,
     #[error("Remainder by zero")]
@@ -267,6 +522,17 @@ impl<'a> ConstantEvaluator<'a> {
                 emitter,
                 block,
             }),
+        }
+    }
+
+    pub fn to_ctx(&self) -> crate::proc::GlobalCtx {
+        crate::proc::GlobalCtx {
+            types: self.types,
+            constants: self.constants,
+            const_expressions: match self.function_local_data {
+                Some(ref data) => data.const_expressions,
+                None => self.expressions,
+            },
         }
     }
 
@@ -579,187 +845,213 @@ impl<'a> ConstantEvaluator<'a> {
             ));
         }
 
+        // NOTE: We try to match the declaration order of `MathFunction` here.
         match fun {
-            crate::MathFunction::Pow => self.math_pow(arg, arg1.unwrap(), span),
-            crate::MathFunction::Clamp => self.math_clamp(arg, arg1.unwrap(), arg2.unwrap(), span),
+            // comparison
+            crate::MathFunction::Abs => {
+                component_wise_scalar(self, span, [arg], |args| match args {
+                    Scalar::AbstractFloat([e]) => Ok(Scalar::AbstractFloat([e.abs()])),
+                    Scalar::F32([e]) => Ok(Scalar::F32([e.abs()])),
+                    Scalar::AbstractInt([e]) => Ok(Scalar::AbstractInt([e.abs()])),
+                    Scalar::I32([e]) => Ok(Scalar::I32([e.wrapping_abs()])),
+                    Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
+                })
+            }
+            crate::MathFunction::Min => {
+                component_wise_scalar!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.min(e2)])
+                })
+            }
+            crate::MathFunction::Max => {
+                component_wise_scalar!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.max(e2)])
+                })
+            }
+            crate::MathFunction::Clamp => {
+                component_wise_scalar!(
+                    self,
+                    span,
+                    [arg, arg1.unwrap(), arg2.unwrap()],
+                    |e, low, high| {
+                        if low > high {
+                            Err(ConstantEvaluatorError::InvalidClamp)
+                        } else {
+                            Ok([e.clamp(low, high)])
+                        }
+                    }
+                )
+            }
+            crate::MathFunction::Saturate => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
+            }
+
+            // trigonometry
+            crate::MathFunction::Cos => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.cos()]) })
+            }
+            crate::MathFunction::Cosh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.cosh()]) })
+            }
+            crate::MathFunction::Sin => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
+            }
+            crate::MathFunction::Sinh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.sinh()]) })
+            }
+            crate::MathFunction::Tan => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.tan()]) })
+            }
+            crate::MathFunction::Tanh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.tanh()]) })
+            }
+            crate::MathFunction::Acos => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.acos()]) })
+            }
+            crate::MathFunction::Asin => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.asin()]) })
+            }
+            crate::MathFunction::Atan => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
+            }
+            crate::MathFunction::Asinh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
+            }
+            crate::MathFunction::Acosh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.acosh()]) })
+            }
+            crate::MathFunction::Atanh => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.atanh()]) })
+            }
+            crate::MathFunction::Radians => {
+                component_wise_float!(self, span, [arg], |e1| { Ok([e1.to_radians()]) })
+            }
+            crate::MathFunction::Degrees => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.to_degrees()]) })
+            }
+
+            // decomposition
+            crate::MathFunction::Ceil => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.ceil()]) })
+            }
+            crate::MathFunction::Floor => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
+            }
+            crate::MathFunction::Round => {
+                // TODO: Use `f{32,64}.round_ties_even()` when available on stable. This polyfill
+                // is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
+                // which has licensing compatible with ours. See also
+                // <https://github.com/rust-lang/rust/issues/96710>.
+                //
+                // [polyfill source]: https://github.com/imeka/ndarray-ndimage/blob/8b14b4d6ecfbc96a8a052f802e342a7049c68d8f/src/lib.rs#L98
+                fn round_ties_even(x: f64) -> f64 {
+                    let i = x as i64;
+                    let f = (x - i as f64).abs();
+                    if f == 0.5 {
+                        if i & 1 == 1 {
+                            // -1.5, 1.5, 3.5, ...
+                            (x.abs() + 0.5).copysign(x)
+                        } else {
+                            (x.abs() - 0.5).copysign(x)
+                        }
+                    } else {
+                        x.round()
+                    }
+                }
+                component_wise_float(self, span, [arg], |e| match e {
+                    Float::Abstract([e]) => Ok(Float::Abstract([round_ties_even(e)])),
+                    Float::F32([e]) => Ok(Float::F32([(round_ties_even(e as f64) as f32)])),
+                })
+            }
+            crate::MathFunction::Fract => {
+                component_wise_float!(self, span, [arg], |e| {
+                    // N.B., Rust's definition of `fract` is `e - e.trunc()`, so we can't use that
+                    // here.
+                    Ok([e - e.floor()])
+                })
+            }
+            crate::MathFunction::Trunc => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.trunc()]) })
+            }
+
+            // exponent
+            crate::MathFunction::Exp => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
+            }
+            crate::MathFunction::Exp2 => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.exp2()]) })
+            }
+            crate::MathFunction::Log => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.ln()]) })
+            }
+            crate::MathFunction::Log2 => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
+            }
+            crate::MathFunction::Pow => {
+                component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
+                    Ok([e1.powf(e2)])
+                })
+            }
+
+            // computational
+            crate::MathFunction::Sign => {
+                component_wise_signed!(self, span, [arg], |e| { Ok([e.signum()]) })
+            }
+            crate::MathFunction::Fma => {
+                component_wise_float!(
+                    self,
+                    span,
+                    [arg, arg1.unwrap(), arg2.unwrap()],
+                    |e1, e2, e3| { Ok([e1.mul_add(e2, e3)]) }
+                )
+            }
+            crate::MathFunction::Step => {
+                component_wise_float!(self, span, [arg, arg1.unwrap()], |edge, x| {
+                    Ok([if edge <= x { 1.0 } else { 0.0 }])
+                })
+            }
+            crate::MathFunction::Sqrt => {
+                component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
+            }
+            crate::MathFunction::InverseSqrt => {
+                component_wise_float!(self, span, [arg], |e| { Ok([1. / e.sqrt()]) })
+            }
+
+            // bits
+            crate::MathFunction::CountTrailingZeros => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .trailing_zeros()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
+            }
+            crate::MathFunction::CountLeadingZeros => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .leading_zeros()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
+            }
+            crate::MathFunction::CountOneBits => {
+                component_wise_concrete_int!(self, span, [arg], |e| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok([e
+                        .count_ones()
+                        .try_into()
+                        .expect("bit count overflowed 32 bits, somehow!?")])
+                })
+            }
+            crate::MathFunction::ReverseBits => {
+                component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
+            }
+
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
             ))),
         }
-    }
-
-    fn math_pow(
-        &mut self,
-        e1: Handle<Expression>,
-        e2: Handle<Expression>,
-        span: Span,
-    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let e1 = self.eval_zero_value_and_splat(e1, span)?;
-        let e2 = self.eval_zero_value_and_splat(e2, span)?;
-
-        let expr = match (&self.expressions[e1], &self.expressions[e2]) {
-            (&Expression::Literal(Literal::F32(a)), &Expression::Literal(Literal::F32(b))) => {
-                Expression::Literal(Literal::F32(a.powf(b)))
-            }
-            (
-                &Expression::Compose {
-                    components: ref src_components0,
-                    ty: ty0,
-                },
-                &Expression::Compose {
-                    components: ref src_components1,
-                    ty: ty1,
-                },
-            ) if ty0 == ty1
-                && matches!(
-                    self.types[ty0].inner,
-                    crate::TypeInner::Vector {
-                        scalar: crate::Scalar {
-                            kind: ScalarKind::Float,
-                            ..
-                        },
-                        ..
-                    }
-                ) =>
-            {
-                let mut components: Vec<_> = crate::proc::flatten_compose(
-                    ty0,
-                    src_components0,
-                    self.expressions,
-                    self.types,
-                )
-                .chain(crate::proc::flatten_compose(
-                    ty1,
-                    src_components1,
-                    self.expressions,
-                    self.types,
-                ))
-                .collect();
-
-                let mid = components.len() / 2;
-                let (first, last) = components.split_at_mut(mid);
-                for (a, b) in first.iter_mut().zip(&*last) {
-                    *a = self.math_pow(*a, *b, span)?;
-                }
-                components.truncate(mid);
-
-                Expression::Compose {
-                    ty: ty0,
-                    components,
-                }
-            }
-            _ => return Err(ConstantEvaluatorError::InvalidMathArg),
-        };
-
-        self.register_evaluated_expr(expr, span)
-    }
-
-    fn math_clamp(
-        &mut self,
-        e: Handle<Expression>,
-        low: Handle<Expression>,
-        high: Handle<Expression>,
-        span: Span,
-    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let e = self.eval_zero_value_and_splat(e, span)?;
-        let low = self.eval_zero_value_and_splat(low, span)?;
-        let high = self.eval_zero_value_and_splat(high, span)?;
-
-        let expr = match (
-            &self.expressions[e],
-            &self.expressions[low],
-            &self.expressions[high],
-        ) {
-            (&Expression::Literal(e), &Expression::Literal(low), &Expression::Literal(high)) => {
-                let literal = match (e, low, high) {
-                    (Literal::I32(e), Literal::I32(low), Literal::I32(high)) => {
-                        if low > high {
-                            return Err(ConstantEvaluatorError::InvalidClamp);
-                        } else {
-                            Literal::I32(e.clamp(low, high))
-                        }
-                    }
-                    (Literal::U32(e), Literal::U32(low), Literal::U32(high)) => {
-                        if low > high {
-                            return Err(ConstantEvaluatorError::InvalidClamp);
-                        } else {
-                            Literal::U32(e.clamp(low, high))
-                        }
-                    }
-                    (Literal::F32(e), Literal::F32(low), Literal::F32(high)) => {
-                        if low > high {
-                            return Err(ConstantEvaluatorError::InvalidClamp);
-                        } else {
-                            Literal::F32(e.clamp(low, high))
-                        }
-                    }
-                    _ => return Err(ConstantEvaluatorError::InvalidMathArg),
-                };
-                Expression::Literal(literal)
-            }
-            (
-                &Expression::Compose {
-                    components: ref src_components0,
-                    ty: ty0,
-                },
-                &Expression::Compose {
-                    components: ref src_components1,
-                    ty: ty1,
-                },
-                &Expression::Compose {
-                    components: ref src_components2,
-                    ty: ty2,
-                },
-            ) if ty0 == ty1
-                && ty0 == ty2
-                && matches!(
-                    self.types[ty0].inner,
-                    crate::TypeInner::Vector {
-                        scalar: crate::Scalar {
-                            kind: ScalarKind::Float,
-                            ..
-                        },
-                        ..
-                    }
-                ) =>
-            {
-                let mut components: Vec<_> = crate::proc::flatten_compose(
-                    ty0,
-                    src_components0,
-                    self.expressions,
-                    self.types,
-                )
-                .chain(crate::proc::flatten_compose(
-                    ty1,
-                    src_components1,
-                    self.expressions,
-                    self.types,
-                ))
-                .chain(crate::proc::flatten_compose(
-                    ty2,
-                    src_components2,
-                    self.expressions,
-                    self.types,
-                ))
-                .collect();
-
-                let chunk_size = components.len() / 3;
-                let (es, rem) = components.split_at_mut(chunk_size);
-                let (lows, highs) = rem.split_at(chunk_size);
-                for ((e, low), high) in es.iter_mut().zip(lows).zip(highs) {
-                    *e = self.math_clamp(*e, *low, *high, span)?;
-                }
-                components.truncate(chunk_size);
-
-                Expression::Compose {
-                    ty: ty0,
-                    components,
-                }
-            }
-            _ => return Err(ConstantEvaluatorError::InvalidMathArg),
-        };
-
-        self.register_evaluated_expr(expr, span)
     }
 
     fn array_length(
@@ -976,6 +1268,18 @@ impl<'a> ConstantEvaluator<'a> {
 
         let expr = self.eval_zero_value(expr, span)?;
 
+        let make_error = || -> Result<_, ConstantEvaluatorError> {
+            let from = format!("{:?} {:?}", expr, self.expressions[expr]);
+
+            #[cfg(feature = "wgsl-in")]
+            let to = target.to_wgsl();
+
+            #[cfg(not(feature = "wgsl-in"))]
+            let to = format!("{target:?}");
+
+            Err(ConstantEvaluatorError::InvalidCastArg { from, to })
+        };
+
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
                 let literal = match target {
@@ -985,8 +1289,10 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v as i32,
                         Literal::Bool(v) => v as i32,
                         Literal::F64(_) | Literal::I64(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                            return make_error();
                         }
+                        Literal::AbstractInt(v) => i32::try_from_abstract(v)?,
+                        Literal::AbstractFloat(v) => i32::try_from_abstract(v)?,
                     }),
                     Sc::U32 => Literal::U32(match literal {
                         Literal::I32(v) => v as u32,
@@ -994,8 +1300,10 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v as u32,
                         Literal::Bool(v) => v as u32,
                         Literal::F64(_) | Literal::I64(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                            return make_error();
                         }
+                        Literal::AbstractInt(v) => u32::try_from_abstract(v)?,
+                        Literal::AbstractFloat(v) => u32::try_from_abstract(v)?,
                     }),
                     Sc::F32 => Literal::F32(match literal {
                         Literal::I32(v) => v as f32,
@@ -1003,27 +1311,48 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v,
                         Literal::Bool(v) => v as u32 as f32,
                         Literal::F64(_) | Literal::I64(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                            return make_error();
                         }
+                        Literal::AbstractInt(v) => f32::try_from_abstract(v)?,
+                        Literal::AbstractFloat(v) => f32::try_from_abstract(v)?,
                     }),
                     Sc::F64 => Literal::F64(match literal {
                         Literal::I32(v) => v as f64,
                         Literal::U32(v) => v as f64,
                         Literal::F32(v) => v as f64,
-                        Literal::Bool(v) => v as u32 as f64,
                         Literal::F64(v) => v,
-                        Literal::I64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::Bool(v) => v as u32 as f64,
+                        Literal::I64(_) => return make_error(),
+                        Literal::AbstractInt(v) => f64::try_from_abstract(v)?,
+                        Literal::AbstractFloat(v) => f64::try_from_abstract(v)?,
                     }),
                     Sc::BOOL => Literal::Bool(match literal {
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,
                         Literal::F32(v) => v != 0.0,
                         Literal::Bool(v) => v,
-                        Literal::F64(_) | Literal::I64(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        Literal::F64(_)
+                        | Literal::I64(_)
+                        | Literal::AbstractInt(_)
+                        | Literal::AbstractFloat(_) => {
+                            return make_error();
                         }
                     }),
-                    _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+                    Sc::ABSTRACT_FLOAT => Literal::AbstractFloat(match literal {
+                        Literal::AbstractInt(v) => {
+                            // Overflow is forbidden, but inexact conversions
+                            // are fine. The range of f64 is far larger than
+                            // that of i64, so we don't have to check anything
+                            // here.
+                            v as f64
+                        }
+                        Literal::AbstractFloat(v) => v,
+                        _ => return make_error(),
+                    }),
+                    _ => {
+                        log::debug!("Constant evaluator refused to convert value to {target:?}");
+                        return make_error();
+                    }
                 };
                 Expression::Literal(literal)
             }
@@ -1041,7 +1370,7 @@ impl<'a> ConstantEvaluator<'a> {
                         rows,
                         scalar: target,
                     },
-                    _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+                    _ => return make_error(),
                 };
 
                 let mut components = src_components.clone();
@@ -1067,10 +1396,73 @@ impl<'a> ConstantEvaluator<'a> {
                     value: cast_value,
                 }
             }
-            _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+            _ => return make_error(),
         };
 
         self.register_evaluated_expr(expr, span)
+    }
+
+    /// Convert the scalar leaves of  `expr` to `target`, handling arrays.
+    ///
+    /// `expr` must be a `Compose` expression whose type is a scalar, vector,
+    /// matrix, or nested arrays of such.
+    ///
+    /// This is basically the same as the [`cast`] method, except that that
+    /// should only handle Naga [`As`] expressions, which cannot convert arrays.
+    ///
+    /// Treat `span` as the location of the resulting expression.
+    ///
+    /// [`cast`]: ConstantEvaluator::cast
+    /// [`As`]: crate::Expression::As
+    pub fn cast_array(
+        &mut self,
+        expr: Handle<Expression>,
+        target: crate::Scalar,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let Expression::Compose { ty, ref components } = self.expressions[expr] else {
+            return self.cast(expr, target, span);
+        };
+
+        let crate::TypeInner::Array {
+            base: _,
+            size,
+            stride: _,
+        } = self.types[ty].inner
+        else {
+            return self.cast(expr, target, span);
+        };
+
+        let mut components = components.clone();
+        for component in &mut components {
+            *component = self.cast_array(*component, target, span)?;
+        }
+
+        let first = components.first().unwrap();
+        let new_base = match self.resolve_type(*first)? {
+            crate::proc::TypeResolution::Handle(ty) => ty,
+            crate::proc::TypeResolution::Value(inner) => {
+                self.types.insert(Type { name: None, inner }, span)
+            }
+        };
+        let new_base_stride = self.types[new_base].inner.size(self.to_ctx());
+        let new_array_ty = self.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: new_base,
+                    size,
+                    stride: new_base_stride,
+                },
+            },
+            span,
+        );
+
+        let compose = Expression::Compose {
+            ty: new_array_ty,
+            components,
+        };
+        self.register_evaluated_expr(compose, span)
     }
 
     fn unary_op(
@@ -1084,8 +1476,10 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = match self.expressions[expr] {
             Expression::Literal(value) => Expression::Literal(match op {
                 UnaryOperator::Negate => match value {
-                    Literal::I32(v) => Literal::I32(-v),
+                    Literal::I32(v) => Literal::I32(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
+                    Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
+                    Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
                 UnaryOperator::LogicalNot => match value {
@@ -1095,6 +1489,7 @@ impl<'a> ConstantEvaluator<'a> {
                 UnaryOperator::BitwiseNot => match value {
                     Literal::I32(v) => Literal::I32(!v),
                     Literal::U32(v) => Literal::U32(!v),
+                    Literal::AbstractInt(v) => Literal::AbstractInt(!v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
             }),
@@ -1214,6 +1609,47 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Modulo => a % b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
+                        (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
+                            Literal::AbstractInt(match op {
+                                BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("addition".into())
+                                })?,
+                                BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("subtraction".into())
+                                })?,
+                                BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("multiplication".into())
+                                })?,
+                                BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
+                                    if b == 0 {
+                                        ConstantEvaluatorError::DivisionByZero
+                                    } else {
+                                        ConstantEvaluatorError::Overflow("division".into())
+                                    }
+                                })?,
+                                BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
+                                    if b == 0 {
+                                        ConstantEvaluatorError::RemainderByZero
+                                    } else {
+                                        ConstantEvaluatorError::Overflow("remainder".into())
+                                    }
+                                })?,
+                                BinaryOperator::And => a & b,
+                                BinaryOperator::ExclusiveOr => a ^ b,
+                                BinaryOperator::InclusiveOr => a | b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
+                        (Literal::AbstractFloat(a), Literal::AbstractFloat(b)) => {
+                            Literal::AbstractFloat(match op {
+                                BinaryOperator::Add => a + b,
+                                BinaryOperator::Subtract => a - b,
+                                BinaryOperator::Multiply => a * b,
+                                BinaryOperator::Divide => a / b,
+                                BinaryOperator::Modulo => a % b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,
                             BinaryOperator::LogicalOr => a || b,
@@ -1250,10 +1686,105 @@ impl<'a> ConstantEvaluator<'a> {
                 }
                 Expression::Compose { ty, components }
             }
+            (
+                &Expression::Compose {
+                    components: ref left_components,
+                    ty: left_ty,
+                },
+                &Expression::Compose {
+                    components: ref right_components,
+                    ty: right_ty,
+                },
+            ) => {
+                // We have to make a copy of the component lists, because the
+                // call to `binary_op_vector` needs `&mut self`, but `self` owns
+                // the component lists.
+                let left_flattened = crate::proc::flatten_compose(
+                    left_ty,
+                    left_components,
+                    self.expressions,
+                    self.types,
+                );
+                let right_flattened = crate::proc::flatten_compose(
+                    right_ty,
+                    right_components,
+                    self.expressions,
+                    self.types,
+                );
+
+                // `flatten_compose` doesn't return an `ExactSizeIterator`, so
+                // make a reasonable guess of the capacity we'll need.
+                let mut flattened = Vec::with_capacity(left_components.len());
+                flattened.extend(left_flattened.zip(right_flattened));
+
+                match (&self.types[left_ty].inner, &self.types[right_ty].inner) {
+                    (
+                        &TypeInner::Vector {
+                            size: left_size, ..
+                        },
+                        &TypeInner::Vector {
+                            size: right_size, ..
+                        },
+                    ) if left_size == right_size => {
+                        self.binary_op_vector(op, left_size, &flattened, left_ty, span)?
+                    }
+                    _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                }
+            }
             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
         };
 
         self.register_evaluated_expr(expr, span)
+    }
+
+    fn binary_op_vector(
+        &mut self,
+        op: BinaryOperator,
+        size: crate::VectorSize,
+        components: &[(Handle<Expression>, Handle<Expression>)],
+        left_ty: Handle<Type>,
+        span: Span,
+    ) -> Result<Expression, ConstantEvaluatorError> {
+        let ty = match op {
+            // Relational operators produce vectors of booleans.
+            BinaryOperator::Equal
+            | BinaryOperator::NotEqual
+            | BinaryOperator::Less
+            | BinaryOperator::LessEqual
+            | BinaryOperator::Greater
+            | BinaryOperator::GreaterEqual => self.types.insert(
+                Type {
+                    name: None,
+                    inner: TypeInner::Vector {
+                        size,
+                        scalar: crate::Scalar::BOOL,
+                    },
+                },
+                span,
+            ),
+
+            // Other operators produce the same type as their left
+            // operand.
+            BinaryOperator::Add
+            | BinaryOperator::Subtract
+            | BinaryOperator::Multiply
+            | BinaryOperator::Divide
+            | BinaryOperator::Modulo
+            | BinaryOperator::And
+            | BinaryOperator::ExclusiveOr
+            | BinaryOperator::InclusiveOr
+            | BinaryOperator::LogicalAnd
+            | BinaryOperator::LogicalOr
+            | BinaryOperator::ShiftLeft
+            | BinaryOperator::ShiftRight => left_ty,
+        };
+
+        let components = components
+            .iter()
+            .map(|&(left, right)| self.binary_op(op, left, right, span))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Expression::Compose { ty, components })
     }
 
     /// Deep copy `expr` from `expressions` into `self.expressions`.
@@ -1326,6 +1857,31 @@ impl<'a> ConstantEvaluator<'a> {
         } else {
             Ok(self.expressions.append(expr, span))
         }
+    }
+
+    fn resolve_type(
+        &self,
+        expr: Handle<Expression>,
+    ) -> Result<crate::proc::TypeResolution, ConstantEvaluatorError> {
+        use crate::proc::TypeResolution as Tr;
+        use crate::Expression as Ex;
+        let resolution = match self.expressions[expr] {
+            Ex::Literal(ref literal) => Tr::Value(literal.ty_inner()),
+            Ex::Constant(c) => Tr::Handle(self.constants[c].ty),
+            Ex::ZeroValue(ty) | Ex::Compose { ty, .. } => Tr::Handle(ty),
+            Ex::Splat { size, value } => {
+                let Tr::Value(TypeInner::Scalar(scalar)) = self.resolve_type(value)? else {
+                    return Err(ConstantEvaluatorError::SplatScalarOnly);
+                };
+                Tr::Value(TypeInner::Vector { scalar, size })
+            }
+            _ => {
+                log::debug!("resolve_type: SubexpressionsAreNotConstant");
+                return Err(ConstantEvaluatorError::SubexpressionsAreNotConstant);
+            }
+        };
+
+        Ok(resolution)
     }
 }
 
@@ -1834,5 +2390,94 @@ mod tests {
         if !pass {
             panic!("unexpected evaluation result")
         }
+    }
+}
+
+/// Trait for conversions of abstract values to concrete types.
+trait TryFromAbstract<T>: Sized {
+    /// Convert an abstract literal `value` to `Self`.
+    ///
+    /// Since Naga's `AbstractInt` and `AbstractFloat` exist to support
+    /// WGSL, we follow WGSL's conversion rules here:
+    ///
+    /// - WGSL §6.1.2. Conversion Rank says that automatic conversions
+    ///   to integers are either lossless or an error.
+    ///
+    /// - WGSL §14.6.4 Floating Point Conversion says that conversions
+    ///   to floating point in constant expressions and override
+    ///   expressions are errors if the value is out of range for the
+    ///   destination type, but rounding is okay.
+    ///
+    /// [`AbstractInt`]: crate::Literal::AbstractInt
+    /// [`Float`]: crate::Literal::Float
+    fn try_from_abstract(value: T) -> Result<Self, ConstantEvaluatorError>;
+}
+
+impl TryFromAbstract<i64> for i32 {
+    fn try_from_abstract(value: i64) -> Result<i32, ConstantEvaluatorError> {
+        i32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
+            value: format!("{value:?}"),
+            to_type: "i32",
+        })
+    }
+}
+
+impl TryFromAbstract<i64> for u32 {
+    fn try_from_abstract(value: i64) -> Result<u32, ConstantEvaluatorError> {
+        u32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
+            value: format!("{value:?}"),
+            to_type: "u32",
+        })
+    }
+}
+
+impl TryFromAbstract<i64> for f32 {
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        let f = value as f32;
+        // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
+        // `f32` is roughly ±3.4 × 10³⁸, so there's no opportunity for
+        // overflow here.
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<f64> for f32 {
+    fn try_from_abstract(value: f64) -> Result<f32, ConstantEvaluatorError> {
+        let f = value as f32;
+        if f.is_infinite() {
+            return Err(ConstantEvaluatorError::AutomaticConversionLossy {
+                value: format!("{value:?}"),
+                to_type: "f32",
+            });
+        }
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<i64> for f64 {
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        let f = value as f64;
+        // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
+        // `f64` is roughly ±1.8 × 10³⁰⁸, so there's no opportunity for
+        // overflow here.
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<f64> for f64 {
+    fn try_from_abstract(value: f64) -> Result<f64, ConstantEvaluatorError> {
+        Ok(value)
+    }
+}
+
+impl TryFromAbstract<f64> for i32 {
+    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
+        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "i32" })
+    }
+}
+
+impl TryFromAbstract<f64> for u32 {
+    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
+        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u32" })
     }
 }

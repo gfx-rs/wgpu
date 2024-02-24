@@ -20,7 +20,7 @@ impl crate::BufferTextureCopy {
         &self,
         format: wgt::TextureFormat,
     ) -> d3d12_ty::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-        let (block_width, block_height) = format.block_dimensions();
+        let (block_width, _) = format.block_dimensions();
         d3d12_ty::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
             Offset: self.buffer_layout.offset,
             Footprint: d3d12_ty::D3D12_SUBRESOURCE_FOOTPRINT {
@@ -30,10 +30,7 @@ impl crate::BufferTextureCopy {
                 )
                 .unwrap(),
                 Width: self.size.width,
-                Height: self
-                    .buffer_layout
-                    .rows_per_image
-                    .map_or(self.size.height, |count| count * block_height),
+                Height: self.size.height,
                 Depth: self.size.depth,
                 RowPitch: {
                     let actual = self.buffer_layout.bytes_per_row.unwrap_or_else(|| {
@@ -56,6 +53,13 @@ impl super::Temp {
         self.marker.extend(marker.encode_utf16());
         self.marker.push(0);
         (&self.marker, self.marker.len() as u32 * 2)
+    }
+}
+
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        use crate::CommandEncoder;
+        unsafe { self.discard_encoding() }
     }
 }
 
@@ -292,14 +296,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         let raw = self.list.take().unwrap();
-        let closed = raw.close().into_result().is_ok();
-        Ok(super::CommandBuffer { raw, closed })
+        raw.close()
+            .into_device_result("GraphicsCommandList::close")?;
+        Ok(super::CommandBuffer { raw })
     }
     unsafe fn reset_all<I: Iterator<Item = super::CommandBuffer>>(&mut self, command_buffers: I) {
         for cmd_buf in command_buffers {
-            if cmd_buf.closed {
-                self.free_lists.push(cmd_buf.raw);
-            }
+            self.free_lists.push(cmd_buf.raw);
         }
         self.allocator.reset();
     }
@@ -415,6 +418,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             wgt::TextureAspect::All => 0..2,
                             wgt::TextureAspect::DepthOnly => 0..1,
                             wgt::TextureAspect::StencilOnly => 1..2,
+                            _ => unreachable!(),
+                        }
+                    } else if let Some(planes) = barrier.texture.format.planes() {
+                        match barrier.range.aspect {
+                            wgt::TextureAspect::All => 0..planes,
+                            wgt::TextureAspect::Plane0 => 0..1,
+                            wgt::TextureAspect::Plane1 => 1..2,
+                            wgt::TextureAspect::Plane2 => 2..3,
+                            _ => unreachable!(),
                         }
                     } else {
                         match barrier.texture.format {
@@ -1191,5 +1203,25 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 0,
             )
         };
+    }
+
+    unsafe fn build_acceleration_structures<'a, T>(
+        &mut self,
+        _descriptor_count: u32,
+        _descriptors: T,
+    ) where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
+        // Implement using `BuildRaytracingAccelerationStructure`:
+        // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
+        todo!()
+    }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        todo!()
     }
 }

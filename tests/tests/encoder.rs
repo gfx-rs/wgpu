@@ -8,16 +8,22 @@ static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync
     drop(encoder);
 });
 
-// This test crashes on DX12 with the exception:
-//
-// ID3D12CommandAllocator::Reset: The command allocator cannot be reset because a
-// command list is currently being recorded with the allocator. [ EXECUTION ERROR
-// #543: COMMAND_ALLOCATOR_CANNOT_RESET]
-//
-// For now, we mark the test as failing on DX12.
+#[gpu_test]
+static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().expect_fail(FailureCase::always()))
+        .run_sync(|ctx| {
+            // Use the device after the queue is dropped. Currently this panics
+            // but it probably shouldn't
+            let device = ctx.device.clone();
+            drop(ctx);
+            let _encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        });
+
 #[gpu_test]
 static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::backend(wgpu::Backends::DX12)))
+    .parameters(TestParameters::default())
     .run_sync(|ctx| {
         let mut encoder = ctx
             .device

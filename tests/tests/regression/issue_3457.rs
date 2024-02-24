@@ -16,12 +16,12 @@ use wgpu::*;
 /// that we unset the correct locations (see PR #3706).
 #[gpu_test]
 static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+    GpuTestConfiguration::new().run_async(|ctx| async move {
         let module = ctx
             .device
             .create_shader_module(include_wgsl!("issue_3457.wgsl"));
 
-        // We use two separate vertex buffers so we can delete one in between submisions
+        // We use two separate vertex buffers so we can delete one in between submissions
         let vertex_buffer1 = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("vertex buffer 1"),
             size: 3 * 16,
@@ -160,7 +160,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
         drop(vertex_buffer2);
 
         // Make sure the buffers are actually deleted.
-        ctx.device.poll(Maintain::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         let mut encoder2 = ctx
             .device

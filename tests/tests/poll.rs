@@ -68,48 +68,60 @@ impl DummyWorkData {
 }
 
 #[gpu_test]
-static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_async(|ctx| async move {
     let data = DummyWorkData::new(&ctx);
 
     ctx.queue.submit(Some(data.cmd_buf));
-    ctx.device.poll(Maintain::Wait);
+    ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 });
 
 #[gpu_test]
-static DOUBLE_WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    let data = DummyWorkData::new(&ctx);
-
-    ctx.queue.submit(Some(data.cmd_buf));
-    ctx.device.poll(Maintain::Wait);
-    ctx.device.poll(Maintain::Wait);
-});
-
-#[gpu_test]
-static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    let data = DummyWorkData::new(&ctx);
-
-    let index = ctx.queue.submit(Some(data.cmd_buf));
-    ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
-});
-
-#[gpu_test]
-static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+static DOUBLE_WAIT: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
         let data = DummyWorkData::new(&ctx);
 
-        let index = ctx.queue.submit(Some(data.cmd_buf));
-        ctx.device
-            .poll(Maintain::WaitForSubmissionIndex(index.clone()));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
+        ctx.queue.submit(Some(data.cmd_buf));
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
     });
 
 #[gpu_test]
-static WAIT_OUT_OF_ORDER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    let data1 = DummyWorkData::new(&ctx);
-    let data2 = DummyWorkData::new(&ctx);
+static WAIT_ON_SUBMISSION: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
+        let data = DummyWorkData::new(&ctx);
 
-    let index1 = ctx.queue.submit(Some(data1.cmd_buf));
-    let index2 = ctx.queue.submit(Some(data2.cmd_buf));
-    ctx.device.poll(Maintain::WaitForSubmissionIndex(index2));
-    ctx.device.poll(Maintain::WaitForSubmissionIndex(index1));
-});
+        let index = ctx.queue.submit(Some(data.cmd_buf));
+        ctx.async_poll(Maintain::wait_for(index))
+            .await
+            .panic_on_timeout();
+    });
+
+#[gpu_test]
+static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
+        let data = DummyWorkData::new(&ctx);
+
+        let index = ctx.queue.submit(Some(data.cmd_buf));
+        ctx.async_poll(Maintain::wait_for(index.clone()))
+            .await
+            .panic_on_timeout();
+        ctx.async_poll(Maintain::wait_for(index))
+            .await
+            .panic_on_timeout();
+    });
+
+#[gpu_test]
+static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
+        let data1 = DummyWorkData::new(&ctx);
+        let data2 = DummyWorkData::new(&ctx);
+
+        let index1 = ctx.queue.submit(Some(data1.cmd_buf));
+        let index2 = ctx.queue.submit(Some(data2.cmd_buf));
+        ctx.async_poll(Maintain::wait_for(index2))
+            .await
+            .panic_on_timeout();
+        ctx.async_poll(Maintain::wait_for(index1))
+            .await
+            .panic_on_timeout();
+    });

@@ -71,7 +71,11 @@ impl From<super::StorageFormat> for super::ScalarKind {
 impl super::ScalarKind {
     pub const fn is_numeric(self) -> bool {
         match self {
-            crate::ScalarKind::Sint | crate::ScalarKind::Uint | crate::ScalarKind::Float => true,
+            crate::ScalarKind::Sint
+            | crate::ScalarKind::Uint
+            | crate::ScalarKind::Float
+            | crate::ScalarKind::AbstractInt
+            | crate::ScalarKind::AbstractFloat => true,
             crate::ScalarKind::Bool => false,
         }
     }
@@ -102,6 +106,24 @@ impl super::Scalar {
         kind: crate::ScalarKind::Bool,
         width: crate::BOOL_WIDTH,
     };
+    pub const ABSTRACT_INT: Self = Self {
+        kind: crate::ScalarKind::AbstractInt,
+        width: crate::ABSTRACT_WIDTH,
+    };
+    pub const ABSTRACT_FLOAT: Self = Self {
+        kind: crate::ScalarKind::AbstractFloat,
+        width: crate::ABSTRACT_WIDTH,
+    };
+
+    pub const fn is_abstract(self) -> bool {
+        match self.kind {
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => true,
+            crate::ScalarKind::Sint
+            | crate::ScalarKind::Uint
+            | crate::ScalarKind::Float
+            | crate::ScalarKind::Bool => false,
+        }
+    }
 
     /// Construct a float `Scalar` with the given width.
     ///
@@ -144,7 +166,7 @@ impl Eq for crate::Literal {}
 impl std::hash::Hash for crate::Literal {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
         match *self {
-            Self::F64(v) => {
+            Self::F64(v) | Self::AbstractFloat(v) => {
                 hasher.write_u8(0);
                 v.to_bits().hash(hasher);
             }
@@ -164,7 +186,7 @@ impl std::hash::Hash for crate::Literal {
                 hasher.write_u8(4);
                 v.hash(hasher);
             }
-            Self::I64(v) => {
+            Self::I64(v) | Self::AbstractInt(v) => {
                 hasher.write_u8(5);
                 v.hash(hasher);
             }
@@ -198,7 +220,8 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
-            Self::Bool(_) => 1,
+            Self::Bool(_) => crate::BOOL_WIDTH,
+            Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
         }
     }
     pub const fn scalar(&self) -> crate::Scalar {
@@ -209,6 +232,8 @@ impl crate::Literal {
             Self::I32(_) => crate::Scalar::I32,
             Self::I64(_) => crate::Scalar::I64,
             Self::Bool(_) => crate::Scalar::BOOL,
+            Self::AbstractInt(_) => crate::Scalar::ABSTRACT_INT,
+            Self::AbstractFloat(_) => crate::Scalar::ABSTRACT_FLOAT,
         }
     }
     pub const fn scalar_kind(&self) -> crate::ScalarKind {
@@ -222,6 +247,10 @@ impl crate::Literal {
 pub const POINTER_SPAN: u32 = 4;
 
 impl super::TypeInner {
+    /// Return the scalar type of `self`.
+    ///
+    /// If `inner` is a scalar, vector, or matrix type, return
+    /// its scalar type. Otherwise, return `None`.
     pub const fn scalar(&self) -> Option<super::Scalar> {
         use crate::TypeInner as Ti;
         match *self {
@@ -696,7 +725,7 @@ impl GlobalCtx<'_> {
 /// Normally, this would just be an iterator over `components`. However,
 /// `Compose` expressions can concatenate vectors, in which case the i'th
 /// value being composed is not generally the i'th element of `components`.
-/// This function consults `ty` to decide if this concatenation is occuring,
+/// This function consults `ty` to decide if this concatenation is occurring,
 /// and returns an iterator that produces the components of the result of
 /// the `Compose` expression in either case.
 pub fn flatten_compose<'arenas>(

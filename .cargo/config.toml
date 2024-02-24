@@ -5,3 +5,6 @@ xtask = "run --manifest-path xtask/Cargo.toml"
 rustflags = [
 "--cfg=web_sys_unstable_apis"
 ]
+rustdocflags = [
+"--cfg=web_sys_unstable_apis"
+]

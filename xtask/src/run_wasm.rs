@@ -2,16 +2,28 @@ use anyhow::Context;
 
 use pico_args::Arguments;
 
-use crate::util::check_all_programs;
+use crate::util::{check_all_programs, Program};
 
 pub(crate) fn run_wasm(mut args: Arguments) -> Result<(), anyhow::Error> {
     let no_serve = args.contains("--no-serve");
     let release = args.contains("--release");
 
     let programs_needed: &[_] = if no_serve {
-        &["wasm-bindgen"]
+        &[Program {
+            crate_name: "wasm-bindgen-cli",
+            binary_name: "wasm-bindgen",
+        }]
     } else {
-        &["wasm-bindgen", "simple-http-server"]
+        &[
+            Program {
+                crate_name: "wasm-bindgen-cli",
+                binary_name: "wasm-bindgen",
+            },
+            Program {
+                crate_name: "simple-http-server",
+                binary_name: "simple-http-server",
+            },
+        ]
     };
 
     check_all_programs(programs_needed)?;
@@ -49,7 +61,7 @@ pub(crate) fn run_wasm(mut args: Arguments) -> Result<(), anyhow::Error> {
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --features webgl {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features wgsl,webgl {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()

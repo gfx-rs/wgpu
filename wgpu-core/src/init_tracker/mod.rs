@@ -60,7 +60,8 @@ type UninitializedRangeVec<Idx> = SmallVec<[Range<Idx>; 1]>;
 /// Tracks initialization status of a linear range from 0..size
 #[derive(Debug, Clone)]
 pub(crate) struct InitTracker<Idx: Ord + Copy + Default> {
-    // Ordered, non overlapping list of all uninitialized ranges.
+    /// Non-overlapping list of all uninitialized ranges, sorted by
+    /// range end.
     uninitialized_ranges: UninitializedRangeVec<Idx>,
 }
 
@@ -154,11 +155,14 @@ where
         }
     }
 
-    // Checks if there's any uninitialized ranges within a query.
-    //
-    // If there are any, the range returned a the subrange of the query_range
-    // that contains all these uninitialized regions. Returned range may be
-    // larger than necessary (tradeoff for making this function O(log n))
+    /// Checks for uninitialized ranges within a given query range.
+    ///
+    /// If `query_range` includes any uninitialized portions of this init
+    /// tracker's resource, return the smallest subrange of `query_range` that
+    /// covers all uninitialized regions.
+    ///
+    /// The returned range may be larger than necessary, to keep this function
+    /// O(log n).
     pub(crate) fn check(&self, query_range: Range<Idx>) -> Option<Range<Idx>> {
         let index = self
             .uninitialized_ranges
@@ -323,7 +327,7 @@ mod test {
             vec![900..1000]
         );
 
-        // Splitted ranges.
+        // Split ranges.
         assert_eq!(
             tracker.drain(5..1003).collect::<Vec<Range<u32>>>(),
             vec![5..21, 42..900, 1000..1003]

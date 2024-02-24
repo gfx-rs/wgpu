@@ -9,7 +9,7 @@ use std::{
 };
 
 use arrayvec::ArrayVec;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(native)]
 use std::mem;
 use std::sync::atomic::Ordering;
 
@@ -115,7 +115,7 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the texture. If `drop_guard` is
     ///   [`Some`], the texture must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw(
         &self,
         name: std::num::NonZeroU32,
@@ -143,7 +143,7 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the renderbuffer. If `drop_guard` is
     ///   [`Some`], the renderbuffer must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
         name: std::num::NonZeroU32,
@@ -176,7 +176,7 @@ impl super::Device {
         };
 
         let raw = unsafe { gl.create_shader(target) }.unwrap();
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(native)]
         if gl.supports_debug() {
             //TODO: remove all transmutes from `object_label`
             // https://github.com/grovesNL/glow/issues/186
@@ -342,9 +342,9 @@ impl super::Device {
             naga::back::glsl::Version::Desktop(version) => format!("{version}"),
         };
         let program = unsafe { gl.create_program() }.unwrap();
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(native)]
         if let Some(label) = label {
-            if gl.supports_debug() {
+            if private_caps.contains(PrivateCapabilities::DEBUG_FNS) {
                 let name = unsafe { mem::transmute(program) };
                 unsafe { gl.object_label(glow::PROGRAM, name, Some(label)) };
             }
@@ -591,9 +591,13 @@ impl crate::Device<super::Api> for super::Device {
         }
         //TODO: do we need `glow::MAP_UNSYNCHRONIZED_BIT`?
 
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(native)]
         if let Some(label) = desc.label {
-            if gl.supports_debug() {
+            if self
+                .shared
+                .private_caps
+                .contains(PrivateCapabilities::DEBUG_FNS)
+            {
                 let name = unsafe { mem::transmute(raw) };
                 unsafe { gl.object_label(glow::BUFFER, name, Some(label)) };
             }
@@ -730,9 +734,13 @@ impl crate::Device<super::Api> for super::Device {
                 };
             }
 
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(native)]
             if let Some(label) = desc.label {
-                if gl.supports_debug() {
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+                {
                     let name = unsafe { mem::transmute(raw) };
                     unsafe { gl.object_label(glow::RENDERBUFFER, name, Some(label)) };
                 }
@@ -746,7 +754,7 @@ impl crate::Device<super::Api> for super::Device {
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
-            match desc.format.sample_type(None) {
+            match desc.format.sample_type(None, Some(self.shared.features)) {
                 Some(
                     wgt::TextureSampleType::Float { filterable: false }
                     | wgt::TextureSampleType::Uint
@@ -894,9 +902,13 @@ impl crate::Device<super::Api> for super::Device {
                 };
             }
 
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(native)]
             if let Some(label) = desc.label {
-                if gl.supports_debug() {
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+                {
                     let name = unsafe { mem::transmute(raw) };
                     unsafe { gl.object_label(glow::TEXTURE, name, Some(label)) };
                 }
@@ -927,7 +939,7 @@ impl crate::Device<super::Api> for super::Device {
                 super::TextureInner::Texture { raw, .. } => {
                     unsafe { gl.delete_texture(raw) };
                 }
-                #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+                #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => {}
             }
         }
@@ -1033,9 +1045,13 @@ impl crate::Device<super::Api> for super::Device {
             };
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(native)]
         if let Some(label) = desc.label {
-            if gl.supports_debug() {
+            if self
+                .shared
+                .private_caps
+                .contains(PrivateCapabilities::DEBUG_FNS)
+            {
                 let name = unsafe { mem::transmute(raw) };
                 unsafe { gl.object_label(glow::SAMPLER, name, Some(label)) };
             }
@@ -1125,6 +1141,7 @@ impl crate::Device<super::Api> for super::Device {
                         ty: wgt::BufferBindingType::Storage { .. },
                         ..
                     } => &mut num_storage_buffers,
+                    wgt::BindingType::AccelerationStructure => unimplemented!(),
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -1177,13 +1194,16 @@ impl crate::Device<super::Api> for super::Device {
                     let sampler = desc.samplers[entry.resource_index as usize];
                     super::RawBinding::Sampler(sampler.raw)
                 }
-                wgt::BindingType::Texture { .. } => {
+                wgt::BindingType::Texture { view_dimension, .. } => {
                     let view = desc.textures[entry.resource_index as usize].view;
                     if view.array_layers.start != 0 {
                         log::error!("Unable to create a sampled texture binding for non-zero array layer.\n{}",
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
+
+                    super::Texture::log_failing_target_heuristics(view_dimension, target);
+
                     super::RawBinding::Texture {
                         raw,
                         target,
@@ -1211,6 +1231,7 @@ impl crate::Device<super::Api> for super::Device {
                         format: format_desc.internal,
                     })
                 }
+                wgt::BindingType::AccelerationStructure => unimplemented!(),
             };
             contents.push(binding);
         }
@@ -1414,7 +1435,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<bool, crate::DeviceError> {
         if fence.last_completed < wait_value {
             let gl = &self.shared.context.lock();
-            let timeout_ns = if cfg!(target_arch = "wasm32") {
+            let timeout_ns = if cfg!(any(webgl, Emscripten)) {
                 0
             } else {
                 (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
@@ -1428,7 +1449,7 @@ impl crate::Device<super::Api> for super::Device {
                     gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
                 } {
                     // for some reason firefox returns WAIT_FAILED, to investigate
-                    #[cfg(target_arch = "wasm32")]
+                    #[cfg(any(webgl, Emscripten))]
                     glow::WAIT_FAILED => {
                         log::warn!("wait failed!");
                         Ok(false)
@@ -1443,7 +1464,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn start_capture(&self) -> bool {
-        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+        #[cfg(all(native, feature = "renderdoc"))]
         return unsafe {
             self.render_doc
                 .start_frame_capture(self.shared.context.raw_context(), ptr::null_mut())
@@ -1452,23 +1473,34 @@ impl crate::Device<super::Api> for super::Device {
         false
     }
     unsafe fn stop_capture(&self) {
-        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+        #[cfg(all(native, feature = "renderdoc"))]
         unsafe {
             self.render_doc
                 .end_frame_capture(ptr::null_mut(), ptr::null_mut())
         }
     }
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<(), crate::DeviceError> {
+        unimplemented!()
+    }
+    unsafe fn get_acceleration_structure_build_sizes<'a>(
+        &self,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
+    ) -> crate::AccelerationStructureBuildSizes {
+        unimplemented!()
+    }
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &(),
+    ) -> wgt::BufferAddress {
+        unimplemented!()
+    }
+    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: ()) {}
 }
 
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for super::Device {}
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for super::Device {}

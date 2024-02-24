@@ -1,4 +1,9 @@
-use crate::{binding_model::BindEntryMap, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl,
+    id::{markers::Buffer, Id},
+    FastHashMap, FastHashSet,
+};
+use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -133,8 +138,11 @@ pub struct Interface {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("Buffer usage is {actual:?} which does not contain required usage {expected:?}")]
+#[error(
+    "Usage flags {actual:?} for buffer {id:?} do not contain required usage flags {expected:?}"
+)]
 pub struct MissingBufferUsageError {
+    pub(crate) id: Id<Buffer>,
     pub(crate) actual: wgt::BufferUsages,
     pub(crate) expected: wgt::BufferUsages,
 }
@@ -142,11 +150,16 @@ pub struct MissingBufferUsageError {
 /// Checks that the given buffer usage contains the required buffer usage,
 /// returns an error otherwise.
 pub fn check_buffer_usage(
+    id: Id<Buffer>,
     actual: wgt::BufferUsages,
     expected: wgt::BufferUsages,
 ) -> Result<(), MissingBufferUsageError> {
     if !actual.contains(expected) {
-        Err(MissingBufferUsageError { actual, expected })
+        Err(MissingBufferUsageError {
+            id,
+            actual,
+            expected,
+        })
     } else {
         Ok(())
     }
@@ -252,7 +265,7 @@ pub enum StageError {
     TooManyVaryings { used: u32, limit: u32 },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
-    #[error("Shader global {0:?} is not available in the layout pipeline layout")]
+    #[error("Shader global {0:?} is not available in the pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
     #[error("Unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
     Filtering {
@@ -560,7 +573,9 @@ impl Resource {
                             }
                             naga::ScalarKind::Sint => wgt::TextureSampleType::Sint,
                             naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
-                            naga::ScalarKind::Bool => unreachable!(),
+                            naga::ScalarKind::AbstractInt
+                            | naga::ScalarKind::AbstractFloat
+                            | naga::ScalarKind::Bool => unreachable!(),
                         },
                         view_dimension,
                         multisampled: multi,
@@ -772,6 +787,27 @@ pub fn check_texture_format(
     }
 }
 
+pub enum BindingLayoutSource<'a> {
+    /// The binding layout is derived from the pipeline layout.
+    ///
+    /// This will be filled in by the shader binding validation, as it iterates the shader's interfaces.
+    Derived(ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+    /// The binding layout is provided by the user in BGLs.
+    ///
+    /// This will be validated against the shader's interfaces.
+    Provided(ArrayVec<&'a bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+}
+
+impl<'a> BindingLayoutSource<'a> {
+    pub fn new_derived(limits: &wgt::Limits) -> Self {
+        let mut array = ArrayVec::new();
+        for _ in 0..limits.max_bind_groups {
+            array.push(Default::default());
+        }
+        BindingLayoutSource::Derived(array)
+    }
+}
+
 pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
 
 impl Interface {
@@ -868,9 +904,15 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                naga::TypeInner::Array { stride, .. } => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(stride as u64).unwrap(),
-                },
+                naga::TypeInner::Array { stride, size, .. } => {
+                    let size = match size {
+                        naga::ArraySize::Constant(size) => size.get() * stride,
+                        naga::ArraySize::Dynamic => stride,
+                    };
+                    ResourceType::Buffer {
+                        size: wgt::BufferSize::new(size as u64).unwrap(),
+                    }
+                }
                 ref other => ResourceType::Buffer {
                     size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
                 },
@@ -931,8 +973,7 @@ impl Interface {
 
     pub fn check_stage(
         &self,
-        given_layouts: Option<&[&BindEntryMap]>,
-        derived_layouts: &mut [BindEntryMap],
+        layouts: &mut BindingLayoutSource<'_>,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
@@ -956,45 +997,53 @@ impl Interface {
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
-            let result = match given_layouts {
-                Some(layouts) => {
-                    // update the required binding size for this buffer
-                    if let ResourceType::Buffer { size } = res.ty {
-                        match shader_binding_sizes.entry(res.bind.clone()) {
-                            Entry::Occupied(e) => {
-                                *e.into_mut() = size.max(*e.get());
-                            }
-                            Entry::Vacant(e) => {
-                                e.insert(size);
+            let result = 'err: {
+                match layouts {
+                    BindingLayoutSource::Provided(layouts) => {
+                        // update the required binding size for this buffer
+                        if let ResourceType::Buffer { size } = res.ty {
+                            match shader_binding_sizes.entry(res.bind.clone()) {
+                                Entry::Occupied(e) => {
+                                    *e.into_mut() = size.max(*e.get());
+                                }
+                                Entry::Vacant(e) => {
+                                    e.insert(size);
+                                }
                             }
                         }
+
+                        let Some(map) = layouts.get(res.bind.group as usize) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        let Some(entry) = map.get(res.bind.binding) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        if !entry.visibility.contains(stage_bit) {
+                            break 'err Err(BindingError::Invisible);
+                        }
+
+                        res.check_binding_use(entry)
                     }
-                    layouts
-                        .get(res.bind.group as usize)
-                        .and_then(|map| map.get(&res.bind.binding))
-                        .ok_or(BindingError::Missing)
-                        .and_then(|entry| {
-                            if entry.visibility.contains(stage_bit) {
-                                Ok(entry)
-                            } else {
-                                Err(BindingError::Invisible)
+                    BindingLayoutSource::Derived(layouts) => {
+                        let Some(map) = layouts.get_mut(res.bind.group as usize) else {
+                            break 'err Err(BindingError::Missing);
+                        };
+
+                        let ty = match res.derive_binding_type() {
+                            Ok(ty) => ty,
+                            Err(error) => break 'err Err(error),
+                        };
+
+                        match map.entry(res.bind.binding) {
+                            indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
+                                break 'err Err(BindingError::InconsistentlyDerivedType)
                             }
-                        })
-                        .and_then(|entry| res.check_binding_use(entry))
-                }
-                None => derived_layouts
-                    .get_mut(res.bind.group as usize)
-                    .ok_or(BindingError::Missing)
-                    .and_then(|set| {
-                        let ty = res.derive_binding_type()?;
-                        match set.entry(res.bind.binding) {
-                            Entry::Occupied(e) if e.get().ty != ty => {
-                                return Err(BindingError::InconsistentlyDerivedType)
-                            }
-                            Entry::Occupied(e) => {
+                            indexmap::map::Entry::Occupied(e) => {
                                 e.into_mut().visibility |= stage_bit;
                             }
-                            Entry::Vacant(e) => {
+                            indexmap::map::Entry::Vacant(e) => {
                                 e.insert(BindGroupLayoutEntry {
                                     binding: res.bind.binding,
                                     ty,
@@ -1004,20 +1053,28 @@ impl Interface {
                             }
                         }
                         Ok(())
-                    }),
+                    }
+                }
             };
             if let Err(error) = result {
                 return Err(StageError::Binding(res.bind.clone(), error));
             }
         }
 
-        // check the compatibility between textures and samplers
-        if let Some(layouts) = given_layouts {
+        // Check the compatibility between textures and samplers
+        //
+        // We only need to do this if the binding layout is provided by the user, as derived
+        // layouts will inherently be correctly tagged.
+        if let BindingLayoutSource::Provided(layouts) = layouts {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
-                let texture_layout = &layouts[texture_bind.group as usize][&texture_bind.binding];
-                let sampler_layout = &layouts[sampler_bind.group as usize][&sampler_bind.binding];
+                let texture_layout = layouts[texture_bind.group as usize]
+                    .get(texture_bind.binding)
+                    .unwrap();
+                let sampler_layout = layouts[sampler_bind.group as usize]
+                    .get(sampler_bind.binding)
+                    .unwrap();
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
 
@@ -1206,4 +1263,30 @@ impl Interface {
             .ok_or(StageError::MissingEntryPoint(pair.1))
             .map(|ep| ep.dual_source_blending)
     }
+}
+
+// https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample
+pub fn validate_color_attachment_bytes_per_sample(
+    attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
+    limit: u32,
+) -> Result<(), u32> {
+    let mut total_bytes_per_sample = 0;
+    for format in attachment_formats {
+        let Some(format) = format else { continue; };
+
+        let byte_cost = format.target_pixel_byte_cost().unwrap();
+        let alignment = format.target_component_alignment().unwrap();
+
+        let rem = total_bytes_per_sample % alignment;
+        if rem != 0 {
+            total_bytes_per_sample += alignment - rem;
+        }
+        total_bytes_per_sample += byte_cost;
+    }
+
+    if total_bytes_per_sample > limit {
+        return Err(total_bytes_per_sample);
+    }
+
+    Ok(())
 }

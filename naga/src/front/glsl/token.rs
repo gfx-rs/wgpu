@@ -1,4 +1,4 @@
-pub use pp_rs::token::{Float, Integer, Location, PreprocessorError, Token as PPToken};
+pub use pp_rs::token::{Float, Integer, Location, Token as PPToken};
 
 use super::ast::Precision;
 use crate::{Interpolation, Sampling, Span, Type};
@@ -20,7 +20,7 @@ pub struct Token {
 ///
 /// This type is exported since it's returned in the
 /// [`InvalidToken`](super::ErrorKind::InvalidToken) error.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokenValue {
     Identifier(String),
 

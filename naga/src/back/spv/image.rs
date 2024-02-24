@@ -64,7 +64,7 @@ trait Access {
     /// the level of detail, and `sample_id` is the index of the sample to
     /// access in a multisampled texel.
     ///
-    /// Ths method assumes that `coordinates_id` has already had the image array
+    /// This method assumes that `coordinates_id` has already had the image array
     /// index, if any, folded in, as done by `write_image_coordinates`.
     ///
     /// Return the value id produced by the instruction, if any.
@@ -333,6 +333,10 @@ impl<'w> BlockContext<'w> {
             (crate::ScalarKind::Bool, _) => unreachable!("we don't allow bool for component"),
             (_, crate::ScalarKind::Bool | crate::ScalarKind::Float) => {
                 unreachable!("we don't allow bool or float for array index")
+            }
+            (crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat, _)
+            | (_, crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat) => {
+                unreachable!("abstract types should never reach backends")
             }
         };
         let reconciled_array_index_id = if let Some(cast) = cast {

@@ -8,8 +8,8 @@ const MIP_PASS_COUNT: u32 = MIP_LEVEL_COUNT - 1;
 
 const QUERY_FEATURES: wgpu::Features = {
     wgpu::Features::TIMESTAMP_QUERY
-        .union(wgpu::Features::PIPELINE_STATISTICS_QUERY)
         .union(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
+        .union(wgpu::Features::PIPELINE_STATISTICS_QUERY)
 };
 
 fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
@@ -133,7 +133,6 @@ impl Example {
                     mip_level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: None,
-                    ..Default::default()
                 })
             })
             .collect::<Vec<_>>();
@@ -411,7 +410,7 @@ impl crate::framework::Example for Example {
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
-            device.poll(wgpu::Maintain::Wait);
+            device.poll(wgpu::Maintain::wait()).panic_on_timeout();
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .mapping_buffer

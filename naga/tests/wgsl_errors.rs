@@ -20,6 +20,21 @@ fn check(input: &str, snapshot: &str) {
 }
 
 #[test]
+fn very_negative_integers() {
+    // wgpu#4492
+    check(
+        "const i32min = -0x80000000i;",
+        r###"error: numeric literal not representable by target type: `0x80000000i`
+  ┌─ wgsl:1:17
+  │
+1 │ const i32min = -0x80000000i;
+  │                 ^^^^^^^^^^^ numeric literal not representable by target type
+
+"###,
+    );
+}
+
+#[test]
 fn reserved_identifier_prefix() {
     check(
         "var __bad;",
@@ -166,7 +181,7 @@ fn type_not_constructible() {
 }
 
 #[test]
-fn type_not_inferrable() {
+fn type_not_inferable() {
     check(
         r#"
             fn x() {
@@ -209,11 +224,13 @@ fn constructor_parameter_type_mismatch() {
                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
             }
         "#,
-        r#"error: invalid type for constructor component at index [0]
-  ┌─ wgsl:3:33
+        r#"error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
+  ┌─ wgsl:3:21
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
-  │                                 ^^^^^^^^^^^ invalid component type
+  │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
+  │                     │            
+  │                     a value of type vec2<f32> is required here
 
 "#,
     );
@@ -502,7 +519,7 @@ fn let_type_mismatch() {
         r#"
             const x: i32 = 1.0;
         "#,
-        r#"error: the type of `x` is expected to be `i32`, but got `f32`
+        r#"error: the type of `x` is expected to be `i32`, but got `{AbstractFloat}`
   ┌─ wgsl:2:19
   │
 2 │             const x: i32 = 1.0;
@@ -824,6 +841,22 @@ fn matrix_with_bad_type() {
   │
 3 │                 let m: mat3x3<i32>;
   │                               ^^^ must be floating-point (e.g. `f32`)
+
+"#,
+    );
+}
+
+#[test]
+fn matrix_constructor_inferred() {
+    check(
+        r#"
+            const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
+        "#,
+        r#"error: the type of `m` is expected to be `mat2x2<f64>`, but got `mat2x2<f32>`
+  ┌─ wgsl:2:19
+  │
+2 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
+  │                   ^ definition of `m`
 
 "#,
     );
@@ -1967,6 +2000,41 @@ fn function_param_redefinition_as_local() {
 }
 
 #[test]
+fn constructor_type_error_span() {
+    check(
+        "
+        fn unfortunate() {
+            var i: i32;
+            var a: array<f32, 1> = array<f32, 1>(i);
+        }
+    ",
+        r###"error: automatic conversions cannot convert `i32` to `f32`
+  ┌─ wgsl:4:36
+  │
+4 │             var a: array<f32, 1> = array<f32, 1>(i);
+  │                                    ^^^^^^^^^^^^^ a value of type f32 is required here
+
+"###,
+    )
+}
+
+#[test]
+fn global_initialization_type_mismatch() {
+    check(
+        "
+        var<private> a: vec2<f32> = vec2<i32>(1i, 2i);
+    ",
+        r###"error: the type of `a` is expected to be `vec2<f32>`, but got `vec2<i32>`
+  ┌─ wgsl:2:22
+  │
+2 │         var<private> a: vec2<f32> = vec2<i32>(1i, 2i);
+  │                      ^ definition of `a`
+
+"###,
+    )
+}
+
+#[test]
 fn binding_array_local() {
     check_validation! {
         "fn f() { var x: binding_array<sampler, 4>; }":
@@ -1996,9 +2064,12 @@ fn binding_array_non_struct() {
 #[test]
 fn compaction_preserves_spans() {
     let source = r#"
-        const a: i32 = -(-(-(-42i)));
-        const b: vec2<u32> = vec2<u32>(42u, 43i);
-    "#; //                   ^^^^^^^^^^^^^^^^^^^ correct error span: 68..87
+        fn f() {
+           var a: i32 = -(-(-(-42i)));
+           var x: i32;
+           x = 42u;
+        }
+    "#; //     ^^^   correct error span: 95..98
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
     naga::compact::compact(&mut module);
     let err = naga::valid::Validator::new(
@@ -2011,10 +2082,18 @@ fn compaction_preserves_spans() {
     // Ideally this would all just be a `matches!` with a big pattern,
     // but the `Span` API is full of opaque structs.
     let mut spans = err.spans();
-    let first_span = spans.next().expect("error should have at least one span").0;
+
+    // The first span is the whole function.
+    let _ = spans.next().expect("error should have at least one span");
+
+    // The second span is the assignment destination.
+    let dest_span = spans
+        .next()
+        .expect("error should have at least two spans")
+        .0;
     if !matches!(
-        first_span.to_range(),
-        Some(std::ops::Range { start: 68, end: 87 })
+        dest_span.to_range(),
+        Some(std::ops::Range { start: 95, end: 98 })
     ) {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }

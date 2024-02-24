@@ -30,3 +30,15 @@ fn breakIf(a: bool) {
         }
     }
 }
+
+fn breakIfSeparateVariable() {
+    var counter = 0u;
+
+    loop {
+        counter += 1u;
+
+        continuing {
+            break if counter == 5u;
+        }
+    }
+}

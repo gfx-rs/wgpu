@@ -117,7 +117,6 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('>') => (Token::Arrow, chars.as_str()),
-                Some('0'..='9' | '.') => consume_number(input),
                 Some('-') => (Token::DecrementOperation, chars.as_str()),
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
                 _ => (Token::Operation(cur), og_chars),
@@ -465,13 +464,13 @@ fn test_numbers() {
     sub_test(
         "0x123 0X123u 1u 123 0 0i 0x3f",
         &[
-            Token::Number(Ok(Number::I32(291))),
+            Token::Number(Ok(Number::AbstractInt(291))),
             Token::Number(Ok(Number::U32(291))),
             Token::Number(Ok(Number::U32(1))),
-            Token::Number(Ok(Number::I32(123))),
+            Token::Number(Ok(Number::AbstractInt(123))),
+            Token::Number(Ok(Number::AbstractInt(0))),
             Token::Number(Ok(Number::I32(0))),
-            Token::Number(Ok(Number::I32(0))),
-            Token::Number(Ok(Number::I32(63))),
+            Token::Number(Ok(Number::AbstractInt(63))),
         ],
     );
     // decimal floating point
@@ -479,61 +478,77 @@ fn test_numbers() {
         "0.e+4f 01. .01 12.34 .0f 0h 1e-3 0xa.fp+2 0x1P+4f 0X.3 0x3p+2h 0X1.fp-4 0x3.2p+2h",
         &[
             Token::Number(Ok(Number::F32(0.))),
-            Token::Number(Ok(Number::F32(1.))),
-            Token::Number(Ok(Number::F32(0.01))),
-            Token::Number(Ok(Number::F32(12.34))),
+            Token::Number(Ok(Number::AbstractFloat(1.))),
+            Token::Number(Ok(Number::AbstractFloat(0.01))),
+            Token::Number(Ok(Number::AbstractFloat(12.34))),
             Token::Number(Ok(Number::F32(0.))),
             Token::Number(Err(NumberError::UnimplementedF16)),
-            Token::Number(Ok(Number::F32(0.001))),
-            Token::Number(Ok(Number::F32(43.75))),
+            Token::Number(Ok(Number::AbstractFloat(0.001))),
+            Token::Number(Ok(Number::AbstractFloat(43.75))),
             Token::Number(Ok(Number::F32(16.))),
-            Token::Number(Ok(Number::F32(0.1875))),
+            Token::Number(Ok(Number::AbstractFloat(0.1875))),
             Token::Number(Err(NumberError::UnimplementedF16)),
-            Token::Number(Ok(Number::F32(0.12109375))),
+            Token::Number(Ok(Number::AbstractFloat(0.12109375))),
             Token::Number(Err(NumberError::UnimplementedF16)),
         ],
     );
 
     // MIN / MAX //
 
-    // min / max decimal signed integer
+    // min / max decimal integer
     sub_test(
-        "-2147483648i 2147483647i -2147483649i 2147483648i",
+        "0i 2147483647i 2147483648i",
         &[
-            Token::Number(Ok(Number::I32(i32::MIN))),
+            Token::Number(Ok(Number::I32(0))),
             Token::Number(Ok(Number::I32(i32::MAX))),
-            Token::Number(Err(NumberError::NotRepresentable)),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
     // min / max decimal unsigned integer
     sub_test(
-        "0u 4294967295u -1u 4294967296u",
+        "0u 4294967295u 4294967296u",
         &[
             Token::Number(Ok(Number::U32(u32::MIN))),
             Token::Number(Ok(Number::U32(u32::MAX))),
-            Token::Number(Err(NumberError::NotRepresentable)),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
 
     // min / max hexadecimal signed integer
     sub_test(
-        "-0x80000000i 0x7FFFFFFFi -0x80000001i 0x80000000i",
+        "0x0i 0x7FFFFFFFi 0x80000000i",
         &[
-            Token::Number(Ok(Number::I32(i32::MIN))),
+            Token::Number(Ok(Number::I32(0))),
             Token::Number(Ok(Number::I32(i32::MAX))),
-            Token::Number(Err(NumberError::NotRepresentable)),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
     // min / max hexadecimal unsigned integer
     sub_test(
-        "0x0u 0xFFFFFFFFu -0x1u 0x100000000u",
+        "0x0u 0xFFFFFFFFu 0x100000000u",
         &[
             Token::Number(Ok(Number::U32(u32::MIN))),
             Token::Number(Ok(Number::U32(u32::MAX))),
             Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+
+    // min/max decimal abstract int
+    sub_test(
+        "0 9223372036854775807 9223372036854775808",
+        &[
+            Token::Number(Ok(Number::AbstractInt(0))),
+            Token::Number(Ok(Number::AbstractInt(i64::MAX))),
+            Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+
+    // min/max hexadecimal abstract int
+    sub_test(
+        "0 0x7fffffffffffffff 0x8000000000000000",
+        &[
+            Token::Number(Ok(Number::AbstractInt(0))),
+            Token::Number(Ok(Number::AbstractInt(i64::MAX))),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
@@ -548,77 +563,43 @@ fn test_numbers() {
     const LARGEST_F32_LESS_THAN_ONE: f32 = 0.99999994;
     /// ≈ 1 + 2^−23
     const SMALLEST_F32_LARGER_THAN_ONE: f32 = 1.0000001;
-    /// ≈ -(2^127 * (2 − 2^−23))
-    const SMALLEST_NORMAL_F32: f32 = f32::MIN;
     /// ≈ 2^127 * (2 − 2^−23)
     const LARGEST_NORMAL_F32: f32 = f32::MAX;
 
     // decimal floating point
     sub_test(
-        "1e-45f 1.1754942e-38f 1.17549435e-38f 0.99999994f 1.0000001f -3.40282347e+38f 3.40282347e+38f",
+        "1e-45f 1.1754942e-38f 1.17549435e-38f 0.99999994f 1.0000001f 3.40282347e+38f",
         &[
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_F32_LESS_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_F32_LARGER_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_NORMAL_F32,
-            ))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_NORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_F32_LESS_THAN_ONE))),
+            Token::Number(Ok(Number::F32(SMALLEST_F32_LARGER_THAN_ONE))),
+            Token::Number(Ok(Number::F32(LARGEST_NORMAL_F32))),
         ],
     );
     sub_test(
-        "-3.40282367e+38f 3.40282367e+38f",
+        "3.40282367e+38f",
         &[
-            Token::Number(Err(NumberError::NotRepresentable)), // ≈ -2^128
             Token::Number(Err(NumberError::NotRepresentable)), // ≈ 2^128
         ],
     );
 
     // hexadecimal floating point
     sub_test(
-        "0x1p-149f 0x7FFFFFp-149f 0x1p-126f 0xFFFFFFp-24f 0x800001p-23f -0xFFFFFFp+104f 0xFFFFFFp+104f",
+        "0x1p-149f 0x7FFFFFp-149f 0x1p-126f 0xFFFFFFp-24f 0x800001p-23f 0xFFFFFFp+104f",
         &[
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_F32_LESS_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_F32_LARGER_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_NORMAL_F32,
-            ))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_NORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_F32_LESS_THAN_ONE))),
+            Token::Number(Ok(Number::F32(SMALLEST_F32_LARGER_THAN_ONE))),
+            Token::Number(Ok(Number::F32(LARGEST_NORMAL_F32))),
         ],
     );
     sub_test(
-        "-0x1p128f 0x1p128f 0x1.000001p0f",
+        "0x1p128f 0x1.000001p0f",
         &[
-            Token::Number(Err(NumberError::NotRepresentable)), // = -2^128
             Token::Number(Err(NumberError::NotRepresentable)), // = 2^128
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
@@ -635,7 +616,7 @@ fn double_floats() {
             Token::Number(Ok(Number::F64(0.0625))),
             Token::Number(Ok(Number::F64(0.0625))),
             Token::Number(Ok(Number::F64(10.0))),
-            Token::Number(Ok(Number::I32(10))),
+            Token::Number(Ok(Number::AbstractInt(10))),
             Token::Word("l"),
         ],
     )
@@ -646,13 +627,16 @@ fn test_tokens() {
     sub_test("id123_OK", &[Token::Word("id123_OK")]);
     sub_test(
         "92No",
-        &[Token::Number(Ok(Number::I32(92))), Token::Word("No")],
+        &[
+            Token::Number(Ok(Number::AbstractInt(92))),
+            Token::Word("No"),
+        ],
     );
     sub_test(
         "2u3o",
         &[
             Token::Number(Ok(Number::U32(2))),
-            Token::Number(Ok(Number::I32(3))),
+            Token::Number(Ok(Number::AbstractInt(3))),
             Token::Word("o"),
         ],
     );
@@ -660,7 +644,7 @@ fn test_tokens() {
         "2.4f44po",
         &[
             Token::Number(Ok(Number::F32(2.4))),
-            Token::Number(Ok(Number::I32(44))),
+            Token::Number(Ok(Number::AbstractInt(44))),
             Token::Word("po"),
         ],
     );
@@ -699,13 +683,13 @@ fn test_tokens() {
         &[
             // The 'f' suffixes are taken as a hex digit:
             // the fractional part is 0x2f / 256.
-            Token::Number(Ok(Number::F32(1.0 + 0x2f as f32 / 256.0))),
-            Token::Number(Ok(Number::F32(1.0 + 0x2f as f32 / 256.0))),
-            Token::Number(Ok(Number::F32(1.125))),
+            Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
+            Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
+            Token::Number(Ok(Number::AbstractFloat(1.125))),
             Token::Word("h"),
-            Token::Number(Ok(Number::F32(1.125))),
+            Token::Number(Ok(Number::AbstractFloat(1.125))),
             Token::Word("H"),
-            Token::Number(Ok(Number::F32(1.125))),
+            Token::Number(Ok(Number::AbstractFloat(1.125))),
             Token::Word("lf"),
         ],
     )
@@ -719,7 +703,7 @@ fn test_variable_decl() {
             Token::Attribute,
             Token::Word("group"),
             Token::Paren('('),
-            Token::Number(Ok(Number::I32(0))),
+            Token::Number(Ok(Number::AbstractInt(0))),
             Token::Paren(')'),
             Token::Word("var"),
             Token::Paren('<'),

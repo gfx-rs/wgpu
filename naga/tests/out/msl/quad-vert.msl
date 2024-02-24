@@ -21,13 +21,13 @@ struct type_4 {
 void main_1(
     thread metal::float2& v_uv,
     thread metal::float2& a_uv_1,
-    thread gl_PerVertex& perVertexStruct,
+    thread gl_PerVertex& unnamed,
     thread metal::float2& a_pos_1
 ) {
     metal::float2 _e6 = a_uv_1;
     v_uv = _e6;
     metal::float2 _e7 = a_pos_1;
-    perVertexStruct.gl_Position = metal::float4(_e7.x, _e7.y, 0.0, 1.0);
+    unnamed.gl_Position = metal::float4(_e7.x, _e7.y, 0.0, 1.0);
     return;
 }
 
@@ -44,15 +44,15 @@ vertex main_Output main_(
 ) {
     metal::float2 v_uv = {};
     metal::float2 a_uv_1 = {};
-    gl_PerVertex perVertexStruct = gl_PerVertex {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_3 {}, type_3 {}};
+    gl_PerVertex unnamed = gl_PerVertex {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_3 {}, type_3 {}};
     metal::float2 a_pos_1 = {};
     const auto a_uv = varyings.a_uv;
     const auto a_pos = varyings.a_pos;
     a_uv_1 = a_uv;
     a_pos_1 = a_pos;
-    main_1(v_uv, a_uv_1, perVertexStruct, a_pos_1);
+    main_1(v_uv, a_uv_1, unnamed, a_pos_1);
     metal::float2 _e7 = v_uv;
-    metal::float4 _e8 = perVertexStruct.gl_Position;
+    metal::float4 _e8 = unnamed.gl_Position;
     const auto _tmp = type_4 {_e7, _e8};
     return main_Output { _tmp.member, _tmp.gl_Position };
 }

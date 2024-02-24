@@ -23,7 +23,7 @@ const BUNNY_SIZE: f32 = 0.15 * 256.0;
 const GRAVITY: f32 = -9.8 * 100.0;
 const MAX_VELOCITY: f32 = 750.0;
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
-const DESIRED_FRAMES: u32 = 3;
+const DESIRED_MAX_LATENCY: u32 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -132,9 +132,9 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: DESIRED_FRAMES.clamp(
-                *surface_caps.swap_chain_sizes.start(),
-                *surface_caps.swap_chain_sizes.end(),
+            maximum_frame_latency: DESIRED_MAX_LATENCY.clamp(
+                *surface_caps.maximum_frame_latency.start(),
+                *surface_caps.maximum_frame_latency.end(),
             ),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
@@ -422,7 +422,6 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::RESOURCE,
             range: wgt::ImageSubresourceRange::default(),
-            plane: None,
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -442,6 +441,7 @@ impl<A: hal::Api> Example<A> {
                 buffers: &[global_buffer_binding],
                 samplers: &[&sampler],
                 textures: &[texture_binding],
+                acceleration_structures: &[],
                 entries: &[
                     hal::BindGroupEntry {
                         binding: 0,
@@ -475,6 +475,7 @@ impl<A: hal::Api> Example<A> {
                 buffers: &[local_buffer_binding],
                 samplers: &[],
                 textures: &[],
+                acceleration_structures: &[],
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource_index: 0,
@@ -489,7 +490,7 @@ impl<A: hal::Api> Example<A> {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
             queue
-                .submit(&[&init_cmd], Some((&mut fence, init_fence_value)))
+                .submit(&[&init_cmd], &[], Some((&mut fence, init_fence_value)))
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
             device.destroy_buffer(staging_buffer);
@@ -541,7 +542,7 @@ impl<A: hal::Api> Example<A> {
             {
                 let ctx = &mut self.contexts[self.context_index];
                 self.queue
-                    .submit(&[], Some((&mut ctx.fence, ctx.fence_value)))
+                    .submit(&[], &[], Some((&mut ctx.fence, ctx.fence_value)))
                     .unwrap();
             }
 
@@ -659,7 +660,6 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::COLOR_TARGET,
             range: wgt::ImageSubresourceRange::default(),
-            plane: None,
         };
         let surface_tex_view = unsafe {
             self.device
@@ -729,7 +729,9 @@ impl<A: hal::Api> Example<A> {
             } else {
                 None
             };
-            self.queue.submit(&[&cmd_buf], fence_param).unwrap();
+            self.queue
+                .submit(&[&cmd_buf], &[&surface_tex], fence_param)
+                .unwrap();
             self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);

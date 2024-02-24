@@ -20,7 +20,7 @@ struct Light {
     color: vec4<f32>,
 }
 
-const c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
+const c_ambient: vec3<f32> = vec3<f32>(0.05f, 0.05f, 0.05f);
 const c_max_lights: u32 = 10u;
 
 @group(0) @binding(0) 
@@ -37,12 +37,12 @@ var t_shadow: texture_depth_2d_array;
 var sampler_shadow: sampler_comparison;
 
 fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
-    if (homogeneous_coords.w <= 0.0) {
-        return 1.0;
+    if (homogeneous_coords.w <= 0f) {
+        return 1f;
     }
-    let flip_correction = vec2<f32>(0.5, -0.5);
-    let proj_correction = (1.0 / homogeneous_coords.w);
-    let light_local = (((homogeneous_coords.xy * flip_correction) * proj_correction) + vec2<f32>(0.5, 0.5));
+    let flip_correction = vec2<f32>(0.5f, -0.5f);
+    let proj_correction = (1f / homogeneous_coords.w);
+    let light_local = (((homogeneous_coords.xy * flip_correction) * proj_correction) + vec2<f32>(0.5f, 0.5f));
     let _e24 = textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), (homogeneous_coords.z * proj_correction));
     return _e24;
 }
@@ -81,7 +81,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let _e19 = i;
             let _e23 = fetch_shadow(_e19, (light.proj * in.world_position));
             let light_dir = normalize((light.pos.xyz - in.world_position.xyz));
-            let diffuse = max(0.0, dot(normal_1, light_dir));
+            let diffuse = max(0f, dot(normal_1, light_dir));
             let _e37 = color;
             color = (_e37 + ((_e23 * diffuse) * light.color.xyz));
         }
@@ -92,7 +92,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     let _e42 = color;
     let _e47 = u_entity.color;
-    return (vec4<f32>(_e42, 1.0) * _e47);
+    return (vec4<f32>(_e42, 1f) * _e47);
 }
 
 @fragment 
@@ -114,7 +114,7 @@ fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
             let _e19 = i_1;
             let _e23 = fetch_shadow(_e19, (light_1.proj * in_1.world_position));
             let light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
-            let diffuse_1 = max(0.0, dot(normal_2, light_dir_1));
+            let diffuse_1 = max(0f, dot(normal_2, light_dir_1));
             let _e37 = color_1;
             color_1 = (_e37 + ((_e23 * diffuse_1) * light_1.color.xyz));
         }
@@ -125,5 +125,5 @@ fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
     }
     let _e42 = color_1;
     let _e47 = u_entity.color;
-    return (vec4<f32>(_e42, 1.0) * _e47);
+    return (vec4<f32>(_e42, 1f) * _e47);
 }

@@ -93,6 +93,13 @@ impl super::CommandBuffer {
     }
 }
 
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        use crate::CommandEncoder;
+        unsafe { self.discard_encoding() }
+    }
+}
+
 impl super::CommandEncoder {
     fn rebind_stencil_func(&mut self) {
         fn make(s: &super::StencilSide, face: u32) -> C {
@@ -349,7 +356,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
@@ -507,7 +514,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .iter()
             .filter_map(|at| at.as_ref())
             .any(|at| match at.target.view.inner {
-                #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+                #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => true,
                 _ => false,
             });
@@ -605,7 +612,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if !cat.ops.contains(crate::AttachmentOps::LOAD) {
                 let c = &cat.clear_value;
                 self.cmd_buffer.commands.push(
-                    match cat.target.view.format.sample_type(None).unwrap() {
+                    match cat.target.view.format.sample_type(None, None).unwrap() {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF {
                             draw_buffer: i as u32,
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
@@ -776,7 +783,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         // There is nothing preventing the user from trying to update a single value within
         // a vector or matrix in the set_push_constant call, as to the user, all of this is
-        // just memory. However OpenGL does not allow parital uniform updates.
+        // just memory. However OpenGL does not allow partial uniform updates.
         //
         // As such, we locally keep a copy of the current state of the push constant memory
         // block. If the user tries to update a single value, we have the data to update the entirety
@@ -1165,5 +1172,23 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             indirect_buf: buffer.raw.unwrap(),
             indirect_offset: offset,
         });
+    }
+
+    unsafe fn build_acceleration_structures<'a, T>(
+        &mut self,
+        _descriptor_count: u32,
+        _descriptors: T,
+    ) where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
+        unimplemented!()
+    }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        unimplemented!()
     }
 }

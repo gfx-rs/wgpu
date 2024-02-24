@@ -117,13 +117,13 @@ pub enum FunctionError {
     MissingDefaultCase,
     #[error("Multiple `default` cases are present")]
     MultipleDefaultCases,
-    #[error("The last `switch` case contains a `falltrough`")]
+    #[error("The last `switch` case contains a `fallthrough`")]
     LastCaseFallTrough,
     #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
     InvalidStorePointer(Handle<crate::Expression>),
     #[error("The value {0:?} can not be stored")]
     InvalidStoreValue(Handle<crate::Expression>),
-    #[error("Store of {value:?} into {pointer:?} doesn't have matching types")]
+    #[error("The type of {value:?} doesn't match the type stored in {pointer:?}")]
     InvalidStoreTypes {
         pointer: Handle<crate::Expression>,
         value: Handle<crate::Expression>,
@@ -442,9 +442,7 @@ impl super::Validator {
             (sk::Sint | sk::Uint | sk::Float, sg::Add | sg::Mul | sg::Min | sg::Max) => {}
             (sk::Sint | sk::Uint | sk::Bool, sg::And | sg::Or | sg::Xor) => {}
 
-            (_, sg::All | sg::Any)
-            | (sk::Bool, sg::Add | sg::Mul | sg::Min | sg::Max)
-            | (sk::Float, sg::And | sg::Or | sg::Xor) => {
+            (_, _) => {
                 log::error!("Subgroup operand type {:?}", argument_inner);
                 return Err(SubgroupError::InvalidOperand(argument)
                     .with_span_handle(argument, context.expressions)

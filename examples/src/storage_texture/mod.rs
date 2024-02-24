@@ -33,8 +33,8 @@ async fn run(_path: Option<String>) {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::empty(),
-                limits: wgpu::Limits::downlevel_defaults(),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
         )
@@ -143,7 +143,7 @@ async fn run(_path: Option<String>) {
     let buffer_slice = output_staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::Maintain::wait()).panic_on_timeout();
     receiver.recv_async().await.unwrap().unwrap();
     log::info!("Output buffer mapped");
     {

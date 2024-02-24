@@ -7,6 +7,7 @@ mod init;
 mod isolation;
 pub mod native;
 mod params;
+mod poll;
 mod report;
 mod run;
 

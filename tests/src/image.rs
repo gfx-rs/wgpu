@@ -5,6 +5,8 @@ use std::{borrow::Cow, ffi::OsStr, path::Path};
 use wgpu::util::{align_to, DeviceExt};
 use wgpu::*;
 
+use crate::TestingContext;
+
 #[cfg(not(target_arch = "wasm32"))]
 async fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
     let data = match std::fs::read(&path) {
@@ -181,7 +183,7 @@ pub async fn compare_image_output(
     let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
     let renderer = format!(
         "{}-{}-{}",
-        adapter_info.backend.to_str(),
+        adapter_info.backend,
         sanitize_for_path(&adapter_info.name),
         sanitize_for_path(&adapter_info.driver)
     );
@@ -220,7 +222,7 @@ pub async fn compare_image_output(
             all_passed &= check.check(&mut pool);
         }
 
-        // Convert the error values to a false color reprensentation
+        // Convert the error values to a false color representation
         let magma_image = error_map_flip
             .apply_color_lut(&nv_flip::magma_lut())
             .to_vec();
@@ -236,7 +238,7 @@ pub async fn compare_image_output(
     )
     .await;
     write_png(
-        difference_path,
+        &difference_path,
         width,
         height,
         &magma_image_with_alpha,
@@ -245,7 +247,7 @@ pub async fn compare_image_output(
     .await;
 
     if !all_passed {
-        panic!("Image data mismatch!")
+        panic!("Image data mismatch: {}", difference_path.display())
     }
 }
 
@@ -563,15 +565,15 @@ impl ReadbackBuffers {
         copy_texture_to_buffer(device, encoder, texture, &self.buffer, &self.buffer_stencil);
     }
 
-    fn retrieve_buffer(
+    async fn retrieve_buffer(
         &self,
-        device: &Device,
+        ctx: &TestingContext,
         buffer: &Buffer,
         aspect: Option<TextureAspect>,
     ) -> Vec<u8> {
         let buffer_slice = buffer.slice(..);
         buffer_slice.map_async(MapMode::Read, |_| ());
-        device.poll(Maintain::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
         let (block_width, block_height) = self.texture_format.block_dimensions();
         let expected_bytes_per_row = (self.texture_width / block_width)
             * self.texture_format.block_copy_size(aspect).unwrap_or(4);
@@ -600,26 +602,36 @@ impl ReadbackBuffers {
         }
     }
 
-    pub fn are_zero(&self, device: &Device) -> bool {
-        let is_zero = |device: &Device, buffer: &Buffer, aspect: Option<TextureAspect>| -> bool {
-            let is_zero = self
-                .retrieve_buffer(device, buffer, aspect)
-                .iter()
-                .all(|b| *b == 0);
-            buffer.unmap();
-            is_zero
-        };
+    async fn is_zero(
+        &self,
+        ctx: &TestingContext,
+        buffer: &Buffer,
+        aspect: Option<TextureAspect>,
+    ) -> bool {
+        let is_zero = self
+            .retrieve_buffer(ctx, buffer, aspect)
+            .await
+            .iter()
+            .all(|b| *b == 0);
+        buffer.unmap();
+        is_zero
+    }
 
-        let buffer_zero = is_zero(device, &self.buffer, self.buffer_aspect());
+    pub async fn are_zero(&self, ctx: &TestingContext) -> bool {
+        let buffer_zero = self.is_zero(ctx, &self.buffer, self.buffer_aspect()).await;
         let mut stencil_buffer_zero = true;
         if let Some(buffer) = &self.buffer_stencil {
-            stencil_buffer_zero = is_zero(device, buffer, Some(TextureAspect::StencilOnly));
+            stencil_buffer_zero = self
+                .is_zero(ctx, buffer, Some(TextureAspect::StencilOnly))
+                .await;
         };
         buffer_zero && stencil_buffer_zero
     }
 
-    pub fn assert_buffer_contents(&self, device: &Device, expected_data: &[u8]) {
-        let result_buffer = self.retrieve_buffer(device, &self.buffer, self.buffer_aspect());
+    pub async fn assert_buffer_contents(&self, ctx: &TestingContext, expected_data: &[u8]) {
+        let result_buffer = self
+            .retrieve_buffer(ctx, &self.buffer, self.buffer_aspect())
+            .await;
         assert!(
             result_buffer.len() >= expected_data.len(),
             "Result buffer ({}) smaller than expected buffer ({})",

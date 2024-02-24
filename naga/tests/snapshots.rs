@@ -285,7 +285,13 @@ fn check_targets(
         .subgroup_stages(subgroup_stages)
         .subgroup_operations(subgroup_operations)
         .validate(module)
-        .unwrap_or_else(|_| panic!("Naga module validation failed on test '{}'", name.display()));
+        .unwrap_or_else(|err| {
+            panic!(
+                "Naga module validation failed on test `{}`:\n{:?}",
+                name.display(),
+                err
+            );
+        });
 
     #[cfg(feature = "compact")]
     let info = {
@@ -304,10 +310,11 @@ fn check_targets(
             .subgroup_stages(subgroup_stages)
             .subgroup_operations(subgroup_operations)
             .validate(module)
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|err| {
                 panic!(
-                    "Post-compaction module validation failed on test '{}'",
-                    name.display()
+                    "Post-compaction module validation failed on test '{}':\n<{:?}",
+                    name.display(),
+                    err,
                 )
             })
     };
@@ -741,6 +748,11 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("cubeArrayShadow", Targets::GLSL),
+        ("sample-cube-array-depth-lod", Targets::GLSL),
+        (
+            "use-gl-ext-over-grad-workaround-if-instructed",
+            Targets::GLSL,
+        ),
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -794,6 +806,18 @@ fn convert_wgsl() {
         (
             "f64",
             Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "abstract-types-const",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
+            "abstract-types-var",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
+            "abstract-types-operators",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
             "subgroup-operations",
@@ -878,6 +902,12 @@ fn convert_spv_all() {
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+    convert_spv(
+        "unnamed-gl-per-vertex",
+        true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
     convert_spv(
         "subgroup-operations-s",
         false,

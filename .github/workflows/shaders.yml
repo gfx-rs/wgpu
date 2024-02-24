@@ -7,6 +7,16 @@ on:
   pull_request:
   merge_group:
 
+env:
+  # Sourced from https://vulkan.lunarg.com/sdk/home#linux
+  VULKAN_SDK_VERSION: "1.3.268"
+
+  # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
+  #
+  # Must also be changed in ci.yaml
+  DXC_RELEASE: "v1.7.2308"
+  DXC_FILENAME: "dxc_2023_08_14.zip"
+
 jobs:
   naga-validate-windows:
     name: "Validate: HLSL"
@@ -14,9 +24,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup DXC
-        uses: napokue/setup-dxc@v1.1.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            naga/xtask -> naga/xtask/target
 
+      # We must have the FXC job before the DXC job, so the DXC PATH has priority
+      # over the FXC PATH. This is because the windows kits also include an older
+      # version of DXC, which we don't want to use.
       - name: Setup FXC
         run: |
           Get-Childitem -Path "C:\Program Files (x86)\Windows Kits\10\bin\**\x64\fxc.exe" `
@@ -26,19 +41,31 @@ jobs:
           | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
         shell: powershell
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
+      - name: Setup DXC
+        shell: bash
+        run: |
+          set -e
 
-      - run: |
+          curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
+          7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
+
+          # We need to use cygpath to convert PWD to a windows path as we're using bash.
+          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
+
+      - name: Validate
+        shell: bash
+        run: |
+          set -e
+
+          dxc --version
+
           cd naga
           cargo xtask validate hlsl dxc
           cargo xtask validate hlsl fxc
-    
+
   naga-validate-macos:
     name: "Validate: MSL"
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -50,15 +77,29 @@ jobs:
       - run: |
           cd naga
           cargo xtask validate msl
-      
+
   naga-validate-linux:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools
-        run: sudo apt-get install spirv-tools glslang-tools graphviz
+      - name: install vulkan sdk
+        shell: bash
+        run: |
+          set -e
+
+          sudo apt-get update -y -qq
+
+          # vulkan sdk
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list
+
+          sudo apt-get update
+          sudo apt install -y vulkan-sdk
+
+      - name: Install graphviz
+        run: sudo apt-get install graphviz
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -72,4 +113,3 @@ jobs:
       - run: cd naga; cargo xtask validate dot
 
       - run: cd naga; cargo xtask validate wgsl
-

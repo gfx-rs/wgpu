@@ -159,7 +159,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 // Layer count of the destination texture
                 let mut dest_layers = 1;
 
-                // If the test is suppoed to be valid call to copyExternal.
+                // If the test is supposed to be valid call to copyExternal.
                 let mut valid = true;
                 match case {
                     TestCase::Normal => {}
@@ -323,7 +323,9 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 readback_buffer
                     .slice(..)
                     .map_async(wgpu::MapMode::Read, |_| ());
-                ctx.device.poll(wgpu::Maintain::Wait);
+                ctx.async_poll(wgpu::Maintain::wait())
+                    .await
+                    .panic_on_timeout();
 
                 let buffer = readback_buffer.slice(..).get_mapped_range();
 

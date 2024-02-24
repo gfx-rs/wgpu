@@ -7,28 +7,27 @@ use std::{
     fmt,
     future::Future,
     marker::PhantomData,
+    num::NonZeroU64,
     ops::Range,
     pin::Pin,
     rc::Rc,
+    sync::atomic::{AtomicU64, Ordering},
     task::{self, Poll},
 };
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     context::{downcast_ref, ObjectId, QueueWriteBuffer, Unused},
-    UncapturedErrorHandler,
+    SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
 
 fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "expose-ids")] {
-            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-            let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            (Identified(core::num::NonZeroU64::new(id).unwrap(), PhantomData), Sendable(value))
-        } else {
-            (Identified(PhantomData), Sendable(value))
-        }
-    }
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    (
+        Identified(NonZeroU64::new(id).unwrap(), PhantomData),
+        Sendable(value),
+    )
 }
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
@@ -39,25 +38,18 @@ fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
 // type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
-#[allow(unused_variables)]
 impl<T> From<ObjectId> for Identified<T> {
     fn from(object_id: ObjectId) -> Self {
-        Self(
-            #[cfg(feature = "expose-ids")]
-            object_id.global_id(),
-            PhantomData,
-        )
+        Self(object_id.global_id(), PhantomData)
     }
 }
 
-#[allow(unused_variables)]
 impl<T> From<Identified<T>> for ObjectId {
     fn from(identified: Identified<T>) -> Self {
         Self::new(
             // TODO: the ID isn't used, so we hardcode it to 1 for now until we rework this
             // API.
-            core::num::NonZeroU64::new(1).unwrap(),
-            #[cfg(feature = "expose-ids")]
+            NonZeroU64::new(1).unwrap(),
             identified.0,
         )
     }
@@ -65,48 +57,33 @@ impl<T> From<Identified<T>> for ObjectId {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<T> Send for Sendable<T> {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(
-    #[cfg(feature = "expose-ids")] std::num::NonZeroU64,
-    PhantomData<T>,
-);
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+pub(crate) struct Identified<T>(std::num::NonZeroU64, PhantomData<T>);
+#[cfg(send_sync)]
 unsafe impl<T> Send for Identified<T> {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<T> Sync for Identified<T> {}
 
-pub(crate) struct Context(web_sys::Gpu);
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
-unsafe impl Send for Context {}
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
-unsafe impl Sync for Context {}
+pub(crate) struct ContextWebGpu(web_sys::Gpu);
+#[cfg(send_sync)]
+unsafe impl Send for ContextWebGpu {}
+#[cfg(send_sync)]
+unsafe impl Sync for ContextWebGpu {}
+#[cfg(send_sync)]
+unsafe impl Send for BufferMappedRange {}
+#[cfg(send_sync)]
+unsafe impl Sync for BufferMappedRange {}
 
-impl fmt::Debug for Context {
+impl fmt::Debug for ContextWebGpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Context").field("type", &"Web").finish()
+        f.debug_struct("ContextWebGpu")
+            .field("type", &"Web")
+            .finish()
     }
 }
 
@@ -158,10 +135,7 @@ impl<F, M> MakeSendFuture<F, M> {
     }
 }
 
-#[cfg(all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
 fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTextureFormat {
@@ -280,10 +254,10 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
                 wgt::AstcBlock::B12x12 => tf::Astc12x12UnormSrgb,
             },
             wgt::AstcChannel::Hdr => {
-                unimplemented!("Format {texture_format:?} has no WebGPU equivilant")
+                unimplemented!("Format {texture_format:?} has no WebGPU equivalent")
             }
         },
-        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivilant"),
+        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivalent"),
     }
 }
 
@@ -568,8 +542,9 @@ fn map_texture_view_dimension(
 }
 
 fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> web_sys::GpuImageCopyBuffer {
-    let buffer: &<Context as crate::Context>::BufferData = downcast_ref(view.buffer.data.as_ref());
-    let mut mapped = web_sys::GpuImageCopyBuffer::new(&buffer.0);
+    let buffer: &<ContextWebGpu as crate::Context>::BufferData =
+        downcast_ref(view.buffer.data.as_ref());
+    let mut mapped = web_sys::GpuImageCopyBuffer::new(&buffer.0.buffer);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
         mapped.bytes_per_row(bytes_per_row);
     }
@@ -581,7 +556,7 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> web_sys::GpuImageCo
 }
 
 fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> web_sys::GpuImageCopyTexture {
-    let texture: &<Context as crate::Context>::TextureData =
+    let texture: &<ContextWebGpu as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
     let mut mapped = web_sys::GpuImageCopyTexture::new(&texture.0);
     mapped.mip_level(view.mip_level);
@@ -592,7 +567,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> web_sys::GpuImage
 fn map_tagged_texture_copy_view(
     view: crate::ImageCopyTextureTagged<'_>,
 ) -> web_sys::GpuImageCopyTextureTagged {
-    let texture: &<Context as crate::Context>::TextureData =
+    let texture: &<ContextWebGpu as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
     let mut mapped = web_sys::GpuImageCopyTextureTagged::new(&texture.0);
     mapped.mip_level(view.mip_level);
@@ -617,6 +592,9 @@ fn map_texture_aspect(aspect: wgt::TextureAspect) -> web_sys::GpuTextureAspect {
         wgt::TextureAspect::All => web_sys::GpuTextureAspect::All,
         wgt::TextureAspect::StencilOnly => web_sys::GpuTextureAspect::StencilOnly,
         wgt::TextureAspect::DepthOnly => web_sys::GpuTextureAspect::DepthOnly,
+        wgt::TextureAspect::Plane0 | wgt::TextureAspect::Plane1 | wgt::TextureAspect::Plane2 => {
+            panic!("multi-plane textures are not supported")
+        }
     }
 }
 
@@ -661,7 +639,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 11] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -703,6 +681,10 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
         wgt::Features::BGRA8UNORM_STORAGE,
         web_sys::GpuFeatureName::Bgra8unormStorage,
     ),
+    (
+        wgt::Features::FLOAT32_FILTERABLE,
+        web_sys::GpuFeatureName::Float32Filterable,
+    ),
 ];
 
 fn map_wgt_features(supported_features: web_sys::GpuSupportedFeatures) -> wgt::Features {
@@ -742,6 +724,8 @@ fn map_wgt_limits(limits: web_sys::GpuSupportedLimits) -> wgt::Limits {
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
         max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+        max_color_attachments: limits.max_color_attachments(),
+        max_color_attachment_bytes_per_sample: limits.max_color_attachment_bytes_per_sample(),
         max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
         max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
         max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
@@ -842,7 +826,7 @@ fn future_request_device(
             (device_id, device_data, queue_id, queue_data)
         })
         .map_err(|error_value| crate::RequestDeviceError {
-            inner: crate::RequestDeviceErrorKind::Web(error_value),
+            inner: crate::RequestDeviceErrorKind::WebGpu(error_value),
         })
 }
 
@@ -898,36 +882,8 @@ where
     *rc_callback.borrow_mut() = Some((closure_success, closure_rejected, callback));
 }
 
-impl Context {
-    pub fn instance_create_surface_from_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-    ) -> Result<
-        (
-            <Self as crate::Context>::SurfaceId,
-            <Self as crate::Context>::SurfaceData,
-        ),
-        crate::CreateSurfaceError,
-    > {
-        let result = canvas.get_context("webgpu");
-        self.create_surface_from_context(Canvas::Canvas(canvas), result)
-    }
-
-    pub fn instance_create_surface_from_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-    ) -> Result<
-        (
-            <Self as crate::Context>::SurfaceId,
-            <Self as crate::Context>::SurfaceData,
-        ),
-        crate::CreateSurfaceError,
-    > {
-        let result = canvas.get_context("webgpu");
-        self.create_surface_from_context(Canvas::Offscreen(canvas), result)
-    }
-
-    /// Common portion of public `instance_create_surface_from_*` functions.
+impl ContextWebGpu {
+    /// Common portion of the internal branches of the public `instance_create_surface` function.
     ///
     /// Note: Analogous code also exists in the WebGL2 backend at
     /// `wgpu_hal::gles::web::Instance`.
@@ -978,6 +934,15 @@ impl Context {
 
         Ok(create_identified((canvas, context)))
     }
+
+    /// Get mapped buffer range directly as a `js_sys::ArrayBuffer`.
+    pub fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        buffer_data: &<ContextWebGpu as crate::Context>::BufferData,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        buffer_data.0.get_mapped_array_buffer(sub_range)
+    }
 }
 
 // Represents the global object in the JavaScript context.
@@ -1001,7 +966,31 @@ pub enum Canvas {
     Offscreen(web_sys::OffscreenCanvas),
 }
 
-impl crate::context::Context for Context {
+/// Returns the browsers gpu object or `None` if the current context is neither the main thread nor a dedicated worker.
+///
+/// If WebGPU is not supported, the Gpu property is `undefined` (but *not* necessarily `None`).
+///
+/// See:
+/// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>
+/// * <https://developer.mozilla.org/en-US/docs/Web/API/WorkerNavigator/gpu>
+pub fn get_browser_gpu_property() -> Option<web_sys::Gpu> {
+    let global: Global = js_sys::global().unchecked_into();
+
+    if !global.window().is_undefined() {
+        Some(global.unchecked_into::<web_sys::Window>().navigator().gpu())
+    } else if !global.worker().is_undefined() {
+        Some(
+            global
+                .unchecked_into::<web_sys::WorkerGlobalScope>()
+                .navigator()
+                .gpu(),
+        )
+    } else {
+        None
+    }
+}
+
+impl crate::context::Context for ContextWebGpu {
     type AdapterId = Identified<web_sys::GpuAdapter>;
     type AdapterData = Sendable<web_sys::GpuAdapter>;
     type DeviceId = Identified<web_sys::GpuDevice>;
@@ -1018,8 +1007,8 @@ impl crate::context::Context for Context {
     type TextureViewData = Sendable<web_sys::GpuTextureView>;
     type SamplerId = Identified<web_sys::GpuSampler>;
     type SamplerData = Sendable<web_sys::GpuSampler>;
-    type BufferId = Identified<web_sys::GpuBuffer>;
-    type BufferData = Sendable<web_sys::GpuBuffer>;
+    type BufferId = Identified<WebBuffer>;
+    type BufferData = Sendable<WebBuffer>;
     type TextureId = Identified<web_sys::GpuTexture>;
     type TextureData = Sendable<web_sys::GpuTexture>;
     type QuerySetId = Identified<web_sys::GpuQuerySet>;
@@ -1071,42 +1060,60 @@ impl crate::context::Context for Context {
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
-        let global: Global = js_sys::global().unchecked_into();
-        let gpu = if !global.window().is_undefined() {
-            global.unchecked_into::<web_sys::Window>().navigator().gpu()
-        } else if !global.worker().is_undefined() {
-            global
-                .unchecked_into::<web_sys::WorkerGlobalScope>()
-                .navigator()
-                .gpu()
-        } else {
+        let Some(gpu) = get_browser_gpu_property() else {
             panic!(
                 "Accessing the GPU is only supported on the main thread or from a dedicated worker"
             );
         };
-        Context(gpu)
+        ContextWebGpu(gpu)
     }
 
     unsafe fn instance_create_surface(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        target: SurfaceTargetUnsafe,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let canvas_attribute = match window_handle {
-            raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
-            _ => panic!("expected valid handle for canvas"),
-        };
-        let canvas_node: wasm_bindgen::JsValue = web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                doc.query_selector_all(&format!("[data-raw-handle=\"{canvas_attribute}\"]"))
-                    .ok()
-            })
-            .and_then(|nodes| nodes.get(0))
-            .expect("expected to find single canvas")
-            .into();
-        let canvas_element: web_sys::HtmlCanvasElement = canvas_node.into();
-        self.instance_create_surface_from_canvas(canvas_element)
+        match target {
+            SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: _,
+                raw_window_handle,
+            } => {
+                let canvas_element: web_sys::HtmlCanvasElement = match raw_window_handle {
+                    raw_window_handle::RawWindowHandle::Web(handle) => {
+                        let canvas_node: wasm_bindgen::JsValue = web_sys::window()
+                            .and_then(|win| win.document())
+                            .and_then(|doc| {
+                                doc.query_selector_all(&format!(
+                                    "[data-raw-handle=\"{}\"]",
+                                    handle.id
+                                ))
+                                .ok()
+                            })
+                            .and_then(|nodes| nodes.get(0))
+                            .expect("expected to find single canvas")
+                            .into();
+                        canvas_node.into()
+                    }
+                    raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
+                        let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                        value.clone().unchecked_into()
+                    }
+                    raw_window_handle::RawWindowHandle::WebOffscreenCanvas(handle) => {
+                        let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                        let canvas: web_sys::OffscreenCanvas = value.clone().unchecked_into();
+                        let context_result = canvas.get_context("webgpu");
+
+                        return self.create_surface_from_context(
+                            Canvas::Offscreen(canvas),
+                            context_result,
+                        );
+                    }
+                    _ => panic!("expected valid handle for canvas"),
+                };
+
+                let context_result = canvas_element.get_context("webgpu");
+                self.create_surface_from_context(Canvas::Canvas(canvas_element), context_result)
+            }
+        }
     }
 
     fn instance_request_adapter(
@@ -1151,7 +1158,7 @@ impl crate::context::Context for Context {
 
         // TODO: Migrate to a web_sys api.
         // See https://github.com/rustwasm/wasm-bindgen/issues/3587
-        let limits_object = map_js_sys_limits(&desc.limits);
+        let limits_object = map_js_sys_limits(&desc.required_limits);
 
         js_sys::Reflect::set(
             &mapped_desc,
@@ -1164,7 +1171,7 @@ impl crate::context::Context for Context {
             .iter()
             .copied()
             .flat_map(|(flag, value)| {
-                if desc.features.contains(flag) {
+                if desc.required_features.contains(flag) {
                     Some(JsValue::from(value))
                 } else {
                     None
@@ -1395,7 +1402,7 @@ impl crate::context::Context for Context {
             feature = "spirv",
             feature = "glsl",
             feature = "wgsl",
-            feature = "naga"
+            feature = "naga-ir"
         )),
         allow(unreachable_code, unused_variables)
     )]
@@ -1406,7 +1413,7 @@ impl crate::context::Context for Context {
         desc: crate::ShaderModuleDescriptor<'_>,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
-        let mut descriptor = match desc.source {
+        let mut descriptor: web_sys::GpuShaderModuleDescriptor = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
                 use naga::{back, front, valid};
@@ -1460,7 +1467,7 @@ impl crate::context::Context for Context {
             }
             #[cfg(feature = "wgsl")]
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
-            #[cfg(feature = "naga")]
+            #[cfg(feature = "naga-ir")]
             crate::ShaderSource::Naga(module) => {
                 use naga::{back, valid};
 
@@ -1580,6 +1587,7 @@ impl crate::context::Context for Context {
                         storage_texture.view_dimension(map_texture_view_dimension(view_dimension));
                         mapped_entry.storage_texture(&storage_texture);
                     }
+                    wgt::BindingType::AccelerationStructure => todo!(),
                 }
 
                 mapped_entry
@@ -1609,9 +1617,10 @@ impl crate::context::Context for Context {
                         offset,
                         size,
                     }) => {
-                        let buffer: &<Context as crate::Context>::BufferData =
+                        let buffer: &<ContextWebGpu as crate::Context>::BufferData =
                             downcast_ref(buffer.data.as_ref());
-                        let mut mapped_buffer_binding = web_sys::GpuBufferBinding::new(&buffer.0);
+                        let mut mapped_buffer_binding =
+                            web_sys::GpuBufferBinding::new(&buffer.0.buffer);
                         mapped_buffer_binding.offset(offset as f64);
                         if let Some(s) = size {
                             mapped_buffer_binding.size(s.get() as f64);
@@ -1622,7 +1631,7 @@ impl crate::context::Context for Context {
                         panic!("Web backend does not support arrays of buffers")
                     }
                     crate::BindingResource::Sampler(sampler) => {
-                        let sampler: &<Context as crate::Context>::SamplerData =
+                        let sampler: &<ContextWebGpu as crate::Context>::SamplerData =
                             downcast_ref(sampler.data.as_ref());
                         JsValue::from(&sampler.0)
                     }
@@ -1630,7 +1639,7 @@ impl crate::context::Context for Context {
                         panic!("Web backend does not support arrays of samplers")
                     }
                     crate::BindingResource::TextureView(texture_view) => {
-                        let texture_view: &<Context as crate::Context>::TextureViewData =
+                        let texture_view: &<ContextWebGpu as crate::Context>::TextureViewData =
                             downcast_ref(texture_view.data.as_ref());
                         JsValue::from(&texture_view.0)
                     }
@@ -1643,7 +1652,7 @@ impl crate::context::Context for Context {
             })
             .collect::<js_sys::Array>();
 
-        let bgl: &<Context as crate::Context>::BindGroupLayoutData =
+        let bgl: &<ContextWebGpu as crate::Context>::BindGroupLayoutData =
             downcast_ref(desc.layout.data.as_ref());
         let mut mapped_desc = web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &bgl.0);
         if let Some(label) = desc.label {
@@ -1662,7 +1671,7 @@ impl crate::context::Context for Context {
             .bind_group_layouts
             .iter()
             .map(|bgl| {
-                let bgl: &<Context as crate::Context>::BindGroupLayoutData =
+                let bgl: &<ContextWebGpu as crate::Context>::BindGroupLayoutData =
                     downcast_ref(bgl.data.as_ref());
                 &bgl.0
             })
@@ -1680,7 +1689,7 @@ impl crate::context::Context for Context {
         device_data: &Self::DeviceData,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
-        let module: &<Context as crate::Context>::ShaderModuleData =
+        let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.vertex.module.data.as_ref());
         let mut mapped_vertex_state =
             web_sys::GpuVertexState::new(desc.vertex.entry_point, &module.0);
@@ -1717,7 +1726,7 @@ impl crate::context::Context for Context {
         let mut mapped_desc = web_sys::GpuRenderPipelineDescriptor::new(
             &match desc.layout {
                 Some(layout) => {
-                    let layout: &<Context as crate::Context>::PipelineLayoutData =
+                    let layout: &<ContextWebGpu as crate::Context>::PipelineLayoutData =
                         downcast_ref(layout.data.as_ref());
                     JsValue::from(&layout.0)
                 }
@@ -1755,7 +1764,7 @@ impl crate::context::Context for Context {
                     None => wasm_bindgen::JsValue::null(),
                 })
                 .collect::<js_sys::Array>();
-            let module: &<Context as crate::Context>::ShaderModuleData =
+            let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
                 downcast_ref(frag.module.data.as_ref());
             let mapped_fragment_desc =
                 web_sys::GpuFragmentState::new(frag.entry_point, &module.0, &targets);
@@ -1780,7 +1789,7 @@ impl crate::context::Context for Context {
         device_data: &Self::DeviceData,
         desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
-        let shader_module: &<Context as crate::Context>::ShaderModuleData =
+        let shader_module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.module.data.as_ref());
         let mapped_compute_stage =
             web_sys::GpuProgrammableStage::new(desc.entry_point, &shader_module.0);
@@ -1788,7 +1797,7 @@ impl crate::context::Context for Context {
         let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {
                 Some(layout) => {
-                    let layout: &<Context as crate::Context>::PipelineLayoutData =
+                    let layout: &<ContextWebGpu as crate::Context>::PipelineLayoutData =
                         downcast_ref(layout.data.as_ref());
                     JsValue::from(&layout.0)
                 }
@@ -1814,7 +1823,10 @@ impl crate::context::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_buffer(&mapped_desc))
+        create_identified(WebBuffer::new(
+            device_data.0.create_buffer(&mapped_desc),
+            desc,
+        ))
     }
 
     fn device_create_texture(
@@ -1968,9 +1980,9 @@ impl crate::context::Context for Context {
         _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
         _maintain: crate::Maintain,
-    ) -> bool {
+    ) -> crate::MaintainResult {
         // Device is polled automatically
-        true
+        crate::MaintainResult::SubmissionQueueEmpty
     }
 
     fn device_on_uncaptured_error(
@@ -1999,6 +2011,7 @@ impl crate::context::Context for Context {
         device_data.0.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => web_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => web_sys::GpuErrorFilter::Validation,
+            crate::ErrorFilter::Internal => web_sys::GpuErrorFilter::Internal,
         });
     }
 
@@ -2022,11 +2035,13 @@ impl crate::context::Context for Context {
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
     ) {
-        let map_promise = buffer_data.0.map_async_with_f64_and_f64(
+        let map_promise = buffer_data.0.buffer.map_async_with_f64_and_f64(
             map_map_mode(mode),
             range.start as f64,
             (range.end - range.start) as f64,
         );
+
+        buffer_data.0.set_mapped_range(range);
 
         register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
     }
@@ -2037,9 +2052,7 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
-        let array_buffer =
-            self.buffer_get_mapped_range_as_array_buffer(_buffer, buffer_data, sub_range);
-        let actual_mapping = js_sys::Uint8Array::new(&array_buffer);
+        let actual_mapping = buffer_data.0.get_mapped_range(sub_range);
         let temporary_mapping = actual_mapping.to_vec();
         Box::new(BufferMappedRange {
             actual_mapping,
@@ -2047,20 +2060,9 @@ impl crate::context::Context for Context {
         })
     }
 
-    fn buffer_get_mapped_range_as_array_buffer(
-        &self,
-        _buffer: &Self::BufferId,
-        buffer_data: &Self::BufferData,
-        sub_range: Range<wgt::BufferAddress>,
-    ) -> js_sys::ArrayBuffer {
-        buffer_data.0.get_mapped_range_with_f64_and_f64(
-            sub_range.start as f64,
-            (sub_range.end - sub_range.start) as f64,
-        )
-    }
-
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
-        buffer_data.0.unmap();
+        buffer_data.0.buffer.unmap();
+        buffer_data.0.mapping.borrow_mut().mapped_buffer = None;
     }
 
     fn texture_create_view(
@@ -2100,7 +2102,7 @@ impl crate::context::Context for Context {
     }
 
     fn buffer_destroy(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
-        buffer_data.0.destroy();
+        buffer_data.0.buffer.destroy();
     }
 
     fn buffer_drop(&self, _buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
@@ -2236,9 +2238,9 @@ impl crate::context::Context for Context {
         encoder_data
             .0
             .copy_buffer_to_buffer_with_f64_and_f64_and_f64(
-                &source_data.0,
+                &source_data.0.buffer,
                 source_offset as f64,
-                &destination_data.0,
+                &destination_data.0.buffer,
                 destination_offset as f64,
                 copy_size as f64,
             )
@@ -2342,7 +2344,7 @@ impl crate::context::Context for Context {
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
 
-                    let view: &<Context as crate::Context>::TextureViewData =
+                    let view: &<ContextWebGpu as crate::Context>::TextureViewData =
                         downcast_ref(ca.view.data.as_ref());
 
                     let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachment::new(
@@ -2354,7 +2356,7 @@ impl crate::context::Context for Context {
                         mapped_color_attachment.clear_value(&cv);
                     }
                     if let Some(rt) = ca.resolve_target {
-                        let resolve_target_view: &<Context as crate::Context>::TextureViewData =
+                        let resolve_target_view: &<ContextWebGpu as crate::Context>::TextureViewData =
                             downcast_ref(rt.data.as_ref());
                         mapped_color_attachment.resolve_target(&resolve_target_view.0);
                     }
@@ -2373,7 +2375,7 @@ impl crate::context::Context for Context {
         }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
-            let depth_stencil_attachment: &<Context as crate::Context>::TextureViewData =
+            let depth_stencil_attachment: &<ContextWebGpu as crate::Context>::TextureViewData =
                 downcast_ref(dsa.view.data.as_ref());
             let mut mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachment::new(&depth_stencil_attachment.0);
@@ -2450,16 +2452,17 @@ impl crate::context::Context for Context {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) {
-        let buffer: &<Context as crate::Context>::BufferData = downcast_ref(buffer.data.as_ref());
+        let buffer: &<ContextWebGpu as crate::Context>::BufferData =
+            downcast_ref(buffer.data.as_ref());
         match size {
-            Some(size) => {
-                encoder_data
-                    .0
-                    .clear_buffer_with_f64_and_f64(&buffer.0, offset as f64, size as f64)
-            }
+            Some(size) => encoder_data.0.clear_buffer_with_f64_and_f64(
+                &buffer.0.buffer,
+                offset as f64,
+                size as f64,
+            ),
             None => encoder_data
                 .0
-                .clear_buffer_with_f64(&buffer.0, offset as f64),
+                .clear_buffer_with_f64(&buffer.0.buffer, offset as f64),
         }
     }
 
@@ -2495,14 +2498,14 @@ impl crate::context::Context for Context {
     fn command_encoder_write_timestamp(
         &self,
         _encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
+        _encoder_data: &Self::CommandEncoderData,
         _query_set: &Self::QuerySetId,
-        query_set_data: &Self::QuerySetData,
-        query_index: u32,
+        _query_set_data: &Self::QuerySetData,
+        _query_index: u32,
     ) {
-        encoder_data
-            .0
-            .write_timestamp(&query_set_data.0, query_index);
+        // Not available on WebGPU.
+        // This was part of the spec originally but got removed, see https://github.com/gpuweb/gpuweb/pull/4370
+        panic!("TIMESTAMP_QUERY_INSIDE_ENCODERS feature must be enabled to call write_timestamp on a command encoder.")
     }
 
     fn command_encoder_resolve_query_set(
@@ -2521,7 +2524,7 @@ impl crate::context::Context for Context {
             &query_set_data.0,
             first_query,
             query_count,
-            &destination_data.0,
+            &destination_data.0.buffer,
             destination_offset as u32,
         );
     }
@@ -2563,7 +2566,7 @@ impl crate::context::Context for Context {
         queue_data
             .0
             .write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
-                &buffer_data.0,
+                &buffer_data.0.buffer,
                 offset as f64,
                 &js_sys::Uint8Array::from(data).buffer(),
                 0f64,
@@ -2580,7 +2583,7 @@ impl crate::context::Context for Context {
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
     ) -> Option<()> {
-        let usage = wgt::BufferUsages::from_bits_truncate(buffer_data.0.usage());
+        let usage = wgt::BufferUsages::from_bits_truncate(buffer_data.0.buffer.usage());
         // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
             log::error!("Destination buffer is missing the `COPY_DST` usage flag");
@@ -2601,8 +2604,8 @@ impl crate::context::Context for Context {
             );
             return None;
         }
-        if write_size + offset > buffer_data.0.size() as u64 {
-            log::error!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer_data.0.size());
+        if write_size + offset > buffer_data.0.buffer.size() as u64 {
+            log::error!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer_data.0.buffer.size());
             return None;
         }
         Some(())
@@ -2813,7 +2816,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass.")
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -2856,9 +2859,10 @@ impl crate::context::Context for Context {
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        pass_data
-            .0
-            .dispatch_workgroups_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+        pass_data.0.dispatch_workgroups_indirect_with_f64(
+            &indirect_buffer_data.0.buffer,
+            indirect_offset as f64,
+        );
     }
 
     fn render_bundle_encoder_set_pipeline(
@@ -2910,7 +2914,7 @@ impl crate::context::Context for Context {
         match size {
             Some(s) => {
                 encoder_data.0.set_index_buffer_with_f64_and_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                     s.get() as f64,
@@ -2918,7 +2922,7 @@ impl crate::context::Context for Context {
             }
             None => {
                 encoder_data.0.set_index_buffer_with_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                 );
@@ -2940,7 +2944,7 @@ impl crate::context::Context for Context {
             Some(s) => {
                 encoder_data.0.set_vertex_buffer_with_f64_and_f64(
                     slot,
-                    Some(&buffer_data.0),
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                     s.get() as f64,
                 );
@@ -2948,7 +2952,7 @@ impl crate::context::Context for Context {
             None => {
                 encoder_data.0.set_vertex_buffer_with_f64(
                     slot,
-                    Some(&buffer_data.0),
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                 );
             }
@@ -3012,7 +3016,7 @@ impl crate::context::Context for Context {
     ) {
         encoder_data
             .0
-            .draw_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_bundle_encoder_draw_indexed_indirect(
@@ -3025,7 +3029,7 @@ impl crate::context::Context for Context {
     ) {
         encoder_data
             .0
-            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_bundle_encoder_multi_draw_indirect(
@@ -3131,7 +3135,7 @@ impl crate::context::Context for Context {
         match size {
             Some(s) => {
                 pass_data.0.set_index_buffer_with_f64_and_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                     s.get() as f64,
@@ -3139,7 +3143,7 @@ impl crate::context::Context for Context {
             }
             None => {
                 pass_data.0.set_index_buffer_with_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                 );
@@ -3161,15 +3165,17 @@ impl crate::context::Context for Context {
             Some(s) => {
                 pass_data.0.set_vertex_buffer_with_f64_and_f64(
                     slot,
-                    Some(&buffer_data.0),
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                     s.get() as f64,
                 );
             }
             None => {
-                pass_data
-                    .0
-                    .set_vertex_buffer_with_f64(slot, Some(&buffer_data.0), offset as f64);
+                pass_data.0.set_vertex_buffer_with_f64(
+                    slot,
+                    Some(&buffer_data.0.buffer),
+                    offset as f64,
+                );
             }
         };
     }
@@ -3231,7 +3237,7 @@ impl crate::context::Context for Context {
     ) {
         pass_data
             .0
-            .draw_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_pass_draw_indexed_indirect(
@@ -3244,7 +3250,7 @@ impl crate::context::Context for Context {
     ) {
         pass_data
             .0
-            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_pass_multi_draw_indirect(
@@ -3388,7 +3394,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a render pass.")
     }
 
     fn render_pass_begin_occlusion_query(
@@ -3427,13 +3433,11 @@ impl crate::context::Context for Context {
         // Not available in gecko yet
     }
 
-    fn render_pass_execute_bundles<'a>(
+    fn render_pass_execute_bundles(
         &self,
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<
-            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
-        >,
+        render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let mapped = render_bundles
             .map(|(_, bundle_data)| &bundle_data.0)
@@ -3460,6 +3464,71 @@ impl QueueWriteBuffer for WebQueueWriteBuffer {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
+
+/// Stores the state of a GPU buffer and a reference to its mapped `ArrayBuffer` (if any).
+/// The WebGPU specification forbids calling `getMappedRange` on a `web_sys::GpuBuffer` more than
+/// once, so this struct stores the initial mapped range and re-uses it, allowing for multiple `get_mapped_range`
+/// calls on the Rust-side.
+#[derive(Debug)]
+pub struct WebBuffer {
+    /// The associated GPU buffer.
+    buffer: web_sys::GpuBuffer,
+    /// The mapped array buffer and mapped range.
+    mapping: RefCell<WebBufferMapState>,
+}
+
+impl WebBuffer {
+    /// Creates a new web buffer for the given Javascript object and description.
+    fn new(buffer: web_sys::GpuBuffer, desc: &crate::BufferDescriptor<'_>) -> Self {
+        Self {
+            buffer,
+            mapping: RefCell::new(WebBufferMapState {
+                mapped_buffer: None,
+                range: 0..desc.size,
+            }),
+        }
+    }
+
+    /// Creates a raw Javascript array buffer over the provided range.
+    fn get_mapped_array_buffer(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::ArrayBuffer {
+        self.buffer.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        )
+    }
+
+    /// Obtains a reference to the re-usable buffer mapping as a Javascript array view.
+    fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
+        let mut mapping = self.mapping.borrow_mut();
+        let range = mapping.range.clone();
+        let array_buffer = mapping.mapped_buffer.get_or_insert_with(|| {
+            self.buffer.get_mapped_range_with_f64_and_f64(
+                range.start as f64,
+                (range.end - range.start) as f64,
+            )
+        });
+        js_sys::Uint8Array::new_with_byte_offset_and_length(
+            array_buffer,
+            (sub_range.start - range.start) as u32,
+            (sub_range.end - sub_range.start) as u32,
+        )
+    }
+
+    /// Sets the range of the buffer which is presently mapped.
+    fn set_mapped_range(&self, range: Range<wgt::BufferAddress>) {
+        self.mapping.borrow_mut().range = range;
+    }
+}
+
+/// Remembers which portion of a buffer has been mapped, along with a reference
+/// to the mapped portion.
+#[derive(Debug)]
+struct WebBufferMapState {
+    /// The mapped memory of the buffer.
+    pub mapped_buffer: Option<js_sys::ArrayBuffer>,
+    /// The total range which has been mapped in the buffer overall.
+    pub range: Range<wgt::BufferAddress>,
 }
 
 #[derive(Debug)]

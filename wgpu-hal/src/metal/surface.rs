@@ -221,7 +221,7 @@ impl crate::Surface<super::Api> for super::Surface {
         }
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-        render_layer.set_maximum_drawable_count(config.swap_chain_size as _);
+        render_layer.set_maximum_drawable_count(config.maximum_frame_latency as u64 + 1);
         render_layer.set_drawable_size(drawable_size);
         if caps.can_set_next_drawable_timeout {
             let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];

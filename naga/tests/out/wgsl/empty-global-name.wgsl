@@ -7,7 +7,7 @@ var<storage, read_write> unnamed: type_1;
 
 fn function() {
     let _e3 = unnamed.member;
-    unnamed.member = (_e3 + 1);
+    unnamed.member = (_e3 + 1i);
     return;
 }
 

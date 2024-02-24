@@ -593,6 +593,7 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, ">")?;
             }
+            TypeInner::AccelerationStructure => write!(self.out, "acceleration_structure")?,
             _ => {
                 return Err(Error::Unimplemented(format!("write_value_type {inner:?}")));
             }
@@ -1203,20 +1204,30 @@ impl<W: Write> Writer<W> {
         use crate::Expression;
 
         match expressions[expr] {
-            Expression::Literal(literal) => {
-                match literal {
-                    // Floats are written using `Debug` instead of `Display` because it always appends the
-                    // decimal part even it's zero
-                    crate::Literal::F32(value) => write!(self.out, "{:?}", value)?,
-                    crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
-                    crate::Literal::I32(value) => write!(self.out, "{}", value)?,
-                    crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
-                    crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
-                    crate::Literal::I64(_) => {
-                        return Err(Error::Custom("unsupported i64 literal".to_string()));
+            Expression::Literal(literal) => match literal {
+                crate::Literal::F32(value) => write!(self.out, "{}f", value)?,
+                crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
+                crate::Literal::I32(value) => {
+                    // `-2147483648i` is not valid WGSL. The most negative `i32`
+                    // value can only be expressed in WGSL using AbstractInt and
+                    // a unary negation operator.
+                    if value == i32::MIN {
+                        write!(self.out, "i32(-2147483648)")?;
+                    } else {
+                        write!(self.out, "{}i", value)?;
                     }
                 }
-            }
+                crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
+                crate::Literal::I64(_) => {
+                    return Err(Error::Custom("unsupported i64 literal".to_string()));
+                }
+                crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                    return Err(Error::Custom(
+                        "Abstract types should not appear in IR presented to backends".into(),
+                    ));
+                }
+            },
             Expression::Constant(handle) => {
                 let constant = &module.constants[handle];
                 if constant.name.is_some() {

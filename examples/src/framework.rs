@@ -142,7 +142,7 @@ impl SurfaceWrapper {
     /// a surface (and hence a canvas) to be present to create the adapter.
     ///
     /// We cannot unconditionally create a surface here, as Android requires
-    /// us to wait until we recieve the `Resumed` event to do so.
+    /// us to wait until we receive the `Resumed` event to do so.
     fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
         if cfg!(target_arch = "wasm32") {
             self.surface = Some(instance.create_surface(window).unwrap());
@@ -160,7 +160,7 @@ impl SurfaceWrapper {
         }
     }
 
-    /// Called when an event which matches [`Self::start_condition`] is recieved.
+    /// Called when an event which matches [`Self::start_condition`] is received.
     ///
     /// On all native platforms, this is where we create the surface.
     ///
@@ -317,8 +317,8 @@ impl ExampleContext {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: (optional_features & adapter_features) | required_features,
-                    limits: needed_limits,
+                    required_features: (optional_features & adapter_features) | required_features,
+                    required_limits: needed_limits,
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),
             )
@@ -571,6 +571,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                         format,
                         width: params.width,
                         height: params.height,
+                        desired_maximum_frame_latency: 2,
                         present_mode: wgpu::PresentMode::Fifo,
                         alpha_mode: wgpu::CompositeAlphaMode::Auto,
                         view_formats: vec![format],
@@ -612,7 +613,9 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-                ctx.device.poll(wgpu::Maintain::Wait);
+                ctx.async_poll(wgpu::Maintain::wait())
+                    .await
+                    .panic_on_timeout();
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
                 wgpu_test::image::compare_image_output(
