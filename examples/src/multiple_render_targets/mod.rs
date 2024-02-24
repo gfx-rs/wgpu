@@ -1,12 +1,16 @@
-use std::borrow::Cow;
 use glam::Vec2;
+use std::borrow::Cow;
+use wgpu::{
+    BindGroup, BindGroupLayout, ColorTargetState, CommandEncoder, Device, Extent3d, Queue,
+    RenderPassColorAttachment, RenderPipeline, Sampler, ShaderModule, SurfaceConfiguration,
+    Texture, TextureAspect, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension,
+};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
     window::Window,
 };
-use wgpu::{BindGroup, BindGroupLayout, ColorTargetState, CommandEncoder, Device, Extent3d, Queue, RenderPassColorAttachment, RenderPipeline, Sampler, ShaderModule, SurfaceConfiguration, Texture, TextureAspect, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension};
-
 
 /// Renderer that draws its outputs to two output texture targets at the same time.
 struct MultiTargetRenderer {
@@ -18,8 +22,6 @@ struct MultiTargetRenderer {
 
 impl MultiTargetRenderer {
     fn create_image_texture(device: &Device, queue: &Queue) -> (Texture, TextureView) {
-
-
         fn create_halo_texture_data(width: usize, height: usize) -> Vec<u8> {
             // Creates black and white pixel data for the texture to sample.
             let mut img_data = vec![];
@@ -87,38 +89,38 @@ impl MultiTargetRenderer {
         (texture, view)
     }
 
-    fn init(device: &Device, queue: &Queue, shader: &ShaderModule, target_states: &[ColorTargetState]) -> MultiTargetRenderer {
-
+    fn init(
+        device: &Device,
+        queue: &Queue,
+        shader: &ShaderModule,
+        target_states: &[ColorTargetState],
+    ) -> MultiTargetRenderer {
         let texture_bind_group_layout =
-            device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                multisampled: false,
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                            },
-                            count: None,
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
                         },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                    label: None,
-                });
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: None,
+            });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[
-                &texture_bind_group_layout,
-
-            ],
+            bind_group_layouts: &[&texture_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -131,7 +133,6 @@ impl MultiTargetRenderer {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
-
 
         let (texture, texture_view) = Self::create_image_texture(device, queue);
 
@@ -150,8 +151,10 @@ impl MultiTargetRenderer {
             label: None,
         });
 
-
-        let ts = target_states.iter().map(|x| Some(x.clone())).collect::<Vec<_>>();
+        let ts = target_states
+            .iter()
+            .map(|x| Some(x.clone()))
+            .collect::<Vec<_>>();
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
@@ -180,24 +183,30 @@ impl MultiTargetRenderer {
         }
     }
 
-    fn draw<'tex>(&self, encoder: &mut CommandEncoder, targets: &[Option<RenderPassColorAttachment<'tex>>]) {
-
-            let mut rpass =
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: targets,
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bindgroup, &[]);
-            rpass.draw(0..3, 0..1);
-
+    fn draw<'tex>(
+        &self,
+        encoder: &mut CommandEncoder,
+        targets: &[Option<RenderPassColorAttachment<'tex>>],
+    ) {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: targets,
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        rpass.set_pipeline(&self.pipeline);
+        rpass.set_bind_group(0, &self.bindgroup, &[]);
+        rpass.draw(0..3, 0..1);
     }
 }
 
-fn create_target_textures(device: &Device, format: TextureFormat, width: u32, height: u32) -> TextureTargets {
+fn create_target_textures(
+    device: &Device,
+    format: TextureFormat,
+    width: u32,
+    height: u32,
+) -> TextureTargets {
     let size = Extent3d {
         width: width as u32,
         height: height as u32,
@@ -211,7 +220,9 @@ fn create_target_textures(device: &Device, format: TextureFormat, width: u32, he
         sample_count: 1,
         dimension: TextureDimension::D2,
         format: format,
-        usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
+        usage: TextureUsages::COPY_DST
+            | TextureUsages::TEXTURE_BINDING
+            | TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],
     });
     let b = device.create_texture(&wgpu::TextureDescriptor {
@@ -221,7 +232,9 @@ fn create_target_textures(device: &Device, format: TextureFormat, width: u32, he
         sample_count: 1,
         dimension: TextureDimension::D2,
         format: format,
-        usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
+        usage: TextureUsages::COPY_DST
+            | TextureUsages::TEXTURE_BINDING
+            | TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],
     });
     let a_view = a.create_view(&TextureViewDescriptor {
@@ -252,31 +265,34 @@ struct TargetRenderer {
 }
 
 impl TargetRenderer {
-
-    fn init(device: &Device, shader: &ShaderModule, format: TextureFormat, targets: &TextureTargets,) -> TargetRenderer {
+    fn init(
+        device: &Device,
+        shader: &ShaderModule,
+        format: TextureFormat,
+        targets: &TextureTargets,
+    ) -> TargetRenderer {
         let texture_bind_group_layout =
-            device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                multisampled: false,
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                            },
-                            count: None,
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
                         },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                    label: None,
-                });
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: None,
+            });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -293,9 +309,6 @@ impl TargetRenderer {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
-
-
-
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -320,7 +333,8 @@ impl TargetRenderer {
             multiview: None,
         });
 
-        let (ba, bb) = Self::create_bindgroups(device, &texture_bind_group_layout, &targets, &sampler);
+        let (ba, bb) =
+            Self::create_bindgroups(device, &texture_bind_group_layout, &targets, &sampler);
         Self {
             pipeline: render_pipeline,
             bindgroup_layout: texture_bind_group_layout,
@@ -329,7 +343,12 @@ impl TargetRenderer {
             sampler: sampler,
         }
     }
-    fn create_bindgroups(device: &Device, layout: &BindGroupLayout, texture_targets: &TextureTargets, sampler: &Sampler) -> (BindGroup, BindGroup) {
+    fn create_bindgroups(
+        device: &Device,
+        layout: &BindGroupLayout,
+        texture_targets: &TextureTargets,
+        sampler: &Sampler,
+    ) -> (BindGroup, BindGroup) {
         let a = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &layout,
             entries: &[
@@ -359,25 +378,29 @@ impl TargetRenderer {
             ],
             label: None,
         });
-        (a,b)
+        (a, b)
     }
 
-    fn draw(&self, encoder: &mut CommandEncoder, surface_view: &TextureView, config: &SurfaceConfiguration) {
-        let mut rpass =
-            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &surface_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+    fn draw(
+        &self,
+        encoder: &mut CommandEncoder,
+        surface_view: &TextureView,
+        config: &SurfaceConfiguration,
+    ) {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &surface_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bindgroup_a, &[]);
 
@@ -395,12 +418,14 @@ impl TargetRenderer {
     }
 
     fn rebuild_resources(&mut self, device: &Device, texture_targets: &TextureTargets) {
-        (self.bindgroup_a, self.bindgroup_b) =
-            Self::create_bindgroups(device, &self.bindgroup_layout, texture_targets, &self.sampler)
+        (self.bindgroup_a, self.bindgroup_b) = Self::create_bindgroups(
+            device,
+            &self.bindgroup_layout,
+            texture_targets,
+            &self.sampler,
+        )
     }
 }
-
-
 
 struct TextureTargets {
     a: Texture,
@@ -453,24 +478,29 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     });
 
     // Renderer that draws to 2 textures at the same time:
-    let mtr = MultiTargetRenderer::init(&device, &queue, &shader,
-                                        // ColorTargetStates specify how the data will be written to the
-                                        // output textures:
-                                        &[
-                                            ColorTargetState {
-                                                format: config.format,
-                                                blend: None,
-                                                write_mask: Default::default(),
-                                            },
-                                            ColorTargetState {
-                                                format: config.format,
-                                                blend: None,
-                                                write_mask: Default::default(),
-                                            },
-                                        ]);
+    let mtr = MultiTargetRenderer::init(
+        &device,
+        &queue,
+        &shader,
+        // ColorTargetStates specify how the data will be written to the
+        // output textures:
+        &[
+            ColorTargetState {
+                format: config.format,
+                blend: None,
+                write_mask: Default::default(),
+            },
+            ColorTargetState {
+                format: config.format,
+                blend: None,
+                write_mask: Default::default(),
+            },
+        ],
+    );
 
     // create our target textures that will receive the simultaneous rendering:
-    let mut texture_targets = create_target_textures(&device, config.format, config.width, config.height);
+    let mut texture_targets =
+        create_target_textures(&device, config.format, config.width, config.height);
 
     // Helper renderer that displays the results in 2 separate viewports:
     let mut drawer = TargetRenderer::init(&device, &shader, config.format, &texture_targets);
@@ -495,7 +525,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         config.height = new_size.height.max(1);
                         surface.configure(&device, &config);
 
-                        texture_targets = create_target_textures(&device, config.format, config.width, config.height);
+                        texture_targets = create_target_textures(
+                            &device,
+                            config.format,
+                            config.width,
+                            config.height,
+                        );
                         drawer.rebuild_resources(&device, &texture_targets);
 
                         // On macos the window needs to be redrawn manually after resizing
@@ -505,28 +540,28 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         let frame = surface
                             .get_current_texture()
                             .expect("Failed to acquire next swap chain texture");
-                        let view = frame
-                            .texture
-                            .create_view(&TextureViewDescriptor::default());
+                        let view = frame.texture.create_view(&TextureViewDescriptor::default());
                         let mut encoder =
                             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                                 label: None,
                             });
 
                         // draw to 2 textures at the same time:
-                        mtr.draw(&mut encoder, &[
-                            Some(RenderPassColorAttachment {
-                                view: &texture_targets.a_view,
-                                resolve_target: None,
-                                ops: Default::default(),
-                            }),
-                            Some(RenderPassColorAttachment {
-                                view: &texture_targets.b_view,
-                                resolve_target: None,
-                                ops: Default::default(),
-                            })
-
-                        ]);
+                        mtr.draw(
+                            &mut encoder,
+                            &[
+                                Some(RenderPassColorAttachment {
+                                    view: &texture_targets.a_view,
+                                    resolve_target: None,
+                                    ops: Default::default(),
+                                }),
+                                Some(RenderPassColorAttachment {
+                                    view: &texture_targets.b_view,
+                                    resolve_target: None,
+                                    ops: Default::default(),
+                                }),
+                            ],
+                        );
 
                         // display results of the both drawn textures on screen:
                         drawer.draw(&mut encoder, &view, &config);

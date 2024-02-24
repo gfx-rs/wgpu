@@ -13,6 +13,7 @@ pub mod hello_windows;
 pub mod hello_workgroups;
 pub mod mipmap;
 pub mod msaa_line;
+pub mod multiple_render_targets;
 pub mod render_to_texture;
 pub mod repeated_compute;
 pub mod shadow;
@@ -24,7 +25,6 @@ pub mod texture_arrays;
 pub mod timestamp_queries;
 pub mod uniform_values;
 pub mod water;
-pub mod multiple_render_targets;
 
 #[cfg(test)]
 wgpu_test::gpu_test_main!();
