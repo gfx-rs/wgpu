@@ -24,7 +24,7 @@ pub mod texture_arrays;
 pub mod timestamp_queries;
 pub mod uniform_values;
 pub mod water;
-pub mod multi_target_render;
+pub mod multiple_render_targets;
 
 #[cfg(test)]
 wgpu_test::gpu_test_main!();
