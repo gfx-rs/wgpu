@@ -224,9 +224,9 @@ type BindTarget = u32;
 
 #[derive(Debug, Clone, Copy)]
 enum VertexAttribKind {
-    Float, // glVertexAttribPointer
+    Float,   // glVertexAttribPointer
     Integer, // glVertexAttribIPointer
-           //Double,  // glVertexAttribLPointer
+    Double,  // glVertexAttribLPointer
 }
 
 impl Default for VertexAttribKind {
