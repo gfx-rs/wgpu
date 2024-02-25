@@ -206,7 +206,7 @@ impl TlasPackage {
     }
 
     /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
-    /// This contructor moves the instances into the package (the number of instances needs to fit into tlas).
+    /// This constructor moves the instances into the package (the number of instances needs to fit into tlas).
     pub fn new_with_instances(tlas: Tlas, instances: Vec<Option<TlasInstance>>) -> Self {
         Self {
             tlas,
@@ -333,7 +333,7 @@ pub struct ContextTlasPackage<'a, T: Context> {
     pub(crate) lowest_unmodified: u32,
 }
 
-/// Utility module to add traits for the device and command encoder.    
+/// Utility module to add traits for the device and command encoder.
 pub mod traits {
     pub use super::{CommandEncoderRayTracing as _, DeviceRayTracing as _};
 }

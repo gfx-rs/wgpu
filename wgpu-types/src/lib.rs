@@ -7101,11 +7101,11 @@ pub enum BlasGeometrySizeDescriptors {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Update mode for acceleration structure builds.
 pub enum AccelerationStructureUpdateMode {
-    /// Allwasy perform a full build.
+    /// Always perform a full build.
     Build,
     /// If possible, perform an incremental update.
     /// Not advised for major topology changes.
-    /// (Usefull for e.g. skinning)
+    /// (Useful for e.g. skinning)
     PreferUpdate,
 }
 
