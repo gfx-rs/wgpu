@@ -38,6 +38,8 @@ pub enum BindGroupLayoutEntryError {
     ArrayUnsupported,
     #[error("Multisampled binding with sample type `TextureSampleType::Float` must have filterable set to false.")]
     SampleTypeFloatFilterableBindingMultisampled,
+    #[error("Multisampled texture binding view dimension must be 2d, got {0:?}")]
+    Non2DMultisampled(wgt::TextureViewDimension),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]

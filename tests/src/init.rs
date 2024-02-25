@@ -31,7 +31,7 @@ pub fn initialize_instance() -> Instance {
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
     Instance::new(wgpu::InstanceDescriptor {
         backends,
-        flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
+        flags: wgpu::InstanceFlags::debugging().with_env(),
         dx12_shader_compiler,
         gles_minor_version,
     })
