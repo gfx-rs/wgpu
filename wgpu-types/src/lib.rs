@@ -94,7 +94,7 @@ pub const QUERY_SIZE: u32 = 8;
 /// Backends supported by wgpu.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backend {
     /// Dummy backend, used for testing.
     Empty = 0,
