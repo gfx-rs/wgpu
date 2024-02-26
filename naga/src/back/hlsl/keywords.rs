@@ -817,6 +817,8 @@ pub const RESERVED: &[&str] = &[
     // Naga utilities
     super::writer::MODF_FUNCTION,
     super::writer::FREXP_FUNCTION,
+    super::writer::EXTRACT_BITS_FUNCTION,
+    super::writer::INSERT_BITS_FUNCTION,
 ];
 
 // DXC scalar types, from https://github.com/microsoft/DirectXShaderCompiler/blob/18c9e114f9c314f93e68fbc72ce207d4ed2e65ae/tools/clang/lib/AST/ASTContextHLSL.cpp#L48-L254
