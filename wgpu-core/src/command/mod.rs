@@ -174,6 +174,7 @@ impl<A: HalApi> CommandBuffer<A> {
                     .as_ref()
                     .unwrap_or(&String::from("<CommandBuffer>"))
                     .as_str(),
+                None,
             ),
             data: Mutex::new(Some(CommandBufferMutable {
                 encoder: CommandEncoder {
