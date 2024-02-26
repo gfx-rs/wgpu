@@ -25,6 +25,7 @@ use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 
+use crate::resource::{Blas, Tlas};
 use std::{
     iter, mem, ptr,
     sync::{atomic::Ordering, Arc},
@@ -150,6 +151,8 @@ pub enum TempResource<A: HalApi> {
     DestroyedBuffer(Arc<DestroyedBuffer<A>>),
     DestroyedTexture(Arc<DestroyedTexture<A>>),
     Texture(Arc<Texture<A>>),
+    Tlas(Arc<Tlas<A>>),
+    Blas(Arc<Blas<A>>),
 }
 
 /// A queue execution for a particular command encoder.
@@ -366,6 +369,10 @@ pub enum QueueSubmitError {
     SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
+    #[error(transparent)]
+    ValidateBlasActionsError(#[from] crate::ray_tracing::ValidateBlasActionsError),
+    #[error(transparent)]
+    ValidateTlasActionsError(#[from] crate::ray_tracing::ValidateTlasActionsError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -1338,7 +1345,28 @@ impl Global {
                                         .insert(bundle.as_info().id(), bundle.clone());
                                 }
                             }
+                            for blas in cmd_buf_trackers.blas_s.used_resources() {
+                                blas.info.use_at(submit_index);
+                                if blas.is_unique() {
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .blas_s
+                                        .insert(blas.as_info().id(), blas.clone());
+                                }
+                            }
+                            for tlas in cmd_buf_trackers.tlas_s.used_resources() {
+                                tlas.info.use_at(submit_index);
+                                if tlas.is_unique() {
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .tlas_s
+                                        .insert(tlas.as_info().id(), tlas.clone());
+                                }
+                            }
                         }
+
                         let mut baked = cmdbuf.from_arc_into_baked();
                         // execute resource transitions
                         unsafe {
@@ -1360,6 +1388,11 @@ impl Global {
                         baked
                             .initialize_texture_memory(&mut *trackers, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
+                        let mut blas_guard = hub.blas_s.write();
+                        baked.validate_blas_actions(&mut blas_guard)?;
+                        let mut tlas_guard = hub.tlas_s.write();
+                        baked.validate_tlas_actions(&blas_guard, &mut tlas_guard)?;
+
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_tracker(

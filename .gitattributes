@@ -1,2 +1,2 @@
-*.mtl binary
-*.obj binary
+*.mtl binary -diff
+*.obj binary -diff

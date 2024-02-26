@@ -1390,6 +1390,7 @@ impl Global {
             let buffer_guard = hub.buffers.read();
             let texture_guard = hub.textures.read();
             let view_guard = hub.texture_views.read();
+            let tlas_guard = hub.tlas_s.read();
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1425,6 +1426,8 @@ impl Global {
                 Some(&*render_pipeline_guard),
                 Some(&*bundle_guard),
                 Some(&*query_set_guard),
+                None,
+                Some(&*tlas_guard),
             );
 
             let raw = &mut encoder.raw;
@@ -1506,6 +1509,21 @@ impl Global {
                             info.pending_discard_init_fixups
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
+
+                        let mapped_used_resources = bind_group
+                            .used
+                            .acceleration_structures
+                            .used_resources()
+                            .map(|blas| {
+                                tracker.tlas_s.add_single(&tlas_guard, blas.as_info().id());
+
+                                crate::ray_tracing::TlasAction {
+                                    id: blas.as_info().id(),
+                                    kind: crate::ray_tracing::TlasActionKind::Use,
+                                }
+                            });
+
+                        cmd_buf_data.tlas_actions.extend(mapped_used_resources);
 
                         let pipeline_layout = state.binder.pipeline_layout.clone();
                         let entries =

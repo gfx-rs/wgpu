@@ -435,6 +435,16 @@ pub struct CommandEncoder {
     open: bool,
 }
 
+#[derive(Debug)]
+pub struct Blas {
+    // error_sink: ErrorSink,
+}
+
+#[derive(Debug)]
+pub struct Tlas {
+    // error_sink: ErrorSink,
+}
+
 impl crate::Context for ContextWgpuCore {
     type AdapterId = wgc::id::AdapterId;
     type AdapterData = ();
@@ -484,6 +494,11 @@ impl crate::Context for ContextWgpuCore {
     type SubmissionIndexData = wgc::device::queue::WrappedSubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
+
+    type BlasId = wgc::id::BlasId;
+    type BlasData = Blas;
+    type TlasId = wgc::id::TlasId;
+    type TlasData = Tlas;
 
     #[allow(clippy::type_complexity)]
     type RequestDeviceFuture = Ready<
@@ -1002,6 +1017,9 @@ impl crate::Context for ContextWgpuCore {
                         remaining_arrayed_texture_views =
                             &remaining_arrayed_texture_views[array.len()..];
                         bm::BindingResource::TextureViewArray(Owned(views))
+                    }
+                    BindingResource::AccelerationStructure(acceleration_structure) => {
+                        bm::BindingResource::AccelerationStructure(acceleration_structure.id.into())
                     }
                 },
             })
@@ -2907,6 +2925,211 @@ impl crate::Context for ContextWgpuCore {
                 temp_render_bundles.len(),
             )
         }
+    }
+
+    fn device_create_blas(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
+        sizes: wgt::BlasGeometrySizeDescriptors,
+    ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
+        let global = &self.0;
+        let (id, handle, error) = wgc::gfx_select!(device => global.device_create_blas(
+            *device,
+            &desc.map_label(|l| l.map(Borrowed)),
+            sizes,
+            None,
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &device_data.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_blas",
+            );
+        }
+        (
+            id,
+            handle,
+            Blas {
+                // error_sink: Arc::clone(&device_data.error_sink),
+            },
+        )
+    }
+
+    fn device_create_tlas(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
+    ) -> (Self::TlasId, Self::TlasData) {
+        let global = &self.0;
+        let (id, error) = wgc::gfx_select!(device => global.device_create_tlas(
+            *device,
+            &desc.map_label(|l| l.map(Borrowed)),
+            None,
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &device_data.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_blas",
+            );
+        }
+        (
+            id,
+            Tlas {
+                // error_sink: Arc::clone(&device_data.error_sink),
+            },
+        )
+    }
+
+    fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
+        &'a self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<Self>>,
+    ) {
+        let global = &self.0;
+
+        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<'_, Self>| {
+            let geometries = match e.geometries {
+                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
+                    triangle_geometries,
+                ) => {
+                    let iter = triangle_geometries.into_iter().map(|tg| {
+                        wgc::ray_tracing::BlasTriangleGeometry {
+                            vertex_buffer: tg.vertex_buffer,
+                            index_buffer: tg.index_buffer,
+                            transform_buffer: tg.transform_buffer,
+                            size: tg.size,
+                            transform_buffer_offset: tg.transform_buffer_offset,
+                            first_vertex: tg.first_vertex,
+                            vertex_stride: tg.vertex_stride,
+                            index_buffer_offset: tg.index_buffer_offset,
+                        }
+                    });
+                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            wgc::ray_tracing::BlasBuildEntry {
+                blas_id: e.blas_id,
+                geometries,
+            }
+        });
+
+        let tlas = tlas.into_iter().map(
+            |e: crate::ray_tracing::ContextTlasBuildEntry<ContextWgpuCore>| {
+                wgc::ray_tracing::TlasBuildEntry {
+                    tlas_id: e.tlas_id,
+                    instance_buffer_id: e.instance_buffer_id,
+                    instance_count: e.instance_count,
+                }
+            },
+        );
+
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures_unsafe_tlas(
+            *encoder,
+            blas,
+            tlas
+        )) {
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
+            );
+        }
+    }
+
+    fn command_encoder_build_acceleration_structures<'a>(
+        &'a self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
+    ) {
+        let global = &self.0;
+
+        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<'_, Self>| {
+            let geometries = match e.geometries {
+                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
+                    triangle_geometries,
+                ) => {
+                    let iter = triangle_geometries.into_iter().map(|tg| {
+                        wgc::ray_tracing::BlasTriangleGeometry {
+                            vertex_buffer: tg.vertex_buffer,
+                            index_buffer: tg.index_buffer,
+                            transform_buffer: tg.transform_buffer,
+                            size: tg.size,
+                            transform_buffer_offset: tg.transform_buffer_offset,
+                            first_vertex: tg.first_vertex,
+                            vertex_stride: tg.vertex_stride,
+                            index_buffer_offset: tg.index_buffer_offset,
+                        }
+                    });
+                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            wgc::ray_tracing::BlasBuildEntry {
+                blas_id: e.blas_id,
+                geometries,
+            }
+        });
+
+        let tlas = tlas.into_iter().map(|e| {
+            let instances = e.instances.map(
+                |instance: Option<crate::ray_tracing::ContextTlasInstance<'_, _>>| {
+                    instance.map(|instance| wgc::ray_tracing::TlasInstance {
+                        blas_id: instance.blas_id,
+                        transform: instance.transform,
+                        custom_index: instance.custom_index,
+                        mask: instance.mask,
+                    })
+                },
+            );
+            wgc::ray_tracing::TlasPackage {
+                tlas_id: e.tlas_id,
+                instances: Box::new(instances),
+                lowest_unmodified: e.lowest_unmodified,
+            }
+        });
+
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures(
+            *encoder,
+            blas,
+            tlas
+        )) {
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
+            );
+        }
+    }
+
+    fn blas_destroy(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
+        let global = &self.0;
+        let _ = wgc::gfx_select!(blas => global.blas_destroy(*blas));
+    }
+
+    fn blas_drop(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
+        let global = &self.0;
+        wgc::gfx_select!(blas => global.blas_drop(*blas, false))
+    }
+
+    fn tlas_destroy(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
+        let global = &self.0;
+        let _ = wgc::gfx_select!(tlas => global.tlas_destroy(*tlas));
+    }
+
+    fn tlas_drop(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
+        let global = &self.0;
+        wgc::gfx_select!(tlas => global.tlas_drop(*tlas, false))
     }
 }
 

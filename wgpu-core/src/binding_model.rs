@@ -6,7 +6,7 @@ use crate::{
     },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
-    id::{BindGroupLayoutId, BufferId, SamplerId, TextureId, TextureViewId},
+    id::{BindGroupLayoutId, BufferId, SamplerId, TextureId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log,
@@ -183,6 +183,8 @@ pub enum CreateBindGroupError {
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
+    #[error("Tlas {0:?} is invalid or destroyed")]
+    InvalidTlas(TlasId),
 }
 
 impl PrettyError for CreateBindGroupError {
@@ -331,6 +333,7 @@ pub(crate) struct BindingTypeMaxCountValidator {
     storage_buffers: PerStageBindingTypeCounter,
     storage_textures: PerStageBindingTypeCounter,
     uniform_buffers: PerStageBindingTypeCounter,
+    acceleration_structures: PerStageBindingTypeCounter,
 }
 
 impl BindingTypeMaxCountValidator {
@@ -366,7 +369,9 @@ impl BindingTypeMaxCountValidator {
             wgt::BindingType::StorageTexture { .. } => {
                 self.storage_textures.add(binding.visibility, count);
             }
-            wgt::BindingType::AccelerationStructure => todo!(),
+            wgt::BindingType::AccelerationStructure => {
+                self.acceleration_structures.add(binding.visibility, count);
+            }
         }
     }
 
@@ -773,6 +778,7 @@ pub enum BindingResource<'a> {
     SamplerArray(Cow<'a, [SamplerId]>),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),
+    AccelerationStructure(TlasId),
 }
 
 #[derive(Clone, Debug, Error)]

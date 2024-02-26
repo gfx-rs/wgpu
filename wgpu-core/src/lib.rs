@@ -65,6 +65,7 @@ pub mod instance;
 pub mod pipeline;
 mod pool;
 pub mod present;
+pub mod ray_tracing;
 pub mod registry;
 pub mod resource;
 mod snatch;

@@ -36,6 +36,9 @@ use std::{
     },
 };
 
+use crate::id::BlasId;
+use std::num::NonZeroU64;
+
 /// Information about the wgpu-core resource.
 ///
 /// Each type representing a `wgpu-core` resource, like [`Device`],
@@ -1503,4 +1506,97 @@ pub enum DestroyError {
     Invalid,
     #[error("Resource is already destroyed")]
     AlreadyDestroyed,
+}
+
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+
+#[derive(Debug)]
+pub struct Blas<A: HalApi> {
+    pub(crate) raw: Option<A::AccelerationStructure>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<Blas<A>>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) handle: u64,
+}
+
+impl<A: HalApi> Drop for Blas<A> {
+    fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyBlas(self.info.id()));
+        }
+        unsafe {
+            if let Some(structure) = self.raw.take() {
+                resource_log!("Destroy raw Blas {:?}", self.info.label());
+                use hal::Device;
+                self.device.raw().destroy_acceleration_structure(structure);
+            }
+        }
+    }
+}
+
+impl<A: HalApi> Resource for Blas<A> {
+    const TYPE: &'static str = "Blas";
+
+    type Marker = crate::id::markers::Blas;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
+        &mut self.info
+    }
+}
+
+#[derive(Debug)]
+pub struct Tlas<A: HalApi> {
+    pub(crate) raw: Option<A::AccelerationStructure>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<Tlas<A>>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) max_instance_count: u32,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) dependencies: RwLock<Vec<BlasId>>,
+    pub(crate) instance_buffer: RwLock<Option<A::Buffer>>,
+}
+
+impl<A: HalApi> Drop for Tlas<A> {
+    fn drop(&mut self) {
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyTlas(self.info.id()));
+        }
+        unsafe {
+            use hal::Device;
+            if let Some(structure) = self.raw.take() {
+                resource_log!("Destroy raw Tlas {:?}", self.info.label());
+                self.device.raw().destroy_acceleration_structure(structure);
+            }
+            if let Some(buffer) = self.instance_buffer.write().take() {
+                self.device.raw().destroy_buffer(buffer)
+            }
+        }
+    }
+}
+
+impl<A: HalApi> Resource for Tlas<A> {
+    const TYPE: &'static str = "Tlas";
+
+    type Marker = crate::id::markers::Tlas;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
+        &mut self.info
+    }
 }

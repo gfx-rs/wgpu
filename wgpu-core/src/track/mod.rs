@@ -320,6 +320,7 @@ pub(crate) struct BindGroupStates<A: HalApi> {
     pub textures: TextureBindGroupState<A>,
     pub views: StatelessBindGroupSate<resource::TextureView<A>>,
     pub samplers: StatelessBindGroupSate<resource::Sampler<A>>,
+    pub acceleration_structures: StatelessBindGroupSate<resource::Tlas<A>>,
 }
 
 impl<A: HalApi> BindGroupStates<A> {
@@ -329,6 +330,7 @@ impl<A: HalApi> BindGroupStates<A> {
             textures: TextureBindGroupState::new(),
             views: StatelessBindGroupSate::new(),
             samplers: StatelessBindGroupSate::new(),
+            acceleration_structures: StatelessBindGroupSate::new(),
         }
     }
 
@@ -341,6 +343,7 @@ impl<A: HalApi> BindGroupStates<A> {
         self.textures.optimize();
         self.views.optimize();
         self.samplers.optimize();
+        self.acceleration_structures.optimize();
     }
 }
 
@@ -496,6 +499,8 @@ pub(crate) struct Tracker<A: HalApi> {
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
     pub bundles: StatelessTracker<command::RenderBundle<A>>,
     pub query_sets: StatelessTracker<resource::QuerySet<A>>,
+    pub blas_s: StatelessTracker<resource::Blas<A>>,
+    pub tlas_s: StatelessTracker<resource::Tlas<A>>,
 }
 
 impl<A: HalApi> Tracker<A> {
@@ -510,6 +515,8 @@ impl<A: HalApi> Tracker<A> {
             render_pipelines: StatelessTracker::new(),
             bundles: StatelessTracker::new(),
             query_sets: StatelessTracker::new(),
+            blas_s: StatelessTracker::new(),
+            tlas_s: StatelessTracker::new(),
         }
     }
 
@@ -525,6 +532,8 @@ impl<A: HalApi> Tracker<A> {
         render_pipelines: Option<&Storage<pipeline::RenderPipeline<A>>>,
         bundles: Option<&Storage<command::RenderBundle<A>>>,
         query_sets: Option<&Storage<resource::QuerySet<A>>>,
+        blas_s: Option<&Storage<resource::Blas<A>>>,
+        tlas_s: Option<&Storage<resource::Tlas<A>>>,
     ) {
         if let Some(buffers) = buffers {
             self.buffers.set_size(buffers.len());
@@ -552,6 +561,12 @@ impl<A: HalApi> Tracker<A> {
         };
         if let Some(query_sets) = query_sets {
             self.query_sets.set_size(query_sets.len());
+        };
+        if let Some(blas_s) = blas_s {
+            self.blas_s.set_size(blas_s.len());
+        };
+        if let Some(tlas_s) = tlas_s {
+            self.tlas_s.set_size(tlas_s.len());
         };
     }
 
