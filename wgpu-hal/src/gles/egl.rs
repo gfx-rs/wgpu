@@ -161,7 +161,7 @@ impl Drop for DisplayOwner {
 fn open_x_display() -> Option<DisplayOwner> {
     log::debug!("Loading X11 library to get the current display");
     unsafe {
-        let library = libloading::Library::new("libX11.so").ok()?;
+        let library = find_library(&["libX11.so.6", "libX11.so"])?;
         let func: libloading::Symbol<XOpenDisplayFun> = library.get(b"XOpenDisplay").unwrap();
         let result = func(ptr::null());
         ptr::NonNull::new(result).map(|ptr| DisplayOwner {
