@@ -120,6 +120,8 @@ Bottom level categories:
 - Simplify and speed up the allocation of internal IDs. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
 - Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
 - Fix registry leaks with de-duplicated resources. By @nical in [#5244](https://github.com/gfx-rs/wgpu/pull/5244)
+- Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
+- Fix missing validation for `Device::clear_buffer` where `offset + size buffer.size` was not checked when `size` was omitted. By @ErichDonGubler in [#5282](https://github.com/gfx-rs/wgpu/pull/5282).
 
 #### WGL
 

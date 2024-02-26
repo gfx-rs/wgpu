@@ -63,6 +63,18 @@ dxc_shader_compiler = ["hassle-rs"]
 renderdoc = ["libloading", "renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
 link = ["metal/link"]
+# Panic when running into an out-of-memory error (for debugging purposes).
+#
+# Only affects the d3d12 and vulkan backends.
+oom_panic = []
+# Panic when running into a device lost error (for debugging purposes).
+# Only affects the d3d12 and vulkan backends.
+device_lost_panic = []
+# Panic when running into an internal error other than out-of-memory and device lost
+# (for debugging purposes).
+#
+# Only affects the d3d12 and vulkan backends.
+internal_error_panic = []
 
 [[example]]
 name = "halmark"
