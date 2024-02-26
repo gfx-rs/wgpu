@@ -28,7 +28,7 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     storage::Storage,
-    track::{BindGroupStates, TextureSelector, Tracker},
+    track::{BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators},
     validation::{
         self, check_buffer_usage, check_texture_usage, validate_color_attachment_bytes_per_sample,
     },
@@ -118,6 +118,7 @@ pub struct Device<A: HalApi> {
     /// Has to be locked temporarily only (locked last)
     /// and never before pending_writes
     pub(crate) trackers: Mutex<Tracker<A>>,
+    pub(crate) tracker_indices: TrackerIndexAllocators,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<LifetimeTracker<A>>,
     /// Temporary storage for resource management functions. Cleared at the end
@@ -263,13 +264,14 @@ impl<A: HalApi> Device<A> {
             queue: OnceCell::new(),
             queue_to_drop: OnceCell::new(),
             zero_buffer: Some(zero_buffer),
-            info: ResourceInfo::new("<device>"),
+            info: ResourceInfo::new("<device>", None),
             command_allocator: Mutex::new(Some(com_alloc)),
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new() },
             valid: AtomicBool::new(true),
             trackers: Mutex::new(Tracker::new()),
+            tracker_indices: TrackerIndexAllocators::new(),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(Some(life::ResourceMaps::new())),
             bgl_pool: ResourcePool::new(),
@@ -493,56 +495,56 @@ impl<A: HalApi> Device<A> {
                 if resource.is_unique() {
                     temp_suspected
                         .buffers
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
             for resource in trackers.textures.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .textures
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
             for resource in trackers.views.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .texture_views
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
             for resource in trackers.bind_groups.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .bind_groups
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
             for resource in trackers.samplers.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .samplers
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
             for resource in trackers.compute_pipelines.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .compute_pipelines
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
             for resource in trackers.render_pipelines.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .render_pipelines
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
             for resource in trackers.query_sets.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .query_sets
-                        .insert(resource.as_info().id(), resource.clone());
+                        .insert(resource.as_info().tracker_index(), resource.clone());
                 }
             }
         }
@@ -643,7 +645,10 @@ impl<A: HalApi> Device<A> {
             initialization_status: RwLock::new(BufferInitTracker::new(aligned_size)),
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.buffers.clone()),
+            ),
             bind_groups: Mutex::new(Vec::new()),
         })
     }
@@ -672,7 +677,10 @@ impl<A: HalApi> Device<A> {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
             },
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.textures.clone()),
+            ),
             clear_mode: RwLock::new(clear_mode),
             views: Mutex::new(Vec::new()),
             bind_groups: Mutex::new(Vec::new()),
@@ -694,7 +702,10 @@ impl<A: HalApi> Device<A> {
             initialization_status: RwLock::new(BufferInitTracker::new(0)),
             sync_mapped_writes: Mutex::new(None),
             map_state: Mutex::new(resource::BufferMapState::Idle),
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.buffers.clone()),
+            ),
             bind_groups: Mutex::new(Vec::new()),
         }
     }
@@ -1272,7 +1283,10 @@ impl<A: HalApi> Device<A> {
             render_extent,
             samples: texture.desc.sample_count,
             selector,
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.texture_views.clone()),
+            ),
         })
     }
 
@@ -1376,7 +1390,10 @@ impl<A: HalApi> Device<A> {
         Ok(Sampler {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.samplers.clone()),
+            ),
             comparison: desc.compare.is_some(),
             filtering: desc.min_filter == wgt::FilterMode::Linear
                 || desc.mag_filter == wgt::FilterMode::Linear,
@@ -1569,7 +1586,7 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             interface: Some(interface),
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(desc.label.borrow_or_default(), None),
             label: desc.label.borrow_or_default().to_string(),
         })
     }
@@ -1610,7 +1627,7 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             interface: None,
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(desc.label.borrow_or_default(), None),
             label: desc.label.borrow_or_default().to_string(),
         })
     }
@@ -1863,7 +1880,10 @@ impl<A: HalApi> Device<A> {
             entries: entry_map,
             origin,
             binding_count_validator: count_validator,
-            info: ResourceInfo::new(label.unwrap_or("<BindGroupLayout>")),
+            info: ResourceInfo::new(
+                label.unwrap_or("<BindGroupLayout>"),
+                Some(self.tracker_indices.bind_group_layouts.clone()),
+            ),
             label: label.unwrap_or_default().to_string(),
         })
     }
@@ -2296,7 +2316,10 @@ impl<A: HalApi> Device<A> {
             raw: Snatchable::new(raw),
             device: self.clone(),
             layout: layout.clone(),
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.bind_groups.clone()),
+            ),
             used,
             used_buffer_ranges,
             used_texture_ranges,
@@ -2578,7 +2601,10 @@ impl<A: HalApi> Device<A> {
         Ok(binding_model::PipelineLayout {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.pipeline_layouts.clone()),
+            ),
             bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
         })
@@ -2743,7 +2769,10 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             _shader_module: shader_module,
             late_sized_buffer_groups,
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.compute_pipelines.clone()),
+            ),
         };
         Ok(pipeline)
     }
@@ -3337,7 +3366,10 @@ impl<A: HalApi> Device<A> {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.render_pipelines.clone()),
+            ),
         };
         Ok(pipeline)
     }
@@ -3450,7 +3482,7 @@ impl<A: HalApi> Device<A> {
         Ok(QuerySet {
             raw: Some(unsafe { self.raw().create_query_set(&hal_desc).unwrap() }),
             device: self.clone(),
-            info: ResourceInfo::new(""),
+            info: ResourceInfo::new("", Some(self.tracker_indices.query_sets.clone())),
             desc: desc.map_label(|_| ()),
         })
     }

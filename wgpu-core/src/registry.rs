@@ -60,7 +60,6 @@ impl<T: Resource> Registry<T> {
 #[must_use]
 pub(crate) struct FutureId<'a, T: Resource> {
     id: Id<T::Marker>,
-    identity: Arc<IdentityManager<T::Marker>>,
     data: &'a RwLock<Storage<T>>,
 }
 
@@ -75,7 +74,7 @@ impl<T: Resource> FutureId<'_, T> {
     }
 
     pub fn init(&self, mut value: T) -> Arc<T> {
-        value.as_info_mut().set_id(self.id, &self.identity);
+        value.as_info_mut().set_id(self.id);
         Arc::new(value)
     }
 
@@ -117,7 +116,6 @@ impl<T: Resource> Registry<T> {
                 }
                 None => self.identity.process(self.backend),
             },
-            identity: self.identity.clone(),
             data: &self.storage,
         }
     }
@@ -125,7 +123,6 @@ impl<T: Resource> Registry<T> {
     pub(crate) fn request(&self) -> FutureId<T> {
         FutureId {
             id: self.identity.process(self.backend),
-            identity: self.identity.clone(),
             data: &self.storage,
         }
     }
@@ -142,11 +139,12 @@ impl<T: Resource> Registry<T> {
         self.storage.write()
     }
     pub fn unregister_locked(&self, id: Id<T::Marker>, storage: &mut Storage<T>) -> Option<Arc<T>> {
+        self.identity.free(id);
         storage.remove(id)
     }
     pub fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
         let mut storage = self.storage.write();
-        value.as_info_mut().set_id(id, &self.identity);
+        value.as_info_mut().set_id(id);
         storage.force_replace(id, value)
     }
     pub fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
@@ -155,6 +153,7 @@ impl<T: Resource> Registry<T> {
         storage.insert_error(id, label);
     }
     pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
+        self.identity.free(id);
         let value = self.storage.write().remove(id);
         //Returning None is legal if it's an error ID
         value
