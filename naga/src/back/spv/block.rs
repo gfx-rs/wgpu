@@ -731,12 +731,41 @@ impl<'w> BlockContext<'w> {
                         Some(crate::ScalarKind::Uint) => spirv::GLOp::UMax,
                         other => unimplemented!("Unexpected max({:?})", other),
                     }),
-                    Mf::Clamp => MathOp::Ext(match arg_scalar_kind {
-                        Some(crate::ScalarKind::Float) => spirv::GLOp::FClamp,
-                        Some(crate::ScalarKind::Sint) => spirv::GLOp::SClamp,
-                        Some(crate::ScalarKind::Uint) => spirv::GLOp::UClamp,
+                    Mf::Clamp => match arg_scalar_kind {
+                        // Clamp is undefined if min > max. In practice this means it can use a median-of-three
+                        // instruction to determine the value. This is fine according to the WGSL spec for float
+                        // clamp, but integer clamp _must_ use min-max. As such we write out min/max.
+                        Some(crate::ScalarKind::Float) => MathOp::Ext(spirv::GLOp::FClamp),
+                        Some(_) => {
+                            let (min_op, max_op) = match arg_scalar_kind {
+                                Some(crate::ScalarKind::Sint) => {
+                                    (spirv::GLOp::SMin, spirv::GLOp::SMax)
+                                }
+                                Some(crate::ScalarKind::Uint) => {
+                                    (spirv::GLOp::UMin, spirv::GLOp::UMax)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            let max_id = self.gen_id();
+                            block.body.push(Instruction::ext_inst(
+                                self.writer.gl450_ext_inst_id,
+                                max_op,
+                                result_type_id,
+                                max_id,
+                                &[arg0_id, arg1_id],
+                            ));
+
+                            MathOp::Custom(Instruction::ext_inst(
+                                self.writer.gl450_ext_inst_id,
+                                min_op,
+                                result_type_id,
+                                id,
+                                &[max_id, arg2_id],
+                            ))
+                        }
                         other => unimplemented!("Unexpected max({:?})", other),
-                    }),
+                    },
                     Mf::Saturate => {
                         let (maybe_size, scalar) = match *arg_ty {
                             crate::TypeInner::Vector { size, scalar } => (Some(size), scalar),

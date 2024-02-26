@@ -3141,7 +3141,29 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Abs => "abs",
                     Mf::Min => "min",
                     Mf::Max => "max",
-                    Mf::Clamp => "clamp",
+                    Mf::Clamp => {
+                        let scalar_kind = ctx
+                            .resolve_type(arg, &self.module.types)
+                            .scalar_kind()
+                            .unwrap();
+                        match scalar_kind {
+                            crate::ScalarKind::Float => "clamp",
+                            // Clamp is undefined if min > max. In practice this means it can use a median-of-three
+                            // instruction to determine the value. This is fine according to the WGSL spec for float
+                            // clamp, but integer clamp _must_ use min-max. As such we write out min/max.
+                            _ => {
+                                write!(self.out, "min(max(")?;
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, ", ")?;
+                                self.write_expr(arg1.unwrap(), ctx)?;
+                                write!(self.out, "), ")?;
+                                self.write_expr(arg2.unwrap(), ctx)?;
+                                write!(self.out, ")")?;
+
+                                return Ok(());
+                            }
+                        }
+                    }
                     Mf::Saturate => {
                         write!(self.out, "clamp(")?;
 
