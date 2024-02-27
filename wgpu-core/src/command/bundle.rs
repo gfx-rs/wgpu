@@ -350,24 +350,44 @@ impl RenderBundleEncoder {
     ) -> Result<RenderBundle<A>, RenderBundleError> {
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.render_pipelines.read();
-        let query_set_guard = hub.query_sets.read();
         let buffer_guard = hub.buffers.read();
-        let texture_guard = hub.textures.read();
 
         let mut state = State {
-            trackers: RenderBundleScope::new(
-                &*buffer_guard,
-                &*texture_guard,
-                &*bind_group_guard,
-                &*pipeline_guard,
-                &*query_set_guard,
-            ),
+            trackers: RenderBundleScope::new(),
             pipeline: None,
             bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
             vertex: (0..hal::MAX_VERTEX_BUFFERS).map(|_| None).collect(),
             index: None,
             flat_dynamic_offsets: Vec::new(),
         };
+
+        let indices = &device.tracker_indices;
+        state
+            .trackers
+            .buffers
+            .write()
+            .set_size(indices.buffers.size());
+        state
+            .trackers
+            .textures
+            .write()
+            .set_size(indices.textures.size());
+        state
+            .trackers
+            .bind_groups
+            .write()
+            .set_size(indices.bind_groups.size());
+        state
+            .trackers
+            .render_pipelines
+            .write()
+            .set_size(indices.render_pipelines.size());
+        state
+            .trackers
+            .query_sets
+            .write()
+            .set_size(indices.query_sets.size());
+
         let mut commands = Vec::new();
         let mut buffer_memory_init_actions = Vec::new();
         let mut texture_memory_init_actions = Vec::new();
