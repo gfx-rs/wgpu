@@ -1,13 +1,14 @@
 use glam::Vec2;
 use std::borrow::Cow;
-use wgpu::{Adapter, BindGroup, BindGroupLayout, ColorTargetState, CommandEncoder, Device, Extent3d, Queue, RenderPassColorAttachment, RenderPipeline, Sampler, ShaderModule, SurfaceConfiguration, Texture, TextureAspect, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension};
-use winit::{
-    event::{Event, WindowEvent},
-    event_loop::EventLoop,
-    window::Window,
+use wgpu::{
+    Adapter, BindGroup, BindGroupLayout, ColorTargetState, CommandEncoder, Device, Extent3d, Queue,
+    RenderPassColorAttachment, RenderPipeline, Sampler, ShaderModule, SurfaceConfiguration,
+    Texture, TextureAspect, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension,
 };
+use winit::event::WindowEvent;
 
-const EXAMPLE_NAME: &'static str = "multiple_render_targets";
+const EXAMPLE_NAME: &str = "multiple_render_targets";
 
 /// Renderer that draws its outputs to two output texture targets at the same time.
 struct MultiTargetRenderer {
@@ -17,7 +18,6 @@ struct MultiTargetRenderer {
 
 impl MultiTargetRenderer {
     fn create_image_texture(device: &Device, queue: &Queue) -> (Texture, TextureView) {
-
         const WIDTH: usize = 256;
         const HEIGHT: usize = 256;
 
@@ -29,7 +29,8 @@ impl MultiTargetRenderer {
             for y in 0..width {
                 for x in 0..height {
                     let cur_pos = Vec2::new(x as f32, y as f32);
-                    let distance_to_center_normalized = 1.0 - (cur_pos - center).length() / half_distance;
+                    let distance_to_center_normalized =
+                        1.0 - (cur_pos - center).length() / half_distance;
                     let val: u8 = (u8::MAX as f32 * distance_to_center_normalized) as u8;
                     img_data.push(val)
                 }
@@ -63,7 +64,7 @@ impl MultiTargetRenderer {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &ball_texture_data,
+            ball_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(WIDTH as u32),
@@ -419,9 +420,6 @@ struct TextureTargets {
     b_view: TextureView,
 }
 
-
-
-
 struct Example {
     drawer: TargetRenderer,
     multi_target_renderer: MultiTargetRenderer,
@@ -431,15 +429,20 @@ struct Example {
 }
 
 impl crate::framework::Example for Example {
-    fn init(config: &SurfaceConfiguration, adapter: &Adapter, device: &Device, queue: &Queue) -> Self {
+    fn init(
+        config: &SurfaceConfiguration,
+        _adapter: &Adapter,
+        device: &Device,
+        queue: &Queue,
+    ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
         // Renderer that draws to 2 textures at the same time:
         let multi_target_renderer = MultiTargetRenderer::init(
-            &device,
-            &queue,
+            device,
+            queue,
             &shader,
             // ColorTargetStates specify how the data will be written to the
             // output textures:
@@ -458,11 +461,11 @@ impl crate::framework::Example for Example {
         );
 
         // create our target textures that will receive the simultaneous rendering:
-        let mut texture_targets =
-            create_target_textures(&device, config.format, config.width, config.height);
+        let texture_targets =
+            create_target_textures(device, config.format, config.width, config.height);
 
         // helper renderer that displays the results in 2 separate viewports:
-        let mut drawer = TargetRenderer::init(&device, &shader, config.format, &texture_targets);
+        let drawer = TargetRenderer::init(device, &shader, config.format, &texture_targets);
 
         Self {
             texture_targets,
@@ -473,23 +476,17 @@ impl crate::framework::Example for Example {
         }
     }
 
-    fn resize(&mut self, config: &SurfaceConfiguration, device: &Device, queue: &Queue) {
-        self.texture_targets = create_target_textures(
-            &device,
-            config.format,
-            config.width,
-            config.height,
-        );
-        self.drawer.rebuild_resources(&device, &self.texture_targets);
+    fn resize(&mut self, config: &SurfaceConfiguration, device: &Device, _queue: &Queue) {
+        self.texture_targets =
+            create_target_textures(device, config.format, config.width, config.height);
+        self.drawer.rebuild_resources(device, &self.texture_targets);
     }
 
-    fn update(&mut self, event: WindowEvent) {}
+    fn update(&mut self, _event: WindowEvent) {}
 
     fn render(&mut self, view: &TextureView, device: &Device, queue: &Queue) {
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: None,
-            });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         // draw to 2 textures at the same time:
         self.multi_target_renderer.draw(
@@ -509,7 +506,8 @@ impl crate::framework::Example for Example {
         );
 
         // display results of the both drawn textures on screen:
-        self.drawer.draw(&mut encoder, &view, self.screen_width, self.screen_height);
+        self.drawer
+            .draw(&mut encoder, view, self.screen_width, self.screen_height);
 
         queue.submit(Some(encoder.finish()));
     }
