@@ -5320,6 +5320,21 @@ pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, E
     Frontend::new(words, options).parse()
 }
 
+/// Helper function to check if `child` is in the scope of `parent`
+fn is_parent(mut child: usize, parent: usize, block_ctx: &BlockContext) -> bool {
+    loop {
+        if child == parent {
+            // The child is in the scope parent
+            break true;
+        } else if child == 0 {
+            // Searched finished at the root the child isn't in the parent's body
+            break false;
+        }
+
+        child = block_ctx.bodies[child].parent;
+    }
+}
+
 #[cfg(test)]
 mod test {
     #[test]
@@ -5334,20 +5349,5 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
-    }
-}
-
-/// Helper function to check if `child` is in the scope of `parent`
-fn is_parent(mut child: usize, parent: usize, block_ctx: &BlockContext) -> bool {
-    loop {
-        if child == parent {
-            // The child is in the scope parent
-            break true;
-        } else if child == 0 {
-            // Searched finished at the root the child isn't in the parent's body
-            break false;
-        }
-
-        child = block_ctx.bodies[child].parent;
     }
 }
