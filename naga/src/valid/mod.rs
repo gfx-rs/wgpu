@@ -229,19 +229,20 @@ pub enum ValidationError {
 
 impl crate::TypeInner {
     const fn is_sized(&self) -> bool {
-        matches!(self,
+        matches!(
+            self,
             Self::Scalar { .. }
-            | Self::Vector { .. }
-            | Self::Matrix { .. }
-            | Self::Array {
-                size: crate::ArraySize::Constant(_),
-                ..
-            }
-            | Self::Atomic { .. }
-            | Self::Pointer { .. }
-            | Self::ValuePointer { .. }
-            | Self::Struct { .. });
-        }
+                | Self::Vector { .. }
+                | Self::Matrix { .. }
+                | Self::Array {
+                    size: crate::ArraySize::Constant(_),
+                    ..
+                }
+                | Self::Atomic { .. }
+                | Self::Pointer { .. }
+                | Self::ValuePointer { .. }
+                | Self::Struct { .. }
+        )
     }
 
     /// Return the `ImageDimension` for which `self` is an appropriate coordinate.
