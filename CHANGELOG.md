@@ -95,7 +95,7 @@ Bottom level categories:
   - As with other instance flags, this flag can be changed in calls to `InstanceFlags::with_env` with the new `WGPU_GPU_BASED_VALIDATION` environment variable.
 
   By @ErichDonGubler in [#5146](https://github.com/gfx-rs/wgpu/pull/5146), [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
-- Signed and unsigned 64 bit integer support in shaders. By @rodolphito in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
+- Signed and unsigned 64 bit integer support in shaders. By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 - `wgpu::Instance` can now report which `wgpu::Backends` are available based on the build configuration. By @wumpf [#5167](https://github.com/gfx-rs/wgpu/pull/5167)
 ```diff
 -wgpu::Instance::any_backend_feature_enabled()
