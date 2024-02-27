@@ -147,6 +147,7 @@ async fn pulling_common(
                 })],
             }),
             multiview: None,
+            cache: None,
         });
 
     let width = 2;

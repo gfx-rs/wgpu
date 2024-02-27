@@ -72,6 +72,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
+        cache: None,
     });
 
     let mut config = surface

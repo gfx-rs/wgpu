@@ -3497,11 +3497,12 @@ impl<A: HalApi> Device<A> {
             data: desc.data.as_deref(),
             label: desc.label.to_hal(self.instance_flags),
         };
-        let raw = unsafe { (&self.raw.as_ref().unwrap()).create_pipeline_cache(&cache_desc) };
+        let raw = unsafe { (&self.raw.as_ref().unwrap()).create_pipeline_cache(&cache_desc) }?;
         let cache = pipeline::PipelineCache {
             device: self.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
-            raw,
+            // This would be none in the error condition, which we don't implement yet
+            raw: Some(raw),
         };
         Some(cache)
     }

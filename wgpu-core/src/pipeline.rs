@@ -5,7 +5,7 @@ use crate::{
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
-    id::{PipelineLayoutId, ShaderModuleId},
+    id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log, validation, Label,
 };
@@ -192,6 +192,7 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<PipelineLayoutId>,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
+    pub cache: Option<PipelineCacheId>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -354,6 +355,7 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    pub cache: Option<PipelineCacheId>,
 }
 
 #[derive(Clone, Debug)]

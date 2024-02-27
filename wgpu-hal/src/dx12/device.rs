@@ -1517,6 +1517,14 @@ impl crate::Device for super::Device {
     }
     unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
 
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Option<()> {
+        None
+    }
+    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
+
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,

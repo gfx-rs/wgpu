@@ -488,6 +488,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     multisample: wgpu::MultisampleState::default(),
                     fragment: None,
                     multiview: None,
+                    cache: None,
                 });
         });
 

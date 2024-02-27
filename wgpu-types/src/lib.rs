@@ -1749,7 +1749,7 @@ pub struct AdapterInfo {
 }
 
 impl AdapterInfo {
-    /// A recommended filename for storing the pipline cache of this adapter
+    /// A recommended filename for storing the pipeline cache of this adapter
     ///
     /// Each adapter may have a different filename, to allow using multiple caches
     pub fn pipeline_cache_key(&self) -> Option<String> {
