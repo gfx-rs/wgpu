@@ -154,6 +154,7 @@ impl crate::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         // create compute pipeline
@@ -163,6 +164,7 @@ impl crate::framework::Example for Example {
             layout: Some(&compute_pipeline_layout),
             module: &compute_shader,
             entry_point: "main",
+            cache: None,
         });
 
         // buffer for the three 2d triangle vertices of each instance

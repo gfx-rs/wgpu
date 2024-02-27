@@ -1119,6 +1119,7 @@ impl crate::Context for ContextWgpuCore {
                 targets: Borrowed(frag.targets),
             }),
             multiview: desc.multiview,
+            cache: desc.cache.map(|c| c.id.into()),
         };
 
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_render_pipeline(
@@ -1164,6 +1165,7 @@ impl crate::Context for ContextWgpuCore {
                 module: desc.module.id.into(),
                 entry_point: Some(Borrowed(desc.entry_point)),
             },
+            cache: desc.cache.map(|c| c.id.into()),
         };
 
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_compute_pipeline(
