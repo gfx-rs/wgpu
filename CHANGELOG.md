@@ -108,6 +108,10 @@ Bottom level categories:
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
 
+### Examples
+
+- Add multiple render targets example. By @kaphula in [#5297](https://github.com/gfx-rs/wgpu/pull/5313)
+
 ### Bug Fixes
 
 #### General
