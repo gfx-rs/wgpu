@@ -39,7 +39,6 @@ fn fs_multi_main(vs: VertexOutput) -> FragmentOutput {
 
 @fragment
 fn fs_display_main(vs: VertexOutput) -> @location(0) vec4<f32> {
-    let smp = textureSample(image_texture, image_sampler, vs.uv);
-    return vec4<f32>(smp.x, smp.y, smp.z, 1.0);
+    let smp = textureSample(image_texture, image_sampler, vs.uv).xyz;
+    return vec4<f32>(smp, 1.0);
 }
-
