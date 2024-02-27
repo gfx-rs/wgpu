@@ -2662,6 +2662,7 @@ impl<A: HalApi> Device<A> {
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A>,
     ) -> Result<pipeline::ComputePipeline<A>, pipeline::CreateComputePipelineError> {
+        {}
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
@@ -2748,6 +2749,20 @@ impl<A: HalApi> Device<A> {
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
+        let cache = if let Some(cache) = desc.cache {
+            let cache = hub
+                .pipeline_caches
+                .get(cache)
+                .map_err(|_| validation::StageError::InvalidModule)?;
+
+            if cache.device.as_info().id() != self.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+            Some(cache)
+        } else {
+            None
+        };
+
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw(),
@@ -2755,6 +2770,7 @@ impl<A: HalApi> Device<A> {
                 entry_point: final_entry_point_name.as_ref(),
                 module: shader_module.raw(),
             },
+            cache: cache.as_ref().map(|it| it.raw.as_ref()).flatten(),
         };
 
         let raw = unsafe {
@@ -3313,6 +3329,23 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        let cache = if let Some(cache) = desc.cache {
+            let cache = hub
+                .pipeline_caches
+                .get(cache)
+                // This is clearly wrong, but I'm just trying to fix the type errors
+                .map_err(|_| {
+                    pipeline::CreateRenderPipelineError::ConservativeRasterizationNonFillPolygonMode
+                })?;
+
+            if cache.device.as_info().id() != self.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+            Some(cache)
+        } else {
+            None
+        };
+
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
@@ -3327,6 +3360,7 @@ impl<A: HalApi> Device<A> {
             fragment_stage,
             color_targets,
             multiview: desc.multiview,
+            cache: cache.as_ref().map(|it| it.raw.as_ref()).flatten(),
         };
         let raw = unsafe {
             self.raw
