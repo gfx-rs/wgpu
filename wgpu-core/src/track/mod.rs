@@ -103,7 +103,6 @@ mod texture;
 
 use crate::{
     binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,
-    storage::Storage,
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -479,31 +478,14 @@ pub(crate) struct RenderBundleScope<A: HalApi> {
 
 impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
-    pub fn new(
-        buffers: &Storage<resource::Buffer<A>>,
-        textures: &Storage<resource::Texture<A>>,
-        bind_groups: &Storage<binding_model::BindGroup<A>>,
-        render_pipelines: &Storage<pipeline::RenderPipeline<A>>,
-        query_sets: &Storage<resource::QuerySet<A>>,
-    ) -> Self {
-        let value = Self {
+    pub fn new() -> Self {
+        Self {
             buffers: RwLock::new(BufferUsageScope::new()),
             textures: RwLock::new(TextureUsageScope::new()),
             bind_groups: RwLock::new(StatelessTracker::new()),
             render_pipelines: RwLock::new(StatelessTracker::new()),
             query_sets: RwLock::new(StatelessTracker::new()),
-        };
-
-        value.buffers.write().set_size(buffers.len());
-        value.textures.write().set_size(textures.len());
-        value.bind_groups.write().set_size(bind_groups.len());
-        value
-            .render_pipelines
-            .write()
-            .set_size(render_pipelines.len());
-        value.query_sets.write().set_size(query_sets.len());
-
-        value
+        }
     }
 
     /// Merge the inner contents of a bind group into the render bundle tracker.
