@@ -1372,6 +1372,11 @@ impl crate::Device<super::Api> for super::Device {
         }
     }
 
+    unsafe fn create_pipeline_cache(&self, _: &crate::PipelineCacheDescriptor<'_>) -> Option<()> {
+        None
+    }
+    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
+
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     unsafe fn create_query_set(
         &self,

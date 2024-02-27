@@ -302,6 +302,12 @@ impl GlobalPlay for wgc::global::Global {
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop::<A>(id);
             }
+            Action::CreatePipelineCache { id, desc } => {
+                let _ = unsafe { self.device_create_pipeline_cache::<A>(device, &desc, Some(id)) };
+            }
+            Action::DestroyPipelineCache(id) => {
+                self.pipeline_cache_drop::<A>(id);
+            }
             Action::CreateRenderBundle { id, desc, base } => {
                 let bundle =
                     wgc::command::RenderBundleEncoder::new(&desc, device, Some(base)).unwrap();
