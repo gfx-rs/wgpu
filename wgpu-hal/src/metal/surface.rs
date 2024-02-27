@@ -83,12 +83,11 @@ impl super::Surface {
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
         let view = view as *mut Object;
-        let render_layer =
-            {
-                let layer = unsafe { Self::get_metal_layer(view, delegate) };
-                unsafe { mem::transmute::<_, &metal::MetalLayerRef>(layer) }
-            }
-            .to_owned();
+        let render_layer = {
+            let layer = unsafe { Self::get_metal_layer(view, delegate) };
+            unsafe { mem::transmute::<_, &metal::MetalLayerRef>(layer) }
+        }
+        .to_owned();
         let _: *mut c_void = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }

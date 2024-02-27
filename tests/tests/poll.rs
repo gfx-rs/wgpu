@@ -18,13 +18,12 @@ struct DummyWorkData {
 
 impl DummyWorkData {
     fn new(ctx: &TestingContext) -> Self {
-        let buffer =
-            ctx.device.create_buffer(&BufferDescriptor {
-                label: None,
-                size: 16,
-                usage: BufferUsages::UNIFORM,
-                mapped_at_creation: false,
-            });
+        let buffer = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: BufferUsages::UNIFORM,
+            mapped_at_creation: false,
+        });
 
         let bind_group_layout = ctx
             .device
@@ -42,15 +41,14 @@ impl DummyWorkData {
                 }],
             });
 
-        let bind_group =
-            ctx.device.create_bind_group(&BindGroupDescriptor {
-                label: None,
-                layout: &bind_group_layout,
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::Buffer(buffer.as_entire_buffer_binding()),
-                }],
-            });
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::Buffer(buffer.as_entire_buffer_binding()),
+            }],
+        });
 
         let mut cmd_buf = ctx
             .device

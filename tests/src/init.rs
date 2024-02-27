@@ -22,12 +22,11 @@ pub fn initialize_instance() -> Instance {
     // We use it whenever we want to explicitly run with webgl instead of webgpu.
     // To "disable" webgpu regardless, we do this by removing the webgpu backend whenever we see
     // the webgl feature.
-    let backends =
-        if cfg!(feature = "webgl") {
-            Backends::all() - Backends::BROWSER_WEBGPU
-        } else {
-            Backends::all()
-        };
+    let backends = if cfg!(feature = "webgl") {
+        Backends::all() - Backends::BROWSER_WEBGPU
+    } else {
+        Backends::all()
+    };
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
     Instance::new(wgpu::InstanceDescriptor {
@@ -92,17 +91,16 @@ pub async fn initialize_device(
     features: Features,
     limits: Limits,
 ) -> (Device, Queue) {
-    let bundle =
-        adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: features,
-                    required_limits: limits,
-                },
-                None,
-            )
-            .await;
+    let bundle = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                required_features: features,
+                required_limits: limits,
+            },
+            None,
+        )
+        .await;
 
     match bundle {
         Ok(b) => b,

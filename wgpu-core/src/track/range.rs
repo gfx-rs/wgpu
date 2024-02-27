@@ -94,15 +94,14 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
         // 1. scan the ranges to figure out how many extra ones need to be inserted
         // 2. go through the ranges by moving them them to the right and inserting the missing ones
 
-        let mut start_pos =
-            match self.ranges.iter().position(|pair| pair.0.end > index.start) {
-                Some(pos) => pos,
-                None => {
-                    let pos = self.ranges.len();
-                    self.ranges.push((index.clone(), default));
-                    return &mut self.ranges[pos..];
-                }
-            };
+        let mut start_pos = match self.ranges.iter().position(|pair| pair.0.end > index.start) {
+            Some(pos) => pos,
+            None => {
+                let pos = self.ranges.len();
+                self.ranges.push((index.clone(), default));
+                return &mut self.ranges[pos..];
+            }
+        };
 
         {
             let (range, value) = self.ranges[start_pos].clone();

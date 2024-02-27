@@ -134,9 +134,9 @@ impl Instance {
         Surface {
             factory: self.factory.clone(),
             factory_media: self.factory_media.clone(),
-            target: SurfaceTarget::SwapChainPanel(
-                unsafe { d3d12::ComPtr::from_raw(swap_chain_panel) }
-            ),
+            target: SurfaceTarget::SwapChainPanel(unsafe {
+                d3d12::ComPtr::from_raw(swap_chain_panel)
+            }),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
         }
@@ -442,12 +442,11 @@ impl Texture {
     }
 
     fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
-        let plane =
-            match base.aspect {
-                crate::FormatAspects::COLOR | crate::FormatAspects::DEPTH => 0,
-                crate::FormatAspects::STENCIL => 1,
-                _ => unreachable!(),
-            };
+        let plane = match base.aspect {
+            crate::FormatAspects::COLOR | crate::FormatAspects::DEPTH => 0,
+            crate::FormatAspects::STENCIL => 1,
+            _ => unreachable!(),
+        };
         self.calc_subresource(base.mip_level, base.array_layer, plane)
     }
 }
@@ -621,11 +620,10 @@ impl SwapChain {
         &mut self,
         timeout: Option<std::time::Duration>,
     ) -> Result<bool, crate::SurfaceError> {
-        let timeout_ms =
-            match timeout {
-                Some(duration) => duration.as_millis() as u32,
-                None => winbase::INFINITE,
-            };
+        let timeout_ms = match timeout {
+            Some(duration) => duration.as_millis() as u32,
+            None => winbase::INFINITE,
+        };
         match unsafe { synchapi::WaitForSingleObject(self.waitable, timeout_ms) } {
             winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::SurfaceError::Lost),
             winbase::WAIT_OBJECT_0 => Ok(true),
@@ -762,9 +760,9 @@ impl crate::Surface<Api> for Surface {
                             unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
                         {
                             log::error!("Unable to SetContent: {}", err);
-                            return Err(
-                                crate::SurfaceError::Other("IDCompositionVisual::SetContent")
-                            );
+                            return Err(crate::SurfaceError::Other(
+                                "IDCompositionVisual::SetContent",
+                            ));
                         }
                     }
                     &SurfaceTarget::SwapChainPanel(ref swap_chain_panel) => {

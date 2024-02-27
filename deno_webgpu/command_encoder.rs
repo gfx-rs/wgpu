@@ -212,7 +212,9 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
 
     let rid = state
         .resource_table
-        .add(super::render_pass::WebGpuRenderPass(RefCell::new(render_pass)));
+        .add(super::render_pass::WebGpuRenderPass(RefCell::new(
+            render_pass,
+        )));
 
     Ok(WebGpuResult::rid(rid))
 }
@@ -262,7 +264,9 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
 
     let rid = state
         .resource_table
-        .add(super::compute_pass::WebGpuComputePass(RefCell::new(compute_pass)));
+        .add(super::compute_pass::WebGpuComputePass(RefCell::new(
+            compute_pass,
+        )));
 
     Ok(WebGpuResult::rid(rid))
 }
@@ -390,15 +394,14 @@ pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
         origin: source.origin,
         aspect: source.aspect,
     };
-    let destination =
-        wgpu_core::command::ImageCopyBuffer {
-            buffer: destination_buffer_resource.1,
-            layout: wgpu_types::ImageDataLayout {
-                offset: destination.offset,
-                bytes_per_row: destination.bytes_per_row,
-                rows_per_image: destination.rows_per_image,
-            },
-        };
+    let destination = wgpu_core::command::ImageCopyBuffer {
+        buffer: destination_buffer_resource.1,
+        layout: wgpu_types::ImageDataLayout {
+            offset: destination.offset,
+            bytes_per_row: destination.bytes_per_row,
+            rows_per_image: destination.rows_per_image,
+        },
+    };
     gfx_ok!(command_encoder => instance.command_encoder_copy_texture_to_buffer(
       command_encoder,
       &source,
@@ -601,9 +604,10 @@ pub fn op_webgpu_command_encoder_finish(
       &descriptor
     ));
 
-    let rid = state
-        .resource_table
-        .add(WebGpuCommandBuffer(instance.clone(), RefCell::new(Some(val))));
+    let rid = state.resource_table.add(WebGpuCommandBuffer(
+        instance.clone(),
+        RefCell::new(Some(val)),
+    ));
 
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }

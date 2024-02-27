@@ -347,11 +347,10 @@ pub fn op_webgpu_create_render_pipeline(
         .get::<super::shader::WebGpuShaderModule>(args.vertex.module)?;
 
     let fragment = if let Some(fragment) = args.fragment {
-        let fragment_shader_module_resource = state
-            .resource_table
-            .get::<super::shader::WebGpuShaderModule>(
-            fragment.module,
-        )?;
+        let fragment_shader_module_resource =
+            state
+                .resource_table
+                .get::<super::shader::WebGpuShaderModule>(fragment.module)?;
 
         Some(wgpu_core::pipeline::FragmentState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
@@ -364,13 +363,13 @@ pub fn op_webgpu_create_render_pipeline(
         None
     };
 
-    let vertex_buffers =
-        args.vertex
-            .buffers
-            .into_iter()
-            .flatten()
-            .map(Into::into)
-            .collect();
+    let vertex_buffers = args
+        .vertex
+        .buffers
+        .into_iter()
+        .flatten()
+        .map(Into::into)
+        .collect();
 
     let descriptor = wgpu_core::pipeline::RenderPipelineDescriptor {
         label: Some(Cow::Owned(args.label)),

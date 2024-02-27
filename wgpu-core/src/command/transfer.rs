@@ -207,12 +207,10 @@ pub(crate) fn extract_texture_selector<A: HalApi>(
 
     let (layers, origin_z) = match texture.desc.dimension {
         wgt::TextureDimension::D1 => (0..1, 0),
-        wgt::TextureDimension::D2 => {
-            (
-                copy_texture.origin.z..copy_texture.origin.z + copy_size.depth_or_array_layers,
-                0,
-            )
-        }
+        wgt::TextureDimension::D2 => (
+            copy_texture.origin.z..copy_texture.origin.z + copy_size.depth_or_array_layers,
+            0,
+        ),
         wgt::TextureDimension::D3 => (0..1, copy_texture.origin.z),
     };
     let base = hal::TextureCopyBase {
@@ -661,9 +659,9 @@ impl Global {
             if src_buffer.usage.intersects(forbidden_usages)
                 || dst_buffer.usage.intersects(forbidden_usages)
             {
-                return Err(TransferError::MissingDownlevelFlags(
-                    MissingDownlevelFlags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
-                )
+                return Err(TransferError::MissingDownlevelFlags(MissingDownlevelFlags(
+                    wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
+                ))
                 .into());
             }
         }
@@ -841,16 +839,15 @@ impl Global {
             .into());
         }
 
-        let (required_buffer_bytes_in_copy, bytes_per_array_layer) =
-            validate_linear_texture_data(
-                &source.layout,
-                dst_texture.desc.format,
-                destination.aspect,
-                src_buffer.size,
-                CopySide::Source,
-                copy_size,
-                true,
-            )?;
+        let (required_buffer_bytes_in_copy, bytes_per_array_layer) = validate_linear_texture_data(
+            &source.layout,
+            dst_texture.desc.format,
+            destination.aspect,
+            src_buffer.size,
+            CopySide::Source,
+            copy_size,
+            true,
+        )?;
 
         if dst_texture.desc.format.is_depth_stencil_format() {
             device

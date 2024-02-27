@@ -234,7 +234,9 @@ unsafe fn setup_pixel_format(dc: HDC) -> Result<(), crate::InstanceError> {
     }
 
     if format.dwFlags & PFD_SUPPORT_OPENGL == 0 || format.iPixelType != PFD_TYPE_RGBA {
-        return Err(crate::InstanceError::new(String::from("unsuitable pixel format")));
+        return Err(crate::InstanceError::new(String::from(
+            "unsuitable pixel format",
+        )));
     }
     Ok(())
 }
@@ -452,34 +454,33 @@ impl crate::Instance<super::Api> for Instance {
         let can_use_profile = extensions.contains("WGL_ARB_create_context_profile")
             && extra.CreateContextAttribsARB.is_loaded();
 
-        let context =
-            if can_use_profile {
-                let attributes = [
-                    CONTEXT_PROFILE_MASK_ARB as c_int,
-                    CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
-                    CONTEXT_FLAGS_ARB as c_int,
-                    if desc.flags.contains(InstanceFlags::DEBUG) {
-                        CONTEXT_DEBUG_BIT_ARB as c_int
-                    } else {
-                        0
-                    },
-                    0, // End of list
-                ];
-                let context = unsafe {
-                    extra.CreateContextAttribsARB(dc as *const _, ptr::null(), attributes.as_ptr())
-                };
-                if context.is_null() {
-                    return Err(crate::InstanceError::with_source(
-                        String::from("unable to create OpenGL context"),
-                        Error::last_os_error(),
-                    ));
-                }
-                WglContext {
-                    context: context as *mut _,
-                }
-            } else {
-                context
+        let context = if can_use_profile {
+            let attributes = [
+                CONTEXT_PROFILE_MASK_ARB as c_int,
+                CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                CONTEXT_FLAGS_ARB as c_int,
+                if desc.flags.contains(InstanceFlags::DEBUG) {
+                    CONTEXT_DEBUG_BIT_ARB as c_int
+                } else {
+                    0
+                },
+                0, // End of list
+            ];
+            let context = unsafe {
+                extra.CreateContextAttribsARB(dc as *const _, ptr::null(), attributes.as_ptr())
             };
+            if context.is_null() {
+                return Err(crate::InstanceError::with_source(
+                    String::from("unable to create OpenGL context"),
+                    Error::last_os_error(),
+                ));
+            }
+            WglContext {
+                context: context as *mut _,
+            }
+        } else {
+            context
+        };
 
         context.make_current(dc).map_err(|e| {
             crate::InstanceError::with_source(
@@ -537,7 +538,9 @@ impl crate::Instance<super::Api> for Instance {
         let window = if let RawWindowHandle::Win32(handle) = window_handle {
             handle
         } else {
-            return Err(crate::InstanceError::new(format!("unsupported window: {window_handle:?}")));
+            return Err(crate::InstanceError::new(format!(
+                "unsupported window: {window_handle:?}"
+            )));
         };
         Ok(Surface {
             window: window.hwnd.get() as *mut _,
@@ -609,7 +612,9 @@ impl Surface {
                 "unable to get the device context from window: {}",
                 Error::last_os_error()
             );
-            return Err(crate::SurfaceError::Other("unable to get the device context from window"));
+            return Err(crate::SurfaceError::Other(
+                "unable to get the device context from window",
+            ));
         }
         let dc = DeviceContextHandle {
             device: dc,
@@ -683,7 +688,9 @@ impl crate::Surface<super::Api> for Surface {
                 "unable to get the device context from window: {}",
                 Error::last_os_error()
             );
-            return Err(crate::SurfaceError::Other("unable to get the device context from window"));
+            return Err(crate::SurfaceError::Other(
+                "unable to get the device context from window",
+            ));
         }
         let dc = DeviceContextHandle {
             device: dc,
@@ -692,7 +699,9 @@ impl crate::Surface<super::Api> for Surface {
 
         if let Err(e) = unsafe { setup_pixel_format(dc.device) } {
             log::error!("unable to setup surface pixel format: {e}",);
-            return Err(crate::SurfaceError::Other("unable to setup surface pixel format"));
+            return Err(crate::SurfaceError::Other(
+                "unable to setup surface pixel format",
+            ));
         }
 
         let format_desc = device.shared.describe_texture_format(config.format);
@@ -736,7 +745,9 @@ impl crate::Surface<super::Api> for Surface {
         let extensions = get_extensions(&extra, dc.device);
         if !(extensions.contains("WGL_EXT_swap_control") && extra.SwapIntervalEXT.is_loaded()) {
             log::error!("WGL_EXT_swap_control is unsupported");
-            return Err(crate::SurfaceError::Other("WGL_EXT_swap_control is unsupported"));
+            return Err(crate::SurfaceError::Other(
+                "WGL_EXT_swap_control is unsupported",
+            ));
         }
 
         let vsync = match config.present_mode {

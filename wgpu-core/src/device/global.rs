@@ -152,13 +152,12 @@ impl Global {
 
         let mut to_destroy: ArrayVec<resource::Buffer<A>, 2> = ArrayVec::new();
         let error = loop {
-            let device =
-                match hub.devices.get(device_id) {
-                    Ok(device) => device,
-                    Err(_) => {
-                        break DeviceError::Invalid.into();
-                    }
-                };
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                Err(_) => {
+                    break DeviceError::Invalid.into();
+                }
+            };
             if !device.is_valid() {
                 break DeviceError::Lost.into();
             }
@@ -210,19 +209,20 @@ impl Global {
             } else {
                 // buffer needs staging area for initialization only
                 let stage_desc = wgt::BufferDescriptor {
-                    label: Some(Cow::Borrowed("(wgpu internal) initializing unmappable buffer")),
+                    label: Some(Cow::Borrowed(
+                        "(wgpu internal) initializing unmappable buffer",
+                    )),
                     size: desc.size,
                     usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
                     mapped_at_creation: false,
                 };
-                let stage =
-                    match device.create_buffer(&stage_desc, true) {
-                        Ok(stage) => stage,
-                        Err(e) => {
-                            to_destroy.push(buffer);
-                            break e;
-                        }
-                    };
+                let stage = match device.create_buffer(&stage_desc, true) {
+                    Ok(stage) => stage,
+                    Err(e) => {
+                        to_destroy.push(buffer);
+                        break e;
+                    }
+                };
 
                 let snatch_guard = device.snatchable_lock.read();
                 let stage_raw = stage.raw(&snatch_guard).unwrap();
@@ -877,32 +877,31 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.samplers.prepare(id_in);
 
-        let error =
-            loop {
-                let device = match hub.devices.get(device_id) {
-                    Ok(device) => device,
-                    Err(_) => break DeviceError::Invalid.into(),
-                };
-                if !device.is_valid() {
-                    break DeviceError::Lost.into();
-                }
-
-                #[cfg(feature = "trace")]
-                if let Some(ref mut trace) = *device.trace.lock() {
-                    trace.add(trace::Action::CreateSampler(fid.id(), desc.clone()));
-                }
-
-                let sampler = match device.create_sampler(desc) {
-                    Ok(sampler) => sampler,
-                    Err(e) => break e,
-                };
-
-                let (id, resource) = fid.assign(sampler);
-                api_log!("Device::create_sampler -> {id:?}");
-                device.trackers.lock().samplers.insert_single(resource);
-
-                return (id, None);
+        let error = loop {
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.is_valid() {
+                break DeviceError::Lost.into();
+            }
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateSampler(fid.id(), desc.clone()));
+            }
+
+            let sampler = match device.create_sampler(desc) {
+                Ok(sampler) => sampler,
+                Err(e) => break e,
+            };
+
+            let (id, resource) = fid.assign(sampler);
+            api_log!("Device::create_sampler -> {id:?}");
+            device.trackers.lock().samplers.insert_single(resource);
+
+            return (id, None);
+        };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1041,30 +1040,29 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.pipeline_layouts.prepare(id_in);
 
-        let error =
-            loop {
-                let device = match hub.devices.get(device_id) {
-                    Ok(device) => device,
-                    Err(_) => break DeviceError::Invalid.into(),
-                };
-                if !device.is_valid() {
-                    break DeviceError::Lost.into();
-                }
-
-                #[cfg(feature = "trace")]
-                if let Some(ref mut trace) = *device.trace.lock() {
-                    trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
-                }
-
-                let layout = match device.create_pipeline_layout(desc, &hub.bind_group_layouts) {
-                    Ok(layout) => layout,
-                    Err(e) => break e,
-                };
-
-                let (id, _) = fid.assign(layout);
-                api_log!("Device::create_pipeline_layout -> {id:?}");
-                return (id, None);
+        let error = loop {
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.is_valid() {
+                break DeviceError::Lost.into();
+            }
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
+            }
+
+            let layout = match device.create_pipeline_layout(desc, &hub.bind_group_layouts) {
+                Ok(layout) => layout,
+                Err(e) => break e,
+            };
+
+            let (id, _) = fid.assign(layout);
+            api_log!("Device::create_pipeline_layout -> {id:?}");
+            return (id, None);
+        };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1485,35 +1483,34 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.query_sets.prepare(id_in);
 
-        let error =
-            loop {
-                let device = match hub.devices.get(device_id) {
-                    Ok(device) => device,
-                    Err(_) => break DeviceError::Invalid.into(),
-                };
-                if !device.is_valid() {
-                    break DeviceError::Lost.into();
-                }
-
-                #[cfg(feature = "trace")]
-                if let Some(ref mut trace) = *device.trace.lock() {
-                    trace.add(trace::Action::CreateQuerySet {
-                        id: fid.id(),
-                        desc: desc.clone(),
-                    });
-                }
-
-                let query_set = match device.create_query_set(desc) {
-                    Ok(query_set) => query_set,
-                    Err(err) => break err,
-                };
-
-                let (id, resource) = fid.assign(query_set);
-                api_log!("Device::create_query_set -> {id:?}");
-                device.trackers.lock().query_sets.insert_single(resource);
-
-                return (id, None);
+        let error = loop {
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.is_valid() {
+                break DeviceError::Lost.into();
+            }
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateQuerySet {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                });
+            }
+
+            let query_set = match device.create_query_set(desc) {
+                Ok(query_set) => query_set,
+                Err(err) => break err,
+            };
+
+            let (id, resource) = fid.assign(query_set);
+            api_log!("Device::create_query_set -> {id:?}");
+            device.trackers.lock().query_sets.insert_single(resource);
+
+            return (id, None);
+        };
 
         let id = fid.assign_error("");
         (id, Some(error))
@@ -2367,108 +2364,105 @@ impl Global {
             HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
         };
 
-        let buffer =
-            {
-                let buffer = hub.buffers.get(buffer_id);
+        let buffer = {
+            let buffer = hub.buffers.get(buffer_id);
 
-                let buffer =
-                    match buffer {
-                        Ok(b) => b,
-                        Err(_) => {
-                            return Err((op, BufferAccessError::Invalid));
-                        }
-                    };
-                {
-                    let snatch_guard = buffer.device.snatchable_lock.read();
-                    if buffer.is_destroyed(&snatch_guard) {
-                        return Err((op, BufferAccessError::Destroyed));
-                    }
+            let buffer = match buffer {
+                Ok(b) => b,
+                Err(_) => {
+                    return Err((op, BufferAccessError::Invalid));
                 }
-
-                let range_size = if let Some(size) = size {
-                    size
-                } else if offset > buffer.size {
-                    0
-                } else {
-                    buffer.size - offset
-                };
-
-                if offset % wgt::MAP_ALIGNMENT != 0 {
-                    return Err((op, BufferAccessError::UnalignedOffset { offset }));
-                }
-                if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-                    return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
-                }
-
-                let range = offset..(offset + range_size);
-
-                if range.start % wgt::MAP_ALIGNMENT != 0
-                    || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
-                {
-                    return Err((op, BufferAccessError::UnalignedRange));
-                }
-
-                let device = &buffer.device;
-                if !device.is_valid() {
-                    return Err((op, DeviceError::Lost.into()));
-                }
-
-                if let Err(e) = check_buffer_usage(buffer.info.id(), buffer.usage, pub_usage) {
-                    return Err((op, e.into()));
-                }
-
-                if range.start > range.end {
-                    return Err((
-                        op,
-                        BufferAccessError::NegativeRange {
-                            start: range.start,
-                            end: range.end,
-                        },
-                    ));
-                }
-                if range.end > buffer.size {
-                    return Err((
-                        op,
-                        BufferAccessError::OutOfBoundsOverrun {
-                            index: range.end,
-                            max: buffer.size,
-                        },
-                    ));
-                }
-
-                {
-                    let map_state = &mut *buffer.map_state.lock();
-                    *map_state = match *map_state {
-                        resource::BufferMapState::Init { .. }
-                        | resource::BufferMapState::Active { .. } => {
-                            return Err((op, BufferAccessError::AlreadyMapped));
-                        }
-                        resource::BufferMapState::Waiting(_) => {
-                            return Err((op, BufferAccessError::MapAlreadyPending));
-                        }
-                        resource::BufferMapState::Idle => {
-                            resource::BufferMapState::Waiting(resource::BufferPendingMapping {
-                                range,
-                                op,
-                                _parent_buffer: buffer.clone(),
-                            })
-                        }
-                    };
-                }
-
-                let snatch_guard = buffer.device.snatchable_lock.read();
-
-                {
-                    let mut trackers = buffer.device.as_ref().trackers.lock();
-                    trackers.buffers.set_single(&buffer, internal_use);
-                    //TODO: Check if draining ALL buffers is correct!
-                    let _ = trackers.buffers.drain_transitions(&snatch_guard);
-                }
-
-                drop(snatch_guard);
-
-                buffer
             };
+            {
+                let snatch_guard = buffer.device.snatchable_lock.read();
+                if buffer.is_destroyed(&snatch_guard) {
+                    return Err((op, BufferAccessError::Destroyed));
+                }
+            }
+
+            let range_size = if let Some(size) = size {
+                size
+            } else if offset > buffer.size {
+                0
+            } else {
+                buffer.size - offset
+            };
+
+            if offset % wgt::MAP_ALIGNMENT != 0 {
+                return Err((op, BufferAccessError::UnalignedOffset { offset }));
+            }
+            if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+                return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
+            }
+
+            let range = offset..(offset + range_size);
+
+            if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
+            {
+                return Err((op, BufferAccessError::UnalignedRange));
+            }
+
+            let device = &buffer.device;
+            if !device.is_valid() {
+                return Err((op, DeviceError::Lost.into()));
+            }
+
+            if let Err(e) = check_buffer_usage(buffer.info.id(), buffer.usage, pub_usage) {
+                return Err((op, e.into()));
+            }
+
+            if range.start > range.end {
+                return Err((
+                    op,
+                    BufferAccessError::NegativeRange {
+                        start: range.start,
+                        end: range.end,
+                    },
+                ));
+            }
+            if range.end > buffer.size {
+                return Err((
+                    op,
+                    BufferAccessError::OutOfBoundsOverrun {
+                        index: range.end,
+                        max: buffer.size,
+                    },
+                ));
+            }
+
+            {
+                let map_state = &mut *buffer.map_state.lock();
+                *map_state = match *map_state {
+                    resource::BufferMapState::Init { .. }
+                    | resource::BufferMapState::Active { .. } => {
+                        return Err((op, BufferAccessError::AlreadyMapped));
+                    }
+                    resource::BufferMapState::Waiting(_) => {
+                        return Err((op, BufferAccessError::MapAlreadyPending));
+                    }
+                    resource::BufferMapState::Idle => {
+                        resource::BufferMapState::Waiting(resource::BufferPendingMapping {
+                            range,
+                            op,
+                            _parent_buffer: buffer.clone(),
+                        })
+                    }
+                };
+            }
+
+            let snatch_guard = buffer.device.snatchable_lock.read();
+
+            {
+                let mut trackers = buffer.device.as_ref().trackers.lock();
+                trackers.buffers.set_single(&buffer, internal_use);
+                //TODO: Check if draining ALL buffers is correct!
+                let _ = trackers.buffers.drain_transitions(&snatch_guard);
+            }
+
+            drop(snatch_guard);
+
+            buffer
+        };
 
         buffer.device.lock_life().map(&buffer);
 

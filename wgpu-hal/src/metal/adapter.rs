@@ -79,14 +79,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // Affected formats documented at:
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
-        let (read_write_tier1_if, read_write_tier2_if) =
-            match pc.read_write_texture_tier {
-                metal::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
-                metal::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
-                metal::MTLReadWriteTextureTier::Tier2 => {
-                    (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
-                }
-            };
+        let (read_write_tier1_if, read_write_tier2_if) = match pc.read_write_texture_tier {
+            metal::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
+            metal::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
+            metal::MTLReadWriteTextureTier::Tier2 => {
+                (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
+            }
+        };
         let msaa_count = pc.sample_count_mask;
 
         let msaa_resolve_desktop_if = if pc.msaa_desktop {
@@ -94,12 +93,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         } else {
             Tfc::empty()
         };
-        let msaa_resolve_apple3x_if =
-            if pc.msaa_desktop | pc.msaa_apple3 {
-                Tfc::MULTISAMPLE_RESOLVE
-            } else {
-                Tfc::empty()
-            };
+        let msaa_resolve_apple3x_if = if pc.msaa_desktop | pc.msaa_apple3 {
+            Tfc::MULTISAMPLE_RESOLVE
+        } else {
+            Tfc::empty()
+        };
         let is_not_apple1x = super::PrivateCapabilities::supports_any(
             self.shared.device.lock().as_ref(),
             &[

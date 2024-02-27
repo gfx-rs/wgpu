@@ -100,17 +100,16 @@ impl<A: hal::Api> Example<A> {
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let surface =
-            {
-                let raw_window_handle = window.window_handle()?.as_raw();
-                let raw_display_handle = window.display_handle()?.as_raw();
+        let surface = {
+            let raw_window_handle = window.window_handle()?.as_raw();
+            let raw_display_handle = window.display_handle()?.as_raw();
 
-                unsafe {
-                    instance
-                        .create_surface(raw_display_handle, raw_window_handle)
-                        .unwrap()
-                }
-            };
+            unsafe {
+                instance
+                    .create_surface(raw_display_handle, raw_window_handle)
+                    .unwrap()
+            }
+        };
 
         let (adapter, capabilities) = unsafe {
             let mut adapters = instance.enumerate_adapters();
@@ -246,32 +245,31 @@ impl<A: hal::Api> Example<A> {
                 .unwrap()
         };
 
-        let pipeline_desc =
-            hal::RenderPipelineDescriptor {
-                label: None,
-                layout: &pipeline_layout,
-                vertex_stage: hal::ProgrammableStage {
-                    module: &shader,
-                    entry_point: "vs_main",
-                },
-                vertex_buffers: &[],
-                fragment_stage: Some(hal::ProgrammableStage {
-                    module: &shader,
-                    entry_point: "fs_main",
-                }),
-                primitive: wgt::PrimitiveState {
-                    topology: wgt::PrimitiveTopology::TriangleStrip,
-                    ..wgt::PrimitiveState::default()
-                },
-                depth_stencil: None,
-                multisample: wgt::MultisampleState::default(),
-                color_targets: &[Some(wgt::ColorTargetState {
-                    format: surface_config.format,
-                    blend: Some(wgt::BlendState::ALPHA_BLENDING),
-                    write_mask: wgt::ColorWrites::default(),
-                })],
-                multiview: None,
-            };
+        let pipeline_desc = hal::RenderPipelineDescriptor {
+            label: None,
+            layout: &pipeline_layout,
+            vertex_stage: hal::ProgrammableStage {
+                module: &shader,
+                entry_point: "vs_main",
+            },
+            vertex_buffers: &[],
+            fragment_stage: Some(hal::ProgrammableStage {
+                module: &shader,
+                entry_point: "fs_main",
+            }),
+            primitive: wgt::PrimitiveState {
+                topology: wgt::PrimitiveTopology::TriangleStrip,
+                ..wgt::PrimitiveState::default()
+            },
+            depth_stencil: None,
+            multisample: wgt::MultisampleState::default(),
+            color_targets: &[Some(wgt::ColorTargetState {
+                format: surface_config.format,
+                blend: Some(wgt::BlendState::ALPHA_BLENDING),
+                write_mask: wgt::ColorWrites::default(),
+            })],
+            multiview: None,
+        };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
         let texture_data = [0xFFu8; 4];
@@ -373,18 +371,17 @@ impl<A: hal::Api> Example<A> {
         };
         let sampler = unsafe { device.create_sampler(&sampler_desc).unwrap() };
 
-        let globals =
-            Globals {
-                // cgmath::ortho() projection
-                mvp: [
-                    [2.0 / window_size.0 as f32, 0.0, 0.0, 0.0],
-                    [0.0, 2.0 / window_size.1 as f32, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [-1.0, -1.0, 0.0, 1.0],
-                ],
-                size: [BUNNY_SIZE; 2],
-                pad: [0.0; 2],
-            };
+        let globals = Globals {
+            // cgmath::ortho() projection
+            mvp: [
+                [2.0 / window_size.0 as f32, 0.0, 0.0, 0.0],
+                [0.0, 2.0 / window_size.1 as f32, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [-1.0, -1.0, 0.0, 1.0],
+            ],
+            size: [BUNNY_SIZE; 2],
+            pad: [0.0; 2],
+        };
 
         let global_buffer_desc = hal::BufferDescriptor {
             label: Some("global"),
@@ -438,32 +435,31 @@ impl<A: hal::Api> Example<A> {
                 view: &texture_view,
                 usage: hal::TextureUses::RESOURCE,
             };
-            let global_group_desc =
-                hal::BindGroupDescriptor {
-                    label: Some("global"),
-                    layout: &global_group_layout,
-                    buffers: &[global_buffer_binding],
-                    samplers: &[&sampler],
-                    textures: &[texture_binding],
-                    acceleration_structures: &[],
-                    entries: &[
-                        hal::BindGroupEntry {
-                            binding: 0,
-                            resource_index: 0,
-                            count: 1,
-                        },
-                        hal::BindGroupEntry {
-                            binding: 1,
-                            resource_index: 0,
-                            count: 1,
-                        },
-                        hal::BindGroupEntry {
-                            binding: 2,
-                            resource_index: 0,
-                            count: 1,
-                        },
-                    ],
-                };
+            let global_group_desc = hal::BindGroupDescriptor {
+                label: Some("global"),
+                layout: &global_group_layout,
+                buffers: &[global_buffer_binding],
+                samplers: &[&sampler],
+                textures: &[texture_binding],
+                acceleration_structures: &[],
+                entries: &[
+                    hal::BindGroupEntry {
+                        binding: 0,
+                        resource_index: 0,
+                        count: 1,
+                    },
+                    hal::BindGroupEntry {
+                        binding: 1,
+                        resource_index: 0,
+                        count: 1,
+                    },
+                    hal::BindGroupEntry {
+                        binding: 2,
+                        resource_index: 0,
+                        count: 1,
+                    },
+                ],
+            };
             unsafe { device.create_bind_group(&global_group_desc).unwrap() }
         };
 
@@ -728,12 +724,11 @@ impl<A: hal::Api> Example<A> {
 
         unsafe {
             let cmd_buf = ctx.encoder.end_encoding().unwrap();
-            let fence_param =
-                if do_fence {
-                    Some((&mut ctx.fence, ctx.fence_value))
-                } else {
-                    None
-                };
+            let fence_param = if do_fence {
+                Some((&mut ctx.fence, ctx.fence_value))
+            } else {
+                None
+            };
             self.queue
                 .submit(&[&cmd_buf], &[&surface_tex], fence_param)
                 .unwrap();
@@ -746,11 +741,10 @@ impl<A: hal::Api> Example<A> {
             log::debug!("Context switch from {}", self.context_index);
             let old_fence_value = ctx.fence_value;
             if self.contexts.len() == 1 {
-                let hal_desc =
-                    hal::CommandEncoderDescriptor {
-                        label: None,
-                        queue: &self.queue,
-                    };
+                let hal_desc = hal::CommandEncoderDescriptor {
+                    label: None,
+                    queue: &self.queue,
+                };
                 self.contexts.push(unsafe {
                     ExecutionContext {
                         encoder: self.device.create_command_encoder(&hal_desc).unwrap(),
@@ -799,11 +793,10 @@ fn main() {
     env_logger::init();
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
-    let window =
-        winit::window::WindowBuilder::new()
-            .with_title("hal-bunnymark")
-            .build(&event_loop)
-            .unwrap();
+    let window = winit::window::WindowBuilder::new()
+        .with_title("hal-bunnymark")
+        .build(&event_loop)
+        .unwrap();
 
     let example_result = Example::<Api>::init(&window);
     let mut example = Some(example_result.expect("Selected backend is not supported"));

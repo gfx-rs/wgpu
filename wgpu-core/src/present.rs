@@ -160,7 +160,9 @@ impl Global {
         let suf = A::get_surface(surface.as_ref());
         let (texture_id, status) = match unsafe {
             suf.unwrap()
-                .acquire_texture(Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)))
+                .acquire_texture(Some(std::time::Duration::from_millis(
+                    FRAME_TIMEOUT_MS as u64,
+                )))
         } {
             Ok(Some(ast)) => {
                 let texture_desc = wgt::TextureDescriptor {

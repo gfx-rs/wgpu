@@ -107,9 +107,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             .texture
                             .create_view(&wgpu::TextureViewDescriptor::default());
                         let mut encoder =
-                            device.create_command_encoder(
-                                &wgpu::CommandEncoderDescriptor { label: None }
-                            );
+                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                label: None,
+                            });
                         {
                             let mut rpass =
                                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

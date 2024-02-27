@@ -80,9 +80,9 @@ impl ComplexTextureState {
     /// which means the trakcer knows nothing about the state.
     fn new(mip_level_count: u32, array_layer_count: u32) -> Self {
         Self {
-            mips: iter::repeat_with(
-                || RangedStates::from_range(0..array_layer_count, TextureUses::UNKNOWN)
-            )
+            mips: iter::repeat_with(|| {
+                RangedStates::from_range(0..array_layer_count, TextureUses::UNKNOWN)
+            })
             .take(mip_level_count as usize)
             .collect(),
         }
@@ -834,7 +834,9 @@ impl<'a> TextureStateProvider<'a> {
                 if new_state == TextureUses::COMPLEX {
                     let new_complex = unsafe { set.complex.get(&index).unwrap_unchecked() };
 
-                    SingleOrManyStates::Many(EitherIter::Right(new_complex.to_selector_state_iter()))
+                    SingleOrManyStates::Many(EitherIter::Right(
+                        new_complex.to_selector_state_iter(),
+                    ))
                 } else {
                     SingleOrManyStates::Single(new_state)
                 }
@@ -1056,9 +1058,9 @@ unsafe fn merge<A: HalApi>(
 ) -> Result<(), UsageConflict> {
     let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
     let current_state = if *current_simple == TextureUses::COMPLEX {
-        SingleOrManyStates::Many(
-            unsafe { current_state_set.complex.get_mut(&index).unwrap_unchecked() }
-        )
+        SingleOrManyStates::Many(unsafe {
+            current_state_set.complex.get_mut(&index).unwrap_unchecked()
+        })
     } else {
         SingleOrManyStates::Single(current_simple)
     };
@@ -1212,7 +1214,9 @@ unsafe fn barrier(
 ) {
     let current_simple = unsafe { *current_state_set.simple.get_unchecked(index) };
     let current_state = if current_simple == TextureUses::COMPLEX {
-        SingleOrManyStates::Many(unsafe { current_state_set.complex.get(&index).unwrap_unchecked() })
+        SingleOrManyStates::Many(unsafe {
+            current_state_set.complex.get(&index).unwrap_unchecked()
+        })
     } else {
         SingleOrManyStates::Single(current_simple)
     };
@@ -1342,9 +1346,9 @@ unsafe fn update(
 
     let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
     let current_state = if *current_simple == TextureUses::COMPLEX {
-        SingleOrManyStates::Many(
-            unsafe { current_state_set.complex.get_mut(&index).unwrap_unchecked() }
-        )
+        SingleOrManyStates::Many(unsafe {
+            current_state_set.complex.get_mut(&index).unwrap_unchecked()
+        })
     } else {
         SingleOrManyStates::Single(current_simple)
     };

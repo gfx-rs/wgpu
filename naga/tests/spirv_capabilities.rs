@@ -10,13 +10,12 @@ fn capabilities_used(source: &str) -> naga::FastIndexSet<Ca> {
     use naga::back::spv;
     use naga::valid;
 
-    let module =
-        naga::front::wgsl::parse_str(source).unwrap_or_else(|e| {
-            panic!(
-                "expected WGSL to parse successfully:\n{}",
-                e.emit_to_string(source)
-            );
-        });
+    let module = naga::front::wgsl::parse_str(source).unwrap_or_else(|e| {
+        panic!(
+            "expected WGSL to parse successfully:\n{}",
+            e.emit_to_string(source)
+        );
+    });
 
     let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
         .validate(&module)

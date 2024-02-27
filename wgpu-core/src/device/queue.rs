@@ -422,25 +422,22 @@ impl Global {
         let stage_fid = hub.staging_buffers.request();
         let staging_buffer = stage_fid.init(staging_buffer);
 
-        if let Err(flush_error) =
-            unsafe {
-                profiling::scope!("copy");
-                ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
-                staging_buffer.flush(device.raw())
-            }
-        {
+        if let Err(flush_error) = unsafe {
+            profiling::scope!("copy");
+            ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
+            staging_buffer.flush(device.raw())
+        } {
             pending_writes.consume(staging_buffer);
             return Err(flush_error.into());
         }
 
-        let result =
-            self.queue_write_staging_buffer_impl(
-                device,
-                pending_writes,
-                &staging_buffer,
-                buffer_id,
-                buffer_offset,
-            );
+        let result = self.queue_write_staging_buffer_impl(
+            device,
+            pending_writes,
+            &staging_buffer,
+            buffer_id,
+            buffer_offset,
+        );
 
         pending_writes.consume(staging_buffer);
         result
@@ -491,7 +488,9 @@ impl Global {
 
         let staging_buffer = hub.staging_buffers.unregister(staging_buffer_id);
         if staging_buffer.is_none() {
-            return Err(QueueWriteError::Transfer(TransferError::InvalidBuffer(buffer_id)));
+            return Err(QueueWriteError::Transfer(TransferError::InvalidBuffer(
+                buffer_id,
+            )));
         }
         let staging_buffer = staging_buffer.unwrap();
         let mut pending_writes = device.pending_writes.lock();
@@ -506,14 +505,13 @@ impl Global {
             return Err(flush_error.into());
         }
 
-        let result =
-            self.queue_write_staging_buffer_impl(
-                device,
-                pending_writes,
-                &staging_buffer,
-                buffer_id,
-                buffer_offset,
-            );
+        let result = self.queue_write_staging_buffer_impl(
+            device,
+            pending_writes,
+            &staging_buffer,
+            buffer_id,
+            buffer_offset,
+        );
 
         pending_writes.consume(staging_buffer);
         result
@@ -733,13 +731,12 @@ impl Global {
         let width_blocks = size.width / block_width;
         let height_blocks = size.height / block_height;
 
-        let block_rows_per_image =
-            data_layout.rows_per_image.unwrap_or(
-                // doesn't really matter because we need this only if we copy
-                // more than one layer, and then we validate for this being not
-                // None
-                height_blocks,
-            );
+        let block_rows_per_image = data_layout.rows_per_image.unwrap_or(
+            // doesn't really matter because we need this only if we copy
+            // more than one layer, and then we validate for this being not
+            // None
+            height_blocks,
+        );
 
         let block_size = dst
             .desc

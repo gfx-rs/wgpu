@@ -92,9 +92,10 @@ impl super::Device {
             inline_samplers: Default::default(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: false,
-            per_entry_point_map: naga::back::msl::EntryPointResourceMap::from(
-                [(stage.entry_point.to_string(), ep_resources.clone())]
-            ),
+            per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
+                stage.entry_point.to_string(),
+                ep_resources.clone(),
+            )]),
             bounds_check_policies: naga::proc::BoundsCheckPolicies {
                 index: bounds_check_policy,
                 buffer: bounds_check_policy,
@@ -815,31 +816,30 @@ impl crate::Device<super::Api> for super::Device {
                 conv::map_primitive_topology(desc.primitive.topology);
 
             // Vertex shader
-            let (vs_lib, vs_info) =
-                {
-                    let vs = self.load_shader(
-                        &desc.vertex_stage,
-                        desc.layout,
-                        primitive_class,
-                        naga::ShaderStage::Vertex,
-                    )?;
+            let (vs_lib, vs_info) = {
+                let vs = self.load_shader(
+                    &desc.vertex_stage,
+                    desc.layout,
+                    primitive_class,
+                    naga::ShaderStage::Vertex,
+                )?;
 
-                    descriptor.set_vertex_function(Some(&vs.function));
-                    if self.shared.private_caps.supports_mutability {
-                        Self::set_buffers_mutability(
-                            descriptor.vertex_buffers().unwrap(),
-                            vs.immutable_buffer_mask,
-                        );
-                    }
+                descriptor.set_vertex_function(Some(&vs.function));
+                if self.shared.private_caps.supports_mutability {
+                    Self::set_buffers_mutability(
+                        descriptor.vertex_buffers().unwrap(),
+                        vs.immutable_buffer_mask,
+                    );
+                }
 
-                    let info = super::PipelineStageInfo {
-                        push_constants: desc.layout.push_constants_infos.vs,
-                        sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
-                        sized_bindings: vs.sized_bindings,
-                    };
-
-                    (vs.library, info)
+                let info = super::PipelineStageInfo {
+                    push_constants: desc.layout.push_constants_infos.vs,
+                    sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
+                    sized_bindings: vs.sized_bindings,
                 };
+
+                (vs.library, info)
+            };
 
             // Fragment shader
             let (fs_lib, fs_info) = match desc.fragment_stage {
@@ -1061,17 +1061,17 @@ impl crate::Device<super::Api> for super::Device {
                 descriptor.set_label(name);
             }
 
-            let raw =
-                self.shared
-                    .device
-                    .lock()
-                    .new_compute_pipeline_state(&descriptor)
-                    .map_err(|e| {
-                        crate::PipelineError::Linkage(
-                            wgt::ShaderStages::COMPUTE,
-                            format!("new_compute_pipeline_state: {:?}", e),
-                        )
-                    })?;
+            let raw = self
+                .shared
+                .device
+                .lock()
+                .new_compute_pipeline_state(&descriptor)
+                .map_err(|e| {
+                    crate::PipelineError::Linkage(
+                        wgt::ShaderStages::COMPUTE,
+                        format!("new_compute_pipeline_state: {:?}", e),
+                    )
+                })?;
 
             Ok(super::ComputePipeline {
                 raw,
@@ -1128,15 +1128,14 @@ impl crate::Device<super::Api> for super::Device {
                         };
                     csb_desc.set_counter_set(timestamp_counter);
 
-                    let counter_sample_buffer = match device
-                        .new_counter_sample_buffer_with_descriptor(&csb_desc)
-                    {
-                        Ok(buffer) => buffer,
-                        Err(err) => {
-                            log::error!("Failed to create counter sample buffer: {:?}", err);
-                            return Err(crate::DeviceError::ResourceCreationFailed);
-                        }
-                    };
+                    let counter_sample_buffer =
+                        match device.new_counter_sample_buffer_with_descriptor(&csb_desc) {
+                            Ok(buffer) => buffer,
+                            Err(err) => {
+                                log::error!("Failed to create counter sample buffer: {:?}", err);
+                                return Err(crate::DeviceError::ResourceCreationFailed);
+                            }
+                        };
 
                     Ok(super::QuerySet {
                         raw_buffer: destination_buffer,

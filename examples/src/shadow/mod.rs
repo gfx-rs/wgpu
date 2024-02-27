@@ -256,33 +256,32 @@ impl crate::framework::Example for Example {
             scale: f32,
             rotation: f32,
         }
-        let cube_descs =
-            [
-                CubeDesc {
-                    offset: glam::Vec3::new(-2.0, -2.0, 2.0),
-                    angle: 10.0,
-                    scale: 0.7,
-                    rotation: 0.1,
-                },
-                CubeDesc {
-                    offset: glam::Vec3::new(2.0, -2.0, 2.0),
-                    angle: 50.0,
-                    scale: 1.3,
-                    rotation: 0.2,
-                },
-                CubeDesc {
-                    offset: glam::Vec3::new(-2.0, 2.0, 2.0),
-                    angle: 140.0,
-                    scale: 1.1,
-                    rotation: 0.3,
-                },
-                CubeDesc {
-                    offset: glam::Vec3::new(2.0, 2.0, 2.0),
-                    angle: 210.0,
-                    scale: 0.9,
-                    rotation: 0.4,
-                },
-            ];
+        let cube_descs = [
+            CubeDesc {
+                offset: glam::Vec3::new(-2.0, -2.0, 2.0),
+                angle: 10.0,
+                scale: 0.7,
+                rotation: 0.1,
+            },
+            CubeDesc {
+                offset: glam::Vec3::new(2.0, -2.0, 2.0),
+                angle: 50.0,
+                scale: 1.3,
+                rotation: 0.2,
+            },
+            CubeDesc {
+                offset: glam::Vec3::new(-2.0, 2.0, 2.0),
+                angle: 140.0,
+                scale: 1.1,
+                rotation: 0.3,
+            },
+            CubeDesc {
+                offset: glam::Vec3::new(2.0, 2.0, 2.0),
+                angle: 210.0,
+                scale: 0.9,
+                rotation: 0.4,
+            },
+        ];
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let num_entities = 1 + cube_descs.len() as wgpu::BufferAddress;
@@ -443,12 +442,11 @@ impl crate::framework::Example for Example {
         });
 
         let vertex_attr = wgpu::vertex_attr_array![0 => Sint8x4, 1 => Sint8x4];
-        let vb_desc =
-            wgpu::VertexBufferLayout {
-                array_stride: vertex_size as wgpu::BufferAddress,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &vertex_attr,
-            };
+        let vb_desc = wgpu::VertexBufferLayout {
+            array_stride: vertex_size as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &vertex_attr,
+        };
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -478,24 +476,22 @@ impl crate::framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-            let uniform_buf =
-                device.create_buffer(&wgpu::BufferDescriptor {
-                    label: None,
-                    size: uniform_size,
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
+            let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: uniform_size,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
 
             // Create bind group
-            let bind_group =
-                device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_buf.as_entire_binding(),
-                    }],
-                    label: None,
-                });
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buf.as_entire_binding(),
+                }],
+                label: None,
+            });
 
             // Create the render pipeline
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -715,16 +711,15 @@ impl crate::framework::Example for Example {
                     glam::Mat4::from_rotation_x(entity.rotation_speed * consts::PI / 180.);
                 entity.mx_world *= rotation;
             }
-            let data =
-                EntityUniforms {
-                    model: entity.mx_world.to_cols_array_2d(),
-                    color: [
-                        entity.color.r as f32,
-                        entity.color.g as f32,
-                        entity.color.b as f32,
-                        entity.color.a as f32,
-                    ],
-                };
+            let data = EntityUniforms {
+                model: entity.mx_world.to_cols_array_2d(),
+                color: [
+                    entity.color.r as f32,
+                    entity.color.g as f32,
+                    entity.color.b as f32,
+                    entity.color.a as f32,
+                ],
+            };
             queue.write_buffer(
                 &self.entity_uniform_buf,
                 entity.uniform_offset as wgpu::BufferAddress,

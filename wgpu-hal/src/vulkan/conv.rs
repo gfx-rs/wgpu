@@ -644,12 +644,11 @@ pub(super) fn map_subresource_range_combined_aspect(
 pub fn map_subresource_layers(
     base: &crate::TextureCopyBase,
 ) -> (vk::ImageSubresourceLayers, vk::Offset3D) {
-    let offset =
-        vk::Offset3D {
-            x: base.origin.x as i32,
-            y: base.origin.y as i32,
-            z: base.origin.z as i32,
-        };
+    let offset = vk::Offset3D {
+        x: base.origin.x as i32,
+        y: base.origin.y as i32,
+        z: base.origin.z as i32,
+    };
     let subresource = vk::ImageSubresourceLayers {
         aspect_mask: map_aspects(base.aspect),
         mip_level: base.mip_level,

@@ -919,9 +919,9 @@ impl ContextWebGpu {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
                 // A thrown exception indicates misuse of the canvas state.
                 return Err(crate::CreateSurfaceError {
-                    inner: crate::CreateSurfaceErrorKind::Web(
-                        format!("canvas.getContext() threw exception {js_error:?}",)
-                    ),
+                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                        "canvas.getContext() threw exception {js_error:?}",
+                    )),
                 });
             }
         };
@@ -1413,83 +1413,79 @@ impl crate::context::Context for ContextWebGpu {
         desc: crate::ShaderModuleDescriptor<'_>,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
-        let mut descriptor: web_sys::GpuShaderModuleDescriptor =
-            match desc.source {
-                #[cfg(feature = "spirv")]
-                crate::ShaderSource::SpirV(ref spv) => {
-                    use naga::{back, front, valid};
+        let mut descriptor: web_sys::GpuShaderModuleDescriptor = match desc.source {
+            #[cfg(feature = "spirv")]
+            crate::ShaderSource::SpirV(ref spv) => {
+                use naga::{back, front, valid};
 
-                    let options = naga::front::spv::Options {
-                        adjust_coordinate_space: false,
-                        strict_capabilities: true,
-                        block_ctx_dump_prefix: None,
-                    };
-                    let spv_parser = front::spv::Frontend::new(spv.iter().cloned(), &options);
-                    let spv_module = spv_parser.parse().unwrap();
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: false,
+                    strict_capabilities: true,
+                    block_ctx_dump_prefix: None,
+                };
+                let spv_parser = front::spv::Frontend::new(spv.iter().cloned(), &options);
+                let spv_module = spv_parser.parse().unwrap();
 
-                    let mut validator = valid::Validator::new(
-                        valid::ValidationFlags::all(),
-                        valid::Capabilities::all(),
-                    );
-                    let spv_module_info = validator.validate(&spv_module).unwrap();
+                let mut validator = valid::Validator::new(
+                    valid::ValidationFlags::all(),
+                    valid::Capabilities::all(),
+                );
+                let spv_module_info = validator.validate(&spv_module).unwrap();
 
-                    let writer_flags = naga::back::wgsl::WriterFlags::empty();
-                    let wgsl_text =
-                        back::wgsl::write_string(&spv_module, &spv_module_info, writer_flags)
-                            .unwrap();
-                    web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
-                }
-                #[cfg(feature = "glsl")]
-                crate::ShaderSource::Glsl {
-                    ref shader,
+                let writer_flags = naga::back::wgsl::WriterFlags::empty();
+                let wgsl_text =
+                    back::wgsl::write_string(&spv_module, &spv_module_info, writer_flags).unwrap();
+                web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            }
+            #[cfg(feature = "glsl")]
+            crate::ShaderSource::Glsl {
+                ref shader,
+                stage,
+                ref defines,
+            } => {
+                use naga::{back, front, valid};
+
+                // Parse the given shader code and store its representation.
+                let options = front::glsl::Options {
                     stage,
-                    ref defines,
-                } => {
-                    use naga::{back, front, valid};
+                    defines: defines.clone(),
+                };
+                let mut parser = front::glsl::Frontend::default();
+                let glsl_module = parser.parse(&options, shader).unwrap();
 
-                    // Parse the given shader code and store its representation.
-                    let options = front::glsl::Options {
-                        stage,
-                        defines: defines.clone(),
-                    };
-                    let mut parser = front::glsl::Frontend::default();
-                    let glsl_module = parser.parse(&options, shader).unwrap();
+                let mut validator = valid::Validator::new(
+                    valid::ValidationFlags::all(),
+                    valid::Capabilities::all(),
+                );
+                let glsl_module_info = validator.validate(&glsl_module).unwrap();
 
-                    let mut validator = valid::Validator::new(
-                        valid::ValidationFlags::all(),
-                        valid::Capabilities::all(),
-                    );
-                    let glsl_module_info = validator.validate(&glsl_module).unwrap();
+                let writer_flags = naga::back::wgsl::WriterFlags::empty();
+                let wgsl_text =
+                    back::wgsl::write_string(&glsl_module, &glsl_module_info, writer_flags)
+                        .unwrap();
+                web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            }
+            #[cfg(feature = "wgsl")]
+            crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
+            #[cfg(feature = "naga-ir")]
+            crate::ShaderSource::Naga(module) => {
+                use naga::{back, valid};
 
-                    let writer_flags = naga::back::wgsl::WriterFlags::empty();
-                    let wgsl_text =
-                        back::wgsl::write_string(&glsl_module, &glsl_module_info, writer_flags)
-                            .unwrap();
-                    web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
-                }
-                #[cfg(feature = "wgsl")]
-                crate::ShaderSource::Wgsl(ref code) => {
-                    web_sys::GpuShaderModuleDescriptor::new(code)
-                }
-                #[cfg(feature = "naga-ir")]
-                crate::ShaderSource::Naga(module) => {
-                    use naga::{back, valid};
+                let mut validator = valid::Validator::new(
+                    valid::ValidationFlags::all(),
+                    valid::Capabilities::all(),
+                );
+                let module_info = validator.validate(&module).unwrap();
 
-                    let mut validator = valid::Validator::new(
-                        valid::ValidationFlags::all(),
-                        valid::Capabilities::all(),
-                    );
-                    let module_info = validator.validate(&module).unwrap();
-
-                    let writer_flags = naga::back::wgsl::WriterFlags::empty();
-                    let wgsl_text =
-                        back::wgsl::write_string(&module, &module_info, writer_flags).unwrap();
-                    web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
-                }
-                crate::ShaderSource::Dummy(_) => {
-                    panic!("found `ShaderSource::Dummy`")
-                }
-            };
+                let writer_flags = naga::back::wgsl::WriterFlags::empty();
+                let wgsl_text =
+                    back::wgsl::write_string(&module, &module_info, writer_flags).unwrap();
+                web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            }
+            crate::ShaderSource::Dummy(_) => {
+                panic!("found `ShaderSource::Dummy`")
+            }
+        };
         if let Some(label) = desc.label {
             descriptor.label(label);
         }
@@ -2621,7 +2617,9 @@ impl crate::context::Context for ContextWebGpu {
         _queue_data: &Self::QueueData,
         size: wgt::BufferSize,
     ) -> Option<Box<dyn QueueWriteBuffer>> {
-        Some(Box::new(WebQueueWriteBuffer(vec![0; size.get() as usize].into_boxed_slice())))
+        Some(Box::new(WebQueueWriteBuffer(
+            vec![0; size.get() as usize].into_boxed_slice(),
+        )))
     }
 
     fn queue_write_staging_buffer(

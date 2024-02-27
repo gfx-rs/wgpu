@@ -1826,9 +1826,9 @@ impl Instance {
     #[cfg(wgpu_core)]
     pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
-            context: Arc::new(
-                unsafe { crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance) }
-            ),
+            context: Arc::new(unsafe {
+                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance)
+            }),
         }
     }
 
@@ -1863,9 +1863,9 @@ impl Instance {
     #[cfg(wgpu_core)]
     pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
         Self {
-            context: Arc::new(
-                unsafe { crate::backend::ContextWgpuCore::from_core_instance(core_instance) }
-            ),
+            context: Arc::new(unsafe {
+                crate::backend::ContextWgpuCore::from_core_instance(core_instance)
+            }),
         }
     }
 
@@ -1925,15 +1925,14 @@ impl Instance {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
         let context = Arc::clone(&self.context);
-        let id =
-            unsafe {
-                context
-                    .as_any()
-                    .downcast_ref::<crate::backend::ContextWgpuCore>()
-                    .unwrap()
-                    .create_adapter_from_hal(hal_adapter)
-                    .into()
-            };
+        let id = unsafe {
+            context
+                .as_any()
+                .downcast_ref::<crate::backend::ContextWgpuCore>()
+                .unwrap()
+                .create_adapter_from_hal(hal_adapter)
+                .into()
+        };
         Adapter {
             context,
             id,
@@ -2092,14 +2091,13 @@ impl Adapter {
         trace_path: Option<&std::path::Path>,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let context = Arc::clone(&self.context);
-        let device =
-            DynContext::adapter_request_device(
-                &*self.context,
-                &self.id,
-                self.data.as_ref(),
-                desc,
-                trace_path,
-            );
+        let device = DynContext::adapter_request_device(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            desc,
+            trace_path,
+        );
         async move {
             device.await.map(
                 |DeviceRequest {
@@ -3047,13 +3045,12 @@ impl<'a> BufferSlice<'a> {
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     pub fn get_mapped_range(&self) -> BufferView<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let data =
-            DynContext::buffer_get_mapped_range(
-                &*self.buffer.context,
-                &self.buffer.id,
-                self.buffer.data.as_ref(),
-                self.offset..end,
-            );
+        let data = DynContext::buffer_get_mapped_range(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.buffer.data.as_ref(),
+            self.offset..end,
+        );
         BufferView { slice: *self, data }
     }
 
@@ -3082,13 +3079,12 @@ impl<'a> BufferSlice<'a> {
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let data =
-            DynContext::buffer_get_mapped_range(
-                &*self.buffer.context,
-                &self.buffer.id,
-                self.buffer.data.as_ref(),
-                self.offset..end,
-            );
+        let data = DynContext::buffer_get_mapped_range(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.buffer.data.as_ref(),
+            self.offset..end,
+        );
         BufferViewMut {
             slice: *self,
             data,

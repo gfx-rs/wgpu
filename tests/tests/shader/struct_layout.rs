@@ -161,9 +161,8 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     for ty in ["f32", "u32", "i32"] {
         let header = format!("struct Inner {{ vec: vec3<{ty}>, scalar1: u32, scalar2: u32 }}");
         let members = String::from("arr: array<Inner, 2>");
-        let direct =
-            String::from(
-                "\
+        let direct = String::from(
+            "\
             output[0] = bitcast<u32>(input.arr[0].vec.x);
             output[1] = bitcast<u32>(input.arr[0].vec.y);
             output[2] = bitcast<u32>(input.arr[0].vec.z);
@@ -175,7 +174,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[8] = bitcast<u32>(input.arr[1].scalar1);
             output[9] = bitcast<u32>(input.arr[1].scalar2);
         ",
-            );
+        );
 
         tests.push(
             ShaderTest::new(

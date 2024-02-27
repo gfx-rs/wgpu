@@ -10,17 +10,16 @@ use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 /// If the update code is working correctly, the values not written to by the second update
 /// will remain unchanged.
 #[gpu_test]
-static PARTIAL_UPDATE: GpuTestConfiguration =
-    GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .features(wgpu::Features::PUSH_CONSTANTS)
-                .limits(wgpu::Limits {
-                    max_push_constant_size: 32,
-                    ..Default::default()
-                }),
-        )
-        .run_async(partial_update_test);
+static PARTIAL_UPDATE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::PUSH_CONSTANTS)
+            .limits(wgpu::Limits {
+                max_push_constant_size: 32,
+                ..Default::default()
+            }),
+    )
+    .run_async(partial_update_test);
 
 const SHADER: &str = r#"
     struct Pc {

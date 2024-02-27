@@ -61,13 +61,11 @@ impl super::AdapterShared {
             Tf::Rgba32Uint => (glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT),
             Tf::Rgba32Sint => (glow::RGBA32I, glow::RGBA_INTEGER, glow::INT),
             Tf::Rgba32Float => (glow::RGBA32F, glow::RGBA, glow::FLOAT),
-            Tf::Stencil8 => {
-                (
-                    glow::STENCIL_INDEX8,
-                    glow::STENCIL_INDEX,
-                    glow::UNSIGNED_BYTE,
-                )
-            }
+            Tf::Stencil8 => (
+                glow::STENCIL_INDEX8,
+                glow::STENCIL_INDEX,
+                glow::UNSIGNED_BYTE,
+            ),
             Tf::Depth16Unorm => (
                 glow::DEPTH_COMPONENT16,
                 glow::DEPTH_COMPONENT,
@@ -107,20 +105,16 @@ impl super::AdapterShared {
             Tf::Bc7RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_BPTC_UNORM, glow::RGBA, 0),
             Tf::Etc2Rgb8Unorm => (glow::COMPRESSED_RGB8_ETC2, glow::RGB, 0),
             Tf::Etc2Rgb8UnormSrgb => (glow::COMPRESSED_SRGB8_ETC2, glow::RGB, 0),
-            Tf::Etc2Rgb8A1Unorm => {
-                (
-                    glow::COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2,
-                    glow::RGBA,
-                    0,
-                )
-            }
-            Tf::Etc2Rgb8A1UnormSrgb => {
-                (
-                    glow::COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2,
-                    glow::RGBA,
-                    0,
-                )
-            }
+            Tf::Etc2Rgb8A1Unorm => (
+                glow::COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+                glow::RGBA,
+                0,
+            ),
+            Tf::Etc2Rgb8A1UnormSrgb => (
+                glow::COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+                glow::RGBA,
+                0,
+            ),
             Tf::Etc2Rgba8Unorm => (glow::COMPRESSED_RGBA8_ETC2_EAC, glow::RGBA, 0),
             Tf::Etc2Rgba8UnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ETC2_EAC, glow::RGBA, 0),
             Tf::EacR11Unorm => (glow::COMPRESSED_R11_EAC, glow::RED, 0),

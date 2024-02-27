@@ -103,15 +103,14 @@ impl super::CommandEncoder {
             }
         }
         if let Some(root_index) = self.pass.layout.special_constants_root_index {
-            let needs_update =
-                match self.pass.root_elements[root_index as usize] {
-                    super::RootElement::SpecialConstantBuffer {
-                        first_vertex: other_vertex,
-                        first_instance: other_instance,
-                        other: _,
-                    } => first_vertex != other_vertex || first_instance != other_instance,
-                    _ => true,
-                };
+            let needs_update = match self.pass.root_elements[root_index as usize] {
+                super::RootElement::SpecialConstantBuffer {
+                    first_vertex: other_vertex,
+                    first_instance: other_instance,
+                    other: _,
+                } => first_vertex != other_vertex || first_instance != other_instance,
+                _ => true,
+            };
             if needs_update {
                 self.pass.dirty_root_elements |= 1 << root_index;
                 self.pass.root_elements[root_index as usize] =
@@ -774,15 +773,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
         }
 
-        let raw_vp =
-            d3d12_ty::D3D12_VIEWPORT {
-                TopLeftX: 0.0,
-                TopLeftY: 0.0,
-                Width: desc.extent.width as f32,
-                Height: desc.extent.height as f32,
-                MinDepth: 0.0,
-                MaxDepth: 1.0,
-            };
+        let raw_vp = d3d12_ty::D3D12_VIEWPORT {
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: desc.extent.width as f32,
+            Height: desc.extent.height as f32,
+            MinDepth: 0.0,
+            MaxDepth: 1.0,
+        };
         let raw_rect = d3d12_ty::D3D12_RECT {
             left: 0,
             top: 0,

@@ -28,13 +28,12 @@ fn main() {
     let inner_size = gl_context.window().inner_size();
 
     println!("Hooking up to wgpu-hal");
-    let exposed =
-        unsafe {
-            <hal::api::Gles as hal::Api>::Adapter::new_external(|name| {
-                gl_context.get_proc_address(name)
-            })
-        }
-        .expect("GL adapter can't be initialized");
+    let exposed = unsafe {
+        <hal::api::Gles as hal::Api>::Adapter::new_external(|name| {
+            gl_context.get_proc_address(name)
+        })
+    }
+    .expect("GL adapter can't be initialized");
 
     fill_screen(&exposed, inner_size.width, inner_size.height);
 
@@ -77,27 +76,25 @@ fn main() {
     egl.initialize(display)
         .expect("unable to initialize display");
 
-    let attributes =
-        [
-            khronos_egl::RED_SIZE,
-            8,
-            khronos_egl::GREEN_SIZE,
-            8,
-            khronos_egl::BLUE_SIZE,
-            8,
-            khronos_egl::NONE,
-        ];
+    let attributes = [
+        khronos_egl::RED_SIZE,
+        8,
+        khronos_egl::GREEN_SIZE,
+        8,
+        khronos_egl::BLUE_SIZE,
+        8,
+        khronos_egl::NONE,
+    ];
 
     let config = egl
         .choose_first_config(display, &attributes)
         .unwrap()
         .expect("unable to choose config");
-    let surface =
-        unsafe {
-            let window = std::ptr::null_mut::<std::ffi::c_void>();
-            egl.create_window_surface(display, config, window, None)
-        }
-        .expect("unable to create surface");
+    let surface = unsafe {
+        let window = std::ptr::null_mut::<std::ffi::c_void>();
+        egl.create_window_surface(display, config, window, None)
+    }
+    .expect("unable to create surface");
 
     let context_attributes = [khronos_egl::CONTEXT_CLIENT_VERSION, 3, khronos_egl::NONE];
 

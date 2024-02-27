@@ -164,12 +164,11 @@ impl crate::framework::Example for Example {
         // Create the texture
         let size = 256u32;
         let texels = create_texels(size as usize);
-        let texture_extent =
-            wgpu::Extent3d {
-                width: size,
-                height: size,
-                depth_or_array_layers: 1,
-            };
+        let texture_extent = wgpu::Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: texture_extent,

@@ -533,15 +533,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             range = range.transform_offset(transform.offset);
                         }
 
-                        let geometry =
-                            vk::AccelerationStructureGeometryKHR::builder()
-                                .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
-                                .geometry(vk::AccelerationStructureGeometryDataKHR {
-                                    triangles: *triangle_data,
-                                })
-                                .flags(conv::map_acceleration_structure_geometry_flags(
-                                    triangles.flags,
-                                ));
+                        let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                            .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                            .geometry(vk::AccelerationStructureGeometryDataKHR {
+                                triangles: *triangle_data,
+                            })
+                            .flags(conv::map_acceleration_structure_geometry_flags(
+                                triangles.flags,
+                            ));
 
                         geometries.push(*geometry);
                         ranges.push(*range);
@@ -568,9 +567,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
                         let geometry = vk::AccelerationStructureGeometryKHR::builder()
                             .geometry_type(vk::GeometryTypeKHR::AABBS)
-                            .geometry(
-                                vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data }
-                            )
+                            .geometry(vk::AccelerationStructureGeometryDataKHR {
+                                aabbs: *aabbs_data,
+                            })
                             .flags(conv::map_acceleration_structure_geometry_flags(aabb.flags));
 
                         geometries.push(*geometry);
@@ -674,10 +673,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 vk_image_views.push(cat.target.view.raw);
                 let color = super::ColorAttachmentKey {
                     base: cat.target.make_attachment_key(cat.ops, caps),
-                    resolve:
-                        cat.resolve_target.as_ref().map(
-                            |target| target.make_attachment_key(crate::AttachmentOps::STORE, caps)
-                        ),
+                    resolve: cat.resolve_target.as_ref().map(|target| {
+                        target.make_attachment_key(crate::AttachmentOps::STORE, caps)
+                    }),
                 };
 
                 rp_key.colors.push(Some(color));
@@ -754,16 +752,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .render_area(render_area)
             .clear_values(&vk_clear_values)
             .framebuffer(raw_framebuffer);
-        let mut vk_attachment_info =
-            if caps.imageless_framebuffers {
-                Some(
-                    vk::RenderPassAttachmentBeginInfo::builder()
-                        .attachments(&vk_image_views)
-                        .build(),
-                )
-            } else {
-                None
-            };
+        let mut vk_attachment_info = if caps.imageless_framebuffers {
+            Some(
+                vk::RenderPassAttachmentBeginInfo::builder()
+                    .attachments(&vk_image_views)
+                    .build(),
+            )
+        } else {
+            None
+        };
         if let Some(attachment_info) = vk_attachment_info.as_mut() {
             vk_info = vk_info.push_next(attachment_info);
         }

@@ -3386,13 +3386,11 @@ impl TextureFormat {
 
             Self::Stencil8 => Some(uint),
             Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => Some(depth),
-            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => {
-                match aspect {
-                    Some(TextureAspect::DepthOnly) => Some(depth),
-                    Some(TextureAspect::StencilOnly) => Some(uint),
-                    _ => None,
-                }
-            }
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
+                Some(TextureAspect::DepthOnly) => Some(depth),
+                Some(TextureAspect::StencilOnly) => Some(uint),
+                _ => None,
+            },
 
             Self::NV12 => match aspect {
                 Some(TextureAspect::Plane0) | Some(TextureAspect::Plane1) => {

@@ -10,12 +10,11 @@ static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfigurat
 
         // Creating this query set should fail, since we didn't include
         // TIMESTAMP_QUERY in our required features.
-        let bad_query_set =
-            ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
-                label: Some("doomed query set"),
-                ty: wgpu::QueryType::Timestamp,
-                count: 1,
-            });
+        let bad_query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: Some("doomed query set"),
+            ty: wgpu::QueryType::Timestamp,
+            count: 1,
+        });
 
         // Dropping this should not panic.
         drop(bad_query_set);

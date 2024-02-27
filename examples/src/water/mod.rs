@@ -315,16 +315,15 @@ impl crate::framework::Example for Example {
                 let random = terrain_random.generate::<f32>() * 0.2 + 0.9;
 
                 // Choose colour.
-                let colour =
-                    if y <= 0.0 {
-                        DARK_SAND
-                    } else if y <= 0.8 {
-                        SAND
-                    } else if y <= 10.0 {
-                        GRASS
-                    } else {
-                        SNOW
-                    };
+                let colour = if y <= 0.0 {
+                    DARK_SAND
+                } else if y <= 0.8 {
+                    SAND
+                } else if y <= 10.0 {
+                    GRASS
+                } else {
+                    SNOW
+                };
                 point_gen::TerrainVertex {
                     position: Vec3::new(point[0], y, point[1]),
                     colour: mul_arr(colour, random),

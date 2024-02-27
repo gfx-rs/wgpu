@@ -9,18 +9,17 @@ use crate::TestingContext;
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
-    let data =
-        match std::fs::read(&path) {
-            Ok(f) => f,
-            Err(e) => {
-                log::warn!(
-                    "image comparison invalid: file io error when comparing {}: {}",
-                    path.as_ref().display(),
-                    e
-                );
-                return None;
-            }
-        };
+    let data = match std::fs::read(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            log::warn!(
+                "image comparison invalid: file io error when comparing {}: {}",
+                path.as_ref().display(),
+                e
+            );
+            return None;
+        }
+    };
     let decoder = png::Decoder::new(std::io::Cursor::new(data));
     let mut reader = decoder.read_info().ok()?;
 
@@ -202,12 +201,11 @@ pub async fn compare_image_output(
         let reference_flip = nv_flip::FlipImageRgb8::with_data(width, height, &reference);
         let test_flip = nv_flip::FlipImageRgb8::with_data(width, height, &test);
 
-        let error_map_flip =
-            nv_flip::flip(
-                reference_flip,
-                test_flip,
-                nv_flip::DEFAULT_PIXELS_PER_DEGREE,
-            );
+        let error_map_flip = nv_flip::flip(
+            reference_flip,
+            test_flip,
+            nv_flip::DEFAULT_PIXELS_PER_DEGREE,
+        );
         let mut pool = nv_flip::FlipPool::from_image(&error_map_flip);
 
         println!(
@@ -282,38 +280,35 @@ fn copy_via_compute(
     buffer: &Buffer,
     aspect: TextureAspect,
 ) {
-    let bgl =
-        device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Texture {
-                        sample_type: match aspect {
-                            TextureAspect::DepthOnly => {
-                                TextureSampleType::Float { filterable: false }
-                            }
-                            TextureAspect::StencilOnly => TextureSampleType::Uint,
-                            _ => unreachable!(),
-                        },
-                        view_dimension: TextureViewDimension::D2Array,
-                        multisampled: false,
+    let bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Texture {
+                    sample_type: match aspect {
+                        TextureAspect::DepthOnly => TextureSampleType::Float { filterable: false },
+                        TextureAspect::StencilOnly => TextureSampleType::Uint,
+                        _ => unreachable!(),
                     },
-                    count: None,
+                    view_dimension: TextureViewDimension::D2Array,
+                    multisampled: false,
                 },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: 1,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
                 },
-            ],
-        });
+                count: None,
+            },
+        ],
+    });
 
     let view = texture.create_view(&TextureViewDescriptor {
         aspect,

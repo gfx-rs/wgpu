@@ -305,12 +305,11 @@ impl GlobalPlay for wgc::global::Global {
             Action::CreateRenderBundle { id, desc, base } => {
                 let bundle =
                     wgc::command::RenderBundleEncoder::new(&desc, device, Some(base)).unwrap();
-                let (_, error) =
-                    self.render_bundle_encoder_finish::<A>(
-                        bundle,
-                        &wgt::RenderBundleDescriptor { label: desc.label },
-                        Some(id),
-                    );
+                let (_, error) = self.render_bundle_encoder_finish::<A>(
+                    bundle,
+                    &wgt::RenderBundleDescriptor { label: desc.label },
+                    Some(id),
+                );
                 if let Some(e) = error {
                     panic!("{e}");
                 }

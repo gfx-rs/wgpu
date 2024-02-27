@@ -633,15 +633,14 @@ impl crate::Queue<Api> for Queue {
                     ref mut free,
                     ..
                 } => {
-                    fence_raw =
-                        match free.pop() {
-                            Some(raw) => raw,
-                            None => unsafe {
-                                self.device
-                                    .raw
-                                    .create_fence(&vk::FenceCreateInfo::builder(), None)?
-                            },
-                        };
+                    fence_raw = match free.pop() {
+                        Some(raw) => raw,
+                        None => unsafe {
+                            self.device
+                                .raw
+                                .create_fence(&vk::FenceCreateInfo::builder(), None)?
+                        },
+                    };
                     active.push((value, fence_raw));
                 }
             }

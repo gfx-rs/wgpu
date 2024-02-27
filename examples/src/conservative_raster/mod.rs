@@ -37,13 +37,12 @@ impl Example {
             })
             .create_view(&Default::default());
 
-        let sampler =
-            device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("Nearest Neighbor Sampler"),
-                mag_filter: wgpu::FilterMode::Nearest,
-                min_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            });
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Nearest Neighbor Sampler"),
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("upscale bind group"),
@@ -84,13 +83,12 @@ impl crate::framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-        let shader_triangle_and_lines =
-            device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(
-                    Cow::Borrowed(include_str!("triangle_and_lines.wgsl"))
-                ),
-            });
+        let shader_triangle_and_lines = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "triangle_and_lines.wgsl"
+            ))),
+        });
 
         let pipeline_triangle_conservative =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

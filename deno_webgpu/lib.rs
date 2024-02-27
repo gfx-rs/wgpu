@@ -429,15 +429,14 @@ pub async fn op_webgpu_request_adapter(
         wgpu_core::instance::AdapterInputs::Mask(backends, |_| None),
     );
 
-    let adapter =
-        match res {
-            Ok(adapter) => adapter,
-            Err(err) => {
-                return Ok(GpuAdapterDeviceOrErr::Error {
-                    err: err.to_string(),
-                })
-            }
-        };
+    let adapter = match res {
+        Ok(adapter) => adapter,
+        Err(err) => {
+            return Ok(GpuAdapterDeviceOrErr::Error {
+                err: err.to_string(),
+            })
+        }
+    };
     let adapter_features = gfx_select!(adapter => instance.adapter_features(adapter))?;
     let features = deserialize_features(&adapter_features);
     let adapter_limits = gfx_select!(adapter => instance.adapter_limits(adapter))?;

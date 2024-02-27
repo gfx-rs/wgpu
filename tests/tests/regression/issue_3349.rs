@@ -23,17 +23,16 @@ use wgpu_test::{
 ///
 /// We then validate the data is correct from every position.
 #[gpu_test]
-static MULTI_STAGE_DATA_BINDING: GpuTestConfiguration =
-    GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .features(wgpu::Features::PUSH_CONSTANTS)
-                .limits(wgpu::Limits {
-                    max_push_constant_size: 16,
-                    ..Default::default()
-                }),
-        )
-        .run_async(multi_stage_data_binding_test);
+static MULTI_STAGE_DATA_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::PUSH_CONSTANTS)
+            .limits(wgpu::Limits {
+                max_push_constant_size: 16,
+                ..Default::default()
+            }),
+    )
+    .run_async(multi_stage_data_binding_test);
 
 async fn multi_stage_data_binding_test(ctx: TestingContext) {
     // We use different shader modules to allow us to use different

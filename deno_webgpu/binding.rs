@@ -188,24 +188,22 @@ pub fn op_webgpu_create_bind_group_layout(
         .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.1;
 
-    let entries =
-        entries
-            .into_iter()
-            .map(|entry| {
-                wgpu_types::BindGroupLayoutEntry {
-                    binding: entry.binding,
-                    visibility: wgpu_types::ShaderStages::from_bits(entry.visibility).unwrap(),
-                    ty: entry.binding_type.into(),
-                    count: None, // native-only
-                }
-            })
-            .collect::<Vec<_>>();
+    let entries = entries
+        .into_iter()
+        .map(|entry| {
+            wgpu_types::BindGroupLayoutEntry {
+                binding: entry.binding,
+                visibility: wgpu_types::ShaderStages::from_bits(entry.visibility).unwrap(),
+                ty: entry.binding_type.into(),
+                count: None, // native-only
+            }
+        })
+        .collect::<Vec<_>>();
 
-    let descriptor =
-        wgpu_core::binding_model::BindGroupLayoutDescriptor {
-            label: Some(label),
-            entries: Cow::from(entries),
-        };
+    let descriptor = wgpu_core::binding_model::BindGroupLayoutDescriptor {
+        label: Some(label),
+        entries: Cow::from(entries),
+    };
 
     gfx_put!(device => instance.device_create_bind_group_layout(
     device,
@@ -287,11 +285,10 @@ pub fn op_webgpu_create_bind_group(
                         wgpu_core::binding_model::BindingResource::Sampler(sampler_resource.1)
                     }
                     "GPUTextureView" => {
-                        let texture_view_resource = state
-                            .resource_table
-                            .get::<super::texture::WebGpuTextureView>(
-                            entry.resource,
-                        )?;
+                        let texture_view_resource =
+                            state
+                                .resource_table
+                                .get::<super::texture::WebGpuTextureView>(entry.resource)?;
                         wgpu_core::binding_model::BindingResource::TextureView(
                             texture_view_resource.1,
                         )

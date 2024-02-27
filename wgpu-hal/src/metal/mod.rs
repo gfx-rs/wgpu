@@ -102,17 +102,15 @@ impl crate::Instance<Api> for Instance {
                 Ok(unsafe { Surface::from_view(handle.ui_view.as_ptr(), None) })
             }
             #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::AppKit(handle) => {
-                Ok(unsafe {
-                    Surface::from_view(
-                        handle.ns_view.as_ptr(),
-                        Some(&self.managed_metal_layer_delegate),
-                    )
-                })
-            }
-            _ => Err(crate::InstanceError::new(
-                format!("window handle {window_handle:?} is not a Metal-compatible handle")
-            )),
+            raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
+                Surface::from_view(
+                    handle.ns_view.as_ptr(),
+                    Some(&self.managed_metal_layer_delegate),
+                )
+            }),
+            _ => Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a Metal-compatible handle"
+            ))),
         }
     }
 

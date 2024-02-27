@@ -67,17 +67,16 @@ pub async fn execute_test(
         config.params.required_limits.clone(),
     ));
 
-    let context =
-        TestingContext {
-            instance,
-            adapter,
-            adapter_info,
-            adapter_downlevel_capabilities,
-            device: Arc::new(device),
-            device_features: config.params.required_features,
-            device_limits: config.params.required_limits.clone(),
-            queue,
-        };
+    let context = TestingContext {
+        instance,
+        adapter,
+        adapter_info,
+        adapter_downlevel_capabilities,
+        device: Arc::new(device),
+        device_features: config.params.required_features,
+        device_limits: config.params.required_limits.clone(),
+        queue,
+    };
 
     let mut failures = Vec::new();
 
@@ -94,12 +93,11 @@ pub async fn execute_test(
 
         let result = FailureResult::panic();
 
-        let result =
-            if let Some(panic_str) = message {
-                result.with_message(panic_str)
-            } else {
-                result
-            };
+        let result = if let Some(panic_str) = message {
+            result.with_message(panic_str)
+        } else {
+            result
+        };
 
         failures.push(result)
     }

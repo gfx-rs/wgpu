@@ -18,12 +18,10 @@ pub fn parse_example_wgsl() {
     };
     for example_entry in read_dir {
         let read_files = match example_entry {
-            Ok(dir_entry) => {
-                match dir_entry.path().read_dir() {
-                    Ok(iter) => iter,
-                    Err(_) => continue,
-                }
-            }
+            Ok(dir_entry) => match dir_entry.path().read_dir() {
+                Ok(iter) => iter,
+                Err(_) => continue,
+            },
             Err(e) => {
                 log::warn!("Skipping example: {:?}", e);
                 continue;

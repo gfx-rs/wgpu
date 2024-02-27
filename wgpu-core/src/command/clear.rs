@@ -276,7 +276,9 @@ pub(crate) fn clear_texture<A: HalApi>(
             hal::TextureUses::COLOR_TARGET
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture.as_info().id()));
+            return Err(ClearError::NoValidTextureClearMode(
+                dst_texture.as_info().id(),
+            ));
         }
     };
 
@@ -308,16 +310,14 @@ pub(crate) fn clear_texture<A: HalApi>(
 
     // Record actual clearing
     match *dst_texture.clear_mode.read() {
-        TextureClearMode::BufferCopy => {
-            clear_texture_via_buffer_copies::<A>(
-                &dst_texture.desc,
-                alignments,
-                zero_buffer,
-                range,
-                encoder,
-                dst_raw,
-            )
-        }
+        TextureClearMode::BufferCopy => clear_texture_via_buffer_copies::<A>(
+            &dst_texture.desc,
+            alignments,
+            zero_buffer,
+            range,
+            encoder,
+            dst_raw,
+        ),
         TextureClearMode::Surface { .. } => {
             clear_texture_via_render_passes(dst_texture, range, true, encoder)?
         }
@@ -325,7 +325,9 @@ pub(crate) fn clear_texture<A: HalApi>(
             clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture.as_info().id()));
+            return Err(ClearError::NoValidTextureClearMode(
+                dst_texture.as_info().id(),
+            ));
         }
     }
     Ok(())
@@ -444,9 +446,26 @@ fn clear_texture_via_render_passes<A: HalApi>(
         let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
         for depth_or_layer in range.layer_range.clone() {
             let color_attachments_tmp;
-            let (color_attachments, depth_stencil_attachment) =
-                if is_color {
-                    color_attachments_tmp = [Some(hal::ColorAttachment {
+            let (color_attachments, depth_stencil_attachment) = if is_color {
+                color_attachments_tmp = [Some(hal::ColorAttachment {
+                    target: hal::Attachment {
+                        view: Texture::get_clear_view(
+                            clear_mode,
+                            &dst_texture.desc,
+                            mip_level,
+                            depth_or_layer,
+                        ),
+                        usage: hal::TextureUses::COLOR_TARGET,
+                    },
+                    resolve_target: None,
+                    ops: hal::AttachmentOps::STORE,
+                    clear_value: wgt::Color::TRANSPARENT,
+                })];
+                (&color_attachments_tmp[..], None)
+            } else {
+                (
+                    &[][..],
+                    Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
                             view: Texture::get_clear_view(
                                 clear_mode,
@@ -454,32 +473,14 @@ fn clear_texture_via_render_passes<A: HalApi>(
                                 mip_level,
                                 depth_or_layer,
                             ),
-                            usage: hal::TextureUses::COLOR_TARGET,
+                            usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                         },
-                        resolve_target: None,
-                        ops: hal::AttachmentOps::STORE,
-                        clear_value: wgt::Color::TRANSPARENT,
-                    })];
-                    (&color_attachments_tmp[..], None)
-                } else {
-                    (
-                        &[][..],
-                        Some(hal::DepthStencilAttachment {
-                            target: hal::Attachment {
-                                view: Texture::get_clear_view(
-                                    clear_mode,
-                                    &dst_texture.desc,
-                                    mip_level,
-                                    depth_or_layer,
-                                ),
-                                usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
-                            },
-                            depth_ops: hal::AttachmentOps::STORE,
-                            stencil_ops: hal::AttachmentOps::STORE,
-                            clear_value: (0.0, 0),
-                        }),
-                    )
-                };
+                        depth_ops: hal::AttachmentOps::STORE,
+                        stencil_ops: hal::AttachmentOps::STORE,
+                        clear_value: (0.0, 0),
+                    }),
+                )
+            };
             unsafe {
                 encoder.begin_render_pass(&hal::RenderPassDescriptor {
                     label: Some("(wgpu internal) clear_texture clear pass"),

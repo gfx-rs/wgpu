@@ -116,15 +116,14 @@ impl DxgiLib {
         ) -> HRESULT;
 
         let mut factory = Factory4::null();
-        let hr =
-            unsafe {
-                let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
-                func(
-                    flags.bits(),
-                    &dxgi1_4::IDXGIFactory4::uuidof(),
-                    factory.mut_void(),
-                )
-            };
+        let hr = unsafe {
+            let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
+            func(
+                flags.bits(),
+                &dxgi1_4::IDXGIFactory4::uuidof(),
+                factory.mut_void(),
+            )
+        };
 
         Ok((factory, hr))
     }
@@ -296,14 +295,13 @@ impl Factory4 {
     #[cfg(feature = "implicit-link")]
     pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
         let mut factory = Factory4::null();
-        let hr =
-            unsafe {
-                dxgi1_3::CreateDXGIFactory2(
-                    flags.bits(),
-                    &dxgi1_4::IDXGIFactory4::uuidof(),
-                    factory.mut_void(),
-                )
-            };
+        let hr = unsafe {
+            dxgi1_3::CreateDXGIFactory2(
+                flags.bits(),
+                &dxgi1_4::IDXGIFactory4::uuidof(),
+                factory.mut_void(),
+            )
+        };
 
         (factory, hr)
     }

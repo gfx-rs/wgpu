@@ -47,13 +47,12 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
 
         ctx.queue.submit(None);
 
-        let read_buffer =
-            ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: (size * size) as u64,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+        let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: (size * size) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         let mut encoder = ctx
             .device

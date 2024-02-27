@@ -57,15 +57,13 @@ impl super::Adapter {
         let device = {
             profiling::scope!("ID3D12Device::create_device");
             match library.create_device(&adapter, d3d12::FeatureLevel::L11_0) {
-                Ok(pair) => {
-                    match pair.into_result() {
-                        Ok(device) => device,
-                        Err(err) => {
-                            log::warn!("Device creation failed: {}", err);
-                            return None;
-                        }
+                Ok(pair) => match pair.into_result() {
+                    Ok(device) => device,
+                    Err(err) => {
+                        log::warn!("Device creation failed: {}", err);
+                        return None;
                     }
-                }
+                },
                 Err(err) => {
                     log::warn!("Device creation function is not found: {:?}", err);
                     return None;
@@ -205,11 +203,10 @@ impl super::Adapter {
 
         let (full_heap_count, uav_count) = match options.ResourceBindingTier {
             d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => {
-                let uav_count =
-                    match max_feature_level {
-                        d3d12::FeatureLevel::L11_0 => 8,
-                        _ => 64,
-                    };
+                let uav_count = match max_feature_level {
+                    d3d12::FeatureLevel::L11_0 => 8,
+                    _ => 64,
+                };
 
                 (
                     d3d12_ty::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
@@ -505,9 +502,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 self.device.CheckFeatureSupport(
                     d3d12_ty::D3D12_FEATURE_FORMAT_SUPPORT,
                     ptr::addr_of_mut!(data_srv_uav).cast(),
-                    DWORD::try_from(mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT>(
-                    ))
-                    .unwrap(),
+                    DWORD::try_from(mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT>())
+                        .unwrap(),
                 )
             });
         } else {
@@ -576,23 +572,21 @@ impl crate::Adapter<super::Api> for super::Adapter {
             NumQualityLevels: 0,
         };
 
-        let mut set_sample_count =
-            |sc: u32, tfc: Tfc| {
-                ms_levels.SampleCount = sc;
+        let mut set_sample_count = |sc: u32, tfc: Tfc| {
+            ms_levels.SampleCount = sc;
 
-                if unsafe {
-                    self.device.CheckFeatureSupport(
-                        d3d12_ty::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-                        <*mut _>::cast(&mut ms_levels),
-                        mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>()
-                            as _,
-                    )
-                } == winerror::S_OK
-                    && ms_levels.NumQualityLevels != 0
-                {
-                    caps.set(tfc, !no_msaa_load && !no_msaa_target);
-                }
-            };
+            if unsafe {
+                self.device.CheckFeatureSupport(
+                    d3d12_ty::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                    <*mut _>::cast(&mut ms_levels),
+                    mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
+                )
+            } == winerror::S_OK
+                && ms_levels.NumQualityLevels != 0
+            {
+                caps.set(tfc, !no_msaa_load && !no_msaa_target);
+            }
+        };
 
         set_sample_count(2, Tfc::MULTISAMPLE_X2);
         set_sample_count(4, Tfc::MULTISAMPLE_X4);

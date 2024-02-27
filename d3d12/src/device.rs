@@ -71,13 +71,12 @@ impl Device {
     ) -> D3DResult<Heap> {
         let mut heap = Heap::null();
 
-        let desc =
-            d3d12::D3D12_HEAP_DESC {
-                SizeInBytes: size_in_bytes,
-                Properties: properties.0,
-                Alignment: alignment,
-                Flags: flags.bits(),
-            };
+        let desc = d3d12::D3D12_HEAP_DESC {
+            SizeInBytes: size_in_bytes,
+            Properties: properties.0,
+            Alignment: alignment,
+            Flags: flags.bits(),
+        };
 
         let hr = unsafe { self.CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void()) };
 
@@ -104,23 +103,21 @@ impl Device {
         flags: queue::CommandQueueFlags,
         node_mask: NodeMask,
     ) -> D3DResult<CommandQueue> {
-        let desc =
-            d3d12::D3D12_COMMAND_QUEUE_DESC {
-                Type: list_type as _,
-                Priority: priority as _,
-                Flags: flags.bits(),
-                NodeMask: node_mask,
-            };
+        let desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
+            Type: list_type as _,
+            Priority: priority as _,
+            Flags: flags.bits(),
+            NodeMask: node_mask,
+        };
 
         let mut queue = CommandQueue::null();
-        let hr =
-            unsafe {
-                self.CreateCommandQueue(
-                    &desc,
-                    &d3d12::ID3D12CommandQueue::uuidof(),
-                    queue.mut_void(),
-                )
-            };
+        let hr = unsafe {
+            self.CreateCommandQueue(
+                &desc,
+                &d3d12::ID3D12CommandQueue::uuidof(),
+                queue.mut_void(),
+            )
+        };
 
         (queue, hr)
     }
@@ -190,14 +187,13 @@ impl Device {
         };
 
         let mut query_heap = QueryHeap::null();
-        let hr =
-            unsafe {
-                self.CreateQueryHeap(
-                    &desc,
-                    &d3d12::ID3D12QueryHeap::uuidof(),
-                    query_heap.mut_void(),
-                )
-            };
+        let hr = unsafe {
+            self.CreateQueryHeap(
+                &desc,
+                &d3d12::ID3D12QueryHeap::uuidof(),
+                query_heap.mut_void(),
+            )
+        };
 
         (query_heap, hr)
     }
@@ -308,15 +304,14 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let hr =
-            unsafe {
-                self.CreateCommandSignature(
-                    &desc,
-                    root_signature.as_mut_ptr(),
-                    &d3d12::ID3D12CommandSignature::uuidof(),
-                    signature.mut_void(),
-                )
-            };
+        let hr = unsafe {
+            self.CreateCommandSignature(
+                &desc,
+                root_signature.as_mut_ptr(),
+                &d3d12::ID3D12CommandSignature::uuidof(),
+                signature.mut_void(),
+            )
+        };
 
         (signature, hr)
     }

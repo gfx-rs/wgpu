@@ -114,13 +114,17 @@ mod compat {
                                 ));
                             }
                         } else {
-                            diff.push(format!("Entry {id} not found in assigned bind group layout"))
+                            diff.push(format!(
+                                "Entry {id} not found in assigned bind group layout"
+                            ))
                         }
                     }
 
                     assigned_bgl.entries.iter().for_each(|(id, _e_entry)| {
                         if !expected_bgl.entries.contains_key(*id) {
-                            diff.push(format!("Entry {id} not found in expected bind group layout"))
+                            diff.push(format!(
+                                "Entry {id} not found in expected bind group layout"
+                            ))
                         }
                     });
 

@@ -53,14 +53,13 @@ pub fn op_webgpu_create_buffer(
         .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.1;
 
-    let descriptor =
-        wgpu_core::resource::BufferDescriptor {
-            label: Some(label),
-            size,
-            usage: wgpu_types::BufferUsages::from_bits(usage)
-                .ok_or_else(|| type_error("usage is not valid"))?,
-            mapped_at_creation,
-        };
+    let descriptor = wgpu_core::resource::BufferDescriptor {
+        label: Some(label),
+        size,
+        usage: wgpu_types::BufferUsages::from_bits(usage)
+            .ok_or_else(|| type_error("usage is not valid"))?,
+        mapped_at_creation,
+    };
 
     gfx_put!(device => instance.device_create_buffer(
     device,

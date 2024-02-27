@@ -162,11 +162,10 @@ struct WgpuContext {
 impl WgpuContext {
     async fn new(buffer_size: usize) -> WgpuContext {
         let instance = wgpu::Instance::default();
-        let adapter =
-            instance
-                .request_adapter(&wgpu::RequestAdapterOptions::default())
-                .await
-                .unwrap();
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .await
+            .unwrap();
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -182,9 +181,9 @@ impl WgpuContext {
         // Our shader, kindly compiled with Naga.
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(
-                std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))
-            ),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "shader.wgsl"
+            ))),
         });
 
         // This is where the GPU will read from and write to.

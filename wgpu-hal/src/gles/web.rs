@@ -73,9 +73,9 @@ impl Instance {
             Err(js_error) => {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
                 // A thrown exception indicates misuse of the canvas state.
-                return Err(crate::InstanceError::new(
-                    format!("canvas.getContext() threw exception {js_error:?}",)
-                ));
+                return Err(crate::InstanceError::new(format!(
+                    "canvas.getContext() threw exception {js_error:?}",
+                )));
             }
         };
 
@@ -141,32 +141,31 @@ impl crate::Instance<super::Api> for Instance {
         _display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        let canvas: web_sys::HtmlCanvasElement =
-            match window_handle {
-                raw_window_handle::RawWindowHandle::Web(handle) => web_sys::window()
-                    .and_then(|win| win.document())
-                    .expect("Cannot get document")
-                    .query_selector(&format!("canvas[data-raw-handle=\"{}\"]", handle.id))
-                    .expect("Cannot query for canvas")
-                    .expect("Canvas is not found")
-                    .dyn_into()
-                    .expect("Failed to downcast to canvas type"),
-                raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
-                    let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
-                    value.clone().unchecked_into()
-                }
-                raw_window_handle::RawWindowHandle::WebOffscreenCanvas(handle) => {
-                    let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
-                    let canvas: web_sys::OffscreenCanvas = value.clone().unchecked_into();
+        let canvas: web_sys::HtmlCanvasElement = match window_handle {
+            raw_window_handle::RawWindowHandle::Web(handle) => web_sys::window()
+                .and_then(|win| win.document())
+                .expect("Cannot get document")
+                .query_selector(&format!("canvas[data-raw-handle=\"{}\"]", handle.id))
+                .expect("Cannot query for canvas")
+                .expect("Canvas is not found")
+                .dyn_into()
+                .expect("Failed to downcast to canvas type"),
+            raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
+                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                value.clone().unchecked_into()
+            }
+            raw_window_handle::RawWindowHandle::WebOffscreenCanvas(handle) => {
+                let value: &JsValue = unsafe { handle.obj.cast().as_ref() };
+                let canvas: web_sys::OffscreenCanvas = value.clone().unchecked_into();
 
-                    return self.create_surface_from_offscreen_canvas(canvas);
-                }
-                _ => {
-                    return Err(crate::InstanceError::new(
-                        format!("window handle {window_handle:?} is not a web handle")
-                    ))
-                }
-            };
+                return self.create_surface_from_offscreen_canvas(canvas);
+            }
+            _ => {
+                return Err(crate::InstanceError::new(format!(
+                    "window handle {window_handle:?} is not a web handle"
+                )))
+            }
+        };
 
         self.create_surface_from_canvas(canvas)
     }
@@ -233,9 +232,9 @@ impl Surface {
     ) -> Result<(), crate::SurfaceError> {
         let gl = &context.glow_context;
         let swapchain = self.swapchain.read();
-        let swapchain = swapchain
-            .as_ref()
-            .ok_or(crate::SurfaceError::Other("need to configure surface before presenting"))?;
+        let swapchain = swapchain.as_ref().ok_or(crate::SurfaceError::Other(
+            "need to configure surface before presenting",
+        ))?;
 
         if swapchain.format.is_srgb() {
             // Important to set the viewport since we don't know in what state the user left it.
