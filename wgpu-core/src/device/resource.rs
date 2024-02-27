@@ -343,7 +343,8 @@ impl<A: HalApi> Device<A> {
                     let Some(bind_group) = bind_group.upgrade() else {
                         continue;
                     };
-                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write()) else {
+                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write())
+                    else {
                         continue;
                     };
 

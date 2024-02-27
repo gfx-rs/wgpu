@@ -100,6 +100,7 @@ impl DownloadBuffer {
             None => buffer.buffer.map_context.lock().total_size - buffer.offset,
         };
 
+        #[allow(clippy::arc_with_non_send_sync)] // False positive on emscripten
         let download = Arc::new(device.create_buffer(&super::BufferDescriptor {
             size,
             usage: super::BufferUsages::COPY_DST | super::BufferUsages::MAP_READ,

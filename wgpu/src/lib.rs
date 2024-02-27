@@ -4777,11 +4777,11 @@ impl Surface<'_> {
         let caps = self.get_capabilities(adapter);
         Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: *caps.formats.get(0)?,
+            format: *caps.formats.first()?,
             width,
             height,
             desired_maximum_frame_latency: 2,
-            present_mode: *caps.present_modes.get(0)?,
+            present_mode: *caps.present_modes.first()?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
             view_formats: vec![],
         })
@@ -4931,7 +4931,7 @@ impl<T> Eq for Id<T> {}
 
 impl<T> PartialOrd for Id<T> {
     fn partial_cmp(&self, other: &Id<T>) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 
