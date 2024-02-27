@@ -13,7 +13,7 @@ exclude = ["Cargo.lock"]
 
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs", "--cfg", "web_sys_unstable_apis"]
 targets = [
     "x86_64-unknown-linux-gnu",
     "x86_64-apple-darwin",
