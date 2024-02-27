@@ -76,9 +76,11 @@ Bottom level categories:
 #### DX12
 - Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
 
-## v0.19.1 (2024-01-21)
+#### glsl-in
 
-### Bug Fixes
+- Fix code generation from nested loops. By @cwfitzgerald and @teoxoy in [#5311](https://github.com/gfx-rs/wgpu/pull/5311)
+
+## v0.19.1 (2024-01-21)
 
 #### WGL
 
