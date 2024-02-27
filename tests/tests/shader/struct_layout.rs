@@ -155,6 +155,40 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
         ));
     }
 
+    // Test for https://github.com/gfx-rs/wgpu/issues/5262.
+    //
+    // The struct is supposed to have a size of 32 and alignment of 16, but on metal, it has size 24.
+    for ty in ["f32", "u32", "i32"] {
+        let header = format!("struct Inner {{ vec: vec3<{ty}>, scalar1: u32, scalar2: u32 }}");
+        let members = String::from("arr: array<Inner, 2>");
+        let direct = String::from(
+            "\
+            output[0] = bitcast<u32>(input.arr[0].vec.x);
+            output[1] = bitcast<u32>(input.arr[0].vec.y);
+            output[2] = bitcast<u32>(input.arr[0].vec.z);
+            output[3] = bitcast<u32>(input.arr[0].scalar1);
+            output[4] = bitcast<u32>(input.arr[0].scalar2);
+            output[5] = bitcast<u32>(input.arr[1].vec.x);
+            output[6] = bitcast<u32>(input.arr[1].vec.y);
+            output[7] = bitcast<u32>(input.arr[1].vec.z);
+            output[8] = bitcast<u32>(input.arr[1].scalar1);
+            output[9] = bitcast<u32>(input.arr[1].scalar2);
+        ",
+        );
+
+        tests.push(
+            ShaderTest::new(
+                format!("Alignment of 24 byte struct with a vec3<{ty}>"),
+                members,
+                direct,
+                &input_values,
+                &[0, 1, 2, 3, 4, 8, 9, 10, 11, 12],
+            )
+            .header(header)
+            .failures(Backends::METAL),
+        );
+    }
+
     // Mat3 alignment tests
     for ty in ["f32", "u32", "i32"] {
         for columns in [2, 3, 4] {
@@ -228,11 +262,6 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
             .expect_fail(
                 FailureCase::backend(wgpu::Backends::VULKAN)
                     .validation_error("a matrix with stride 8 not satisfying alignment to 16"),
-            )
-            .expect_fail(
-                FailureCase::backend(wgpu::Backends::VULKAN).validation_error(
-                    "Failure to instrument shader.  Proceeding with non-instrumented shader.",
-                ),
             )
             .limits(Limits::downlevel_defaults()),
     )

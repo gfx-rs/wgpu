@@ -724,13 +724,25 @@ impl crate::Queue<Api> for Queue {
 
 impl From<vk::Result> for crate::DeviceError {
     fn from(result: vk::Result) -> Self {
+        #![allow(unreachable_code)]
         match result {
             vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                #[cfg(feature = "oom_panic")]
+                panic!("Out of memory ({result:?})");
+
                 Self::OutOfMemory
             }
-            vk::Result::ERROR_DEVICE_LOST => Self::Lost,
+            vk::Result::ERROR_DEVICE_LOST => {
+                #[cfg(feature = "device_lost_panic")]
+                panic!("Device lost");
+
+                Self::Lost
+            }
             _ => {
-                log::warn!("Unrecognized device error {:?}", result);
+                #[cfg(feature = "internal_error_panic")]
+                panic!("Internal error: {result:?}");
+
+                log::warn!("Unrecognized device error {result:?}");
                 Self::Lost
             }
         }
