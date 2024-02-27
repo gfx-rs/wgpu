@@ -1130,8 +1130,9 @@ impl PipelineCache {
     /// Get the data associated with this pipeline cache.
     /// The format is unspecified, and should be passed to a call to
     /// [`Device::create_pipeline_cache`] for a compatible device.
-    pub fn get_data() -> Option<Vec<u8>> {
-        None
+    pub fn get_data(&self) -> Option<Vec<u8>> {
+        self.context
+            .pipeline_cache_get_data(&mut self.id, &mut self.data)
     }
 }
 

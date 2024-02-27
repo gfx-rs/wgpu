@@ -2387,6 +2387,14 @@ impl crate::Context for ContextWgpuCore {
         wgc::gfx_select!(device => self.0.device_stop_capture(*device));
     }
 
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &Self::PipelineCacheId,
+        cache_data: &Self::PipelineCacheData,
+    ) -> Option<Vec<u8>> {
+        wgc::gfx_select!(cache => self.0.pipeline_cache_get_data(*cache));
+    }
+
     fn compute_pass_set_pipeline(
         &self,
         _pass: &mut Self::ComputePassId,

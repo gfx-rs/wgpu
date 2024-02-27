@@ -1642,6 +1642,7 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     pub layout: &'a A::PipelineLayout,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStage<'a, A>,
+    pub cache: Option<&'a A::PipelineCache>,
 }
 
 pub struct PipelineCacheDescriptor<'a> {
@@ -1683,6 +1684,7 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    pub cache: Option<&'a A::PipelineCache>,
 }
 
 #[derive(Debug, Clone)]

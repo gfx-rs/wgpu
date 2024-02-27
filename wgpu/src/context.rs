@@ -633,6 +633,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     fn device_start_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
 
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &Self::PipelineCacheId,
+        cache_data: &Self::PipelineCacheData,
+    ) -> Option<Vec<u8>>;
+
     fn compute_pass_set_pipeline(
         &self,
         pass: &mut Self::ComputePassId,
@@ -1633,6 +1639,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
 
     fn device_start_capture(&self, device: &ObjectId, data: &crate::Data);
     fn device_stop_capture(&self, device: &ObjectId, data: &crate::Data);
+
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &ObjectId,
+        cache_data: &crate::Data,
+    ) -> Option<Vec<u8>>;
 
     fn compute_pass_set_pipeline(
         &self,
@@ -3147,6 +3159,16 @@ where
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_stop_capture(self, &device, device_data)
+    }
+
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &ObjectId,
+        cache_data: &crate::Data,
+    ) -> Option<Vec<u8>> {
+        let mut cache = <T::PipelineCacheId>::from(*cache);
+        let cache_data = downcast_mut::<T::PipelineCacheData>(cache_data);
+        Context::pipeline_cache_get_data(self, &mut cache, cache_data)
     }
 
     fn compute_pass_set_pipeline(
