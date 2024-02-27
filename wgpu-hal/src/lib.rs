@@ -432,6 +432,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ShaderModule: fmt::Debug + WasmNotSendSync;
     type RenderPipeline: fmt::Debug + WasmNotSendSync;
     type ComputePipeline: fmt::Debug + WasmNotSendSync;
+    type PipelineCache: fmt::Debug + WasmNotSendSync;
 
     type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
 }
@@ -611,6 +612,11 @@ pub trait Device: WasmNotSendSync {
         desc: &ComputePipelineDescriptor<Self::A>,
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Option<A::PipelineCache>;
+    unsafe fn destroy_pipeline_cache(&self, cache: A::PipelineCache);
 
     unsafe fn create_query_set(
         &self,
@@ -1636,6 +1642,11 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     pub layout: &'a A::PipelineLayout,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStage<'a, A>,
+}
+
+pub struct PipelineCacheDescriptor<'a> {
+    pub label: Label<'a>,
+    pub data: Option<&'a [u8]>,
 }
 
 /// Describes how the vertex buffer is interpreted.

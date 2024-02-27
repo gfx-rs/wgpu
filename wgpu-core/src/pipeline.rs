@@ -259,6 +259,45 @@ impl<A: HalApi> ComputePipeline<A> {
     }
 }
 
+#[derive(Debug)]
+pub struct PipelineCache<A: HalApi> {
+    pub(crate) raw: Option<A::PipelineCache>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<PipelineCache<A>>,
+}
+
+impl<A: HalApi> Drop for PipelineCache<A> {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw PipelineCache {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyPipelineCache(self.info.id()));
+            }
+
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_pipeline_cache(raw);
+            }
+        }
+    }
+}
+
+impl<A: HalApi> Resource for PipelineCache<A> {
+    const TYPE: ResourceType = "PipelineCache";
+
+    type Marker = crate::id::markers::PipelineCache;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
+        &mut self.info
+    }
+}
+
 /// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -315,6 +354,13 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PipelineCacheDescriptor<'a> {
+    pub label: Label<'a>,
+    pub data: Option<Cow<'a, [u8]>>,
 }
 
 #[derive(Clone, Debug, Error)]

@@ -73,6 +73,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -552,6 +553,11 @@ pub struct RenderPipeline {
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: vk::Pipeline,
+}
+
+#[derive(Debug)]
+pub struct PipelineCache {
+    raw: vk::PipelineCache,
 }
 
 #[derive(Debug)]

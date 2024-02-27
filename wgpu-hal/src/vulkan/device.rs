@@ -1,4 +1,4 @@
-use super::conv;
+use super::{conv, PipelineCache};
 
 use arrayvec::ArrayVec;
 use ash::{extensions::khr, vk};
@@ -1943,6 +1943,26 @@ impl crate::Device for super::Device {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
     }
 
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Option<PipelineCache> {
+        let mut info = vk::PipelineCacheCreateInfo::builder();
+        // TODO: Add additional validation to the data, as described in https://medium.com/@zeuxcg/creating-a-robust-pipeline-cache-with-vulkan-961d09416cda
+        if let Some(data) = desc.data {
+            info = info.initial_data(data)
+        }
+        // TODO: Proper error handling
+        let raw = {
+            profiling::scope!("vkCreatePipelineCache");
+            unsafe { self.shared.raw.create_pipeline_cache(&info, None) }.ok()?
+        };
+
+        Some(PipelineCache { raw })
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: PipelineCache) {
+        unsafe { self.shared.raw.destroy_pipeline_cache(cache.raw, None) }
+    }
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,

@@ -1825,6 +1825,51 @@ impl Global {
         }
     }
 
+    pub unsafe fn device_create_pipeline_cache<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+        desc: &pipeline::PipelineCacheDescriptor<'_>,
+        id_in: Option<id::PipelineCacheId>,
+    ) -> Option<id::PipelineCacheId> {
+        profiling::scope!("Device::create_pipeline_cache");
+
+        let hub = A::hub(self);
+
+        let fid = hub.pipeline_caches.prepare(id_in);
+        let device = match hub.devices.get(device_id) {
+            Ok(device) => device,
+            // TODO: Handle error properly
+            Err(_) => return None,
+        };
+        if !device.is_valid() {
+            return None;
+        }
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::CreatePipelineCache {
+                id: fid.id(),
+                desc: desc.clone(),
+            });
+        }
+        let pipeline = unsafe { device.create_pipeline_cache(desc) }?;
+        let (id, _) = fid.assign(pipeline);
+        api_log!("Device::create_pipeline_cache -> {id:?}");
+
+        Some(id)
+    }
+
+    pub fn pipeline_cache_drop<A: HalApi>(&self, pipeline_cache_id: id::PipelineCacheId) {
+        profiling::scope!("PipelineCache::drop");
+        api_log!("PipelineCache::drop {pipeline_cache_id:?}");
+
+        let hub = A::hub(self);
+
+        if let Some(cache) = hub.pipeline_caches.unregister(pipeline_cache_id) {
+            drop(cache)
+        }
+    }
+
     pub fn surface_configure<A: HalApi>(
         &self,
         surface_id: SurfaceId,

@@ -3489,6 +3489,23 @@ impl<A: HalApi> Device<A> {
         Ok(pipeline)
     }
 
+    pub unsafe fn create_pipeline_cache(
+        self: &Arc<Self>,
+        desc: &pipeline::PipelineCacheDescriptor,
+    ) -> Option<pipeline::PipelineCache<A>> {
+        let cache_desc = hal::PipelineCacheDescriptor {
+            data: desc.data.as_deref(),
+            label: desc.label.to_hal(self.instance_flags),
+        };
+        let raw = unsafe { (&self.raw.as_ref().unwrap()).create_pipeline_cache(&cache_desc) };
+        let cache = pipeline::PipelineCache {
+            device: self.clone(),
+            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            raw,
+        };
+        Some(cache)
+    }
+
     pub(crate) fn get_texture_format_features(
         &self,
         adapter: &Adapter<A>,

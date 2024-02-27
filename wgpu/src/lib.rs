@@ -1111,6 +1111,39 @@ impl ComputePipeline {
     }
 }
 
+/// Handle to a pipeline cache, which is used to accelerate
+/// creating [`RenderPipeline`]s and [`ComputePipeline`]s
+/// in subsequent executions
+///
+/// This type is unique to the Rust API of `wgpu`.
+#[derive(Debug)]
+pub struct PipelineCache {
+    context: Arc<C>,
+    id: ObjectId,
+    data: Box<Data>,
+}
+
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCache: Send, Sync);
+
+impl PipelineCache {
+    /// Get the data associated with this pipeline cache.
+    /// The format is unspecified, and should be passed to a call to
+    /// [`Device::create_pipeline_cache`] for a compatible device.
+    pub fn get_data() -> Option<Vec<u8>> {
+        None
+    }
+}
+
+impl Drop for PipelineCache {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context
+                .pipeline_cache_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
+
 /// Handle to a command buffer on the GPU.
 ///
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
@@ -1938,6 +1971,21 @@ pub struct ComputePipelineDescriptor<'a> {
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
+
+#[derive(Clone, Debug)]
+pub struct PipelineCacheInitDescriptor<'a> {
+    pub label: Label<'a>,
+    pub data: &'a [u8],
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCacheInitDescriptor<'_>: Send, Sync);
+
+#[derive(Clone, Debug)]
+pub struct PipelineCacheDescriptor<'a> {
+    pub label: Label<'a>,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCacheDescriptor<'_>: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -3085,6 +3133,43 @@ impl Device {
     #[doc(hidden)]
     pub fn make_invalid(&self) {
         DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
+    }
+
+    pub unsafe fn create_pipeline_cache_init(
+        &self,
+        desc: &PipelineCacheInitDescriptor<'_>,
+        // TODO: Work out error handling and conditions
+    ) -> Option<PipelineCache> {
+        let (id, data) = unsafe {
+            DynContext::device_create_pipeline_cache_init(
+                &*self.context,
+                &self.id,
+                self.data.as_ref(),
+                desc,
+            )
+        }?;
+        Some(PipelineCache {
+            context: Arc::clone(&self.context),
+            id,
+            data,
+        })
+    }
+
+    pub fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Option<PipelineCache> {
+        let (id, data) = DynContext::device_create_pipeline_cache(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            desc,
+        )?;
+        Some(PipelineCache {
+            context: Arc::clone(&self.context),
+            id,
+            data,
+        })
     }
 }
 

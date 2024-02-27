@@ -4,10 +4,10 @@ use crate::{
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
-    SurfaceStatus, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    PipelineCacheInitDescriptor, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderModuleDescriptorSpirV, ShaderSource, StoreOp, SurfaceStatus, SurfaceTargetUnsafe,
+    TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -511,6 +511,8 @@ impl crate::Context for ContextWgpuCore {
     type RenderPipelineData = ();
     type ComputePipelineId = wgc::id::ComputePipelineId;
     type ComputePipelineData = ();
+    type PipelineCacheId = wgc::id::PipelineCacheId;
+    type PipelineCacheData = ();
     type CommandEncoderId = wgc::id::CommandEncoderId;
     type CommandEncoderData = CommandEncoder;
     type ComputePassId = Unused;
@@ -1259,6 +1261,52 @@ impl crate::Context for ContextWgpuCore {
         }
         (id, ())
     }
+
+    unsafe fn device_create_pipeline_cache_init(
+        &self,
+        device: &Self::DeviceId,
+        // TODO: Will be used for error handling
+        device_data: &Self::DeviceData,
+        desc: &PipelineCacheInitDescriptor<'_>,
+    ) -> Option<(Self::PipelineCacheId, Self::PipelineCacheData)> {
+        use wgc::pipeline as pipe;
+
+        let descriptor = pipe::PipelineCacheDescriptor {
+            label: desc.label.map(Borrowed),
+            data: Some(desc.data.into()),
+        };
+        let id = wgc::gfx_select!(device => self.0.device_create_pipeline_cache(
+            *device,
+            &descriptor,
+            None
+        ))?;
+        Some((id, ()))
+    }
+
+    fn device_create_pipeline_cache(
+        &self,
+        device: &Self::DeviceId,
+        // TODO: Will be used for error handling
+        device_data: &Self::DeviceData,
+        desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Option<(Self::PipelineCacheId, Self::PipelineCacheData)> {
+        use wgc::pipeline as pipe;
+
+        let descriptor = pipe::PipelineCacheDescriptor {
+            label: desc.label.map(Borrowed),
+            data: None,
+        };
+        // Safety: data is None, so no safety concerns
+        let id = unsafe {
+            wgc::gfx_select!(device => self.0.device_create_pipeline_cache(
+                *device,
+                &descriptor,
+                None
+            ))
+        }?;
+        Some((id, ()))
+    }
+
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -1716,6 +1764,14 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::RenderPipelineData,
     ) {
         wgc::gfx_select!(*pipeline => self.0.render_pipeline_drop(*pipeline))
+    }
+
+    fn pipeline_cache_drop(
+        &self,
+        cache: &Self::PipelineCacheId,
+        _cache_data: &Self::PipelineCacheData,
+    ) {
+        wgc::gfx_select!(*cache => self.0.pipeline_cache_drop(*cache))
     }
 
     fn compute_pipeline_get_bind_group_layout(

@@ -11,11 +11,12 @@ use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, ComputePassDescriptor,
     ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer,
-    ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineLayoutDescriptor,
-    QuerySetDescriptor, RenderBundleDescriptor, RenderBundleEncoderDescriptor,
-    RenderPassDescriptor, RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe,
-    Texture, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
+    ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineCacheDescriptor,
+    PipelineCacheInitDescriptor, PipelineLayoutDescriptor, QuerySetDescriptor,
+    RenderBundleDescriptor, RenderBundleEncoderDescriptor, RenderPassDescriptor,
+    RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError, SamplerDescriptor,
+    ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture,
+    TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -59,6 +60,8 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type RenderPipelineData: ContextData;
     type ComputePipelineId: ContextId + WasmNotSendSync;
     type ComputePipelineData: ContextData;
+    type PipelineCacheId: ContextId + WasmNotSendSync;
+    type PipelineCacheData: ContextData;
     type CommandEncoderId: ContextId + WasmNotSendSync;
     type CommandEncoderData: ContextData;
     type ComputePassId: ContextId;
@@ -233,6 +236,18 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData);
+    unsafe fn device_create_pipeline_cache_init(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &PipelineCacheInitDescriptor<'_>,
+    ) -> Option<(Self::PipelineCacheId, Self::PipelineCacheData)>;
+    fn device_create_pipeline_cache(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Option<(Self::PipelineCacheId, Self::PipelineCacheData)>;
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -394,6 +409,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         pipeline: &Self::RenderPipelineId,
         pipeline_data: &Self::RenderPipelineData,
+    );
+    fn pipeline_cache_drop(
+        &self,
+        cache: &Self::PipelineCacheId,
+        cache_data: &Self::PipelineCacheData,
     );
 
     fn compute_pipeline_get_bind_group_layout(
@@ -1271,6 +1291,18 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
+    unsafe fn device_create_pipeline_cache_init(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &PipelineCacheInitDescriptor<'_>,
+    ) -> Option<(ObjectId, Box<crate::Data>)>;
+    fn device_create_pipeline_cache(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Option<(ObjectId, Box<crate::Data>)>;
     fn device_create_buffer(
         &self,
         device: &ObjectId,
@@ -1391,6 +1423,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn render_bundle_drop(&self, render_bundle: &ObjectId, render_bundle_data: &crate::Data);
     fn compute_pipeline_drop(&self, pipeline: &ObjectId, pipeline_data: &crate::Data);
     fn render_pipeline_drop(&self, pipeline: &ObjectId, pipeline_data: &crate::Data);
+    fn pipeline_cache_drop(&self, cache: &ObjectId, _cache_data: &crate::Data);
 
     fn compute_pipeline_get_bind_group_layout(
         &self,
@@ -2297,6 +2330,33 @@ where
         (compute_pipeline.into(), Box::new(data) as _)
     }
 
+    unsafe fn device_create_pipeline_cache_init(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &PipelineCacheInitDescriptor<'_>,
+    ) -> Option<(ObjectId, Box<crate::Data>)> {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        let (pipeline_cache, data) = unsafe {
+            Context::device_create_pipeline_cache_init(self, &device, device_data, desc)
+        }?;
+        Some((pipeline_cache.into(), Box::new(data) as _))
+    }
+
+    fn device_create_pipeline_cache(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Option<(ObjectId, Box<crate::Data>)> {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        let (pipeline_cache, data) =
+            Context::device_create_pipeline_cache(self, &device, device_data, desc)?;
+        Some((pipeline_cache.into(), Box::new(data) as _))
+    }
+
     fn device_create_buffer(
         &self,
         device: &ObjectId,
@@ -2619,6 +2679,12 @@ where
         let pipeline = <T::RenderPipelineId>::from(*pipeline);
         let pipeline_data = downcast_ref(pipeline_data);
         Context::render_pipeline_drop(self, &pipeline, pipeline_data)
+    }
+
+    fn pipeline_cache_drop(&self, cache: &ObjectId, cache_data: &crate::Data) {
+        let cache = <T::PipelineCacheId>::from(*cache);
+        let cache_data = downcast_ref(cache_data);
+        Context::pipeline_cache_drop(self, &cache, cache_data)
     }
 
     fn compute_pipeline_get_bind_group_layout(

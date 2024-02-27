@@ -1159,6 +1159,8 @@ impl crate::context::Context for ContextWebGpu {
     type SurfaceOutputDetail = SurfaceOutputDetail;
     type SubmissionIndex = Unused;
     type SubmissionIndexData = ();
+    type PipelineCacheId = Unused;
+    type PipelineCacheData = ();
 
     type RequestAdapterFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -1993,6 +1995,15 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.label(label);
         }
         create_identified(device_data.0.create_compute_pipeline(&mapped_desc))
+    }
+
+    unsafe fn device_create_pipeline_cache_init(
+        &self,
+        _: &Self::DeviceId,
+        _: &Self::DeviceData,
+        _: &PipelineCacheInitDescriptor<'_>,
+    ) -> Option<(Self::PipelineCacheId, Self::PipelineCacheData)> {
+        None
     }
 
     fn device_create_buffer(
