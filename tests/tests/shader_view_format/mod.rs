@@ -81,10 +81,11 @@ async fn reinterpret(
         wgpu::util::TextureDataOrder::LayerMajor,
         bytemuck::cast_slice(src_data),
     );
-    let tv = tex.create_view(&wgpu::TextureViewDescriptor {
-        format: Some(reinterpret_to),
-        ..Default::default()
-    });
+    let tv =
+        tex.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(reinterpret_to),
+            ..Default::default()
+        });
     let pipeline = ctx
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {

@@ -278,17 +278,15 @@ impl crate::framework::Example for Example {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&[
-                        &red_texture_view,
-                        &green_texture_view,
-                    ]),
+                    resource: wgpu::BindingResource::TextureViewArray(
+                        &[&red_texture_view, &green_texture_view]
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureViewArray(&[
-                        &blue_texture_view,
-                        &white_texture_view,
-                    ]),
+                    resource: wgpu::BindingResource::TextureViewArray(
+                        &[&blue_texture_view, &white_texture_view]
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,

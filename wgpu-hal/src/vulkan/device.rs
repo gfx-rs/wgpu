@@ -434,12 +434,13 @@ impl
             })
             .collect::<ArrayVec<_, 8>>();
 
-        let mut vk_flags =
-            if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND) {
-                vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
-            } else {
-                vk::DescriptorPoolCreateFlags::empty()
-            };
+        let mut vk_flags = if flags
+            .contains(gpu_descriptor::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND)
+        {
+            vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
+        } else {
+            vk::DescriptorPoolCreateFlags::empty()
+        };
         if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
             vk_flags |= vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET;
         }
@@ -517,12 +518,13 @@ impl
         pool: &mut vk::DescriptorPool,
         sets: impl Iterator<Item = vk::DescriptorSet>,
     ) {
-        let result = unsafe {
-            self.raw.free_descriptor_sets(
-                *pool,
-                &smallvec::SmallVec::<[vk::DescriptorSet; 32]>::from_iter(sets),
-            )
-        };
+        let result =
+            unsafe {
+                self.raw.free_descriptor_sets(
+                    *pool,
+                    &smallvec::SmallVec::<[vk::DescriptorSet; 32]>::from_iter(sets),
+                )
+            };
         match result {
             Ok(()) => {}
             Err(err) => log::error!("free_descriptor_sets: {:?}", err),
@@ -546,10 +548,11 @@ impl super::Device {
         profiling::scope!("Device::create_swapchain");
         let functor = khr::Swapchain::new(&surface.instance.raw, &self.shared.raw);
 
-        let old_swapchain = match provided_old_swapchain {
-            Some(osc) => osc.raw,
-            None => vk::SwapchainKHR::null(),
-        };
+        let old_swapchain =
+            match provided_old_swapchain {
+                Some(osc) => osc.raw,
+                None => vk::SwapchainKHR::null(),
+            };
 
         let color_space = if config.format == wgt::TextureFormat::Rgba16Float {
             // Enable wide color gamut mode
@@ -780,11 +783,12 @@ impl super::Device {
         };
 
         let entry_point = CString::new(stage.entry_point).unwrap();
-        let create_info = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(conv::map_shader_stage(stage_flags))
-            .module(vk_module)
-            .name(&entry_point)
-            .build();
+        let create_info =
+            vk::PipelineShaderStageCreateInfo::builder()
+                .stage(conv::map_shader_stage(stage_flags))
+                .module(vk_module)
+                .name(&entry_point)
+                .build();
 
         Ok(CompiledStage {
             create_info,
@@ -884,17 +888,18 @@ impl crate::Device<super::Api> for super::Device {
             req.alignment
         } - 1;
 
-        let block = unsafe {
-            self.mem_allocator.lock().alloc(
-                &*self.shared,
-                gpu_alloc::Request {
-                    size: req.size,
-                    align_mask: alignment_mask,
-                    usage: alloc_usage,
-                    memory_types: req.memory_type_bits & self.valid_ash_memory_types,
-                },
-            )?
-        };
+        let block =
+            unsafe {
+                self.mem_allocator.lock().alloc(
+                    &*self.shared,
+                    gpu_alloc::Request {
+                        size: req.size,
+                        align_mask: alignment_mask,
+                        usage: alloc_usage,
+                        memory_types: req.memory_type_bits & self.valid_ash_memory_types,
+                    },
+                )?
+            };
 
         unsafe {
             self.shared
@@ -957,11 +962,9 @@ impl crate::Device<super::Api> for super::Device {
     {
         if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
             unsafe {
-                self.shared
-                    .raw
-                    .flush_mapped_memory_ranges(
-                        &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
-                    )
+                self.shared.raw.flush_mapped_memory_ranges(
+                    &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges)
+                )
             }
             .unwrap();
         }
@@ -972,11 +975,9 @@ impl crate::Device<super::Api> for super::Device {
     {
         if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
             unsafe {
-                self.shared
-                    .raw
-                    .invalidate_mapped_memory_ranges(&smallvec::SmallVec::<
-                        [vk::MappedMemoryRange; 32],
-                    >::from_iter(vk_ranges))
+                self.shared.raw.invalidate_mapped_memory_ranges(
+                    &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges)
+                )
             }
             .unwrap();
         }
@@ -1287,17 +1288,17 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         //Note: not bothering with on stack array here as it's low frequency
-        let vk_bindings = desc
-            .entries
-            .iter()
-            .map(|entry| vk::DescriptorSetLayoutBinding {
-                binding: entry.binding,
-                descriptor_type: types[entry.binding as usize].0,
-                descriptor_count: types[entry.binding as usize].1,
-                stage_flags: conv::map_shader_stage(entry.visibility),
-                p_immutable_samplers: ptr::null(),
-            })
-            .collect::<Vec<_>>();
+        let vk_bindings =
+            desc.entries
+                .iter()
+                .map(|entry| vk::DescriptorSetLayoutBinding {
+                    binding: entry.binding,
+                    descriptor_type: types[entry.binding as usize].0,
+                    descriptor_count: types[entry.binding as usize].1,
+                    stage_flags: conv::map_shader_stage(entry.visibility),
+                    p_immutable_samplers: ptr::null(),
+                })
+                .collect::<Vec<_>>();
 
         let vk_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&vk_bindings);
 
@@ -1315,28 +1316,29 @@ impl crate::Device<super::Api> for super::Device {
             .flags
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
 
-        let vk_info = if partially_bound {
-            binding_flag_vec = desc
-                .entries
-                .iter()
-                .map(|entry| {
-                    let mut flags = vk::DescriptorBindingFlags::empty();
+        let vk_info =
+            if partially_bound {
+                binding_flag_vec = desc
+                    .entries
+                    .iter()
+                    .map(|entry| {
+                        let mut flags = vk::DescriptorBindingFlags::empty();
 
-                    if partially_bound && entry.count.is_some() {
-                        flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-                    }
+                        if partially_bound && entry.count.is_some() {
+                            flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+                        }
 
-                    flags
-                })
-                .collect::<Vec<_>>();
+                        flags
+                    })
+                    .collect::<Vec<_>>();
 
-            binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder()
-                .binding_flags(&binding_flag_vec);
+                binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder()
+                    .binding_flags(&binding_flag_vec);
 
-            vk_info.push_next(&mut binding_flag_info)
-        } else {
-            vk_info
-        };
+                vk_info.push_next(&mut binding_flag_info)
+            } else {
+                vk_info
+            };
 
         let raw = unsafe {
             self.shared
@@ -1376,15 +1378,15 @@ impl crate::Device<super::Api> for super::Device {
             .iter()
             .map(|bgl| bgl.raw)
             .collect::<Vec<_>>();
-        let vk_push_constant_ranges = desc
-            .push_constant_ranges
-            .iter()
-            .map(|pcr| vk::PushConstantRange {
-                stage_flags: conv::map_shader_stage(pcr.stages),
-                offset: pcr.range.start,
-                size: pcr.range.end - pcr.range.start,
-            })
-            .collect::<Vec<_>>();
+        let vk_push_constant_ranges =
+            desc.push_constant_ranges
+                .iter()
+                .map(|pcr| vk::PushConstantRange {
+                    stage_flags: conv::map_shader_stage(pcr.stages),
+                    offset: pcr.range.start,
+                    size: pcr.range.end - pcr.range.start,
+                })
+                .collect::<Vec<_>>();
 
         let vk_info = vk::PipelineLayoutCreateInfo::builder()
             .flags(vk::PipelineLayoutCreateFlags::empty())
@@ -1890,12 +1892,13 @@ impl crate::Device<super::Api> for super::Device {
             &desc.layout.binding_arrays,
         )?;
 
-        let vk_infos = [{
-            vk::ComputePipelineCreateInfo::builder()
-                .layout(desc.layout.raw)
-                .stage(compiled.create_info)
-                .build()
-        }];
+        let vk_infos =
+            [{
+                vk::ComputePipelineCreateInfo::builder()
+                    .layout(desc.layout.raw)
+                    .stage(compiled.create_info)
+                    .build()
+            }];
 
         let mut raw_vec = {
             profiling::scope!("vkCreateComputePipelines");
@@ -2149,9 +2152,7 @@ impl crate::Device<super::Api> for super::Device {
                         .geometry(vk::AccelerationStructureGeometryDataKHR {
                             triangles: *triangle_data,
                         })
-                        .flags(conv::map_acceleration_structure_geometry_flags(
-                            triangles.flags,
-                        ));
+                        .flags(conv::map_acceleration_structure_geometry_flags(triangles.flags));
 
                     geometries.push(*geometry);
                     primitive_counts.push(pritive_count);

@@ -30,12 +30,13 @@ impl Debug {
     #[cfg(feature = "implicit-link")]
     pub fn get_interface() -> crate::D3DResult<Self> {
         let mut debug = Debug::null();
-        let hr = unsafe {
-            winapi::um::d3d12::D3D12GetDebugInterface(
-                &d3d12sdklayers::ID3D12Debug::uuidof(),
-                debug.mut_void(),
-            )
-        };
+        let hr =
+            unsafe {
+                winapi::um::d3d12::D3D12GetDebugInterface(
+                    &d3d12sdklayers::ID3D12Debug::uuidof(),
+                    debug.mut_void(),
+                )
+            };
 
         (debug, hr)
     }

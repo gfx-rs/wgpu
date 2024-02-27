@@ -576,10 +576,8 @@ impl super::Validator {
 
                     // The last field may be an unsized array.
                     if !base_info.flags.contains(TypeFlags::SIZED) {
-                        let is_array = match gctx.types[member.ty].inner {
-                            crate::TypeInner::Array { .. } => true,
-                            _ => false,
-                        };
+                        let is_array =
+                            matches!(gctx.types[member.ty].inner, crate::TypeInner::Array { .. });
                         if !is_array || i + 1 != members.len() {
                             let name = member.name.clone().unwrap_or_default();
                             return Err(TypeError::InvalidDynamicArray(name, member.ty));

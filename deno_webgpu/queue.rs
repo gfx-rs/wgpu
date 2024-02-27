@@ -79,10 +79,11 @@ pub fn op_webgpu_write_buffer(
     let queue_resource = state.resource_table.get::<WebGpuQueue>(queue_rid)?;
     let queue = queue_resource.1;
 
-    let data = match size {
-        Some(size) => &buf[data_offset..(data_offset + size)],
-        None => &buf[data_offset..],
-    };
+    let data =
+        match size {
+            Some(size) => &buf[data_offset..(data_offset + size)],
+            None => &buf[data_offset..],
+        };
     let maybe_err = gfx_select!(queue => instance.queue_write_buffer(
       queue.transmute(),
       buffer,

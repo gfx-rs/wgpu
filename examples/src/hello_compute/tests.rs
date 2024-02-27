@@ -30,25 +30,26 @@ static COMPUTE_2: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static COMPUTE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-            .limits(wgpu::Limits::downlevel_defaults())
-            .skip(FailureCase::adapter("V3D")),
-    )
-    .run_async(|ctx| {
-        let input = &[77031, 837799, 8400511, 63728127];
-        async move {
-            assert_execute_gpu(
-                &ctx.device,
-                &ctx.queue,
-                input,
-                &[350, 524, OVERFLOW, OVERFLOW],
-            )
-            .await
-        }
-    });
+static COMPUTE_OVERFLOW: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+                .limits(wgpu::Limits::downlevel_defaults())
+                .skip(FailureCase::adapter("V3D")),
+        )
+        .run_async(|ctx| {
+            let input = &[77031, 837799, 8400511, 63728127];
+            async move {
+                assert_execute_gpu(
+                    &ctx.device,
+                    &ctx.queue,
+                    input,
+                    &[350, 524, OVERFLOW, OVERFLOW],
+                )
+                .await
+            }
+        });
 
 #[cfg(not(target_arch = "wasm32"))]
 #[gpu_test]
@@ -73,12 +74,9 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
                 let ctx = Arc::clone(&ctx);
                 thread::spawn(move || {
                     let input = &[100, 100, 100];
-                    pollster::block_on(assert_execute_gpu(
-                        &ctx.device,
-                        &ctx.queue,
-                        input,
-                        &[25, 25, 25],
-                    ));
+                    pollster::block_on(
+                        assert_execute_gpu(&ctx.device, &ctx.queue, input, &[25, 25, 25])
+                    );
                     tx.send(true).unwrap();
                 })
             })

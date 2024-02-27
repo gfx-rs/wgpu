@@ -104,11 +104,13 @@ impl TestCase {
     // Get the draw calls for this test case
     fn draws(&self) -> &'static [Draw] {
         match self {
-            TestCase::Draw => &[Draw {
-                vertex: 0..6,
-                instance: 0..1,
-                base_vertex: None,
-            }],
+            TestCase::Draw => {
+                &[Draw {
+                    vertex: 0..6,
+                    instance: 0..1,
+                    base_vertex: None,
+                }]
+            }
             TestCase::DrawNonZeroFirstVertex => &[
                 Draw {
                     vertex: 0..3,
@@ -121,16 +123,20 @@ impl TestCase {
                     base_vertex: None,
                 },
             ],
-            TestCase::DrawBaseVertex => &[Draw {
-                vertex: 0..6,
-                instance: 0..1,
-                base_vertex: Some(3),
-            }],
-            TestCase::DrawInstanced => &[Draw {
-                vertex: 0..3,
-                instance: 0..2,
-                base_vertex: None,
-            }],
+            TestCase::DrawBaseVertex => {
+                &[Draw {
+                    vertex: 0..6,
+                    instance: 0..1,
+                    base_vertex: Some(3),
+                }]
+            }
+            TestCase::DrawInstanced => {
+                &[Draw {
+                    vertex: 0..3,
+                    instance: 0..2,
+                    base_vertex: None,
+                }]
+            }
             TestCase::DrawNonZeroFirstInstance => &[
                 Draw {
                     vertex: 0..3,

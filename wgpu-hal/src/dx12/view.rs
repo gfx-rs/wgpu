@@ -45,12 +45,13 @@ fn aspects_to_plane(aspects: crate::FormatAspects) -> u32 {
 
 impl ViewDescriptor {
     pub(crate) unsafe fn to_srv(&self) -> Option<d3d12_ty::D3D12_SHADER_RESOURCE_VIEW_DESC> {
-        let mut desc = d3d12_ty::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: self.srv_uav_format?,
-            ViewDimension: 0,
-            Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-            u: unsafe { mem::zeroed() },
-        };
+        let mut desc =
+            d3d12_ty::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                Format: self.srv_uav_format?,
+                ViewDimension: 0,
+                Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                u: unsafe { mem::zeroed() },
+            };
 
         match self.dimension {
             wgt::TextureViewDimension::D1 => {

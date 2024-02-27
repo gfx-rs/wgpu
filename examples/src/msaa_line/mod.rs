@@ -137,19 +137,20 @@ impl crate::framework::Example for Example {
             .get_texture_format_features(config.view_formats[0])
             .flags;
 
-        let max_sample_count = {
-            if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X16) {
-                16
-            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8) {
-                8
-            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4) {
-                4
-            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2) {
-                2
-            } else {
-                1
-            }
-        };
+        let max_sample_count =
+            {
+                if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X16) {
+                    16
+                } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8) {
+                    8
+                } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4) {
+                    4
+                } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2) {
+                    2
+                } else {
+                    1
+                }
+            };
 
         let sample_count = max_sample_count;
 
@@ -276,27 +277,28 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
-            let rpass_color_attachment = if self.sample_count == 1 {
-                wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                }
-            } else {
-                wgpu::RenderPassColorAttachment {
-                    view: &self.multisampled_framebuffer,
-                    resolve_target: Some(view),
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        // Storing pre-resolve MSAA data is unnecessary if it isn't used later.
-                        // On tile-based GPU, avoid store can reduce your app's memory footprint.
-                        store: wgpu::StoreOp::Discard,
-                    },
-                }
-            };
+            let rpass_color_attachment =
+                if self.sample_count == 1 {
+                    wgpu::RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }
+                } else {
+                    wgpu::RenderPassColorAttachment {
+                        view: &self.multisampled_framebuffer,
+                        resolve_target: Some(view),
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            // Storing pre-resolve MSAA data is unnecessary if it isn't used later.
+                            // On tile-based GPU, avoid store can reduce your app's memory footprint.
+                            store: wgpu::StoreOp::Discard,
+                        },
+                    }
+                };
 
             encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {

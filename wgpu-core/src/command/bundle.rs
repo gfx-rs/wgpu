@@ -1391,12 +1391,13 @@ impl<A: HalApi> State<A> {
             _ => (),
         }
 
-        self.index = Some(IndexState {
-            buffer,
-            format,
-            range,
-            is_dirty: true,
-        });
+        self.index =
+            Some(IndexState {
+                buffer,
+                format,
+                range,
+                is_dirty: true,
+            });
     }
 
     /// Generate a `SetIndexBuffer` command to prepare for an indexed draw

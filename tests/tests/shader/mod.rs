@@ -219,19 +219,21 @@ async fn shader_input_output_test(
             ],
         });
 
-    let input_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("input buffer"),
-        size: MAX_BUFFER_SIZE,
-        usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM | BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    });
+    let input_buffer =
+        ctx.device.create_buffer(&BufferDescriptor {
+            label: Some("input buffer"),
+            size: MAX_BUFFER_SIZE,
+            usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM | BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
 
-    let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("output buffer"),
-        size: MAX_BUFFER_SIZE,
-        usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    });
+    let output_buffer =
+        ctx.device.create_buffer(&BufferDescriptor {
+            label: Some("output buffer"),
+            size: MAX_BUFFER_SIZE,
+            usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
 
     let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
         label: Some("mapping buffer"),

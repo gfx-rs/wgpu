@@ -1025,10 +1025,11 @@ pub struct ObjectId {
 }
 
 impl ObjectId {
-    pub(crate) const UNUSED: Self = ObjectId {
-        id: None,
-        global_id: None,
-    };
+    pub(crate) const UNUSED: Self =
+        ObjectId {
+            id: None,
+            global_id: None,
+        };
 
     #[allow(dead_code)]
     pub fn new(id: NonZeroU64, global_id: NonZeroU64) -> Self {

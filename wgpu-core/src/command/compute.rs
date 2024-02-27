@@ -368,10 +368,8 @@ impl Global {
         let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
         let device = &cmd_buf.device;
         if !device.is_valid() {
-            return Err(ComputePassErrorInner::InvalidDevice(
-                cmd_buf.device.as_info().id(),
-            ))
-            .map_pass_err(pass_scope);
+            return Err(ComputePassErrorInner::InvalidDevice(cmd_buf.device.as_info().id()))
+                .map_pass_err(pass_scope);
         }
 
         let mut cmd_buf_data = cmd_buf.data.lock();
@@ -404,12 +402,13 @@ impl Global {
         let query_set_guard = hub.query_sets.read();
         let buffer_guard = hub.buffers.read();
 
-        let mut state = State {
-            binder: Binder::new(),
-            pipeline: None,
-            scope: UsageScope::new(&device.tracker_indices),
-            debug_scope_depth: 0,
-        };
+        let mut state =
+            State {
+                binder: Binder::new(),
+                pipeline: None,
+                scope: UsageScope::new(&device.tracker_indices),
+                debug_scope_depth: 0,
+            };
         let mut temp_offsets = Vec::new();
         let mut dynamic_offset_count = 0;
         let mut string_offset = 0;
@@ -641,9 +640,7 @@ impl Global {
                         .pipeline_layout
                         .as_ref()
                         //TODO: don't error here, lazily update the push constants
-                        .ok_or(ComputePassErrorInner::Dispatch(
-                            DispatchError::MissingPipeline,
-                        ))
+                        .ok_or(ComputePassErrorInner::Dispatch(DispatchError::MissingPipeline))
                         .map_pass_err(scope)?;
 
                     pipeline_layout
@@ -900,15 +897,16 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = unsafe {
-            pass.current_bind_groups.set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut pass.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            )
-        };
+        let redundant =
+            unsafe {
+                pass.current_bind_groups.set_and_check_redundant(
+                    bind_group_id,
+                    index,
+                    &mut pass.base.dynamic_offsets,
+                    offsets,
+                    offset_length,
+                )
+            };
 
         if redundant {
             return;

@@ -66,20 +66,22 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
         canvas.set_width(3);
         canvas.set_height(3);
 
-        let d2_context: web_sys::CanvasRenderingContext2d = canvas
-            .get_context("2d")
-            .unwrap()
-            .unwrap()
-            .dyn_into()
-            .unwrap();
+        let d2_context: web_sys::CanvasRenderingContext2d =
+            canvas
+                .get_context("2d")
+                .unwrap()
+                .unwrap()
+                .dyn_into()
+                .unwrap();
         d2_context
             .draw_image_with_image_bitmap(&image_bitmap, 0.0, 0.0)
             .unwrap();
 
         // Decode it cpu side
-        let raw_image = image::load_from_memory_with_format(image_encoded, image::ImageFormat::Png)
-            .unwrap()
-            .into_rgba8();
+        let raw_image =
+            image::load_from_memory_with_format(image_encoded, image::ImageFormat::Png)
+                .unwrap()
+                .into_rgba8();
 
         // Set of test cases to test with image import
         #[derive(Debug, Copy, Clone)]

@@ -96,13 +96,14 @@ mod dxc {
         dxil_path: Option<PathBuf>,
     ) -> Result<Option<DxcContainer>, crate::DeviceError> {
         // Make sure that dxil.dll exists.
-        let dxil = match hassle_rs::Dxil::new(dxil_path) {
-            Ok(dxil) => dxil,
-            Err(e) => {
-                log::warn!("Failed to load dxil.dll. Defaulting to FXC instead: {}", e);
-                return Ok(None);
-            }
-        };
+        let dxil =
+            match hassle_rs::Dxil::new(dxil_path) {
+                Ok(dxil) => dxil,
+                Err(e) => {
+                    log::warn!("Failed to load dxil.dll. Defaulting to FXC instead: {}", e);
+                    return Ok(None);
+                }
+            };
 
         // Needed for explicit validation.
         let validator = dxil.create_validator()?;

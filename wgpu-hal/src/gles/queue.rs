@@ -958,12 +958,13 @@ impl super::Queue {
                         };
                         temp_query_results.push(result);
                     }
-                    let query_data = unsafe {
-                        slice::from_raw_parts(
-                            temp_query_results.as_ptr() as *const u8,
-                            temp_query_results.len() * mem::size_of::<u64>(),
-                        )
-                    };
+                    let query_data =
+                        unsafe {
+                            slice::from_raw_parts(
+                                temp_query_results.as_ptr() as *const u8,
+                                temp_query_results.len() * mem::size_of::<u64>(),
+                            )
+                        };
                     match dst.raw {
                         Some(buffer) => {
                             unsafe { gl.bind_buffer(dst_target, Some(buffer)) };

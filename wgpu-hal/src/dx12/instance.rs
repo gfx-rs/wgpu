@@ -16,9 +16,9 @@ impl Drop for super::Instance {
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init DX12 Backend");
-        let lib_main = d3d12::D3D12Lib::new().map_err(|e| {
-            crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
-        })?;
+        let lib_main = d3d12::D3D12Lib::new().map_err(
+            |e| crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
+        )?;
 
         if desc
             .flags
@@ -59,13 +59,15 @@ impl crate::Instance<super::Api> for super::Instance {
 
         // Create IDXGIFactoryMedia
         let factory_media = match lib_dxgi.create_factory_media() {
-            Ok(pair) => match pair.into_result() {
-                Ok(factory_media) => Some(factory_media),
-                Err(err) => {
-                    log::error!("Failed to create IDXGIFactoryMedia: {}", err);
-                    None
+            Ok(pair) => {
+                match pair.into_result() {
+                    Ok(factory_media) => Some(factory_media),
+                    Err(err) => {
+                        log::error!("Failed to create IDXGIFactoryMedia: {}", err);
+                        None
+                    }
                 }
-            },
+            }
             Err(err) => {
                 log::warn!("IDXGIFactory1 creation function not found: {:?}", err);
                 None
@@ -97,9 +99,9 @@ impl crate::Instance<super::Api> for super::Instance {
                 dxc_path,
             } => {
                 let container = super::shader_compilation::get_dxc_container(dxc_path, dxil_path)
-                    .map_err(|e| {
-                    crate::InstanceError::with_source(String::from("Failed to load DXC"), e)
-                })?;
+                    .map_err(
+                    |e| crate::InstanceError::with_source(String::from("Failed to load DXC"), e)
+                )?;
 
                 container.map(Arc::new)
             }
@@ -136,9 +138,9 @@ impl crate::Instance<super::Api> for super::Instance {
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: RwLock::new(None),
             }),
-            _ => Err(crate::InstanceError::new(format!(
-                "window handle {window_handle:?} is not a Win32 handle"
-            ))),
+            _ => Err(crate::InstanceError::new(
+                format!("window handle {window_handle:?} is not a Win32 handle")
+            )),
         }
     }
     unsafe fn destroy_surface(&self, _surface: super::Surface) {

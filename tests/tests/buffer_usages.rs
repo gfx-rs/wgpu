@@ -43,30 +43,32 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
 }
 
 #[gpu_test]
-static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    try_create(
-        ctx,
-        &[
-            (false, ALWAYS_VALID),
-            (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
-            (true, ALWAYS_FAIL),
-        ],
-    );
-});
-
-#[gpu_test]
-static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
-    .run_sync(|ctx| {
+static BUFFER_USAGE: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         try_create(
             ctx,
             &[
                 (false, ALWAYS_VALID),
-                (false, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
+                (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
                 (true, ALWAYS_FAIL),
             ],
         );
     });
+
+#[gpu_test]
+static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
+        .run_sync(|ctx| {
+            try_create(
+                ctx,
+                &[
+                    (false, ALWAYS_VALID),
+                    (false, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
+                    (true, ALWAYS_FAIL),
+                ],
+            );
+        });
 
 async fn map_test(
     ctx: &TestingContext,

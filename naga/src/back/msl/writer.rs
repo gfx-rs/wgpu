@@ -406,15 +406,15 @@ impl crate::AddressSpace {
     /// passed in function arguments. These arguments need to be
     /// passed through any functions called from the entry point.
     const fn needs_pass_through(&self) -> bool {
-        match *self {
+        matches!(
+            self,
             Self::Uniform
-            | Self::Storage { .. }
-            | Self::Private
-            | Self::WorkGroup
-            | Self::PushConstant
-            | Self::Handle => true,
-            Self::Function => false,
-        }
+                | Self::Storage { .. }
+                | Self::Private
+                | Self::WorkGroup
+                | Self::PushConstant
+                | Self::Handle
+        )
     }
 
     /// Returns true if the address space may need a "const" qualifier.

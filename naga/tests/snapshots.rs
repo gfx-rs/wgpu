@@ -273,39 +273,41 @@ fn check_targets(
         }
     }
 
-    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
-        .validate(module)
-        .unwrap_or_else(|err| {
-            panic!(
-                "Naga module validation failed on test `{}`:\n{:?}",
-                name.display(),
-                err
-            );
-        });
-
-    #[cfg(feature = "compact")]
-    let info = {
-        naga::compact::compact(module);
-
-        #[cfg(feature = "serialize")]
-        {
-            if targets.contains(Targets::IR) {
-                let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
-                let string = ron::ser::to_string_pretty(module, config).unwrap();
-                input.write_output_file("ir", "compact.ron", string);
-            }
-        }
-
+    let info =
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
             .validate(module)
             .unwrap_or_else(|err| {
                 panic!(
-                    "Post-compaction module validation failed on test '{}':\n<{:?}",
+                    "Naga module validation failed on test `{}`:\n{:?}",
                     name.display(),
-                    err,
-                )
-            })
-    };
+                    err
+                );
+            });
+
+    #[cfg(feature = "compact")]
+    let info =
+        {
+            naga::compact::compact(module);
+
+            #[cfg(feature = "serialize")]
+            {
+                if targets.contains(Targets::IR) {
+                    let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
+                    let string = ron::ser::to_string_pretty(module, config).unwrap();
+                    input.write_output_file("ir", "compact.ron", string);
+                }
+            }
+
+            naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+                .validate(module)
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "Post-compaction module validation failed on test '{}':\n<{:?}",
+                        name.display(),
+                        err,
+                    )
+                })
+        };
 
     #[cfg(feature = "serialize")]
     {
@@ -425,10 +427,11 @@ fn write_output_spv(
 
     if params.separate_entry_points {
         for ep in module.entry_points.iter() {
-            let pipeline_options = spv::PipelineOptions {
-                entry_point: ep.name.clone(),
-                shader_stage: ep.stage,
-            };
+            let pipeline_options =
+                spv::PipelineOptions {
+                    entry_point: ep.name.clone(),
+                    shader_stage: ep.stage,
+                };
             write_output_spv_inner(
                 input,
                 module,
@@ -512,22 +515,24 @@ fn write_output_glsl(
 
     println!("generating GLSL");
 
-    let pipeline_options = glsl::PipelineOptions {
-        shader_stage: stage,
-        entry_point: ep_name.to_string(),
-        multiview,
-    };
+    let pipeline_options =
+        glsl::PipelineOptions {
+            shader_stage: stage,
+            entry_point: ep_name.to_string(),
+            multiview,
+        };
 
     let mut buffer = String::new();
-    let mut writer = glsl::Writer::new(
-        &mut buffer,
-        module,
-        info,
-        options,
-        &pipeline_options,
-        bounds_check_policies,
-    )
-    .expect("GLSL init failed");
+    let mut writer =
+        glsl::Writer::new(
+            &mut buffer,
+            module,
+            info,
+            options,
+            &pipeline_options,
+            bounds_check_policies,
+        )
+        .expect("GLSL init failed");
     writer.write().expect("GLSL write failed");
 
     let extension = format!("{ep_name}.{stage:?}.glsl");
@@ -557,10 +562,11 @@ fn write_output_hlsl(
     // This info will be passed to dxc
     let mut config = hlsl_snapshots::Config::empty();
     for (index, ep) in module.entry_points.iter().enumerate() {
-        let name = match reflection_info.entry_point_names[index] {
-            Ok(ref name) => name,
-            Err(_) => continue,
-        };
+        let name =
+            match reflection_info.entry_point_names[index] {
+                Ok(ref name) => name,
+                Err(_) => continue,
+            };
         match ep.stage {
             naga::ShaderStage::Vertex => &mut config.vertex,
             naga::ShaderStage::Fragment => &mut config.fragment,
@@ -847,15 +853,16 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     let _ = env_logger::try_init();
 
     let input = Input::new(Some("spv"), name, "spv");
-    let mut module = naga::front::spv::parse_u8_slice(
-        &input.read_bytes(),
-        &naga::front::spv::Options {
-            adjust_coordinate_space,
-            strict_capabilities: false,
-            block_ctx_dump_prefix: None,
-        },
-    )
-    .unwrap();
+    let mut module =
+        naga::front::spv::parse_u8_slice(
+            &input.read_bytes(),
+            &naga::front::spv::Options {
+                adjust_coordinate_space,
+                strict_capabilities: false,
+                block_ctx_dump_prefix: None,
+            },
+        )
+        .unwrap();
     check_targets(&input, &mut module, targets, None);
 }
 
@@ -900,15 +907,16 @@ fn convert_glsl_variations_check() {
     let input = Input::new(None, "variations", "glsl");
     let source = input.read_source();
     let mut parser = naga::front::glsl::Frontend::default();
-    let mut module = parser
-        .parse(
-            &naga::front::glsl::Options {
-                stage: naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-            &source,
-        )
-        .unwrap();
+    let mut module =
+        parser
+            .parse(
+                &naga::front::glsl::Options {
+                    stage: naga::ShaderStage::Fragment,
+                    defines: Default::default(),
+                },
+                &source,
+            )
+            .unwrap();
     check_targets(&input, &mut module, Targets::GLSL, None);
 }
 
@@ -945,12 +953,13 @@ fn convert_glsl_folder() {
             )
             .unwrap();
 
-        let info = naga::valid::Validator::new(
-            naga::valid::ValidationFlags::all(),
-            naga::valid::Capabilities::all(),
-        )
-        .validate(&module)
-        .unwrap();
+        let info =
+            naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::all(),
+            )
+            .validate(&module)
+            .unwrap();
 
         #[cfg(feature = "wgsl-out")]
         {

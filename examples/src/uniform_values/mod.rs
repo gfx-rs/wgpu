@@ -101,14 +101,15 @@ impl WgpuContext {
 
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
+        let adapter =
+            instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: false,
+                })
+                .await
+                .unwrap();
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -123,9 +124,9 @@ impl WgpuContext {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
+            source: wgpu::ShaderSource::Wgsl(
+                std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))
+            ),
         });
 
         // (2)

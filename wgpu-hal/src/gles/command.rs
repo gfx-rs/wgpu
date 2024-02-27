@@ -160,12 +160,13 @@ impl super::CommandEncoder {
                 if self.state.dirty_vbuf_mask & (1 << attribute.buffer_index) == 0 {
                     continue;
                 }
-                let (buffer_desc, vb) =
-                    match self.state.vertex_buffers[attribute.buffer_index as usize] {
-                        // Not all dirty bindings are necessarily filled. Some may be unused.
-                        (_, None) => continue,
-                        (ref vb_desc, Some(ref vb)) => (vb_desc.clone(), vb),
-                    };
+                let (buffer_desc, vb) = match self.state.vertex_buffers
+                    [attribute.buffer_index as usize]
+                {
+                    // Not all dirty bindings are necessarily filled. Some may be unused.
+                    (_, None) => continue,
+                    (ref vb_desc, Some(ref vb)) => (vb_desc.clone(), vb),
+                };
 
                 let mut attribute_desc = attribute.clone();
                 attribute_desc.offset += vb.offset as u32;
@@ -204,14 +205,15 @@ impl super::CommandEncoder {
     fn prepare_draw(&mut self, first_instance: u32) {
         // If we support fully featured instancing, we want to bind everything as normal
         // and let the draw call sort it out.
-        let emulated_first_instance_value = if self
-            .private_caps
-            .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING)
-        {
-            0
-        } else {
-            first_instance
-        };
+        let emulated_first_instance_value =
+            if self
+                .private_caps
+                .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING)
+            {
+                0
+            } else {
+                first_instance
+            };
 
         if emulated_first_instance_value != self.state.active_first_instance {
             // rebind all per-instance buffers on first-instance change
@@ -668,9 +670,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             });
         }
         if !self.state.invalidate_attachments.is_empty() {
-            self.cmd_buffer.commands.push(C::InvalidateAttachments(
-                self.state.invalidate_attachments.clone(),
-            ));
+            self.cmd_buffer
+                .commands
+                .push(C::InvalidateAttachments(self.state.invalidate_attachments.clone()));
             self.state.invalidate_attachments.clear();
         }
         if self.state.has_pass_label {
@@ -989,10 +991,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         self.state.dirty_vbuf_mask |= 1 << index;
         let (_, ref mut vb) = self.state.vertex_buffers[index as usize];
-        *vb = Some(super::BufferBinding {
-            raw: binding.buffer.raw.unwrap(),
-            offset: binding.offset,
-        });
+        *vb =
+            Some(super::BufferBinding {
+                raw: binding.buffer.raw.unwrap(),
+                offset: binding.offset,
+            });
     }
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth: Range<f32>) {
         self.cmd_buffer.commands.push(C::SetViewport {

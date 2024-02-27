@@ -128,11 +128,7 @@ impl FromStr for BoundsCheckPolicyArg {
             "restrict" => BoundsCheckPolicy::Restrict,
             "readzeroskipwrite" => BoundsCheckPolicy::ReadZeroSkipWrite,
             "unchecked" => BoundsCheckPolicy::Unchecked,
-            _ => {
-                return Err(format!(
-                    "Invalid value for --index-bounds-check-policy: {s}"
-                ))
-            }
+            _ => return Err(format!("Invalid value for --index-bounds-check-policy: {s}")),
         }))
     }
 }
@@ -261,10 +257,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(policy) = args.index_bounds_check_policy {
         params.bounds_check_policies.index = policy.0;
     }
-    params.bounds_check_policies.buffer = match args.buffer_bounds_check_policy {
-        Some(arg) => arg.0,
-        None => params.bounds_check_policies.index,
-    };
+    params.bounds_check_policies.buffer =
+        match args.buffer_bounds_check_policy {
+            Some(arg) => arg.0,
+            None => params.bounds_check_policies.index,
+        };
     params.bounds_check_policies.image_load = match args.image_load_bounds_check_policy {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
@@ -354,20 +351,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             });
 
     // Validate the IR before compaction.
-    let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
-        .validate(&module)
-    {
-        Ok(info) => Some(info),
-        Err(error) => {
-            // Validation failure is not fatal. Just report the error.
-            if let Some(input) = &input_text {
-                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+    let info =
+        match naga::valid::Validator::new(params.validation_flags, validation_caps)
+            .validate(&module)
+        {
+            Ok(info) => Some(info),
+            Err(error) => {
+                // Validation failure is not fatal. Just report the error.
+                if let Some(input) = &input_text {
+                    let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                    emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                }
+                print_err(&error);
+                None
             }
-            print_err(&error);
-            None
-        }
-    };
+        };
 
     // Compact the module, if requested.
     let info = if args.compact || args.before_compaction.is_some() {
@@ -725,14 +723,15 @@ pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, sou
     let config = codespan_reporting::term::Config::default();
     let writer = StandardStream::stderr(ColorChoice::Auto);
 
-    let diagnostic = Diagnostic::error().with_labels(
-        ann_err
-            .spans()
-            .map(|(span, desc)| {
-                Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
-            })
-            .collect(),
-    );
+    let diagnostic =
+        Diagnostic::error().with_labels(
+            ann_err
+                .spans()
+                .map(|(span, desc)| {
+                    Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
+                })
+                .collect(),
+        );
 
     term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
 }

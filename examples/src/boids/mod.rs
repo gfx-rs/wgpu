@@ -158,12 +158,13 @@ impl crate::framework::Example for Example {
 
         // create compute pipeline
 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Compute pipeline"),
-            layout: Some(&compute_pipeline_layout),
-            module: &compute_shader,
-            entry_point: "main",
-        });
+        let compute_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Compute pipeline"),
+                layout: Some(&compute_pipeline_layout),
+                module: &compute_shader,
+                entry_point: "main",
+            });
 
         // buffer for the three 2d triangle vertices of each instance
 

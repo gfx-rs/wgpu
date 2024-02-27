@@ -86,11 +86,12 @@ pub fn op_webgpu_create_texture(
       None
     ));
 
-    let rid = state.resource_table.add(WebGpuTexture {
-        instance: instance.clone(),
-        id: val,
-        owned: true,
-    });
+    let rid =
+        state.resource_table.add(WebGpuTexture {
+            instance: instance.clone(),
+            id: val,
+            owned: true,
+        });
 
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }

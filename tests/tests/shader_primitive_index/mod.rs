@@ -61,28 +61,29 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
-    )
-    .run_async(|ctx| async move {
-        //
-        //   +-----+-----+
-        //   |white| red |
-        //   +-----+-----+
-        //   |blue |white|
-        //   +-----+-----+
-        //
-        let expected = [
-            255, 255, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
-        ];
-        pulling_common(ctx, &expected, |rpass| {
-            rpass.draw_indexed(0..6, 0, 0..1);
-        })
-        .await;
-    });
+static DRAW_INDEXED: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+        )
+        .run_async(|ctx| async move {
+            //
+            //   +-----+-----+
+            //   |white| red |
+            //   +-----+-----+
+            //   |blue |white|
+            //   +-----+-----+
+            //
+            let expected = [
+                255, 255, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+            ];
+            pulling_common(ctx, &expected, |rpass| {
+                rpass.draw_indexed(0..6, 0, 0..1);
+            })
+            .await;
+        });
 
 async fn pulling_common(
     ctx: TestingContext,
@@ -114,38 +115,38 @@ async fn pulling_common(
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         });
 
-    let pipeline = ctx
-        .device
-        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: None,
-            vertex: wgpu::VertexState {
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: 8,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x2,
-                        offset: 0,
-                        shader_location: 0,
+    let pipeline =
+        ctx.device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: None,
+                vertex: wgpu::VertexState {
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: 8,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        }],
                     }],
-                }],
-                entry_point: "vs_main",
-                module: &shader,
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                entry_point: "fs_main",
-                module: &shader,
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview: None,
-        });
+                    entry_point: "vs_main",
+                    module: &shader,
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    entry_point: "fs_main",
+                    module: &shader,
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview: None,
+            });
 
     let width = 2;
     let height = 2;

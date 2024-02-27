@@ -141,9 +141,9 @@ pub fn create_factory(
     required_factory_type: DxgiFactoryType,
     instance_flags: wgt::InstanceFlags,
 ) -> Result<(d3d12::DxgiLib, d3d12::DxgiFactory), crate::InstanceError> {
-    let lib_dxgi = d3d12::DxgiLib::new().map_err(|e| {
-        crate::InstanceError::with_source(String::from("failed to load dxgi.dll"), e)
-    })?;
+    let lib_dxgi = d3d12::DxgiLib::new().map_err(
+        |e| crate::InstanceError::with_source(String::from("failed to load dxgi.dll"), e)
+    )?;
 
     let mut factory_flags = d3d12::FactoryCreationFlags::empty();
 
@@ -152,14 +152,16 @@ pub fn create_factory(
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.
         match lib_dxgi.get_debug_interface1() {
-            Ok(pair) => match pair.into_result() {
-                Ok(_debug_controller) => {
-                    factory_flags |= d3d12::FactoryCreationFlags::DEBUG;
+            Ok(pair) => {
+                match pair.into_result() {
+                    Ok(_debug_controller) => {
+                        factory_flags |= d3d12::FactoryCreationFlags::DEBUG;
+                    }
+                    Err(err) => {
+                        log::warn!("Unable to enable DXGI debug interface: {}", err);
+                    }
                 }
-                Err(err) => {
-                    log::warn!("Unable to enable DXGI debug interface: {}", err);
-                }
-            },
+            }
             Err(err) => {
                 log::warn!("Debug interface function for DXGI not found: {:?}", err);
             }
@@ -170,30 +172,31 @@ pub fn create_factory(
     }
 
     // Try to create IDXGIFactory4
-    let factory4 = match lib_dxgi.create_factory2(factory_flags) {
-        Ok(pair) => match pair.into_result() {
-            Ok(factory) => Some(factory),
-            // We hard error here as we _should have_ been able to make a factory4 but couldn't.
-            Err(err) => {
-                // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to create IDXGIFactory4: {err:?}"
-                )));
+    let factory4 =
+        match lib_dxgi.create_factory2(factory_flags) {
+            Ok(pair) => match pair.into_result() {
+                Ok(factory) => Some(factory),
+                // We hard error here as we _should have_ been able to make a factory4 but couldn't.
+                Err(err) => {
+                    // err is a Cow<str>, not an Error implementor
+                    return Err(crate::InstanceError::new(
+                        format!("failed to create IDXGIFactory4: {err:?}")
+                    ));
+                }
+            },
+            // If we require factory4, hard error.
+            Err(err) if required_factory_type == DxgiFactoryType::Factory4 => {
+                return Err(crate::InstanceError::with_source(
+                    String::from("IDXGIFactory1 creation function not found"),
+                    err,
+                ));
             }
-        },
-        // If we require factory4, hard error.
-        Err(err) if required_factory_type == DxgiFactoryType::Factory4 => {
-            return Err(crate::InstanceError::with_source(
-                String::from("IDXGIFactory1 creation function not found"),
-                err,
-            ));
-        }
-        // If we don't print it to warn as all win7 will hit this case.
-        Err(err) => {
-            log::warn!("IDXGIFactory1 creation function not found: {err:?}");
-            None
-        }
-    };
+            // If we don't print it to warn as all win7 will hit this case.
+            Err(err) => {
+                log::warn!("IDXGIFactory1 creation function not found: {err:?}");
+                None
+            }
+        };
 
     if let Some(factory4) = factory4 {
         //  Try to cast the IDXGIFactory4 into IDXGIFactory6
@@ -205,9 +208,9 @@ pub fn create_factory(
             // If we require factory6, hard error.
             Err(err) if required_factory_type == DxgiFactoryType::Factory6 => {
                 // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}"
-                )));
+                return Err(crate::InstanceError::new(
+                    format!("failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}")
+                ));
             }
             // If we don't print it to warn.
             Err(err) => {
@@ -223,9 +226,9 @@ pub fn create_factory(
             Ok(factory) => factory,
             Err(err) => {
                 // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to create IDXGIFactory1: {err:?}"
-                )));
+                return Err(
+                    crate::InstanceError::new(format!("failed to create IDXGIFactory1: {err:?}"))
+                );
             }
         },
         // We always require at least factory1, so hard error
@@ -246,9 +249,9 @@ pub fn create_factory(
         // If we require factory2, hard error.
         Err(err) if required_factory_type == DxgiFactoryType::Factory2 => {
             // err is a Cow<str>, not an Error implementor
-            return Err(crate::InstanceError::new(format!(
-                "failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}"
-            )));
+            return Err(crate::InstanceError::new(
+                format!("failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}")
+            ));
         }
         // If we don't print it to warn.
         Err(err) => {

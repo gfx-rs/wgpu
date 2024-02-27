@@ -32,21 +32,22 @@ impl super::Adapter {
                     src = &src[pos + es_sig.len()..];
                 }
                 None => {
-                    return Err(crate::InstanceError::new(format!(
-                        "OpenGL version {src:?} does not contain 'ES'"
-                    )));
+                    return Err(crate::InstanceError::new(
+                        format!("OpenGL version {src:?} does not contain 'ES'")
+                    ));
                 }
             }
         };
 
         let glsl_es_sig = "GLSL ES ";
-        let is_glsl = match src.find(glsl_es_sig) {
-            Some(pos) => {
-                src = &src[pos + glsl_es_sig.len()..];
-                true
-            }
-            None => false,
-        };
+        let is_glsl =
+            match src.find(glsl_es_sig) {
+                Some(pos) => {
+                    src = &src[pos + glsl_es_sig.len()..];
+                    true
+                }
+                None => false,
+            };
 
         Self::parse_full_version(src).map(|(major, minor)| {
             (
@@ -87,19 +88,20 @@ impl super::Adapter {
         let mut it = version.split('.');
         let major = it.next().and_then(|s| s.parse().ok());
         let minor = it.next().and_then(|s| {
-            let trimmed = if s.starts_with('0') {
-                "0"
-            } else {
-                s.trim_end_matches('0')
-            };
+            let trimmed =
+                if s.starts_with('0') {
+                    "0"
+                } else {
+                    s.trim_end_matches('0')
+                };
             trimmed.parse().ok()
         });
 
         match (major, minor) {
             (Some(major), Some(minor)) => Ok((major, minor)),
-            _ => Err(crate::InstanceError::new(format!(
-                "unable to extract OpenGL version from {version:?}"
-            ))),
+            _ => Err(crate::InstanceError::new(
+                format!("unable to extract OpenGL version from {version:?}")
+            )),
         }
     }
 
@@ -491,23 +493,25 @@ impl super::Adapter {
             "EXT_texture_compression_rgtc",
             "EXT_texture_compression_bptc",
         ];
-        let bcn_exts = if cfg!(any(webgl, Emscripten)) {
-            &webgl_bcn_exts[..]
-        } else if es_ver.is_some() {
-            &gles_bcn_exts[..]
-        } else {
-            &gl_bcn_exts[..]
-        };
+        let bcn_exts =
+            if cfg!(any(webgl, Emscripten)) {
+                &webgl_bcn_exts[..]
+            } else if es_ver.is_some() {
+                &gles_bcn_exts[..]
+            } else {
+                &gl_bcn_exts[..]
+            };
         features.set(
             wgt::Features::TEXTURE_COMPRESSION_BC,
             bcn_exts.iter().all(|&ext| extensions.contains(ext)),
         );
-        let has_etc = if cfg!(any(webgl, Emscripten)) {
-            extensions.contains("WEBGL_compressed_texture_etc")
-        } else {
-            // This is a required part of GLES3, but not part of Desktop GL at all.
-            es_ver.is_some()
-        };
+        let has_etc =
+            if cfg!(any(webgl, Emscripten)) {
+                extensions.contains("WEBGL_compressed_texture_etc")
+            } else {
+                // This is a required part of GLES3, but not part of Desktop GL at all.
+                es_ver.is_some()
+            };
         features.set(wgt::Features::TEXTURE_COMPRESSION_ETC2, has_etc);
 
         // `OES_texture_compression_astc` provides 2D + 3D, LDR + HDR support
@@ -634,11 +638,13 @@ impl super::Adapter {
 
         let min_uniform_buffer_offset_alignment =
             (unsafe { gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT) } as u32);
-        let min_storage_buffer_offset_alignment = if supports_storage {
-            (unsafe { gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT) } as u32)
-        } else {
-            256
-        };
+        let min_storage_buffer_offset_alignment =
+            if supports_storage {
+                (unsafe { gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT) }
+                    as u32)
+            } else {
+                256
+            };
         let max_uniform_buffers_per_shader_stage =
             unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS) }
                 .min(unsafe { gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS) })

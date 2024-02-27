@@ -103,45 +103,46 @@ impl super::Device {
         let capacity_views = limits.max_non_sampler_bindings as u64;
         let capacity_samplers = 2_048;
 
-        let shared = super::DeviceShared {
-            zero_buffer,
-            cmd_signatures: super::CommandSignatures {
-                draw: raw
-                    .create_command_signature(
-                        d3d12::RootSignature::null(),
-                        &[d3d12::IndirectArgument::draw()],
-                        mem::size_of::<wgt::DrawIndirectArgs>() as u32,
-                        0,
-                    )
-                    .into_device_result("Command (draw) signature creation")?,
-                draw_indexed: raw
-                    .create_command_signature(
-                        d3d12::RootSignature::null(),
-                        &[d3d12::IndirectArgument::draw_indexed()],
-                        mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
-                        0,
-                    )
-                    .into_device_result("Command (draw_indexed) signature creation")?,
-                dispatch: raw
-                    .create_command_signature(
-                        d3d12::RootSignature::null(),
-                        &[d3d12::IndirectArgument::dispatch()],
-                        mem::size_of::<wgt::DispatchIndirectArgs>() as u32,
-                        0,
-                    )
-                    .into_device_result("Command (dispatch) signature creation")?,
-            },
-            heap_views: descriptor::GeneralHeap::new(
-                raw.clone(),
-                d3d12::DescriptorHeapType::CbvSrvUav,
-                capacity_views,
-            )?,
-            heap_samplers: descriptor::GeneralHeap::new(
-                raw.clone(),
-                d3d12::DescriptorHeapType::Sampler,
-                capacity_samplers,
-            )?,
-        };
+        let shared =
+            super::DeviceShared {
+                zero_buffer,
+                cmd_signatures: super::CommandSignatures {
+                    draw: raw
+                        .create_command_signature(
+                            d3d12::RootSignature::null(),
+                            &[d3d12::IndirectArgument::draw()],
+                            mem::size_of::<wgt::DrawIndirectArgs>() as u32,
+                            0,
+                        )
+                        .into_device_result("Command (draw) signature creation")?,
+                    draw_indexed: raw
+                        .create_command_signature(
+                            d3d12::RootSignature::null(),
+                            &[d3d12::IndirectArgument::draw_indexed()],
+                            mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                            0,
+                        )
+                        .into_device_result("Command (draw_indexed) signature creation")?,
+                    dispatch: raw
+                        .create_command_signature(
+                            d3d12::RootSignature::null(),
+                            &[d3d12::IndirectArgument::dispatch()],
+                            mem::size_of::<wgt::DispatchIndirectArgs>() as u32,
+                            0,
+                        )
+                        .into_device_result("Command (dispatch) signature creation")?,
+                },
+                heap_views: descriptor::GeneralHeap::new(
+                    raw.clone(),
+                    d3d12::DescriptorHeapType::CbvSrvUav,
+                    capacity_views,
+                )?,
+                heap_samplers: descriptor::GeneralHeap::new(
+                    raw.clone(),
+                    d3d12::DescriptorHeapType::Sampler,
+                    capacity_samplers,
+                )?,
+            };
 
         let mut rtv_pool = descriptor::CpuPool::new(raw.clone(), d3d12::DescriptorHeapType::Rtv);
         let null_rtv_handle = rtv_pool.alloc_handle()?;
@@ -167,18 +168,15 @@ impl super::Device {
             private_caps,
             shared: Arc::new(shared),
             rtv_pool: Mutex::new(rtv_pool),
-            dsv_pool: Mutex::new(descriptor::CpuPool::new(
-                raw.clone(),
-                d3d12::DescriptorHeapType::Dsv,
-            )),
-            srv_uav_pool: Mutex::new(descriptor::CpuPool::new(
-                raw.clone(),
-                d3d12::DescriptorHeapType::CbvSrvUav,
-            )),
-            sampler_pool: Mutex::new(descriptor::CpuPool::new(
-                raw,
-                d3d12::DescriptorHeapType::Sampler,
-            )),
+            dsv_pool: Mutex::new(
+                descriptor::CpuPool::new(raw.clone(), d3d12::DescriptorHeapType::Dsv)
+            ),
+            srv_uav_pool: Mutex::new(
+                descriptor::CpuPool::new(raw.clone(), d3d12::DescriptorHeapType::CbvSrvUav)
+            ),
+            sampler_pool: Mutex::new(
+                descriptor::CpuPool::new(raw, d3d12::DescriptorHeapType::Sampler)
+            ),
             library: Arc::clone(library),
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
@@ -807,29 +805,30 @@ impl crate::Device<super::Api> for super::Device {
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
         // which could cause invalid pointers.
-        let total_non_dynamic_entries = desc
-            .bind_group_layouts
-            .iter()
-            .flat_map(|bgl| {
-                bgl.entries.iter().map(|entry| match entry.ty {
-                    wgt::BindingType::Buffer {
-                        has_dynamic_offset: true,
-                        ..
-                    } => 0,
-                    _ => 1,
+        let total_non_dynamic_entries =
+            desc.bind_group_layouts
+                .iter()
+                .flat_map(|bgl| {
+                    bgl.entries.iter().map(|entry| match entry.ty {
+                        wgt::BindingType::Buffer {
+                            has_dynamic_offset: true,
+                            ..
+                        } => 0,
+                        _ => 1,
+                    })
                 })
-            })
-            .sum();
+                .sum();
         let mut ranges = Vec::with_capacity(total_non_dynamic_entries);
 
         let mut bind_group_infos =
             arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
         for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
-            let mut info = super::BindGroupInfo {
-                tables: super::TableTypes::empty(),
-                base_root_index: parameters.len() as u32,
-                dynamic_buffers: Vec::new(),
-            };
+            let mut info =
+                super::BindGroupInfo {
+                    tables: super::TableTypes::empty(),
+                    base_root_index: parameters.len() as u32,
+                    dynamic_buffers: Vec::new(),
+                };
 
             let mut visibility_view_static = wgt::ShaderStages::empty();
             let mut visibility_view_dynamic = wgt::ShaderStages::empty();
@@ -951,16 +950,20 @@ impl crate::Device<super::Api> for super::Device {
                         d3d12_ty::D3D12_ROOT_PARAMETER_TYPE_CBV,
                         &mut bind_cbv,
                     ),
-                    wgt::BufferBindingType::Storage { read_only: true } => (
-                        super::BufferViewKind::ShaderResource,
-                        d3d12_ty::D3D12_ROOT_PARAMETER_TYPE_SRV,
-                        &mut bind_srv,
-                    ),
-                    wgt::BufferBindingType::Storage { read_only: false } => (
-                        super::BufferViewKind::UnorderedAccess,
-                        d3d12_ty::D3D12_ROOT_PARAMETER_TYPE_UAV,
-                        &mut bind_uav,
-                    ),
+                    wgt::BufferBindingType::Storage { read_only: true } => {
+                        (
+                            super::BufferViewKind::ShaderResource,
+                            d3d12_ty::D3D12_ROOT_PARAMETER_TYPE_SRV,
+                            &mut bind_srv,
+                        )
+                    }
+                    wgt::BufferBindingType::Storage { read_only: false } => {
+                        (
+                            super::BufferViewKind::UnorderedAccess,
+                            d3d12_ty::D3D12_ROOT_PARAMETER_TYPE_UAV,
+                            &mut bind_uav,
+                        )
+                    }
                 };
 
                 binding_map.insert(
@@ -1462,22 +1465,23 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let blob_cs = self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute)?;
 
-        let pair = {
-            profiling::scope!("ID3D12Device::CreateComputePipelineState");
-            self.raw.create_compute_pipeline_state(
-                &desc.layout.shared.signature,
-                blob_cs.create_native_shader(),
-                0,
-                d3d12::CachedPSO::null(),
-                d3d12::PipelineStateFlags::empty(),
-            )
-        };
+        let pair =
+            {
+                profiling::scope!("ID3D12Device::CreateComputePipelineState");
+                self.raw.create_compute_pipeline_state(
+                    &desc.layout.shared.signature,
+                    blob_cs.create_native_shader(),
+                    0,
+                    d3d12::CachedPSO::null(),
+                    d3d12::PipelineStateFlags::empty(),
+                )
+            };
 
         unsafe { blob_cs.destroy() };
 
-        let raw = pair.into_result().map_err(|err| {
-            crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())
-        })?;
+        let raw = pair.into_result().map_err(
+            |err| crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())
+        )?;
 
         null_comptr_check(&raw)?;
 

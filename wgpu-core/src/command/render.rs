@@ -829,12 +829,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut check_multiview = |view: &TextureView<A>| {
             // Get the multiview configuration for this texture view
             let layers = view.selector.layers.end - view.selector.layers.start;
-            let this_multiview = if layers >= 2 {
-                // Trivially proven by the if above
-                Some(unsafe { NonZeroU32::new_unchecked(layers) })
-            } else {
-                None
-            };
+            let this_multiview =
+                if layers >= 2 {
+                    // Trivially proven by the if above
+                    Some(unsafe { NonZeroU32::new_unchecked(layers) })
+                } else {
+                    None
+                };
 
             // Make sure that if this view is a multiview, it is set to be an array
             if this_multiview.is_some() && view.desc.dimension != TextureViewDimension::D2Array {
@@ -858,9 +859,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             Ok(())
         };
         let mut add_view = |view: &TextureView<A>, location| {
-            let render_extent = view.render_extent.map_err(|reason| {
-                RenderPassErrorInner::TextureViewIsNotRenderable { location, reason }
-            })?;
+            let render_extent = view.render_extent.map_err(
+                |reason| RenderPassErrorInner::TextureViewIsNotRenderable { location, reason }
+            )?;
             if let Some(ex) = extent {
                 if ex != render_extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
@@ -901,9 +902,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let ds_aspects = view.desc.aspects();
             if ds_aspects.contains(hal::FormatAspects::COLOR) {
-                return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
-                    view.desc.format,
-                ));
+                return Err(
+                    RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(view.desc.format)
+                );
             }
 
             if !ds_aspects.contains(hal::FormatAspects::STENCIL)
@@ -1071,12 +1072,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     resolve: true,
                 };
 
-                let render_extent = resolve_view.render_extent.map_err(|reason| {
-                    RenderPassErrorInner::TextureViewIsNotRenderable {
-                        location: resolve_location,
-                        reason,
-                    }
-                })?;
+                let render_extent =
+                    resolve_view.render_extent.map_err(|reason| {
+                        RenderPassErrorInner::TextureViewIsNotRenderable {
+                            location: resolve_location,
+                            reason,
+                        }
+                    })?;
                 if color_view.render_extent.unwrap() != render_extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                         expected_location: attachment_location,
@@ -1118,18 +1120,18 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: resolve_view.raw(snatch_guard).ok_or_else(|| {
-                        RenderPassErrorInner::InvalidResolveTarget(resolve_view.info.id())
-                    })?,
+                    view: resolve_view.raw(snatch_guard).ok_or_else(
+                        || RenderPassErrorInner::InvalidResolveTarget(resolve_view.info.id())
+                    )?,
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
             }
 
             colors.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
-                    view: color_view.raw(snatch_guard).ok_or_else(|| {
-                        RenderPassErrorInner::InvalidAttachment(color_view.info.id())
-                    })?,
+                    view: color_view.raw(snatch_guard).ok_or_else(
+                        || RenderPassErrorInner::InvalidAttachment(color_view.info.id())
+                    )?,
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
@@ -1187,16 +1189,17 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             None
         };
 
-        let occlusion_query_set = if let Some(occlusion_query_set) = occlusion_query_set {
-            let query_set = trackers
-                .query_sets
-                .add_single(query_set_guard, occlusion_query_set)
-                .ok_or(RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
+        let occlusion_query_set =
+            if let Some(occlusion_query_set) = occlusion_query_set {
+                let query_set = trackers
+                    .query_sets
+                    .add_single(query_set_guard, occlusion_query_set)
+                    .ok_or(RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
 
-            Some(query_set.raw.as_ref().unwrap())
-        } else {
-            None
-        };
+                Some(query_set.raw.as_ref().unwrap())
+            } else {
+                None
+            };
 
         let hal_desc = hal::RenderPassDescriptor {
             label: hal_label(label, device.instance_flags),
@@ -1277,9 +1280,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
-                        view: view.raw(snatch_guard).ok_or_else(|| {
-                            RenderPassErrorInner::InvalidAttachment(view.info.id())
-                        })?,
+                        view: view.raw(snatch_guard).ok_or_else(
+                            || RenderPassErrorInner::InvalidAttachment(view.info.id())
+                        )?,
                         usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,
@@ -1822,9 +1825,9 @@ impl Global {
                             .map_pass_err(scope);
                         }
                         if !(0.0..=1.0).contains(&depth_min) || !(0.0..=1.0).contains(&depth_max) {
-                            return Err(RenderCommandError::InvalidViewportDepth(
-                                depth_min, depth_max,
-                            ))
+                            return Err(
+                                RenderCommandError::InvalidViewportDepth(depth_min, depth_max)
+                            )
                             .map_pass_err(scope);
                         }
                         let r = hal::Rect {
@@ -2475,15 +2478,16 @@ pub mod render_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = unsafe {
-            pass.current_bind_groups.set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut pass.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            )
-        };
+        let redundant =
+            unsafe {
+                pass.current_bind_groups.set_and_check_redundant(
+                    bind_group_id,
+                    index,
+                    &mut pass.base.dynamic_offsets,
+                    offsets,
+                    offset_length,
+                )
+            };
 
         if redundant {
             return;

@@ -130,9 +130,10 @@ impl AccelerationStructureInstance {
     }
 
     pub fn set_flags(&mut self, flags: u8) {
-        self.shader_binding_table_record_offset_and_flags =
-            (self.shader_binding_table_record_offset_and_flags & Self::LOW_24_MASK)
-                | (u32::from(flags) << 24)
+        self.shader_binding_table_record_offset_and_flags = (self
+            .shader_binding_table_record_offset_and_flags
+            & Self::LOW_24_MASK)
+            | (u32::from(flags) << 24)
     }
 
     pub fn new(
@@ -226,16 +227,17 @@ impl<A: hal::Api> Example<A> {
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let surface = {
-            let raw_window_handle = window.window_handle()?.as_raw();
-            let raw_display_handle = window.display_handle()?.as_raw();
+        let surface =
+            {
+                let raw_window_handle = window.window_handle()?.as_raw();
+                let raw_display_handle = window.display_handle()?.as_raw();
 
-            unsafe {
-                instance
-                    .create_surface(raw_display_handle, raw_window_handle)
-                    .unwrap()
-            }
-        };
+                unsafe {
+                    instance
+                        .create_surface(raw_display_handle, raw_window_handle)
+                        .unwrap()
+                }
+            };
 
         let (adapter, features) = unsafe {
             let mut adapters = instance.enumerate_adapters();
@@ -364,17 +366,18 @@ impl<A: hal::Api> Example<A> {
                 .unwrap()
         };
 
-        let pipeline = unsafe {
-            device.create_compute_pipeline(&hal::ComputePipelineDescriptor {
-                label: Some("pipeline"),
-                layout: &pipeline_layout,
-                stage: hal::ProgrammableStage {
-                    module: &shader_module,
-                    entry_point: "main",
-                },
-            })
-        }
-        .unwrap();
+        let pipeline =
+            unsafe {
+                device.create_compute_pipeline(&hal::ComputePipelineDescriptor {
+                    label: Some("pipeline"),
+                    layout: &pipeline_layout,
+                    stage: hal::ProgrammableStage {
+                        module: &shader_module,
+                        entry_point: "main",
+                    },
+                })
+            }
+            .unwrap();
 
         let vertices: [f32; 9] = [1.0, 1.0, 0.0, -1.0, 1.0, 0.0, 0.0, -1.0, 0.0];
 
@@ -409,30 +412,32 @@ impl<A: hal::Api> Example<A> {
             vertices_buffer
         };
 
-        let indices_buffer = unsafe {
-            let indices_buffer = device
-                .create_buffer(&hal::BufferDescriptor {
-                    label: Some("indices buffer"),
-                    size: indices_size_in_bytes as u64,
-                    usage: hal::BufferUses::MAP_WRITE
-                        | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                    memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
-                })
-                .unwrap();
+        let indices_buffer =
+            unsafe {
+                let indices_buffer = device
+                    .create_buffer(&hal::BufferDescriptor {
+                        label: Some("indices buffer"),
+                        size: indices_size_in_bytes as u64,
+                        usage: hal::BufferUses::MAP_WRITE
+                            | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        memory_flags: hal::MemoryFlags::TRANSIENT
+                            | hal::MemoryFlags::PREFER_COHERENT,
+                    })
+                    .unwrap();
 
-            let mapping = device
-                .map_buffer(&indices_buffer, 0..indices_size_in_bytes as u64)
-                .unwrap();
-            ptr::copy_nonoverlapping(
-                indices.as_ptr() as *const u8,
-                mapping.ptr.as_ptr(),
-                indices_size_in_bytes,
-            );
-            device.unmap_buffer(&indices_buffer).unwrap();
-            assert!(mapping.is_coherent);
+                let mapping = device
+                    .map_buffer(&indices_buffer, 0..indices_size_in_bytes as u64)
+                    .unwrap();
+                ptr::copy_nonoverlapping(
+                    indices.as_ptr() as *const u8,
+                    mapping.ptr.as_ptr(),
+                    indices_size_in_bytes,
+                );
+                device.unmap_buffer(&indices_buffer).unwrap();
+                assert!(mapping.is_coherent);
 
-            indices_buffer
-        };
+                indices_buffer
+            };
 
         let blas_triangles = vec![hal::AccelerationStructureTriangles {
             vertex_buffer: Some(&vertices_buffer),
@@ -458,14 +463,15 @@ impl<A: hal::Api> Example<A> {
                 offset: 0,
             });
 
-        let blas_sizes = unsafe {
-            device.get_acceleration_structure_build_sizes(
-                &hal::GetAccelerationStructureBuildSizesDescriptor {
-                    entries: &blas_entries,
-                    flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
-                },
-            )
-        };
+        let blas_sizes =
+            unsafe {
+                device.get_acceleration_structure_build_sizes(
+                    &hal::GetAccelerationStructureBuildSizesDescriptor {
+                        entries: &blas_entries,
+                        flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
+                    },
+                )
+            };
 
         let tlas_flags = hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE
             | hal::AccelerationStructureBuildFlags::ALLOW_UPDATE;
@@ -479,23 +485,25 @@ impl<A: hal::Api> Example<A> {
             )
         };
 
-        let blas = unsafe {
-            device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                label: Some("blas"),
-                size: blas_sizes.acceleration_structure_size,
-                format: hal::AccelerationStructureFormat::BottomLevel,
-            })
-        }
-        .unwrap();
+        let blas =
+            unsafe {
+                device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                    label: Some("blas"),
+                    size: blas_sizes.acceleration_structure_size,
+                    format: hal::AccelerationStructureFormat::BottomLevel,
+                })
+            }
+            .unwrap();
 
-        let tlas = unsafe {
-            device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                label: Some("tlas"),
-                size: tlas_sizes.acceleration_structure_size,
-                format: hal::AccelerationStructureFormat::TopLevel,
-            })
-        }
-        .unwrap();
+        let tlas =
+            unsafe {
+                device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                    label: Some("tlas"),
+                    size: tlas_sizes.acceleration_structure_size,
+                    format: hal::AccelerationStructureFormat::TopLevel,
+                })
+            }
+            .unwrap();
 
         let uniforms = {
             let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
@@ -568,31 +576,32 @@ impl<A: hal::Api> Example<A> {
                 view: &texture_view,
                 usage: hal::TextureUses::STORAGE_READ_WRITE,
             };
-            let group_desc = hal::BindGroupDescriptor {
-                label: Some("bind group"),
-                layout: &bgl,
-                buffers: &[buffer_binding],
-                samplers: &[],
-                textures: &[texture_binding],
-                acceleration_structures: &[&tlas],
-                entries: &[
-                    hal::BindGroupEntry {
-                        binding: 0,
-                        resource_index: 0,
-                        count: 1,
-                    },
-                    hal::BindGroupEntry {
-                        binding: 1,
-                        resource_index: 0,
-                        count: 1,
-                    },
-                    hal::BindGroupEntry {
-                        binding: 2,
-                        resource_index: 0,
-                        count: 1,
-                    },
-                ],
-            };
+            let group_desc =
+                hal::BindGroupDescriptor {
+                    label: Some("bind group"),
+                    layout: &bgl,
+                    buffers: &[buffer_binding],
+                    samplers: &[],
+                    textures: &[texture_binding],
+                    acceleration_structures: &[&tlas],
+                    entries: &[
+                        hal::BindGroupEntry {
+                            binding: 0,
+                            resource_index: 0,
+                            count: 1,
+                        },
+                        hal::BindGroupEntry {
+                            binding: 1,
+                            resource_index: 0,
+                            count: 1,
+                        },
+                        hal::BindGroupEntry {
+                            binding: 2,
+                            resource_index: 0,
+                            count: 1,
+                        },
+                    ],
+                };
             unsafe { device.create_bind_group(&group_desc).unwrap() }
         };
 
@@ -839,11 +848,12 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
 
-            let instances = hal::AccelerationStructureInstances {
-                buffer: Some(&self.instances_buffer),
-                count: self.instances.len() as u32,
-                offset: 0,
-            };
+            let instances =
+                hal::AccelerationStructureInstances {
+                    buffer: Some(&self.instances_buffer),
+                    count: self.instances.len() as u32,
+                    offset: 0,
+                };
 
             ctx.encoder
                 .place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
@@ -955,11 +965,12 @@ impl<A: hal::Api> Example<A> {
 
         unsafe {
             let cmd_buf = ctx.encoder.end_encoding().unwrap();
-            let fence_param = if do_fence {
-                Some((&mut ctx.fence, ctx.fence_value))
-            } else {
-                None
-            };
+            let fence_param =
+                if do_fence {
+                    Some((&mut ctx.fence, ctx.fence_value))
+                } else {
+                    None
+                };
             self.queue
                 .submit(&[&cmd_buf], &[&surface_tex], fence_param)
                 .unwrap();
@@ -972,10 +983,11 @@ impl<A: hal::Api> Example<A> {
             log::info!("Context switch from {}", self.context_index);
             let old_fence_value = ctx.fence_value;
             if self.contexts.len() == 1 {
-                let hal_desc = hal::CommandEncoderDescriptor {
-                    label: None,
-                    queue: &self.queue,
-                };
+                let hal_desc =
+                    hal::CommandEncoderDescriptor {
+                        label: None,
+                        queue: &self.queue,
+                    };
                 self.contexts.push(unsafe {
                     ExecutionContext {
                         encoder: self.device.create_command_encoder(&hal_desc).unwrap(),
@@ -1080,26 +1092,28 @@ fn main() {
             let _ = &window; // force ownership by the closure
             target.set_control_flow(winit::event_loop::ControlFlow::Poll);
             match event {
-                winit::event::Event::WindowEvent { event, .. } => match event {
-                    winit::event::WindowEvent::CloseRequested => {
-                        target.exit();
+                winit::event::Event::WindowEvent { event, .. } => {
+                    match event {
+                        winit::event::WindowEvent::CloseRequested => {
+                            target.exit();
+                        }
+                        winit::event::WindowEvent::KeyboardInput { event, .. }
+                            if event.physical_key
+                                == winit::keyboard::PhysicalKey::Code(
+                                    winit::keyboard::KeyCode::Escape,
+                                ) =>
+                        {
+                            target.exit();
+                        }
+                        winit::event::WindowEvent::RedrawRequested => {
+                            let ex = example.as_mut().unwrap();
+                            ex.render();
+                        }
+                        _ => {
+                            example.as_mut().unwrap().update(event);
+                        }
                     }
-                    winit::event::WindowEvent::KeyboardInput { event, .. }
-                        if event.physical_key
-                            == winit::keyboard::PhysicalKey::Code(
-                                winit::keyboard::KeyCode::Escape,
-                            ) =>
-                    {
-                        target.exit();
-                    }
-                    winit::event::WindowEvent::RedrawRequested => {
-                        let ex = example.as_mut().unwrap();
-                        ex.render();
-                    }
-                    _ => {
-                        example.as_mut().unwrap().update(event);
-                    }
-                },
+                }
                 winit::event::Event::LoopExiting => {
                     example.take().unwrap().exit();
                 }

@@ -80,23 +80,23 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             .device
             .create_shader_module(include_wgsl!("zero_init_workgroup_mem.wgsl"));
 
-        let pipeline_read = ctx
-            .device
-            .create_compute_pipeline(&ComputePipelineDescriptor {
-                label: Some("pipeline read"),
-                layout: Some(&pll),
-                module: &sm,
-                entry_point: "read",
-            });
+        let pipeline_read =
+            ctx.device
+                .create_compute_pipeline(&ComputePipelineDescriptor {
+                    label: Some("pipeline read"),
+                    layout: Some(&pll),
+                    module: &sm,
+                    entry_point: "read",
+                });
 
-        let pipeline_write = ctx
-            .device
-            .create_compute_pipeline(&ComputePipelineDescriptor {
-                label: Some("pipeline write"),
-                layout: None,
-                module: &sm,
-                entry_point: "write",
-            });
+        let pipeline_write =
+            ctx.device
+                .create_compute_pipeline(&ComputePipelineDescriptor {
+                    label: Some("pipeline write"),
+                    layout: None,
+                    module: &sm,
+                    entry_point: "write",
+                });
 
         // -- Initializing data --
 

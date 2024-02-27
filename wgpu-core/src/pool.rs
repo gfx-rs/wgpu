@@ -239,10 +239,11 @@ mod tests {
             barrier: Barrier,
         }
 
-        let resources = Arc::new(Resources {
-            pool: ResourcePool::<u32, u32>::new(),
-            barrier: Barrier::new(2),
-        });
+        let resources =
+            Arc::new(Resources {
+                pool: ResourcePool::<u32, u32>::new(),
+                barrier: Barrier::new(2),
+            });
 
         // Like all races, this is not inherently guaranteed to work, but in practice it should work fine.
         //

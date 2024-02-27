@@ -274,9 +274,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let dst_texture = if src.format != dst.format {
             let raw_format = self.shared.private_caps.map_format(src.format);
-            Cow::Owned(objc::rc::autoreleasepool(|| {
-                dst.raw.new_texture_view(raw_format)
-            }))
+            Cow::Owned(objc::rc::autoreleasepool(|| dst.raw.new_texture_view(raw_format)))
         } else {
             Cow::Borrowed(&dst.raw)
         };
@@ -417,20 +415,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         // Try to use an existing encoder for timestamp query if possible.
         // This works only if it's supported for the active encoder.
-        if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
-            self.state.blit.as_ref(),
-        ) {
+        if let (true, Some(encoder)) =
+            (
+                support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
+                self.state.blit.as_ref(),
+            )
+        {
             encoder.sample_counters_in_buffer(sample_buffer, index as _, with_barrier);
-        } else if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
-            self.state.render.as_ref(),
-        ) {
+        } else if let (true, Some(encoder)) =
+            (
+                support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
+                self.state.render.as_ref(),
+            )
+        {
             encoder.sample_counters_in_buffer(sample_buffer, index as _, with_barrier);
-        } else if let (true, Some(encoder)) = (
-            support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
-            self.state.compute.as_ref(),
-        ) {
+        } else if let (true, Some(encoder)) =
+            (
+                support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
+                self.state.compute.as_ref(),
+            )
+        {
             encoder.sample_counters_in_buffer(sample_buffer, index as _, with_barrier);
         } else {
             // If we're here it means we either have no encoder open, or it's not supported to sample within them.
@@ -909,12 +913,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             wgt::IndexFormat::Uint16 => (2, metal::MTLIndexType::UInt16),
             wgt::IndexFormat::Uint32 => (4, metal::MTLIndexType::UInt32),
         };
-        self.state.index = Some(super::IndexState {
-            buffer_ptr: AsNative::from(binding.buffer.raw.as_ref()),
-            offset: binding.offset,
-            stride,
-            raw_type,
-        });
+        self.state.index =
+            Some(super::IndexState {
+                buffer_ptr: AsNative::from(binding.buffer.raw.as_ref()),
+                offset: binding.offset,
+                stride,
+                raw_type,
+            });
     }
 
     unsafe fn set_vertex_buffer<'a>(

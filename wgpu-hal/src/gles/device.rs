@@ -41,11 +41,12 @@ impl CompilationContext<'_> {
             if ep_info[handle].is_empty() {
                 continue;
             }
-            let register = match var.space {
-                naga::AddressSpace::Uniform => super::BindingRegister::UniformBuffers,
-                naga::AddressSpace::Storage { .. } => super::BindingRegister::StorageBuffers,
-                _ => continue,
-            };
+            let register =
+                match var.space {
+                    naga::AddressSpace::Uniform => super::BindingRegister::UniformBuffers,
+                    naga::AddressSpace::Storage { .. } => super::BindingRegister::StorageBuffers,
+                    _ => continue,
+                };
 
             let br = var.binding.as_ref().unwrap();
             let slot = self.layout.get_slot(br);
@@ -231,11 +232,12 @@ impl super::Device {
         use naga::proc::BoundsCheckPolicy;
         // The image bounds checks require the TEXTURE_LEVELS feature available in GL core 4.3+.
         let version = gl.version();
-        let image_check = if !version.is_embedded && (version.major, version.minor) >= (4, 3) {
-            BoundsCheckPolicy::ReadZeroSkipWrite
-        } else {
-            BoundsCheckPolicy::Unchecked
-        };
+        let image_check =
+            if !version.is_embedded && (version.major, version.minor) >= (4, 3) {
+                BoundsCheckPolicy::ReadZeroSkipWrite
+            } else {
+                BoundsCheckPolicy::Unchecked
+            };
 
         // Other bounds check are either provided by glsl or not implemented yet.
         let policies = naga::proc::BoundsCheckPolicies {
@@ -362,13 +364,14 @@ impl super::Device {
                 push_constant_items.push(Vec::new());
                 push_constant_items.last_mut().unwrap()
             };
-            let context = CompilationContext {
-                layout,
-                sampler_map: &mut sampler_map,
-                name_binding_map: &mut name_binding_map,
-                push_constant_items: pc_item,
-                multiview,
-            };
+            let context =
+                CompilationContext {
+                    layout,
+                    sampler_map: &mut sampler_map,
+                    name_binding_map: &mut name_binding_map,
+                    push_constant_items: pc_item,
+                    multiview,
+                };
 
             let shader = Self::create_shader(gl, naga_stage, stage, context, program)?;
             shaders_to_delete.push(shader);
@@ -603,11 +606,12 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
 
-        let data = if emulate_map && desc.usage.contains(crate::BufferUses::MAP_READ) {
-            Some(Arc::new(Mutex::new(vec![0; desc.size as usize])))
-        } else {
-            None
-        };
+        let data =
+            if emulate_map && desc.usage.contains(crate::BufferUses::MAP_READ) {
+                Some(Arc::new(Mutex::new(vec![0; desc.size as usize])))
+            } else {
+                None
+            };
 
         Ok(super::Buffer {
             raw,

@@ -229,7 +229,7 @@ pub enum ValidationError {
 
 impl crate::TypeInner {
     const fn is_sized(&self) -> bool {
-        match *self {
+        matches!(self,
             Self::Scalar { .. }
             | Self::Vector { .. }
             | Self::Matrix { .. }
@@ -240,13 +240,7 @@ impl crate::TypeInner {
             | Self::Atomic { .. }
             | Self::Pointer { .. }
             | Self::ValuePointer { .. }
-            | Self::Struct { .. } => true,
-            Self::Array { .. }
-            | Self::Image { .. }
-            | Self::Sampler { .. }
-            | Self::AccelerationStructure
-            | Self::RayQuery
-            | Self::BindingArray { .. } => false,
+            | Self::Struct { .. });
         }
     }
 

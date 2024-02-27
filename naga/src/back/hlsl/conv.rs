@@ -39,10 +39,7 @@ impl crate::Scalar {
 
 impl crate::TypeInner {
     pub(super) const fn is_matrix(&self) -> bool {
-        match *self {
-            Self::Matrix { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Matrix { .. })
     }
 
     pub(super) fn size_hlsl(&self, gctx: crate::proc::GlobalCtx) -> u32 {

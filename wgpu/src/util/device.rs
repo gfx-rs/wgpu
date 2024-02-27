@@ -64,12 +64,13 @@ impl DeviceExt for crate::Device {
     fn create_buffer_init(&self, descriptor: &BufferInitDescriptor<'_>) -> crate::Buffer {
         // Skip mapping if the buffer is zero sized
         if descriptor.contents.is_empty() {
-            let wgt_descriptor = crate::BufferDescriptor {
-                label: descriptor.label,
-                size: 0,
-                usage: descriptor.usage,
-                mapped_at_creation: false,
-            };
+            let wgt_descriptor =
+                crate::BufferDescriptor {
+                    label: descriptor.label,
+                    size: 0,
+                    usage: descriptor.usage,
+                    mapped_at_creation: false,
+                };
 
             self.create_buffer(&wgt_descriptor)
         } else {

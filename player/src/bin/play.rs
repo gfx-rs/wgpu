@@ -53,14 +53,15 @@ fn main() {
     let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
 
     #[cfg(feature = "winit")]
-    let surface = unsafe {
-        global.instance_create_surface(
-            window.display_handle().unwrap().into(),
-            window.window_handle().unwrap().into(),
-            Some(wgc::id::Id::zip(0, 1, wgt::Backend::Empty)),
-        )
-    }
-    .unwrap();
+    let surface =
+        unsafe {
+            global.instance_create_surface(
+                window.display_handle().unwrap().into(),
+                window.window_handle().unwrap().into(),
+                Some(wgc::id::Id::zip(0, 1, wgt::Backend::Empty)),
+            )
+        }
+        .unwrap();
 
     let device = match actions.pop() {
         Some(trace::Action::Init { desc, backend }) => {

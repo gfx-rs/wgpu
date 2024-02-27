@@ -292,14 +292,16 @@ impl<A: HalApi> Adapter<A> {
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        if let Ok(device) = Device::new(
-            hal_device.device,
-            &hal_device.queue,
-            self,
-            desc,
-            trace_path,
-            instance_flags,
-        ) {
+        if let Ok(device) =
+            Device::new(
+                hal_device.device,
+                &hal_device.queue,
+                self,
+                desc,
+                trace_path,
+                instance_flags,
+            )
+        {
             let queue = Queue {
                 device: None,
                 raw: Some(hal_device.queue),
@@ -318,9 +320,9 @@ impl<A: HalApi> Adapter<A> {
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
-            return Err(RequestDeviceError::UnsupportedFeature(
-                desc.required_features - self.raw.features,
-            ));
+            return Err(
+                RequestDeviceError::UnsupportedFeature(desc.required_features - self.raw.features)
+            );
         }
 
         let caps = &self.raw.capabilities;
@@ -877,28 +879,31 @@ impl Global {
             }
         }
 
-        let preferred_gpu = match desc.power_preference {
-            // Since devices of type "Other" might really be "Unknown" and come
-            // from APIs like OpenGL that don't specify device type, Prefer more
-            // Specific types over Other.
-            //
-            // This means that backends which do provide accurate device types
-            // will be preferred if their device type indicates an actual
-            // hardware GPU (integrated or discrete).
-            PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
-            PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
-            PowerPreference::None => {
-                let option_min = |a: Option<usize>, b: Option<usize>| {
-                    if let (Some(a), Some(b)) = (a, b) {
-                        Some(a.min(b))
-                    } else {
-                        a.or(b)
-                    }
-                };
-                // Pick the lowest id of these types
-                option_min(option_min(discrete, integrated), other)
-            }
-        };
+        let preferred_gpu =
+            match desc.power_preference {
+                // Since devices of type "Other" might really be "Unknown" and come
+                // from APIs like OpenGL that don't specify device type, Prefer more
+                // Specific types over Other.
+                //
+                // This means that backends which do provide accurate device types
+                // will be preferred if their device type indicates an actual
+                // hardware GPU (integrated or discrete).
+                PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
+                PowerPreference::HighPerformance => {
+                    discrete.or(integrated).or(other).or(virt).or(cpu)
+                }
+                PowerPreference::None => {
+                    let option_min = |a: Option<usize>, b: Option<usize>| {
+                        if let (Some(a), Some(b)) = (a, b) {
+                            Some(a.min(b))
+                        } else {
+                            a.or(b)
+                        }
+                    };
+                    // Pick the lowest id of these types
+                    option_min(option_min(discrete, integrated), other)
+                }
+            };
 
         let mut selected = preferred_gpu.unwrap_or(0);
         #[cfg(vulkan)]
@@ -1056,29 +1061,30 @@ impl Global {
         let device_fid = hub.devices.prepare(device_id_in);
         let queue_fid = hub.queues.prepare(queue_id_in);
 
-        let error = loop {
-            let adapter = match hub.adapters.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break RequestDeviceError::InvalidAdapter,
-            };
-            let (device, mut queue) =
-                match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
-                    Ok((device, queue)) => (device, queue),
-                    Err(e) => break e,
+        let error =
+            loop {
+                let adapter = match hub.adapters.get(adapter_id) {
+                    Ok(adapter) => adapter,
+                    Err(_) => break RequestDeviceError::InvalidAdapter,
                 };
-            let (device_id, _) = device_fid.assign(device);
-            resource_log!("Created Device {:?}", device_id);
+                let (device, mut queue) =
+                    match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
+                        Ok((device, queue)) => (device, queue),
+                        Err(e) => break e,
+                    };
+                let (device_id, _) = device_fid.assign(device);
+                resource_log!("Created Device {:?}", device_id);
 
-            let device = hub.devices.get(device_id).unwrap();
-            queue.device = Some(device.clone());
+                let device = hub.devices.get(device_id).unwrap();
+                queue.device = Some(device.clone());
 
-            let (queue_id, queue) = queue_fid.assign(queue);
-            resource_log!("Created Queue {:?}", queue_id);
+                let (queue_id, queue) = queue_fid.assign(queue);
+                resource_log!("Created Queue {:?}", queue_id);
 
-            device.set_queue(queue);
+                device.set_queue(queue);
 
-            return (device_id, queue_id, None);
-        };
+                return (device_id, queue_id, None);
+            };
 
         let device_id = device_fid.assign_error(desc.label.borrow_or_default());
         let queue_id = queue_fid.assign_error(desc.label.borrow_or_default());

@@ -96,12 +96,13 @@ mod placed {
         };
 
         // let mut allocator = unsafe { device.mem_allocator.as_ref().unwrap_unchecked().lock() };
-        let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
-            allocator.allocator.device().as_winapi(),
-            &raw_desc,
-            name,
-            location,
-        );
+        let allocation_desc =
+            AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+                allocator.allocator.device().as_winapi(),
+                &raw_desc,
+                name,
+                location,
+            );
         let allocation = allocator.allocator.allocate(&allocation_desc)?;
 
         let hr = unsafe {
@@ -145,12 +146,13 @@ mod placed {
                 .strict_unwrap_unchecked()
                 .lock()
         };
-        let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
-            allocator.allocator.device().as_winapi(),
-            &raw_desc,
-            name,
-            location,
-        );
+        let allocation_desc =
+            AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+                allocator.allocator.device().as_winapi(),
+                &raw_desc,
+                name,
+                location,
+            );
         let allocation = allocator.allocator.allocate(&allocation_desc)?;
 
         let hr = unsafe {

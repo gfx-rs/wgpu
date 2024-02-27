@@ -131,11 +131,12 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // the device.
 
         // Create some 512 x 512 2D textures.
-        let texture_extent = wgpu::Extent3d {
-            width: 512,
-            height: 512,
-            depth_or_array_layers: 1,
-        };
+        let texture_extent =
+            wgpu::Extent3d {
+                width: 512,
+                height: 512,
+                depth_or_array_layers: 1,
+            };
         let texture_for_view = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: texture_extent,
@@ -483,39 +484,40 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
     });
 
 #[gpu_test]
-static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
-    .run_async(|ctx| async move {
-        // This test checks that when device.destroy is called, the provided
-        // DeviceLostClosure is called with reason DeviceLostReason::Destroyed.
-        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default())
+        .run_async(|ctx| async move {
+            // This test checks that when device.destroy is called, the provided
+            // DeviceLostClosure is called with reason DeviceLostReason::Destroyed.
+            let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
 
-        // Set a LoseDeviceCallback on the device.
-        let was_called_clone = was_called.clone();
-        let callback = Box::new(move |reason, _m| {
-            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            // Set a LoseDeviceCallback on the device.
+            let was_called_clone = was_called.clone();
+            let callback = Box::new(move |reason, _m| {
+                was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                assert!(
+                    matches!(reason, wgt::DeviceLostReason::Destroyed),
+                    "Device lost info reason should match DeviceLostReason::Destroyed."
+                );
+            });
+            ctx.device.set_device_lost_callback(callback);
+
+            // Destroy the device.
+            ctx.device.destroy();
+
+            // Make sure the device queues are empty, which ensures that the closure
+            // has been called.
+            assert!(ctx
+                .async_poll(wgpu::Maintain::wait())
+                .await
+                .is_queue_empty());
+
             assert!(
-                matches!(reason, wgt::DeviceLostReason::Destroyed),
-                "Device lost info reason should match DeviceLostReason::Destroyed."
+                was_called.load(std::sync::atomic::Ordering::SeqCst),
+                "Device lost callback should have been called."
             );
         });
-        ctx.device.set_device_lost_callback(callback);
-
-        // Destroy the device.
-        ctx.device.destroy();
-
-        // Make sure the device queues are empty, which ensures that the closure
-        // has been called.
-        assert!(ctx
-            .async_poll(wgpu::Maintain::wait())
-            .await
-            .is_queue_empty());
-
-        assert!(
-            was_called.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
 
 #[gpu_test]
 static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -551,33 +553,34 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
-    .run_sync(|ctx| {
-        // This test checks that a device_lost_callback is called when it is
-        // replaced by another callback.
-        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default())
+        .run_sync(|ctx| {
+            // This test checks that a device_lost_callback is called when it is
+            // replaced by another callback.
+            let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
 
-        // Set a LoseDeviceCallback on the device.
-        let was_called_clone = was_called.clone();
-        let callback = Box::new(move |reason, _m| {
-            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            // Set a LoseDeviceCallback on the device.
+            let was_called_clone = was_called.clone();
+            let callback = Box::new(move |reason, _m| {
+                was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                assert!(
+                    matches!(reason, wgt::DeviceLostReason::ReplacedCallback),
+                    "Device lost info reason should match DeviceLostReason::ReplacedCallback."
+                );
+            });
+            ctx.device.set_device_lost_callback(callback);
+
+            // Replace the callback.
+            let replacement_callback = Box::new(move |_r, _m| {});
+            ctx.device.set_device_lost_callback(replacement_callback);
+
             assert!(
-                matches!(reason, wgt::DeviceLostReason::ReplacedCallback),
-                "Device lost info reason should match DeviceLostReason::ReplacedCallback."
+                was_called.load(std::sync::atomic::Ordering::SeqCst),
+                "Device lost callback should have been called."
             );
         });
-        ctx.device.set_device_lost_callback(callback);
-
-        // Replace the callback.
-        let replacement_callback = Box::new(move |_r, _m| {});
-        ctx.device.set_device_lost_callback(replacement_callback);
-
-        assert!(
-            was_called.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
 
 #[gpu_test]
 static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfiguration::new()

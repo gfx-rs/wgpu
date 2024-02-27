@@ -44,17 +44,18 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
 
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
     //  `features` being the available features.
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-            },
-            None,
-        )
-        .await
-        .unwrap();
+    let (device, queue) =
+        adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
     execute_gpu_inner(&device, &queue, numbers).await
 }
@@ -104,12 +105,13 @@ async fn execute_gpu_inner(
     // A pipeline specifies the operation of a shader
 
     // Instantiates the pipeline.
-    let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: None,
-        layout: None,
-        module: &cs_module,
-        entry_point: "main",
-    });
+    let compute_pipeline =
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &cs_module,
+            entry_point: "main",
+        });
 
     // Instantiates the bind group, once again specifying the binding of buffers.
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);

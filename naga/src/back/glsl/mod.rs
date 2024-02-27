@@ -99,10 +99,10 @@ impl crate::AtomicFunction {
 
 impl crate::AddressSpace {
     const fn is_buffer(&self) -> bool {
-        match *self {
-            crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. }
+        )
     }
 
     /// Whether a variable with this address space can be initialized
@@ -1600,9 +1600,8 @@ impl<'a, W: Write> Writer<'a, W> {
         let arguments: Vec<_> = arguments
             .iter()
             .enumerate()
-            .filter(|&(_, arg)| match self.module.types[arg.ty].inner {
-                TypeInner::Sampler { .. } => false,
-                _ => true,
+            .filter(|&(_, arg)| {
+                !matches!(self.module.types[arg.ty].inner, TypeInner::Sampler { .. })
             })
             .collect();
         self.write_slice(&arguments, |this, _, &(i, arg)| {

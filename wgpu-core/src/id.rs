@@ -351,13 +351,15 @@ ids! {
 
 #[test]
 fn test_id_backend() {
-    for &b in &[
-        Backend::Empty,
-        Backend::Vulkan,
-        Backend::Metal,
-        Backend::Dx12,
-        Backend::Gl,
-    ] {
+    for &b in
+        &[
+            Backend::Empty,
+            Backend::Vulkan,
+            Backend::Metal,
+            Backend::Dx12,
+            Backend::Gl,
+        ]
+    {
         let id = crate::id::Id::<()>::zip(1, 0, b);
         let (_id, _epoch, backend) = id.unzip();
         assert_eq!(id.backend(), b);
@@ -370,13 +372,14 @@ fn test_id() {
     let last_index = ((1u64 << INDEX_BITS) - 1) as Index;
     let indexes = [1, last_index / 2 - 1, last_index / 2 + 1, last_index];
     let epochs = [1, EPOCH_MASK / 2 - 1, EPOCH_MASK / 2 + 1, EPOCH_MASK];
-    let backends = [
-        Backend::Empty,
-        Backend::Vulkan,
-        Backend::Metal,
-        Backend::Dx12,
-        Backend::Gl,
-    ];
+    let backends =
+        [
+            Backend::Empty,
+            Backend::Vulkan,
+            Backend::Metal,
+            Backend::Dx12,
+            Backend::Gl,
+        ];
     for &i in &indexes {
         for &e in &epochs {
             for &b in &backends {

@@ -324,11 +324,12 @@ pub(crate) use resource_log;
 
 #[inline]
 pub(crate) fn get_lowest_common_denom(a: u32, b: u32) -> u32 {
-    let gcd = if a >= b {
-        get_greatest_common_divisor(a, b)
-    } else {
-        get_greatest_common_divisor(b, a)
-    };
+    let gcd =
+        if a >= b {
+            get_greatest_common_divisor(a, b)
+        } else {
+            get_greatest_common_divisor(b, a)
+        };
     a * b / gcd
 }
 

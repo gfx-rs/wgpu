@@ -220,10 +220,10 @@ const fn vector_size_str(size: crate::VectorSize) -> &'static str {
 
 impl crate::TypeInner {
     const fn is_handle(&self) -> bool {
-        match *self {
-            crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. }
+        )
     }
 }
 
@@ -232,13 +232,13 @@ impl crate::Statement {
     ///
     /// Used to decide whether case blocks require a explicit `break`.
     pub const fn is_terminator(&self) -> bool {
-        match *self {
+        matches!(
+            self,
             crate::Statement::Break
-            | crate::Statement::Continue
-            | crate::Statement::Return { .. }
-            | crate::Statement::Kill => true,
-            _ => false,
-        }
+                | crate::Statement::Continue
+                | crate::Statement::Return { .. }
+                | crate::Statement::Kill
+        )
     }
 }
 

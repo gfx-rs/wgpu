@@ -58,14 +58,15 @@ async fn draw_test_with_reports(
     let report = global_report.hub_report(ctx.adapter_info.backend);
     assert_eq!(report.buffers.num_allocated, 1);
 
-    let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &bgl,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: buffer.as_entire_binding(),
-        }],
-    });
+    let bg =
+        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);

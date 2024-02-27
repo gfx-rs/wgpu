@@ -285,25 +285,27 @@ impl crate::D3D12Lib {
             *mut *mut ID3DBlob,
         ) -> crate::HRESULT;
 
-        let desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
-            NumParameters: parameters.len() as _,
-            pParameters: parameters.as_ptr() as *const _,
-            NumStaticSamplers: static_samplers.len() as _,
-            pStaticSamplers: static_samplers.as_ptr() as _,
-            Flags: flags.bits(),
-        };
+        let desc =
+            d3d12::D3D12_ROOT_SIGNATURE_DESC {
+                NumParameters: parameters.len() as _,
+                pParameters: parameters.as_ptr() as *const _,
+                NumStaticSamplers: static_samplers.len() as _,
+                pStaticSamplers: static_samplers.as_ptr() as _,
+                Flags: flags.bits(),
+            };
 
         let mut blob = Blob::null();
         let mut error = Error::null();
-        let hr = unsafe {
-            let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12SerializeRootSignature")?;
-            func(
-                &desc,
-                version as _,
-                blob.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
-            )
-        };
+        let hr =
+            unsafe {
+                let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12SerializeRootSignature")?;
+                func(
+                    &desc,
+                    version as _,
+                    blob.mut_void() as *mut *mut _,
+                    error.mut_void() as *mut *mut _,
+                )
+            };
 
         Ok(((blob, error), hr))
     }
@@ -320,22 +322,24 @@ impl RootSignature {
         let mut blob = Blob::null();
         let mut error = Error::null();
 
-        let desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
-            NumParameters: parameters.len() as _,
-            pParameters: parameters.as_ptr() as *const _,
-            NumStaticSamplers: static_samplers.len() as _,
-            pStaticSamplers: static_samplers.as_ptr() as _,
-            Flags: flags.bits(),
-        };
+        let desc =
+            d3d12::D3D12_ROOT_SIGNATURE_DESC {
+                NumParameters: parameters.len() as _,
+                pParameters: parameters.as_ptr() as *const _,
+                NumStaticSamplers: static_samplers.len() as _,
+                pStaticSamplers: static_samplers.as_ptr() as _,
+                Flags: flags.bits(),
+            };
 
-        let hr = unsafe {
-            d3d12::D3D12SerializeRootSignature(
-                &desc,
-                version as _,
-                blob.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
-            )
-        };
+        let hr =
+            unsafe {
+                d3d12::D3D12SerializeRootSignature(
+                    &desc,
+                    version as _,
+                    blob.mut_void() as *mut *mut _,
+                    error.mut_void() as *mut *mut _,
+                )
+            };
 
         ((blob, error), hr)
     }
@@ -346,11 +350,12 @@ pub struct RenderTargetViewDesc(pub(crate) d3d12::D3D12_RENDER_TARGET_VIEW_DESC)
 
 impl RenderTargetViewDesc {
     pub fn texture_2d(format: dxgiformat::DXGI_FORMAT, mip_slice: u32, plane_slice: u32) -> Self {
-        let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-            Format: format,
-            ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
-            ..unsafe { mem::zeroed() }
-        };
+        let mut desc =
+            d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+                Format: format,
+                ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
+                ..unsafe { mem::zeroed() }
+            };
 
         *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
             MipSlice: mip_slice,

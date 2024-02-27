@@ -764,13 +764,13 @@ impl NumericType {
         if self.scalar.kind != other.scalar.kind {
             return false;
         }
-        match (self.dim, other.dim) {
-            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
-            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
-            (NumericDimension::Vector(_), NumericDimension::Vector(_)) => true,
-            (NumericDimension::Matrix(..), NumericDimension::Matrix(..)) => true,
-            _ => false,
-        }
+        matches!(
+            (self.dim, other.dim),
+            (NumericDimension::Scalar, NumericDimension::Scalar)
+                | (NumericDimension::Scalar, NumericDimension::Vector(_))
+                | (NumericDimension::Vector(_), NumericDimension::Vector(_))
+                | (NumericDimension::Matrix(..), NumericDimension::Matrix(..))
+        )
     }
 }
 
@@ -817,38 +817,43 @@ impl Interface {
         ty: naga::Handle<naga::Type>,
         arena: &naga::UniqueArena<naga::Type>,
     ) {
-        let numeric_ty = match arena[ty].inner {
-            naga::TypeInner::Scalar(scalar) => NumericType {
-                dim: NumericDimension::Scalar,
-                scalar,
-            },
-            naga::TypeInner::Vector { size, scalar } => NumericType {
-                dim: NumericDimension::Vector(size),
-                scalar,
-            },
-            naga::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            } => NumericType {
-                dim: NumericDimension::Matrix(columns, rows),
-                scalar,
-            },
-            naga::TypeInner::Struct { ref members, .. } => {
-                for member in members {
-                    Self::populate(list, member.binding.as_ref(), member.ty, arena);
+        let numeric_ty =
+            match arena[ty].inner {
+                naga::TypeInner::Scalar(scalar) => NumericType {
+                    dim: NumericDimension::Scalar,
+                    scalar,
+                },
+                naga::TypeInner::Vector { size, scalar } => {
+                    NumericType {
+                        dim: NumericDimension::Vector(size),
+                        scalar,
+                    }
                 }
-                return;
-            }
-            ref other => {
-                //Note: technically this should be at least `log::error`, but
-                // the reality is - every shader coming from `glslc` outputs an array
-                // of clip distances and hits this path :(
-                // So we lower it to `log::warn` to be less annoying.
-                log::warn!("Unexpected varying type: {:?}", other);
-                return;
-            }
-        };
+                naga::TypeInner::Matrix {
+                    columns,
+                    rows,
+                    scalar,
+                } => {
+                    NumericType {
+                        dim: NumericDimension::Matrix(columns, rows),
+                        scalar,
+                    }
+                }
+                naga::TypeInner::Struct { ref members, .. } => {
+                    for member in members {
+                        Self::populate(list, member.binding.as_ref(), member.ty, arena);
+                    }
+                    return;
+                }
+                ref other => {
+                    //Note: technically this should be at least `log::error`, but
+                    // the reality is - every shader coming from `glslc` outputs an array
+                    // of clip distances and hits this path :(
+                    // So we lower it to `log::warn` to be less annoying.
+                    log::warn!("Unexpected varying type: {:?}", other);
+                    return;
+                }
+            };
 
         let varying = match binding {
             Some(&naga::Binding::Location {
@@ -898,11 +903,13 @@ impl Interface {
                     dim,
                     arrayed,
                     class,
-                } => ResourceType::Texture {
-                    dim,
-                    arrayed,
-                    class,
-                },
+                } => {
+                    ResourceType::Texture {
+                        dim,
+                        arrayed,
+                        class,
+                    }
+                }
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
                 naga::TypeInner::Array { stride, size, .. } => {
                     let size = match size {
@@ -997,65 +1004,66 @@ impl Interface {
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
-            let result = 'err: {
-                match layouts {
-                    BindingLayoutSource::Provided(layouts) => {
-                        // update the required binding size for this buffer
-                        if let ResourceType::Buffer { size } = res.ty {
-                            match shader_binding_sizes.entry(res.bind.clone()) {
-                                Entry::Occupied(e) => {
-                                    *e.into_mut() = size.max(*e.get());
+            let result =
+                'err: {
+                    match layouts {
+                        BindingLayoutSource::Provided(layouts) => {
+                            // update the required binding size for this buffer
+                            if let ResourceType::Buffer { size } = res.ty {
+                                match shader_binding_sizes.entry(res.bind.clone()) {
+                                    Entry::Occupied(e) => {
+                                        *e.into_mut() = size.max(*e.get());
+                                    }
+                                    Entry::Vacant(e) => {
+                                        e.insert(size);
+                                    }
                                 }
-                                Entry::Vacant(e) => {
-                                    e.insert(size);
+                            }
+
+                            let Some(map) = layouts.get(res.bind.group as usize) else {
+                                break 'err Err(BindingError::Missing);
+                            };
+
+                            let Some(entry) = map.get(res.bind.binding) else {
+                                break 'err Err(BindingError::Missing);
+                            };
+
+                            if !entry.visibility.contains(stage_bit) {
+                                break 'err Err(BindingError::Invisible);
+                            }
+
+                            res.check_binding_use(entry)
+                        }
+                        BindingLayoutSource::Derived(layouts) => {
+                            let Some(map) = layouts.get_mut(res.bind.group as usize) else {
+                                break 'err Err(BindingError::Missing);
+                            };
+
+                            let ty = match res.derive_binding_type() {
+                                Ok(ty) => ty,
+                                Err(error) => break 'err Err(error),
+                            };
+
+                            match map.entry(res.bind.binding) {
+                                indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
+                                    break 'err Err(BindingError::InconsistentlyDerivedType)
+                                }
+                                indexmap::map::Entry::Occupied(e) => {
+                                    e.into_mut().visibility |= stage_bit;
+                                }
+                                indexmap::map::Entry::Vacant(e) => {
+                                    e.insert(BindGroupLayoutEntry {
+                                        binding: res.bind.binding,
+                                        ty,
+                                        visibility: stage_bit,
+                                        count: None,
+                                    });
                                 }
                             }
+                            Ok(())
                         }
-
-                        let Some(map) = layouts.get(res.bind.group as usize) else {
-                            break 'err Err(BindingError::Missing);
-                        };
-
-                        let Some(entry) = map.get(res.bind.binding) else {
-                            break 'err Err(BindingError::Missing);
-                        };
-
-                        if !entry.visibility.contains(stage_bit) {
-                            break 'err Err(BindingError::Invisible);
-                        }
-
-                        res.check_binding_use(entry)
                     }
-                    BindingLayoutSource::Derived(layouts) => {
-                        let Some(map) = layouts.get_mut(res.bind.group as usize) else {
-                            break 'err Err(BindingError::Missing);
-                        };
-
-                        let ty = match res.derive_binding_type() {
-                            Ok(ty) => ty,
-                            Err(error) => break 'err Err(error),
-                        };
-
-                        match map.entry(res.bind.binding) {
-                            indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
-                                break 'err Err(BindingError::InconsistentlyDerivedType)
-                            }
-                            indexmap::map::Entry::Occupied(e) => {
-                                e.into_mut().visibility |= stage_bit;
-                            }
-                            indexmap::map::Entry::Vacant(e) => {
-                                e.insert(BindGroupLayoutEntry {
-                                    binding: res.bind.binding,
-                                    ty,
-                                    visibility: stage_bit,
-                                    count: None,
-                                });
-                            }
-                        }
-                        Ok(())
-                    }
-                }
-            };
+                };
             if let Err(error) = result {
                 return Err(StageError::Binding(res.bind.clone(), error));
             }
@@ -1087,14 +1095,15 @@ impl Interface {
                     _ => unreachable!(),
                 };
 
-                let error = match (sampler_filtering, texture_sample_type) {
-                    (true, wgt::TextureSampleType::Float { filterable: false }) => {
-                        Some(FilteringError::Float)
-                    }
-                    (true, wgt::TextureSampleType::Sint) => Some(FilteringError::Integer),
-                    (true, wgt::TextureSampleType::Uint) => Some(FilteringError::Integer),
-                    _ => None,
-                };
+                let error =
+                    match (sampler_filtering, texture_sample_type) {
+                        (true, wgt::TextureSampleType::Float { filterable: false }) => {
+                            Some(FilteringError::Float)
+                        }
+                        (true, wgt::TextureSampleType::Sint) => Some(FilteringError::Integer),
+                        (true, wgt::TextureSampleType::Uint) => Some(FilteringError::Integer),
+                        _ => None,
+                    };
 
                 if let Some(error) = error {
                     return Err(StageError::Filtering {
@@ -1272,7 +1281,9 @@ pub fn validate_color_attachment_bytes_per_sample(
 ) -> Result<(), u32> {
     let mut total_bytes_per_sample = 0;
     for format in attachment_formats {
-        let Some(format) = format else { continue; };
+        let Some(format) = format else {
+            continue;
+        };
 
         let byte_cost = format.target_pixel_byte_cost().unwrap();
         let alignment = format.target_component_alignment().unwrap();

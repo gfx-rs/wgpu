@@ -299,10 +299,11 @@ pub struct FailureReason {
 
 impl FailureReason {
     /// Match any failure reason.
-    const ANY: Self = Self {
-        kind: None,
-        message: None,
-    };
+    const ANY: Self =
+        Self {
+            kind: None,
+            message: None,
+        };
 
     /// Match a validation error.
     #[allow(dead_code)] // Not constructed on wasm

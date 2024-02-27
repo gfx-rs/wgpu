@@ -1865,13 +1865,13 @@ impl BlendFactor {
     ///
     /// Note that the usage of those blend factors require [`Features::DUAL_SOURCE_BLENDING`].
     pub fn ref_second_blend_source(&self) -> bool {
-        match self {
+        matches!(
+            self,
             BlendFactor::Src1
-            | BlendFactor::OneMinusSrc1
-            | BlendFactor::Src1Alpha
-            | BlendFactor::OneMinusSrc1Alpha => true,
-            _ => false,
-        }
+                | BlendFactor::OneMinusSrc1
+                | BlendFactor::Src1Alpha
+                | BlendFactor::OneMinusSrc1Alpha
+        )
     }
 }
 
@@ -1935,13 +1935,13 @@ impl BlendComponent {
     /// Returns true if the state relies on the constant color, which is
     /// set independently on a render command encoder.
     pub fn uses_constant(&self) -> bool {
-        match (self.src_factor, self.dst_factor) {
+        matches!(
+            (self.src_factor, self.dst_factor),
             (BlendFactor::Constant, _)
-            | (BlendFactor::OneMinusConstant, _)
-            | (_, BlendFactor::Constant)
-            | (_, BlendFactor::OneMinusConstant) => true,
-            (_, _) => false,
-        }
+                | (BlendFactor::OneMinusConstant, _)
+                | (_, BlendFactor::Constant)
+                | (_, BlendFactor::OneMinusConstant)
+        )
     }
 }
 
@@ -2058,10 +2058,7 @@ pub enum PrimitiveTopology {
 impl PrimitiveTopology {
     /// Returns true for strip topologies.
     pub fn is_strip(&self) -> bool {
-        match *self {
-            Self::PointList | Self::LineList | Self::TriangleList => false,
-            Self::LineStrip | Self::TriangleStrip => true,
-        }
+        matches!(self, Self::LineStrip | Self::TriangleStrip)
     }
 }
 
@@ -2918,36 +2915,38 @@ impl TextureFormat {
     /// Returns `true` if `self` is a depth or stencil component of the given
     /// combined depth-stencil format
     pub fn is_depth_stencil_component(&self, combined_format: Self) -> bool {
-        match (combined_format, *self) {
-            (Self::Depth24PlusStencil8, Self::Depth24Plus | Self::Stencil8)
-            | (Self::Depth32FloatStencil8, Self::Depth32Float | Self::Stencil8) => true,
-            _ => false,
-        }
+        matches!(
+            (combined_format, *self),
+            (
+                Self::Depth24PlusStencil8,
+                Self::Depth24Plus | Self::Stencil8
+            ) | (
+                Self::Depth32FloatStencil8,
+                Self::Depth32Float | Self::Stencil8
+            )
+        )
     }
 
     /// Returns `true` if the format is a depth and/or stencil format
     ///
     /// see <https://gpuweb.github.io/gpuweb/#depth-formats>
     pub fn is_depth_stencil_format(&self) -> bool {
-        match *self {
+        matches!(
+            self,
             Self::Stencil8
-            | Self::Depth16Unorm
-            | Self::Depth24Plus
-            | Self::Depth24PlusStencil8
-            | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+                | Self::Depth16Unorm
+                | Self::Depth24Plus
+                | Self::Depth24PlusStencil8
+                | Self::Depth32Float
+                | Self::Depth32FloatStencil8
+        )
     }
 
     /// Returns `true` if the format is a combined depth-stencil format
     ///
     /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
     pub fn is_combined_depth_stencil_format(&self) -> bool {
-        match *self {
-            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        matches!(self, Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8)
     }
 
     /// Returns `true` if the format is a multi-planar format
@@ -2970,22 +2969,22 @@ impl TextureFormat {
 
     /// Returns `true` if the format has a depth aspect
     pub fn has_depth_aspect(&self) -> bool {
-        match *self {
+        matches!(
+            self,
             Self::Depth16Unorm
-            | Self::Depth24Plus
-            | Self::Depth24PlusStencil8
-            | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+                | Self::Depth24Plus
+                | Self::Depth24PlusStencil8
+                | Self::Depth32Float
+                | Self::Depth32FloatStencil8
+        )
     }
 
     /// Returns `true` if the format has a stencil aspect
     pub fn has_stencil_aspect(&self) -> bool {
-        match *self {
-            Self::Stencil8 | Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Self::Stencil8 | Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8
+        )
     }
 
     /// Returns the size multiple requirement for a texture using this format.
@@ -3387,11 +3386,13 @@ impl TextureFormat {
 
             Self::Stencil8 => Some(uint),
             Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => Some(depth),
-            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
-                Some(TextureAspect::DepthOnly) => Some(depth),
-                Some(TextureAspect::StencilOnly) => Some(uint),
-                _ => None,
-            },
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => {
+                match aspect {
+                    Some(TextureAspect::DepthOnly) => Some(depth),
+                    Some(TextureAspect::StencilOnly) => Some(uint),
+                    _ => None,
+                }
+            }
 
             Self::NV12 => match aspect {
                 Some(TextureAspect::Plane0) | Some(TextureAspect::Plane1) => {
@@ -4435,10 +4436,7 @@ impl<T> Maintain<T> {
 
     /// This maintain represents a wait of some kind.
     pub fn is_wait(&self) -> bool {
-        match *self {
-            Self::WaitForSubmissionIndex(..) | Self::Wait => true,
-            Self::Poll => false,
-        }
+        matches!(self, Self::WaitForSubmissionIndex(..) | Self::Wait)
     }
 
     /// Map on the wait index type.
@@ -4747,10 +4745,7 @@ pub enum CompareFunction {
 impl CompareFunction {
     /// Returns true if the comparison depends on the reference value.
     pub fn needs_ref_value(self) -> bool {
-        match self {
-            Self::Never | Self::Always => false,
-            _ => true,
-        }
+        !matches!(self, Self::Never | Self::Always)
     }
 }
 

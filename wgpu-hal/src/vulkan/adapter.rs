@@ -550,15 +550,16 @@ impl PhysicalDeviceFeatures {
             );
         }
 
-        let supports_depth_format = |format| {
-            supports_format(
-                instance,
-                phd,
-                format,
-                vk::ImageTiling::OPTIMAL,
-                depth_stencil_required_flags(),
-            )
-        };
+        let supports_depth_format =
+            |format| {
+                supports_format(
+                    instance,
+                    phd,
+                    format,
+                    vk::ImageTiling::OPTIMAL,
+                    depth_stencil_required_flags(),
+                )
+            };
 
         let texture_s8 = supports_depth_format(vk::Format::S8_UINT);
         let texture_d32 = supports_depth_format(vk::Format::D32_SFLOAT);
@@ -821,12 +822,13 @@ impl PhysicalDeviceCapabilities {
 
         // Prevent very large buffers on mesa and most android devices.
         let is_nvidia = self.properties.vendor_id == crate::auxil::db::nvidia::VENDOR;
-        let max_buffer_size =
-            if (cfg!(target_os = "linux") || cfg!(target_os = "android")) && !is_nvidia {
-                i32::MAX as u64
-            } else {
-                u64::MAX
-            };
+        let max_buffer_size = if (cfg!(target_os = "linux") || cfg!(target_os = "android"))
+            && !is_nvidia
+        {
+            i32::MAX as u64
+        } else {
+            u64::MAX
+        };
 
         // TODO: programmatically determine this, if possible. It's unclear whether we can
         // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
@@ -900,73 +902,76 @@ impl super::InstanceShared {
         &self,
         phd: vk::PhysicalDevice,
     ) -> (PhysicalDeviceCapabilities, PhysicalDeviceFeatures) {
-        let capabilities = {
-            let mut capabilities = PhysicalDeviceCapabilities::default();
-            capabilities.supported_extensions =
-                unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
-            capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
-            capabilities.device_api_version = capabilities.properties.api_version;
+        let capabilities =
+            {
+                let mut capabilities = PhysicalDeviceCapabilities::default();
+                capabilities.supported_extensions =
+                    unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
+                capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
+                capabilities.device_api_version = capabilities.properties.api_version;
 
-            if let Some(ref get_device_properties) = self.get_physical_device_properties {
-                // Get these now to avoid borrowing conflicts later
-                let supports_maintenance3 = capabilities.device_api_version >= vk::API_VERSION_1_1
-                    || capabilities.supports_extension(vk::KhrMaintenance3Fn::name());
-                let supports_descriptor_indexing = capabilities.device_api_version
-                    >= vk::API_VERSION_1_2
-                    || capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
-                let supports_driver_properties = capabilities.device_api_version
-                    >= vk::API_VERSION_1_2
-                    || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
+                if let Some(ref get_device_properties) = self.get_physical_device_properties {
+                    // Get these now to avoid borrowing conflicts later
+                    let supports_maintenance3 = capabilities.device_api_version
+                        >= vk::API_VERSION_1_1
+                        || capabilities.supports_extension(vk::KhrMaintenance3Fn::name());
+                    let supports_descriptor_indexing = capabilities.device_api_version
+                        >= vk::API_VERSION_1_2
+                        || capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+                    let supports_driver_properties = capabilities.device_api_version
+                        >= vk::API_VERSION_1_2
+                        || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
-                let supports_acceleration_structure =
-                    capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
+                    let supports_acceleration_structure =
+                        capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
 
-                let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
-                if supports_maintenance3 {
-                    capabilities.maintenance_3 =
-                        Some(vk::PhysicalDeviceMaintenance3Properties::default());
-                    builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
-                }
+                    let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
+                    if supports_maintenance3 {
+                        capabilities.maintenance_3 =
+                            Some(vk::PhysicalDeviceMaintenance3Properties::default());
+                        builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
+                    }
 
-                if supports_descriptor_indexing {
-                    let next = capabilities
-                        .descriptor_indexing
-                        .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
-                    builder = builder.push_next(next);
-                }
+                    if supports_descriptor_indexing {
+                        let next = capabilities
+                            .descriptor_indexing
+                            .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
+                        builder = builder.push_next(next);
+                    }
 
-                if supports_acceleration_structure {
-                    let next = capabilities
-                        .acceleration_structure
-                        .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
-                    builder = builder.push_next(next);
-                }
+                    if supports_acceleration_structure {
+                        let next = capabilities.acceleration_structure.insert(
+                            vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default(),
+                        );
+                        builder = builder.push_next(next);
+                    }
 
-                if supports_driver_properties {
-                    let next = capabilities
-                        .driver
-                        .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
-                    builder = builder.push_next(next);
-                }
+                    if supports_driver_properties {
+                        let next = capabilities
+                            .driver
+                            .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
+                        builder = builder.push_next(next);
+                    }
 
-                let mut properties2 = builder.build();
-                unsafe {
-                    get_device_properties.get_physical_device_properties2(phd, &mut properties2);
-                }
+                    let mut properties2 = builder.build();
+                    unsafe {
+                        get_device_properties
+                            .get_physical_device_properties2(phd, &mut properties2);
+                    }
 
-                if is_intel_igpu_outdated_for_robustness2(
-                    capabilities.properties,
-                    capabilities.driver,
-                ) {
-                    use crate::auxil::cstr_from_bytes_until_nul;
-                    capabilities.supported_extensions.retain(|&x| {
-                        cstr_from_bytes_until_nul(&x.extension_name)
-                            != Some(vk::ExtRobustness2Fn::name())
-                    });
-                }
+                    if is_intel_igpu_outdated_for_robustness2(
+                        capabilities.properties,
+                        capabilities.driver,
+                    ) {
+                        use crate::auxil::cstr_from_bytes_until_nul;
+                        capabilities.supported_extensions.retain(|&x| {
+                            cstr_from_bytes_until_nul(&x.extension_name)
+                                != Some(vk::ExtRobustness2Fn::name())
+                        });
+                    }
+                };
+                capabilities
             };
-            capabilities
-        };
 
         let mut features = PhysicalDeviceFeatures::default();
         features.core = if let Some(ref get_device_properties) = self.get_physical_device_properties
@@ -1048,7 +1053,8 @@ impl super::InstanceShared {
             if capabilities.supports_extension(vk::KhrAccelerationStructureFn::name()) {
                 let next = features
                     .acceleration_structure
-                    .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default());
+                    .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default(
+                    ));
                 builder = builder.push_next(next);
             }
 
@@ -1255,15 +1261,16 @@ impl super::Instance {
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(vk::KhrImageFormatListFn::name()),
         };
-        let capabilities = crate::Capabilities {
-            limits: phd_capabilities.to_wgpu_limits(),
-            alignments: phd_capabilities.to_hal_alignments(),
-            downlevel: wgt::DownlevelCapabilities {
-                flags: downlevel_flags,
-                limits: wgt::DownlevelLimits {},
-                shader_model: wgt::ShaderModel::Sm5, //TODO?
-            },
-        };
+        let capabilities =
+            crate::Capabilities {
+                limits: phd_capabilities.to_wgpu_limits(),
+                alignments: phd_capabilities.to_hal_alignments(),
+                downlevel: wgt::DownlevelCapabilities {
+                    flags: downlevel_flags,
+                    limits: wgt::DownlevelLimits {},
+                    shader_model: wgt::ShaderModel::Sm5, //TODO?
+                },
+            };
 
         let adapter = super::Adapter {
             raw: phd,
@@ -1308,9 +1315,9 @@ impl super::Adapter {
             .phd_capabilities
             .get_required_extensions(features)
             .iter()
-            .partition::<Vec<&CStr>, _>(|&&extension| {
-                self.phd_capabilities.supports_extension(extension)
-            });
+            .partition::<Vec<&CStr>, _>(
+                |&&extension| self.phd_capabilities.supports_extension(extension)
+            );
 
         if !unsupported_extensions.is_empty() {
             log::warn!("Missing extensions: {:?}", unsupported_extensions);
@@ -1350,14 +1357,15 @@ impl super::Adapter {
         family_index: u32,
         queue_index: u32,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let mem_properties = {
-            profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
-            unsafe {
-                self.instance
-                    .raw
-                    .get_physical_device_memory_properties(self.raw)
-            }
-        };
+        let mem_properties =
+            {
+                profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
+                unsafe {
+                    self.instance
+                        .raw
+                        .get_physical_device_memory_properties(self.raw)
+                }
+            };
         let memory_types =
             &mem_properties.memory_types[..mem_properties.memory_type_count as usize];
         let valid_ash_memory_types = memory_types.iter().enumerate().fold(0, |u, (i, mem)| {
@@ -1370,11 +1378,12 @@ impl super::Adapter {
 
         let swapchain_fn = khr::Swapchain::new(&self.instance.raw, &raw_device);
 
-        let indirect_count_fn = if enabled_extensions.contains(&khr::DrawIndirectCount::name()) {
-            Some(khr::DrawIndirectCount::new(&self.instance.raw, &raw_device))
-        } else {
-            None
-        };
+        let indirect_count_fn =
+            if enabled_extensions.contains(&khr::DrawIndirectCount::name()) {
+                Some(khr::DrawIndirectCount::new(&self.instance.raw, &raw_device))
+            } else {
+                None
+            };
         let timeline_semaphore_fn = if enabled_extensions.contains(&khr::TimelineSemaphore::name())
         {
             Some(super::ExtensionFn::Extension(khr::TimelineSemaphore::new(
@@ -1550,12 +1559,13 @@ impl super::Adapter {
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
             let config = gpu_alloc::Config::i_am_prototyping(); //TODO
-            let max_memory_allocation_size =
-                if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
-                    maintenance_3.max_memory_allocation_size
-                } else {
-                    u64::max_value()
-                };
+            let max_memory_allocation_size = if let Some(maintenance_3) =
+                self.phd_capabilities.maintenance_3
+            {
+                maintenance_3.max_memory_allocation_size
+            } else {
+                u64::max_value()
+            };
             let properties = gpu_alloc::DeviceProperties {
                 max_memory_allocation_count: limits.max_memory_allocation_count,
                 max_memory_allocation_size,
@@ -1581,13 +1591,14 @@ impl super::Adapter {
             };
             gpu_alloc::GpuAllocator::new(config, properties)
         };
-        let desc_allocator = gpu_descriptor::DescriptorAllocator::new(
-            if let Some(di) = self.phd_capabilities.descriptor_indexing {
-                di.max_update_after_bind_descriptors_in_all_pools
-            } else {
-                0
-            },
-        );
+        let desc_allocator =
+            gpu_descriptor::DescriptorAllocator::new(
+                if let Some(di) = self.phd_capabilities.descriptor_indexing {
+                    di.max_update_after_bind_descriptors_in_all_pools
+                } else {
+                    0
+                },
+            );
 
         let device = super::Device {
             shared,
@@ -1811,16 +1822,16 @@ impl crate::Adapter<super::Api> for super::Adapter {
         };
 
         // `0xFFFFFFFF` indicates that the extent depends on the created swapchain.
-        let current_extent = if caps.current_extent.width != !0 && caps.current_extent.height != !0
-        {
-            Some(wgt::Extent3d {
-                width: caps.current_extent.width,
-                height: caps.current_extent.height,
-                depth_or_array_layers: 1,
-            })
-        } else {
-            None
-        };
+        let current_extent =
+            if caps.current_extent.width != !0 && caps.current_extent.height != !0 {
+                Some(wgt::Extent3d {
+                    width: caps.current_extent.width,
+                    height: caps.current_extent.height,
+                    depth_or_array_layers: 1,
+                })
+            } else {
+                None
+            };
 
         let raw_present_modes = {
             profiling::scope!("vkGetPhysicalDeviceSurfacePresentModesKHR");
@@ -1909,20 +1920,22 @@ fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDev
     let r16snorm = supports_format(instance, phd, vk::Format::R16_SNORM, tiling, features);
     let rg16unorm = supports_format(instance, phd, vk::Format::R16G16_UNORM, tiling, features);
     let rg16snorm = supports_format(instance, phd, vk::Format::R16G16_SNORM, tiling, features);
-    let rgba16unorm = supports_format(
-        instance,
-        phd,
-        vk::Format::R16G16B16A16_UNORM,
-        tiling,
-        features,
-    );
-    let rgba16snorm = supports_format(
-        instance,
-        phd,
-        vk::Format::R16G16B16A16_SNORM,
-        tiling,
-        features,
-    );
+    let rgba16unorm =
+        supports_format(
+            instance,
+            phd,
+            vk::Format::R16G16B16A16_UNORM,
+            tiling,
+            features,
+        );
+    let rgba16snorm =
+        supports_format(
+            instance,
+            phd,
+            vk::Format::R16G16B16A16_SNORM,
+            tiling,
+            features,
+        );
 
     r16unorm && r16snorm && rg16unorm && rg16snorm && rgba16unorm && rgba16snorm
 }

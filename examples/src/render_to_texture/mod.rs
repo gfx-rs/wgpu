@@ -15,17 +15,18 @@ async fn run(_path: Option<String>) {
         .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
         .unwrap();
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-            },
-            None,
-        )
-        .await
-        .unwrap();
+    let (device, queue) =
+        adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,

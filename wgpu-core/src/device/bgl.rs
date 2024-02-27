@@ -77,9 +77,9 @@ impl EntryMap {
                 );
             }
             if inner.insert(entry.binding, *entry).is_some() {
-                return Err(binding_model::CreateBindGroupLayoutError::ConflictBinding(
-                    entry.binding,
-                ));
+                return Err(
+                    binding_model::CreateBindGroupLayoutError::ConflictBinding(entry.binding)
+                );
             }
         }
         inner.sort_unstable_keys();

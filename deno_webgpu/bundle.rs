@@ -74,19 +74,18 @@ pub fn op_webgpu_create_render_bundle_encoder(
     };
 
     let res = wgpu_core::command::RenderBundleEncoder::new(&descriptor, device, None);
-    let (render_bundle_encoder, maybe_err) = match res {
-        Ok(encoder) => (encoder, None),
-        Err(e) => (
-            wgpu_core::command::RenderBundleEncoder::dummy(device),
-            Some(e),
-        ),
-    };
+    let (render_bundle_encoder, maybe_err) =
+        match res {
+            Ok(encoder) => (encoder, None),
+            Err(e) => (
+                wgpu_core::command::RenderBundleEncoder::dummy(device),
+                Some(e),
+            ),
+        };
 
     let rid = state
         .resource_table
-        .add(WebGpuRenderBundleEncoder(RefCell::new(
-            render_bundle_encoder,
-        )));
+        .add(WebGpuRenderBundleEncoder(RefCell::new(render_bundle_encoder)));
 
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }

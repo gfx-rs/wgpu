@@ -500,12 +500,13 @@ impl<A: HalApi> LifetimeTracker<A> {
     fn triage_suspected_bind_groups(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let resource_map = &mut self.suspected_resources.bind_groups;
-        let mut removed_resource = Self::triage_resources(
-            resource_map,
-            self.active.as_mut_slice(),
-            &mut trackers.bind_groups,
-            |maps| &mut maps.bind_groups,
-        );
+        let mut removed_resource =
+            Self::triage_resources(
+                resource_map,
+                self.active.as_mut_slice(),
+                &mut trackers.bind_groups,
+                |maps| &mut maps.bind_groups,
+            );
         removed_resource.drain(..).for_each(|bind_group| {
             for v in bind_group.used.buffers.drain_resources() {
                 self.suspected_resources
