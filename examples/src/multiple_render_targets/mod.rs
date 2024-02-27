@@ -477,6 +477,8 @@ impl crate::framework::Example for Example {
     }
 
     fn resize(&mut self, config: &SurfaceConfiguration, device: &Device, _queue: &Queue) {
+        self.screen_width = config.width;
+        self.screen_height = config.height;
         self.texture_targets =
             create_target_textures(device, config.format, config.width, config.height);
         self.drawer.rebuild_resources(device, &self.texture_targets);
