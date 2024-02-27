@@ -217,7 +217,7 @@ impl Global {
                     mapped_at_creation: false,
                 };
                 let stage = match device.create_buffer(&stage_desc, true) {
-                    Ok(stage) => stage,
+                    Ok(stage) => Arc::new(stage),
                     Err(e) => {
                         to_destroy.push(buffer);
                         break e;
@@ -230,13 +230,9 @@ impl Global {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         to_destroy.push(buffer);
-                        to_destroy.push(stage);
                         break CreateBufferError::Device(e.into());
                     }
                 };
-
-                let stage_fid = hub.buffers.request();
-                let stage = stage_fid.init(stage);
 
                 assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
                 // Zero initialize memory and then mark both staging and buffer as initialized
