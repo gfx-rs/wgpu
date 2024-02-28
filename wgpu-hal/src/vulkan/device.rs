@@ -2114,6 +2114,11 @@ impl crate::Device<super::Api> for super::Device {
         }
     }
 
+    unsafe fn pipeline_cache_get_data(&self, cache: &PipelineCache) -> Option<Vec<u8>> {
+        let data = unsafe { self.raw_device().get_pipeline_cache_data(cache.raw) };
+        data.ok()
+    }
+
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
         desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
