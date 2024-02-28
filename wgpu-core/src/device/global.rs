@@ -13,8 +13,10 @@ use crate::{
     instance::{self, Adapter, Surface},
     lock::{rank, RwLock},
     pipeline, present,
-    resource::{self, BufferAccessResult},
-    resource::{BufferAccessError, BufferMapOperation, CreateBufferError, Resource},
+    resource::{
+        self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
+        Resource,
+    },
     validation::check_buffer_usage,
     Label, LabelHelpers as _,
 };
@@ -2315,6 +2317,22 @@ impl Global {
         let hub = A::hub(self);
         hub.devices
             .force_replace_with_error(device_id, "Made invalid.");
+    }
+
+    pub fn pipeline_cache_get_data<A: HalApi>(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
+        api_log!("PipelineCache::get_data");
+        let hub = A::hub(self);
+
+        if let Ok(cache) = hub.pipeline_caches.get(id) {
+            // TODO: Is this check needed?
+            if !cache.device.is_valid() {
+                return None;
+            }
+            if let Some(raw_cache) = cache.raw.as_ref() {
+                return unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) };
+            }
+        }
+        None
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {

@@ -2390,9 +2390,10 @@ impl crate::Context for ContextWgpuCore {
     fn pipeline_cache_get_data(
         &self,
         cache: &Self::PipelineCacheId,
+        // TODO: Used for error handling?
         cache_data: &Self::PipelineCacheData,
     ) -> Option<Vec<u8>> {
-        wgc::gfx_select!(cache => self.0.pipeline_cache_get_data(*cache));
+        wgc::gfx_select!(cache => self.0.pipeline_cache_get_data(*cache))
     }
 
     fn compute_pass_set_pipeline(

@@ -658,6 +658,11 @@ pub trait Device: WasmNotSendSync {
     unsafe fn start_capture(&self) -> bool;
     unsafe fn stop_capture(&self);
 
+    #[allow(unused_variables)]
+    unsafe fn pipeline_cache_get_data(&self, cache: &A::PipelineCache) -> Option<Vec<u8>> {
+        None
+    }
+
     unsafe fn create_acceleration_structure(
         &self,
         desc: &AccelerationStructureDescriptor,

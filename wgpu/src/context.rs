@@ -3167,7 +3167,7 @@ where
         cache_data: &crate::Data,
     ) -> Option<Vec<u8>> {
         let mut cache = <T::PipelineCacheId>::from(*cache);
-        let cache_data = downcast_mut::<T::PipelineCacheData>(cache_data);
+        let cache_data = downcast_ref::<T::PipelineCacheData>(cache_data);
         Context::pipeline_cache_get_data(self, &mut cache, cache_data)
     }
 

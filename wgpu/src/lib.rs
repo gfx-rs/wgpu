@@ -1132,7 +1132,7 @@ impl PipelineCache {
     /// [`Device::create_pipeline_cache`] for a compatible device.
     pub fn get_data(&self) -> Option<Vec<u8>> {
         self.context
-            .pipeline_cache_get_data(&mut self.id, &mut self.data)
+            .pipeline_cache_get_data(&self.id, self.data.as_ref())
     }
 }
 
