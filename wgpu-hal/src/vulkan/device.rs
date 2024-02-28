@@ -1850,7 +1850,13 @@ impl crate::Device<super::Api> for super::Device {
             unsafe {
                 self.shared
                     .raw
-                    .create_graphics_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                    .create_graphics_pipelines(
+                        desc.cache
+                            .map(|it| it.raw)
+                            .unwrap_or(vk::PipelineCache::null()),
+                        &vk_infos,
+                        None,
+                    )
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };
@@ -1902,7 +1908,13 @@ impl crate::Device<super::Api> for super::Device {
             unsafe {
                 self.shared
                     .raw
-                    .create_compute_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                    .create_compute_pipelines(
+                        desc.cache
+                            .map(|it| it.raw)
+                            .unwrap_or(vk::PipelineCache::null()),
+                        &vk_infos,
+                        None,
+                    )
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };
