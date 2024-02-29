@@ -68,6 +68,9 @@ Bottom level categories:
 #### General
 - `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
 
+#### `wgsl-out`
+- Learned to generate acceleration structure types. By @JMS55 in [#5261](https://github.com/gfx-rs/wgpu/pull/5261)
+
 ### Bug Fixes
 
 #### General
@@ -79,7 +82,7 @@ Bottom level categories:
 #### DX12
 - Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
 
-#### glsl-in
+#### `glsl-in`
 
 - Fix code generation from nested loops. By @cwfitzgerald and @teoxoy in [#5311](https://github.com/gfx-rs/wgpu/pull/5311)
 
