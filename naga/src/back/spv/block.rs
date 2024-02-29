@@ -1050,24 +1050,131 @@ impl<'w> BlockContext<'w> {
                             Some(crate::ScalarKind::Sint) => spirv::Op::BitFieldSExtract,
                             other => unimplemented!("Unexpected sign({:?})", other),
                         };
+
+                        // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
+                        // to first sanitize the offset and count first. If we don't do this, AMD and Intel
+                        // will return out-of-spec values if the extracted range is not within the bit width.
+                        //
+                        // This encodes the exact formula specified by the wgsl spec:
+                        // https://gpuweb.github.io/gpuweb/wgsl/#extractBits-unsigned-builtin
+                        //
+                        // w = sizeof(x) * 8
+                        // o = min(offset, w)
+                        // tmp = w - o
+                        // c = min(count, tmp)
+                        //
+                        // bitfieldExtract(x, o, c)
+
+                        let bit_width = arg_ty.scalar_width().unwrap();
+                        let width_constant = self
+                            .writer
+                            .get_constant_scalar(crate::Literal::U32(bit_width as u32));
+
+                        let u32_type = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        // o = min(offset, w)
+                        let offset_id = self.gen_id();
+                        block.body.push(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::UMin,
+                            u32_type,
+                            offset_id,
+                            &[arg1_id, width_constant],
+                        ));
+
+                        // tmp = w - o
+                        let max_count_id = self.gen_id();
+                        block.body.push(Instruction::binary(
+                            spirv::Op::ISub,
+                            u32_type,
+                            max_count_id,
+                            width_constant,
+                            offset_id,
+                        ));
+
+                        // c = min(count, tmp)
+                        let count_id = self.gen_id();
+                        block.body.push(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::UMin,
+                            u32_type,
+                            count_id,
+                            &[arg2_id, max_count_id],
+                        ));
+
                         MathOp::Custom(Instruction::ternary(
                             op,
                             result_type_id,
                             id,
                             arg0_id,
-                            arg1_id,
-                            arg2_id,
+                            offset_id,
+                            count_id,
                         ))
                     }
-                    Mf::InsertBits => MathOp::Custom(Instruction::quaternary(
-                        spirv::Op::BitFieldInsert,
-                        result_type_id,
-                        id,
-                        arg0_id,
-                        arg1_id,
-                        arg2_id,
-                        arg3_id,
-                    )),
+                    Mf::InsertBits => {
+                        // The behavior of InsertBits has the same undefined behavior as ExtractBits.
+
+                        let bit_width = arg_ty.scalar_width().unwrap();
+                        let width_constant = self
+                            .writer
+                            .get_constant_scalar(crate::Literal::U32(bit_width as u32));
+
+                        let u32_type = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        // o = min(offset, w)
+                        let offset_id = self.gen_id();
+                        block.body.push(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::UMin,
+                            u32_type,
+                            offset_id,
+                            &[arg2_id, width_constant],
+                        ));
+
+                        // tmp = w - o
+                        let max_count_id = self.gen_id();
+                        block.body.push(Instruction::binary(
+                            spirv::Op::ISub,
+                            u32_type,
+                            max_count_id,
+                            width_constant,
+                            offset_id,
+                        ));
+
+                        // c = min(count, tmp)
+                        let count_id = self.gen_id();
+                        block.body.push(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::UMin,
+                            u32_type,
+                            count_id,
+                            &[arg3_id, max_count_id],
+                        ));
+
+                        MathOp::Custom(Instruction::quaternary(
+                            spirv::Op::BitFieldInsert,
+                            result_type_id,
+                            id,
+                            arg0_id,
+                            arg1_id,
+                            offset_id,
+                            count_id,
+                        ))
+                    }
                     Mf::FindLsb => MathOp::Ext(spirv::GLOp::FindILsb),
                     Mf::FindMsb => MathOp::Ext(match arg_scalar_kind {
                         Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
