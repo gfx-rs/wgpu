@@ -1496,8 +1496,8 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Option<()> {
-        None
+    ) -> Result<(), crate::PipelineCacheError> {
+        Ok(())
     }
     unsafe fn destroy_pipeline_cache(&self, (): ()) {}
 

@@ -214,8 +214,8 @@ impl crate::Device<Api> for Context {
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Option<Resource> {
-        Some(Resource)
+    ) -> Result<Resource, crate::PipelineCacheError> {
+        Ok(Resource)
     }
     unsafe fn destroy_pipeline_cache(&self, cache: Resource) {}
 

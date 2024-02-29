@@ -142,6 +142,14 @@ pub enum PipelineError {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
+pub enum PipelineCacheError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("Pipeline cache had a validation error")]
+    Validation,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum SurfaceError {
     #[error("Surface is lost")]
     Lost,
@@ -377,7 +385,7 @@ pub trait Device<A: Api>: WasmNotSendSync {
     unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
-    ) -> Option<A::PipelineCache>;
+    ) -> Result<A::PipelineCache, PipelineCacheError>;
     unsafe fn destroy_pipeline_cache(&self, cache: A::PipelineCache);
 
     unsafe fn create_query_set(
