@@ -1997,14 +1997,23 @@ impl crate::context::Context for ContextWebGpu {
         create_identified(device_data.0.create_compute_pipeline(&mapped_desc))
     }
 
+    fn device_create_pipeline_cache(
+        &self,
+        _: &Self::DeviceId,
+        _: &Self::DeviceData,
+        _: &crate::PipelineCacheDescriptor<'_>,
+    ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
+        (Unused, ())
+    }
     unsafe fn device_create_pipeline_cache_init(
         &self,
         _: &Self::DeviceId,
         _: &Self::DeviceData,
-        _: &PipelineCacheInitDescriptor<'_>,
-    ) -> Option<(Self::PipelineCacheId, Self::PipelineCacheData)> {
-        None
+        _: &crate::PipelineCacheInitDescriptor<'_>,
+    ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
+        (Unused, ())
     }
+    fn pipeline_cache_drop(&self, _: &Self::PipelineCacheId, _: &Self::PipelineCacheData) {}
 
     fn device_create_buffer(
         &self,
@@ -2991,6 +3000,14 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_start_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
     fn device_stop_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
+
+    fn pipeline_cache_get_data(
+        &self,
+        _: &Self::PipelineCacheId,
+        _: &Self::PipelineCacheData,
+    ) -> Option<Vec<u8>> {
+        None
+    }
 
     fn compute_pass_set_pipeline(
         &self,

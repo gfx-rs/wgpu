@@ -3542,7 +3542,10 @@ impl<A: HalApi> Device<A> {
         };
         let cache = pipeline::PipelineCache {
             device: self.clone(),
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.pipeline_caches.clone()),
+            ),
             // This would be none in the error condition, which we don't implement yet
             raw: Some(raw),
         };

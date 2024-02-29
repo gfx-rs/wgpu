@@ -1101,7 +1101,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_cache(
         &self,
-        desc: &crate::PipelineCacheDescriptor<'_>,
+        _desc: &crate::PipelineCacheDescriptor<'_>,
     ) -> Result<(), crate::PipelineCacheError> {
         Ok(())
     }

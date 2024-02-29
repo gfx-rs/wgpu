@@ -3237,7 +3237,7 @@ impl Device {
     /// Create a pipeline cache without initial data
     ///
     /// This can be passed to [`Device::create_compute_pipeline`]
-    /// and [`Device::create_render_pipeline`] to intialise its cache data
+    /// and [`Device::create_render_pipeline`] to initialise its cache data
     ///
     /// # Errors
     /// Returns `None` if this device does not support [`PipelineCache`]. See the
