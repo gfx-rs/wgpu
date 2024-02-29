@@ -45,7 +45,7 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.19.1"
+version = "0.19.2"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
