@@ -1827,38 +1827,53 @@ impl Global {
         }
     }
 
+    /// # Safety
+    /// The `data` argument of `desc` must have been returned by
+    /// [Self::pipeline_cache_get_data] for the same adapter
     pub unsafe fn device_create_pipeline_cache<A: HalApi>(
         &self,
         device_id: DeviceId,
         desc: &pipeline::PipelineCacheDescriptor<'_>,
         id_in: Option<id::PipelineCacheId>,
-    ) -> Option<id::PipelineCacheId> {
+    ) -> (
+        id::PipelineCacheId,
+        Option<pipeline::CreatePipelineCacheError>,
+    ) {
         profiling::scope!("Device::create_pipeline_cache");
 
         let hub = A::hub(self);
 
         let fid = hub.pipeline_caches.prepare(id_in);
-        let device = match hub.devices.get(device_id) {
-            Ok(device) => device,
-            // TODO: Handle error properly
-            Err(_) => return None,
+        let error: pipeline::CreatePipelineCacheError = 'error: {
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                // TODO: Handle error properly
+                Err(crate::storage::InvalidId) => break 'error DeviceError::Invalid.into(),
+            };
+            if !device.is_valid() {
+                break 'error DeviceError::Lost.into();
+            }
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreatePipelineCache {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                });
+            }
+            let cache = unsafe { device.create_pipeline_cache(desc) };
+            match cache {
+                Ok(cache) => {
+                    let (id, _) = fid.assign(cache);
+                    api_log!("Device::create_pipeline_cache -> {id:?}");
+                    return (id, None);
+                }
+                Err(e) => break 'error e,
+            }
         };
-        if !device.is_valid() {
-            return None;
-        }
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::CreatePipelineCache {
-                id: fid.id(),
-                desc: desc.clone(),
-            });
-        }
-        let pipeline = unsafe { device.create_pipeline_cache(desc) }?;
-        let (id, _) = fid.assign(pipeline);
-        api_log!("Device::create_pipeline_cache -> {id:?}");
+        let id = fid.assign_error(desc.label.borrow_or_default());
 
-        Some(id)
+        (id, Some(error))
     }
 
     pub fn pipeline_cache_drop<A: HalApi>(&self, pipeline_cache_id: id::PipelineCacheId) {

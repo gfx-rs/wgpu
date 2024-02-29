@@ -1115,6 +1115,15 @@ impl ComputePipeline {
 /// creating [`RenderPipeline`]s and [`ComputePipeline`]s
 /// in subsequent executions
 ///
+/// # Usage
+///
+/// TODO
+///
+/// # Memory Usage
+/// There is not currently an API available to reduce the size of a cache.
+///
+/// TODO
+///
 /// This type is unique to the Rust API of `wgpu`.
 #[derive(Debug)]
 pub struct PipelineCache {
@@ -1128,8 +1137,12 @@ static_assertions::assert_impl_all!(PipelineCache: Send, Sync);
 
 impl PipelineCache {
     /// Get the data associated with this pipeline cache.
-    /// The format is unspecified, and should be passed to a call to
-    /// [`Device::create_pipeline_cache`] for a compatible device.
+    ///
+    /// The data format may be `wgpu` specific, and should therefore only be
+    /// passed to a call to [`Device::create_pipeline_cache_init`] for a
+    /// compatible device.
+    ///
+    /// This function is unique to the Rust API of `wgpu`.
     pub fn get_data(&self) -> Option<Vec<u8>> {
         self.context
             .pipeline_cache_get_data(&self.id, self.data.as_ref())
@@ -1872,6 +1885,7 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use for this operation
     pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
@@ -1966,6 +1980,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// and no return value in the shader.
     pub entry_point: &'a str,
+    /// The pipeline cache to use when creating this pipeline
     pub cache: Option<&'a PipelineCache>,
     /// Advanced options for when this pipeline is compiled
     ///
@@ -1975,16 +1990,38 @@ pub struct ComputePipelineDescriptor<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
 
+/// Describes a pipeline cache which reuses data from a previous run.
+///
+/// For use with [`Device::create_pipeline_cache_init`].
+///
+/// This type is unique to the Rust API of `wgpu`.
 #[derive(Clone, Debug)]
 pub struct PipelineCacheInitDescriptor<'a> {
+    /// Debug label of the pipeline cache. This might show up in some logs from `wgpu`
     pub label: Label<'a>,
+    /// The data used to initialise the cache initialise the cache using
+    ///
+    /// # Safety
+    /// This data must have been provided from a previous call to
+    /// [`PipelineCache::get_data`]
     pub data: &'a [u8],
+    /// Whether to create a cache without data when the provided data
+    /// is invalid.
+    ///
+    /// Recommended to set to true
+    pub fallback: bool,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineCacheInitDescriptor<'_>: Send, Sync);
 
+/// Describes a pipeline cache when
+///
+/// For use with [`Device::create_pipeline_cache`].
+///
+/// This type is unique to the Rust API of `wgpu`.
 #[derive(Clone, Debug)]
 pub struct PipelineCacheDescriptor<'a> {
+    /// Debug label of the pipeline cache. This might show up in some logs from `wgpu`
     pub label: Label<'a>,
 }
 #[cfg(send_sync)]
@@ -3138,11 +3175,50 @@ impl Device {
         DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
     }
 
+    /// Test-only function to make this device invalid.
+    #[doc(hidden)]
+    pub fn make_invalid(&self) {
+        DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
+    }
+
+    /// Create a [`PipelineCache`] with initial data
+    ///
+    /// This can be passed to [`Device::create_compute_pipeline`]
+    /// and [`Device::create_render_pipeline`] to either accelerate these
+    /// or add the cache results from those.
+    ///
+    /// # Safety
+    ///
+    /// The `data` field of `desc` must have previously been returned from a call
+    /// to [`PipelineCache::get_data`][^saving]. It's recommended to only `data` for the same
+    /// [`util::pipeline_cache_key`], but this isn't a safety requirement.
+    /// This is also compatible across wgpu versions, as any data format change will
+    /// be accounted for.
+    ///
+    /// Note that this means it is *not* supported to bring caches from previous
+    /// direct uses of backend APIs into this method.
+    ///
+    /// # Errors
+    /// Returns `None` if this device does not support [`PipelineCache`]. See the
+    /// documentation on that type for details of API support
+    ///
+    /// Returns `Some` with an error value if:
+    ///  * The `fallback` field on `desc` is false; and
+    ///  * the `data` provided would not be used[^data_not_used]
+    ///
+    /// If an error value is used in subsequent calls, default caching will be used.
+    ///
+    /// [^saving]: We do recognise that saving this data to disk means this condition
+    /// is impossible to fully prove. Consider the risks for your own application in this case.
+    ///
+    /// [^data_not_used]: This data may be not used if: the data was produced by a prior
+    /// version of wgpu; or was created for an incompatible adapter, or there was a GPU driver
+    /// update. In some cases, the data might not be used and a real value is returned,
+    /// this is left to the discretion of GPU drivers.
     pub unsafe fn create_pipeline_cache_init(
         &self,
         desc: &PipelineCacheInitDescriptor<'_>,
-        // TODO: Work out error handling and conditions
-    ) -> Option<PipelineCache> {
+    ) -> PipelineCache {
         let (id, data) = unsafe {
             DynContext::device_create_pipeline_cache_init(
                 &*self.context,
@@ -3150,29 +3226,38 @@ impl Device {
                 self.data.as_ref(),
                 desc,
             )
-        }?;
-        Some(PipelineCache {
+        };
+        PipelineCache {
             context: Arc::clone(&self.context),
             id,
             data,
-        })
+        }
     }
 
-    pub fn create_pipeline_cache(
-        &self,
-        desc: &PipelineCacheDescriptor<'_>,
-    ) -> Option<PipelineCache> {
+    /// Create a pipeline cache without initial data
+    ///
+    /// This can be passed to [`Device::create_compute_pipeline`]
+    /// and [`Device::create_render_pipeline`] to intialise its cache data
+    ///
+    /// # Errors
+    /// Returns `None` if this device does not support [`PipelineCache`]. See the
+    /// documentation on that type for details of API support
+    ///
+    /// Returns `Some` with an error value if:
+    ///  * this device is invalid; or
+    ///  * the device is out of memory
+    pub fn create_pipeline_cache(&self, desc: &PipelineCacheDescriptor<'_>) -> PipelineCache {
         let (id, data) = DynContext::device_create_pipeline_cache(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
-        )?;
-        Some(PipelineCache {
+        );
+        PipelineCache {
             context: Arc::clone(&self.context),
             id,
             data,
-        })
+        }
     }
 }
 

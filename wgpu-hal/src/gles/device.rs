@@ -1406,8 +1406,13 @@ impl crate::Device for super::Device {
         }
     }
 
-    unsafe fn create_pipeline_cache(&self, _: &crate::PipelineCacheDescriptor<'_>) -> Option<()> {
-        None
+    unsafe fn create_pipeline_cache(
+        &self,
+        _: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<(), crate::PipelineCacheError> {
+        // Even though the cache doesn't do anything, we still return something here
+        // as the least bad option
+        Ok(())
     }
     unsafe fn destroy_pipeline_cache(&self, (): ()) {}
 

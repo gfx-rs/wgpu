@@ -2736,7 +2736,6 @@ impl<A: HalApi> Device<A> {
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A>,
     ) -> Result<pipeline::ComputePipeline<A>, pipeline::CreateComputePipelineError> {
-        {}
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
@@ -2846,7 +2845,7 @@ impl<A: HalApi> Device<A> {
                 constants: desc.stage.constants.as_ref(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
-            cache: cache.as_ref().map(|it| it.raw.as_ref()).flatten(),
+            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
 
         let raw = unsafe {
@@ -3442,7 +3441,7 @@ impl<A: HalApi> Device<A> {
             fragment_stage,
             color_targets,
             multiview: desc.multiview,
-            cache: cache.as_ref().map(|it| it.raw.as_ref()).flatten(),
+            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
         let raw = unsafe {
             self.raw
@@ -3523,22 +3522,31 @@ impl<A: HalApi> Device<A> {
         Ok(pipeline)
     }
 
+    /// # Safety
+    /// The `data` field on `desc` must have previously been returned from [`crate::global::Global::pipeline_cache_get_data`]
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
-    ) -> Option<pipeline::PipelineCache<A>> {
-        let cache_desc = hal::PipelineCacheDescriptor {
+    ) -> Result<pipeline::PipelineCache<A>, pipeline::CreatePipelineCacheError> {
+        let mut cache_desc = hal::PipelineCacheDescriptor {
             data: desc.data.as_deref(),
             label: desc.label.to_hal(self.instance_flags),
         };
-        let raw = unsafe { (&self.raw.as_ref().unwrap()).create_pipeline_cache(&cache_desc) }?;
+        let raw = match unsafe { self.raw().create_pipeline_cache(&cache_desc) } {
+            Ok(raw) => raw,
+            Err(hal::PipelineCacheError::Validation) if desc.fallback => {
+                debug_assert!(cache_desc.data.take().is_some());
+                unsafe { self.raw().create_pipeline_cache(&cache_desc)? }
+            }
+            Err(e) => return Err(e.into()),
+        };
         let cache = pipeline::PipelineCache {
             device: self.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             // This would be none in the error condition, which we don't implement yet
             raw: Some(raw),
         };
-        Some(cache)
+        Ok(cache)
     }
 
     pub(crate) fn get_texture_format_features(

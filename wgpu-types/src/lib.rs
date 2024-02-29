@@ -1748,25 +1748,6 @@ pub struct AdapterInfo {
     pub backend: Backend,
 }
 
-impl AdapterInfo {
-    /// A recommended filename for storing the pipeline cache of this adapter
-    ///
-    /// Each adapter may have a different filename, to allow using multiple caches
-    pub fn pipeline_cache_key(&self) -> Option<String> {
-        match self.backend {
-            Backend::Vulkan => Some(format!(
-                // The vendor/device should uniquely define a driver
-                // We will also later validate that the vendor and driver
-                // version match, which may lead to clearing an outdated
-                // cache for the same device.
-                "wgpu_pipeline_cache_vulkan_{}_{}",
-                self.vendor, self.device
-            )),
-            _ => None,
-        }
-    }
-}
-
 /// Describes a [`Device`](../wgpu/struct.Device.html).
 ///
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](

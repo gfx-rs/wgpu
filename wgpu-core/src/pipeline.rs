@@ -260,6 +260,28 @@ impl<A: HalApi> ComputePipeline<A> {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreatePipelineCacheError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("Pipeline cache validation failed")]
+    Validation,
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+
+impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
+    fn from(value: hal::PipelineCacheError) -> Self {
+        match value {
+            hal::PipelineCacheError::Device(device) => {
+                CreatePipelineCacheError::Device(device.into())
+            }
+            hal::PipelineCacheError::Validation => CreatePipelineCacheError::Validation,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PipelineCache<A: HalApi> {
     pub(crate) raw: Option<A::PipelineCache>,
@@ -363,6 +385,7 @@ pub struct RenderPipelineDescriptor<'a> {
 pub struct PipelineCacheDescriptor<'a> {
     pub label: Label<'a>,
     pub data: Option<Cow<'a, [u8]>>,
+    pub fallback: bool,
 }
 
 #[derive(Clone, Debug, Error)]
