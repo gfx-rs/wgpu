@@ -31,7 +31,7 @@ macro_rules! gen_component_wise_extractor {
             $(
                 #[doc = concat!(
                     "Maps to [`Literal::",
-                    stringify!($mapping),
+                    stringify!($literal),
                     "`]",
                 )]
                 $mapping([$ty; N]),
