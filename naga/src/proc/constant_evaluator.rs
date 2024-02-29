@@ -1877,6 +1877,95 @@ impl<'a> ConstantEvaluator<'a> {
     }
 }
 
+/// Trait for conversions of abstract values to concrete types.
+trait TryFromAbstract<T>: Sized {
+    /// Convert an abstract literal `value` to `Self`.
+    ///
+    /// Since Naga's `AbstractInt` and `AbstractFloat` exist to support
+    /// WGSL, we follow WGSL's conversion rules here:
+    ///
+    /// - WGSL §6.1.2. Conversion Rank says that automatic conversions
+    ///   to integers are either lossless or an error.
+    ///
+    /// - WGSL §14.6.4 Floating Point Conversion says that conversions
+    ///   to floating point in constant expressions and override
+    ///   expressions are errors if the value is out of range for the
+    ///   destination type, but rounding is okay.
+    ///
+    /// [`AbstractInt`]: crate::Literal::AbstractInt
+    /// [`Float`]: crate::Literal::Float
+    fn try_from_abstract(value: T) -> Result<Self, ConstantEvaluatorError>;
+}
+
+impl TryFromAbstract<i64> for i32 {
+    fn try_from_abstract(value: i64) -> Result<i32, ConstantEvaluatorError> {
+        i32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
+            value: format!("{value:?}"),
+            to_type: "i32",
+        })
+    }
+}
+
+impl TryFromAbstract<i64> for u32 {
+    fn try_from_abstract(value: i64) -> Result<u32, ConstantEvaluatorError> {
+        u32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
+            value: format!("{value:?}"),
+            to_type: "u32",
+        })
+    }
+}
+
+impl TryFromAbstract<i64> for f32 {
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        let f = value as f32;
+        // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
+        // `f32` is roughly ±3.4 × 10³⁸, so there's no opportunity for
+        // overflow here.
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<f64> for f32 {
+    fn try_from_abstract(value: f64) -> Result<f32, ConstantEvaluatorError> {
+        let f = value as f32;
+        if f.is_infinite() {
+            return Err(ConstantEvaluatorError::AutomaticConversionLossy {
+                value: format!("{value:?}"),
+                to_type: "f32",
+            });
+        }
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<i64> for f64 {
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        let f = value as f64;
+        // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
+        // `f64` is roughly ±1.8 × 10³⁰⁸, so there's no opportunity for
+        // overflow here.
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<f64> for f64 {
+    fn try_from_abstract(value: f64) -> Result<f64, ConstantEvaluatorError> {
+        Ok(value)
+    }
+}
+
+impl TryFromAbstract<f64> for i32 {
+    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
+        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "i32" })
+    }
+}
+
+impl TryFromAbstract<f64> for u32 {
+    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
+        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u32" })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::vec;
@@ -2382,94 +2471,5 @@ mod tests {
         if !pass {
             panic!("unexpected evaluation result")
         }
-    }
-}
-
-/// Trait for conversions of abstract values to concrete types.
-trait TryFromAbstract<T>: Sized {
-    /// Convert an abstract literal `value` to `Self`.
-    ///
-    /// Since Naga's `AbstractInt` and `AbstractFloat` exist to support
-    /// WGSL, we follow WGSL's conversion rules here:
-    ///
-    /// - WGSL §6.1.2. Conversion Rank says that automatic conversions
-    ///   to integers are either lossless or an error.
-    ///
-    /// - WGSL §14.6.4 Floating Point Conversion says that conversions
-    ///   to floating point in constant expressions and override
-    ///   expressions are errors if the value is out of range for the
-    ///   destination type, but rounding is okay.
-    ///
-    /// [`AbstractInt`]: crate::Literal::AbstractInt
-    /// [`Float`]: crate::Literal::Float
-    fn try_from_abstract(value: T) -> Result<Self, ConstantEvaluatorError>;
-}
-
-impl TryFromAbstract<i64> for i32 {
-    fn try_from_abstract(value: i64) -> Result<i32, ConstantEvaluatorError> {
-        i32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
-            value: format!("{value:?}"),
-            to_type: "i32",
-        })
-    }
-}
-
-impl TryFromAbstract<i64> for u32 {
-    fn try_from_abstract(value: i64) -> Result<u32, ConstantEvaluatorError> {
-        u32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
-            value: format!("{value:?}"),
-            to_type: "u32",
-        })
-    }
-}
-
-impl TryFromAbstract<i64> for f32 {
-    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
-        let f = value as f32;
-        // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
-        // `f32` is roughly ±3.4 × 10³⁸, so there's no opportunity for
-        // overflow here.
-        Ok(f)
-    }
-}
-
-impl TryFromAbstract<f64> for f32 {
-    fn try_from_abstract(value: f64) -> Result<f32, ConstantEvaluatorError> {
-        let f = value as f32;
-        if f.is_infinite() {
-            return Err(ConstantEvaluatorError::AutomaticConversionLossy {
-                value: format!("{value:?}"),
-                to_type: "f32",
-            });
-        }
-        Ok(f)
-    }
-}
-
-impl TryFromAbstract<i64> for f64 {
-    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
-        let f = value as f64;
-        // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
-        // `f64` is roughly ±1.8 × 10³⁰⁸, so there's no opportunity for
-        // overflow here.
-        Ok(f)
-    }
-}
-
-impl TryFromAbstract<f64> for f64 {
-    fn try_from_abstract(value: f64) -> Result<f64, ConstantEvaluatorError> {
-        Ok(value)
-    }
-}
-
-impl TryFromAbstract<f64> for i32 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "i32" })
-    }
-}
-
-impl TryFromAbstract<f64> for u32 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u32" })
     }
 }

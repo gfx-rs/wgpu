@@ -238,6 +238,9 @@ struct DeviceShared {
     heap_samplers: descriptor::GeneralHeap,
 }
 
+unsafe impl Send for DeviceShared {}
+unsafe impl Sync for DeviceShared {}
+
 pub struct Device {
     raw: d3d12::Device,
     present_queue: d3d12::CommandQueue,

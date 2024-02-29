@@ -161,7 +161,7 @@ impl Drop for DisplayOwner {
 fn open_x_display() -> Option<DisplayOwner> {
     log::debug!("Loading X11 library to get the current display");
     unsafe {
-        let library = libloading::Library::new("libX11.so").ok()?;
+        let library = find_library(&["libX11.so.6", "libX11.so"])?;
         let func: libloading::Symbol<XOpenDisplayFun> = library.get(b"XOpenDisplay").unwrap();
         let result = func(ptr::null());
         ptr::NonNull::new(result).map(|ptr| DisplayOwner {
@@ -783,6 +783,7 @@ impl crate::Instance<super::Api> for Instance {
                 (display, Some(Rc::new(display_owner)), WindowKind::AngleX11)
             } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
                 log::warn!("No windowing system present. Using surfaceless platform");
+                #[allow(clippy::unnecessary_literal_unwrap)] // This is only a literal on Emscripten
                 let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
                 let display = unsafe {
                     egl.get_platform_display(

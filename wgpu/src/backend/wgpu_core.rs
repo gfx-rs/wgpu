@@ -1102,7 +1102,7 @@ impl crate::Context for ContextWgpuCore {
             vertex: pipe::VertexState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.id.into(),
-                    entry_point: Borrowed(desc.vertex.entry_point),
+                    entry_point: Some(Borrowed(desc.vertex.entry_point)),
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1112,7 +1112,7 @@ impl crate::Context for ContextWgpuCore {
             fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: frag.module.id.into(),
-                    entry_point: Borrowed(frag.entry_point),
+                    entry_point: Some(Borrowed(frag.entry_point)),
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1160,7 +1160,7 @@ impl crate::Context for ContextWgpuCore {
             layout: desc.layout.map(|l| l.id.into()),
             stage: pipe::ProgrammableStageDescriptor {
                 module: desc.module.id.into(),
-                entry_point: Borrowed(desc.entry_point),
+                entry_point: Some(Borrowed(desc.entry_point)),
             },
         };
 

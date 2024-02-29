@@ -102,6 +102,7 @@ Bottom level categories:
 ```
 - `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
 - `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU). By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
+- Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 
 #### GLES
 
@@ -120,6 +121,13 @@ Bottom level categories:
 - Simplify and speed up the allocation of internal IDs. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
 - Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
 - Fix behavior of `extractBits` and `insertBits` when `offset + count` overflows the bit width. By @cwfitzgerald in [#5305](https://github.com/gfx-rs/wgpu/pull/5305)
+- Fix registry leaks with de-duplicated resources. By @nical in [#5244](https://github.com/gfx-rs/wgpu/pull/5244)
+- Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
+- Fix missing validation for `Device::clear_buffer` where `offset + size buffer.size` was not checked when `size` was omitted. By @ErichDonGubler in [#5282](https://github.com/gfx-rs/wgpu/pull/5282).
+
+#### glsl-in
+
+- Fix code generation from nested loops. By @cwfitzgerald and @teoxoy in [#5311](https://github.com/gfx-rs/wgpu/pull/5311)
 
 #### WGL
 

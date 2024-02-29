@@ -252,7 +252,8 @@ An override expression can be evaluated at pipeline creation time.
     clippy::collapsible_if,
     clippy::derive_partial_eq_without_eq,
     clippy::needless_borrowed_reference,
-    clippy::single_match
+    clippy::single_match,
+    clippy::enum_variant_names
 )]
 #![warn(
     trivial_casts,

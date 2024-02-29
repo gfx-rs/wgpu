@@ -29,7 +29,7 @@
                 layout: Some(Id(0, 1, Empty)),
                 stage: (
                     module: Id(0, 1, Empty),
-                    entry_point: "main",
+                    entry_point: None,
                 ),
             ),
         ),

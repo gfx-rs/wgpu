@@ -198,7 +198,7 @@ impl<A: HalApi> Adapter<A> {
 
         Self {
             raw,
-            info: ResourceInfo::new("<Adapter>"),
+            info: ResourceInfo::new("<Adapter>", None),
         }
     }
 
@@ -303,7 +303,7 @@ impl<A: HalApi> Adapter<A> {
             let queue = Queue {
                 device: None,
                 raw: Some(hal_device.queue),
-                info: ResourceInfo::new("<Queue>"),
+                info: ResourceInfo::new("<Queue>", None),
             };
             return Ok((device, queue));
         }
@@ -521,7 +521,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
+            info: ResourceInfo::new("<Surface>", None),
             raw: hal_surface,
         };
 
@@ -542,7 +542,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
+            info: ResourceInfo::new("<Surface>", None),
             raw: {
                 let hal_surface = self
                     .instance
@@ -575,7 +575,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
+            info: ResourceInfo::new("<Surface>", None),
             raw: {
                 let hal_surface = self
                     .instance
@@ -604,7 +604,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
+            info: ResourceInfo::new("<Surface>", None),
             raw: {
                 let hal_surface = self
                     .instance
@@ -633,7 +633,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>"),
+            info: ResourceInfo::new("<Surface>", None),
             raw: {
                 let hal_surface = self
                     .instance
