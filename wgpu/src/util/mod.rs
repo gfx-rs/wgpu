@@ -156,20 +156,23 @@ impl std::ops::Deref for DownloadBuffer {
 /// # Examples
 ///
 /// ``` no_run
+/// # use std::path::PathBuf;
 /// # let adapter_info = todo!();
 /// let cache_dir: PathBuf = PathBuf::new();
-/// let filename = pipeline_cache_key(&adapter_info);
-/// let cache_file = cache_dir.join(filename);
-/// let cache_data = std::fs::read(&cache_file);
-/// let pipeline_cache: wgpu::PipelineCache = todo!("Use data (if present) to create a pipeline cache");
+/// let filename = wgpu::util::pipeline_cache_key(&adapter_info);
+/// if let Some(filename) = filename {
+///     let cache_file = cache_dir.join(&filename);
+///     let cache_data = std::fs::read(&cache_file);
+///     let pipeline_cache: wgpu::PipelineCache = todo!("Use data (if present) to create a pipeline cache");
 ///
-/// let data = pipeline_cache.get_data();
-/// if let Some(data) = data {
-///     let temp_file = cache_file.with_extension("temp");
-///     std::fs::write(&temp_file, &data)?;
-///     std::fs::rename(&temp_file, &cache_file)?;
+///     let data = pipeline_cache.get_data();
+///     if let Some(data) = data {
+///         let temp_file = cache_file.with_extension("temp");
+///         std::fs::write(&temp_file, &data)?;
+///         std::fs::rename(&temp_file, &cache_file)?;
+///     }
 /// }
-/// # Ok(())
+/// # Ok::<(), std::io::Error>(())
 /// ```
 ///
 /// [`PipelineCache`]: super::PipelineCache
