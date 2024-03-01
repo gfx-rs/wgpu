@@ -50,16 +50,6 @@ type WlEglWindowResizeFun = unsafe extern "system" fn(
 
 type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const raw::c_void);
 
-#[cfg(target_os = "android")]
-extern "C" {
-    pub fn ANativeWindow_setBuffersGeometry(
-        window: *mut raw::c_void,
-        width: i32,
-        height: i32,
-        format: i32,
-    ) -> i32;
-}
-
 type EglLabel = *const raw::c_void;
 
 #[allow(clippy::upper_case_acronyms)]
@@ -864,7 +854,12 @@ impl crate::Instance<super::Api> for Instance {
                     .unwrap();
 
                 let ret = unsafe {
-                    ANativeWindow_setBuffersGeometry(handle.a_native_window.as_ptr(), 0, 0, format)
+                    ndk_sys::ANativeWindow_setBuffersGeometry(
+                        handle.a_native_window.as_ptr() as *mut ndk_sys::ANativeWindow,
+                        0,
+                        0,
+                        format,
+                    )
                 };
 
                 if ret != 0 {
