@@ -55,8 +55,8 @@ env:
   RUST_LOG: info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
-  RUSTDOCFLAGS: --cfg=web_sys_unstable_apis -D warnings
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
 
