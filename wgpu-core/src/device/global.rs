@@ -2121,9 +2121,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Ok(device) => device,
                     Err(_) => break DeviceError::Invalid.into(),
                 };
-                if !device.valid {
-                    break DeviceError::Invalid.into();
-                }
+                // if !device.valid {
+                //     break DeviceError::Invalid.into();
+                // }
 
                 #[cfg(feature = "trace")]
                 if let Some(ref trace) = device.trace {
