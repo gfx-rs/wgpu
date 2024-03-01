@@ -124,6 +124,7 @@ Bottom level categories:
 - Fix registry leaks with de-duplicated resources. By @nical in [#5244](https://github.com/gfx-rs/wgpu/pull/5244)
 - Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
 - Fix missing validation for `Device::clear_buffer` where `offset + size buffer.size` was not checked when `size` was omitted. By @ErichDonGubler in [#5282](https://github.com/gfx-rs/wgpu/pull/5282).
+- Fix linking when targeting android. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
 
 #### glsl-in
 
