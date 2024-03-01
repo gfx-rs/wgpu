@@ -31,3 +31,6 @@ cts/
 
 # Cached GPU config
 .gpuconfig
+
+# Temporary clone location for wasm-bindgen mirroring
+wgpu/src/backend/webgpu/webgpu_sys/wasm_bindgen_clone_tmp
