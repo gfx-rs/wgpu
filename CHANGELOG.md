@@ -39,6 +39,18 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### Vendored WebGPU Bindings from `web_sys` 
+
+**`--cfg=web_sys_unstable_apis` is no longer needed in your `RUSTFLAGS` to compile for WebGPU!!!**
+
+While WebGPU's javascript api is stable in the browsers, the `web_sys` bindings for WebGPU are still improving. As such they are hidden behind the special cfg `--cfg=web_sys_unstable_apis` and are not available by default. Everyone who wanted to use our WebGPU backend needed to enable this cfg in their `RUSTFLAGS`. This was very inconvenient and made it hard to use WebGPU, especially when WebGPU is enabled by default. Additionally, the unstable APIs don't adhere to semver, so there were repeated breakages.
+
+To combat this problem we have decided to vendor the `web_sys` bindings for WebGPU within the crate. Notably we are not forking the bindings, merely vendoring, so any improvements we make to the bindings will be contributed directly to upstream `web_sys`.
+
+By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
+
 ### Documentation
 
 - Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
