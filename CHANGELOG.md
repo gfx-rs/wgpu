@@ -81,6 +81,9 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 
 - Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
 
+#### Android
+- Fix linking error when targeting android without `winit`. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
+
 ## v0.19.2 (2024-02-29)
 
 ### Added/New Features
