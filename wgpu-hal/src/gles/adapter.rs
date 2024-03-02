@@ -628,6 +628,11 @@ impl super::Adapter {
             // that's the only way to get gl_InstanceID to work correctly.
             features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
         }
+        // Supported by GL 3.3+, Not supported by GLES 3.0+
+        features.set(
+            wgt::Features::TEXTURE_FORMAT_16BIT_NORM,
+            es_ver.is_none() && full_ver >= Some((3, 3)),
+        );
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
@@ -1032,6 +1037,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
+        let texture_rgb16bit_renderable =
+            feature_fn(wgt::Features::TEXTURE_FORMAT_16BIT_NORM, renderable);
+
         match format {
             Tf::R8Unorm => filterable_renderable,
             Tf::R8Snorm => filterable,
@@ -1068,8 +1076,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg32Float => unfilterable | float_renderable | texture_float_linear,
             Tf::Rgba16Uint => renderable | storage,
             Tf::Rgba16Sint => renderable | storage,
-            Tf::Rgba16Unorm => empty,
-            Tf::Rgba16Snorm => empty,
+            Tf::Rgba16Unorm => texture_rgb16bit_renderable,
+            Tf::Rgba16Snorm => texture_rgb16bit_renderable,
             Tf::Rgba16Float => filterable | storage | half_float_renderable,
             Tf::Rgba32Uint => renderable | storage,
             Tf::Rgba32Sint => renderable | storage,
