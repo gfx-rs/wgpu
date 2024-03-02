@@ -117,8 +117,22 @@ impl crate::TypeInner {
                 format!("texture{class_suffix}{dim_suffix}{array_suffix}{type_in_brackets}")
             }
             Ti::Sampler { .. } => "sampler".to_string(),
-            Ti::AccelerationStructure => "acceleration_structure".to_string(),
-            Ti::RayQuery => "ray_query".to_string(),
+            Ti::AccelerationStructure { vertex_return } => {
+                let caps = if vertex_return {
+                    "<vertex_return>"
+                } else {
+                    ""
+                };
+                format!("acceleration_structure{}", caps)
+            },
+            Ti::RayQuery { vertex_return } => {
+                let caps = if vertex_return {
+                    "<vertex_return>"
+                } else {
+                    ""
+                };
+                format!("ray_query{}", caps)
+            },
             Ti::BindingArray { base, size, .. } => {
                 let member_type = &gctx.types[base];
                 let base = member_type.name.as_deref().unwrap_or("unknown");

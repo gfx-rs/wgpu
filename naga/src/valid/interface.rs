@@ -549,8 +549,8 @@ impl super::Validator {
                         _ => {}
                     },
                     crate::TypeInner::Sampler { .. }
-                    | crate::TypeInner::AccelerationStructure
-                    | crate::TypeInner::RayQuery => {}
+                    | crate::TypeInner::AccelerationStructure { .. }
+                    | crate::TypeInner::RayQuery { .. } => {}
                     _ => {
                         return Err(GlobalVariableError::InvalidType(var.space));
                     }

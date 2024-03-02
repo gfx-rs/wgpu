@@ -447,8 +447,8 @@ impl crate::TypeInner {
             | Ti::Struct { .. }
             | Ti::Image { .. }
             | Ti::Sampler { .. }
-            | Ti::AccelerationStructure
-            | Ti::RayQuery
+            | Ti::AccelerationStructure { .. }
+            | Ti::RayQuery { .. }
             | Ti::BindingArray { .. } => None,
         }
     }

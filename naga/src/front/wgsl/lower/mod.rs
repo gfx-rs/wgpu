@@ -2660,6 +2660,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::RayQuery { query, fun }, span);
                             return Ok(None);
                         }
+                        "HitVertexPositions" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            ctx.module.add_vertex_return_type();
+
+                            crate::Expression::RayQueryVertexPositions {
+                                query,
+                            }
+                        }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
                             let query = self.ray_query_pointer(args.next()?, ctx)?;
@@ -3275,8 +3286,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 class,
             },
             ast::Type::Sampler { comparison } => crate::TypeInner::Sampler { comparison },
-            ast::Type::AccelerationStructure => crate::TypeInner::AccelerationStructure,
-            ast::Type::RayQuery => crate::TypeInner::RayQuery,
+            ast::Type::AccelerationStructure { vertex_return } => crate::TypeInner::AccelerationStructure{ vertex_return },
+            ast::Type::RayQuery { vertex_return } => crate::TypeInner::RayQuery { vertex_return },
             ast::Type::BindingArray { base, size } => {
                 let base = self.resolve_ast_type(base, ctx)?;
                 let size = self.array_size(size, ctx)?;
@@ -3346,7 +3357,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         match *resolve_inner!(ctx, pointer) {
             crate::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
-                crate::TypeInner::RayQuery => Ok(pointer),
+                crate::TypeInner::RayQuery { .. } => Ok(pointer),
                 ref other => {
                     log::error!("Pointer type to {:?} passed to ray query op", other);
                     Err(Error::InvalidRayQueryPointer(span))
