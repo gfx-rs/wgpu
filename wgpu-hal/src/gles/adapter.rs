@@ -729,9 +729,19 @@ impl super::Adapter {
             max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
-            max_inter_stage_shader_components: unsafe {
-                gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS)
-            } as u32,
+            max_inter_stage_shader_components: {
+                // MAX_VARYING_COMPONENTS may return 0, because it is deprecated since OpenGL 3.2 core,
+                // and an OpenGL Context with the core profile and with forward-compatibility=true,
+                // will make deprecated constants unavailable.
+                let max_varying_components =
+                    unsafe { gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS) } as u32;
+                if max_varying_components == 0 {
+                    // default value for max_inter_stage_shader_components
+                    60
+                } else {
+                    max_varying_components
+                }
+            },
             max_color_attachments,
             max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: if supports_work_group_params {
@@ -837,7 +847,14 @@ impl super::Adapter {
         let source = if es {
             format!("#version 300 es\nprecision lowp float;\n{source}")
         } else {
-            format!("#version 130\n{source}")
+            let version = gl.version();
+            if version.major == 3 && version.minor == 0 {
+                // OpenGL 3.0 only supports this format
+                format!("#version 130\n{source}")
+            } else {
+                // OpenGL 3.1+ support this format
+                format!("#version 140\n{source}")
+            }
         };
         let shader = unsafe { gl.create_shader(shader_type) }.expect("Could not create shader");
         unsafe { gl.shader_source(shader, &source) };
