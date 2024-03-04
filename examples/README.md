@@ -32,7 +32,7 @@ The rest of the examples are for demonstrating specific features that you can co
 - `repeated-compute` - Mostly for going into detail on subjects `hello-compute` did not. It, too, computes the Collatz conjecture, but this time, it automatically loads large arrays of randomly generated numbers, prints them, runs them, and prints the result. It does this cycle 10 times.
 - `hello-workgroups` - Teaches the user about the basics of compute workgroups; what they are and what they can do.
 - `hello-synchronization` - Teaches the user about synchronization in WGSL, the ability to force all invocations in a workgroup to synchronize with each other before continuing via a sort of barrier.
-- `storage-texture` - Demonstrates the use of storage textures as outputs to compute shaders. The example on the outside seems very similar to `render-to-texture` in that it outputs an image either to the file system or the web page, except displaying a grayscale render of the Mandelbrot Set. However, inside, the example dispatches a grid of compute workgroups, one for each pixel, which calculates the pixel value and stores it to the corresponding pixel of the output storage texture.
+- `storage_texture` - Demonstrates the use of storage textures as outputs to compute shaders. The example on the outside seems very similar to `render_to_texture` in that it outputs an image either to the file system or the web page, except displaying a grayscale render of the Mandelbrot Set. However, inside, the example dispatches a grid of compute workgroups, one for each pixel, which calculates the pixel value and stores it to the corresponding pixel of the output storage texture. This example either outputs an image file of your naming (pass command line arguments after specifying a `--` like `cargo run --bin wgpu-examples -- storage_texture "test.png"`) or adds an `img` element containing the image to the page in WASM.
 
 #### Combined
 
@@ -40,7 +40,7 @@ The rest of the examples are for demonstrating specific features that you can co
 
 ## Feature matrix
 
-| Feature                      | boids  | bunnymark | conservative-raster | cube   | hello-synchronization | hello-workgroups | mipmap | msaa-line | render-to-texture | repeated-compute | shadow | skybox | stencil-triangles | storage-texture | texture-arrays | uniform-values | water  |
+| Feature                      | boids  | bunnymark | conservative-raster | cube   | hello-synchronization | hello-workgroups | mipmap | msaa-line | render_to_texture | repeated-compute | shadow | skybox | stencil-triangles | storage_texture | texture-arrays | uniform-values | water  |
 | ---------------------------- | ------ | --------- | ------------------- | ------ | --------------------- | ---------------- | ------ | --------- | ----------------- | ---------------- | ------ | ------ | ----------------- | --------------- | -------------- | -------------- | ------ |
 | vertex attributes            | :star: |           |                     | :star: |                       |                  |        | :star:    |                   |                  | :star: | :star: |                   |                 | :star:         |                | :star: |
 | instancing                   | :star: |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |
