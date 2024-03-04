@@ -19,6 +19,9 @@ target/
 # Output from capture example
 wgpu/red.png
 
+# Output from render_to_texture example
+**/please_don't_git_push_me.png
+
 # Output from invalid comparison tests
 **/*-actual.png
 **/*-difference.png
