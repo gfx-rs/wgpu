@@ -113,7 +113,7 @@ smallvec = { version = "1", optional = true, features = ["union"] }
 
 khronos-egl = { version = "6", features = ["dynamic"], optional = true }
 libloading = { version = ">=0.7, <0.9", optional = true }
-renderdoc-sys = { version = "1.0.0", optional = true }
+renderdoc-sys = { version = "1.1.0", optional = true }
 
 [target.'cfg(target_os = "emscripten")'.dependencies]
 khronos-egl = { version = "6", features = ["static", "no-pkg-config"] }
@@ -153,7 +153,7 @@ core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = "0.2.87"
-web-sys = { version = "0.3.67", features = [
+web-sys = { version = "0.3.68", features = [
     "Window",
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
@@ -184,9 +184,9 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 cfg-if = "1"
-env_logger = "0.10"
+env_logger = "0.11"
 glam = "0.25.0" # for ray-traced-triangle example
-winit = { version = "0.29.10", features = [
+winit = { version = "0.29.13", features = [
     "android-native-activity",
 ] } # for "halmark" example
 
