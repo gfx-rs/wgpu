@@ -119,7 +119,6 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 #### GLES
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
-- Enable `TEXTURE_FORMAT_16BIT_NORM` for OpenGL 3.3+. By @bes in [#5330](https://github.com/gfx-rs/wgpu/pull/5330).
 
 ### Bug Fixes
 
