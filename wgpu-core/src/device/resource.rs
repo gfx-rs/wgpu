@@ -2823,15 +2823,14 @@ impl<A: HalApi> Device<A> {
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
         let cache = if let Some(cache) = desc.cache {
-            let cache = hub
-                .pipeline_caches
-                .get(cache)
-                .map_err(|_| validation::StageError::InvalidModule)?;
-
-            if cache.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
+            if let Ok(cache) = hub.pipeline_caches.get(cache) {
+                if cache.device.as_info().id() != self.as_info().id() {
+                    return Err(DeviceError::WrongDevice.into());
+                }
+                Some(cache)
+            } else {
+                None
             }
-            Some(cache)
         } else {
             None
         };
@@ -3411,18 +3410,14 @@ impl<A: HalApi> Device<A> {
         }
 
         let cache = if let Some(cache) = desc.cache {
-            let cache = hub
-                .pipeline_caches
-                .get(cache)
-                // This is clearly wrong, but I'm just trying to fix the type errors
-                .map_err(|_| {
-                    pipeline::CreateRenderPipelineError::ConservativeRasterizationNonFillPolygonMode
-                })?;
-
-            if cache.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
+            if let Ok(cache) = hub.pipeline_caches.get(cache) {
+                if cache.device.as_info().id() != self.as_info().id() {
+                    return Err(DeviceError::WrongDevice.into());
+                }
+                Some(cache)
+            } else {
+                None
             }
-            Some(cache)
         } else {
             None
         };

@@ -3247,10 +3247,12 @@ impl Device {
     /// direct uses of backend APIs into this method.
     ///
     /// # Errors
-    /// Returns `None` if this device does not support [`PipelineCache`]. See the
-    /// documentation on that type for details of API support
     ///
-    /// Returns `Some` with an error value if:
+    /// Returns an error value if:
+    ///  * this device is invalid; or
+    ///  * the device is out of memory
+    ///
+    /// This method also returns an error value if:
     ///  * The `fallback` field on `desc` is false; and
     ///  * the `data` provided would not be used[^data_not_used]
     ///
@@ -3288,12 +3290,13 @@ impl Device {
     /// and [`Device::create_render_pipeline`] to initialise its cache data
     ///
     /// # Errors
-    /// Returns `None` if this device does not support [`PipelineCache`]. See the
-    /// documentation on that type for details of API support
     ///
-    /// Returns `Some` with an error value if:
+    /// Errors if:
     ///  * this device is invalid; or
     ///  * the device is out of memory
+    ///
+    /// If the error handler didn't panic,and an error value is used in
+    /// subsequent calls, default (driver-provided) caching will be used.
     pub fn create_pipeline_cache(&self, desc: &PipelineCacheDescriptor<'_>) -> PipelineCache {
         let (id, data) = DynContext::device_create_pipeline_cache(
             &*self.context,
