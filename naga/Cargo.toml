@@ -68,7 +68,7 @@ criterion = { version = "0.5", features = [] }
 [dev-dependencies]
 bincode = "1"
 diff = "0.1"
-env_logger = "0.10"
+env_logger = "0.11"
 # This _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
 # are allowed through though.
