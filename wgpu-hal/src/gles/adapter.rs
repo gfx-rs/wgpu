@@ -941,9 +941,18 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // Compile the shader program we use for doing manual clears to work around Mesa fastclear
         // bug.
 
-        let shader_clear_program = unsafe {
-            Self::create_shader_clear_program(gl, self.shared.es)
-                .ok_or(crate::DeviceError::ResourceCreationFailed)?
+        let shader_clear_program = if self
+            .shared
+            .workarounds
+            .contains(super::Workarounds::MESA_I915_SRGB_SHADER_CLEAR)
+        {
+            Some(unsafe {
+                Self::create_shader_clear_program(gl, self.shared.es)
+                    .ok_or(crate::DeviceError::ResourceCreationFailed)?
+            })
+        } else {
+            // If we don't need the workaround, don't waste time and resources compiling the clear program
+            None
         };
 
         Ok(crate::OpenDevice {
