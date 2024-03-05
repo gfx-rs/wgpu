@@ -29,39 +29,69 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
-#[test]
-fn device_lifetime_check() {
-    use pollster::FutureExt as _;
+#[gpu_test]
+static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|_| {
+        use pollster::FutureExt as _;
 
-    env_logger::init();
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
-        dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
-        gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
-        flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
+            dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+            gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+            flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
+        });
+
+        let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
+            .block_on()
+            .expect("failed to create adapter");
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .block_on()
+            .expect("failed to create device");
+
+        instance.poll_all(false);
+
+        let pre_report = instance.generate_report().unwrap();
+
+        drop(queue);
+        drop(device);
+        let post_report = instance.generate_report().unwrap();
+        assert_ne!(
+            pre_report, post_report,
+            "Queue and Device has not been dropped as expected"
+        );
     });
 
-    let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
-        .block_on()
-        .expect("failed to create adapter");
+#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+#[gpu_test]
+static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|_| {
+        use pollster::FutureExt as _;
 
-    let (device, queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor::default(), None)
-        .block_on()
-        .expect("failed to create device");
+        fn create_device_and_queue() -> (wgpu::Device, wgpu::Queue) {
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
+                dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env()
+                    .unwrap_or_default(),
+                gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+                flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
+            });
 
-    instance.poll_all(false);
+            let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
+                .block_on()
+                .expect("failed to create adapter");
 
-    let pre_report = instance.generate_report().unwrap().unwrap();
+            adapter
+                .request_device(&wgpu::DeviceDescriptor::default(), None)
+                .block_on()
+                .expect("failed to create device")
+        }
 
-    drop(queue);
-    drop(device);
-    let post_report = instance.generate_report().unwrap().unwrap();
-    assert_ne!(
-        pre_report, post_report,
-        "Queue and Device has not been dropped as expected"
-    );
-}
+        let _ = vec![create_device_and_queue(), create_device_and_queue()];
+    });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
