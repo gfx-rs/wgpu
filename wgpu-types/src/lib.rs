@@ -1217,7 +1217,7 @@ impl Limits {
     ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
-    pub fn downlevel_defaults() -> Self {
+    pub const fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
             max_texture_dimension_2d: 2048,
@@ -1295,7 +1295,7 @@ impl Limits {
     ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
-    pub fn downlevel_webgl2_defaults() -> Self {
+    pub const fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
             max_storage_buffers_per_shader_stage: 0,
@@ -1323,7 +1323,7 @@ impl Limits {
     /// This is useful because the swapchain might need to be larger than any other image in the application.
     ///
     /// If your application only needs 512x512, you might be running on a 4k display and need extremely high resolution limits.
-    pub fn using_resolution(self, other: Self) -> Self {
+    pub const fn using_resolution(self, other: Self) -> Self {
         Self {
             max_texture_dimension_1d: other.max_texture_dimension_1d,
             max_texture_dimension_2d: other.max_texture_dimension_2d,
@@ -1335,7 +1335,7 @@ impl Limits {
     /// Modify the current limits to use the buffer alignment limits of the adapter.
     ///
     /// This is useful for when you'd like to dynamically use the "best" supported buffer alignments.
-    pub fn using_alignment(self, other: Self) -> Self {
+    pub const fn using_alignment(self, other: Self) -> Self {
         Self {
             min_uniform_buffer_offset_alignment: other.min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment: other.min_storage_buffer_offset_alignment,
