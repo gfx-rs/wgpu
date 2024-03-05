@@ -2860,6 +2860,7 @@ impl Device {
     /// # Errors
     ///
     /// Returns an error value if:
+    ///  * the [`PIPELINE_CACHE`](wgt::Features::PIPELINE_CACHE) feature is not enabled
     ///  * this device is invalid; or
     ///  * the device is out of memory
     ///
@@ -2903,6 +2904,7 @@ impl Device {
     /// # Errors
     ///
     /// Errors if:
+    ///  * the [`PIPELINE_CACHE`](wgt::Features::PIPELINE_CACHE) feature is not enabled
     ///  * this device is invalid; or
     ///  * the device is out of memory
     ///

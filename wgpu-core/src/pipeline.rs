@@ -335,6 +335,8 @@ pub enum CreatePipelineCacheError {
     Device(#[from] DeviceError),
     #[error("Pipeline cache validation failed")]
     Validation,
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error("Internal error: {0}")]
     Internal(String),
 }
