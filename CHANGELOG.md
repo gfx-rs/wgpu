@@ -54,6 +54,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 ### Documentation
 
 - Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
+- Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
 
 ### New features
 
