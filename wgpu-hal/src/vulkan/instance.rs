@@ -35,7 +35,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         // the debug range start and end appear in different command buffers.
         let khronos_validation_layer =
             std::ffi::CStr::from_bytes_with_nul(b"Khronos Validation Layer\0").unwrap();
-        if let Some(layer_properties) = &user_data.validation_layer_properties {
+        if let Some(layer_properties) = user_data.validation_layer_properties.as_ref() {
             if layer_properties.layer_description.as_ref() == khronos_validation_layer
                 && layer_properties.layer_spec_version >= vk::make_api_version(0, 1, 3, 240)
                 && layer_properties.layer_spec_version <= vk::make_api_version(0, 1, 3, 250)
@@ -703,7 +703,7 @@ impl crate::Instance<super::Api> for super::Instance {
             if let Some(layer_properties) = validation_layer_properties {
                 layers.push(validation_layer_name);
 
-                if let Some(debug_user_data) = &mut debug_user_data {
+                if let Some(debug_user_data) = debug_user_data.as_mut() {
                     debug_user_data.validation_layer_properties =
                         Some(super::ValidationLayerProperties {
                             layer_description: cstr_from_bytes_until_nul(
