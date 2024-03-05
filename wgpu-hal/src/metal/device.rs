@@ -965,7 +965,7 @@ impl crate::Device for super::Device {
                             wgt::BindingType::AccelerationStructure => unimplemented!(),
                         }
                     }
-                    wgt::BindingType::AccelerationStructure => unimplemented!(),
+                    wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
                 }
             }
 
