@@ -2665,7 +2665,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let query = self.ray_query_pointer(args.next()?, ctx)?;
                             args.finish()?;
 
-                            ctx.module.add_vertex_return_type();
+                            let _ = ctx.module.generate_vertex_return_type();
 
                             crate::Expression::RayQueryVertexPositions {
                                 query,

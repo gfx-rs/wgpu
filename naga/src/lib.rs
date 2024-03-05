@@ -2331,6 +2331,11 @@ pub struct SpecialTypes {
     /// this if needed and return the handle.
     pub ray_intersection: Option<Handle<Type>>,
 
+    /// Type for `RayVertexReturn
+    ///
+    /// Call [`Module::generate_vertex_return_type`]
+    pub ray_vertex_return: Option<Handle<Type>>,
+
     /// Types for predeclared wgsl types instantiated on demand.
     ///
     /// Call [`Module::generate_predeclared_type`] to populate this if
