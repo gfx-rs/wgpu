@@ -2667,9 +2667,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let _ = ctx.module.generate_vertex_return_type();
 
-                            crate::Expression::RayQueryVertexPositions {
-                                query,
-                            }
+                            crate::Expression::RayQueryVertexPositions { query }
                         }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
@@ -3286,7 +3284,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 class,
             },
             ast::Type::Sampler { comparison } => crate::TypeInner::Sampler { comparison },
-            ast::Type::AccelerationStructure { vertex_return } => crate::TypeInner::AccelerationStructure{ vertex_return },
+            ast::Type::AccelerationStructure { vertex_return } => {
+                crate::TypeInner::AccelerationStructure { vertex_return }
+            }
             ast::Type::RayQuery { vertex_return } => crate::TypeInner::RayQuery { vertex_return },
             ast::Type::BindingArray { base, size } => {
                 let base = self.resolve_ast_type(base, ctx)?;

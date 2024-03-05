@@ -1100,7 +1100,10 @@ impl Writer {
             }
             crate::TypeInner::AccelerationStructure { vertex_return } => {
                 let caps = if vertex_return {
-                    vec![spirv::Capability::RayQueryKHR, spirv::Capability::RayTracingPositionFetchKHR]
+                    vec![
+                        spirv::Capability::RayQueryKHR,
+                        spirv::Capability::RayTracingPositionFetchKHR,
+                    ]
                 } else {
                     vec![spirv::Capability::RayQueryKHR]
                 };
@@ -1108,7 +1111,10 @@ impl Writer {
             }
             crate::TypeInner::RayQuery { vertex_return } => {
                 let caps = if vertex_return {
-                    vec![spirv::Capability::RayQueryKHR, spirv::Capability::RayTracingPositionFetchKHR]
+                    vec![
+                        spirv::Capability::RayQueryKHR,
+                        spirv::Capability::RayTracingPositionFetchKHR,
+                    ]
                 } else {
                     vec![spirv::Capability::RayQueryKHR]
                 };

@@ -622,13 +622,9 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ">")?;
             }
             TypeInner::AccelerationStructure { vertex_return } => {
-                let caps = if vertex_return {
-                    "<vertex_return>"
-                } else {
-                    ""
-                };
+                let caps = if vertex_return { "<vertex_return>" } else { "" };
                 write!(self.out, "acceleration_structure{}", caps)?
-            },
+            }
             _ => {
                 return Err(Error::Unimplemented(format!("write_value_type {inner:?}")));
             }

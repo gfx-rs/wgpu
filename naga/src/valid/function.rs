@@ -173,7 +173,9 @@ pub enum FunctionError {
     InvalidRayQueryExpression(Handle<crate::Expression>),
     #[error("Acceleration structure {0:?} is not a matching expression")]
     InvalidAccelerationStructure(Handle<crate::Expression>),
-    #[error("Acceleration structure {0:?} is missing flag vertex_return while Ray Query {1:?} does")]
+    #[error(
+        "Acceleration structure {0:?} is missing flag vertex_return while Ray Query {1:?} does"
+    )]
     MissingAccelerationStructureVertexReturn(Handle<crate::Expression>, Handle<crate::Expression>),
     #[error("Ray Query {0:?} is missing flag vertex_return")]
     MissingRayQueryVertexReturn(Handle<crate::Expression>),
@@ -1473,7 +1475,7 @@ impl super::Validator {
                             {
                                 Ti::AccelerationStructure { vertex_return } => {
                                     if (!vertex_return) && rq_vertex_return {
-                                        return Err(FunctionError::MissingAccelerationStructureVertexReturn(acceleration_structure, query).with_span_static(span, "invalid acceleration structure"))
+                                        return Err(FunctionError::MissingAccelerationStructureVertexReturn(acceleration_structure, query).with_span_static(span, "invalid acceleration structure"));
                                     }
                                 }
                                 _ => {
@@ -1496,7 +1498,11 @@ impl super::Validator {
                         }
                         crate::RayQueryFunction::ReturnHitVertex { result } => {
                             if !rq_vertex_return {
-                                return Err(FunctionError::MissingRayQueryVertexReturn(query).with_span_static(span, "missing ray query flag: vertex_return"))
+                                return Err(FunctionError::MissingRayQueryVertexReturn(query)
+                                    .with_span_static(
+                                        span,
+                                        "missing ray query flag: vertex_return",
+                                    ));
                             }
                             self.emit_expression(result, context)?;
                         }

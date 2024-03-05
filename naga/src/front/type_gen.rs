@@ -110,14 +110,21 @@ impl crate::Module {
         let ty_vec3f = self.types.insert(
             crate::Type {
                 name: None,
-                inner: crate::TypeInner::Vector { size: crate::VectorSize::Tri, scalar: crate::Scalar::F32 },
+                inner: crate::TypeInner::Vector {
+                    size: crate::VectorSize::Tri,
+                    scalar: crate::Scalar::F32,
+                },
             },
             Span::UNDEFINED,
         );
         let array = self.types.insert(
             crate::Type {
                 name: None,
-                inner: crate::TypeInner::Array { base: ty_vec3f, size: crate::ArraySize::Constant(std::num::NonZeroU32::new(3).unwrap()), stride: 16}
+                inner: crate::TypeInner::Array {
+                    base: ty_vec3f,
+                    size: crate::ArraySize::Constant(std::num::NonZeroU32::new(3).unwrap()),
+                    stride: 16,
+                },
             },
             Span::UNDEFINED,
         );
@@ -138,8 +145,7 @@ impl crate::Module {
     /// [`SpecialTypes::ray_intersection`]: crate::SpecialTypes::ray_intersection
     /// [`Expression::RayQueryGetIntersection`]: crate::Expression::RayQueryGetIntersection
     pub fn generate_ray_intersection_type(&mut self) -> Handle<crate::Type> {
-        if let Some(handle) = self.special_types.
-            ray_intersection {
+        if let Some(handle) = self.special_types.ray_intersection {
             return handle;
         }
 

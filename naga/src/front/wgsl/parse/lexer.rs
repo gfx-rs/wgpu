@@ -463,7 +463,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub(in crate::front::wgsl) fn next_acceleration_structure_flags(
-        &mut self
+        &mut self,
     ) -> Result<bool, Error<'a>> {
         Ok(if self.peek().0 == Token::Paren('<') {
             self.expect(Token::Paren('<'))?;
@@ -471,7 +471,7 @@ impl<'a> Lexer<'a> {
             let ret = if name == "vertex_return" {
                 true
             } else {
-                return Err(Error::UnknownAttribute(span))
+                return Err(Error::UnknownAttribute(span));
             };
             self.expect(Token::Paren('>'))?;
             ret

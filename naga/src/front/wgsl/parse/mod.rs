@@ -1649,11 +1649,11 @@ impl Parser {
             "acceleration_structure" => {
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
                 ast::Type::AccelerationStructure { vertex_return }
-            },
+            }
             "ray_query" => {
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
                 ast::Type::RayQuery { vertex_return }
-            },
+            }
             "RayDesc" => ast::Type::RayDesc,
             "RayIntersection" => ast::Type::RayIntersection,
             _ => return Ok(None),

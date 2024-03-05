@@ -1739,7 +1739,9 @@ impl super::Validator {
                     base,
                     space: crate::AddressSpace::Function,
                 } => match resolver.types[base].inner {
-                    Ti::RayQuery { vertex_return: true } => ShaderStages::all(),
+                    Ti::RayQuery {
+                        vertex_return: true,
+                    } => ShaderStages::all(),
                     ref other => {
                         log::error!("Intersection result of a pointer to {:?}", other);
                         return Err(ExpressionError::InvalidRayQueryType(query));
