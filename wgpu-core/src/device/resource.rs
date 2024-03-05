@@ -3523,6 +3523,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
     ) -> Result<pipeline::PipelineCache<A>, pipeline::CreatePipelineCacheError> {
+        self.require_features(wgt::Features::PIPELINE_CACHE)?;
         let mut cache_desc = hal::PipelineCacheDescriptor {
             data: desc.data.as_deref(),
             label: desc.label.to_hal(self.instance_flags),

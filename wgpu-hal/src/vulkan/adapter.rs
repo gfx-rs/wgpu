@@ -488,7 +488,8 @@ impl PhysicalDeviceFeatures {
             | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::CLEAR_TEXTURE;
+            | F::CLEAR_TEXTURE
+            | F::PIPELINE_CACHE;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
