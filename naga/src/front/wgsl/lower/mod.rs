@@ -1666,9 +1666,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     LoweredGlobalDecl::Const(handle) => {
                         Typed::Plain(crate::Expression::Constant(handle))
                     }
-                    LoweredGlobalDecl::Override(handle) => {
-                        Typed::Plain(crate::Expression::Override(handle))
-                    }
                     _ => {
                         return Err(Error::Unexpected(span, ExpectedToken::Variable));
                     }
