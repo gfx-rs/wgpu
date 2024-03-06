@@ -1020,18 +1020,8 @@ impl<'w> BlockContext<'w> {
                             _ => unreachable!(),
                         };
 
-                        // This polyfill doesn't work yet https://github.com/gfx-rs/wgpu/issues/5276
-                        let maybe_rev_id = if width != 4 {
-                            let rev_id = self.gen_id();
-                            block.body.push(Instruction::unary(
-                                spirv::Op::BitReverse,
-                                int_type_id,
-                                rev_id,
-                                arg0_id,
-                            ));
-                            rev_id
-                        } else {
-                            arg0_id
+                        if width != 4 {
+                            unreachable!("This is validated out until a polyfill is implemented. https://github.com/gfx-rs/wgpu/issues/5276");
                         };
 
                         let msb_id = self.gen_id();
@@ -1044,7 +1034,7 @@ impl<'w> BlockContext<'w> {
                             },
                             int_type_id,
                             msb_id,
-                            &[maybe_rev_id],
+                            &[arg0_id],
                         ));
 
                         MathOp::Custom(Instruction::binary(
@@ -1202,41 +1192,7 @@ impl<'w> BlockContext<'w> {
                             };
                             MathOp::Ext(thing)
                         } else {
-                            // This polyfill doesn't work yet https://github.com/gfx-rs/wgpu/issues/5276
-                            let int_type_id = match *arg_ty {
-                                crate::TypeInner::Vector { size, scalar } => self.get_type_id(
-                                    LocalType::Value {
-                                        vector_size: Some(size),
-                                        scalar,
-                                        pointer_space: None,
-                                    }
-                                    .into(),
-                                ),
-                                crate::TypeInner::Scalar(scalar) => {
-                                    self.get_type_id(LookupType::Local(LocalType::Value {
-                                        vector_size: None,
-                                        scalar,
-                                        pointer_space: None,
-                                    }))
-                                }
-                                _ => unreachable!(),
-                            };
-
-                            let rev_id = self.gen_id();
-                            block.body.push(Instruction::unary(
-                                spirv::Op::BitReverse,
-                                int_type_id,
-                                rev_id,
-                                arg0_id,
-                            ));
-
-                            MathOp::Custom(Instruction::ext_inst(
-                                self.writer.gl450_ext_inst_id,
-                                spirv::GLOp::FindILsb,
-                                result_type_id,
-                                id,
-                                &[rev_id],
-                            ))
+                            unreachable!("This is validated out until a polyfill is implemented. https://github.com/gfx-rs/wgpu/issues/5276");
                         }
                     }
                     Mf::Pack4x8unorm => MathOp::Ext(spirv::GLOp::PackUnorm4x8),
