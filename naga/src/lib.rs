@@ -1256,15 +1256,18 @@ pub enum SampleLevel {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum ImageQuery {
     /// Get the size at the specified level.
+    ///
+    /// The return value is a `u32` for 1D images, and a `vecN<u32>`
+    /// for an image with dimensions N > 2.
     Size {
         /// If `None`, the base level is considered.
         level: Option<Handle<Expression>>,
     },
-    /// Get the number of mipmap levels.
+    /// Get the number of mipmap levels, a `u32`.
     NumLevels,
-    /// Get the number of array layers.
+    /// Get the number of array layers, a `u32`.
     NumLayers,
-    /// Get the number of samples.
+    /// Get the number of samples, a `u32`.
     NumSamples,
 }
 
