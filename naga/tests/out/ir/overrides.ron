@@ -65,7 +65,15 @@
             init: Some(7),
         ),
     ],
-    global_variables: [],
+    global_variables: [
+        (
+            name: Some("gain_x_10"),
+            space: Private,
+            binding: None,
+            ty: 2,
+            init: Some(10),
+        ),
+    ],
     global_expressions: [
         Literal(Bool(true)),
         Literal(F32(2.3)),
@@ -78,6 +86,13 @@
             right: 4,
         ),
         Literal(F32(2.718)),
+        Override(3),
+        Literal(F32(10.0)),
+        Binary(
+            op: Multiply,
+            left: 8,
+            right: 9,
+        ),
     ],
     functions: [],
     entry_points: [
@@ -101,6 +116,11 @@
                         ty: 1,
                         init: None,
                     ),
+                    (
+                        name: Some("gain_x_100"),
+                        ty: 2,
+                        init: None,
+                    ),
                 ],
                 expressions: [
                     Override(6),
@@ -117,6 +137,17 @@
                         expr: 5,
                     ),
                     LocalVariable(2),
+                    GlobalVariable(1),
+                    Load(
+                        pointer: 8,
+                    ),
+                    Literal(F32(10.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 9,
+                        right: 10,
+                    ),
+                    LocalVariable(3),
                 ],
                 named_expressions: {
                     6: "a",
@@ -137,6 +168,18 @@
                     Store(
                         pointer: 7,
                         value: 6,
+                    ),
+                    Emit((
+                        start: 8,
+                        end: 9,
+                    )),
+                    Emit((
+                        start: 10,
+                        end: 11,
+                    )),
+                    Store(
+                        pointer: 12,
+                        value: 11,
                     ),
                     Return(
                         value: None,
