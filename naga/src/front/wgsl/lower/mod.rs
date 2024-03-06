@@ -916,7 +916,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let init;
                     if let Some(init_ast) = v.init {
-                        let mut ectx = ctx.as_const();
+                        let mut ectx = ctx.as_override();
                         let lowered = self.expression_for_abstract(init_ast, &mut ectx)?;
                         let ty_res = crate::proc::TypeResolution::Handle(ty);
                         let converted = ectx

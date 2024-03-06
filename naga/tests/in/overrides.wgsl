@@ -13,9 +13,13 @@
 
 override inferred_f32 = 2.718;
 
+var<private> gain_x_10: f32 = gain * 10.;
+
 @compute @workgroup_size(1)
 fn main() {
     var t = height * 5;
     let a = !has_point_light;
     var x = a;
+
+    var gain_x_100 = gain_x_10 * 10.;
 }

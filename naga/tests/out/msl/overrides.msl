@@ -14,9 +14,13 @@ constant float inferred_f32_ = 2.718;
 
 kernel void main_(
 ) {
+    float gain_x_10_ = 11.0;
     float t = {};
     bool x = {};
+    float gain_x_100_ = {};
     t = 23.0;
     x = true;
+    float _e10 = gain_x_10_;
+    gain_x_100_ = _e10 * 10.0;
     return;
 }

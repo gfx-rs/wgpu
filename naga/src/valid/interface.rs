@@ -31,7 +31,7 @@ pub enum GlobalVariableError {
         Handle<crate::Type>,
         #[source] Disalignment,
     ),
-    #[error("Initializer must be a const-expression")]
+    #[error("Initializer must be an override-expression")]
     InitializerExprType,
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
@@ -529,7 +529,7 @@ impl super::Validator {
                 }
             }
 
-            if !global_expr_kind.is_const(init) {
+            if !global_expr_kind.is_const_or_override(init) {
                 return Err(GlobalVariableError::InitializerExprType);
             }
 
