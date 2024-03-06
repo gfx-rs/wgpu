@@ -677,9 +677,11 @@ impl<'a> ConstantEvaluator<'a> {
     /// [`ZeroValue`], and [`Swizzle`] expressions - to the expression arena
     /// `self` contributes to.
     ///
-    /// If `expr`'s value cannot be determined at compile time, return an
-    /// error. If it's acceptable to evaluate `expr` at runtime, the `expr`
-    /// will be appended to the arena and no error will be returned.
+    /// If `expr`'s value cannot be determined at compile time, and `self` is
+    /// contributing to some function's expression arena, then append `expr` to
+    /// that arena unchanged (and thus unevaluated). Otherwise, `self` must be
+    /// contributing to the module's constant expression arena; since `expr`'s
+    /// value is not a constant, return an error.
     ///
     /// We only consider `expr` itself, without recursing into its operands. Its
     /// operands must all have been produced by prior calls to
