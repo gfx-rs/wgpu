@@ -2023,7 +2023,8 @@ impl Writer {
                 ir_module,
                 info,
                 &pipeline_options.constants,
-            )?
+            )
+            .map_err(Box::new)?
         } else {
             (
                 std::borrow::Cow::Borrowed(ir_module),

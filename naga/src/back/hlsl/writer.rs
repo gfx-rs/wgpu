@@ -189,7 +189,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             module,
             module_info,
             &pipeline_options.constants,
-        )?;
+        )
+        .map_err(Box::new)?;
         let module = module.as_ref();
         let module_info = module_info.as_ref();
 

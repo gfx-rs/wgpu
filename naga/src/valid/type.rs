@@ -63,6 +63,7 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone, Copy, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum Disalignment {
     #[error("The array stride {stride} is not a multiple of the required alignment {alignment}")]
     ArrayStride { stride: u32, alignment: Alignment },
@@ -87,6 +88,7 @@ pub enum Disalignment {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum TypeError {
     #[error("Capability {0:?} is required")]
     MissingCapability(Capabilities),

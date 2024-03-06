@@ -129,6 +129,7 @@ pub enum ExpressionError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ConstExpressionError {
     #[error("The expression is not a constant or override expression")]
     NonConstOrOverride,

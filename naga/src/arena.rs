@@ -122,6 +122,7 @@ impl<T> Handle<T> {
     serde(transparent)
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct Range<T> {
     inner: ops::Range<u32>,
     #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
@@ -140,6 +141,7 @@ impl<T> Range<T> {
 
 // NOTE: Keep this diagnostic in sync with that of [`BadHandle`].
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 #[error("Handle range {range:?} of {kind} is either not present, or inaccessible yet")]
 pub struct BadRangeError {
     // This error is used for many `Handle` types, but there's no point in making this generic, so

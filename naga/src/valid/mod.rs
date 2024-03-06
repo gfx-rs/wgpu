@@ -139,33 +139,6 @@ pub struct ModuleInfo {
     const_expression_types: Box<[TypeResolution]>,
 }
 
-impl ModuleInfo {
-    pub(crate) fn update_const_expression_types(
-        &self,
-        module: &crate::Module,
-    ) -> Result<Self, crate::proc::ResolveError> {
-        Ok(Self {
-            type_flags: self.type_flags.clone(),
-            functions: self.functions.clone(),
-            entry_points: self.entry_points.clone(),
-            const_expression_types: resolve_const_expression_types(module)?.into_boxed_slice(),
-        })
-    }
-}
-
-fn resolve_const_expression_types(
-    module: &crate::Module,
-) -> Result<Vec<TypeResolution>, crate::proc::ResolveError> {
-    let t = crate::Arena::new();
-    let resolve_context = crate::proc::ResolveContext::with_locals(module, &t, &[]);
-    let mut const_expression_types = Vec::with_capacity(module.global_expressions.len());
-    for (_, expr) in module.global_expressions.iter() {
-        let ty = resolve_context.resolve(expr, |h| Ok(&const_expression_types[h.index()]))?;
-        const_expression_types.push(ty);
-    }
-    Ok(const_expression_types)
-}
-
 impl ops::Index<Handle<crate::Type>> for ModuleInfo {
     type Output = TypeFlags;
     fn index(&self, handle: Handle<crate::Type>) -> &Self::Output {
@@ -203,6 +176,7 @@ pub struct Validator {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ConstantError {
     #[error("Initializer must be a const-expression")]
     InitializerExprType,
@@ -213,6 +187,7 @@ pub enum ConstantError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum OverrideError {
     #[error("Override name and ID are missing")]
     MissingNameAndID,
@@ -229,6 +204,7 @@ pub enum OverrideError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ValidationError {
     #[error(transparent)]
     InvalidHandle(#[from] InvalidHandleError),

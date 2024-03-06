@@ -144,7 +144,7 @@ pub enum Error {
     #[error("ray tracing is not supported prior to MSL 2.3")]
     UnsupportedRayTracing,
     #[error(transparent)]
-    PipelineConstant(#[from] crate::back::pipeline_constants::PipelineConstantError),
+    PipelineConstant(#[from] Box<crate::back::pipeline_constants::PipelineConstantError>),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -541,5 +541,5 @@ pub fn write_string(
 #[test]
 fn test_error_size() {
     use std::mem::size_of;
-    assert_eq!(size_of::<Error>(), 56);
+    assert_eq!(size_of::<Error>(), 32);
 }

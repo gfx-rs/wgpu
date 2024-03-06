@@ -1,8 +1,8 @@
 use super::PipelineConstants;
 use crate::{
-    proc::{ConstantEvaluator, ConstantEvaluatorError, ResolveError},
-    valid::ModuleInfo,
-    Constant, Expression, Handle, Literal, Module, Override, Scalar, Span, TypeInner,
+    proc::{ConstantEvaluator, ConstantEvaluatorError},
+    valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
+    Constant, Expression, Handle, Literal, Module, Override, Scalar, Span, TypeInner, WithSpan,
 };
 use std::{borrow::Cow, collections::HashSet};
 use thiserror::Error;
@@ -19,7 +19,7 @@ pub enum PipelineConstantError {
     #[error(transparent)]
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
-    ResolveError(#[from] ResolveError),
+    ValidationError(#[from] WithSpan<ValidationError>),
 }
 
 pub(super) fn process_overrides<'a>(
@@ -110,7 +110,8 @@ pub(super) fn process_overrides<'a>(
         }
     }
 
-    let module_info = module_info.update_const_expression_types(&module)?;
+    let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
+    let module_info = validator.validate(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
 }
