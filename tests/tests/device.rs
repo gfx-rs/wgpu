@@ -581,6 +581,37 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
+static DEVICE_INVALID_THEN_SET_LOST_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|ctx| {
+        // This test checks that when the device is invalid, a subsequent call
+        // to set the device lost callback will immediately call the callback.
+        // Invalidating the device is done via a testing-only method. Fails on
+        // webgl because webgl doesn't implement make_invalid.
+
+        // Make the device invalid.
+        ctx.device.make_invalid();
+
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+
+        // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
+        let callback = Box::new(move |reason, _m| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                matches!(reason, wgt::DeviceLostReason::DeviceInvalid),
+                "Device lost info reason should match DeviceLostReason::DeviceInvalid."
+            );
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });
+
+#[gpu_test]
 static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_sync(|ctx| {

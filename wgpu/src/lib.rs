@@ -2703,6 +2703,11 @@ impl Device {
             Box::new(callback),
         )
     }
+
+    /// Test-only function to make this device invalid.
+    pub fn make_invalid(&self) {
+        DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
+    }
 }
 
 impl Drop for Device {
