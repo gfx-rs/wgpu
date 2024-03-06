@@ -9,5 +9,10 @@ static const float inferred_f32_ = 2.718;
 [numthreads(1, 1, 1)]
 void main()
 {
+    float t = (float)0;
+    bool x = (bool)0;
+
+    t = 23.0;
+    x = true;
     return;
 }

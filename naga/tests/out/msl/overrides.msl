@@ -14,5 +14,9 @@ constant float inferred_f32_ = 2.718;
 
 kernel void main_(
 ) {
+    float t = {};
+    bool x = {};
+    t = 23.0;
+    x = true;
     return;
 }

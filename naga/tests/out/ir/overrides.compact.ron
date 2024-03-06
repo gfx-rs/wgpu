@@ -90,10 +90,54 @@
                 name: Some("main"),
                 arguments: [],
                 result: None,
-                local_variables: [],
-                expressions: [],
-                named_expressions: {},
+                local_variables: [
+                    (
+                        name: Some("t"),
+                        ty: 2,
+                        init: None,
+                    ),
+                    (
+                        name: Some("x"),
+                        ty: 1,
+                        init: None,
+                    ),
+                ],
+                expressions: [
+                    Override(6),
+                    Literal(F32(5.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 1,
+                        right: 2,
+                    ),
+                    LocalVariable(1),
+                    Override(1),
+                    Unary(
+                        op: LogicalNot,
+                        expr: 5,
+                    ),
+                    LocalVariable(2),
+                ],
+                named_expressions: {
+                    6: "a",
+                },
                 body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    Store(
+                        pointer: 4,
+                        value: 3,
+                    ),
+                    Emit((
+                        start: 5,
+                        end: 6,
+                    )),
+                    Store(
+                        pointer: 7,
+                        value: 6,
+                    ),
                     Return(
                         value: None,
                     ),
