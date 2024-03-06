@@ -172,7 +172,7 @@ pub struct Validator {
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
-    override_ids: BitSet,
+    override_ids: FastHashSet<u16>,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -319,7 +319,7 @@ impl Validator {
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
             valid_expression_set: BitSet::new(),
-            override_ids: BitSet::new(),
+            override_ids: FastHashSet::default(),
         }
     }
 
@@ -375,7 +375,7 @@ impl Validator {
         }
 
         if let Some(id) = o.id {
-            if !self.override_ids.insert(id as usize) {
+            if !self.override_ids.insert(id) {
                 return Err(OverrideError::DuplicateID);
             }
         }
