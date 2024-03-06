@@ -14,4 +14,8 @@
 override inferred_f32 = 2.718;
 
 @compute @workgroup_size(1)
-fn main() {}
+fn main() {
+    var t = height * 5;
+    let a = !has_point_light;
+    var x = a;
+}
