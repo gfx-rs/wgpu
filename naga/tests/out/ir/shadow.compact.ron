@@ -154,6 +154,7 @@
     special_types: (
         ray_desc: None,
         ray_intersection: None,
+        ray_vertex_return: None,
         predeclared_types: {},
     ),
     constants: [
