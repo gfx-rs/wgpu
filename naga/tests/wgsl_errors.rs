@@ -890,6 +890,7 @@ macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )?, $capabilities:expr ) => {
         let source = $source;
         let error = validation_error($source, $capabilities);
+        #[allow(clippy::redundant_pattern_matching)]
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
                        source code: {}\n\

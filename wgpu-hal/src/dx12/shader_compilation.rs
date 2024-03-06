@@ -13,7 +13,7 @@ use crate::auxil::dxgi::result::HResult;
 
 pub(super) fn compile_fxc(
     device: &super::Device,
-    source: &String,
+    source: &str,
     source_name: &str,
     raw_ep: &std::ffi::CString,
     stage_bit: wgt::ShaderStages,

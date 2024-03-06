@@ -16,6 +16,8 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
+    // this happens on the GL backend, where it is both thread safe and non-thread safe in the same code.
+    clippy::arc_with_non_send_sync,
     // for `if_then_panic` until it reaches stable
     unknown_lints,
     // We use loops for getting early-out of scope without closures.

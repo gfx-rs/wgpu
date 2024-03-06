@@ -220,7 +220,10 @@ impl Global {
                         layers: 0..1,
                         mips: 0..1,
                     },
-                    info: ResourceInfo::new("<Surface>", None),
+                    info: ResourceInfo::new(
+                        "<Surface Texture>",
+                        Some(device.tracker_indices.textures.clone()),
+                    ),
                     clear_mode: RwLock::new(resource::TextureClearMode::Surface {
                         clear_view: Some(clear_view),
                     }),

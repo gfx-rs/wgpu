@@ -343,7 +343,8 @@ impl<A: HalApi> Device<A> {
                     let Some(bind_group) = bind_group.upgrade() else {
                         continue;
                     };
-                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write()) else {
+                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write())
+                    else {
                         continue;
                     };
 
@@ -2709,14 +2710,21 @@ impl<A: HalApi> Device<A> {
         let mut shader_binding_sizes = FastHashMap::default();
         let io = validation::StageIo::default();
 
+        let final_entry_point_name;
+
         {
             let stage = wgt::ShaderStages::COMPUTE;
+
+            final_entry_point_name = shader_module.finalize_entry_point_name(
+                stage,
+                desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
+            )?;
 
             if let Some(ref interface) = shader_module.interface {
                 let _ = interface.check_stage(
                     &mut binding_layout_source,
                     &mut shader_binding_sizes,
-                    &desc.stage.entry_point,
+                    &final_entry_point_name,
                     stage,
                     io,
                     None,
@@ -2744,7 +2752,7 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw(),
             stage: hal::ProgrammableStage {
-                entry_point: desc.stage.entry_point.as_ref(),
+                entry_point: final_entry_point_name.as_ref(),
                 module: shader_module.raw(),
             },
         };
@@ -3119,6 +3127,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let vertex_shader_module;
+        let vertex_entry_point_name;
         let vertex_stage = {
             let stage_desc = &desc.vertex.stage;
             let stage = wgt::ShaderStages::VERTEX;
@@ -3133,27 +3142,37 @@ impl<A: HalApi> Device<A> {
                 return Err(DeviceError::WrongDevice.into());
             }
 
+            let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+
+            vertex_entry_point_name = vertex_shader_module
+                .finalize_entry_point_name(
+                    stage,
+                    stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
+                )
+                .map_err(stage_err)?;
+
             if let Some(ref interface) = vertex_shader_module.interface {
                 io = interface
                     .check_stage(
                         &mut binding_layout_source,
                         &mut shader_binding_sizes,
-                        &stage_desc.entry_point,
+                        &vertex_entry_point_name,
                         stage,
                         io,
                         desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                     )
-                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage { stage, error })?;
+                    .map_err(stage_err)?;
                 validated_stages |= stage;
             }
 
             hal::ProgrammableStage {
                 module: vertex_shader_module.raw(),
-                entry_point: stage_desc.entry_point.as_ref(),
+                entry_point: &vertex_entry_point_name,
             }
         };
 
         let mut fragment_shader_module = None;
+        let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
                 let stage = wgt::ShaderStages::FRAGMENT;
@@ -3167,28 +3186,38 @@ impl<A: HalApi> Device<A> {
                         })?,
                 );
 
+                let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+
+                fragment_entry_point_name = shader_module
+                    .finalize_entry_point_name(
+                        stage,
+                        fragment_state
+                            .stage
+                            .entry_point
+                            .as_ref()
+                            .map(|ep| ep.as_ref()),
+                    )
+                    .map_err(stage_err)?;
+
                 if validated_stages == wgt::ShaderStages::VERTEX {
                     if let Some(ref interface) = shader_module.interface {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
                                 &mut shader_binding_sizes,
-                                &fragment_state.stage.entry_point,
+                                &fragment_entry_point_name,
                                 stage,
                                 io,
                                 desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
-                            .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                                stage,
-                                error,
-                            })?;
+                            .map_err(stage_err)?;
                         validated_stages |= stage;
                     }
                 }
 
                 if let Some(ref interface) = shader_module.interface {
                     shader_expects_dual_source_blending = interface
-                        .fragment_uses_dual_source_blending(&fragment_state.stage.entry_point)
+                        .fragment_uses_dual_source_blending(&fragment_entry_point_name)
                         .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                             stage,
                             error,
@@ -3197,7 +3226,7 @@ impl<A: HalApi> Device<A> {
 
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
-                    entry_point: fragment_state.stage.entry_point.as_ref(),
+                    entry_point: &fragment_entry_point_name,
                 })
             }
             None => None,
