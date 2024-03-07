@@ -687,11 +687,6 @@ impl Global {
             .into());
         }
 
-        if size == 0 {
-            log::trace!("Ignoring copy_buffer_to_buffer of size 0");
-            return Ok(());
-        }
-
         // Make sure source is initialized memory and mark dest as initialized.
         cmd_buf_data.buffer_memory_init_actions.extend(
             dst_buffer.initialization_status.read().create_action(
@@ -759,11 +754,6 @@ impl Global {
         let tracker = &mut cmd_buf_data.trackers;
         let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
         let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
-
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring copy_buffer_to_texture of size 0");
-            return Ok(());
-        }
 
         let dst_texture = hub
             .textures
@@ -919,11 +909,6 @@ impl Global {
         let tracker = &mut cmd_buf_data.trackers;
         let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
         let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
-
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring copy_texture_to_buffer of size 0");
-            return Ok(());
-        }
 
         let src_texture = hub
             .textures
@@ -1093,11 +1078,6 @@ impl Global {
         let encoder = &mut cmd_buf_data.encoder;
         let tracker = &mut cmd_buf_data.trackers;
         let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
-
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring copy_texture_to_texture of size 0");
-            return Ok(());
-        }
 
         let src_texture = hub
             .textures
