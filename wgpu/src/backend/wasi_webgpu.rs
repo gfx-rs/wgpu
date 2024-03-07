@@ -11,18 +11,8 @@ use std::{future::Future, marker::PhantomData, ops::Range};
 
 wit_bindgen::generate!({
     path: "wit",
-    world: "component:webgpu/example",
-    exports: {
-        world: ExampleTriangle,
-    },
+    world: "wgpu:backend/main",
 });
-
-struct ExampleTriangle;
-
-// TODO: get rid of this.
-impl Guest for ExampleTriangle {
-    fn start() {}
-}
 
 // TODO: get rid of this type.
 #[derive(Debug, Clone, Copy)]

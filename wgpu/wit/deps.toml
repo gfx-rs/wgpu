@@ -1,2 +1,1 @@
-[webgpu]
-url = "https://github.com/MendyBerger/wasi-webgpu/archive/b20c0ec4eb20851dcd6c535af30757a45b8968af/main.tar.gz"
+webgpu = "https://github.com/WebAssembly/wasi-webgpu/archive/d9210ac14fb10ccb20ca9f3d3c4ce371cccb053b.tar.gz"

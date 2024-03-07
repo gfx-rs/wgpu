@@ -1,11 +1,5 @@
 package wgpu:backend;
 
 world main {
-    import component:webgpu/webgpu;
-    import component:webgpu/graphics-context;
-    import component:webgpu/mini-canvas;
-    import component:webgpu/animation-frame;
-    import component:webgpu/pointer-events;
-    import component:webgpu/key-events;
-    import component:webgpu/frame-buffer;
+    include wasi:webgpu/imports;
 }
