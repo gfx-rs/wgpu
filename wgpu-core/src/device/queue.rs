@@ -12,7 +12,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label,
-    id::{self, QueueId},
+    id::{self, DeviceId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, Resource,
@@ -342,6 +342,15 @@ pub struct InvalidQueue;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueWriteError {
+    #[error(
+        "Device of queue ({:?}) does not match device of write recipient ({:?})",
+        queue_device_id,
+        target_device_id
+    )]
+    DeviceMismatch {
+        queue_device_id: DeviceId,
+        target_device_id: DeviceId,
+    },
     #[error(transparent)]
     Queue(#[from] DeviceError),
     #[error(transparent)]
@@ -386,12 +395,30 @@ impl Global {
 
         let hub = A::hub(self);
 
+        let buffer_device_id = hub
+            .buffers
+            .get(buffer_id)
+            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?
+            .device
+            .as_info()
+            .id();
+
         let queue = hub
             .queues
             .get(queue_id)
             .map_err(|_| DeviceError::InvalidQueueId)?;
 
         let device = queue.device.as_ref().unwrap();
+
+        {
+            let queue_device_id = device.as_info().id();
+            if buffer_device_id != queue_device_id {
+                return Err(QueueWriteError::DeviceMismatch {
+                    queue_device_id,
+                    target_device_id: buffer_device_id,
+                });
+            }
+        }
 
         let data_size = data.len() as wgt::BufferAddress;
 
