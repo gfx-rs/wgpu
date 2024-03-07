@@ -1833,6 +1833,13 @@ impl Instance {
             };
         }
 
+        #[cfg(wasi_webgpu)]
+        {
+            return Self {
+                context: Arc::from(crate::backend::ContextWasiWebgpu::init(_instance_desc)),
+            };
+        }
+
         unreachable!(
             "Earlier check of `any_backend_feature_enabled` should have prevented getting here!"
         );

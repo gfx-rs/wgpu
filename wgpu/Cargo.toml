@@ -47,6 +47,9 @@ vulkan-portability = ["wgc?/vulkan"]
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 webgpu = ["naga?/wgsl-out"]
 
+## Enables the WASI-WebGPU backend.
+wasi-webgpu = []
+
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
@@ -167,6 +170,8 @@ raw-window-handle = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
+# TODO: only for wasi-webgpu
+wit-bindgen = "0.19.0"
 
 [dependencies.naga]
 workspace = true
