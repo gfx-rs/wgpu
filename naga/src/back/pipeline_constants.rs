@@ -111,7 +111,7 @@ pub(super) fn process_overrides<'a>(
     }
 
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
-    let module_info = validator.validate(&module)?;
+    let module_info = validator.validate_no_overrides(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
 }
