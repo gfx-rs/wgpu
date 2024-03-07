@@ -135,6 +135,8 @@ pub enum ExpressionError {
 pub enum ConstExpressionError {
     #[error("The expression is not a constant or override expression")]
     NonConstOrOverride,
+    #[error("The expression is not a fully evaluated constant expression")]
+    NonFullyEvaluatedConst,
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
     #[error("Splatting {0:?} can't be done")]
@@ -211,6 +213,9 @@ impl super::Validator {
                 crate::TypeInner::Scalar { .. } => {}
                 _ => return Err(super::ConstExpressionError::InvalidSplatType(value)),
             },
+            _ if global_expr_kind.is_const(handle) => {
+                return Err(super::ConstExpressionError::NonFullyEvaluatedConst)
+            }
             // the constant evaluator will report errors about override-expressions
             _ => {}
         }
