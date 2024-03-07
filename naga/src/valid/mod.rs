@@ -175,6 +175,7 @@ pub struct Validator {
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
     override_ids: FastHashSet<u16>,
+    allow_overrides: bool,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -203,6 +204,8 @@ pub enum OverrideError {
     NonConstructibleType,
     #[error("The type is not a scalar")]
     TypeNotScalar,
+    #[error("Override declarations are not allowed")]
+    NotAllowed,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -322,6 +325,7 @@ impl Validator {
             valid_expression_list: Vec::new(),
             valid_expression_set: BitSet::new(),
             override_ids: FastHashSet::default(),
+            allow_overrides: true,
         }
     }
 
@@ -370,6 +374,10 @@ impl Validator {
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
     ) -> Result<(), OverrideError> {
+        if !self.allow_overrides {
+            return Err(OverrideError::NotAllowed);
+        }
+
         let o = &gctx.overrides[handle];
 
         if o.name.is_none() && o.id.is_none() {
@@ -412,6 +420,25 @@ impl Validator {
 
     /// Check the given module to be valid.
     pub fn validate(
+        &mut self,
+        module: &crate::Module,
+    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+        self.allow_overrides = true;
+        self.validate_impl(module)
+    }
+
+    /// Check the given module to be valid.
+    ///
+    /// With the additional restriction that overrides are not present.
+    pub fn validate_no_overrides(
+        &mut self,
+        module: &crate::Module,
+    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+        self.allow_overrides = false;
+        self.validate_impl(module)
+    }
+
+    fn validate_impl(
         &mut self,
         module: &crate::Module,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
