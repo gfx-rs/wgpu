@@ -161,6 +161,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 #### GLES
 
 - Fixes for being able to use an OpenGL 4.1 core context provided by macOS with wgpu. By @bes in [#5331](https://github.com/gfx-rs/wgpu/pull/5331).
+- Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
 
 #### Vulkan
 

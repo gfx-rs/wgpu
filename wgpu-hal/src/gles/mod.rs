@@ -264,6 +264,11 @@ pub struct Device {
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }
 
+pub struct ShaderClearProgram {
+    pub program: glow::Program,
+    pub color_uniform_location: glow::UniformLocation,
+}
+
 pub struct Queue {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -271,9 +276,7 @@ pub struct Queue {
     copy_fbo: glow::Framebuffer,
     /// Shader program used to clear the screen for [`Workarounds::MESA_I915_SRGB_SHADER_CLEAR`]
     /// devices.
-    shader_clear_program: glow::Program,
-    /// The uniform location of the color uniform in the shader clear program
-    shader_clear_program_color_uniform_location: glow::UniformLocation,
+    shader_clear_program: Option<ShaderClearProgram>,
     /// Keep a reasonably large buffer filled with zeroes, so that we can implement `ClearBuffer` of
     /// zeroes by copying from it.
     zero_buffer: glow::Buffer,
