@@ -1496,7 +1496,7 @@ impl super::Validator {
                                     .with_span_static(span, "invalid ray descriptor"));
                             }
                         }
-                        crate::RayQueryFunction::ReturnHitVertex { result } => {
+                        crate::RayQueryFunction::WriteHitVertex { .. } => {
                             if !rq_vertex_return {
                                 return Err(FunctionError::MissingRayQueryVertexReturn(query)
                                     .with_span_static(
@@ -1504,7 +1504,6 @@ impl super::Validator {
                                         "missing ray query flag: vertex_return",
                                     ));
                             }
-                            self.emit_expression(result, context)?;
                         }
                         crate::RayQueryFunction::Proceed { result } => {
                             self.emit_expression(result, context)?;
