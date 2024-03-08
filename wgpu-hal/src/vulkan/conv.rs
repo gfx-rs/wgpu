@@ -953,6 +953,10 @@ pub fn map_acceleration_structure_flags(
         vk_flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_COMPACTION
     }
 
+    if flags.contains(crate::AccelerationStructureBuildFlags::ALLOW_RAY_HIT_VERTEX_RETURN) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_DATA_ACCESS
+    }
+
     vk_flags
 }
 
