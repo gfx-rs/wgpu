@@ -75,7 +75,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let intersection = rayQueryGetCommittedIntersection(&rq);
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
         var positions : array<vec3f, 3>;
-        getCommittedHitVertexPositions(&rq, positions);
+        writeCommittedHitVertexPositions(&rq, positions);
         color = vec4<f32>(normalize(cross(positions[0], positions[1])), 1.0);
     }
 

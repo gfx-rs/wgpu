@@ -2660,7 +2660,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::RayQuery { query, fun }, span);
                             return Ok(None);
                         }
-                        "getCommittedHitVertexPositions" => {
+                        "writeCommittedHitVertexPositions" => {
                             let mut args = ctx.prepare_args(arguments, 2, span);
                             let query = self.ray_query_pointer(args.next()?, ctx)?;
 
