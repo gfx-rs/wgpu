@@ -1256,15 +1256,18 @@ pub enum SampleLevel {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum ImageQuery {
     /// Get the size at the specified level.
+    ///
+    /// The return value is a `u32` for 1D images, and a `vecN<u32>`
+    /// for an image with dimensions N > 2.
     Size {
         /// If `None`, the base level is considered.
         level: Option<Handle<Expression>>,
     },
-    /// Get the number of mipmap levels.
+    /// Get the number of mipmap levels, a `u32`.
     NumLevels,
-    /// Get the number of array layers.
+    /// Get the number of array layers, a `u32`.
     NumLayers,
-    /// Get the number of samples.
+    /// Get the number of samples, a `u32`.
     NumSamples,
 }
 
@@ -1684,6 +1687,10 @@ pub enum Statement {
     /// A block containing more statements, to be executed sequentially.
     Block(Block),
     /// Conditionally executes one of two blocks, based on the value of the condition.
+    ///
+    /// Naga IR does not have "phi" instructions. If you need to use
+    /// values computed in an `accept` or `reject` block after the `If`,
+    /// store them in a [`LocalVariable`].
     If {
         condition: Handle<Expression>, //bool
         accept: Block,
@@ -1702,6 +1709,10 @@ pub enum Statement {
     /// multiple values, like `case 1: case 2: case 3: { ... }`. This is
     /// represented in the IR as a series of fallthrough cases with empty
     /// bodies, except for the last.
+    ///
+    /// Naga IR does not have "phi" instructions. If you need to use
+    /// values computed in a [`SwitchCase::body`] block after the `Switch`,
+    /// store them in a [`LocalVariable`].
     ///
     /// [`value`]: SwitchCase::value
     /// [`body`]: SwitchCase::body
@@ -1736,6 +1747,10 @@ pub enum Statement {
     /// top of body as usual. The `break_if` expression corresponds to a "break
     /// if" statement in WGSL, or a loop whose back edge is an
     /// `OpBranchConditional` instruction in SPIR-V.
+    ///
+    /// Naga IR does not have "phi" instructions. If you need to use
+    /// values computed in a `body` or `continuing` block after the
+    /// `Loop`, store them in a [`LocalVariable`].
     ///
     /// [`Break`]: Statement::Break
     /// [`Continue`]: Statement::Continue

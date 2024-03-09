@@ -54,6 +54,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 ### Documentation
 
 - Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
+- Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
 
 ### New features
 
@@ -115,11 +116,12 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 - `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
 - `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU). By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
+- `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
 
 #### GLES
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
-- Enable `TEXTURE_FORMAT_16BIT_NORM` for OpenGL 3.3+. By @bes in [#5330](https://github.com/gfx-rs/wgpu/pull/5330).
+- Cache the sample count to keep `get_texture_format_features` cheap. By @Dinnerbone in [#5346](https://github.com/gfx-rs/wgpu/pull/5346)
 
 ### Bug Fixes
 
@@ -150,6 +152,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 #### Naga
 - Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
 - In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
+- GLSL 410 does not support layout(binding = ...), enable only for GLSL 420. By @bes in [#5357](https://github.com/gfx-rs/wgpu/pull/5357)
 
 #### Tests
 
@@ -160,6 +163,11 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 #### GLES
 
 - Fixes for being able to use an OpenGL 4.1 core context provided by macOS with wgpu. By @bes in [#5331](https://github.com/gfx-rs/wgpu/pull/5331).
+- Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
+
+#### Vulkan
+
+- Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
 
 ## v0.19.0 (2024-01-17)
 
