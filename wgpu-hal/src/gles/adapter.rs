@@ -802,6 +802,7 @@ impl super::Adapter {
         }
 
         let downlevel_defaults = wgt::DownlevelLimits {};
+        let max_samples = unsafe { gl.get_parameter_i32(glow::MAX_SAMPLES) };
 
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
@@ -820,6 +821,7 @@ impl super::Adapter {
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
                     es: es_ver.is_some(),
+                    max_msaa_samples: max_samples,
                 }),
             },
             info: Self::make_info(vendor, renderer),
@@ -986,12 +988,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use wgt::TextureFormat as Tf;
 
         let sample_count = {
-            let max_samples = unsafe {
-                self.shared
-                    .context
-                    .lock()
-                    .get_parameter_i32(glow::MAX_SAMPLES)
-            };
+            let max_samples = self.shared.max_msaa_samples;
             if max_samples >= 16 {
                 Tfc::MULTISAMPLE_X2
                     | Tfc::MULTISAMPLE_X4
