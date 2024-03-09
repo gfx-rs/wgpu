@@ -2661,13 +2661,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             return Ok(None);
                         }
                         "getCommittedHitVertexPositions" => {
-                            let mut args = ctx.prepare_args(arguments, 2, span);
+                            let mut args = ctx.prepare_args(arguments, 1, span);
                             let query = self.ray_query_pointer(args.next()?, ctx)?;
                             args.finish()?;
 
                             let _ = ctx.module.generate_vertex_return_type();
 
-                            crate::Expression::RayQueryVertexPositions { query }
+                            crate::Expression::RayQueryVertexPositions {
+                                query,
+                                committed: true,
+                            }
                         }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
@@ -3367,20 +3370,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 log::error!("Type {:?} passed to ray query op", other);
                 Err(Error::InvalidRayQueryPointer(span))
             }
-        }
-    }
-    fn ray_query_write_vertex_position(
-        &mut self,
-        expr: Handle<ast::Expression<'source>>,
-        ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
-        let span = ctx.ast_expressions.get_span(expr);
-        let array = self.expression(expr, ctx)?;
-
-        if *resolve_inner!(ctx, array) == ctx.module.types[ctx.module.special_types.ray_vertex_return.ok_or(Error::InvalidRayVertexReturnArg(span))?].inner {
-            Ok(array)
-        } else {
-            Err(Error::InvalidRayVertexReturnArg(span))
         }
     }
 }

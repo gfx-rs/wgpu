@@ -1734,7 +1734,10 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidRayQueryType(query));
                 }
             },
-            E::RayQueryVertexPositions { query } => match resolver[query] {
+            E::RayQueryVertexPositions {
+                query,
+                committed: _,
+            } => match resolver[query] {
                 Ti::Pointer {
                     base,
                     space: crate::AddressSpace::Function,

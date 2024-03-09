@@ -1777,7 +1777,10 @@ impl BlockContext<'_> {
                 ));
                 id
             }
-            crate::Expression::RayQueryVertexPositions { query } => {
+            crate::Expression::RayQueryVertexPositions { query, committed } => {
+                if !committed {
+                    return Err(Error::FeatureNotImplemented("candidate intersection"));
+                }
                 self.write_ray_query_return_vertex_position(query, block)
             }
         };

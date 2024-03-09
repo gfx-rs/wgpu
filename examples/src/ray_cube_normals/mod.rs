@@ -367,7 +367,8 @@ impl crate::framework::Example for Example {
         let blas = device.create_blas(
             &rt::CreateBlasDescriptor {
                 label: None,
-                flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE | rt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE
+                    | rt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
                 update_mode: rt::AccelerationStructureUpdateMode::Build,
             },
             rt::BlasGeometrySizeDescriptors::Triangles {
@@ -377,7 +378,8 @@ impl crate::framework::Example for Example {
 
         let tlas = device.create_tlas(&rt::CreateTlasDescriptor {
             label: None,
-            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE | rt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE
+                | rt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
             update_mode: rt::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
         });
