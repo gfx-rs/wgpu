@@ -251,6 +251,11 @@ struct AdapterShared {
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
     es: bool,
+
+    /// Result of `gl.get_parameter_i32(glow::MAX_SAMPLES)`.
+    /// Cached here so it doesn't need to be queried every time texture format capabilities are requested.
+    /// (this has been shown to be a significant enough overhead)
+    max_msaa_samples: i32,
 }
 
 pub struct Adapter {

@@ -54,6 +54,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 ### Documentation
 
 - Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
+- Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
 
 ### New features
 
@@ -121,6 +122,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 #### GLES
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
+- Cache the sample count to keep `get_texture_format_features` cheap. By @Dinnerbone in [#5346](https://github.com/gfx-rs/wgpu/pull/5346)
 
 ### Bug Fixes
 
