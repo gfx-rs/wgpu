@@ -72,7 +72,7 @@ fn int64_function(x: i64) -> i64 {
    val += clamp(val, val, val);
    //val += countLeadingZeros(val);
    //val += countOneBits(val);
-   val += countTrailingZeros(val);
+   //val += countTrailingZeros(val);
    val += dot(vec2(val), vec2(val));
    //val += extractBits(val, 15u, 28u);
    //val += firstLeadingBit(val);
@@ -121,7 +121,7 @@ fn uint64_function(x: u64) -> u64 {
    val += clamp(val, val, val);
    //val += countLeadingZeros(val);
    //val += countOneBits(val);
-   val += countTrailingZeros(val);
+   //val += countTrailingZeros(val);
    val += dot(vec2(val), vec2(val));
    //val += extractBits(val, 15u, 28u);
    //val += firstLeadingBit(val);

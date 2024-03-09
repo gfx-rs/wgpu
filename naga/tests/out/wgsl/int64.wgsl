@@ -91,24 +91,21 @@ fn int64_function(x: i64) -> i64 {
     val = (_e123 + clamp(_e119, _e120, _e121));
     let _e125 = val;
     let _e127 = val;
-    val = (_e127 + countTrailingZeros(_e125));
-    let _e129 = val;
-    let _e131 = val;
-    let _e134 = val;
-    val = (_e134 + dot(vec2(_e129), vec2(_e131)));
-    let _e136 = val;
+    let _e130 = val;
+    val = (_e130 + dot(vec2(_e125), vec2(_e127)));
+    let _e132 = val;
+    let _e133 = val;
+    let _e135 = val;
+    val = (_e135 + max(_e132, _e133));
     let _e137 = val;
-    let _e139 = val;
-    val = (_e139 + max(_e136, _e137));
-    let _e141 = val;
+    let _e138 = val;
+    let _e140 = val;
+    val = (_e140 + min(_e137, _e138));
     let _e142 = val;
     let _e144 = val;
-    val = (_e144 + min(_e141, _e142));
+    val = (_e144 + sign(_e142));
     let _e146 = val;
-    let _e148 = val;
-    val = (_e148 + sign(_e146));
-    let _e150 = val;
-    return _e150;
+    return _e146;
 }
 
 fn uint64_function(x_1: u64) -> u64 {
@@ -170,21 +167,18 @@ fn uint64_function(x_1: u64) -> u64 {
     val_1 = (_e123 + clamp(_e119, _e120, _e121));
     let _e125 = val_1;
     let _e127 = val_1;
-    val_1 = (_e127 + countTrailingZeros(_e125));
-    let _e129 = val_1;
-    let _e131 = val_1;
-    let _e134 = val_1;
-    val_1 = (_e134 + dot(vec2(_e129), vec2(_e131)));
-    let _e136 = val_1;
+    let _e130 = val_1;
+    val_1 = (_e130 + dot(vec2(_e125), vec2(_e127)));
+    let _e132 = val_1;
+    let _e133 = val_1;
+    let _e135 = val_1;
+    val_1 = (_e135 + max(_e132, _e133));
     let _e137 = val_1;
-    let _e139 = val_1;
-    val_1 = (_e139 + max(_e136, _e137));
-    let _e141 = val_1;
+    let _e138 = val_1;
+    let _e140 = val_1;
+    val_1 = (_e140 + min(_e137, _e138));
     let _e142 = val_1;
-    let _e144 = val_1;
-    val_1 = (_e144 + min(_e141, _e142));
-    let _e146 = val_1;
-    return _e146;
+    return _e142;
 }
 
 @compute @workgroup_size(1, 1, 1) 

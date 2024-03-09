@@ -98,27 +98,24 @@ long int64_function(
     long _e123 = val;
     val = _e123 + metal::clamp(_e119, _e120, _e121);
     long _e125 = val;
+    metal::long2 _e126 = metal::long2(_e125);
     long _e127 = val;
-    val = _e127 + metal::ctz(_e125);
-    long _e129 = val;
-    metal::long2 _e130 = metal::long2(_e129);
-    long _e131 = val;
-    metal::long2 _e132 = metal::long2(_e131);
-    long _e134 = val;
-    val = _e134 + ( + _e130.x * _e132.x + _e130.y * _e132.y);
-    long _e136 = val;
+    metal::long2 _e128 = metal::long2(_e127);
+    long _e130 = val;
+    val = _e130 + ( + _e126.x * _e128.x + _e126.y * _e128.y);
+    long _e132 = val;
+    long _e133 = val;
+    long _e135 = val;
+    val = _e135 + metal::max(_e132, _e133);
     long _e137 = val;
-    long _e139 = val;
-    val = _e139 + metal::max(_e136, _e137);
-    long _e141 = val;
+    long _e138 = val;
+    long _e140 = val;
+    val = _e140 + metal::min(_e137, _e138);
     long _e142 = val;
     long _e144 = val;
-    val = _e144 + metal::min(_e141, _e142);
+    val = _e144 + metal::select(metal::select(-1, 1, (_e142 > 0)), 0, (_e142 == 0));
     long _e146 = val;
-    long _e148 = val;
-    val = _e148 + metal::select(metal::select(-1, 1, (_e146 > 0)), 0, (_e146 == 0));
-    long _e150 = val;
-    return _e150;
+    return _e146;
 }
 
 ulong uint64_function(
@@ -185,24 +182,21 @@ ulong uint64_function(
     ulong _e123 = val_1;
     val_1 = _e123 + metal::clamp(_e119, _e120, _e121);
     ulong _e125 = val_1;
+    metal::ulong2 _e126 = metal::ulong2(_e125);
     ulong _e127 = val_1;
-    val_1 = _e127 + metal::ctz(_e125);
-    ulong _e129 = val_1;
-    metal::ulong2 _e130 = metal::ulong2(_e129);
-    ulong _e131 = val_1;
-    metal::ulong2 _e132 = metal::ulong2(_e131);
-    ulong _e134 = val_1;
-    val_1 = _e134 + ( + _e130.x * _e132.x + _e130.y * _e132.y);
-    ulong _e136 = val_1;
+    metal::ulong2 _e128 = metal::ulong2(_e127);
+    ulong _e130 = val_1;
+    val_1 = _e130 + ( + _e126.x * _e128.x + _e126.y * _e128.y);
+    ulong _e132 = val_1;
+    ulong _e133 = val_1;
+    ulong _e135 = val_1;
+    val_1 = _e135 + metal::max(_e132, _e133);
     ulong _e137 = val_1;
-    ulong _e139 = val_1;
-    val_1 = _e139 + metal::max(_e136, _e137);
-    ulong _e141 = val_1;
+    ulong _e138 = val_1;
+    ulong _e140 = val_1;
+    val_1 = _e140 + metal::min(_e137, _e138);
     ulong _e142 = val_1;
-    ulong _e144 = val_1;
-    val_1 = _e144 + metal::min(_e141, _e142);
-    ulong _e146 = val_1;
-    return _e146;
+    return _e142;
 }
 
 kernel void main_(

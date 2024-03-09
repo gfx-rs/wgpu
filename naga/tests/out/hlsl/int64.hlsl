@@ -123,24 +123,21 @@ int64_t int64_function(int64_t x)
     val = (_expr123 + clamp(_expr119, _expr120, _expr121));
     int64_t _expr125 = val;
     int64_t _expr127 = val;
-    val = (_expr127 + min(64u, firstbitlow(_expr125)));
-    int64_t _expr129 = val;
-    int64_t _expr131 = val;
-    int64_t _expr134 = val;
-    val = (_expr134 + dot((_expr129).xx, (_expr131).xx));
-    int64_t _expr136 = val;
+    int64_t _expr130 = val;
+    val = (_expr130 + dot((_expr125).xx, (_expr127).xx));
+    int64_t _expr132 = val;
+    int64_t _expr133 = val;
+    int64_t _expr135 = val;
+    val = (_expr135 + max(_expr132, _expr133));
     int64_t _expr137 = val;
-    int64_t _expr139 = val;
-    val = (_expr139 + max(_expr136, _expr137));
-    int64_t _expr141 = val;
+    int64_t _expr138 = val;
+    int64_t _expr140 = val;
+    val = (_expr140 + min(_expr137, _expr138));
     int64_t _expr142 = val;
     int64_t _expr144 = val;
-    val = (_expr144 + min(_expr141, _expr142));
+    val = (_expr144 + sign(_expr142));
     int64_t _expr146 = val;
-    int64_t _expr148 = val;
-    val = (_expr148 + sign(_expr146));
-    int64_t _expr150 = val;
-    return _expr150;
+    return _expr146;
 }
 
 typedef uint64_t ret_Constructarray2_uint64_t_[2];
@@ -213,21 +210,18 @@ uint64_t uint64_function(uint64_t x_1)
     val_1 = (_expr123 + clamp(_expr119, _expr120, _expr121));
     uint64_t _expr125 = val_1;
     uint64_t _expr127 = val_1;
-    val_1 = (_expr127 + min(64u, firstbitlow(_expr125)));
-    uint64_t _expr129 = val_1;
-    uint64_t _expr131 = val_1;
-    uint64_t _expr134 = val_1;
-    val_1 = (_expr134 + dot((_expr129).xx, (_expr131).xx));
-    uint64_t _expr136 = val_1;
+    uint64_t _expr130 = val_1;
+    val_1 = (_expr130 + dot((_expr125).xx, (_expr127).xx));
+    uint64_t _expr132 = val_1;
+    uint64_t _expr133 = val_1;
+    uint64_t _expr135 = val_1;
+    val_1 = (_expr135 + max(_expr132, _expr133));
     uint64_t _expr137 = val_1;
-    uint64_t _expr139 = val_1;
-    val_1 = (_expr139 + max(_expr136, _expr137));
-    uint64_t _expr141 = val_1;
+    uint64_t _expr138 = val_1;
+    uint64_t _expr140 = val_1;
+    val_1 = (_expr140 + min(_expr137, _expr138));
     uint64_t _expr142 = val_1;
-    uint64_t _expr144 = val_1;
-    val_1 = (_expr144 + min(_expr141, _expr142));
-    uint64_t _expr146 = val_1;
-    return _expr146;
+    return _expr142;
 }
 
 [numthreads(1, 1, 1)]
