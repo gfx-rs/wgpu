@@ -2660,20 +2660,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::RayQuery { query, fun }, span);
                             return Ok(None);
                         }
-                        "writeCommittedHitVertexPositions" => {
+                        "getCommittedHitVertexPositions" => {
                             let mut args = ctx.prepare_args(arguments, 2, span);
                             let query = self.ray_query_pointer(args.next()?, ctx)?;
-
-                            let _ = ctx.module.generate_vertex_return_type();
-                            let write = self.ray_query_write_vertex_position(args.next()?, ctx)?;
-
                             args.finish()?;
 
-                            let fun = crate::RayQueryFunction::WriteHitVertex { write, committed: true };
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(crate::Statement::RayQuery { query, fun }, span);
-                            return Ok(Some(write));
+                            let _ = ctx.module.generate_vertex_return_type();
+
+                            crate::Expression::RayQueryVertexPositions { query }
                         }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);

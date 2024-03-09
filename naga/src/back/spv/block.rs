@@ -1777,6 +1777,9 @@ impl BlockContext<'_> {
                 ));
                 id
             }
+            crate::Expression::RayQueryVertexPositions { query } => {
+                self.write_ray_query_return_vertex_position(query, block)
+            }
         };
 
         self.cached[expr_handle] = id;
