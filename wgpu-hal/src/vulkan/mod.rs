@@ -101,17 +101,25 @@ pub struct DebugUtilsCreateInfo {
     callback_data: Box<DebugUtilsMessengerUserData>,
 }
 
+#[derive(Debug)]
+/// The properties related to the validation layer needed for the
+/// DebugUtilsMessenger for their workarounds
+struct ValidationLayerProperties {
+    /// Validation layer description, from `vk::LayerProperties`.
+    layer_description: std::ffi::CString,
+
+    /// Validation layer specification version, from `vk::LayerProperties`.
+    layer_spec_version: u32,
+}
+
 /// User data needed by `instance::debug_utils_messenger_callback`.
 ///
 /// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
 /// pointer refers to one of these values.
 #[derive(Debug)]
 pub struct DebugUtilsMessengerUserData {
-    /// Validation layer description, from `vk::LayerProperties`.
-    validation_layer_description: std::ffi::CString,
-
-    /// Validation layer specification version, from `vk::LayerProperties`.
-    validation_layer_spec_version: u32,
+    /// The properties related to the validation layer, if present
+    validation_layer_properties: Option<ValidationLayerProperties>,
 
     /// If the OBS layer is present. OBS never increments the version of their layer,
     /// so there's no reason to have the version.

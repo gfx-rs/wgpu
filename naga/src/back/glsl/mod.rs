@@ -178,7 +178,7 @@ impl Version {
     /// Note: `location=` for vertex inputs and fragment outputs is supported
     /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Desktop(410) || *self >= Version::new_gles(310)
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(310)
     }
 
     fn supports_early_depth_test(&self) -> bool {
