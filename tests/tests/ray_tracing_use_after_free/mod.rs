@@ -1,12 +1,15 @@
 use std::iter;
 use std::mem::size_of;
-use wgpu::{BindGroupDescriptor, BindGroupEntry, BindingResource, ComputePassDescriptor, ComputePipelineDescriptor, include_wgsl};
 use wgpu::ray_tracing::{
     AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
     CommandEncoderRayTracing, CreateBlasDescriptor, CreateTlasDescriptor, DeviceRayTracing,
     TlasInstance, TlasPackage,
 };
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, ComputePassDescriptor,
+    ComputePipelineDescriptor,
+};
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 use wgt::{
@@ -36,7 +39,9 @@ fn execute(ctx: TestingContext) {
             flags: AccelerationStructureFlags::empty(),
             update_mode: AccelerationStructureUpdateMode::Build,
         },
-        BlasGeometrySizeDescriptors::Triangles { desc: vec![size.clone()] },
+        BlasGeometrySizeDescriptors::Triangles {
+            desc: vec![size.clone()],
+        },
     );
     let vertex_buf = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
@@ -80,21 +85,21 @@ fn execute(ctx: TestingContext) {
     let shader = ctx
         .device
         .create_shader_module(include_wgsl!("compute_usage.wgsl"));
-    let compute_pipeline = ctx.device.create_compute_pipeline(&ComputePipelineDescriptor {
-        label: None,
-        layout: None,
-        module: &shader,
-        entry_point: "main",
-    });
+    let compute_pipeline = ctx
+        .device
+        .create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &shader,
+            entry_point: "main",
+        });
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
         layout: &compute_pipeline.get_bind_group_layout(0),
-        entries: &[
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::AccelerationStructure(tlas_package.tlas()),
-            }
-        ],
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: BindingResource::AccelerationStructure(tlas_package.tlas()),
+        }],
     });
     drop(tlas_package);
     let mut encoder = ctx
