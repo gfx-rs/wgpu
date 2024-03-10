@@ -122,6 +122,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
 - Cache the sample count to keep `get_texture_format_features` cheap. By @Dinnerbone in [#5346](https://github.com/gfx-rs/wgpu/pull/5346)
+- Mark `DEPTH32FLOAT_STENCIL8` as supported in GLES. By @Dinnerbone in [#5370](https://github.com/gfx-rs/wgpu/pull/5370)
 
 ### Bug Fixes
 
