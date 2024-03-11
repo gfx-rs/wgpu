@@ -2106,19 +2106,32 @@ impl Global {
             }
         }
 
-        let (closures, queue_empty) = {
-            let fence = device.fence.read();
-            let fence = fence.as_ref().unwrap();
-            device.maintain(fence, maintain)?
-        };
+        let DevicePoll {
+            closures,
+            queue_empty,
+        } = Self::poll_single_device(&device, maintain)?;
+
+        closures.fire();
+
+        Ok(queue_empty)
+    }
+
+    fn poll_single_device<A: HalApi>(
+        device: &crate::device::Device<A>,
+        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
+    ) -> Result<DevicePoll, WaitIdleError> {
+        let fence = device.fence.read();
+        let fence = fence.as_ref().unwrap();
+        let (closures, queue_empty) = device.maintain(fence, maintain)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
-        closures.fire();
-
-        Ok(queue_empty)
+        Ok(DevicePoll {
+            closures,
+            queue_empty,
+        })
     }
 
     /// Poll all devices belonging to the backend `A`.
@@ -2145,16 +2158,15 @@ impl Global {
                 } else {
                     wgt::Maintain::Poll
                 };
-                let fence = device.fence.read();
-                let fence = fence.as_ref().unwrap();
-                let (cbs, queue_empty) = device.maintain(fence, maintain)?;
+
+                let DevicePoll {
+                    closures: cbs,
+                    queue_empty,
+                } = Self::poll_single_device(device, maintain)?;
+
                 all_queue_empty &= queue_empty;
 
                 closures.extend(cbs);
-
-                // Some deferred destroys are scheduled in maintain so run this right after
-                // to avoid holding on to them until the next device poll.
-                device.deferred_resource_destruction();
             }
         }
 
@@ -2566,4 +2578,9 @@ impl Global {
 
         buffer.unmap()
     }
+}
+
+struct DevicePoll {
+    closures: UserClosures,
+    queue_empty: bool,
 }
