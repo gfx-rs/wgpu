@@ -274,6 +274,7 @@ bitflags::bitflags! {
         /// - Vulkan (mostly)
         /// - DX12
         /// - Metal
+        /// - OpenGL
         ///
         /// This is a web and native feature.
         const DEPTH32FLOAT_STENCIL8 = 1 << 1;

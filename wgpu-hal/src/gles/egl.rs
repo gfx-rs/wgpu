@@ -1,7 +1,8 @@
 use glow::HasContext;
+use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 
-use std::{ffi, os::raw, ptr, rc::Rc, sync::Arc, time::Duration};
+use std::{collections::HashMap, ffi, os::raw, ptr, rc::Rc, sync::Arc, time::Duration};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
 const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
@@ -432,6 +433,45 @@ struct Inner {
     srgb_kind: SrgbFrameBufferKind,
 }
 
+// Different calls to `eglGetPlatformDisplay` may return the same `Display`, making it a global
+// state of all our `EglContext`s. This forces us to track the number of such context to prevent
+// terminating the display if it's currently used by another `EglContext`.
+static DISPLAYS_REFERENCE_COUNT: Lazy<Mutex<HashMap<usize, usize>>> = Lazy::new(Default::default);
+
+fn initialize_display(
+    egl: &EglInstance,
+    display: khronos_egl::Display,
+) -> Result<(i32, i32), khronos_egl::Error> {
+    let mut guard = DISPLAYS_REFERENCE_COUNT.lock();
+    *guard.entry(display.as_ptr() as usize).or_default() += 1;
+
+    // We don't need to check the reference count here since according to the `eglInitialize`
+    // documentation, initializing an already initialized EGL display connection has no effect
+    // besides returning the version numbers.
+    egl.initialize(display)
+}
+
+fn terminate_display(
+    egl: &EglInstance,
+    display: khronos_egl::Display,
+) -> Result<(), khronos_egl::Error> {
+    let key = &(display.as_ptr() as usize);
+    let mut guard = DISPLAYS_REFERENCE_COUNT.lock();
+    let count_ref = guard
+        .get_mut(key)
+        .expect("Attempted to decref a display before incref was called");
+
+    if *count_ref > 1 {
+        *count_ref -= 1;
+
+        Ok(())
+    } else {
+        guard.remove(key);
+
+        egl.terminate(display)
+    }
+}
+
 impl Inner {
     fn create(
         flags: wgt::InstanceFlags,
@@ -439,7 +479,7 @@ impl Inner {
         display: khronos_egl::Display,
         force_gles_minor_version: wgt::Gles3MinorVersion,
     ) -> Result<Self, crate::InstanceError> {
-        let version = egl.initialize(display).map_err(|e| {
+        let version = initialize_display(&egl, display).map_err(|e| {
             crate::InstanceError::with_source(
                 String::from("failed to initialize EGL display connection"),
                 e,
@@ -608,7 +648,8 @@ impl Drop for Inner {
         {
             log::warn!("Error in destroy_context: {:?}", e);
         }
-        if let Err(e) = self.egl.instance.terminate(self.egl.display) {
+
+        if let Err(e) = terminate_display(&self.egl.instance, self.egl.display) {
             log::warn!("Error in terminate: {:?}", e);
         }
     }
@@ -778,7 +819,7 @@ impl crate::Instance<super::Api> for Instance {
                 let display = unsafe {
                     egl.get_platform_display(
                         EGL_PLATFORM_SURFACELESS_MESA,
-                        std::ptr::null_mut(),
+                        khronos_egl::DEFAULT_DISPLAY,
                         &[khronos_egl::ATTRIB_NONE],
                     )
                 }
