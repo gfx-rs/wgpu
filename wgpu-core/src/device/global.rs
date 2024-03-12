@@ -2127,7 +2127,7 @@ impl Global {
     ///
     /// Return `all_queue_empty` indicating whether there are more queue
     /// submissions still in flight.
-    fn poll_device<A: HalApi>(
+    fn poll_all_devices_of_api<A: HalApi>(
         &self,
         force_wait: bool,
         closures: &mut UserClosures,
@@ -2174,23 +2174,23 @@ impl Global {
 
         #[cfg(vulkan)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Vulkan>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Vulkan>(force_wait, &mut closures)?;
         }
         #[cfg(metal)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Metal>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Metal>(force_wait, &mut closures)?;
         }
         #[cfg(dx12)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Dx12>(force_wait, &mut closures)?;
         }
         #[cfg(gles)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Gles>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Gles>(force_wait, &mut closures)?;
         }
 
         closures.fire();
