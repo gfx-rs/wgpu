@@ -1039,6 +1039,42 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::ReverseBits => {
                 component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
             }
+            crate::MathFunction::FirstTrailingBit => {
+                component_wise_concrete_int(self, span, [arg], |concrete_int| match concrete_int {
+                    ConcreteInt::U32([e]) => Ok(ConcreteInt::U32([{
+                        (32 /* bits */ - e.trailing_zeros())
+                            .checked_sub(1)
+                            .unwrap_or(u32::MAX)
+                    }])),
+                    ConcreteInt::I32([e]) => Ok(ConcreteInt::I32([{
+                        (32 /* bits */ - i32::try_from(e.trailing_zeros())
+                            .expect("bit count overflowed 32 bits, somehow!?"))
+                            - 1
+                    }])),
+                })
+            }
+            crate::MathFunction::FirstLeadingBit => {
+                component_wise_concrete_int(self, span, [arg], |concrete_int| match concrete_int {
+                    ConcreteInt::I32([e]) => Ok(ConcreteInt::I32([{
+                        if matches!(e, 0 | -1) {
+                            -1
+                        } else if e.is_positive() {
+                            32 /* bits */ - i32::try_from(e.leading_zeros())
+                                .expect("bit count overflowed 32 bits, somehow!?")
+                        } else {
+                            32 /* bits */ - i32::try_from(e.leading_ones())
+                                .expect("bit count overflowed 32 bits, somehow!?")
+                        }
+                    }])),
+                    ConcreteInt::U32([e]) => Ok(ConcreteInt::U32([{
+                        if e == 0 {
+                            u32::MAX
+                        } else {
+                            e.leading_zeros()
+                        }
+                    }])),
+                })
+            }
 
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
