@@ -1,0 +1,12 @@
+(
+  msl_pipeline: (
+    allow_and_force_point_size: false,
+    experimental_vertex_pulling_transform: true,
+    vertex_buffer_mappings: [(
+      id: 1,
+      count: 40,
+      stride: 8,
+      attributes: [],
+    )],
+  ),
+)

@@ -1,0 +1,53 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct VertexOutput {
+    metal::float4 position;
+    metal::float4 color;
+    metal::float2 texcoord;
+};
+struct VertexInput {
+    metal::float4 position;
+    metal::float3 normal;
+    metal::float2 texcoord;
+};
+
+metal::float4 do_lighting(
+    metal::float4 position,
+    metal::float3 normal
+) {
+    return metal::float4(0.0);
+}
+
+struct render_vertexInput {
+    metal::float4 position [[attribute(0)]];
+    metal::float3 normal [[attribute(1)]];
+    metal::float2 texcoord [[attribute(2)]];
+};
+struct render_vertexOutput {
+    metal::float4 position [[position]];
+    metal::float4 color [[user(loc0), center_perspective]];
+    metal::float2 texcoord [[user(loc1), center_perspective]];
+};
+struct v_1_in_type { metal::uchar data[8]; };
+vertex render_vertexOutput render_vertex(
+  render_vertexInput varyings [[stage_in]]
+, constant metal::float4x4& mvp_matrix [[user(fake0)]]
+, uint v_id [[vertex_id]]
+, constant v_1_in_type *v_1_in [[buffer(1)]]
+) {
+    if (v_id >= 40) { return {}; }
+    const VertexInput v_in = { varyings.position, varyings.normal, varyings.texcoord };
+    VertexOutput v_out = {};
+    metal::float4x4 _e5 = mvp_matrix;
+    v_out.position = v_in.position * _e5;
+    metal::float4 _e10 = do_lighting(v_in.position, v_in.normal);
+    v_out.color = _e10;
+    v_out.texcoord = v_in.texcoord;
+    VertexOutput _e13 = v_out;
+    const auto _tmp = _e13;
+    return render_vertexOutput { _tmp.position, _tmp.color, _tmp.texcoord };
+}

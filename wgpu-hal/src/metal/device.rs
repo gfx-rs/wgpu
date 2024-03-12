@@ -63,6 +63,7 @@ impl super::Device {
     fn load_shader(
         &self,
         stage: &crate::ProgrammableStage<super::Api>,
+        vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
         layout: &super::PipelineLayout,
         primitive_class: metal::MTLPrimitiveTopologyClass,
         naga_stage: naga::ShaderStage,
@@ -112,6 +113,8 @@ impl super::Device {
                 metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
+            experimental_vertex_pulling_transform: false,
+            vertex_buffer_mappings,
         };
 
         let (source, info) = naga::back::msl::write_string(
@@ -817,8 +820,28 @@ impl crate::Device<super::Api> for super::Device {
 
             // Vertex shader
             let (vs_lib, vs_info) = {
+                let mut vertex_buffer_mappings = Vec::<naga::back::msl::VertexBufferMapping>::new();
+                for (i, vbl) in desc.vertex_buffers.iter().enumerate() {
+                    let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
+                    for attribute in vbl.attributes.iter() {
+                        attributes.push(naga::back::msl::AttributeMapping {
+                            id: attribute.shader_location,
+                            offset: attribute.offset as u32,
+                            format: attribute.format as u32,
+                        });
+                    }
+
+                    vertex_buffer_mappings.push(naga::back::msl::VertexBufferMapping {
+                        id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
+                        count: 0, // TODO: get the buffer count
+                        stride: vbl.array_stride as u32,
+                        attributes,
+                    });
+                }
+
                 let vs = self.load_shader(
                     &desc.vertex_stage,
+                    vertex_buffer_mappings,
                     desc.layout,
                     primitive_class,
                     naga::ShaderStage::Vertex,
@@ -846,6 +869,7 @@ impl crate::Device<super::Api> for super::Device {
                 Some(ref stage) => {
                     let fs = self.load_shader(
                         stage,
+                        vec![],
                         desc.layout,
                         primitive_class,
                         naga::ShaderStage::Fragment,
@@ -1038,6 +1062,7 @@ impl crate::Device<super::Api> for super::Device {
 
             let cs = self.load_shader(
                 &desc.stage,
+                vec![],
                 desc.layout,
                 metal::MTLPrimitiveTopologyClass::Unspecified,
                 naga::ShaderStage::Compute,

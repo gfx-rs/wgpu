@@ -807,6 +807,7 @@ fn convert_wgsl() {
             "abstract-types-operators",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        ("vertex-pulling-transform", Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {
