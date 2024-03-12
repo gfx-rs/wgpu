@@ -4237,7 +4237,7 @@ impl<'a> ComputePass<'a> {
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
 impl<'a> ComputePass<'a> {
-    /// Start a pipeline statistics query on this render pass. It can be ended with
+    /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
@@ -4250,7 +4250,7 @@ impl<'a> ComputePass<'a> {
         );
     }
 
-    /// End the pipeline statistics query on this render pass. It can be started with
+    /// End the pipeline statistics query on this compute pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
