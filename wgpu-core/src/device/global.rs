@@ -2148,7 +2148,7 @@ impl Global {
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
                 let (cbs, queue_empty) = device.maintain(fence, maintain)?;
-                all_queue_empty = all_queue_empty && queue_empty;
+                all_queue_empty &= queue_empty;
 
                 closures.extend(cbs);
 
