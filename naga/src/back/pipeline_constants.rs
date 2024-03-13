@@ -22,6 +22,19 @@ pub enum PipelineConstantError {
     ValidationError(#[from] WithSpan<ValidationError>),
 }
 
+/// Replace all overrides in `module` with constants.
+///
+/// If no changes are needed, this just returns `Cow::Borrowed`
+/// references to `module` and `module_info`. Otherwise, it clones
+/// `module`, edits its [`global_expressions`] arena to contain only
+/// fully-evaluated expressions, and returns `Cow::Owned` values
+/// holding the simplified module and its validation results.
+///
+/// In either case, the module returned has an empty `overrides`
+/// arena, and the `global_expressions` arena contains only
+/// fully-evaluated expressions.
+///
+/// [`global_expressions`]: Module::global_expressions
 pub(super) fn process_overrides<'a>(
     module: &'a Module,
     module_info: &'a ModuleInfo,
@@ -32,14 +45,62 @@ pub(super) fn process_overrides<'a>(
     }
 
     let mut module = module.clone();
+
+    // A map from override handles to the handles of the constants
+    // we've replaced them with.
     let mut override_map = Vec::with_capacity(module.overrides.len());
+
+    // A map from `module`'s original global expression handles to
+    // handles in the new, simplified global expression arena.
     let mut adjusted_global_expressions = Vec::with_capacity(module.global_expressions.len());
+
+    // The set of constants whose initializer handles we've already
+    // updated to refer to the newly built global expression arena.
+    //
+    // All constants in `module` must have their `init` handles
+    // updated to point into the new, simplified global expression
+    // arena. Some of these we can most easily handle as a side effect
+    // during the simplification process, but we must handle the rest
+    // in a final fixup pass, guided by `adjusted_global_expressions`. We
+    // add their handles to this set, so that the final fixup step can
+    // leave them alone.
     let mut adjusted_constant_initializers = HashSet::with_capacity(module.constants.len());
 
     let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
+    // An iterator through the original overrides table, consumed in
+    // approximate tandem with the global expressions.
     let mut override_iter = module.overrides.drain();
 
+    // Do two things in tandem:
+    //
+    // - Rebuild the global expression arena from scratch, fully
+    //   evaluating all expressions, and replacing each `Override`
+    //   expression in `module.global_expressions` with a `Constant`
+    //   expression.
+    //
+    // - Build a new `Constant` in `module.constants` to take the
+    //   place of each `Override`.
+    //
+    // Build a map from old global expression handles to their
+    // fully-evaluated counterparts in `adjusted_global_expressions` as we
+    // go.
+    //
+    // Why in tandem? Overrides refer to expressions, and expressions
+    // refer to overrides, so we can't disentangle the two into
+    // separate phases. However, we can take advantage of the fact
+    // that the overrides and expressions must form a DAG, and work
+    // our way from the leaves to the roots, replacing and evaluating
+    // as we go.
+    //
+    // Although the two loops are nested, this is really two
+    // alternating phases: we adjust and evaluate constant expressions
+    // until we hit an `Override` expression, at which point we switch
+    // to building `Constant`s for `Overrides` until we've handled the
+    // one used by the expression. Then we switch back to processing
+    // expressions. Because we know they form a DAG, we know the
+    // `Override` expressions we encounter can only have initializers
+    // referring to global expressions we've already simplified.
     for (old_h, expr, span) in module.global_expressions.drain() {
         let mut expr = match expr {
             Expression::Override(h) => {
@@ -84,6 +145,7 @@ pub(super) fn process_overrides<'a>(
         adjusted_global_expressions.push(h);
     }
 
+    // Finish processing any overrides we didn't visit in the loop above.
     for entry in override_iter {
         process_override(
             entry,
@@ -96,6 +158,9 @@ pub(super) fn process_overrides<'a>(
         )?;
     }
 
+    // Update the initialization expression handles of all `Constant`s
+    // and `GlobalVariable`s. Skip `Constant`s we'd already updated en
+    // passant.
     for (_, c) in module
         .constants
         .iter_mut()
@@ -110,12 +175,18 @@ pub(super) fn process_overrides<'a>(
         }
     }
 
+    // Now that the global expression arena has changed, we need to
+    // recompute those expressions' types. For the time being, do a
+    // full re-validation.
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
     let module_info = validator.validate_no_overrides(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
 }
 
+/// Add a [`Constant`] to `module` for the override `old_h`.
+///
+/// Add the new `Constant` to `override_map` and `adjusted_constant_initializers`.
 fn process_override(
     (old_h, override_, span): (Handle<Override>, Override, Span),
     pipeline_constants: &PipelineConstants,
@@ -125,6 +196,7 @@ fn process_override(
     adjusted_constant_initializers: &mut HashSet<Handle<Constant>>,
     global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
 ) -> Result<Handle<Constant>, PipelineConstantError> {
+    // Determine which key to use for `override_` in `pipeline_constants`.
     let key = if let Some(id) = override_.id {
         Cow::Owned(id.to_string())
     } else if let Some(ref name) = override_.name {
@@ -132,6 +204,10 @@ fn process_override(
     } else {
         unreachable!();
     };
+
+    // Generate a global expression for `override_`'s value, either
+    // from the provided `pipeline_constants` table or its initializer
+    // in the module.
     let init = if let Some(value) = pipeline_constants.get::<str>(&key) {
         let literal = match module.types[override_.ty].inner {
             TypeInner::Scalar(scalar) => map_value_to_literal(*value, scalar)?,
@@ -147,6 +223,8 @@ fn process_override(
     } else {
         return Err(PipelineConstantError::MissingValue(key.to_string()));
     };
+
+    // Generate a new `Constant` to represent the override's value.
     let constant = Constant {
         name: override_.name,
         ty: override_.ty,
@@ -159,6 +237,8 @@ fn process_override(
     Ok(h)
 }
 
+/// Replace every expression handle in `expr` with its counterpart
+/// given by `new_pos`.
 fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
     let adjust = |expr: &mut Handle<Expression>| {
         *expr = new_pos[expr.index()];
