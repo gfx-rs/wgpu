@@ -882,6 +882,10 @@ impl super::PrivateCapabilities {
             F::SHADER_INT64,
             self.msl_version >= MTLLanguageVersion::V2_3,
         );
+        features.set(
+            F::SHADER_INT64_ATOMIC,
+            self.msl_version >= MTLLanguageVersion::V3_1,
+        );
 
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
