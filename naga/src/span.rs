@@ -104,16 +104,17 @@ impl std::ops::Index<Span> for str {
 
 /// A human-readable representation for a span, tailored for text source.
 ///
-/// Corresponds to the positional members of [`GPUCompilationMessage`][gcm] from
-/// the WebGPU specification, except that `offset` and `length` are in bytes
-/// (UTF-8 code units), instead of UTF-16 code units.
+/// Roughly corresponds to the positional members of [`GPUCompilationMessage`][gcm] from
+/// the WebGPU specification, except
+/// - `offset` and `length` are in bytes (UTF-8 code units), instead of UTF-16 code units.
+/// - `line_position` counts entire Unicode code points, instead of UTF-16 code units.
 ///
 /// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SourceLocation {
     /// 1-based line number.
     pub line_number: u32,
-    /// 1-based column of the start of this span
+    /// 1-based column of the start of this span, counted in Unicode code points.
     pub line_position: u32,
     /// 0-based Offset in code units (in bytes) of the start of the span.
     pub offset: u32,
