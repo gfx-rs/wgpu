@@ -258,6 +258,17 @@ enum Behavior<'a> {
     Glsl(GlslRestrictions<'a>),
 }
 
+impl Behavior<'_> {
+    /// Returns `true` if the inner WGSL/GLSL restrictions are runtime restrictions.
+    const fn has_runtime_restrictions(&self) -> bool {
+        matches!(
+            self,
+            &Behavior::Wgsl(WgslRestrictions::Runtime(_))
+                | &Behavior::Glsl(GlslRestrictions::Runtime(_))
+        )
+    }
+}
+
 /// A context for evaluating constant expressions.
 ///
 /// A `ConstantEvaluator` points at an expression arena to which it can append
@@ -699,37 +710,40 @@ impl<'a> ConstantEvaluator<'a> {
         expr: Expression,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        match (
-            &self.behavior,
-            self.expression_kind_tracker.type_of_with_expr(&expr),
-        ) {
-            // avoid errors on unimplemented functionality if possible
-            (
-                &Behavior::Wgsl(WgslRestrictions::Runtime(_))
-                | &Behavior::Glsl(GlslRestrictions::Runtime(_)),
-                ExpressionKind::Const,
-            ) => match self.try_eval_and_append_impl(&expr, span) {
-                Err(
-                    ConstantEvaluatorError::NotImplemented(_)
-                    | ConstantEvaluatorError::InvalidBinaryOpArgs,
-                ) => Ok(self.append_expr(expr, span, ExpressionKind::Runtime)),
-                res => res,
-            },
-            (_, ExpressionKind::Const) => self.try_eval_and_append_impl(&expr, span),
-            (&Behavior::Wgsl(WgslRestrictions::Const), ExpressionKind::Override) => {
-                Err(ConstantEvaluatorError::OverrideExpr)
+        match self.expression_kind_tracker.type_of_with_expr(&expr) {
+            ExpressionKind::Const => {
+                let eval_result = self.try_eval_and_append_impl(&expr, span);
+                // avoid errors on unimplemented functionality if possible
+                if self.behavior.has_runtime_restrictions()
+                    && matches!(
+                        eval_result,
+                        Err(ConstantEvaluatorError::NotImplemented(_)
+                            | ConstantEvaluatorError::InvalidBinaryOpArgs,)
+                    )
+                {
+                    Ok(self.append_expr(expr, span, ExpressionKind::Runtime))
+                } else {
+                    eval_result
+                }
             }
-            (
-                &Behavior::Wgsl(WgslRestrictions::Override | WgslRestrictions::Runtime(_)),
-                ExpressionKind::Override,
-            ) => Ok(self.append_expr(expr, span, ExpressionKind::Override)),
-            (&Behavior::Glsl(_), ExpressionKind::Override) => unreachable!(),
-            (
-                &Behavior::Wgsl(WgslRestrictions::Runtime(_))
-                | &Behavior::Glsl(GlslRestrictions::Runtime(_)),
-                ExpressionKind::Runtime,
-            ) => Ok(self.append_expr(expr, span, ExpressionKind::Runtime)),
-            (_, ExpressionKind::Runtime) => Err(ConstantEvaluatorError::RuntimeExpr),
+            ExpressionKind::Override => match self.behavior {
+                Behavior::Wgsl(WgslRestrictions::Override | WgslRestrictions::Runtime(_)) => {
+                    Ok(self.append_expr(expr, span, ExpressionKind::Override))
+                }
+                Behavior::Wgsl(WgslRestrictions::Const) => {
+                    Err(ConstantEvaluatorError::OverrideExpr)
+                }
+                Behavior::Glsl(_) => {
+                    unreachable!()
+                }
+            },
+            ExpressionKind::Runtime => {
+                if self.behavior.has_runtime_restrictions() {
+                    Ok(self.append_expr(expr, span, ExpressionKind::Runtime))
+                } else {
+                    Err(ConstantEvaluatorError::RuntimeExpr)
+                }
+            }
         }
     }
 
