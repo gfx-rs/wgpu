@@ -1,23 +1,17 @@
 use glam::Vec2;
 use std::borrow::Cow;
-use wgpu::{
-    Adapter, BindGroup, BindGroupLayout, ColorTargetState, CommandEncoder, Device, Extent3d, Queue,
-    RenderPassColorAttachment, RenderPipeline, Sampler, ShaderModule, SurfaceConfiguration,
-    Texture, TextureAspect, TextureDimension, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor, TextureViewDimension,
-};
 use winit::event::WindowEvent;
 
 const EXAMPLE_NAME: &str = "multiple_render_targets";
 
 /// Renderer that draws its outputs to two output texture targets at the same time.
 struct MultiTargetRenderer {
-    pipeline: RenderPipeline,
-    bindgroup: BindGroup,
+    pipeline: wgpu::RenderPipeline,
+    bindgroup: wgpu::BindGroup,
 }
 
 impl MultiTargetRenderer {
-    fn create_image_texture(device: &Device, queue: &Queue) -> (Texture, TextureView) {
+    fn create_image_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::Texture, wgpu::TextureView) {
         const WIDTH: usize = 256;
         const HEIGHT: usize = 256;
 
@@ -38,7 +32,7 @@ impl MultiTargetRenderer {
             img_data
         }
 
-        let size = Extent3d {
+        let size = wgpu::Extent3d {
             width: WIDTH as u32,
             height: HEIGHT as u32,
             depth_or_array_layers: 1,
@@ -49,9 +43,9 @@ impl MultiTargetRenderer {
             size,
             mip_level_count: 1,
             sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::R8Unorm, // we need only the red channel for black/white image,
-            usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm, // we need only the red channel for black/white image,
+            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
 
@@ -73,11 +67,11 @@ impl MultiTargetRenderer {
             size,
         );
 
-        let view = texture.create_view(&TextureViewDescriptor {
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("view"),
             format: None,
-            dimension: Some(TextureViewDimension::D2),
-            aspect: TextureAspect::All,
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
             base_array_layer: 0,
@@ -88,10 +82,10 @@ impl MultiTargetRenderer {
     }
 
     fn init(
-        device: &Device,
-        queue: &Queue,
-        shader: &ShaderModule,
-        target_states: &[ColorTargetState],
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        shader: &wgpu::ShaderModule,
+        target_states: &[wgpu::ColorTargetState],
     ) -> MultiTargetRenderer {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -179,7 +173,7 @@ impl MultiTargetRenderer {
         }
     }
 
-    fn draw(&self, encoder: &mut CommandEncoder, targets: &[Option<RenderPassColorAttachment>]) {
+    fn draw(&self, encoder: &mut wgpu::CommandEncoder, targets: &[Option<wgpu::RenderPassColorAttachment>]) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: targets,
@@ -194,12 +188,12 @@ impl MultiTargetRenderer {
 }
 
 fn create_target_textures(
-    device: &Device,
-    format: TextureFormat,
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
     width: u32,
     height: u32,
 ) -> TextureTargets {
-    let size = Extent3d {
+    let size = wgpu::Extent3d {
         width,
         height,
         depth_or_array_layers: 1,
@@ -210,11 +204,11 @@ fn create_target_textures(
         size,
         mip_level_count: 1,
         sample_count: 1,
-        dimension: TextureDimension::D2,
+        dimension: wgpu::TextureDimension::D2,
         format,
-        usage: TextureUsages::COPY_DST
-            | TextureUsages::TEXTURE_BINDING
-            | TextureUsages::RENDER_ATTACHMENT,
+        usage: wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],
     });
     let b = device.create_texture(&wgpu::TextureDescriptor {
@@ -222,40 +216,40 @@ fn create_target_textures(
         size,
         mip_level_count: 1,
         sample_count: 1,
-        dimension: TextureDimension::D2,
+        dimension: wgpu::TextureDimension::D2,
         format,
-        usage: TextureUsages::COPY_DST
-            | TextureUsages::TEXTURE_BINDING
-            | TextureUsages::RENDER_ATTACHMENT,
+        usage: wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],
     });
-    let a_view = a.create_view(&TextureViewDescriptor {
+    let a_view = a.create_view(&wgpu::TextureViewDescriptor {
         format: Some(format),
-        dimension: Some(TextureViewDimension::D2),
-        ..TextureViewDescriptor::default()
+        dimension: Some(wgpu::TextureViewDimension::D2),
+        ..wgpu::TextureViewDescriptor::default()
     });
-    let b_view = b.create_view(&TextureViewDescriptor {
+    let b_view = b.create_view(&wgpu::TextureViewDescriptor {
         format: Some(format),
-        dimension: Some(TextureViewDimension::D2),
-        ..TextureViewDescriptor::default()
+        dimension: Some(wgpu::TextureViewDimension::D2),
+        ..wgpu::TextureViewDescriptor::default()
     });
     TextureTargets { a_view, b_view }
 }
 
 /// Renderer that displays results on the screen.
 struct TargetRenderer {
-    pipeline: RenderPipeline,
-    bindgroup_layout: BindGroupLayout,
-    bindgroup_a: BindGroup,
-    bindgroup_b: BindGroup,
-    sampler: Sampler,
+    pipeline: wgpu::RenderPipeline,
+    bindgroup_layout: wgpu::BindGroupLayout,
+    bindgroup_a: wgpu::BindGroup,
+    bindgroup_b: wgpu::BindGroup,
+    sampler: wgpu::Sampler,
 }
 
 impl TargetRenderer {
     fn init(
-        device: &Device,
-        shader: &ShaderModule,
-        format: TextureFormat,
+        device: &wgpu::Device,
+        shader: &wgpu::ShaderModule,
+        format: wgpu::TextureFormat,
         targets: &TextureTargets,
     ) -> TargetRenderer {
         let texture_bind_group_layout =
@@ -308,7 +302,7 @@ impl TargetRenderer {
             fragment: Some(wgpu::FragmentState {
                 module: shader,
                 entry_point: "fs_display_main",
-                targets: &[Some(ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: None,
                     write_mask: Default::default(),
@@ -331,11 +325,11 @@ impl TargetRenderer {
         }
     }
     fn create_bindgroups(
-        device: &Device,
-        layout: &BindGroupLayout,
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
         texture_targets: &TextureTargets,
-        sampler: &Sampler,
-    ) -> (BindGroup, BindGroup) {
+        sampler: &wgpu::Sampler,
+    ) -> (wgpu::BindGroup, wgpu::BindGroup) {
         let a = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
@@ -370,8 +364,8 @@ impl TargetRenderer {
 
     fn draw(
         &self,
-        encoder: &mut CommandEncoder,
-        surface_view: &TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+        surface_view: &wgpu::TextureView,
         width: u32,
         height: u32,
     ) {
@@ -405,7 +399,7 @@ impl TargetRenderer {
         rpass.draw(0..3, 0..1);
     }
 
-    fn rebuild_resources(&mut self, device: &Device, texture_targets: &TextureTargets) {
+    fn rebuild_resources(&mut self, device: &wgpu::Device, texture_targets: &TextureTargets) {
         (self.bindgroup_a, self.bindgroup_b) = Self::create_bindgroups(
             device,
             &self.bindgroup_layout,
@@ -416,8 +410,8 @@ impl TargetRenderer {
 }
 
 struct TextureTargets {
-    a_view: TextureView,
-    b_view: TextureView,
+    a_view: wgpu::TextureView,
+    b_view: wgpu::TextureView,
 }
 
 struct Example {
@@ -430,10 +424,10 @@ struct Example {
 
 impl crate::framework::Example for Example {
     fn init(
-        config: &SurfaceConfiguration,
-        _adapter: &Adapter,
-        device: &Device,
-        queue: &Queue,
+        config: &wgpu::SurfaceConfiguration,
+        _adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -447,12 +441,12 @@ impl crate::framework::Example for Example {
             // ColorTargetStates specify how the data will be written to the
             // output textures:
             &[
-                ColorTargetState {
+                wgpu::ColorTargetState {
                     format: config.format,
                     blend: None,
                     write_mask: Default::default(),
                 },
-                ColorTargetState {
+                wgpu::ColorTargetState {
                     format: config.format,
                     blend: None,
                     write_mask: Default::default(),
@@ -476,7 +470,7 @@ impl crate::framework::Example for Example {
         }
     }
 
-    fn resize(&mut self, config: &SurfaceConfiguration, device: &Device, _queue: &Queue) {
+    fn resize(&mut self, config: &wgpu::SurfaceConfiguration, device: &wgpu::Device, _queue: &wgpu::Queue) {
         self.screen_width = config.width;
         self.screen_height = config.height;
         self.texture_targets =
@@ -486,7 +480,7 @@ impl crate::framework::Example for Example {
 
     fn update(&mut self, _event: WindowEvent) {}
 
-    fn render(&mut self, view: &TextureView, device: &Device, queue: &Queue) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
@@ -494,12 +488,12 @@ impl crate::framework::Example for Example {
         self.multi_target_renderer.draw(
             &mut encoder,
             &[
-                Some(RenderPassColorAttachment {
+                Some(wgpu::RenderPassColorAttachment {
                     view: &self.texture_targets.a_view,
                     resolve_target: None,
                     ops: Default::default(),
                 }),
-                Some(RenderPassColorAttachment {
+                Some(wgpu::RenderPassColorAttachment {
                     view: &self.texture_targets.b_view,
                     resolve_target: None,
                     ops: Default::default(),
