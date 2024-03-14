@@ -197,8 +197,8 @@ impl MultiTargetRenderer {
 struct TargetRenderer {
     pipeline: wgpu::RenderPipeline,
     bindgroup_layout: wgpu::BindGroupLayout,
-    bindgroup_a: wgpu::BindGroup,
-    bindgroup_b: wgpu::BindGroup,
+    bindgroup_left: wgpu::BindGroup,
+    bindgroup_right: wgpu::BindGroup,
     sampler: wgpu::Sampler,
 }
 
@@ -271,13 +271,13 @@ impl TargetRenderer {
             multiview: None,
         });
 
-        let (bg_a, bg_b) =
+        let (bg_left, bg_right) =
             Self::create_bindgroups(device, &texture_bind_group_layout, targets, &sampler);
         Self {
             pipeline: render_pipeline,
             bindgroup_layout: texture_bind_group_layout,
-            bindgroup_a: bg_a,
-            bindgroup_b: bg_b,
+            bindgroup_left: bg_left,
+            bindgroup_right: bg_right,
             sampler,
         }
     }
@@ -287,7 +287,7 @@ impl TargetRenderer {
         texture_targets: &TextureTargets,
         sampler: &wgpu::Sampler,
     ) -> (wgpu::BindGroup, wgpu::BindGroup) {
-        let a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let left = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -302,7 +302,7 @@ impl TargetRenderer {
             label: None,
         });
 
-        let b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let right = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -316,7 +316,7 @@ impl TargetRenderer {
             ],
             label: None,
         });
-        (a, b)
+        (left, right)
     }
 
     fn draw(
@@ -341,7 +341,7 @@ impl TargetRenderer {
             occlusion_query_set: None,
         });
         rpass.set_pipeline(&self.pipeline);
-        rpass.set_bind_group(0, &self.bindgroup_a, &[]);
+        rpass.set_bind_group(0, &self.bindgroup_left, &[]);
 
         let height = height as f32;
         let half_w = width as f32 * 0.5;
@@ -352,12 +352,12 @@ impl TargetRenderer {
         rpass.draw(0..3, 0..1);
 
         rpass.set_viewport(half_w, 0.0, half_w, height, 0.0, 1.0);
-        rpass.set_bind_group(0, &self.bindgroup_b, &[]);
+        rpass.set_bind_group(0, &self.bindgroup_right, &[]);
         rpass.draw(0..3, 0..1);
     }
 
     fn rebuild_resources(&mut self, device: &wgpu::Device, texture_targets: &TextureTargets) {
-        (self.bindgroup_a, self.bindgroup_b) = Self::create_bindgroups(
+        (self.bindgroup_left, self.bindgroup_right) = Self::create_bindgroups(
             device,
             &self.bindgroup_layout,
             texture_targets,
