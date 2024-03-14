@@ -10,27 +10,29 @@ struct MultiTargetRenderer {
     bindgroup: wgpu::BindGroup,
 }
 
+fn create_ball_texture_data(width: usize, height: usize) -> Vec<u8> {
+    // Creates black and white pixel data for the texture to sample.
+    let mut img_data = Vec::with_capacity(width * height);
+    let center: Vec2 = Vec2::new(width as f32 * 0.5, height as f32 * 0.5);
+    let half_distance = width as f32 * 0.5;
+    for y in 0..width {
+        for x in 0..height {
+            let cur_pos = Vec2::new(x as f32, y as f32);
+            let distance_to_center_normalized = 1.0 - (cur_pos - center).length() / half_distance;
+            let val: u8 = (u8::MAX as f32 * distance_to_center_normalized) as u8;
+            img_data.push(val)
+        }
+    }
+    img_data
+}
+
 impl MultiTargetRenderer {
-    fn create_image_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::Texture, wgpu::TextureView) {
+    fn create_image_texture(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> (wgpu::Texture, wgpu::TextureView) {
         const WIDTH: usize = 256;
         const HEIGHT: usize = 256;
-
-        fn create_ball_texture_data(width: usize, height: usize) -> Vec<u8> {
-            // Creates black and white pixel data for the texture to sample.
-            let mut img_data = Vec::with_capacity(width * height);
-            let center: Vec2 = Vec2::new(width as f32 * 0.5, height as f32 * 0.5);
-            let half_distance = width as f32 * 0.5;
-            for y in 0..width {
-                for x in 0..height {
-                    let cur_pos = Vec2::new(x as f32, y as f32);
-                    let distance_to_center_normalized =
-                        1.0 - (cur_pos - center).length() / half_distance;
-                    let val: u8 = (u8::MAX as f32 * distance_to_center_normalized) as u8;
-                    img_data.push(val)
-                }
-            }
-            img_data
-        }
 
         let size = wgpu::Extent3d {
             width: WIDTH as u32,
@@ -173,7 +175,11 @@ impl MultiTargetRenderer {
         }
     }
 
-    fn draw(&self, encoder: &mut wgpu::CommandEncoder, targets: &[Option<wgpu::RenderPassColorAttachment>]) {
+    fn draw(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        targets: &[Option<wgpu::RenderPassColorAttachment>],
+    ) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: targets,
@@ -185,55 +191,6 @@ impl MultiTargetRenderer {
         rpass.set_bind_group(0, &self.bindgroup, &[]);
         rpass.draw(0..3, 0..1);
     }
-}
-
-fn create_target_textures(
-    device: &wgpu::Device,
-    format: wgpu::TextureFormat,
-    width: u32,
-    height: u32,
-) -> TextureTargets {
-    let size = wgpu::Extent3d {
-        width,
-        height,
-        depth_or_array_layers: 1,
-    };
-
-    let a = device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage: wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[format],
-    });
-    let b = device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage: wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[format],
-    });
-    let a_view = a.create_view(&wgpu::TextureViewDescriptor {
-        format: Some(format),
-        dimension: Some(wgpu::TextureViewDimension::D2),
-        ..wgpu::TextureViewDescriptor::default()
-    });
-    let b_view = b.create_view(&wgpu::TextureViewDescriptor {
-        format: Some(format),
-        dimension: Some(wgpu::TextureViewDimension::D2),
-        ..wgpu::TextureViewDescriptor::default()
-    });
-    TextureTargets { a_view, b_view }
 }
 
 /// Renderer that displays results on the screen.
@@ -314,13 +271,13 @@ impl TargetRenderer {
             multiview: None,
         });
 
-        let (ba, bb) =
+        let (bg_a, bg_b) =
             Self::create_bindgroups(device, &texture_bind_group_layout, targets, &sampler);
         Self {
             pipeline: render_pipeline,
             bindgroup_layout: texture_bind_group_layout,
-            bindgroup_a: ba,
-            bindgroup_b: bb,
+            bindgroup_a: bg_a,
+            bindgroup_b: bg_b,
             sampler,
         }
     }
@@ -414,6 +371,57 @@ struct TextureTargets {
     b_view: wgpu::TextureView,
 }
 
+impl TextureTargets {
+    fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        width: u32,
+        height: u32,
+    ) -> TextureTargets {
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+
+        let a = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[format],
+        });
+        let b = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[format],
+        });
+        let a_view = a.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(format),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            ..wgpu::TextureViewDescriptor::default()
+        });
+        let b_view = b.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(format),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            ..wgpu::TextureViewDescriptor::default()
+        });
+        TextureTargets { a_view, b_view }
+    }
+}
+
 struct Example {
     drawer: TargetRenderer,
     multi_target_renderer: MultiTargetRenderer,
@@ -456,7 +464,7 @@ impl crate::framework::Example for Example {
 
         // create our target textures that will receive the simultaneous rendering:
         let texture_targets =
-            create_target_textures(device, config.format, config.width, config.height);
+            TextureTargets::new(device, config.format, config.width, config.height);
 
         // helper renderer that displays the results in 2 separate viewports:
         let drawer = TargetRenderer::init(device, &shader, config.format, &texture_targets);
@@ -470,11 +478,16 @@ impl crate::framework::Example for Example {
         }
     }
 
-    fn resize(&mut self, config: &wgpu::SurfaceConfiguration, device: &wgpu::Device, _queue: &wgpu::Queue) {
+    fn resize(
+        &mut self,
+        config: &wgpu::SurfaceConfiguration,
+        device: &wgpu::Device,
+        _queue: &wgpu::Queue,
+    ) {
         self.screen_width = config.width;
         self.screen_height = config.height;
         self.texture_targets =
-            create_target_textures(device, config.format, config.width, config.height);
+            TextureTargets::new(device, config.format, config.width, config.height);
         self.drawer.rebuild_resources(device, &self.texture_targets);
     }
 
