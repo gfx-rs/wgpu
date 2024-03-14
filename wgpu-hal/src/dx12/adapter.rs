@@ -321,7 +321,7 @@ impl super::Adapter {
                     mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS9>() as _,
                 )
             };
-            hr == 0 && features9.AtomicInt64OnTypedResourceSupported != 0
+            hr == 0 && features9.AtomicInt64OnGroupSharedSupported != 0
         };
         features.set(
             wgt::Features::SHADER_INT64_ATOMIC,
