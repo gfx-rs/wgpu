@@ -63,6 +63,7 @@ pub mod identity;
 mod init_tracker;
 pub mod instance;
 pub mod pipeline;
+mod pipeline_cache;
 mod pool;
 pub mod present;
 pub mod registry;
