@@ -1933,7 +1933,7 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
-    /// The pipeline cache to use for this operation
+    /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
@@ -2028,7 +2028,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// and no return value in the shader.
     pub entry_point: &'a str,
-    /// The pipeline cache to use when creating this pipeline
+    /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
     /// Advanced options for when this pipeline is compiled
     ///

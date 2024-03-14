@@ -1863,18 +1863,17 @@ impl crate::Device for super::Device {
                 .build()
         }];
 
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
         let mut raw_vec = {
             profiling::scope!("vkCreateGraphicsPipelines");
             unsafe {
                 self.shared
                     .raw
-                    .create_graphics_pipelines(
-                        desc.cache
-                            .map(|it| it.raw)
-                            .unwrap_or(vk::PipelineCache::null()),
-                        &vk_infos,
-                        None,
-                    )
+                    .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };
@@ -1921,18 +1920,17 @@ impl crate::Device for super::Device {
                 .build()
         }];
 
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
         let mut raw_vec = {
             profiling::scope!("vkCreateComputePipelines");
             unsafe {
                 self.shared
                     .raw
-                    .create_compute_pipelines(
-                        desc.cache
-                            .map(|it| it.raw)
-                            .unwrap_or(vk::PipelineCache::null()),
-                        &vk_infos,
-                        None,
-                    )
+                    .create_compute_pipelines(pipeline_cache, &vk_infos, None)
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };

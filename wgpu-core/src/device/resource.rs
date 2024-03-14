@@ -2822,17 +2822,18 @@ impl<A: HalApi> Device<A> {
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
-        let cache = if let Some(cache) = desc.cache {
-            if let Ok(cache) = hub.pipeline_caches.get(cache) {
-                if cache.device.as_info().id() != self.as_info().id() {
-                    return Err(DeviceError::WrongDevice.into());
-                }
-                Some(cache)
-            } else {
-                None
+        let cache = 'cache: {
+            let Some(cache) = desc.cache else {
+                break 'cache None;
+            };
+            let Ok(cache) = hub.pipeline_caches.get(cache) else {
+                break 'cache None;
+            };
+
+            if cache.device.as_info().id() != self.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
             }
-        } else {
-            None
+            Some(cache)
         };
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
