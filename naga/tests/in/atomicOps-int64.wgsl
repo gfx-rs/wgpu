@@ -22,7 +22,7 @@ var<workgroup> workgroup_struct: Struct;
 
 @compute
 @workgroup_size(2)
-fn cs_main(@builtin(local_invocation_id) id: vec3<u64>) {
+fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     atomicStore(&storage_atomic_scalar, 1lu);
     atomicStore(&storage_atomic_arr[1], 1li);
     atomicStore(&storage_struct.atomic_scalar, 1lu);

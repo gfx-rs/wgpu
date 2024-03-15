@@ -701,6 +701,14 @@ fn convert_wgsl() {
             "padding",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        (
+            "atomicOps-int64",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "atomicCompareExchange-int64",
+            Targets::SPIRV | Targets::WGSL,
+        ),
         ("pointers", Targets::SPIRV | Targets::WGSL),
         (
             "control-flow",
