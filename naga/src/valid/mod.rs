@@ -110,7 +110,7 @@ bitflags::bitflags! {
         const CUBE_ARRAY_TEXTURES = 0x4000;
         /// Support for 64-bit signed and unsigned integers.
         const SHADER_INT64 = 0x8000;
-        /// Support for 64-bit signed and unsigned integers.
+        /// Support for 64-bit integer atomics.
         const SHADER_INT64_ATOMIC = 0x10000;
     }
 }

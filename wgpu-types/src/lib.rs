@@ -886,9 +886,9 @@ bitflags::bitflags! {
         /// Allows shaders to use i64 and u64 atomics.
         ///
         /// Supported platforms:
-        /// - Vulkan
-        /// - DX12 (DXC only)
-        /// - Metal (with MSL 2.3+)
+        /// - Vulkan (with VK_KHR_shader_atomic_int64)
+        /// - DX12 (DXC only, with AtomicInt64OnGroupSharedSupported)
+        /// - Metal (with MSL 3.1+)
         ///
         /// This is a native only feature.
         const SHADER_INT64_ATOMIC = 1 << 56;
