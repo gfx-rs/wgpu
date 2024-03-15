@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
