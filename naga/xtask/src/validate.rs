@@ -208,12 +208,9 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
         buf
     };
     let expected_header_prefix = "; Version: ";
-    let Some(version) =
-        second_line.strip_prefix(expected_header_prefix) else {
-            bail!(
-                "no {expected_header_prefix:?} header found in {path:?}"
-            );
-        };
+    let Some(version) = second_line.strip_prefix(expected_header_prefix) else {
+        bail!("no {expected_header_prefix:?} header found in {path:?}");
+    };
     let file = open_file(path)?;
     let mut spirv_as_cmd = EasyCommand::new(spirv_as, |cmd| {
         cmd.stdin(Stdio::from(file))
@@ -237,19 +234,18 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
         buf
     };
     let expected_header_prefix = "// language: ";
-    let Some(language) =
-        first_line.strip_prefix(expected_header_prefix) else {
-            bail!(
-                "no {expected_header_prefix:?} header found in {path:?}"
-            );
-        };
-    let language = language.strip_suffix('\n').unwrap_or(language);
-
+    let Some(language) = first_line.strip_prefix(expected_header_prefix) else {
+        bail!("no {expected_header_prefix:?} header found in {path:?}");
+    };
+    let mut language = language.strip_suffix('\n').unwrap_or(language);
+    if language.starts_with("metal1") || language.starts_with("metal2") {
+        language = format!("macos-{language}");
+    }
     let file = open_file(path)?;
     EasyCommand::new(xcrun, |cmd| {
         cmd.stdin(Stdio::from(file))
             .args(["-sdk", "macosx", "metal", "-mmacosx-version-min=10.11"])
-            .arg(format!("-std=macos-{language}"))
+            .arg(format!("-std={language}"))
             .args(["-x", "metal", "-", "-o", "/dev/null"])
     })
     .success()
@@ -337,15 +333,16 @@ fn validate_hlsl_with_fxc(
         .target_profile
         .split('_')
         .nth(1)
-        .map(|segment| segment.parse::<u8>()) else {
-            bail!(
-                "expected target profile of the form \
+        .map(|segment| segment.parse::<u8>())
+    else {
+        bail!(
+            "expected target profile of the form \
                  `{{model}}_{{major}}_{{minor}}`, found invalid target \
                  profile {:?} in file {}",
-                config_item.target_profile,
-                file.display()
-            )
-        };
+            config_item.target_profile,
+            file.display()
+        )
+    };
     // NOTE: This isn't implemented by `fxc.exe`; see
     // <https://learn.microsoft.com/en-us/windows/win32/direct3dtools/dx-graphics-tools-fxc-syntax#profiles>.
     if shader_model_major_version < 6 {
