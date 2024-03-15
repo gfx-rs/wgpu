@@ -1,5 +1,6 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
+pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
     command::ColorAttachmentError,
@@ -335,7 +336,7 @@ pub enum CreatePipelineCacheError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("Pipeline cache validation failed")]
-    Validation,
+    Validation(PipelineCacheValidationError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error("Internal error: {0}")]
