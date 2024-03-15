@@ -129,7 +129,7 @@ winit = { version = "0.29", features = ["android-native-activity"] }
 # Metal dependencies
 block = "0.1"
 core-graphics-types = "0.1"
-metal = "0.27.0"
+metal = { git = "https://github.com/gfx-rs/metal-rs" }
 objc = "0.2.5"
 
 # Vulkan dependencies
