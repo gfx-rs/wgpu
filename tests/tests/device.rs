@@ -560,10 +560,7 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         // Set a LoseDeviceCallback on the device.
         let callback = Box::new(|reason, message| {
             WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert!(
-                matches!(reason, wgt::DeviceLostReason::Dropped),
-                "Device lost info reason should match DeviceLostReason::Dropped."
-            );
+            assert_eq!(reason, wgt::DeviceLostReason::Dropped);
             assert_eq!(message, "Device dropped.");
         });
         ctx.device.set_device_lost_callback(callback);
@@ -594,10 +591,7 @@ static DEVICE_INVALID_THEN_SET_LOST_CALLBACK: GpuTestConfiguration = GpuTestConf
         // Set a LoseDeviceCallback on the device.
         let callback = Box::new(|reason, _m| {
             WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert!(
-                matches!(reason, wgt::DeviceLostReason::DeviceInvalid),
-                "Device lost info reason should match DeviceLostReason::DeviceInvalid."
-            );
+            assert_eq!(reason, wgt::DeviceLostReason::DeviceInvalid);
         });
         ctx.device.set_device_lost_callback(callback);
 
@@ -618,10 +612,7 @@ static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguratio
         // Set a LoseDeviceCallback on the device.
         let callback = Box::new(|reason, _m| {
             WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert!(
-                matches!(reason, wgt::DeviceLostReason::ReplacedCallback),
-                "Device lost info reason should match DeviceLostReason::ReplacedCallback."
-            );
+            assert_eq!(reason, wgt::DeviceLostReason::ReplacedCallback);
         });
         ctx.device.set_device_lost_callback(callback);
 
@@ -650,10 +641,7 @@ static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfigurat
         // Set a LoseDeviceCallback on the device.
         let callback = Box::new(|reason, message| {
             WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert!(
-                matches!(reason, wgt::DeviceLostReason::Dropped),
-                "Device lost info reason should match DeviceLostReason::Dropped."
-            );
+            assert_eq!(reason, wgt::DeviceLostReason::Dropped);
             assert_eq!(message, "Device is dying.");
         });
         ctx.device.set_device_lost_callback(callback);

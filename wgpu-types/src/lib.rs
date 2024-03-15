@@ -7183,7 +7183,7 @@ mod send_sync {
 ///
 /// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
 #[repr(u8)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DeviceLostReason {
     /// Triggered by driver
     Unknown = 0,
