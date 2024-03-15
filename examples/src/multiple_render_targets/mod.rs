@@ -1,7 +1,3 @@
-use glam::Vec2;
-use std::borrow::Cow;
-use winit::event::WindowEvent;
-
 const EXAMPLE_NAME: &str = "multiple_render_targets";
 
 /// Renderer that draws its outputs to two output texture targets at the same time.
@@ -13,11 +9,11 @@ struct MultiTargetRenderer {
 fn create_ball_texture_data(width: usize, height: usize) -> Vec<u8> {
     // Creates black and white pixel data for the texture to sample.
     let mut img_data = Vec::with_capacity(width * height);
-    let center: Vec2 = Vec2::new(width as f32 * 0.5, height as f32 * 0.5);
+    let center: glam::Vec2 = glam::Vec2::new(width as f32 * 0.5, height as f32 * 0.5);
     let half_distance = width as f32 * 0.5;
     for y in 0..width {
         for x in 0..height {
-            let cur_pos = Vec2::new(x as f32, y as f32);
+            let cur_pos = glam::Vec2::new(x as f32, y as f32);
             let distance_to_center_normalized = 1.0 - (cur_pos - center).length() / half_distance;
             let val: u8 = (u8::MAX as f32 * distance_to_center_normalized) as u8;
             img_data.push(val)
@@ -439,7 +435,9 @@ impl crate::framework::Example for Example {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "shader.wgsl"
+            ))),
         });
         // Renderer that draws to 2 textures at the same time:
         let multi_target_renderer = MultiTargetRenderer::init(
@@ -491,7 +489,7 @@ impl crate::framework::Example for Example {
         self.drawer.rebuild_resources(device, &self.texture_targets);
     }
 
-    fn update(&mut self, _event: WindowEvent) {}
+    fn update(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
