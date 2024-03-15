@@ -237,15 +237,17 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
     let Some(language) = first_line.strip_prefix(expected_header_prefix) else {
         bail!("no {expected_header_prefix:?} header found in {path:?}");
     };
-    let mut language = language.strip_suffix('\n').unwrap_or(language);
-    if language.starts_with("metal1") || language.starts_with("metal2") {
-        language = format!("macos-{language}").as_str();
-    }
+    let language = language.strip_suffix('\n').unwrap_or(language);
+    let std_arg = if language.starts_with("metal1") || language.starts_with("metal2") {
+        format!("-std=macos-{language}")
+    } else {
+        format!("-std={language}")
+    };
     let file = open_file(path)?;
     EasyCommand::new(xcrun, |cmd| {
         cmd.stdin(Stdio::from(file))
             .args(["-sdk", "macosx", "metal", "-mmacosx-version-min=10.11"])
-            .arg(format!("-std={language}"))
+            .arg(std_arg)
             .args(["-x", "metal", "-", "-o", "/dev/null"])
     })
     .success()
