@@ -2705,6 +2705,7 @@ impl Device {
     }
 
     /// Test-only function to make this device invalid.
+    #[doc(hidden)]
     pub fn make_invalid(&self) {
         DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
     }

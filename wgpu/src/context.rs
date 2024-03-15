@@ -267,6 +267,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &RenderBundleEncoderDescriptor<'_>,
     ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData);
+    #[doc(hidden)]
     fn device_make_invalid(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_drop(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_set_device_lost_callback(
@@ -1294,6 +1295,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &RenderBundleEncoderDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
+    #[doc(hidden)]
     fn device_make_invalid(&self, device: &ObjectId, device_data: &crate::Data);
     fn device_drop(&self, device: &ObjectId, device_data: &crate::Data);
     fn device_set_device_lost_callback(
@@ -2352,6 +2354,7 @@ where
         (render_bundle_encoder.into(), Box::new(data) as _)
     }
 
+    #[doc(hidden)]
     fn device_make_invalid(&self, device: &ObjectId, device_data: &crate::Data) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);

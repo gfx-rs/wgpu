@@ -1346,6 +1346,7 @@ impl crate::Context for ContextWgpuCore {
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
     }
+    #[doc(hidden)]
     fn device_make_invalid(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         wgc::gfx_select!(device => self.0.device_make_invalid(*device));
     }
