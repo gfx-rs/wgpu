@@ -239,7 +239,7 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
     };
     let mut language = language.strip_suffix('\n').unwrap_or(language);
     if language.starts_with("metal1") || language.starts_with("metal2") {
-        language = format!("macos-{language}");
+        language = format!("macos-{language}").as_str();
     }
     let file = open_file(path)?;
     EasyCommand::new(xcrun, |cmd| {
