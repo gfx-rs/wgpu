@@ -21,7 +21,7 @@ implicit-link = []
 [target.'cfg(windows)'.dependencies]
 bitflags = "2"
 # libloading 0.8 switches from `winapi` to `windows-sys`; permit either
-libloading = { version = ">=0.7,<0.9", optional = true }
+libloading = { version = ">=0.7, <0.9", optional = true }
 
 [target.'cfg(windows)'.dependencies.winapi]
 version = "0.3"
