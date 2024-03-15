@@ -1,12 +1,123 @@
-use std::io::Write;
-
+use thiserror::Error;
 use wgt::AdapterInfo;
+
+pub const HEADER_LENGTH: usize = std::mem::size_of::<PipelineCacheHeader>();
+
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[non_exhaustive]
+pub enum PipelineCacheValidationError {
+    #[error("The pipeline cache data truncataed")]
+    Truncated,
+    #[error("The pipeline cache data was longer than recorded")]
+    // TODO: Is it plausible that this would happen
+    Extended,
+    #[error("The pipeline cache data was corrupted (e.g. the hash didn't match)")]
+    Corrupted,
+    #[error("The pipeline cacha data was out of date and so cannot be safely used")]
+    Outdated,
+    #[error("The cache data was created for a different device")]
+    WrongDevice,
+    #[error("Pipeline cacha data was created for a future version of wgpu")]
+    Unsupported,
+}
+
+impl PipelineCacheValidationError {
+    /// Could the error have been avoided?
+    /// That is, is there a mistake in user code interacting with the cache
+    pub fn was_avoidable(&self) -> bool {
+        match self {
+            PipelineCacheValidationError::WrongDevice => true,
+            PipelineCacheValidationError::Truncated
+            | PipelineCacheValidationError::Unsupported
+            | PipelineCacheValidationError::Extended
+            // It's unusual, but not implausible, to be downgrading wgpu
+            | PipelineCacheValidationError::Outdated
+            | PipelineCacheValidationError::Corrupted => false,
+        }
+    }
+}
+
+/// Validate the data in a pipeline cache
+pub fn validate_pipeline_cache<'d>(
+    cache_data: &'d [u8],
+    adapter: &AdapterInfo,
+    validation_key: [u8; 16],
+) -> Result<&'d [u8], PipelineCacheValidationError> {
+    let adapter_key = adapter_key(adapter)?;
+    let Some((header, remaining_data)) = PipelineCacheHeader::read(cache_data) else {
+        return Err(PipelineCacheValidationError::Truncated);
+    };
+    if header.magic != MAGIC {
+        return Err(PipelineCacheValidationError::Corrupted);
+    }
+    if header.header_version != HEADER_VERSION {
+        return Err(PipelineCacheValidationError::Outdated);
+    }
+    if header.cache_abi != ABI {
+        return Err(PipelineCacheValidationError::Outdated);
+    }
+    if header.backend != adapter.backend as u8 {
+        return Err(PipelineCacheValidationError::WrongDevice);
+    }
+    if header.adapter_key != adapter_key {
+        return Err(PipelineCacheValidationError::WrongDevice);
+    }
+    if header.validation_key != validation_key {
+        // If the validation key is wrong, that means that this device has changed
+        // in a way where the cache won't be compatible since the cache was made,
+        // so it is outdated
+        return Err(PipelineCacheValidationError::Outdated);
+    }
+    let data_size: usize = header
+        .data_size
+        .try_into()
+        // If the data was previously more than 4GiB, and we're still on a 32 bit system (ABI check, above)
+        // Then the data must be corrupted
+        .map_err(|_| PipelineCacheValidationError::Corrupted)?;
+    if remaining_data.len() < data_size {
+        return Err(PipelineCacheValidationError::Truncated);
+    }
+    if remaining_data.len() > data_size {
+        return Err(PipelineCacheValidationError::Extended);
+    }
+    let hash = hash(remaining_data);
+    if header.data_hash != hash {
+        return Err(PipelineCacheValidationError::Corrupted);
+    }
+    Ok(remaining_data)
+}
+
+pub fn add_cache_header(
+    in_region: &mut [u8],
+    data: &[u8],
+    adapter: &AdapterInfo,
+    validation_key: [u8; 16],
+) {
+    assert_eq!(in_region.len(), HEADER_LENGTH);
+    let data_hash = hash(&data);
+    let header = PipelineCacheHeader {
+        adapter_key: adapter_key(adapter)
+            .expect("Called add_cache_header for an adapter which doesn't support cache data. This is a wgpu internal bug"),
+        backend: adapter.backend as u8,
+        cache_abi: ABI,
+        magic: MAGIC,
+        header_version: HEADER_VERSION,
+        validation_key,
+        data_hash,
+        data_size: data
+            .len()
+            .try_into()
+            .expect("Cache larger than u64::MAX bytes"),
+    };
+    header.write(in_region);
+}
 
 const MAGIC: [u8; 8] = *b"WGPUPLCH";
 const HEADER_VERSION: u32 = 1;
 const ABI: u32 = std::mem::size_of::<*const ()>() as u32;
 
 #[repr(C)]
+#[derive(PartialEq, Eq)]
 struct PipelineCacheHeader {
     /// The magic header to ensure that we have the right file format
     /// Has a value of MAGIC, as above
@@ -32,7 +143,7 @@ struct PipelineCacheHeader {
     /// A key used to validate that this device is still compatible with the cache
     ///
     /// This should e.g. contain driver version and/or intermediate compiler versions
-    device_key: [u8; 16],
+    validation_key: [u8; 16],
     /// The length of the data which is sent to/recieved from the backend
     data_size: u64,
     /// The hash of the data which is sent to/recieved from the backend, and which
@@ -40,65 +151,55 @@ struct PipelineCacheHeader {
     data_hash: u64,
 }
 
-pub enum PipelineCacheValidationError {
-    Truncated,
-    Corrupted,
-    Outdated,
-    WrongDevice,
-    Unsupported,
-}
+impl PipelineCacheHeader {
+    fn read(data: &[u8]) -> Option<(PipelineCacheHeader, &[u8])> {
+        let mut reader = Reader {
+            data,
+            total_read: 0,
+        };
+        let magic = reader.read_array()?;
+        let header_version = reader.read_u32()?;
+        let cache_abi = reader.read_u32()?;
+        let backend = reader.read_byte()?;
+        let adapter_key = reader.read_array()?;
+        let validation_key = reader.read_array()?;
+        let data_size = reader.read_u64()?;
+        let data_hash = reader.read_u64()?;
 
-impl PipelineCacheValidationError {
-    /// Could the error have been avoided?
-    pub fn was_avoidable(&self) -> bool {
-        match self {
-            PipelineCacheValidationError::WrongDevice
-            | PipelineCacheValidationError::Unsupported => true,
-            PipelineCacheValidationError::Truncated
-            | PipelineCacheValidationError::Outdated
-            | PipelineCacheValidationError::Corrupted => false,
-        }
-    }
-}
+        assert_eq!(
+            reader.total_read,
+            std::mem::size_of::<PipelineCacheHeader>()
+        );
 
-/// Validate the data in a pipeline cache
-pub fn validate_pipeline_cache<'d>(
-    cache_data: &'d [u8],
-    adapter: &AdapterInfo,
-    device_key: [u8; 16],
-) -> Result<&'d [u8], PipelineCacheValidationError> {
-    let adapter_key = adapter_key(adapter)?;
-    let Some((header, remaining_data)) = read_header(cache_data) else {
-        return Err(PipelineCacheValidationError::Truncated);
-    };
-    if header.magic != MAGIC {
-        return Err(PipelineCacheValidationError::Corrupted);
+        Some((
+            PipelineCacheHeader {
+                magic,
+                header_version,
+                cache_abi,
+                backend,
+                adapter_key,
+                validation_key,
+                data_size,
+                data_hash,
+            },
+            reader.data,
+        ))
     }
-    if header.header_version != HEADER_VERSION {
-        return Err(PipelineCacheValidationError::Outdated);
+
+    fn write(&self, into: &mut [u8]) -> Option<()> {
+        let mut writer = Writer { data: into };
+        writer.write_array(&self.magic)?;
+        writer.write_u32(self.header_version)?;
+        writer.write_u32(self.cache_abi)?;
+        writer.write_byte(self.backend)?;
+        writer.write_array(&self.adapter_key)?;
+        writer.write_array(&self.validation_key)?;
+        writer.write_u64(self.data_size)?;
+        writer.write_u64(self.data_hash)?;
+
+        assert_eq!(writer.data.len(), 0);
+        Some(())
     }
-    if header.cache_abi != ABI {
-        return Err(PipelineCacheValidationError::Outdated);
-    }
-    if header.backend != adapter.backend as u8 {
-        return Err(PipelineCacheValidationError::WrongDevice);
-    }
-    if header.adapter_key != adapter_key {
-        return Err(PipelineCacheValidationError::WrongDevice);
-    }
-    if header.device_key != device_key {
-        return Err(PipelineCacheValidationError::WrongDevice);
-    }
-    let data_size: usize = header
-        .data_size
-        .try_into()
-        // If the data was previously more than 4GiB, and we're on the same size of system (ABI, above)l
-        // Then the data must be corrupted
-        .map_err(|_| PipelineCacheValidationError::Corrupted)?;
-    if data_size != remaining_data.len() {
-        return Err(PipelineCacheValidationError::WrongDevice);
-    }
-    Ok(remaining_data)
 }
 
 fn adapter_key(adapter: &AdapterInfo) -> Result<[u8; 15], PipelineCacheValidationError> {
@@ -117,43 +218,14 @@ fn adapter_key(adapter: &AdapterInfo) -> Result<[u8; 15], PipelineCacheValidatio
     }
 }
 
-pub fn write_pipeline_cache(writer: &mut dyn Write, data: &[u8], adpater: &AdapterInfo) {}
-
-fn read_header(data: &[u8]) -> Option<(PipelineCacheHeader, &[u8])> {
-    let mut reader = Reader {
-        data,
-        total_read: 0,
-    };
-    let magic = reader.read_array()?;
-    let header_version = reader.read_u32()?;
-    let cache_abi = reader.read_u32()?;
-    let backend = reader.read_byte()?;
-    let adapter_key = reader.read_array()?;
-    let device_key = reader.read_array()?;
-    let data_size = reader.read_u64()?;
-    let data_hash = reader.read_u64()?;
-
-    assert_eq!(
-        reader.total_read,
-        std::mem::size_of::<PipelineCacheHeader>()
+fn hash(data: &[u8]) -> u64 {
+    log::warn!(
+        "Using fake 'hash' for {} bytes of data. Data might become invalid",
+        data.len()
     );
-
-    Some((
-        PipelineCacheHeader {
-            magic,
-            header_version,
-            cache_abi,
-            backend,
-            adapter_key,
-            device_key,
-            data_size,
-            data_hash,
-        },
-        reader.data,
-    ))
+    // TODO: Actually do a proper hash
+    0xFEDCBA9_876543210
 }
-
-fn write_header(header: PipelineCacheHeader, writer: &mut dyn Write) {}
 
 struct Reader<'a> {
     data: &'a [u8],
@@ -168,10 +240,14 @@ impl<'a> Reader<'a> {
         Some(res)
     }
     fn read_array<const N: usize>(&mut self) -> Option<[u8; N]> {
+        // Only greater than because we're indexing fenceposts, not items
+        if N > self.data.len() {
+            return None;
+        }
         let (start, data) = self.data.split_at(N);
         self.total_read += N;
         self.data = data;
-        start.try_into().ok()
+        Some(start.try_into().expect("off-by-one-error in array size"))
     }
 
     fn read_u16(&mut self) -> Option<u16> {
@@ -182,5 +258,269 @@ impl<'a> Reader<'a> {
     }
     fn read_u64(&mut self) -> Option<u64> {
         self.read_array().map(u64::from_be_bytes)
+    }
+}
+
+struct Writer<'a> {
+    data: &'a mut [u8],
+}
+
+impl<'a> Writer<'a> {
+    fn write_byte(&mut self, byte: u8) -> Option<()> {
+        self.write_array(&[byte])
+    }
+    fn write_array<const N: usize>(&mut self, array: &[u8; N]) -> Option<()> {
+        // Only greater than because we're indexing fenceposts, not items
+        if N > self.data.len() {
+            return None;
+        }
+        let data = std::mem::replace(&mut self.data, &mut []);
+        let (start, data) = data.split_at_mut(N);
+        self.data = data;
+        start.copy_from_slice(array);
+        Some(())
+    }
+
+    fn write_u16(&mut self, value: u16) -> Option<()> {
+        self.write_array(&value.to_be_bytes())
+    }
+    fn write_u32(&mut self, value: u32) -> Option<()> {
+        self.write_array(&value.to_be_bytes())
+    }
+    fn write_u64(&mut self, value: u64) -> Option<()> {
+        self.write_array(&value.to_be_bytes())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wgt::AdapterInfo;
+
+    use crate::pipeline_cache::{PipelineCacheValidationError as E, HEADER_LENGTH};
+
+    use super::ABI;
+
+    // Assert the correct size
+    const _: [(); HEADER_LENGTH] = [(); 64];
+
+    const ADAPTER: AdapterInfo = AdapterInfo {
+        name: String::new(),
+        vendor: 0x0002_FEED,
+        device: 0xFEFE_FEFE,
+        device_type: wgt::DeviceType::Other,
+        driver: String::new(),
+        driver_info: String::new(),
+        backend: wgt::Backend::Vulkan,
+    };
+
+    // IMPORTANT: If these tests fail, then you MUST increment HEADER_VERSION
+    const VALIDATION_KEY: [u8; 16] = u128::to_be_bytes(0xFFFFFFFF_FFFFFFFF_88888888_88888888);
+    #[test]
+    fn written_header() {
+        let mut result = [0; HEADER_LENGTH];
+        super::add_cache_header(&mut result, &[], &ADAPTER, VALIDATION_KEY);
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let expected = cache.into_iter().flatten().collect::<Vec<u8>>();
+
+        assert_eq!(result.as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn valid_data() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let expected: &[u8] = &[];
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Ok(expected));
+    }
+    #[test]
+    fn invalid_magic() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"NOT_WGPU",                                 // (Wrong) MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::Corrupted));
+    }
+
+    #[test]
+    fn wrong_version() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 2, 0, 0, 0, ABI as u8],             // (wrong) Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::Outdated));
+    }
+    #[test]
+    fn wrong_abi() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH", // MAGIC
+            // a 14 bit ABI is improbable
+            [0, 0, 0, 1, 0, 0, 0, 14],            // Version and (wrong) ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED], // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(), // Validation key
+            0x88888888_88888888u64.to_be_bytes(), // Validation key
+            0x0u64.to_be_bytes(),                 // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(), // Header
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::Outdated));
+    }
+
+    #[test]
+    fn wrong_backend() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [2, 255, 255, 255, 0, 2, 0xFE, 0xED],         // (wrong) Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::WrongDevice));
+    }
+    #[test]
+    fn wrong_adapter() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0x00],         // Backend and (wrong) Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::WrongDevice));
+    }
+    #[test]
+    fn wrong_validation() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_00000000u64.to_be_bytes(),         // (wrong) Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::Outdated));
+    }
+    #[test]
+    fn too_little_data() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x064u64.to_be_bytes(),                       // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::Truncated));
+    }
+    #[test]
+    fn not_no_data() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            100u64.to_be_bytes(),                         // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache
+            .into_iter()
+            .flatten()
+            .chain(std::iter::repeat(0u8).take(100))
+            .collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        let expected: &[u8] = &[0; 100];
+        assert_eq!(validation_result, Ok(expected));
+    }
+    #[test]
+    fn too_much_data() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x064u64.to_be_bytes(),                       // Data size
+            0xFEDCBA9_876543210u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache
+            .into_iter()
+            .flatten()
+            .chain(std::iter::repeat(0u8).take(200))
+            .collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::Extended));
+    }
+    #[test]
+    fn wrong_hash() {
+        let cache: [[u8; 8]; HEADER_LENGTH / 8] = [
+            *b"WGPUPLCH",                                 // MAGIC
+            [0, 0, 0, 1, 0, 0, 0, ABI as u8],             // Version and ABI
+            [1, 255, 255, 255, 0, 2, 0xFE, 0xED],         // Backend and Adapter key
+            [0xFE, 0xFE, 0xFE, 0xFE, 255, 255, 255, 255], // Backend and Adapter key
+            0xFFFFFFFF_FFFFFFFFu64.to_be_bytes(),         // Validation key
+            0x88888888_88888888u64.to_be_bytes(),         // Validation key
+            0x0u64.to_be_bytes(),                         // Data size
+            0x00000000_00000000u64.to_be_bytes(),         // Hash
+        ];
+        let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
+        let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
+        assert_eq!(validation_result, Err(E::Corrupted));
     }
 }
