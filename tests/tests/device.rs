@@ -564,10 +564,7 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
                 matches!(reason, wgt::DeviceLostReason::Dropped),
                 "Device lost info reason should match DeviceLostReason::Dropped."
             );
-            assert!(
-                message == "Device dropped.",
-                "Device lost info message should be \"Device dropped.\"."
-            );
+            assert_eq!(message, "Device dropped.");
         });
         ctx.device.set_device_lost_callback(callback);
 
@@ -657,11 +654,7 @@ static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfigurat
                 matches!(reason, wgt::DeviceLostReason::Dropped),
                 "Device lost info reason should match DeviceLostReason::Dropped."
             );
-            assert!(
-                message == "Device is dying.",
-                "Device lost info message is \"{}\" and it should be \"Device is dying.\".",
-                message
-            );
+            assert_eq!(message, "Device is dying.");
         });
         ctx.device.set_device_lost_callback(callback);
 
