@@ -150,6 +150,12 @@ impl FromStr for ShaderModelArg {
             "50" => ShaderModel::V5_0,
             "51" => ShaderModel::V5_1,
             "60" => ShaderModel::V6_0,
+            "61" => ShaderModel::V6_1,
+            "62" => ShaderModel::V6_2,
+            "63" => ShaderModel::V6_3,
+            "64" => ShaderModel::V6_4,
+            "65" => ShaderModel::V6_5,
+            "66" => ShaderModel::V6_6,
             _ => return Err(format!("Invalid value for --shader-model: {s}")),
         }))
     }

@@ -887,7 +887,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan (with VK_KHR_shader_atomic_int64)
-        /// - DX12 (DXC only, with AtomicInt64OnGroupSharedSupported)
+        /// - DX12 (with SM 6.6+)
         /// - Metal (with MSL 3.1+)
         ///
         /// This is a native only feature.

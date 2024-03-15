@@ -1062,7 +1062,7 @@ impl crate::Device<super::Api> for super::Device {
             naga_options: hlsl::Options {
                 shader_model: match self.dxc_container {
                     // DXC
-                    Some(_) => hlsl::ShaderModel::V6_0,
+                    Some(_) => hlsl::ShaderModel::V6_6, // TODO: implement shader model queries in d3d12
                     // FXC doesn't support SM 6.0
                     None => hlsl::ShaderModel::V5_1,
                 },

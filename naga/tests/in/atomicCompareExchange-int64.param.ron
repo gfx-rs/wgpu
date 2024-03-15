@@ -5,7 +5,7 @@
 		capabilities: [ Int64, Int64ImageEXT, Int64Atomics ],
 	),
 	hlsl: (
-		shader_model: V6_0,
+		shader_model: V6_6,
 		binding_map: {},
 		fake_missing_bindings: true,
 		special_constants_binding: Some((space: 1, register: 0)),

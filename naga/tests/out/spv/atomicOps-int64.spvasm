@@ -4,6 +4,7 @@
 ; Bound: 193
 OpCapability Shader
 OpCapability Int64
+OpCapability Int64Atomics
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
