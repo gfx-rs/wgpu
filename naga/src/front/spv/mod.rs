@@ -4876,6 +4876,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let low = self.next()?;
                 match width {
                     4 => crate::Literal::U32(low),
+                    8 => {
+                        inst.expect(5)?;
+                        let high = self.next()?;
+                        crate::Literal::U64(u64::from(high) << 32 | u64::from(low))
+                    }
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
             }

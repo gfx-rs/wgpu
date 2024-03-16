@@ -2097,28 +2097,41 @@ impl Global {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
 
-        let (closures, queue_empty) = {
-            if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
-                if submission_index.queue_id != device_id.transmute() {
-                    return Err(WaitIdleError::WrongSubmissionIndex(
-                        submission_index.queue_id,
-                        device_id,
-                    ));
-                }
+        if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
+            if submission_index.queue_id != device_id.transmute() {
+                return Err(WaitIdleError::WrongSubmissionIndex(
+                    submission_index.queue_id,
+                    device_id,
+                ));
             }
+        }
 
-            let fence = device.fence.read();
-            let fence = fence.as_ref().unwrap();
-            device.maintain(fence, maintain)?
-        };
+        let DevicePoll {
+            closures,
+            queue_empty,
+        } = Self::poll_single_device(&device, maintain)?;
+
+        closures.fire();
+
+        Ok(queue_empty)
+    }
+
+    fn poll_single_device<A: HalApi>(
+        device: &crate::device::Device<A>,
+        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
+    ) -> Result<DevicePoll, WaitIdleError> {
+        let fence = device.fence.read();
+        let fence = fence.as_ref().unwrap();
+        let (closures, queue_empty) = device.maintain(fence, maintain)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
-        closures.fire();
-
-        Ok(queue_empty)
+        Ok(DevicePoll {
+            closures,
+            queue_empty,
+        })
     }
 
     /// Poll all devices belonging to the backend `A`.
@@ -2127,7 +2140,7 @@ impl Global {
     ///
     /// Return `all_queue_empty` indicating whether there are more queue
     /// submissions still in flight.
-    fn poll_device<A: HalApi>(
+    fn poll_all_devices_of_api<A: HalApi>(
         &self,
         force_wait: bool,
         closures: &mut UserClosures,
@@ -2145,10 +2158,13 @@ impl Global {
                 } else {
                     wgt::Maintain::Poll
                 };
-                let fence = device.fence.read();
-                let fence = fence.as_ref().unwrap();
-                let (cbs, queue_empty) = device.maintain(fence, maintain)?;
-                all_queue_empty = all_queue_empty && queue_empty;
+
+                let DevicePoll {
+                    closures: cbs,
+                    queue_empty,
+                } = Self::poll_single_device(device, maintain)?;
+
+                all_queue_empty &= queue_empty;
 
                 closures.extend(cbs);
             }
@@ -2170,23 +2186,23 @@ impl Global {
 
         #[cfg(vulkan)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Vulkan>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Vulkan>(force_wait, &mut closures)?;
         }
         #[cfg(metal)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Metal>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Metal>(force_wait, &mut closures)?;
         }
         #[cfg(dx12)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Dx12>(force_wait, &mut closures)?;
         }
         #[cfg(gles)]
         {
-            all_queue_empty =
-                self.poll_device::<hal::api::Gles>(force_wait, &mut closures)? && all_queue_empty;
+            all_queue_empty &=
+                self.poll_all_devices_of_api::<hal::api::Gles>(force_wait, &mut closures)?;
         }
 
         closures.fire();
@@ -2562,4 +2578,9 @@ impl Global {
 
         buffer.unmap()
     }
+}
+
+struct DevicePoll {
+    closures: UserClosures,
+    queue_empty: bool,
 }

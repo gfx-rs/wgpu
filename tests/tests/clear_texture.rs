@@ -375,6 +375,7 @@ static CLEAR_TEXTURE_DEPTH32_STENCIL8: GpuTestConfiguration = GpuTestConfigurati
     .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8)
+            .downlevel_flags(wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES)
             // https://github.com/gfx-rs/wgpu/issues/5016
             .skip(FailureCase::adapter("Apple Paravirtual device")),
     )

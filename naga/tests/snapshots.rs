@@ -807,6 +807,10 @@ fn convert_wgsl() {
             "abstract-types-operators",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        (
+            "int64",
+            Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
