@@ -41,19 +41,8 @@ Bottom level categories:
 
 ### Major Changes
 
-#### Vendored WebGPU Bindings from `web_sys`
-
-**`--cfg=web_sys_unstable_apis` is no longer needed in your `RUSTFLAGS` to compile for WebGPU!!!**
-
-While WebGPU's javascript api is stable in the browsers, the `web_sys` bindings for WebGPU are still improving. As such they are hidden behind the special cfg `--cfg=web_sys_unstable_apis` and are not available by default. Everyone who wanted to use our WebGPU backend needed to enable this cfg in their `RUSTFLAGS`. This was very inconvenient and made it hard to use WebGPU, especially when WebGPU is enabled by default. Additionally, the unstable APIs don't adhere to semver, so there were repeated breakages.
-
-To combat this problem we have decided to vendor the `web_sys` bindings for WebGPU within the crate. Notably we are not forking the bindings, merely vendoring, so any improvements we make to the bindings will be contributed directly to upstream `web_sys`.
-
-By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
-
 ### Documentation
 
-- Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5092](https://github.com/gfx-rs/wgpu/pull/5092).
 - Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
 - Document precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386)
 - Give short example of WGSL `push_constant` syntax. By @waywardmonkeys in [#5393](https://github.com/gfx-rs/wgpu/pull/5393)
@@ -116,7 +105,6 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 -wgpu::Instance::any_backend_feature_enabled()
 +!wgpu::Instance::enabled_backend_features().is_empty()
 ```
-- `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
 - `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU). By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 - `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
@@ -134,31 +122,18 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 ### Bug Fixes
 
 #### General
-- Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
 - Fix `serde` feature not compiling for `wgpu-types`. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - Fix the validation of vertex and index ranges. By @nical in [#5144](https://github.com/gfx-rs/wgpu/pull/5144) and [#5156](https://github.com/gfx-rs/wgpu/pull/5156)
-- Device lost callbacks are invoked when replaced and when global is dropped. By @bradwerth in [#5168](https://github.com/gfx-rs/wgpu/pull/5168)
 - Fix panic when creating a surface while no backend is available. By @wumpf [#5166](https://github.com/gfx-rs/wgpu/pull/5166)
 - Correctly compute minimum buffer size for array-typed `storage` and `uniform` vars. By @jimblandy [#5222](https://github.com/gfx-rs/wgpu/pull/5222)
 - Fix timeout when presenting a surface where no work has been done. By @waywardmonkeys in [#5200](https://github.com/gfx-rs/wgpu/pull/5200)
 - Simplify and speed up the allocation of internal IDs. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
-- Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
 - Fix behavior of `extractBits` and `insertBits` when `offset + count` overflows the bit width. By @cwfitzgerald in [#5305](https://github.com/gfx-rs/wgpu/pull/5305)
 - Fix registry leaks with de-duplicated resources. By @nical in [#5244](https://github.com/gfx-rs/wgpu/pull/5244)
 - Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
-- Fix missing validation for `Device::clear_buffer` where `offset + size buffer.size` was not checked when `size` was omitted. By @ErichDonGubler in [#5282](https://github.com/gfx-rs/wgpu/pull/5282).
 - Fix linking when targeting android. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
 
-#### glsl-in
-
-- Fix code generation from nested loops. By @cwfitzgerald and @teoxoy in [#5311](https://github.com/gfx-rs/wgpu/pull/5311)
-
-#### WGL
-
-- In Surface::configure and Surface::present, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
-
 #### Naga
-- Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
 - In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 - GLSL 410 does not support layout(binding = ...), enable only for GLSL 420. By @bes in [#5357](https://github.com/gfx-rs/wgpu/pull/5357)
 
@@ -177,6 +152,100 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 #### Vulkan
 
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
+
+## v0.19.3 (2024-03-01)
+
+This release includes `wgpu`, `wgpu-core`, and `wgpu-hal`. All other crates are unchanged.
+
+### Major Changes
+
+#### Vendored WebGPU Bindings from `web_sys` 
+
+**`--cfg=web_sys_unstable_apis` is no longer needed in your `RUSTFLAGS` to compile for WebGPU!!!**
+
+While WebGPU's javascript api is stable in the browsers, the `web_sys` bindings for WebGPU are still improving. As such they are hidden behind the special cfg `--cfg=web_sys_unstable_apis` and are not available by default. Everyone who wanted to use our WebGPU backend needed to enable this cfg in their `RUSTFLAGS`. This was very inconvenient and made it hard to use WebGPU, especially when WebGPU is enabled by default. Additionally, the unstable APIs don't adhere to semver, so there were repeated breakages.
+
+To combat this problem we have decided to vendor the `web_sys` bindings for WebGPU within the crate. Notably we are not forking the bindings, merely vendoring, so any improvements we make to the bindings will be contributed directly to upstream `web_sys`.
+
+By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
+
+### Bug Fixes
+
+#### General
+
+- Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
+
+#### Android
+- Fix linking error when targeting android without `winit`. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
+
+
+## v0.19.2 (2024-02-29)
+
+This release includes `wgpu`, `wgpu-core`, `wgpu-hal`, `wgpu-types`, and `naga`. All other crates are unchanged.
+
+### Added/New Features
+
+#### General
+- `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
+
+#### OpenGL
+- Log an error when OpenGL texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
+
+#### `wgsl-out`
+- Learned to generate acceleration structure types. By @JMS55 in [#5261](https://github.com/gfx-rs/wgpu/pull/5261)
+
+### Documentation
+- Fix link in `wgpu::Instance::create_surface` documentation. By @HexoKnight in [#5280](https://github.com/gfx-rs/wgpu/pull/5280).
+- Fix typo in `wgpu::CommandEncoder::clear_buffer` documentation. By @PWhiddy in [#5281](https://github.com/gfx-rs/wgpu/pull/5281).
+- `Surface` configuration incorrectly claimed that `wgpu::Instance::create_surface` was unsafe. By @hackaugusto in [#5265](https://github.com/gfx-rs/wgpu/pull/5265).
+
+### Bug Fixes
+
+#### General
+- Device lost callbacks are invoked when replaced and when global is dropped. By @bradwerth in [#5168](https://github.com/gfx-rs/wgpu/pull/5168)
+- Fix performance regression when allocating a large amount of resources of the same type. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
+- Fix docs.rs wasm32 builds. By @cwfitzgerald in [#5310](https://github.com/gfx-rs/wgpu/pull/5310)
+- Improve error message when binding count limit hit. By @hackaugusto in [#5298](https://github.com/gfx-rs/wgpu/pull/5298)
+- Remove an unnecessary `clone` during GLSL shader ingestion. By @a1phyr in [#5118](https://github.com/gfx-rs/wgpu/pull/5118).
+- Fix missing validation for `Device::clear_buffer` where `offset + size > buffer.size` was not checked when `size` was omitted. By @ErichDonGubler in [#5282](https://github.com/gfx-rs/wgpu/pull/5282).
+
+#### DX12
+- Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
+
+#### OpenGL
+- Fix internal format for the `Etc2Rgba8Unorm` format. By @andristarr in [#5178](https://github.com/gfx-rs/wgpu/pull/5178)
+- Try to load `libX11.so.6` in addition to `libX11.so` on linux. [#5307](https://github.com/gfx-rs/wgpu/pull/5307)
+- Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
+
+#### `glsl-in`
+
+- Fix code generation from nested loops. By @cwfitzgerald and @teoxoy in [#5311](https://github.com/gfx-rs/wgpu/pull/5311)
+
+
+## v0.19.1 (2024-01-22)
+
+This release includes `wgpu` and `wgpu-hal`. The rest of the crates are unchanged since 0.19.0.
+
+### Bug Fixes
+
+#### DX12
+
+- Properly register all swapchain buffers to prevent error on surface present. By @dtzxporter in [#5091](https://github.com/gfx-rs/wgpu/pull/5091)
+- Check for extra null states when creating resources. By @nical in [#5096](https://github.com/gfx-rs/wgpu/pull/5096)
+- Fix depth-only and stencil-only views causing crashes. By @teoxoy in [#5100](https://github.com/gfx-rs/wgpu/pull/5100)
+
+#### OpenGL
+
+- In Surface::configure and Surface::present on Windows, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
+
+#### WebGPU
+
+- Improve error message when compiling WebGPU backend on wasm without the `web_sys_unstable_apis` set. By @rukai in [#5104](https://github.com/gfx-rs/wgpu/pull/5104)
+
+### Documentation
+
+- Document Wayland specific behavior related to `SurfaceTexture::present`. By @i509VCB in [#5093](https://github.com/gfx-rs/wgpu/pull/5093).
+
 
 ## v0.19.0 (2024-01-17)
 
