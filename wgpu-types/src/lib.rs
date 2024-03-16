@@ -337,7 +337,7 @@ bitflags::bitflags! {
         /// For arbitrary timestamp write commands on encoders refer to [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`].
         /// For arbitrary timestamp write commands on passes refer to [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`].
         ///
-        /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer,
+        /// They must be resolved using [`CommandEncoder::resolve_query_set`] into a buffer,
         /// then the result must be multiplied by the timestamp period [`Queue::get_timestamp_period`]
         /// to get the timestamp in nanoseconds. Multiple timestamps can then be diffed to get the
         /// time for operations between them to finish.
@@ -483,7 +483,7 @@ bitflags::bitflags! {
         /// performed between the start and stop call. Call [`RenderPass::begin_pipeline_statistics_query`] to start
         /// a query, then call [`RenderPass::end_pipeline_statistics_query`] to stop one.
         ///
-        /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer.
+        /// They must be resolved using [`CommandEncoder::resolve_query_set`] into a buffer.
         /// The rules on how these resolve into buffers are detailed in the documentation for [`PipelineStatisticsTypes`].
         ///
         /// Supported Platforms:
