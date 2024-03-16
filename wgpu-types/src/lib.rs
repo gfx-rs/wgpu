@@ -682,7 +682,14 @@ bitflags::bitflags! {
         /// Allows the user to call [`RenderPass::set_push_constants`], provide a non-empty array
         /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_push_constant_size`].
         ///
-        /// A block of push constants can be declared with `layout(push_constant) uniform Name {..}` in shaders.
+        /// A block of push constants can be declared in WGSL with `var<push_constant>`:
+        ///
+        /// ```rust,ignore
+        /// struct PushConstants { example: f32, }
+        /// var<push_constant> c: PushConstants;
+        /// ```
+        ///
+        /// In GLSL, this corresponds to `layout(push_constant) uniform Name {..}`.
         ///
         /// Supported platforms:
         /// - DX12
