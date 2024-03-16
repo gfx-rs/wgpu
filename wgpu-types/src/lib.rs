@@ -480,8 +480,8 @@ bitflags::bitflags! {
         // API:
 
         /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
-        /// performed between the start and stop call. Call [`RenderPassEncoder::begin_pipeline_statistics_query`] to start
-        /// a query, then call [`RenderPassEncoder::end_pipeline_statistics_query`] to stop one.
+        /// performed between the start and stop call. Call [`RenderPass::begin_pipeline_statistics_query`] to start
+        /// a query, then call [`RenderPass::end_pipeline_statistics_query`] to stop one.
         ///
         /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer.
         /// The rules on how these resolve into buffers are detailed in the documentation for [`PipelineStatisticsTypes`].
@@ -511,8 +511,8 @@ bitflags::bitflags! {
         /// Implies [`Features::TIMESTAMP_QUERY`] & [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] is supported.
         ///
         /// Additionally allows for timestamp queries to be used inside render & compute passes using:
-        /// - [`RenderPassEncoder::write_timestamp`]
-        /// - [`ComputePassEncoder::write_timestamp`]
+        /// - [`RenderPass::write_timestamp`]
+        /// - [`ComputePass::write_timestamp`]
         ///
         /// Supported platforms:
         /// - Vulkan
