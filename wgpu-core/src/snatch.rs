@@ -77,7 +77,7 @@ impl SnatchLock {
 
     /// Request read access to snatchable resources.
     pub fn read(&self) -> SnatchGuard {
-        SnatchGuard(self.lock.read())
+        SnatchGuard(self.lock.read_recursive())
     }
 
     /// Request write access to snatchable resources.
