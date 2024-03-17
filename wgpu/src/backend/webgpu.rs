@@ -1493,7 +1493,10 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             descriptor.label(label);
         }
-        create_identified(device_data.0.create_shader_module(&descriptor))
+        let shader_module = device_data.0.create_shader_module(&descriptor);
+        let _compilation_info = shader_module.get_compilation_info();
+        let (id, data) = create_identified(shader_module);
+        (id, data)
     }
 
     unsafe fn device_create_shader_module_spirv(

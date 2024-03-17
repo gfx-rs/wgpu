@@ -1,12 +1,13 @@
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
+    CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
-    SurfaceStatus, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
+    SourceSpan, StoreOp, SurfaceStatus, SurfaceTargetUnsafe, TextureDescriptor,
+    TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -22,8 +23,11 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::device::DeviceLostClosure;
+use wgc::{
+    command::{bundle_ffi::*, compute_ffi::*, render_ffi::*},
+    pipeline::CreateShaderModuleError,
+};
 use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
@@ -852,6 +856,7 @@ impl crate::Context for ContextWgpuCore {
             device => self.0.device_create_shader_module(*device, &descriptor, source, None)
         );
         if let Some(cause) = error {
+            let _info = CompilationInfo::from(&cause);
             self.handle_error(
                 &device_data.error_sink,
                 cause,
@@ -879,6 +884,7 @@ impl crate::Context for ContextWgpuCore {
             device => self.0.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), None)
         );
         if let Some(cause) = error {
+            let _info = CompilationInfo::from(&cause);
             self.handle_error(
                 &device_data.error_sink,
                 cause,
@@ -2989,6 +2995,77 @@ impl fmt::Debug for ErrorSinkRaw {
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
     panic!("wgpu error: {err}\n");
+}
+
+fn span_to_source_span(span: &naga::Span) -> Option<SourceSpan> {
+    span.to_range().map(|range| SourceSpan {
+        offset: range.start as u32,
+        length: range.len() as u32,
+    })
+}
+
+impl From<&CreateShaderModuleError> for CompilationInfo {
+    fn from(value: &CreateShaderModuleError) -> Self {
+        let message = match value {
+            #[cfg(feature = "wgsl")]
+            CreateShaderModuleError::Parsing(e) => CompilationMessage {
+                message: e.to_string(),
+                message_type: CompilationMessageType::Error,
+                span: e
+                    .inner
+                    .labels()
+                    .next()
+                    .and_then(|(span, _)| span_to_source_span(&span)),
+            },
+            #[cfg(feature = "glsl")]
+            CreateShaderModuleError::ParsingGlsl(e) => CompilationMessage {
+                message: e.to_string(),
+                message_type: CompilationMessageType::Error,
+                span: e
+                    .inner
+                    .errors
+                    .first()
+                    .and_then(|e| span_to_source_span(&e.meta)),
+            },
+            #[cfg(feature = "spirv")]
+            CreateShaderModuleError::ParsingSpirV(e) => CompilationMessage {
+                message: e.to_string(),
+                message_type: CompilationMessageType::Error,
+                span: None,
+            },
+            CreateShaderModuleError::Validation(e) => CompilationMessage {
+                message: e.to_string(),
+                message_type: CompilationMessageType::Error,
+                span: e
+                    .inner
+                    .spans()
+                    .next()
+                    .and_then(|(span, _)| span_to_source_span(span)),
+            },
+            CreateShaderModuleError::MissingFeatures(_)
+            | CreateShaderModuleError::InvalidGroupIndex { .. } => CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                span: None,
+            },
+            // Device errors are reported through the error sink, and are not compilation errors.
+            // Same goes for native shader module generation errors.
+            CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
+                return CompilationInfo {
+                    messages: Vec::new(),
+                }
+            }
+            _ => CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                span: None,
+            },
+        };
+
+        CompilationInfo {
+            messages: vec![message],
+        }
+    }
 }
 
 #[derive(Debug)]
