@@ -1,7 +1,7 @@
 #![allow(clippy::manual_strip)]
 #[allow(unused_imports)]
 use std::fs;
-use std::{error::Error, fmt, io::Read, path::Path, str::FromStr};
+use std::{borrow::Cow, error::Error, fmt, io::Read, path::Path, str::FromStr, sync::Arc};
 
 /// Translate shaders to different formats.
 #[derive(argh::FromArgs, Debug, Clone)]
@@ -259,13 +259,53 @@ fn main() {
 
 /// Error type for the CLI
 #[derive(Debug, Clone)]
-struct CliError(&'static str);
+struct CliError {
+    msg: Cow<'static, str>,
+    source: Option<Arc<dyn Error>>,
+}
+
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.msg)?;
+        if let Some(source) = self.source.as_ref() {
+            write!(f, " {}", source)?;
+        }
+        Ok(())
     }
 }
+
 impl std::error::Error for CliError {}
+
+impl From<&'static str> for CliError {
+    fn from(msg: &'static str) -> Self {
+        CliError {
+            msg: msg.into(),
+            source: None,
+        }
+    }
+}
+
+impl From<String> for CliError {
+    fn from(msg: String) -> Self {
+        CliError {
+            msg: msg.into(),
+            source: None,
+        }
+    }
+}
+
+impl CliError {
+    fn context<E, O>(self, e: E) -> Self
+    where
+        E: ToOwned<Owned = O>,
+        O: Error + 'static,
+    {
+        Self {
+            msg: self.msg,
+            source: Some(Arc::new(e.to_owned())),
+        }
+    }
+}
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
@@ -284,7 +324,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Update parameters from commandline arguments
     if let Some(bits) = args.validate {
         params.validation_flags = naga::valid::ValidationFlags::from_bits(bits)
-            .ok_or(CliError("Invalid validation flags"))?;
+            .ok_or(CliError::from("Invalid validation flags"))?;
     }
     if let Some(policy) = args.index_bounds_check_policy {
         params.bounds_check_policies.index = policy.0;
@@ -340,7 +380,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::io::stdin().lock().read_to_end(&mut input)?;
         (Path::new(path), input)
     } else {
-        return Err(CliError("Input file path is not specified").into());
+        return Err(CliError::from("Input file path is not specified").into());
     };
 
     let Parsed {
@@ -467,9 +507,9 @@ fn parse_input(
 ) -> Result<Parsed, Box<dyn std::error::Error>> {
     let (module, input_text) = match Path::new(&input_path)
         .extension()
-        .ok_or(CliError("Input filename has no extension"))?
+        .ok_or(CliError::from("Input filename has no extension"))?
         .to_str()
-        .ok_or(CliError("Input filename not valid unicode"))?
+        .ok_or(CliError::from("Input filename not valid unicode"))?
     {
         "bin" => (bincode::deserialize(&input)?, None),
         "spv" => naga::front::spv::parse_u8_slice(&input, &params.spv_in).map(|m| (m, None))?,
@@ -503,9 +543,9 @@ fn parse_input(
                                     let internal_name = input_path.to_string_lossy();
                                     match Path::new(&internal_name[..internal_name.len()-5])
                                         .extension()
-                                        .ok_or(CliError("Input filename ending with .glsl has no internal extension"))?
+                                        .ok_or(CliError::from("Input filename ending with .glsl has no internal extension"))?
                                         .to_str()
-                                        .ok_or(CliError("Input filename not valid unicode"))?
+                                        .ok_or(CliError::from("Input filename not valid unicode"))?
                                     {
                                         "vert" => naga::ShaderStage::Vertex,
                                         "frag" => naga::ShaderStage::Fragment,
@@ -528,7 +568,7 @@ fn parse_input(
                 Some(input),
             )
         }
-        _ => return Err(CliError("Unknown input file extension").into()),
+        _ => return Err(CliError::from("Unknown input file extension").into()),
     };
 
     Ok(Parsed { module, input_text })
@@ -542,9 +582,9 @@ fn write_output(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match Path::new(&output_path)
         .extension()
-        .ok_or(CliError("Output filename has no extension"))?
+        .ok_or(CliError::from("Output filename has no extension"))?
         .to_str()
-        .ok_or(CliError("Output filename not valid unicode"))?
+        .ok_or(CliError::from("Output filename not valid unicode"))?
     {
         "txt" => {
             use std::io::Write;
@@ -569,7 +609,7 @@ fn write_output(
             let pipeline_options = msl::PipelineOptions::default();
             let (msl, _) = msl::write_string(
                 module,
-                info.as_ref().ok_or(CliError(
+                info.as_ref().ok_or(CliError::from(
                     "Generating metal output requires validation to \
                      succeed, and it failed in a previous step",
                 ))?,
@@ -601,7 +641,7 @@ fn write_output(
 
             let spv = spv::write_vec(
                 module,
-                info.as_ref().ok_or(CliError(
+                info.as_ref().ok_or(CliError::from(
                     "Generating SPIR-V output requires validation to \
                      succeed, and it failed in a previous step",
                 ))?,
@@ -639,7 +679,7 @@ fn write_output(
             let mut writer = glsl::Writer::new(
                 &mut buffer,
                 module,
-                info.as_ref().ok_or(CliError(
+                info.as_ref().ok_or(CliError::from(
                     "Generating glsl output requires validation to \
                      succeed, and it failed in a previous step",
                 ))?,
@@ -664,7 +704,7 @@ fn write_output(
             writer
                 .write(
                     module,
-                    info.as_ref().ok_or(CliError(
+                    info.as_ref().ok_or(CliError::from(
                         "Generating hlsl output requires validation to \
                          succeed, and it failed in a previous step",
                     ))?,
@@ -677,7 +717,7 @@ fn write_output(
 
             let wgsl = wgsl::write_string(
                 module,
-                info.as_ref().ok_or(CliError(
+                info.as_ref().ok_or(CliError::from(
                     "Generating wgsl output requires validation to \
                      succeed, and it failed in a previous step",
                 ))?,
