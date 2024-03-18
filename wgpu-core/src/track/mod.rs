@@ -100,6 +100,7 @@ mod metadata;
 mod range;
 mod stateless;
 mod texture;
+pub mod pool;
 
 use crate::{
     binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,

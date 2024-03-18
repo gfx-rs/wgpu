@@ -29,6 +29,17 @@ impl<T: Resource> ResourceMetadata<T> {
         }
     }
 
+    pub(super) fn new_with_vecs(bitvec: BitVec<usize>, vec: Vec<Option<Arc<T>>>) -> Self {
+        Self {
+            owned: bitvec,
+            resources: vec,
+        }
+    }
+
+    pub(super) fn return_vecs(&mut self) -> (&mut BitVec<usize>, &mut Vec<Option<Arc<T>>>) {
+        (&mut self.owned, &mut self.resources)
+    }
+
     /// Returns the number of indices we can accommodate.
     pub(super) fn size(&self) -> usize {
         self.owned.len()

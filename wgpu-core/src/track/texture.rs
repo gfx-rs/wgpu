@@ -19,7 +19,7 @@
  *   will treat the contents as junk.
 !*/
 
-use super::{
+use super::{pool::{BitvecPool, VecPool}, 
     range::RangedStates, PendingTransition, PendingTransitionList, ResourceTracker, TrackerIndex,
 };
 use crate::{
@@ -204,16 +204,25 @@ impl<A: HalApi> TextureBindGroupState<A> {
     }
 }
 
+static USES_POOL: VecPool = VecPool::new();
+
 /// Container for corresponding simple and complex texture states.
 #[derive(Debug)]
 pub(crate) struct TextureStateSet {
     simple: Vec<TextureUses>,
     complex: FastHashMap<usize, ComplexTextureState>,
 }
+
+impl Drop for TextureStateSet {
+    fn drop(&mut self) {
+        unsafe { USES_POOL.put(&mut self.simple) }
+    }
+}
+
 impl TextureStateSet {
     fn new() -> Self {
         Self {
-            simple: Vec::new(),
+            simple: unsafe { USES_POOL.get() },
             complex: FastHashMap::default(),
         }
     }
@@ -235,12 +244,22 @@ pub(crate) struct TextureUsageScope<A: HalApi> {
     metadata: ResourceMetadata<Texture<A>>,
 }
 
+static RES_POOL: VecPool = VecPool::new();
+static RES_BIT_POOL: BitvecPool = BitvecPool::new();
+
+impl<A: HalApi> Drop for TextureUsageScope<A> {
+    fn drop(&mut self) {
+        let (bits, res) = self.metadata.return_vecs();
+        unsafe { RES_POOL.put(res) };
+        RES_BIT_POOL.put(bits);
+    }
+}
+
 impl<A: HalApi> TextureUsageScope<A> {
     pub fn new() -> Self {
         Self {
             set: TextureStateSet::new(),
-
-            metadata: ResourceMetadata::new(),
+            metadata: ResourceMetadata::new_with_vecs(RES_BIT_POOL.get(), unsafe { RES_POOL.get() }),
         }
     }
 
