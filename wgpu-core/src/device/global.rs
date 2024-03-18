@@ -2324,7 +2324,7 @@ impl Global {
                     validation_key,
                 );
 
-                let deleted = vec.splice(..1, header_contents).collect::<Vec<_>>();
+                let deleted = vec.splice(..0, header_contents).collect::<Vec<_>>();
                 debug_assert!(deleted.is_empty());
 
                 return Some(vec);
