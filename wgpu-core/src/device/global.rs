@@ -2345,12 +2345,9 @@ impl Global {
                 return None;
             }
             if let Some(raw_cache) = cache.raw.as_ref() {
-                let vec = unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) };
-                let Some(mut vec) = vec else { return None };
-                let Some(validation_key) = cache.device.raw().pipeline_cache_validation_key()
-                else {
-                    return None;
-                };
+                let mut vec = unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) }?;
+                let validation_key = cache.device.raw().pipeline_cache_validation_key()?;
+
                 let mut header_contents = [0; pipeline_cache::HEADER_LENGTH];
                 pipeline_cache::add_cache_header(
                     &mut header_contents,

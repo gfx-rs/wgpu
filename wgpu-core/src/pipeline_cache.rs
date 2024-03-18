@@ -94,7 +94,7 @@ pub fn add_cache_header(
     validation_key: [u8; 16],
 ) {
     assert_eq!(in_region.len(), HEADER_LENGTH);
-    let data_hash = hash(&data);
+    let data_hash = hash(data);
     let header = PipelineCacheHeader {
         adapter_key: adapter_key(adapter)
             .expect("Called add_cache_header for an adapter which doesn't support cache data. This is a wgpu internal bug"),
@@ -234,7 +234,7 @@ struct Reader<'a> {
 
 impl<'a> Reader<'a> {
     fn read_byte(&mut self) -> Option<u8> {
-        let res = *self.data.get(0)?;
+        let res = *self.data.first()?;
         self.total_read += 1;
         self.data = &self.data[1..];
         Some(res)
@@ -274,7 +274,7 @@ impl<'a> Writer<'a> {
         if N > self.data.len() {
             return None;
         }
-        let data = std::mem::replace(&mut self.data, &mut []);
+        let data = std::mem::take(&mut self.data);
         let (start, data) = data.split_at_mut(N);
         self.data = data;
         start.copy_from_slice(array);

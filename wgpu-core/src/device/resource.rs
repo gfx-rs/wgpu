@@ -3532,7 +3532,7 @@ impl<A: HalApi> Device<A> {
             .zip(self.raw().pipeline_cache_validation_key())
         {
             let data = pipeline_cache::validate_pipeline_cache(
-                &data,
+                data,
                 &self.adapter.raw.info,
                 validation_key,
             );
