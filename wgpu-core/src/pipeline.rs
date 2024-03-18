@@ -336,7 +336,7 @@ pub enum CreatePipelineCacheError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("Pipeline cache validation failed")]
-    Validation(PipelineCacheValidationError),
+    Validation(#[from] PipelineCacheValidationError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error("Internal error: {0}")]
@@ -349,7 +349,6 @@ impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
             hal::PipelineCacheError::Device(device) => {
                 CreatePipelineCacheError::Device(device.into())
             }
-            hal::PipelineCacheError::Validation => CreatePipelineCacheError::Validation,
         }
     }
 }
