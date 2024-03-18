@@ -890,6 +890,11 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_INT64 = 1 << 55;
+        /// Allows the use of pipeline cache objects
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        const PIPELINE_CACHE = 1 << 56;
     }
 }
 

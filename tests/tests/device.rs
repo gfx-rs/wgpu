@@ -485,6 +485,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     multisample: wgpu::MultisampleState::default(),
                     fragment: None,
                     multiview: None,
+                    cache: None,
                 });
         });
 
@@ -496,6 +497,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     layout: None,
                     module: &shader_module,
                     entry_point: "",
+                    cache: None,
                 });
         });
 

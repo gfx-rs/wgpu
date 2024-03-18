@@ -119,6 +119,10 @@ Bottom level categories:
 
 - Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
 
+#### Vulkan
+
+- Added a top-level `PipelineCache` resource to allow using Vulkan pipeline caches. By @DJMcNab in [#5319](https://github.com/gfx-rs/wgpu/pull/5319)
+
 ### Bug Fixes
 
 #### General

@@ -269,6 +269,7 @@ impl<A: hal::Api> Example<A> {
                 write_mask: wgt::ColorWrites::default(),
             })],
             multiview: None,
+            cache: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 

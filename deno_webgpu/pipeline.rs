@@ -113,6 +113,7 @@ pub fn op_webgpu_create_compute_pipeline(
             entry_point: Some(Cow::from(compute.entry_point)),
             // TODO(lucacasonato): support args.compute.constants
         },
+        cache: None,
     };
     let implicit_pipelines = match layout {
         GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,
@@ -386,6 +387,7 @@ pub fn op_webgpu_create_render_pipeline(
         multisample: args.multisample,
         fragment,
         multiview: None,
+        cache: None,
     };
 
     let implicit_pipelines = match args.layout {

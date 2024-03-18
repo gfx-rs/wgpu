@@ -142,6 +142,12 @@ pub enum PipelineError {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
+pub enum PipelineCacheError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum SurfaceError {
     #[error("Surface is lost")]
     Lost,
@@ -214,6 +220,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ShaderModule: fmt::Debug + WasmNotSendSync;
     type RenderPipeline: fmt::Debug + WasmNotSendSync;
     type ComputePipeline: fmt::Debug + WasmNotSendSync;
+    type PipelineCache: fmt::Debug + WasmNotSendSync;
 
     type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
 }
@@ -373,6 +380,14 @@ pub trait Device<A: Api>: WasmNotSendSync {
         desc: &ComputePipelineDescriptor<A>,
     ) -> Result<A::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: A::ComputePipeline);
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Result<A::PipelineCache, PipelineCacheError>;
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        None
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: A::PipelineCache);
 
     unsafe fn create_query_set(
         &self,
@@ -392,6 +407,11 @@ pub trait Device<A: Api>: WasmNotSendSync {
 
     unsafe fn start_capture(&self) -> bool;
     unsafe fn stop_capture(&self);
+
+    #[allow(unused_variables)]
+    unsafe fn pipeline_cache_get_data(&self, cache: &A::PipelineCache) -> Option<Vec<u8>> {
+        None
+    }
 
     unsafe fn create_acceleration_structure(
         &self,
@@ -1299,6 +1319,12 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     pub layout: &'a A::PipelineLayout,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStage<'a, A>,
+    pub cache: Option<&'a A::PipelineCache>,
+}
+
+pub struct PipelineCacheDescriptor<'a> {
+    pub label: Label<'a>,
+    pub data: Option<&'a [u8]>,
 }
 
 /// Describes how the vertex buffer is interpreted.
@@ -1335,6 +1361,7 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    pub cache: Option<&'a A::PipelineCache>,
 }
 
 #[derive(Debug, Clone)]

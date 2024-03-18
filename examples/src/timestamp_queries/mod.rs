@@ -298,6 +298,7 @@ fn compute_pass(
         layout: None,
         module,
         entry_point: "main_cs",
+        cache: None,
     });
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -363,8 +364,8 @@ fn render_pass(
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
+        cache: None,
     });
-
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("rendertarget"),
         size: wgpu::Extent3d {

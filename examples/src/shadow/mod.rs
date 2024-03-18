@@ -525,6 +525,7 @@ impl crate::framework::Example for Example {
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
             Pass {
@@ -657,6 +658,7 @@ impl crate::framework::Example for Example {
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
             Pass {

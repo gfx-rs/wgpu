@@ -100,6 +100,7 @@ async fn run(_path: Option<String>) {
         layout: Some(&pipeline_layout),
         module: &shader,
         entry_point: "main",
+        cache: None,
     });
 
     log::info!("Wgpu context set up.");

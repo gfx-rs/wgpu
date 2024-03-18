@@ -98,6 +98,11 @@ pub enum Action<'a> {
         implicit_context: Option<super::ImplicitPipelineContext>,
     },
     DestroyRenderPipeline(id::RenderPipelineId),
+    CreatePipelineCache {
+        id: id::PipelineCacheId,
+        desc: crate::pipeline::PipelineCacheDescriptor<'a>,
+    },
+    DestroyPipelineCache(id::PipelineCacheId),
     CreateRenderBundle {
         id: id::RenderBundleId,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,

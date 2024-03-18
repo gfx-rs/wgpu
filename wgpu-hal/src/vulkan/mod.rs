@@ -73,6 +73,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -340,6 +341,7 @@ struct DeviceShared {
     enabled_extensions: Vec<&'static CStr>,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
+    pipeline_cache_validation_key: [u8; 16],
     timestamp_period: f32,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -512,6 +514,11 @@ pub struct RenderPipeline {
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: vk::Pipeline,
+}
+
+#[derive(Debug)]
+pub struct PipelineCache {
+    raw: vk::PipelineCache,
 }
 
 #[derive(Debug)]
