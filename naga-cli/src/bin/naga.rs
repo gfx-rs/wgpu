@@ -561,23 +561,19 @@ fn parse_input(
 ) -> Result<Parsed, Box<dyn std::error::Error>> {
     let input_kind = match params.input_kind {
         Some(kind) => kind,
-        None => {
-            let ext = input_path
+        None => InputKind::from_str(
+            input_path
                 .extension()
                 .ok_or(CliError::from("Input filename has no extension"))?
                 .to_str()
-                .ok_or(CliError::from("Input filename not valid unicode"))?;
-            InputKind::from_str(ext).or_else(|_| {
-                InputKind::from_str(
-                    Path::new(ext)
-                        .extension()
-                        .ok_or(CliError::from("Input filename has unknown extension"))?
-                        .to_str()
-                        .ok_or(CliError::from("Input filename not valid unicode"))?,
-                )
-                .map_err(|e| CliError::from(e).context(CliError::from("from input filename")))
-            })?
-        }
+                .ok_or(CliError::from("Input filename not valid unicode"))?,
+        )
+        .map_err(|e| {
+            CliError::from(e).context(CliError::from(format!(
+                "for input filename {}",
+                input_path.display()
+            )))
+        })?,
     };
     let (module, input_text) = match input_kind {
         InputKind::Bincode => (bincode::deserialize(&input)?, None),
