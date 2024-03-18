@@ -7,7 +7,10 @@
 
 use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
-use super::{pool::{BitvecPool, VecPool}, PendingTransition, ResourceTracker, TrackerIndex};
+use super::{
+    pool::{BitvecPool, VecPool},
+    PendingTransition, ResourceTracker, TrackerIndex,
+};
 use crate::{
     hal_api::HalApi,
     id::BufferId,
@@ -132,7 +135,9 @@ impl<A: HalApi> BufferUsageScope<A> {
         Self {
             // safety: not safe if we have multiple HalApis in a single execution
             state: unsafe { STATE_POOL.get() },
-            metadata: ResourceMetadata::new_with_vecs(RES_BIT_POOL.get(), unsafe { RES_POOL.get() }),
+            metadata: ResourceMetadata::new_with_vecs(RES_BIT_POOL.get(), unsafe {
+                RES_POOL.get()
+            }),
         }
     }
 

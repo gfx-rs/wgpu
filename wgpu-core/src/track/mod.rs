@@ -97,10 +97,10 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 
 mod buffer;
 mod metadata;
+pub mod pool;
 mod range;
 mod stateless;
 mod texture;
-pub mod pool;
 
 use crate::{
     binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,

@@ -7,13 +7,23 @@ pub struct VecPool {
 
 impl VecPool {
     pub const fn new() -> Self {
-        Self{ pool: OnceCell::new() }
+        Self {
+            pool: OnceCell::new(),
+        }
     }
 
     /// safety: a pool instance must only ever be called with a single type T to ensure transmute is sound
     /// (`#[repr(rust)]` does not guarantee equal member order for different monomorphs)
     pub unsafe fn get<T>(&self) -> Vec<T> {
-        unsafe { std::mem::transmute(self.pool.get_or_init(|| Default::default()).lock().pop().unwrap_or_default()) }
+        unsafe {
+            std::mem::transmute(
+                self.pool
+                    .get_or_init(Default::default)
+                    .lock()
+                    .pop()
+                    .unwrap_or_default(),
+            )
+        }
     }
 
     /// safety: a pool instance must only ever be called with a single type T to ensure transmute is sound
@@ -22,7 +32,7 @@ impl VecPool {
         let mut vec = std::mem::take(vec);
         vec.clear();
         let vec = unsafe { std::mem::transmute(vec) };
-        self.pool.get().unwrap().lock().push(vec);
+        self.pool.get_or_init(Default::default).lock().push(vec);
     }
 }
 
@@ -32,16 +42,22 @@ pub struct BitvecPool {
 
 impl BitvecPool {
     pub const fn new() -> Self {
-        Self{ pool: OnceCell::new() }
+        Self {
+            pool: OnceCell::new(),
+        }
     }
 
     pub fn get(&self) -> BitVec<usize> {
-        self.pool.get_or_init(|| Default::default()).lock().pop().unwrap_or_default()
+        self.pool
+            .get_or_init(Default::default)
+            .lock()
+            .pop()
+            .unwrap_or_default()
     }
 
     pub fn put(&self, vec: &mut BitVec<usize>) {
         let mut vec = std::mem::take(vec);
         vec.clear();
-        self.pool.get().unwrap().lock().push(vec);
+        self.pool.get_or_init(Default::default).lock().push(vec);
     }
 }

@@ -19,8 +19,10 @@
  *   will treat the contents as junk.
 !*/
 
-use super::{pool::{BitvecPool, VecPool}, 
-    range::RangedStates, PendingTransition, PendingTransitionList, ResourceTracker, TrackerIndex,
+use super::{
+    pool::{BitvecPool, VecPool},
+    range::RangedStates,
+    PendingTransition, PendingTransitionList, ResourceTracker, TrackerIndex,
 };
 use crate::{
     hal_api::HalApi,
@@ -259,7 +261,9 @@ impl<A: HalApi> TextureUsageScope<A> {
     pub fn new() -> Self {
         Self {
             set: TextureStateSet::new(),
-            metadata: ResourceMetadata::new_with_vecs(RES_BIT_POOL.get(), unsafe { RES_POOL.get() }),
+            metadata: ResourceMetadata::new_with_vecs(RES_BIT_POOL.get(), unsafe {
+                RES_POOL.get()
+            }),
         }
     }
 
