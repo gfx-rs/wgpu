@@ -1968,6 +1968,9 @@ impl crate::Device for super::Device {
 
         Ok(PipelineCache { raw })
     }
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        Some(self.shared.pipeline_cache_validation_key)
+    }
     unsafe fn destroy_pipeline_cache(&self, cache: PipelineCache) {
         unsafe { self.shared.raw.destroy_pipeline_cache(cache.raw, None) }
     }

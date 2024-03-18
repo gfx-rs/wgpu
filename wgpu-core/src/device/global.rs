@@ -2335,6 +2335,7 @@ impl Global {
     }
 
     pub fn pipeline_cache_get_data<A: HalApi>(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
+        use crate::pipeline_cache;
         api_log!("PipelineCache::get_data");
         let hub = A::hub(self);
 
@@ -2344,7 +2345,24 @@ impl Global {
                 return None;
             }
             if let Some(raw_cache) = cache.raw.as_ref() {
-                return unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) };
+                let vec = unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) };
+                let Some(mut vec) = vec else { return None };
+                let Some(validation_key) = cache.device.raw().pipeline_cache_validation_key()
+                else {
+                    return None;
+                };
+                let mut header_contents = [0; pipeline_cache::HEADER_LENGTH];
+                pipeline_cache::add_cache_header(
+                    &mut header_contents,
+                    &vec,
+                    &cache.device.adapter.raw.info,
+                    validation_key,
+                );
+
+                let deleted = vec.splice(..1, header_contents).collect::<Vec<_>>();
+                debug_assert!(deleted.is_empty());
+
+                return Some(vec);
             }
         }
         None

@@ -3524,17 +3524,33 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
     ) -> Result<pipeline::PipelineCache<A>, pipeline::CreatePipelineCacheError> {
+        use crate::pipeline_cache;
         self.require_features(wgt::Features::PIPELINE_CACHE)?;
-        let mut cache_desc = hal::PipelineCacheDescriptor {
-            data: desc.data.as_deref(),
+        let data = if let Some((data, validation_key)) = desc
+            .data
+            .as_ref()
+            .zip(self.raw().pipeline_cache_validation_key())
+        {
+            let data = pipeline_cache::validate_pipeline_cache(
+                &data,
+                &self.adapter.raw.info,
+                validation_key,
+            );
+            match data {
+                Ok(data) => Some(data),
+                Err(e) if e.was_avoidable() || !desc.fallback => return Err(e.into()),
+                // If the error was unavoidable and we are asked to fallback, do so
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+        let cache_desc = hal::PipelineCacheDescriptor {
+            data,
             label: desc.label.to_hal(self.instance_flags),
         };
         let raw = match unsafe { self.raw().create_pipeline_cache(&cache_desc) } {
             Ok(raw) => raw,
-            Err(hal::PipelineCacheError::Validation) if desc.fallback => {
-                debug_assert!(cache_desc.data.take().is_some());
-                unsafe { self.raw().create_pipeline_cache(&cache_desc)? }
-            }
             Err(e) => return Err(e.into()),
         };
         let cache = pipeline::PipelineCache {

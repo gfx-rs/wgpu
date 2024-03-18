@@ -336,8 +336,6 @@ pub enum PipelineError {
 pub enum PipelineCacheError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Pipeline cache had a validation error")]
-    Validation,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
@@ -624,6 +622,9 @@ pub trait Device: WasmNotSendSync {
         &self,
         desc: &PipelineCacheDescriptor<'_>,
     ) -> Result<A::PipelineCache, PipelineCacheError>;
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        None
+    }
     unsafe fn destroy_pipeline_cache(&self, cache: A::PipelineCache);
 
     unsafe fn create_query_set(

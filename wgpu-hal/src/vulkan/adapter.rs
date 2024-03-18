@@ -1776,6 +1776,19 @@ impl super::Adapter {
             unsafe { raw_device.get_device_queue(family_index, queue_index) }
         };
 
+        let driver_version = self
+            .phd_capabilities
+            .properties
+            .driver_version
+            .to_be_bytes();
+        #[rustfmt::skip]
+        let pipeline_cache_validation_key = [
+            driver_version[0], driver_version[1], driver_version[2], driver_version[3],
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+        ];
+
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             family_index,
@@ -1790,6 +1803,7 @@ impl super::Adapter {
                 timeline_semaphore: timeline_semaphore_fn,
                 ray_tracing: ray_tracing_fns,
             },
+            pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             private_caps: self.private_caps.clone(),

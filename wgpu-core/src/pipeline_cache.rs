@@ -250,9 +250,9 @@ impl<'a> Reader<'a> {
         Some(start.try_into().expect("off-by-one-error in array size"))
     }
 
-    fn read_u16(&mut self) -> Option<u16> {
-        self.read_array().map(u16::from_be_bytes)
-    }
+    // fn read_u16(&mut self) -> Option<u16> {
+    //     self.read_array().map(u16::from_be_bytes)
+    // }
     fn read_u32(&mut self) -> Option<u32> {
         self.read_array().map(u32::from_be_bytes)
     }
@@ -281,9 +281,9 @@ impl<'a> Writer<'a> {
         Some(())
     }
 
-    fn write_u16(&mut self, value: u16) -> Option<()> {
-        self.write_array(&value.to_be_bytes())
-    }
+    // fn write_u16(&mut self, value: u16) -> Option<()> {
+    //     self.write_array(&value.to_be_bytes())
+    // }
     fn write_u32(&mut self, value: u32) -> Option<()> {
         self.write_array(&value.to_be_bytes())
     }
