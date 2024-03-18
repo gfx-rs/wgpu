@@ -132,6 +132,7 @@ Bottom level categories:
 - Fix registry leaks with de-duplicated resources. By @nical in [#5244](https://github.com/gfx-rs/wgpu/pull/5244)
 - Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
 - Fix linking when targeting android. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
+- fix resource leak for buffers/textures dropped while having pending writes. By @robtfm in [#5413](https://github.com/gfx-rs/wgpu/pull/5413)
 
 #### Naga
 - In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
