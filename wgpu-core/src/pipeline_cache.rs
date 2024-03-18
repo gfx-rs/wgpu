@@ -6,7 +6,7 @@ pub const HEADER_LENGTH: usize = std::mem::size_of::<PipelineCacheHeader>();
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
 #[non_exhaustive]
 pub enum PipelineCacheValidationError {
-    #[error("The pipeline cache data truncataed")]
+    #[error("The pipeline cache data was truncated")]
     Truncated,
     #[error("The pipeline cache data was longer than recorded")]
     // TODO: Is it plausible that this would happen
