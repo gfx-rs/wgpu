@@ -1155,7 +1155,7 @@ impl Global {
                 + 1;
             let mut active_executions = Vec::new();
 
-            let mut used_surface_textures = track::TextureUsageScope::new();
+            let mut used_surface_textures = track::TextureUsageScope::default();
 
             let snatch_guard = device.snatchable_lock.read();
 
@@ -1435,7 +1435,7 @@ impl Global {
                                 baked.encoder.end_encoding().unwrap()
                             };
                             baked.list.push(present);
-                            used_surface_textures = track::TextureUsageScope::new();
+                            used_surface_textures = track::TextureUsageScope::default();
                         }
 
                         // done

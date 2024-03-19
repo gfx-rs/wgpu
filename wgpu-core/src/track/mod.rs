@@ -97,13 +97,13 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 
 mod buffer;
 mod metadata;
-pub mod pool;
 mod range;
 mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,
+    binding_model, command, conv, device::Device, hal_api::HalApi, id, pipeline, resource,
+    snatch::SnatchGuard,
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -481,8 +481,8 @@ impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new() -> Self {
         Self {
-            buffers: RwLock::new(BufferUsageScope::new()),
-            textures: RwLock::new(TextureUsageScope::new()),
+            buffers: RwLock::new(BufferUsageScope::default()),
+            textures: RwLock::new(TextureUsageScope::default()),
             bind_groups: RwLock::new(StatelessTracker::new()),
             render_pipelines: RwLock::new(StatelessTracker::new()),
             query_sets: RwLock::new(StatelessTracker::new()),
@@ -516,25 +516,55 @@ impl<A: HalApi> RenderBundleScope<A> {
 /// A usage scope tracker. Only needs to store stateful resources as stateless
 /// resources cannot possibly have a usage conflict.
 #[derive(Debug)]
-pub(crate) struct UsageScope<A: HalApi> {
+pub(crate) struct UsageScope<'a, A: HalApi> {
+    pub device: Option<&'a Device<A>>,
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
 }
 
-impl<A: HalApi> UsageScope<A> {
-    /// Create the render bundle scope and pull the maximum IDs from the hubs.
-    pub fn new(tracker_indices: &TrackerIndexAllocators) -> Self {
-        let mut value = Self {
-            buffers: BufferUsageScope::new(),
-            textures: TextureUsageScope::new(),
+impl<'a, A: HalApi> Drop for UsageScope<'a, A> {
+    fn drop(&mut self) {
+        if let Some(device) = self.device.take() {
+            self.buffers.clear();
+            self.textures.clear();
+            device.put_usage_scope(UsageScope::<'static, A> {
+                device: None,
+                buffers: std::mem::take(&mut self.buffers),
+                textures: std::mem::take(&mut self.textures),
+            });
+        }
+    }
+}
+
+impl<A: HalApi> Default for UsageScope<'static, A> {
+    fn default() -> Self {
+        Self {
+            device: Default::default(),
+            buffers: Default::default(),
+            textures: Default::default(),
+        }
+    }
+}
+
+impl<A: HalApi> UsageScope<'static, A> {
+    pub fn set_device<'d>(mut self, device: &'d Device<A>) -> UsageScope<'d, A> {
+        let mut scope = UsageScope::<'d, A> {
+            device: Some(device),
+            buffers: std::mem::take(&mut self.buffers),
+            textures: std::mem::take(&mut self.textures),
         };
 
-        value.buffers.set_size(tracker_indices.buffers.size());
-        value.textures.set_size(tracker_indices.textures.size());
-
-        value
+        scope
+            .buffers
+            .set_size(device.tracker_indices.buffers.size());
+        scope
+            .textures
+            .set_size(device.tracker_indices.textures.size());
+        scope
     }
+}
 
+impl<'a, A: HalApi> UsageScope<'a, A> {
     /// Merge the inner contents of a bind group into the usage scope.
     ///
     /// Only stateful things are merged in here, all other resources are owned

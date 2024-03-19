@@ -20,9 +20,7 @@
 !*/
 
 use super::{
-    pool::{BitvecPool, VecPool},
-    range::RangedStates,
-    PendingTransition, PendingTransitionList, ResourceTracker, TrackerIndex,
+    range::RangedStates, PendingTransition, PendingTransitionList, ResourceTracker, TrackerIndex,
 };
 use crate::{
     hal_api::HalApi,
@@ -206,8 +204,6 @@ impl<A: HalApi> TextureBindGroupState<A> {
     }
 }
 
-static USES_POOL: VecPool = VecPool::new();
-
 /// Container for corresponding simple and complex texture states.
 #[derive(Debug)]
 pub(crate) struct TextureStateSet {
@@ -215,16 +211,10 @@ pub(crate) struct TextureStateSet {
     complex: FastHashMap<usize, ComplexTextureState>,
 }
 
-impl Drop for TextureStateSet {
-    fn drop(&mut self) {
-        unsafe { USES_POOL.put(&mut self.simple) }
-    }
-}
-
 impl TextureStateSet {
     fn new() -> Self {
         Self {
-            simple: unsafe { USES_POOL.get() },
+            simple: Vec::new(),
             complex: FastHashMap::default(),
         }
     }
@@ -246,27 +236,16 @@ pub(crate) struct TextureUsageScope<A: HalApi> {
     metadata: ResourceMetadata<Texture<A>>,
 }
 
-static RES_POOL: VecPool = VecPool::new();
-static RES_BIT_POOL: BitvecPool = BitvecPool::new();
-
-impl<A: HalApi> Drop for TextureUsageScope<A> {
-    fn drop(&mut self) {
-        let (bits, res) = self.metadata.return_vecs();
-        unsafe { RES_POOL.put(res) };
-        RES_BIT_POOL.put(bits);
+impl<A: HalApi> Default for TextureUsageScope<A> {
+    fn default() -> Self {
+        Self {
+            set: TextureStateSet::new(),
+            metadata: ResourceMetadata::new(),
+        }
     }
 }
 
 impl<A: HalApi> TextureUsageScope<A> {
-    pub fn new() -> Self {
-        Self {
-            set: TextureStateSet::new(),
-            metadata: ResourceMetadata::new_with_vecs(RES_BIT_POOL.get(), unsafe {
-                RES_POOL.get()
-            }),
-        }
-    }
-
     fn tracker_assert_in_bounds(&self, index: usize) {
         self.metadata.tracker_assert_in_bounds(index);
 
@@ -279,6 +258,11 @@ impl<A: HalApi> TextureUsageScope<A> {
         } else {
             true
         });
+    }
+
+    pub fn clear(&mut self) {
+        self.set.clear();
+        self.metadata.clear();
     }
 
     /// Sets the size of all the vectors inside the tracker.

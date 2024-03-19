@@ -29,17 +29,6 @@ impl<T: Resource> ResourceMetadata<T> {
         }
     }
 
-    pub(super) fn new_with_vecs(bitvec: BitVec<usize>, vec: Vec<Option<Arc<T>>>) -> Self {
-        Self {
-            owned: bitvec,
-            resources: vec,
-        }
-    }
-
-    pub(super) fn return_vecs(&mut self) -> (&mut BitVec<usize>, &mut Vec<Option<Arc<T>>>) {
-        (&mut self.owned, &mut self.resources)
-    }
-
     /// Returns the number of indices we can accommodate.
     pub(super) fn size(&self) -> usize {
         self.owned.len()
@@ -48,6 +37,11 @@ impl<T: Resource> ResourceMetadata<T> {
     pub(super) fn set_size(&mut self, size: usize) {
         self.resources.resize(size, None);
         resize_bitvec(&mut self.owned, size);
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.resources.clear();
+        self.owned.clear();
     }
 
     /// Ensures a given index is in bounds for all arrays and does
