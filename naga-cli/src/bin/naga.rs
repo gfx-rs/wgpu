@@ -105,6 +105,10 @@ struct Args {
     #[argh(switch)]
     version: bool,
 
+    /// override value, of the form "foo=N,bar=M", repeatable
+    #[argh(option, long = "override")]
+    overrides: Vec<Overrides>,
+
     /// the input and output files.
     ///
     /// First positional argument is the input file. If not specified, the
@@ -202,12 +206,34 @@ impl FromStr for MslVersionArg {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Overrides {
+    pairs: Vec<(String, f64)>,
+}
+
+impl FromStr for Overrides {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut pairs = vec![];
+        for pair in s.split(',') {
+            let Some((name, value)) = pair.split_once('=') else {
+                return Err(format!("value needs a `=`: {pair:?}"));
+            };
+            let value = f64::from_str(value.trim()).map_err(|err| format!("{err}: {value:?}"))?;
+            pairs.push((name.trim().to_string(), value));
+        }
+        Ok(Overrides { pairs })
+    }
+}
+
 #[derive(Default)]
 struct Parameters<'a> {
     validation_flags: naga::valid::ValidationFlags,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     entry_point: Option<String>,
     keep_coordinate_space: bool,
+    overrides: naga::back::PipelineConstants,
     spv_in: naga::front::spv::Options,
     spv_out: naga::back::spv::Options<'a>,
     dot: naga::back::dot::Options,
@@ -301,7 +327,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
-
+    params.overrides = args
+        .overrides
+        .iter()
+        .flat_map(|o| &o.pairs)
+        .cloned()
+        .collect();
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
@@ -670,7 +701,9 @@ fn write_output(
                         "Generating hlsl output requires validation to \
                          succeed, and it failed in a previous step",
                     ))?,
-                    &hlsl::PipelineOptions::default(),
+                    &hlsl::PipelineOptions {
+                        constants: params.overrides.clone(),
+                    },
                 )
                 .unwrap_pretty();
             fs::write(output_path, buffer)?;
