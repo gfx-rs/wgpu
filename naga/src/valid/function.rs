@@ -440,7 +440,7 @@ impl super::Validator {
         match (scalar.kind, *op) {
             (sk::Bool, sg::All | sg::Any) if is_scalar => {}
             (sk::Sint | sk::Uint | sk::Float, sg::Add | sg::Mul | sg::Min | sg::Max) => {}
-            (sk::Sint | sk::Uint | sk::Bool, sg::And | sg::Or | sg::Xor) => {}
+            (sk::Sint | sk::Uint, sg::And | sg::Or | sg::Xor) => {}
 
             (_, _) => {
                 log::error!("Subgroup operand type {:?}", argument_inner);
