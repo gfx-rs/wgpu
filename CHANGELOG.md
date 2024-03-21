@@ -60,6 +60,11 @@ Bottom level categories:
         - `step`
         - `tan`
         - `tanh`
+### Bug Fixes
+
+#### DX12
+
+- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
 
 ## v0.19.3 (2024-03-01)
 
