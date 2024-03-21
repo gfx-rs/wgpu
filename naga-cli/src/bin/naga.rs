@@ -569,7 +569,7 @@ fn parse_input(
             .to_str()
             .context("Input filename not valid unicode")?
             .parse()
-            .context("Unable to determind --input-kind from filename")?,
+            .context("Unable to determine --input-kind from filename")?,
     };
 
     let (module, input_text) = match input_kind {
