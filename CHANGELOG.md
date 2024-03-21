@@ -49,6 +49,8 @@ Bottom level categories:
 
 ### New features
 
+- Added `--shader-stage` and `--input-kind` options to naga-cli for specifying vertex/fragment/compute shaders, and frontend. by @ratmice in [#5411](https://github.com/gfx-rs/wgpu/pull/5411)
+
 #### General
 
 - Implemented the `Unorm10_10_10_2` VertexFormat.
