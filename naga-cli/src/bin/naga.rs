@@ -1,4 +1,5 @@
 #![allow(clippy::manual_strip)]
+use anyhow::anyhow;
 #[allow(unused_imports)]
 use std::fs;
 use std::{error::Error, fmt, io::Read, path::Path, str::FromStr};
@@ -300,7 +301,7 @@ impl fmt::Display for CliError {
 }
 impl std::error::Error for CliError {}
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<(), anyhow::Error> {
     env_logger::init();
 
     // Parse commandline arguments
@@ -504,7 +505,7 @@ fn parse_input(
     input_path: &Path,
     input: Vec<u8>,
     params: &Parameters,
-) -> Result<Parsed, Box<dyn std::error::Error>> {
+) -> Result<Parsed, anyhow::Error> {
     let (module, input_text) = match Path::new(&input_path)
         .extension()
         .ok_or(CliError("Input filename has no extension"))?
@@ -519,11 +520,11 @@ fn parse_input(
             match result {
                 Ok(v) => (v, Some(input)),
                 Err(ref e) => {
-                    let message = format!(
+                    let message = anyhow!(
                         "Could not parse WGSL:\n{}",
                         e.emit_to_string_with_path(&input, input_path)
                     );
-                    return Err(message.into());
+                    return Err(message);
                 }
             }
         }
@@ -579,7 +580,7 @@ fn write_output(
     info: &Option<naga::valid::ModuleInfo>,
     params: &Parameters,
     output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), anyhow::Error> {
     match Path::new(&output_path)
         .extension()
         .ok_or(CliError("Output filename has no extension"))?
@@ -744,7 +745,7 @@ fn write_output(
     Ok(())
 }
 
-fn bulk_validate(args: Args, params: &Parameters) -> Result<(), Box<dyn std::error::Error>> {
+fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
     let mut invalid = vec![];
     for input_path in args.files {
         let path = Path::new(&input_path);
@@ -787,7 +788,7 @@ fn bulk_validate(args: Args, params: &Parameters) -> Result<(), Box<dyn std::err
         for path in invalid {
             writeln!(&mut formatted, "  {path}").unwrap();
         }
-        return Err(formatted.into());
+        return Err(anyhow!(formatted));
     }
 
     Ok(())

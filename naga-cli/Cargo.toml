@@ -23,6 +23,7 @@ log = "0.4"
 codespan-reporting = "0.11"
 env_logger = "0.11"
 argh = "0.1.5"
+anyhow.workspace = true
 
 [dependencies.naga]
 version = "0.19"
