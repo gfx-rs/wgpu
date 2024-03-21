@@ -68,7 +68,7 @@ path = "./naga"
 version = "0.19.2"
 
 [workspace.dependencies]
-anyhow = "1.0"
+anyhow = "1.0.3"
 arrayvec = "0.7"
 bit-vec = "0.6"
 bitflags = "2"
