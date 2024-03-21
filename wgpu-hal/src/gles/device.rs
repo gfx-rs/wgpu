@@ -1123,8 +1123,10 @@ impl crate::Device<super::Api> for super::Device {
                 !0;
                 bg_layout
                     .entries
-                    .last()
-                    .map_or(0, |b| b.binding as usize + 1)
+                    .iter()
+                    .map(|b| b.binding)
+                    .max()
+                    .map_or(0, |idx| idx as usize + 1)
             ]
             .into_boxed_slice();
 
@@ -1177,7 +1179,16 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::BindGroup, crate::DeviceError> {
         let mut contents = Vec::new();
 
-        for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+            let layout = desc
+                .layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (entry, layout)
+        });
+        for (entry, layout) in layout_and_entry_iter {
             let binding = match layout.ty {
                 wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];
