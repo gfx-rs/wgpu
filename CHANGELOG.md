@@ -157,6 +157,7 @@ Bottom level categories:
 - Fixes for being able to use an OpenGL 4.1 core context provided by macOS with wgpu. By @bes in [#5331](https://github.com/gfx-rs/wgpu/pull/5331).
 - Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
 - Fix crash when holding multiple devices on wayland/surfaceless. By @ashdnazg in [#5351](https://github.com/gfx-rs/wgpu/pull/5351).
+- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
 
 #### Vulkan
 
