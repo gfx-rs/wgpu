@@ -28,7 +28,10 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     storage::Storage,
-    track::{BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope},
+    track::{
+        BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope,
+        UsageScopePool,
+    },
     validation::{
         self, check_buffer_usage, check_texture_usage, validate_color_attachment_bytes_per_sample,
     },
@@ -137,7 +140,7 @@ pub struct Device<A: HalApi> {
     pub(crate) trace: Mutex<Option<trace::Trace>>,
 
     // usage_scope pool
-    pub(crate) usage_scopes: Mutex<Vec<UsageScope<'static, A>>>,
+    pub(crate) usage_scopes: UsageScopePool<A>,
 }
 
 pub(crate) enum DeferredDestroy<A: HalApi> {
@@ -299,7 +302,7 @@ impl<A: HalApi> Device<A> {
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
             deferred_destroy: Mutex::new(Vec::new()),
-            usage_scopes: Mutex::default(),
+            usage_scopes: Default::default(),
         })
     }
 
@@ -3574,12 +3577,7 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn get_usage_scope<'a>(&'a self) -> UsageScope<'a, A> {
-        let usage_scope = self.usage_scopes.lock().pop().unwrap_or_default();
-        usage_scope.set_device(self)
-    }
-
-    pub(crate) fn put_usage_scope(&self, usage_scope: UsageScope<'static, A>) {
-        self.usage_scopes.lock().push(usage_scope);
+        UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
     }
 }
 

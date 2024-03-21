@@ -102,8 +102,7 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv, device::Device, hal_api::HalApi, id, pipeline, resource,
-    snatch::SnatchGuard,
+    binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -513,53 +512,47 @@ impl<A: HalApi> RenderBundleScope<A> {
     }
 }
 
+/// A pool for storing the memory used by [`UsageScope`]s and [`RenderBundleScope`]s. We take and store this memory when the
+/// scope is dropped to avoid reallocating. The memory required only grows and allocation cost is
+/// significant when a large number of resources have been used.
+pub(crate) type UsageScopePool<A> = Mutex<Vec<(BufferUsageScope<A>, TextureUsageScope<A>)>>;
+
 /// A usage scope tracker. Only needs to store stateful resources as stateless
 /// resources cannot possibly have a usage conflict.
 #[derive(Debug)]
 pub(crate) struct UsageScope<'a, A: HalApi> {
-    pub device: Option<&'a Device<A>>,
+    pub pool: &'a UsageScopePool<A>,
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
 }
 
 impl<'a, A: HalApi> Drop for UsageScope<'a, A> {
     fn drop(&mut self) {
-        if let Some(device) = self.device.take() {
-            self.buffers.clear();
-            self.textures.clear();
-            device.put_usage_scope(UsageScope::<'static, A> {
-                device: None,
-                buffers: std::mem::take(&mut self.buffers),
-                textures: std::mem::take(&mut self.textures),
-            });
-        }
-    }
-}
-
-impl<A: HalApi> Default for UsageScope<'static, A> {
-    fn default() -> Self {
-        Self {
-            device: Default::default(),
-            buffers: Default::default(),
-            textures: Default::default(),
-        }
+        // clear vecs and push into pool
+        self.buffers.clear();
+        self.textures.clear();
+        self.pool.lock().push((
+            std::mem::take(&mut self.buffers),
+            std::mem::take(&mut self.textures),
+        ));
     }
 }
 
 impl<A: HalApi> UsageScope<'static, A> {
-    pub fn set_device<'d>(mut self, device: &'d Device<A>) -> UsageScope<'d, A> {
+    pub fn new_pooled<'d>(
+        pool: &'d UsageScopePool<A>,
+        tracker_indices: &TrackerIndexAllocators,
+    ) -> UsageScope<'d, A> {
+        let pooled = pool.lock().pop().unwrap_or_default();
+
         let mut scope = UsageScope::<'d, A> {
-            device: Some(device),
-            buffers: std::mem::take(&mut self.buffers),
-            textures: std::mem::take(&mut self.textures),
+            pool,
+            buffers: pooled.0,
+            textures: pooled.1,
         };
 
-        scope
-            .buffers
-            .set_size(device.tracker_indices.buffers.size());
-        scope
-            .textures
-            .set_size(device.tracker_indices.textures.size());
+        scope.buffers.set_size(tracker_indices.buffers.size());
+        scope.textures.set_size(tracker_indices.textures.size());
         scope
     }
 }
