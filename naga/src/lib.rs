@@ -1299,11 +1299,17 @@ pub enum SwizzleComponent {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum GatherMode {
+    /// All gather from the active lane with the smallest index
     BroadcastFirst,
+    /// All gather from the same lane at the index given by the expression
     Broadcast(Handle<Expression>),
+    /// Each gathers from a different lane at the index given by the expression
     Shuffle(Handle<Expression>),
+    /// Each gathers from their lane plus the shift given by the expression
     ShuffleDown(Handle<Expression>),
+    /// Each gathers from their lane minus the shift given by the expression
     ShuffleUp(Handle<Expression>),
+    /// Each gathers from their lane xored with the given by the expression
     ShuffleXor(Handle<Expression>),
 }
 
