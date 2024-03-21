@@ -6,7 +6,7 @@ A separate compute shader is used to perform the ray queries.
 ## To Run
 
 ```
-cargo run --example ray-cube-compute
+cargo run --bin wgpu-examples ray_cube_normals
 ```
 
 ## Screenshots
