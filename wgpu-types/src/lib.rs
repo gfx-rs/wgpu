@@ -912,7 +912,6 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - Vulkan
-        /// - Metal
         ///
         /// This is a native only feature.
         const SUBGROUP_VERTEX = 1 << 58;

@@ -810,9 +810,7 @@ impl super::PrivateCapabilities {
             supports_simd_scoped_operations: family_check
                 && (device.supports_family(MTLGPUFamily::Metal3)
                     || device.supports_family(MTLGPUFamily::Mac2)
-                    || device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Apple8)
-                    || device.supports_family(MTLGPUFamily::Apple9)),
+                    || device.supports_family(MTLGPUFamily::Apple7)),
         }
     }
 
@@ -899,7 +897,7 @@ impl super::PrivateCapabilities {
         features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         if self.supports_simd_scoped_operations {
-            features.insert(F::SUBGROUP_COMPUTE | F::SUBGROUP_FRAGMENT | F::SUBGROUP_VERTEX);
+            features.insert(F::SUBGROUP_COMPUTE | F::SUBGROUP_FRAGMENT);
         }
 
         features
