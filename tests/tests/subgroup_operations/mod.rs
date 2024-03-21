@@ -9,7 +9,7 @@ const TEST_COUNT: u32 = 31;
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::SUBGROUP_COMPUTE)
+            .features(wgpu::Features::SUBGROUP)
             .limits(wgpu::Limits::downlevel_defaults())
             .expect_fail(wgpu_test::FailureCase::molten_vk())
             .expect_fail(

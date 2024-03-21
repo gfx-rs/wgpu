@@ -1533,11 +1533,8 @@ impl<A: HalApi> Device<A> {
         );
         caps.set(
             Caps::SUBGROUP,
-            self.features.intersects(
-                wgt::Features::SUBGROUP_COMPUTE
-                    | wgt::Features::SUBGROUP_FRAGMENT
-                    | wgt::Features::SUBGROUP_VERTEX,
-            ),
+            self.features
+                .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX),
         );
 
         let debug_source =
@@ -1556,12 +1553,8 @@ impl<A: HalApi> Device<A> {
 
         let mut subgroup_stages = naga::valid::ShaderStages::empty();
         subgroup_stages.set(
-            naga::valid::ShaderStages::COMPUTE,
-            self.features.contains(wgt::Features::SUBGROUP_COMPUTE),
-        );
-        subgroup_stages.set(
-            naga::valid::ShaderStages::FRAGMENT,
-            self.features.contains(wgt::Features::SUBGROUP_FRAGMENT),
+            naga::valid::ShaderStages::COMPUTE | naga::valid::ShaderStages::FRAGMENT,
+            self.features.contains(wgt::Features::SUBGROUP),
         );
         subgroup_stages.set(
             naga::valid::ShaderStages::VERTEX,

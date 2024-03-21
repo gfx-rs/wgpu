@@ -890,7 +890,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_INT64 = 1 << 55;
-        /// Allows compute shaders to use the subgroup operation built-ins
+        /// Allows compute and fragment shaders to use the subgroup operation built-ins
         ///
         /// Supported Platforms:
         /// - Vulkan
@@ -898,23 +898,14 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const SUBGROUP_COMPUTE = 1 << 56;
-        /// Allows fragment shaders to use the subgroup operation built-ins
-        ///
-        /// Supported Platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const SUBGROUP_FRAGMENT = 1 << 57;
+        const SUBGROUP = 1 << 56;
         /// Allows vertex shaders to use the subgroup operation built-ins
         ///
         /// Supported Platforms:
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SUBGROUP_VERTEX = 1 << 58;
+        const SUBGROUP_VERTEX = 1 << 57;
     }
 }
 

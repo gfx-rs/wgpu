@@ -560,16 +560,10 @@ impl PhysicalDeviceFeatures {
                     | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE,
             ) {
                 features.set(
-                    F::SUBGROUP_COMPUTE,
+                    F::SUBGROUP,
                     subgroup
                         .supported_stages
-                        .contains(vk::ShaderStageFlags::COMPUTE),
-                );
-                features.set(
-                    F::SUBGROUP_FRAGMENT,
-                    subgroup
-                        .supported_stages
-                        .contains(vk::ShaderStageFlags::FRAGMENT),
+                        .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT),
                 );
                 features.set(
                     F::SUBGROUP_VERTEX,
@@ -1478,11 +1472,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Geometry);
             }
 
-            if features.intersects(
-                wgt::Features::SUBGROUP_COMPUTE
-                    | wgt::Features::SUBGROUP_FRAGMENT
-                    | wgt::Features::SUBGROUP_VERTEX,
-            ) {
+            if features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX) {
                 capabilities.push(spv::Capability::GroupNonUniform);
                 capabilities.push(spv::Capability::GroupNonUniformVote);
                 capabilities.push(spv::Capability::GroupNonUniformArithmetic);
@@ -1526,11 +1516,9 @@ impl super::Adapter {
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
             spv::Options {
-                lang_version: if features.intersects(
-                    wgt::Features::SUBGROUP_COMPUTE
-                        | wgt::Features::SUBGROUP_FRAGMENT
-                        | wgt::Features::SUBGROUP_VERTEX,
-                ) {
+                lang_version: if features
+                    .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX)
+                {
                     (1, 3)
                 } else {
                     (1, 0)
