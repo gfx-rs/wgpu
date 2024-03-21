@@ -325,19 +325,19 @@ impl StatementGraph {
                         (
                             crate::CollectiveOperation::ExclusiveScan,
                             crate::SubgroupOperation::Add,
-                        ) => "SubgroupPrefixExclusiveAdd",
+                        ) => "SubgroupExclusiveAdd",
                         (
                             crate::CollectiveOperation::ExclusiveScan,
                             crate::SubgroupOperation::Mul,
-                        ) => "SubgroupPrefixExclusiveMul",
+                        ) => "SubgroupExclusiveMul",
                         (
                             crate::CollectiveOperation::InclusiveScan,
                             crate::SubgroupOperation::Add,
-                        ) => "SubgroupPrefixInclusiveAdd",
+                        ) => "SubgroupInclusiveAdd",
                         (
                             crate::CollectiveOperation::InclusiveScan,
                             crate::SubgroupOperation::Mul,
-                        ) => "SubgroupPrefixInclusiveMul",
+                        ) => "SubgroupInclusiveMul",
                         _ => unimplemented!(),
                     }
                 }

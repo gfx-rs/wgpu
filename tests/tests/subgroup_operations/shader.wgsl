@@ -80,25 +80,25 @@ fn main(
     for(var i = 0u; i < subgroup_invocation_id; i += 1u) {
         expected += global_id.x - subgroup_invocation_id + i + 1u;
     }
-    add_result_to_mask(&passed, 15u, subgroupPrefixExclusiveAdd(global_id.x + 1u) == expected);
+    add_result_to_mask(&passed, 15u, subgroupExclusiveAdd(global_id.x + 1u) == expected);
 
     expected = 1u;
     for(var i = 0u; i < subgroup_invocation_id; i += 1u) {
         expected *= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    add_result_to_mask(&passed, 16u, subgroupPrefixExclusiveMul(global_id.x + 1u) == expected);
+    add_result_to_mask(&passed, 16u, subgroupExclusiveMul(global_id.x + 1u) == expected);
 
     expected = 0u;
     for(var i = 0u; i <= subgroup_invocation_id; i += 1u) {
         expected += global_id.x - subgroup_invocation_id + i + 1u;
     }
-    add_result_to_mask(&passed, 17u, subgroupPrefixInclusiveAdd(global_id.x + 1u) == expected);
+    add_result_to_mask(&passed, 17u, subgroupInclusiveAdd(global_id.x + 1u) == expected);
 
     expected = 1u;
     for(var i = 0u; i <= subgroup_invocation_id; i += 1u) {
         expected *= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    add_result_to_mask(&passed, 18u, subgroupPrefixInclusiveMul(global_id.x + 1u) == expected);
+    add_result_to_mask(&passed, 18u, subgroupInclusiveMul(global_id.x + 1u) == expected);
 
     add_result_to_mask(&passed, 19u, subgroupBroadcastFirst(u32(subgroup_invocation_id != 0u)) == 0u);
     add_result_to_mask(&passed, 20u, subgroupBroadcastFirst(u32(subgroup_invocation_id == 0u)) == 1u);

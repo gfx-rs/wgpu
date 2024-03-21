@@ -976,16 +976,16 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "subgroupXor(")?
                     }
                     (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Add) => {
-                        write!(self.out, "subgroupPrefixExclusiveAdd(")?
+                        write!(self.out, "subgroupExclusiveAdd(")?
                     }
                     (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Mul) => {
-                        write!(self.out, "subgroupPrefixExclusiveMul(")?
+                        write!(self.out, "subgroupExclusiveMul(")?
                     }
                     (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Add) => {
-                        write!(self.out, "subgroupPrefixInclusiveAdd(")?
+                        write!(self.out, "subgroupInclusiveAdd(")?
                     }
                     (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Mul) => {
-                        write!(self.out, "subgroupPrefixInclusiveMul(")?
+                        write!(self.out, "subgroupInclusiveMul(")?
                     }
                     _ => unimplemented!(),
                 }

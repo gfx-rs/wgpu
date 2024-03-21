@@ -19,10 +19,10 @@ fn main(
     subgroupAnd(subgroup_invocation_id);
     subgroupOr(subgroup_invocation_id);
     subgroupXor(subgroup_invocation_id);
-    subgroupPrefixExclusiveAdd(subgroup_invocation_id);
-    subgroupPrefixExclusiveMul(subgroup_invocation_id);
-    subgroupPrefixInclusiveAdd(subgroup_invocation_id);
-    subgroupPrefixInclusiveMul(subgroup_invocation_id);
+    subgroupExclusiveAdd(subgroup_invocation_id);
+    subgroupExclusiveMul(subgroup_invocation_id);
+    subgroupInclusiveAdd(subgroup_invocation_id);
+    subgroupInclusiveMul(subgroup_invocation_id);
 
     subgroupBroadcastFirst(subgroup_invocation_id);
     subgroupBroadcast(subgroup_invocation_id, 4u);

@@ -12,10 +12,10 @@ fn main(@builtin(num_subgroups) num_subgroups: u32, @builtin(subgroup_id) subgro
     let _e20 = subgroupAnd(subgroup_invocation_id);
     let _e21 = subgroupOr(subgroup_invocation_id);
     let _e22 = subgroupXor(subgroup_invocation_id);
-    let _e23 = subgroupPrefixExclusiveAdd(subgroup_invocation_id);
-    let _e24 = subgroupPrefixExclusiveMul(subgroup_invocation_id);
-    let _e25 = subgroupPrefixInclusiveAdd(subgroup_invocation_id);
-    let _e26 = subgroupPrefixInclusiveMul(subgroup_invocation_id);
+    let _e23 = subgroupExclusiveAdd(subgroup_invocation_id);
+    let _e24 = subgroupExclusiveMul(subgroup_invocation_id);
+    let _e25 = subgroupInclusiveAdd(subgroup_invocation_id);
+    let _e26 = subgroupInclusiveMul(subgroup_invocation_id);
     let _e27 = subgroupBroadcastFirst(subgroup_invocation_id);
     let _e29 = subgroupBroadcast(subgroup_invocation_id, 4u);
     let _e33 = subgroupShuffle(subgroup_invocation_id, ((subgroup_size - 1u) - subgroup_invocation_id));

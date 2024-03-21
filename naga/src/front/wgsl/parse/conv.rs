@@ -281,10 +281,10 @@ pub fn map_subgroup_operation(
         "subgroupAnd" => (sg::And, co::Reduce),
         "subgroupOr" => (sg::Or, co::Reduce),
         "subgroupXor" => (sg::Xor, co::Reduce),
-        "subgroupPrefixExclusiveAdd" => (sg::Add, co::ExclusiveScan),
-        "subgroupPrefixExclusiveMul" => (sg::Mul, co::ExclusiveScan),
-        "subgroupPrefixInclusiveAdd" => (sg::Add, co::InclusiveScan),
-        "subgroupPrefixInclusiveMul" => (sg::Mul, co::InclusiveScan),
+        "subgroupExclusiveAdd" => (sg::Add, co::ExclusiveScan),
+        "subgroupExclusiveMul" => (sg::Mul, co::ExclusiveScan),
+        "subgroupInclusiveAdd" => (sg::Add, co::InclusiveScan),
+        "subgroupInclusiveMul" => (sg::Mul, co::InclusiveScan),
         _ => return None,
     })
 }

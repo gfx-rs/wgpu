@@ -17,10 +17,10 @@ fn main_1() {
     let _e19 = subgroupAnd(_e6);
     let _e20 = subgroupOr(_e6);
     let _e21 = subgroupXor(_e6);
-    let _e22 = subgroupPrefixExclusiveAdd(_e6);
-    let _e23 = subgroupPrefixExclusiveMul(_e6);
-    let _e24 = subgroupPrefixInclusiveAdd(_e6);
-    let _e25 = subgroupPrefixInclusiveMul(_e6);
+    let _e22 = subgroupExclusiveAdd(_e6);
+    let _e23 = subgroupExclusiveMul(_e6);
+    let _e24 = subgroupInclusiveAdd(_e6);
+    let _e25 = subgroupInclusiveMul(_e6);
     let _e26 = subgroupBroadcastFirst(_e6);
     let _e27 = subgroupBroadcast(_e6, 4u);
     let _e30 = subgroupShuffle(_e6, ((_e5 - 1u) - _e6));
