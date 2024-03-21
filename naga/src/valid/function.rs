@@ -462,7 +462,7 @@ impl super::Validator {
         }
         Ok(())
     }
-    fn validate_subgroup_broadcast(
+    fn validate_subgroup_gather(
         &mut self,
         mode: &crate::GatherMode,
         argument: Handle<crate::Expression>,
@@ -1116,7 +1116,7 @@ impl super::Validator {
                         )
                         .with_span_static(span, "support for this operation is not present"));
                     }
-                    self.validate_subgroup_broadcast(mode, argument, result, context)?;
+                    self.validate_subgroup_gather(mode, argument, result, context)?;
                 }
             }
         }
