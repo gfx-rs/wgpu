@@ -1329,7 +1329,6 @@ pub enum SubgroupOperation {
     Xor = 8,
 }
 
-#[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
