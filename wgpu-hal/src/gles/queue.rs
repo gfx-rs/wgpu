@@ -40,10 +40,14 @@ fn get_z_offset(target: u32, base: &crate::TextureCopyBase) -> u32 {
 impl super::Queue {
     /// Performs a manual shader clear, used as a workaround for a clearing bug on mesa
     unsafe fn perform_shader_clear(&self, gl: &glow::Context, draw_buffer: u32, color: [f32; 4]) {
-        unsafe { gl.use_program(Some(self.shader_clear_program)) };
+        let shader_clear = self
+            .shader_clear_program
+            .as_ref()
+            .expect("shader_clear_program should always be set if the workaround is enabled");
+        unsafe { gl.use_program(Some(shader_clear.program)) };
         unsafe {
             gl.uniform_4_f32(
-                Some(&self.shader_clear_program_color_uniform_location),
+                Some(&shader_clear.color_uniform_location),
                 color[0],
                 color[1],
                 color[2],

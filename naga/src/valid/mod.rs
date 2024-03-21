@@ -28,7 +28,7 @@ pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, TypeError, TypeFlags};
+pub use r#type::{Disalignment, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
@@ -77,7 +77,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u16 {
+    pub struct Capabilities: u32 {
         /// Support for [`AddressSpace:PushConstant`].
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
@@ -108,8 +108,10 @@ bitflags::bitflags! {
         const DUAL_SOURCE_BLENDING = 0x2000;
         /// Support for arrayed cube textures.
         const CUBE_ARRAY_TEXTURES = 0x4000;
+        /// Support for 64-bit signed and unsigned integers.
+        const SHADER_INT64 = 0x8000;
         /// Support for subgroup operations
-        const SUBGROUP = 0x8000;
+        const SUBGROUP = 0x10000;
     }
 }
 

@@ -35,11 +35,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         // the debug range start and end appear in different command buffers.
         let khronos_validation_layer =
             std::ffi::CStr::from_bytes_with_nul(b"Khronos Validation Layer\0").unwrap();
-        if user_data.validation_layer_description.as_ref() == khronos_validation_layer
-            && user_data.validation_layer_spec_version >= vk::make_api_version(0, 1, 3, 240)
-            && user_data.validation_layer_spec_version <= vk::make_api_version(0, 1, 3, 250)
-        {
-            return vk::FALSE;
+        if let Some(layer_properties) = user_data.validation_layer_properties.as_ref() {
+            if layer_properties.layer_description.as_ref() == khronos_validation_layer
+                && layer_properties.layer_spec_version >= vk::make_api_version(0, 1, 3, 240)
+                && layer_properties.layer_spec_version <= vk::make_api_version(0, 1, 3, 250)
+            {
+                return vk::FALSE;
+            }
         }
     }
 
@@ -684,52 +686,33 @@ impl crate::Instance<super::Api> for super::Instance {
 
         let mut layers: Vec<&'static CStr> = Vec::new();
 
+        let has_debug_extension = extensions.contains(&ext::DebugUtils::name());
+        let mut debug_user_data = has_debug_extension.then(|| {
+            // Put the callback data on the heap, to ensure it will never be
+            // moved.
+            Box::new(super::DebugUtilsMessengerUserData {
+                validation_layer_properties: None,
+                has_obs_layer,
+            })
+        });
+
         // Request validation layer if asked.
-        let mut debug_utils = None;
         if desc.flags.intersects(wgt::InstanceFlags::VALIDATION)
             || should_enable_gpu_based_validation
         {
             if let Some(layer_properties) = validation_layer_properties {
                 layers.push(validation_layer_name);
 
-                if extensions.contains(&ext::DebugUtils::name()) {
-                    // Put the callback data on the heap, to ensure it will never be
-                    // moved.
-                    let callback_data = Box::new(super::DebugUtilsMessengerUserData {
-                        validation_layer_description: cstr_from_bytes_until_nul(
-                            &layer_properties.description,
-                        )
-                        .unwrap()
-                        .to_owned(),
-                        validation_layer_spec_version: layer_properties.spec_version,
-                        has_obs_layer,
-                    });
-
-                    // having ERROR unconditionally because Vk doesn't like empty flags
-                    let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
-                    if log::max_level() >= log::LevelFilter::Debug {
-                        severity |= vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE;
-                    }
-                    if log::max_level() >= log::LevelFilter::Info {
-                        severity |= vk::DebugUtilsMessageSeverityFlagsEXT::INFO;
-                    }
-                    if log::max_level() >= log::LevelFilter::Warn {
-                        severity |= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING;
-                    }
-
-                    let message_type = vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-                        | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                        | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE;
-
-                    let create_info = super::DebugUtilsCreateInfo {
-                        severity,
-                        message_type,
-                        callback_data,
-                    };
-
-                    let vk_create_info = create_info.to_vk_create_info().build();
-
-                    debug_utils = Some((create_info, vk_create_info));
+                if let Some(debug_user_data) = debug_user_data.as_mut() {
+                    debug_user_data.validation_layer_properties =
+                        Some(super::ValidationLayerProperties {
+                            layer_description: cstr_from_bytes_until_nul(
+                                &layer_properties.description,
+                            )
+                            .unwrap()
+                            .to_owned(),
+                            layer_spec_version: layer_properties.spec_version,
+                        });
                 }
             } else {
                 log::warn!(
@@ -738,6 +721,35 @@ impl crate::Instance<super::Api> for super::Instance {
                 );
             }
         }
+        let mut debug_utils = if let Some(callback_data) = debug_user_data {
+            // having ERROR unconditionally because Vk doesn't like empty flags
+            let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
+            if log::max_level() >= log::LevelFilter::Debug {
+                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE;
+            }
+            if log::max_level() >= log::LevelFilter::Info {
+                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::INFO;
+            }
+            if log::max_level() >= log::LevelFilter::Warn {
+                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING;
+            }
+
+            let message_type = vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE;
+
+            let create_info = super::DebugUtilsCreateInfo {
+                severity,
+                message_type,
+                callback_data,
+            };
+
+            let vk_create_info = create_info.to_vk_create_info().build();
+
+            Some((create_info, vk_create_info))
+        } else {
+            None
+        };
 
         #[cfg(target_os = "android")]
         let android_sdk_version = {

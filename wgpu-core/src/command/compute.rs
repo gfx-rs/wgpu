@@ -1,6 +1,7 @@
 use crate::device::DeviceError;
 use crate::resource::Resource;
 use crate::snatch::SnatchGuard;
+use crate::track::TrackerIndex;
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
@@ -305,7 +306,7 @@ impl<A: HalApi> State<A> {
         raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut Tracker<A>,
         bind_group_guard: &Storage<BindGroup<A>>,
-        indirect_buffer: Option<id::BufferId>,
+        indirect_buffer: Option<TrackerIndex>,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
@@ -402,12 +403,11 @@ impl Global {
         let pipeline_guard = hub.compute_pipelines.read();
         let query_set_guard = hub.query_sets.read();
         let buffer_guard = hub.buffers.read();
-        let texture_guard = hub.textures.read();
 
         let mut state = State {
             binder: Binder::new(),
             pipeline: None,
-            scope: UsageScope::new(&*buffer_guard, &*texture_guard),
+            scope: UsageScope::new(&device.tracker_indices),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
@@ -452,17 +452,14 @@ impl Global {
 
         let snatch_guard = device.snatchable_lock.read();
 
-        tracker.set_size(
-            Some(&*buffer_guard),
-            Some(&*texture_guard),
-            None,
-            None,
-            Some(&*bind_group_guard),
-            Some(&*pipeline_guard),
-            None,
-            None,
-            Some(&*query_set_guard),
-        );
+        let indices = &device.tracker_indices;
+        tracker.buffers.set_size(indices.buffers.size());
+        tracker.textures.set_size(indices.textures.size());
+        tracker.bind_groups.set_size(indices.bind_groups.size());
+        tracker
+            .compute_pipelines
+            .set_size(indices.compute_pipelines.size());
+        tracker.query_sets.set_size(indices.query_sets.size());
 
         let discard_hal_labels = self
             .instance
@@ -757,7 +754,7 @@ impl Global {
                             raw,
                             &mut intermediate_trackers,
                             &*bind_group_guard,
-                            Some(buffer_id),
+                            Some(indirect_buffer.as_info().tracker_index()),
                             &snatch_guard,
                         )
                         .map_pass_err(scope)?;

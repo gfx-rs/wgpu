@@ -820,6 +820,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
+            "int64",
+            Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
+        ),
+        (
             "subgroup-operations",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),

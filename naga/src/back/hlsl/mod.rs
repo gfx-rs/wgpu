@@ -256,6 +256,7 @@ struct Wrapped {
     constructors: crate::FastHashSet<help::WrappedConstructor>,
     struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
     mat_cx2s: crate::FastHashSet<help::WrappedMatCx2>,
+    math: crate::FastHashSet<help::WrappedMath>,
 }
 
 impl Wrapped {
@@ -265,6 +266,7 @@ impl Wrapped {
         self.constructors.clear();
         self.struct_matrix_access.clear();
         self.mat_cx2s.clear();
+        self.math.clear();
     }
 }
 

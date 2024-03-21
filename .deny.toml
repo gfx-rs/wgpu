@@ -4,6 +4,7 @@ skip-tree = [
 	{ name = "windows-sys", version = "0.45" },
 	{ name = "winit", version = "0.27.5" },
 	{ name = "rustc_version", version = "0.2.3" },
+	{ name = "sourcemap", version = "7.1.1" },
 ]
 skip = [
 	{ name = "hlsl-snapshots", version = "0.1.0" },

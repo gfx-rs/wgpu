@@ -1,0 +1,213 @@
+// language: metal2.3
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct UniformCompatible {
+    uint val_u32_;
+    int val_i32_;
+    float val_f32_;
+    char _pad3[4];
+    ulong val_u64_;
+    char _pad4[8];
+    metal::ulong2 val_u64_2_;
+    char _pad5[16];
+    metal::ulong3 val_u64_3_;
+    metal::ulong4 val_u64_4_;
+    long val_i64_;
+    char _pad8[8];
+    metal::long2 val_i64_2_;
+    metal::long3 val_i64_3_;
+    metal::long4 val_i64_4_;
+    ulong final_value;
+};
+struct type_11 {
+    ulong inner[2];
+};
+struct type_12 {
+    long inner[2];
+};
+struct StorageCompatible {
+    type_11 val_u64_array_2_;
+    type_12 val_i64_array_2_;
+};
+constant ulong constant_variable = 20uL;
+
+long int64_function(
+    long x,
+    constant UniformCompatible& input_uniform,
+    device UniformCompatible const& input_storage,
+    device StorageCompatible const& input_arrays,
+    device UniformCompatible& output,
+    device StorageCompatible& output_arrays
+) {
+    long val = 20L;
+    long _e6 = val;
+    val = _e6 + (31L - 1002003004005006L);
+    long _e8 = val;
+    long _e11 = val;
+    val = _e11 + (_e8 + 5L);
+    uint _e15 = input_uniform.val_u32_;
+    long _e16 = val;
+    long _e20 = val;
+    val = _e20 + static_cast<long>(_e15 + static_cast<uint>(_e16));
+    int _e24 = input_uniform.val_i32_;
+    long _e25 = val;
+    long _e29 = val;
+    val = _e29 + static_cast<long>(_e24 + static_cast<int>(_e25));
+    float _e33 = input_uniform.val_f32_;
+    long _e34 = val;
+    long _e38 = val;
+    val = _e38 + static_cast<long>(_e33 + static_cast<float>(_e34));
+    long _e42 = input_uniform.val_i64_;
+    long _e45 = val;
+    val = _e45 + metal::long3(_e42).z;
+    ulong _e49 = input_uniform.val_u64_;
+    long _e51 = val;
+    val = _e51 + as_type<long>(_e49);
+    metal::ulong2 _e55 = input_uniform.val_u64_2_;
+    long _e58 = val;
+    val = _e58 + as_type<metal::long2>(_e55).y;
+    metal::ulong3 _e62 = input_uniform.val_u64_3_;
+    long _e65 = val;
+    val = _e65 + as_type<metal::long3>(_e62).z;
+    metal::ulong4 _e69 = input_uniform.val_u64_4_;
+    long _e72 = val;
+    val = _e72 + as_type<metal::long4>(_e69).w;
+    long _e78 = input_uniform.val_i64_;
+    long _e81 = input_storage.val_i64_;
+    output.val_i64_ = _e78 + _e81;
+    metal::long2 _e87 = input_uniform.val_i64_2_;
+    metal::long2 _e90 = input_storage.val_i64_2_;
+    output.val_i64_2_ = _e87 + _e90;
+    metal::long3 _e96 = input_uniform.val_i64_3_;
+    metal::long3 _e99 = input_storage.val_i64_3_;
+    output.val_i64_3_ = _e96 + _e99;
+    metal::long4 _e105 = input_uniform.val_i64_4_;
+    metal::long4 _e108 = input_storage.val_i64_4_;
+    output.val_i64_4_ = _e105 + _e108;
+    type_12 _e114 = input_arrays.val_i64_array_2_;
+    output_arrays.val_i64_array_2_ = _e114;
+    long _e115 = val;
+    long _e117 = val;
+    val = _e117 + metal::abs(_e115);
+    long _e119 = val;
+    long _e120 = val;
+    long _e121 = val;
+    long _e123 = val;
+    val = _e123 + metal::clamp(_e119, _e120, _e121);
+    long _e125 = val;
+    metal::long2 _e126 = metal::long2(_e125);
+    long _e127 = val;
+    metal::long2 _e128 = metal::long2(_e127);
+    long _e130 = val;
+    val = _e130 + ( + _e126.x * _e128.x + _e126.y * _e128.y);
+    long _e132 = val;
+    long _e133 = val;
+    long _e135 = val;
+    val = _e135 + metal::max(_e132, _e133);
+    long _e137 = val;
+    long _e138 = val;
+    long _e140 = val;
+    val = _e140 + metal::min(_e137, _e138);
+    long _e142 = val;
+    long _e144 = val;
+    val = _e144 + metal::select(metal::select(-1, 1, (_e142 > 0)), 0, (_e142 == 0));
+    long _e146 = val;
+    return _e146;
+}
+
+ulong uint64_function(
+    ulong x_1,
+    constant UniformCompatible& input_uniform,
+    device UniformCompatible const& input_storage,
+    device StorageCompatible const& input_arrays,
+    device UniformCompatible& output,
+    device StorageCompatible& output_arrays
+) {
+    ulong val_1 = 20uL;
+    ulong _e6 = val_1;
+    val_1 = _e6 + (31uL + 1002003004005006uL);
+    ulong _e8 = val_1;
+    ulong _e11 = val_1;
+    val_1 = _e11 + (_e8 + 5uL);
+    uint _e15 = input_uniform.val_u32_;
+    ulong _e16 = val_1;
+    ulong _e20 = val_1;
+    val_1 = _e20 + static_cast<ulong>(_e15 + static_cast<uint>(_e16));
+    int _e24 = input_uniform.val_i32_;
+    ulong _e25 = val_1;
+    ulong _e29 = val_1;
+    val_1 = _e29 + static_cast<ulong>(_e24 + static_cast<int>(_e25));
+    float _e33 = input_uniform.val_f32_;
+    ulong _e34 = val_1;
+    ulong _e38 = val_1;
+    val_1 = _e38 + static_cast<ulong>(_e33 + static_cast<float>(_e34));
+    ulong _e42 = input_uniform.val_u64_;
+    ulong _e45 = val_1;
+    val_1 = _e45 + metal::ulong3(_e42).z;
+    long _e49 = input_uniform.val_i64_;
+    ulong _e51 = val_1;
+    val_1 = _e51 + as_type<ulong>(_e49);
+    metal::long2 _e55 = input_uniform.val_i64_2_;
+    ulong _e58 = val_1;
+    val_1 = _e58 + as_type<metal::ulong2>(_e55).y;
+    metal::long3 _e62 = input_uniform.val_i64_3_;
+    ulong _e65 = val_1;
+    val_1 = _e65 + as_type<metal::ulong3>(_e62).z;
+    metal::long4 _e69 = input_uniform.val_i64_4_;
+    ulong _e72 = val_1;
+    val_1 = _e72 + as_type<metal::ulong4>(_e69).w;
+    ulong _e78 = input_uniform.val_u64_;
+    ulong _e81 = input_storage.val_u64_;
+    output.val_u64_ = _e78 + _e81;
+    metal::ulong2 _e87 = input_uniform.val_u64_2_;
+    metal::ulong2 _e90 = input_storage.val_u64_2_;
+    output.val_u64_2_ = _e87 + _e90;
+    metal::ulong3 _e96 = input_uniform.val_u64_3_;
+    metal::ulong3 _e99 = input_storage.val_u64_3_;
+    output.val_u64_3_ = _e96 + _e99;
+    metal::ulong4 _e105 = input_uniform.val_u64_4_;
+    metal::ulong4 _e108 = input_storage.val_u64_4_;
+    output.val_u64_4_ = _e105 + _e108;
+    type_11 _e114 = input_arrays.val_u64_array_2_;
+    output_arrays.val_u64_array_2_ = _e114;
+    ulong _e115 = val_1;
+    ulong _e117 = val_1;
+    val_1 = _e117 + metal::abs(_e115);
+    ulong _e119 = val_1;
+    ulong _e120 = val_1;
+    ulong _e121 = val_1;
+    ulong _e123 = val_1;
+    val_1 = _e123 + metal::clamp(_e119, _e120, _e121);
+    ulong _e125 = val_1;
+    metal::ulong2 _e126 = metal::ulong2(_e125);
+    ulong _e127 = val_1;
+    metal::ulong2 _e128 = metal::ulong2(_e127);
+    ulong _e130 = val_1;
+    val_1 = _e130 + ( + _e126.x * _e128.x + _e126.y * _e128.y);
+    ulong _e132 = val_1;
+    ulong _e133 = val_1;
+    ulong _e135 = val_1;
+    val_1 = _e135 + metal::max(_e132, _e133);
+    ulong _e137 = val_1;
+    ulong _e138 = val_1;
+    ulong _e140 = val_1;
+    val_1 = _e140 + metal::min(_e137, _e138);
+    ulong _e142 = val_1;
+    return _e142;
+}
+
+kernel void main_(
+  constant UniformCompatible& input_uniform [[user(fake0)]]
+, device UniformCompatible const& input_storage [[user(fake0)]]
+, device StorageCompatible const& input_arrays [[user(fake0)]]
+, device UniformCompatible& output [[user(fake0)]]
+, device StorageCompatible& output_arrays [[user(fake0)]]
+) {
+    ulong _e3 = uint64_function(67uL, input_uniform, input_storage, input_arrays, output, output_arrays);
+    long _e5 = int64_function(60L, input_uniform, input_storage, input_arrays, output, output_arrays);
+    output.final_value = _e3 + as_type<ulong>(_e5);
+    return;
+}

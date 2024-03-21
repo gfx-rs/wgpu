@@ -62,6 +62,10 @@ struct Args {
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
 
+    /// the metal version to use, for example, 1.0, 1.1, 1.2, etc.
+    #[argh(option)]
+    metal_version: Option<MslVersionArg>,
+
     /// if the selected frontends/backends support coordinate space conversions,
     /// disable them
     #[argh(switch)]
@@ -171,6 +175,30 @@ impl FromStr for GlslProfileArg {
         } else {
             return Err(format!("Unknown profile: {s}"));
         }))
+    }
+}
+
+/// Newtype so we can implement [`FromStr`] for a Metal Language Version.
+#[derive(Clone, Debug)]
+struct MslVersionArg((u8, u8));
+
+impl FromStr for MslVersionArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut iter = s.split('.');
+
+        let check_value = |iter: &mut core::str::Split<_>| {
+            iter.next()
+                .ok_or_else(|| format!("Invalid value for --metal-version: {s}"))?
+                .parse::<u8>()
+                .map_err(|err| format!("Invalid value for --metal-version: '{s}': {err}"))
+        };
+
+        let major = check_value(&mut iter)?;
+        let minor = check_value(&mut iter)?;
+
+        Ok(Self((major, minor)))
     }
 }
 
@@ -286,6 +314,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(ref model) = args.shader_model {
         params.hlsl.shader_model = model.0;
+    }
+    if let Some(ref version) = args.metal_version {
+        params.msl.lang_version = version.0;
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
 
