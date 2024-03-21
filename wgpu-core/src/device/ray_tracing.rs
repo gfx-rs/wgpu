@@ -1,5 +1,6 @@
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
+use bitflags::Flags;
 
 use crate::api_log;
 #[cfg(feature = "trace")]
@@ -26,6 +27,10 @@ impl Device {
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+
+        if blas_desc.flags.contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN) && !self.features.contains(wgt::Features::RAY_HIT_VERTEX_RETURN) {
+            return Err(CreateBlasError::MissingVertexReturnFeature)
+        }
 
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
@@ -137,6 +142,10 @@ impl Device {
             return Err(CreateTlasError::DisallowedFlag(
                 wgt::AccelerationStructureFlags::USE_TRANSFORM,
             ));
+        }
+
+        if desc.flags.contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN) && !self.features.contains(wgt::Features::RAY_HIT_VERTEX_RETURN) {
+            return Err(CreateTlasError::MissingVertexReturnFeature)
         }
 
         let size_info = unsafe {
