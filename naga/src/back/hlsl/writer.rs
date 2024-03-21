@@ -161,6 +161,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
         }
+        for statement in func.body.iter() {
+            match *statement {
+                crate::Statement::SubgroupCollectiveOperation {
+                    op: _,
+                    collective_op: crate::CollectiveOperation::InclusiveScan,
+                    argument,
+                    result: _,
+                } => {
+                    self.need_bake_expressions.insert(argument);
+                }
+                _ => {}
+            }
+        }
     }
 
     pub fn write(
