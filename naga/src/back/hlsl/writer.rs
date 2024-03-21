@@ -1110,7 +1110,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         write!(self.out, " {name}(")?;
 
         let need_workgroup_variables_initialization =
-            self.need_workgroup_variables_initialization(func, func_ctx, module);
+            self.need_workgroup_variables_initialization(func_ctx, module);
+        let need_local_invocation_index = func.arguments.iter().any(|arg| {
+            matches!(
+                arg.binding,
+                Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
+            )
+        });
 
         // Write function arguments for non entry point functions
         match func_ctx.ty {
@@ -1183,7 +1189,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if arg_num > 0 {
                             write!(self.out, ", ")?;
                         }
+                        arg_num += 1;
                         write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
+                    }
+                    if need_local_invocation_index {
+                        if arg_num > 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        write!(self.out, "uint __local_invocation_index : SV_GroupIndex")?;
                     }
                 }
             }
@@ -1246,9 +1259,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             crate::BuiltIn::SubgroupId => {
                                 writeln!(
                                     self.out,
-                                    "(__local_invocation_id.z * {}u + __local_invocation_id.y * {}u + __local_invocation_id.x) / WaveGetLaneCount();",
-                                    ep.workgroup_size[0] * ep.workgroup_size[1],
-                                    ep.workgroup_size[1],
+                                    "__local_invocation_index / WaveGetLaneCount();",
                                 )?;
                             }
                             _ => unreachable!(),
@@ -1308,20 +1319,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     fn need_workgroup_variables_initialization(
         &mut self,
-        func: &crate::Function,
         func_ctx: &back::FunctionCtx,
         module: &Module,
     ) -> bool {
-        func.arguments.iter().any(|arg| {
-            matches!(
-                arg.binding,
-                Some(crate::Binding::BuiltIn(crate::BuiltIn::NumSubgroups))
-            )
-        }) || (self.options.zero_initialize_workgroup_memory
+        self.options.zero_initialize_workgroup_memory
             && func_ctx.ty.is_compute_entry_point(module)
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            }))
+            })
     }
 
     fn write_workgroup_variables_initialization(

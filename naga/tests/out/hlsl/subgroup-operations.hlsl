@@ -1,11 +1,8 @@
 [numthreads(1, 1, 1)]
-void main(uint3 __local_invocation_id : SV_GroupThreadID)
+void main(uint __local_invocation_index : SV_GroupIndex)
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
-    }
-    GroupMemoryBarrierWithGroupSync();
     const uint num_subgroups = (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();
-    const uint subgroup_id = (__local_invocation_id.z * 1u + __local_invocation_id.y * 1u + __local_invocation_id.x) / WaveGetLaneCount();
+    const uint subgroup_id = __local_invocation_index / WaveGetLaneCount();
     const uint subgroup_size = WaveGetLaneCount();
     const uint subgroup_invocation_id = WaveGetLaneIndex();
     const uint4 _e8 = WaveActiveBallot(((subgroup_invocation_id & 1u) == 1u));
