@@ -56,6 +56,8 @@ pub enum SubgroupError {
     ResultTypeMismatch(Handle<crate::Expression>),
     #[error("Support for subgroup operation {0:?} is required")]
     UnsupportedOperation(super::SubgroupOperationSet),
+    #[error("Unknown operation")]
+    UnknownOperation,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -417,7 +419,7 @@ impl super::Validator {
     fn validate_subgroup_operation(
         &mut self,
         op: &crate::SubgroupOperation,
-        _collective_op: &crate::CollectiveOperation,
+        collective_op: &crate::CollectiveOperation,
         argument: Handle<crate::Expression>,
         result: Handle<crate::Expression>,
         context: &BlockContext,
@@ -447,6 +449,27 @@ impl super::Validator {
                 return Err(SubgroupError::InvalidOperand(argument)
                     .with_span_handle(argument, context.expressions)
                     .into_other());
+            }
+        };
+
+        use crate::CollectiveOperation as co;
+        match (*collective_op, *op) {
+            (
+                co::Reduce,
+                sg::All
+                | sg::Any
+                | sg::Add
+                | sg::Mul
+                | sg::Min
+                | sg::Max
+                | sg::And
+                | sg::Or
+                | sg::Xor,
+            ) => {}
+            (co::InclusiveScan | co::ExclusiveScan, sg::Add | sg::Mul) => {}
+
+            (_, _) => {
+                return Err(SubgroupError::UnknownOperation.with_span().into_other());
             }
         };
 
