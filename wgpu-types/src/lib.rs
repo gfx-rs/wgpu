@@ -7190,7 +7190,7 @@ mod send_sync {
 ///
 /// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
 #[repr(u8)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DeviceLostReason {
     /// Triggered by driver
     Unknown = 0,
@@ -7210,4 +7210,10 @@ pub enum DeviceLostReason {
     /// exactly once before it is dropped, which helps with managing the
     /// memory owned by the callback.
     ReplacedCallback = 3,
+    /// When setting the callback, but the device is already invalid
+    ///
+    /// As above, when the callback is provided, wgpu guarantees that it
+    /// will eventually be called. If the device is already invalid, wgpu
+    /// will call the callback immediately, with this reason.
+    DeviceInvalid = 4,
 }

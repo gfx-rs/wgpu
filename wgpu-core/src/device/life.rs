@@ -309,12 +309,12 @@ impl<A: HalApi> LifetimeTracker<A> {
     }
 
     pub fn post_submit(&mut self) {
-        for v in self.future_suspected_buffers.drain(..).take(1) {
+        for v in self.future_suspected_buffers.drain(..) {
             self.suspected_resources
                 .buffers
                 .insert(v.as_info().tracker_index(), v);
         }
-        for v in self.future_suspected_textures.drain(..).take(1) {
+        for v in self.future_suspected_textures.drain(..) {
             self.suspected_resources
                 .textures
                 .insert(v.as_info().tracker_index(), v);
