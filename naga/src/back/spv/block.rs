@@ -1201,11 +1201,158 @@ impl<'w> BlockContext<'w> {
                     Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),
                     Mf::Pack2x16unorm => MathOp::Ext(spirv::GLOp::PackUnorm2x16),
                     Mf::Pack2x16snorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let (int_type, is_signed) = match fun {
+                            Mf::Pack4xI8 => (crate::ScalarKind::Sint, true),
+                            Mf::Pack4xU8 => (crate::ScalarKind::Uint, false),
+                            _ => unreachable!(),
+                        };
+                        let uint_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: int_type,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        let mut last_instruction = Instruction::new(spirv::Op::Nop);
+
+                        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0));
+                        let mut preresult = zero;
+                        block
+                            .body
+                            .reserve(usize::from(VEC_LENGTH) * (2 + usize::from(is_signed)));
+
+                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+                        const VEC_LENGTH: u8 = 4;
+                        for i in 0..u32::from(VEC_LENGTH) {
+                            let offset =
+                                self.writer.get_constant_scalar(crate::Literal::U32(i * 8));
+                            let mut extracted = self.gen_id();
+                            block.body.push(Instruction::binary(
+                                spirv::Op::CompositeExtract,
+                                int_type_id,
+                                extracted,
+                                arg0_id,
+                                i,
+                            ));
+                            if is_signed {
+                                let casted = self.gen_id();
+                                block.body.push(Instruction::unary(
+                                    spirv::Op::Bitcast,
+                                    uint_type_id,
+                                    casted,
+                                    extracted,
+                                ));
+                                extracted = casted;
+                            }
+                            let is_last = i == u32::from(VEC_LENGTH - 1);
+                            if is_last {
+                                last_instruction = Instruction::quaternary(
+                                    spirv::Op::BitFieldInsert,
+                                    result_type_id,
+                                    id,
+                                    preresult,
+                                    extracted,
+                                    offset,
+                                    eight,
+                                )
+                            } else {
+                                let new_preresult = self.gen_id();
+                                block.body.push(Instruction::quaternary(
+                                    spirv::Op::BitFieldInsert,
+                                    result_type_id,
+                                    new_preresult,
+                                    preresult,
+                                    extracted,
+                                    offset,
+                                    eight,
+                                ));
+                                preresult = new_preresult;
+                            }
+                        }
+
+                        MathOp::Custom(last_instruction)
+                    }
                     Mf::Unpack4x8unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm4x8),
                     Mf::Unpack4x8snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm4x8),
                     Mf::Unpack2x16float => MathOp::Ext(spirv::GLOp::UnpackHalf2x16),
                     Mf::Unpack2x16unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm2x16),
                     Mf::Unpack2x16snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm2x16),
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        let (int_type, extract_op, is_signed) = match fun {
+                            Mf::Unpack4xI8 => {
+                                (crate::ScalarKind::Sint, spirv::Op::BitFieldSExtract, true)
+                            }
+                            Mf::Unpack4xU8 => {
+                                (crate::ScalarKind::Uint, spirv::Op::BitFieldUExtract, false)
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        let sint_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: crate::ScalarKind::Sint,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: int_type,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+                        block
+                            .body
+                            .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
+                        let arg_id = if is_signed {
+                            let new_arg_id = self.gen_id();
+                            block.body.push(Instruction::unary(
+                                spirv::Op::Bitcast,
+                                sint_type_id,
+                                new_arg_id,
+                                arg0_id,
+                            ));
+                            new_arg_id
+                        } else {
+                            arg0_id
+                        };
+
+                        const VEC_LENGTH: u8 = 4;
+                        let parts: [_; VEC_LENGTH as usize] =
+                            std::array::from_fn(|_| self.gen_id());
+                        for (i, part_id) in parts.into_iter().enumerate() {
+                            let index = self
+                                .writer
+                                .get_constant_scalar(crate::Literal::U32(i as u32 * 8));
+                            block.body.push(Instruction::ternary(
+                                extract_op,
+                                int_type_id,
+                                part_id,
+                                arg_id,
+                                index,
+                                eight,
+                            ));
+                        }
+
+                        MathOp::Custom(Instruction::composite_construct(result_type_id, id, &parts))
+                    }
                 };
 
                 block.body.push(match math_op {

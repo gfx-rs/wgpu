@@ -153,11 +153,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     | crate::MathFunction::Unpack2x16unorm
                     | crate::MathFunction::Unpack4x8snorm
                     | crate::MathFunction::Unpack4x8unorm
+                    | crate::MathFunction::Unpack4xI8
+                    | crate::MathFunction::Unpack4xU8
                     | crate::MathFunction::Pack2x16float
                     | crate::MathFunction::Pack2x16snorm
                     | crate::MathFunction::Pack2x16unorm
                     | crate::MathFunction::Pack4x8snorm
-                    | crate::MathFunction::Pack4x8unorm => {
+                    | crate::MathFunction::Pack4x8unorm
+                    | crate::MathFunction::Pack4xI8
+                    | crate::MathFunction::Pack4xU8 => {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::CountLeadingZeros => {
@@ -2838,11 +2842,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Pack2x16unorm,
                     Pack4x8snorm,
                     Pack4x8unorm,
+                    Pack4xI8,
+                    Pack4xU8,
                     Unpack2x16float,
                     Unpack2x16snorm,
                     Unpack2x16unorm,
                     Unpack4x8snorm,
                     Unpack4x8unorm,
+                    Unpack4xI8,
+                    Unpack4xU8,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
                     MissingIntReturnType(&'static str),
@@ -2924,12 +2932,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Pack2x16unorm => Function::Pack2x16unorm,
                     Mf::Pack4x8snorm => Function::Pack4x8snorm,
                     Mf::Pack4x8unorm => Function::Pack4x8unorm,
+                    Mf::Pack4xI8 => Function::Pack4xI8,
+                    Mf::Pack4xU8 => Function::Pack4xU8,
                     // Data Unpacking
                     Mf::Unpack2x16float => Function::Unpack2x16float,
                     Mf::Unpack2x16snorm => Function::Unpack2x16snorm,
                     Mf::Unpack2x16unorm => Function::Unpack2x16unorm,
                     Mf::Unpack4x8snorm => Function::Unpack4x8snorm,
                     Mf::Unpack4x8unorm => Function::Unpack4x8unorm,
+                    Mf::Unpack4xI8 => Function::Unpack4xI8,
+                    Mf::Unpack4xU8 => Function::Unpack4xU8,
                     _ => return Err(Error::Unimplemented(format!("write_expr_math {fun:?}"))),
                 };
 
@@ -3022,6 +3034,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[3], 0.0, 1.0) * {scale}.0)) << 24)")?;
                     }
+                    fun @ (Function::Pack4xI8 | Function::Pack4xU8) => {
+                        let was_signed = matches!(fun, Function::Pack4xI8);
+                        if was_signed {
+                            write!(self.out, "uint(")?;
+                        }
+                        write!(self.out, "(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[0] & 0xFF) | ((")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[1] & 0xFF) << 8) | ((")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[2] & 0xFF) << 16) | ((")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[3] & 0xFF) << 24)")?;
+                        if was_signed {
+                            write!(self.out, ")")?;
+                        }
+                    }
 
                     Function::Unpack2x16float => {
                         write!(self.out, "float2(f16tof32(")?;
@@ -3073,6 +3103,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, " >> 16 & 0xFF, ")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " >> 24) / {scale}.0)")?;
+                    }
+                    fun @ (Function::Unpack4xI8 | Function::Unpack4xU8) => {
+                        if matches!(fun, Function::Unpack4xU8) {
+                            write!(self.out, "u")?;
+                        }
+                        write!(self.out, "int4(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 8, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 16, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 24) << 24 >> 24")?;
                     }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{fun_name}(")?;
