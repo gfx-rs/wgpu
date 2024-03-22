@@ -3454,16 +3454,45 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Pack2x16snorm => "packSnorm2x16",
                     Mf::Pack2x16unorm => "packUnorm2x16",
                     Mf::Pack2x16float => "packHalf2x16",
-                    Mf::Pack4xI8 => todo!("Pack4xI8"),
-                    Mf::Pack4xU8 => todo!("Pack4xU8"),
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        if fun == Mf::Pack4xI8 {
+                            write!(self.out, "int(")?;
+                        }
+                        write!(self.out, "(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[0] & 0xFF) | (")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[1] & (0xFF << 8)) | (")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[2] & (0xFF << 16)) | (")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[3] & (0xFF << 24))")?;
+                        if fun == Mf::Pack4xI8 {
+                            write!(self.out, ")")?;
+                        }
+
+                        return Ok(());
+                    }
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpackSnorm4x8",
                     Mf::Unpack4x8unorm => "unpackUnorm4x8",
                     Mf::Unpack2x16snorm => "unpackSnorm2x16",
                     Mf::Unpack2x16unorm => "unpackUnorm2x16",
                     Mf::Unpack2x16float => "unpackHalf2x16",
-                    Mf::Unpack4xI8 => todo!("Unpack4xI8"),
-                    Mf::Unpack4xU8 => todo!("Unpack4xU8"),
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        let sign_prefix = if fun == Mf::Unpack4xI8 { 'i' } else { 'u' };
+                        write!(self.out, "{sign_prefix}vec4(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, " & 0xFF, (")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, " >> 8) & 0xFF, (")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, " >> 16) & 0xFF, ")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, " >> 24)")?;
+
+                        return Ok(());
+                    }
                 };
 
                 let extract_bits = fun == Mf::ExtractBits;
