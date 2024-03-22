@@ -100,6 +100,7 @@ pub struct Device<A: HalApi> {
     pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
+    // NOTE: if both are needed, the `snatchable_lock` must be acquired before the `fence`
     pub(crate) fence: RwLock<Option<A::Fence>>,
     pub(crate) snatchable_lock: SnatchLock,
 

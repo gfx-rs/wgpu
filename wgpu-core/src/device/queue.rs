@@ -1149,7 +1149,9 @@ impl Global {
 
             let device = queue.device.as_ref().unwrap();
 
-            let mut fence = device.fence.write();
+            let snatch_guard = device.snatchable_lock.read();
+
+            let mut fence = device.fence.write(); // snatch(r) -> fence(w)
             let fence = fence.as_mut().unwrap();
             let submit_index = device
                 .active_submission_index
@@ -1158,8 +1160,6 @@ impl Global {
             let mut active_executions = Vec::new();
 
             let mut used_surface_textures = track::TextureUsageScope::default();
-
-            let snatch_guard = device.snatchable_lock.read();
 
             let mut submit_surface_textures_owned = SmallVec::<[_; 2]>::new();
 
