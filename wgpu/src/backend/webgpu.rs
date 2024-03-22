@@ -1578,10 +1578,10 @@ impl crate::context::Context for ContextWebGpu {
                                 webgpu_sys::GpuStorageTextureAccess::WriteOnly
                             }
                             wgt::StorageTextureAccess::ReadOnly => {
-                                panic!("ReadOnly is not available")
+                                webgpu_sys::GpuStorageTextureAccess::ReadOnly
                             }
                             wgt::StorageTextureAccess::ReadWrite => {
-                                panic!("ReadWrite is not available")
+                                webgpu_sys::GpuStorageTextureAccess::ReadWrite
                             }
                         };
                         let mut storage_texture = webgpu_sys::GpuStorageTextureBindingLayout::new(
