@@ -868,6 +868,7 @@ impl Global {
             transit,
             &mut tracker.textures,
             device,
+            &snatch_guard,
         );
         CommandBuffer::insert_barriers_from_tracker(
             transit,

@@ -2374,7 +2374,7 @@ impl Global {
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        unsafe { bundle.execute(raw) }
+                        unsafe { bundle.execute(raw, &snatch_guard) }
                             .map_err(|e| match e {
                                 ExecutionError::DestroyedBuffer(id) => {
                                     RenderCommandError::DestroyedBuffer(id)
@@ -2427,6 +2427,7 @@ impl Global {
                 transit,
                 &mut tracker.textures,
                 &cmd_buf.device,
+                &snatch_guard,
             );
 
             cmd_buf_data
