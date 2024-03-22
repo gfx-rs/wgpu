@@ -250,7 +250,9 @@ impl super::CommandEncoder {
     }
 }
 
-impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
+impl crate::CommandEncoder for super::CommandEncoder {
+    type A = super::Api;
+
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         self.state = State::default();
         self.cmd_buffer.label = label.map(str::to_string);
