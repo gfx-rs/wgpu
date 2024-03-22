@@ -2810,18 +2810,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[3], 0.0, 1.0) * {scale}.0)) << 24)")?;
                     }
-                    Function::Pack4xI8 => {
-                        write!(self.out, "uint((")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[0] & 0xFF) | (")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[1] & (0xFF << 8)) | (")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[2] & (0xFF << 16)) | (")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[3] & (0xFF << 24)))")?;
-                    }
-                    Function::Pack4xU8 => {
+                    fun @ (Function::Pack4xI8 | Function::Pack4xU8) => {
+                        if matches!(fun, Function::Pack4xU8) {
+                            write!(self.out, "uint(")?;
+                        }
                         write!(self.out, "(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[0] & 0xFF) | (")?;
@@ -2831,6 +2823,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, "[2] & (0xFF << 16)) | (")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[3] & (0xFF << 24))")?;
+                        if matches!(fun, Function::Pack4xU8) {
+                            write!(self.out, ")")?;
+                        }
                     }
 
                     Function::Unpack2x16float => {
