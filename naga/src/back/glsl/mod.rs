@@ -3454,12 +3454,16 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Pack2x16snorm => "packSnorm2x16",
                     Mf::Pack2x16unorm => "packUnorm2x16",
                     Mf::Pack2x16float => "packHalf2x16",
+                    Mf::Pack4xI8 => todo!("Pack4xI8"),
+                    Mf::Pack4xU8 => todo!("Pack4xU8"),
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpackSnorm4x8",
                     Mf::Unpack4x8unorm => "unpackUnorm4x8",
                     Mf::Unpack2x16snorm => "unpackSnorm2x16",
                     Mf::Unpack2x16unorm => "unpackUnorm2x16",
                     Mf::Unpack2x16float => "unpackHalf2x16",
+                    Mf::Unpack4xI8 => todo!("Unpack4xI8"),
+                    Mf::Unpack4xU8 => todo!("Unpack4xU8"),
                 };
 
                 let extract_bits = fun == Mf::ExtractBits;

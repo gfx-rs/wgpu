@@ -1838,12 +1838,16 @@ impl<W: Write> Writer<W> {
                     Mf::Pack2x16snorm => "pack_float_to_snorm2x16",
                     Mf::Pack2x16unorm => "pack_float_to_unorm2x16",
                     Mf::Pack2x16float => "",
+                    Mf::Pack4xI8 => "",
+                    Mf::Pack4xU8 => "",
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpack_snorm4x8_to_float",
                     Mf::Unpack4x8unorm => "unpack_unorm4x8_to_float",
                     Mf::Unpack2x16snorm => "unpack_snorm2x16_to_float",
                     Mf::Unpack2x16unorm => "unpack_unorm2x16_to_float",
                     Mf::Unpack2x16float => "",
+                    Mf::Unpack4xI8 => "",
+                    Mf::Unpack4xU8 => "",
                 };
 
                 match fun {
@@ -1927,6 +1931,14 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "as_type<uint>(half2(")?;
                     self.put_expression(arg, context, false)?;
                     write!(self.out, "))")?;
+                } else if fun == Mf::Pack4xI8 {
+                    todo!("Pack4xI8")
+                } else if fun == Mf::Pack4xU8 {
+                    todo!("Pack4xU8")
+                } else if fun == Mf::Unpack4xI8 {
+                    todo!("Unpack4xI8")
+                } else if fun == Mf::Unpack4xU8 {
+                    todo!("Unpack4xU8")
                 } else if fun == Mf::ExtractBits {
                     // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
                     // to first sanitize the offset and count first. If we don't do this, Apple chips
