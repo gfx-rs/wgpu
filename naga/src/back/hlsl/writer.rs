@@ -2884,19 +2884,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " >> 24) / {scale}.0)")?;
                     }
-                    Function::Unpack4xI8 => {
+                    fun @ (Function::Unpack4xI8 | Function::Unpack4xU8) => {
+                        if matches!(fun, Function::Unpack4xU8) {
+                            write!(self.out, "u")?;
+                        }
                         write!(self.out, "int4(")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " & 0xFF, (")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 8) & 0xFF, (")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 16) & 0xFF, ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 24)")?;
-                    }
-                    Function::Unpack4xU8 => {
-                        write!(self.out, "uint4(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " & 0xFF, (")?;
                         self.write_expr(module, arg, func_ctx)?;
