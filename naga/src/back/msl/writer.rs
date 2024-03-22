@@ -1828,12 +1828,16 @@ impl<W: Write> Writer<W> {
                     Mf::Pack2x16snorm => "pack_float_to_snorm2x16",
                     Mf::Pack2x16unorm => "pack_float_to_unorm2x16",
                     Mf::Pack2x16float => "",
+                    Mf::Pack4xI8 => "",
+                    Mf::Pack4xU8 => "",
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpack_snorm4x8_to_float",
                     Mf::Unpack4x8unorm => "unpack_unorm4x8_to_float",
                     Mf::Unpack2x16snorm => "unpack_snorm2x16_to_float",
                     Mf::Unpack2x16unorm => "unpack_unorm2x16_to_float",
                     Mf::Unpack2x16float => "",
+                    Mf::Unpack4xI8 => "",
+                    Mf::Unpack4xU8 => "",
                 };
 
                 match fun {
@@ -1984,6 +1988,38 @@ impl<W: Write> Writer<W> {
                     Mf::Modf | Mf::Frexp => {
                         write!(self.out, "{fun_name}")?;
                         self.put_call_parameters(iter::once(arg), context)?;
+                    }
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let was_signed = fun == Mf::Pack4xI8;
+                        if was_signed {
+                            write!(self.out, "uint(")?;
+                        }
+                        write!(self.out, "(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[0] & 0xFF) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[1] & 0xFF) << 8) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[2] & 0xFF) << 16) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[3] & 0xFF) << 24)")?;
+                        if was_signed {
+                            write!(self.out, ")")?;
+                        }
+                    }
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        if matches!(fun, Mf::Unpack4xU8) {
+                            write!(self.out, "u")?;
+                        }
+                        write!(self.out, "int4(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " >> 8, ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " >> 16, ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " >> 24) << 24 >> 24")?;
                     }
                     _ => {
                         write!(self.out, "{NAMESPACE}::{fun_name}")?;
@@ -2611,7 +2647,11 @@ impl<W: Write> Writer<W> {
                             }
                         }
                     }
-                    crate::MathFunction::FindMsb => {
+                    crate::MathFunction::FindMsb
+                    | crate::MathFunction::Pack4xI8
+                    | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Unpack4xI8
+                    | crate::MathFunction::Unpack4xU8 => {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {

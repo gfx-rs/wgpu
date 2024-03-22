@@ -1527,11 +1527,30 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
+                    mf @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let scalar_kind = match mf {
+                            Mf::Pack4xI8 => Sk::Sint,
+                            Mf::Pack4xU8 => Sk::Uint,
+                            _ => unreachable!(),
+                        };
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Vector {
+                                size: crate::VectorSize::Quad,
+                                scalar: Sc { kind, .. },
+                            } if kind == scalar_kind => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
                     Mf::Unpack2x16float
                     | Mf::Unpack2x16snorm
                     | Mf::Unpack2x16unorm
                     | Mf::Unpack4x8snorm
-                    | Mf::Unpack4x8unorm => {
+                    | Mf::Unpack4x8unorm
+                    | Mf::Unpack4xI8
+                    | Mf::Unpack4xU8 => {
                         if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }

@@ -53,8 +53,7 @@ use crate::{
 use features::FeaturesManager;
 use std::{
     cmp::Ordering,
-    fmt,
-    fmt::{Error as FmtError, Write},
+    fmt::{self, Error as FmtError, Write},
     mem,
 };
 use thiserror::Error;
@@ -1317,6 +1316,12 @@ impl<'a, W: Write> Writer<'a, W> {
                                 _ => {}
                             }
                         }
+                    }
+                    crate::MathFunction::Pack4xI8
+                    | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Unpack4xI8
+                    | crate::MathFunction::Unpack4xU8 => {
+                        self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
                         // Only argument 1 is re-used.
@@ -3582,12 +3587,66 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Pack2x16snorm => "packSnorm2x16",
                     Mf::Pack2x16unorm => "packUnorm2x16",
                     Mf::Pack2x16float => "packHalf2x16",
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let was_signed = match fun {
+                            Mf::Pack4xI8 => true,
+                            Mf::Pack4xU8 => false,
+                            _ => unreachable!(),
+                        };
+                        let const_suffix = if was_signed { "" } else { "u" };
+                        if was_signed {
+                            write!(self.out, "uint(")?;
+                        }
+                        write!(self.out, "(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[0] & 0xFF{const_suffix}) | ((")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[1] & 0xFF{const_suffix}) << 8) | ((")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[2] & 0xFF{const_suffix}) << 16) | ((")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[3] & 0xFF{const_suffix}) << 24)")?;
+                        if was_signed {
+                            write!(self.out, ")")?;
+                        }
+
+                        return Ok(());
+                    }
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpackSnorm4x8",
                     Mf::Unpack4x8unorm => "unpackUnorm4x8",
                     Mf::Unpack2x16snorm => "unpackSnorm2x16",
                     Mf::Unpack2x16unorm => "unpackUnorm2x16",
                     Mf::Unpack2x16float => "unpackHalf2x16",
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        let sign_prefix = match fun {
+                            Mf::Unpack4xI8 => 'i',
+                            Mf::Unpack4xU8 => 'u',
+                            _ => unreachable!(),
+                        };
+                        write!(self.out, "{sign_prefix}vec4(")?;
+                        for i in 0..4 {
+                            write!(self.out, "bitfieldExtract(")?;
+                            // Since bitfieldExtract only sign extends if the value is signed, this
+                            // cast is needed
+                            match fun {
+                                Mf::Unpack4xI8 => {
+                                    write!(self.out, "int(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")")?;
+                                }
+                                Mf::Unpack4xU8 => self.write_expr(arg, ctx)?,
+                                _ => unreachable!(),
+                            };
+                            write!(self.out, ", {}, 8)", i * 8)?;
+                            if i != 3 {
+                                write!(self.out, ", ")?;
+                            }
+                        }
+                        write!(self.out, ")")?;
+
+                        return Ok(());
+                    }
                 };
 
                 let extract_bits = fun == Mf::ExtractBits;

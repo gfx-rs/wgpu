@@ -1220,12 +1220,16 @@ pub enum MathFunction {
     Pack2x16snorm,
     Pack2x16unorm,
     Pack2x16float,
+    Pack4xI8,
+    Pack4xU8,
     // data unpacking
     Unpack4x8snorm,
     Unpack4x8unorm,
     Unpack2x16snorm,
     Unpack2x16unorm,
     Unpack2x16float,
+    Unpack4xI8,
+    Unpack4xU8,
 }
 
 /// Sampling modifier to control the level of detail.
