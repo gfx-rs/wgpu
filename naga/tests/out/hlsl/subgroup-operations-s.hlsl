@@ -3,6 +3,9 @@ static uint subgroup_id_1 = (uint)0;
 static uint subgroup_size_1 = (uint)0;
 static uint subgroup_invocation_id_1 = (uint)0;
 
+struct ComputeInput_main {
+};
+
 void main_1()
 {
     uint _expr5 = subgroup_size_1;
@@ -32,12 +35,12 @@ void main_1()
 }
 
 [numthreads(1, 1, 1)]
-void main(uint __local_invocation_index : SV_GroupIndex)
+void main(ComputeInput_main computeinput_main, uint __local_invocation_index : SV_GroupIndex)
 {
-    const uint num_subgroups = (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();
-    const uint subgroup_id = __local_invocation_index / WaveGetLaneCount();
-    const uint subgroup_size = WaveGetLaneCount();
-    const uint subgroup_invocation_id = WaveGetLaneIndex();
+    uint num_subgroups = (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();
+    uint subgroup_id = __local_invocation_index / WaveGetLaneCount();
+    uint subgroup_size = WaveGetLaneCount();
+    uint subgroup_invocation_id = WaveGetLaneIndex();
     num_subgroups_1 = num_subgroups;
     subgroup_id_1 = subgroup_id;
     subgroup_size_1 = subgroup_size;

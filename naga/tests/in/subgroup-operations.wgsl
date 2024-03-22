@@ -1,8 +1,12 @@
+struct Structure {
+    @builtin(num_subgroups) num_subgroups: u32,
+    @builtin(subgroup_size) subgroup_size: u32,
+};
+
 @compute @workgroup_size(1)
 fn main(
-    @builtin(num_subgroups) num_subgroups: u32,
+    sizes: Structure,
     @builtin(subgroup_id) subgroup_id: u32,
-    @builtin(subgroup_size) subgroup_size: u32,
     @builtin(subgroup_invocation_id) subgroup_invocation_id: u32,
 ) {
     subgroupBarrier();
@@ -26,8 +30,8 @@ fn main(
 
     subgroupBroadcastFirst(subgroup_invocation_id);
     subgroupBroadcast(subgroup_invocation_id, 4u);
-    subgroupShuffle(subgroup_invocation_id, subgroup_size - 1u - subgroup_invocation_id);
+    subgroupShuffle(subgroup_invocation_id, sizes.subgroup_size - 1u - subgroup_invocation_id);
     subgroupShuffleDown(subgroup_invocation_id, 1u);
     subgroupShuffleUp(subgroup_invocation_id, 1u);
-    subgroupShuffleXor(subgroup_invocation_id, subgroup_size - 1u);
+    subgroupShuffleXor(subgroup_invocation_id, sizes.subgroup_size - 1u);
 }
