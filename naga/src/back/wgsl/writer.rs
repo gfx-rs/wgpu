@@ -1593,22 +1593,16 @@ impl<W: Write> Writer<W> {
                     Mf::Pack2x16snorm => Function::Regular("pack2x16snorm"),
                     Mf::Pack2x16unorm => Function::Regular("pack2x16unorm"),
                     Mf::Pack2x16float => Function::Regular("pack2x16float"),
-                    Mf::Pack4xI8 | Mf::Pack4xU8 => {
-                        return Err(Error::Unimplemented(String::from(
-                            "Pack4xI8 and Pack4xU8 are not yet supported",
-                        )))
-                    }
+                    Mf::Pack4xI8 => Function::Regular("pack4xI8"),
+                    Mf::Pack4xU8 => Function::Regular("pack4xU8"),
                     // data unpacking
                     Mf::Unpack4x8snorm => Function::Regular("unpack4x8snorm"),
                     Mf::Unpack4x8unorm => Function::Regular("unpack4x8unorm"),
                     Mf::Unpack2x16snorm => Function::Regular("unpack2x16snorm"),
                     Mf::Unpack2x16unorm => Function::Regular("unpack2x16unorm"),
                     Mf::Unpack2x16float => Function::Regular("unpack2x16float"),
-                    Mf::Unpack4xI8 | Mf::Unpack4xU8 => {
-                        return Err(Error::Unimplemented(String::from(
-                            "Unpack4xI8 and Unpack4xU8 are not yet supported",
-                        )))
-                    }
+                    Mf::Unpack4xI8 => Function::Regular("unpack4xI8"),
+                    Mf::Unpack4xU8 => Function::Regular("unpack4xU8"),
                     Mf::Inverse | Mf::Outer => {
                         return Err(Error::UnsupportedMathFunction(fun));
                     }
