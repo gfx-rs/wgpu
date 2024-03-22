@@ -2811,10 +2811,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, "[3], 0.0, 1.0) * {scale}.0)) << 24)")?;
                     }
                     Function::Pack4xI8 => {
-                        todo!("hlsl Pack4xI8");
+                        write!(self.out, "uint((")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[0] & 0xFF) | (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[1] & (0xFF << 8)) | (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[2] & (0xFF << 16)) | (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[3] & (0xFF << 24)))")?;
                     }
                     Function::Pack4xU8 => {
-                        todo!("hlsl Pack4xU8");
+                        write!(self.out, "(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[0] & 0xFF) | (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[1] & (0xFF << 8)) | (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[2] & (0xFF << 16)) | (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "[3] & (0xFF << 24))")?;
                     }
 
                     Function::Unpack2x16float => {
@@ -2869,10 +2885,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, " >> 24) / {scale}.0)")?;
                     }
                     Function::Unpack4xI8 => {
-                        todo!("hlsl Unpack4xI8");
+                        write!(self.out, "int4(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " & 0xFF, (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 8) & 0xFF, (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 16) & 0xFF, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 24)")?;
                     }
                     Function::Unpack4xU8 => {
-                        todo!("hlsl Unpack4xU8");
+                        write!(self.out, "uint4(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " & 0xFF, (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 8) & 0xFF, (")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 16) & 0xFF, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 24)")?;
                     }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{fun_name}(")?;
