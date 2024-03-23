@@ -28,7 +28,10 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     storage::Storage,
-    track::{BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators},
+    track::{
+        BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope,
+        UsageScopePool,
+    },
     validation::{
         self, check_buffer_usage, check_texture_usage, validate_color_attachment_bytes_per_sample,
     },
@@ -135,6 +138,7 @@ pub struct Device<A: HalApi> {
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
+    pub(crate) usage_scopes: UsageScopePool<A>,
 }
 
 pub(crate) enum DeferredDestroy<A: HalApi> {
@@ -296,6 +300,7 @@ impl<A: HalApi> Device<A> {
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
             deferred_destroy: Mutex::new(Vec::new()),
+            usage_scopes: Default::default(),
         })
     }
 
@@ -3567,6 +3572,10 @@ impl<A: HalApi> Device<A> {
         for texture in trackers.textures.used_resources() {
             let _ = texture.destroy();
         }
+    }
+
+    pub(crate) fn new_usage_scope(&self) -> UsageScope<'_, A> {
+        UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
     }
 }
 

@@ -108,22 +108,26 @@ impl<A: HalApi> BufferBindGroupState<A> {
 #[derive(Debug)]
 pub(crate) struct BufferUsageScope<A: HalApi> {
     state: Vec<BufferUses>,
-
     metadata: ResourceMetadata<Buffer<A>>,
 }
 
-impl<A: HalApi> BufferUsageScope<A> {
-    pub fn new() -> Self {
+impl<A: HalApi> Default for BufferUsageScope<A> {
+    fn default() -> Self {
         Self {
             state: Vec::new(),
-
             metadata: ResourceMetadata::new(),
         }
     }
+}
 
+impl<A: HalApi> BufferUsageScope<A> {
     fn tracker_assert_in_bounds(&self, index: usize) {
         strict_assert!(index < self.state.len());
         self.metadata.tracker_assert_in_bounds(index);
+    }
+    pub fn clear(&mut self) {
+        self.state.clear();
+        self.metadata.clear();
     }
 
     /// Sets the size of all the vectors inside the tracker.

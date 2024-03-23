@@ -134,6 +134,7 @@ Bottom level categories:
 - Fix linking when targeting android. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
 - fix resource leak for buffers/textures dropped while having pending writes. By @robtfm in [#5413](https://github.com/gfx-rs/wgpu/pull/5413)
 - Failing to set the device lost closure will call the closure before returning. By @bradwerth in [#5358](https://github.com/gfx-rs/wgpu/pull/5358).
+- Use memory pooling for UsageScopes to avoid frequent large allocations. by @robtfm in [#5414](https://github.com/gfx-rs/wgpu/pull/5414)
 
 #### Naga
 - In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
