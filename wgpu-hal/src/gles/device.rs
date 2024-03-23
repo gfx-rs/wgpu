@@ -483,7 +483,9 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+impl crate::Device for super::Device {
+    type A = super::Api;
+
     unsafe fn exit(self, queue: super::Queue) {
         let gl = &self.shared.context.lock();
         unsafe { gl.delete_vertex_array(self.main_vao) };
