@@ -120,6 +120,7 @@ Bottom level categories:
 #### Naga
 
 - Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
+- Support `arrayLength` for runtime-sized arrays inside binding arrays (for WGSL input and SPIR-V output). By @kvark in [#5428](https://github.com/gfx-rs/wgpu/pull/5428)
 
 #### WebGPU
 
