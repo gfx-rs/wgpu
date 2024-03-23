@@ -48,25 +48,39 @@ impl<'w> BlockContext<'w> {
         // inside a buffer that is itself an element in a buffer bindings array.
         // SPIR-V requires that runtime-sized arrays are wrapped in structs.
         // See `helpers::global_needs_wrapper` and its uses.
-        let (opt_array_index, global_handle, opt_last_member_index) = match self
+        let (opt_array_index_id, global_handle, opt_last_member_index) = match self
             .ir_function
             .expressions[array]
         {
-            // Note that SPIR-V forbids `OpArrayLength` on a variable pointer,
-            // so we aren't handling `crate::Expression::Access` here.
             crate::Expression::AccessIndex { base, index } => {
                 match self.ir_function.expressions[base] {
                     // The global variable is an array of buffer bindings of structs,
-                    // and we are accessing the last member.
+                    // we are accessing one of them with a static index,
+                    // and the last member of it.
                     crate::Expression::AccessIndex {
                         base: base_outer,
                         index: index_outer,
                     } => match self.ir_function.expressions[base_outer] {
                         crate::Expression::GlobalVariable(handle) => {
-                            (Some(index_outer), handle, Some(index))
+                            let index_id = self.get_index_constant(index_outer);
+                            (Some(index_id), handle, Some(index))
                         }
                         _ => return Err(Error::Validation("array length expression case-1a")),
                     },
+                    // The global variable is an array of buffer bindings of structs,
+                    // we are accessing one of them with a dynamic index,
+                    // and the last member of it.
+                    crate::Expression::Access {
+                        base: base_outer,
+                        index: index_outer,
+                    } => match self.ir_function.expressions[base_outer] {
+                        crate::Expression::GlobalVariable(handle) => {
+                            let index_id = self.cached[index_outer];
+                            (Some(index_id), handle, Some(index))
+                        }
+                        _ => return Err(Error::Validation("array length expression case-1b")),
+                    },
+                    // The global variable is a buffer, and we are accessing the last member.
                     crate::Expression::GlobalVariable(handle) => {
                         let global = &self.ir_module.global_variables[handle];
                         match self.ir_module.types[global.ty].inner {
@@ -79,15 +93,27 @@ impl<'w> BlockContext<'w> {
                     _ => return Err(Error::Validation("array length expression case-1c")),
                 }
             }
+            // The global variable is an array of buffer bindings of arrays.
+            crate::Expression::Access { base, index } => match self.ir_function.expressions[base] {
+                crate::Expression::GlobalVariable(handle) => {
+                    let index_id = self.cached[index];
+                    let global = &self.ir_module.global_variables[handle];
+                    match self.ir_module.types[global.ty].inner {
+                        crate::TypeInner::BindingArray { .. } => (Some(index_id), handle, None),
+                        _ => return Err(Error::Validation("array length expression case-2a")),
+                    }
+                }
+                _ => return Err(Error::Validation("array length expression case-2b")),
+            },
             // The global variable is a run-time array.
             crate::Expression::GlobalVariable(handle) => {
                 let global = &self.ir_module.global_variables[handle];
                 if !global_needs_wrapper(self.ir_module, global) {
-                    return Err(Error::Validation("array length expression case-2"));
+                    return Err(Error::Validation("array length expression case-3"));
                 }
                 (None, handle, None)
             }
-            _ => return Err(Error::Validation("array length expression case-3")),
+            _ => return Err(Error::Validation("array length expression case-4")),
         };
 
         let gvar = self.writer.global_variables[global_handle.index()].clone();
@@ -103,17 +129,16 @@ impl<'w> BlockContext<'w> {
                 (0, gvar.var_id)
             }
         };
-        let structure_id = match opt_array_index {
+        let structure_id = match opt_array_index_id {
             // We are indexing inside a binding array, generate the access op.
-            Some(index) => {
+            Some(index_id) => {
                 let element_type_id = match self.ir_module.types[global.ty].inner {
                     crate::TypeInner::BindingArray { base, size: _ } => {
                         let class = map_storage_class(global.space);
                         self.get_pointer_id(base, class)?
                     }
-                    _ => return Err(Error::Validation("array length expression case-4")),
+                    _ => return Err(Error::Validation("array length expression case-5")),
                 };
-                let index_id = self.get_index_constant(index);
                 let structure_id = self.gen_id();
                 block.body.push(Instruction::access_chain(
                     element_type_id,

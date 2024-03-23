@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 68
+; Bound: 76
 OpCapability Shader
 OpCapability ShaderNonUniform
 OpExtension "SPV_KHR_storage_buffer_storage_class"
@@ -104,7 +104,17 @@ OpStore %31 %61
 %65 = OpLoad  %3  %31
 %66 = OpIAdd  %3  %65 %64
 OpStore %31 %66
-%67 = OpLoad  %3  %31
-OpStore %23 %67
+%67 = OpAccessChain  %38  %11 %36
+%68 = OpArrayLength  %3  %67 1
+%69 = OpLoad  %3  %31
+%70 = OpIAdd  %3  %69 %68
+OpStore %31 %70
+%71 = OpAccessChain  %38  %11 %37
+%72 = OpArrayLength  %3  %71 1
+%73 = OpLoad  %3  %31
+%74 = OpIAdd  %3  %73 %72
+OpStore %31 %74
+%75 = OpLoad  %3  %31
+OpStore %23 %75
 OpReturn
 OpFunctionEnd
