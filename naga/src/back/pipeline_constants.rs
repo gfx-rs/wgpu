@@ -180,13 +180,13 @@ pub(super) fn process_overrides<'a>(
     for (_, function) in functions.iter_mut() {
         process_function(&mut module, &override_map, function)?;
     }
-    let _ = mem::replace(&mut module.functions, functions);
+    module.functions = functions;
 
     let mut entry_points = mem::take(&mut module.entry_points);
     for ep in entry_points.iter_mut() {
         process_function(&mut module, &override_map, &mut ep.function)?;
     }
-    let _ = mem::replace(&mut module.entry_points, entry_points);
+    module.entry_points = entry_points;
 
     // Now that we've rewritten all the expressions, we need to
     // recompute their types and other metadata. For the time being,
@@ -303,7 +303,7 @@ fn process_function(
     adjust_block(&adjusted_local_expressions, &mut function.body);
 
     let new_body = filter_emits_in_block(&function.body, &function.expressions);
-    let _ = mem::replace(&mut function.body, new_body);
+    function.body = new_body;
 
     // We've changed the keys of `function.named_expression`, so we have to
     // rebuild it from scratch.
