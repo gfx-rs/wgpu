@@ -512,7 +512,7 @@ impl<A: HalApi> RenderBundleScope<A> {
     }
 }
 
-/// A pool for storing the memory used by [`UsageScope`]s and [`RenderBundleScope`]s. We take and store this memory when the
+/// A pool for storing the memory used by [`UsageScope`]s. We take and store this memory when the
 /// scope is dropped to avoid reallocating. The memory required only grows and allocation cost is
 /// significant when a large number of resources have been used.
 pub(crate) type UsageScopePool<A> = Mutex<Vec<(BufferUsageScope<A>, TextureUsageScope<A>)>>;

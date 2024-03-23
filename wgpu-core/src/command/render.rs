@@ -1214,7 +1214,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 
         Ok(Self {
             context,
-            usage_scope: device.get_usage_scope(),
+            usage_scope: device.new_usage_scope(),
             render_attachments,
             is_depth_read_only,
             is_stencil_read_only,

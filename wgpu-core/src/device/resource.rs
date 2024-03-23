@@ -138,8 +138,6 @@ pub struct Device<A: HalApi> {
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
-
-    // usage_scope pool
     pub(crate) usage_scopes: UsageScopePool<A>,
 }
 
@@ -3576,7 +3574,7 @@ impl<A: HalApi> Device<A> {
         }
     }
 
-    pub(crate) fn get_usage_scope<'a>(&'a self) -> UsageScope<'a, A> {
+    pub(crate) fn new_usage_scope(&self) -> UsageScope<'_, A> {
         UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
     }
 }

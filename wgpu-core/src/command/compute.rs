@@ -407,7 +407,7 @@ impl Global {
         let mut state = State {
             binder: Binder::new(),
             pipeline: None,
-            scope: device.get_usage_scope(),
+            scope: device.new_usage_scope(),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
