@@ -24,6 +24,8 @@ fn main(fragment_in: FragmentIn) -> @location(0) u32 {
     u1 += storage_array[non_uniform_index].x;
 
     u1 += arrayLength(&storage_array[0].far);
+    u1 += arrayLength(&storage_array[uniform_index].far);
+    u1 += arrayLength(&storage_array[non_uniform_index].far);
 
     return u1;
 }
