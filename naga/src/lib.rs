@@ -2295,3 +2295,56 @@ pub struct Module {
     /// validation.
     pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
 }
+
+bitflags::bitflags! {
+    /// Ray flags used when casting rays.
+    /// Matching vulkan constants can be found in
+    /// https://github.com/KhronosGroup/SPIRV-Registry/blob/main/extensions/KHR/ray_common/ray_flags_section.txt
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
+    #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    pub struct RayFlag: u32 {
+        /// Force all intersections to be treated as opaque.
+        const FORCE_OPAQUE = 0x1;
+        /// Force all intersections to be treated as non-opaque.
+        const FORCE_NO_OPAQUE = 0x2;
+        /// Stop traversal after the first hit.
+        const TERMINATE_ON_FIRST_HIT = 0x4;
+        /// Don't execute the closest hit shader.
+        const SKIP_CLOSEST_HIT_SHADER = 0x8;
+        /// Cull back facing geometry.
+        const CULL_BACK_FACING = 0x10;
+        /// Cull front facing geometry.
+        const CULL_FRONT_FACING = 0x20;
+        /// Cull opaque geometry.
+        const CULL_OPAQUE = 0x40;
+        /// Cull non-opaque geometry.
+        const CULL_NO_OPAQUE = 0x80;
+        /// Skip triangular geometry.
+        const SKIP_TRIANGLES = 0x100;
+        /// Skip axis-aligned bounding boxes.
+        const SKIP_AABBS = 0x200;
+    }
+}
+
+bitflags::bitflags! {
+    /// Type of a ray query intersection.
+    /// Matching vulkan constants can be found in
+    /// https://github.com/KhronosGroup/SPIRV-Registry/blob/main/extensions/KHR/SPV_KHR_ray_query.asciidoc
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
+    #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    pub struct RayQueryIntersection: u32 {
+        /// Intersecting with triangles..
+        /// Matches RayQueryCommittedIntersectionTriangleKHR and RayQueryCandidateIntersectionTriangleKHR.
+        const TRIANGLE = 0x1;
+        /// Intersecting with generated primitives.
+        /// Matches RayQueryCommittedIntersectionGeneratedKHR.
+        const GENERATED = 0x2;
+        /// Intersecting with Axis Aligned Bounding Boxes.
+        /// Matches RayQueryCandidateIntersectionAABBKHR.
+        const AABB = 0x4;
+    }
+}
