@@ -703,7 +703,9 @@ impl Instance {
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
-impl crate::Instance<super::Api> for Instance {
+impl crate::Instance for Instance {
+    type A = super::Api;
+
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (EGL) Backend");
         #[cfg(Emscripten)]
@@ -1165,7 +1167,9 @@ impl Surface {
     }
 }
 
-impl crate::Surface<super::Api> for Surface {
+impl crate::Surface for Surface {
+    type A = super::Api;
+
     unsafe fn configure(
         &self,
         device: &super::Device,
