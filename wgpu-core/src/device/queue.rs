@@ -1151,7 +1151,8 @@ impl Global {
 
             let snatch_guard = device.snatchable_lock.read();
 
-            let mut fence = device.fence.write(); // snatch(r) -> fence(w)
+            // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
+            let mut fence = device.fence.write();
             let fence = fence.as_mut().unwrap();
             let submit_index = device
                 .active_submission_index

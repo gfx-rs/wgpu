@@ -89,7 +89,7 @@ impl SnatchLock {
     pub fn read(&self) -> SnatchGuard {
         if cfg!(debug_assertions) {
             let caller = Location::caller();
-            let backtrace = Backtrace::force_capture();
+            let backtrace = Backtrace::capture();
             if let Some((prev, bt)) = READ_LOCK_LOCATION.take() {
                 let current = thread::current();
                 let name = current.name().unwrap_or("<unnamed>");

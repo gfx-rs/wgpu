@@ -188,11 +188,11 @@ impl Global {
                 hal::BufferUses::empty()
             } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // buffer is mappable, so we are just doing that at start
-                let snatch_guard = device.snatchable_lock.read();
                 let map_size = buffer.size;
                 let ptr = if map_size == 0 {
                     std::ptr::NonNull::dangling()
                 } else {
+                    let snatch_guard = device.snatchable_lock.read();
                     match map_buffer(
                         device.raw(),
                         &buffer,
