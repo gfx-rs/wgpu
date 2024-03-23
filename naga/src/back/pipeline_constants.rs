@@ -282,18 +282,18 @@ fn process_function(
     let mut emitter = Emitter::default();
     let mut block = Block::new();
 
-    for (old_h, expr, span) in expressions.drain() {
-        let mut expr = match expr {
-            Expression::Override(h) => Expression::Constant(override_map[h.index()]),
-            expr => expr,
-        };
-        let mut evaluator = ConstantEvaluator::for_wgsl_function(
-            module,
-            &mut function.expressions,
-            &mut local_expression_kind_tracker,
-            &mut emitter,
-            &mut block,
-        );
+    let mut evaluator = ConstantEvaluator::for_wgsl_function(
+        module,
+        &mut function.expressions,
+        &mut local_expression_kind_tracker,
+        &mut emitter,
+        &mut block,
+    );
+
+    for (old_h, mut expr, span) in expressions.drain() {
+        if let Expression::Override(h) = expr {
+            expr = Expression::Constant(override_map[h.index()]);
+        }
         adjust_expr(&adjusted_local_expressions, &mut expr);
         let h = evaluator.try_eval_and_append(expr, span)?;
         debug_assert_eq!(old_h.index(), adjusted_local_expressions.len());
