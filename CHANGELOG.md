@@ -40,6 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+## 23.1.0 (2024-12-11)
+
+### New Features
+
+#### Naga
+
+- Expose Ray Query flags as constants in WGSL. By @kvark in [#5429](https://github.com/gfx-rs/wgpu/pull/5429)
+
 ## 23.0.1 (2024-11-25)
 
 This release includes patches for `wgpu`, `wgpu-core` and `wgpu-hal`. All other crates remain at [23.0.0](https://github.com/gfx-rs/wgpu/releases/tag/v23.0.0).
