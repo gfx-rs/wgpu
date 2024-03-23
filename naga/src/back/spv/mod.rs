@@ -576,6 +576,15 @@ impl BlockContext<'_> {
         self.writer
             .get_constant_scalar(crate::Literal::I32(scope as _))
     }
+
+    fn get_pointer_id(
+        &mut self,
+        handle: Handle<crate::Type>,
+        class: spirv::StorageClass,
+    ) -> Result<Word, Error> {
+        self.writer
+            .get_pointer_id(&self.ir_module.types, handle, class)
+    }
 }
 
 #[derive(Clone, Copy, Default)]

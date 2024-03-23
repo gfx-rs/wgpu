@@ -4,6 +4,7 @@ struct UniformIndex {
 
 struct Foo {
     x: u32,
+    far: array<i32>,
 }
 
 struct FragmentIn {
@@ -30,6 +31,8 @@ fn main(fragment_in: FragmentIn) -> @location(0) @interpolate(flat) u32 {
     let _e22 = storage_array[non_uniform_index].x;
     let _e23 = u1_;
     u1_ = (_e23 + _e22);
-    let _e25 = u1_;
-    return _e25;
+    let _e29 = u1_;
+    u1_ = (_e29 + arrayLength((&storage_array[0].far)));
+    let _e31 = u1_;
+    return _e31;
 }
