@@ -188,9 +188,9 @@ pub(super) fn process_overrides<'a>(
     }
     let _ = mem::replace(&mut module.entry_points, entry_points);
 
-    // Now that the global expression arena has changed, we need to
-    // recompute those expressions' types. For the time being, do a
-    // full re-validation.
+    // Now that we've rewritten all the expressions, we need to
+    // recompute their types and other metadata. For the time being,
+    // do a full re-validation.
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
     let module_info = validator.validate_no_overrides(&module)?;
 
@@ -250,8 +250,15 @@ fn process_override(
     Ok(h)
 }
 
-/// Replaces all `Expression::Override`s in this function's expression arena
-/// with `Expression::Constant` and evaluates all expressions in its arena.
+/// Replace all override expressions in `function` with fully-evaluated constants.
+///
+/// Replace all `Expression::Override`s in `function`'s expression arena with
+/// the corresponding `Expression::Constant`s, as given in `override_map`.
+/// Replace any expressions whose values are now known with their fully
+/// evaluated form.
+///
+/// If `h` is a `Handle<Override>`, then `override_map[h.index()]` is the
+/// `Handle<Constant>` for the override's final value.
 fn process_function(
     module: &mut Module,
     override_map: &[Handle<Constant>],
@@ -298,6 +305,8 @@ fn process_function(
     let new_body = filter_emits_in_block(&function.body, &function.expressions);
     let _ = mem::replace(&mut function.body, new_body);
 
+    // We've changed the keys of `function.named_expression`, so we have to
+    // rebuild it from scratch.
     let named_expressions = mem::take(&mut function.named_expressions);
     for (expr_h, name) in named_expressions {
         function
@@ -595,10 +604,22 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
     }
 }
 
-/// Filters out expressions that `needs_pre_emit`. This step is necessary after
-/// const evaluation since unevaluated expressions could have been included in
-/// `Statement::Emit`; but since they have been evaluated we need to filter those
-/// out.
+/// Adjust [`Emit`] statements in `block` to skip [`needs_pre_emit`] expressions we have introduced.
+///
+/// According to validation, [`Emit`] statements must not cover any expressions
+/// for which [`Expression::needs_pre_emit`] returns true. All expressions built
+/// by successful constant evaluation fall into that category, meaning that
+/// `process_function` will usually rewrite [`Override`] expressions and those
+/// that use their values into pre-emitted expressions, leaving any [`Emit`]
+/// statements that cover them invalid.
+///
+/// This function rewrites all [`Emit`] statements into zero or more new
+/// [`Emit`] statements covering only those expressions in the original range
+/// that are not pre-emitted.
+///
+/// [`Emit`]: Statement::Emit
+/// [`needs_pre_emit`]: Expression::needs_pre_emit
+/// [`Override`]: Expression::Override
 fn filter_emits_in_block(block: &Block, expressions: &Arena<Expression>) -> Block {
     let mut out = Block::with_capacity(block.len());
     for (stmt, span) in block.span_iter() {
