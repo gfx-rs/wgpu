@@ -119,6 +119,10 @@ Bottom level categories:
 
 - Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
 
+### Examples
+
+- Add multiple render targets example. By @kaphula in [#5297](https://github.com/gfx-rs/wgpu/pull/5313)
+
 ### Bug Fixes
 
 #### General
