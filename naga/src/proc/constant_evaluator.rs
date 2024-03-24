@@ -713,7 +713,10 @@ impl<'a> ConstantEvaluator<'a> {
         match self.expression_kind_tracker.type_of_with_expr(&expr) {
             ExpressionKind::Const => {
                 let eval_result = self.try_eval_and_append_impl(&expr, span);
-                // avoid errors on unimplemented functionality if possible
+                // We should be able to evaluate `Const` expressions at this
+                // point. If we failed to, then that probably means we just
+                // haven't implemented that part of constant evaluation. Work
+                // around this by simply emitting it as a run-time expression.
                 if self.behavior.has_runtime_restrictions()
                     && matches!(
                         eval_result,
