@@ -1,5 +1,9 @@
 //! Tests that compute passes take ownership of resources that are passed in.
 //! I.e. once a resource is passed in to a compute pass, it can be dropped.
+//!
+//! TODO: Test doesn't check on timestamp writes & pipeline statistics queries yet.
+//!       (Not important as long as they are lifetime constrained to the command encoder,
+//!       but once we lift this constraint, we should add tests for this as well!)
 
 use std::num::NonZeroU64;
 
@@ -93,6 +97,7 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &sm,
             entry_point: "main",
+            compilation_options: Default::default(),
         });
 
     let mut encoder = ctx
@@ -104,14 +109,19 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute_pass"),
-            timestamp_writes: None,
+            timestamp_writes: None, // TODO: See description above, we should test this as well once we lift the lifetime bound.
         });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
 
-        // TODO: Now drop all resources we set. Then do a device pool.
-        // TODO: Test doesn't check on timestamp writes & pipeline statistics queries yet.
+        // Now drop all resources we set. Then do a device poll to make sure the resources are really not dropped too early, no matter what.
+        drop(pipeline);
+        drop(bind_group);
+        drop(indirect_buffer);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
     }
 
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
