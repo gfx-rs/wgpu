@@ -1,7 +1,12 @@
 #![allow(unused)]
 
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::cell::UnsafeCell;
+use std::{
+    backtrace::Backtrace,
+    cell::{Cell, RefCell, UnsafeCell},
+    panic::{self, Location},
+    thread,
+};
 
 /// A guard that provides read access to snatchable data.
 pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
@@ -59,6 +64,10 @@ impl<T> std::fmt::Debug for Snatchable<T> {
 
 unsafe impl<T> Sync for Snatchable<T> {}
 
+thread_local! {
+    static READ_LOCK_LOCATION: Cell<Option<(&'static Location<'static>, Backtrace)>> = const { Cell::new(None) };
+}
+
 /// A Device-global lock for all snatchable data.
 pub struct SnatchLock {
     lock: RwLock<()>,
@@ -76,7 +85,24 @@ impl SnatchLock {
     }
 
     /// Request read access to snatchable resources.
+    #[track_caller]
     pub fn read(&self) -> SnatchGuard {
+        if cfg!(debug_assertions) {
+            let caller = Location::caller();
+            let backtrace = Backtrace::capture();
+            if let Some((prev, bt)) = READ_LOCK_LOCATION.take() {
+                let current = thread::current();
+                let name = current.name().unwrap_or("<unnamed>");
+                panic!(
+                    "thread '{name}' attempted to acquire a snatch read lock recursively.\n
+                    - {prev}\n{bt}\n
+                    - {caller}\n{backtrace}"
+                );
+            } else {
+                READ_LOCK_LOCATION.set(Some((caller, backtrace)));
+            }
+        }
+
         SnatchGuard(self.lock.read())
     }
 
@@ -87,5 +113,12 @@ impl SnatchLock {
     /// wgpu work.
     pub fn write(&self) -> ExclusiveSnatchGuard {
         ExclusiveSnatchGuard(self.lock.write())
+    }
+}
+
+impl Drop for SnatchGuard<'_> {
+    fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        READ_LOCK_LOCATION.take();
     }
 }
