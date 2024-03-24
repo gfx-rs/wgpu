@@ -131,7 +131,7 @@ pub enum ComputePassErrorInner {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
     #[error("Bind group at index {0:?} is invalid")]
-    InvalidBindGroup(usize),
+    InvalidBindGroup(u32),
     #[error("Device {0:?} is invalid")]
     InvalidDevice(DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
@@ -196,7 +196,7 @@ impl PrettyError for ComputePassErrorInner {
 pub struct ComputePassError {
     pub scope: PassErrorScope,
     #[source]
-    inner: ComputePassErrorInner,
+    pub(super) inner: ComputePassErrorInner,
 }
 impl PrettyError for ComputePassError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
@@ -294,7 +294,7 @@ impl Global {
         pass: &ComputePass,
     ) -> Result<(), ComputePassError> {
         // TODO: This should go directly to `command_encoder_run_compute_pass_impl` by means of storing `ArcComputeCommand` internally.
-        self.command_encoder_run_compute_pass_unresolved_commands::<A>(
+        self.command_encoder_run_compute_pass_with_unresolved_commands::<A>(
             encoder_id,
             pass.base.as_ref(),
             pass.timestamp_writes.as_ref(),
@@ -302,14 +302,26 @@ impl Global {
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_compute_pass_unresolved_commands<A: HalApi>(
+    pub fn command_encoder_run_compute_pass_with_unresolved_commands<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
         timestamp_writes: Option<&ComputePassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
-        todo!("todo");
-        Ok(())
+        let resolved_commands =
+            ComputeCommand::resolve_compute_command_ids(A::hub(self), base.commands)?;
+
+        self.command_encoder_run_compute_pass_impl::<A>(
+            encoder_id,
+            BasePassRef {
+                label: base.label,
+                commands: &resolved_commands,
+                dynamic_offsets: base.dynamic_offsets,
+                string_data: base.string_data,
+                push_constant_data: base.push_constant_data,
+            },
+            timestamp_writes,
+        )
     }
 
     #[doc(hidden)]
@@ -499,7 +511,7 @@ impl Global {
                             if let Some(group) = e.group.as_ref() {
                                 let raw_bg = group
                                     .raw(&snatch_guard)
-                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(i))
+                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(i as u32))
                                     .map_pass_err(scope)?;
                                 unsafe {
                                     raw.set_bind_group(
@@ -543,7 +555,7 @@ impl Global {
                                 if let Some(group) = e.group.as_ref() {
                                     let raw_bg = group
                                         .raw(&snatch_guard)
-                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(i))
+                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(i as u32))
                                         .map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(
