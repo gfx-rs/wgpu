@@ -137,17 +137,12 @@ pub fn op_webgpu_compute_pass_set_bind_group(
 
     let dynamic_offsets_data: &[u32] = &dynamic_offsets_data[start..start + len];
 
-    // SAFETY: the raw pointer and length are of the same slice, and that slice
-    // lives longer than the below function invocation.
-    unsafe {
-        wgpu_core::command::compute_commands::wgpu_compute_pass_set_bind_group(
-            &mut compute_pass_resource.0.borrow_mut(),
-            index,
-            bind_group_resource.1,
-            dynamic_offsets_data.as_ptr(),
-            dynamic_offsets_data.len(),
-        );
-    }
+    wgpu_core::command::compute_commands::wgpu_compute_pass_set_bind_group(
+        &mut compute_pass_resource.0.borrow_mut(),
+        index,
+        bind_group_resource.1,
+        dynamic_offsets_data,
+    );
 
     Ok(WebGpuResult::empty())
 }
@@ -163,16 +158,11 @@ pub fn op_webgpu_compute_pass_push_debug_group(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    let label = std::ffi::CString::new(group_label).unwrap();
-    // SAFETY: the string the raw pointer points to lives longer than the below
-    // function invocation.
-    unsafe {
-        wgpu_core::command::compute_commands::wgpu_compute_pass_push_debug_group(
-            &mut compute_pass_resource.0.borrow_mut(),
-            label.as_ptr(),
-            0, // wgpu#975
-        );
-    }
+    wgpu_core::command::compute_commands::wgpu_compute_pass_push_debug_group(
+        &mut compute_pass_resource.0.borrow_mut(),
+        group_label,
+        0, // wgpu#975
+    );
 
     Ok(WebGpuResult::empty())
 }
@@ -205,16 +195,11 @@ pub fn op_webgpu_compute_pass_insert_debug_marker(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    let label = std::ffi::CString::new(marker_label).unwrap();
-    // SAFETY: the string the raw pointer points to lives longer than the below
-    // function invocation.
-    unsafe {
-        wgpu_core::command::compute_commands::wgpu_compute_pass_insert_debug_marker(
-            &mut compute_pass_resource.0.borrow_mut(),
-            label.as_ptr(),
-            0, // wgpu#975
-        );
-    }
+    wgpu_core::command::compute_commands::wgpu_compute_pass_insert_debug_marker(
+        &mut compute_pass_resource.0.borrow_mut(),
+        marker_label,
+        0, // wgpu#975
+    );
 
     Ok(WebGpuResult::empty())
 }
