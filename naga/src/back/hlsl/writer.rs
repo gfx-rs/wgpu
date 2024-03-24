@@ -2814,14 +2814,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if matches!(fun, Function::Pack4xU8) {
                             write!(self.out, "uint(")?;
                         }
+                        write!(self.out, "(")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[0] | (")?;
+                        write!(self.out, "[0] & 0xFF) | (")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[1] << 8) | (")?;
+                        write!(self.out, "[1] & (0xFF << 8)) | (")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[2] << 16) | (")?;
+                        write!(self.out, "[2] & (0xFF << 16)) | (")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "[3] << 24)")?;
+                        write!(self.out, "[3] & (0xFF << 24))")?;
                         if matches!(fun, Function::Pack4xU8) {
                             write!(self.out, ")")?;
                         }

@@ -3458,14 +3458,15 @@ impl<'a, W: Write> Writer<'a, W> {
                         if fun == Mf::Pack4xI8 {
                             write!(self.out, "int(")?;
                         }
+                        write!(self.out, "(")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, "[0] | (")?;
+                        write!(self.out, "[0] & 0xFF) | (")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, "[1] << 8) | (")?;
+                        write!(self.out, "[1] & (0xFF << 8)) | (")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, "[2] << 16) | (")?;
+                        write!(self.out, "[2] & (0xFF << 16)) | (")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, "[3] << 24)")?;
+                        write!(self.out, "[3] & (0xFF << 24))")?;
                         if fun == Mf::Pack4xI8 {
                             write!(self.out, ")")?;
                         }
