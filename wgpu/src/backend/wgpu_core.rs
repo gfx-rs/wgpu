@@ -23,7 +23,7 @@ use std::{
     sync::Arc,
 };
 use wgc::{
-    command::{bundle_ffi::*, compute_commands::*, render_commands::*},
+    command::{bundle_ffi::*, render_commands::*},
     device::DeviceLostClosure,
     id::{CommandEncoderId, TextureViewId},
 };
@@ -2311,7 +2311,8 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::ComputePipelineId,
         _pipeline_data: &Self::ComputePipelineData,
     ) {
-        wgpu_compute_pass_set_pipeline(pass_data, *pipeline)
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_set_pipeline(pass_data, *pipeline))
     }
 
     fn compute_pass_set_bind_group(
@@ -2323,7 +2324,8 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        wgpu_compute_pass_set_bind_group(pass_data, index, *bind_group, offsets);
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_set_bind_group(pass_data, index, *bind_group, offsets));
     }
 
     fn compute_pass_set_push_constants(
@@ -2333,7 +2335,8 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        wgpu_compute_pass_set_push_constant(pass_data, offset, data);
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_set_push_constant(pass_data, offset, data));
     }
 
     fn compute_pass_insert_debug_marker(
@@ -2342,7 +2345,8 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         label: &str,
     ) {
-        wgpu_compute_pass_insert_debug_marker(pass_data, label, 0);
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_insert_debug_marker(pass_data, label, 0));
     }
 
     fn compute_pass_push_debug_group(
@@ -2351,7 +2355,8 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
     ) {
-        wgpu_compute_pass_push_debug_group(pass_data, group_label, 0);
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_push_debug_group(pass_data, group_label, 0));
     }
 
     fn compute_pass_pop_debug_group(
@@ -2359,7 +2364,8 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        wgpu_compute_pass_pop_debug_group(pass_data);
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_pop_debug_group(pass_data));
     }
 
     fn compute_pass_write_timestamp(
@@ -2370,7 +2376,8 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_compute_pass_write_timestamp(pass_data, *query_set, query_index)
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_write_timestamp(pass_data, *query_set, query_index));
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -2381,7 +2388,8 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_compute_pass_begin_pipeline_statistics_query(pass_data, *query_set, query_index)
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_begin_pipeline_statistics_query(pass_data, *query_set, query_index));
     }
 
     fn compute_pass_end_pipeline_statistics_query(
@@ -2389,7 +2397,8 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        wgpu_compute_pass_end_pipeline_statistics_query(pass_data)
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_end_pipeline_statistics_query(pass_data));
     }
 
     fn compute_pass_dispatch_workgroups(
@@ -2400,7 +2409,8 @@ impl crate::Context for ContextWgpuCore {
         y: u32,
         z: u32,
     ) {
-        wgpu_compute_pass_dispatch_workgroups(pass_data, x, y, z)
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups(pass_data, x, y, z));
     }
 
     fn compute_pass_dispatch_workgroups_indirect(
@@ -2411,7 +2421,8 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_compute_pass_dispatch_workgroups_indirect(pass_data, *indirect_buffer, indirect_offset)
+        let encoder = pass_data.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups_indirect(pass_data, *indirect_buffer, indirect_offset));
     }
 
     fn render_bundle_encoder_set_pipeline(

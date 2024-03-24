@@ -1,29 +1,26 @@
-use crate::command::compute_command::{ArcComputeCommand, ComputeCommand};
-use crate::device::DeviceError;
-use crate::resource::Resource;
-use crate::snatch::SnatchGuard;
-use crate::track::TrackerIndex;
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
     },
     command::{
         bind::Binder,
+        compute_command::{ArcComputeCommand, ComputeCommand},
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
         CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
-    device::{MissingDownlevelFlags, MissingFeatures},
+    device::{DeviceError, MissingDownlevelFlags, MissingFeatures},
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    hal_label, id,
-    id::DeviceId,
+    hal_label,
+    id::{self, DeviceId},
     init_tracker::MemoryInitKind,
-    resource::{self},
+    resource::{self, Resource},
+    snatch::SnatchGuard,
     storage::Storage,
-    track::{Tracker, UsageConflict, UsageScope},
+    track::{Tracker, TrackerIndex, UsageConflict, UsageScope},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
 };
@@ -35,6 +32,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use thiserror::Error;
+use wgt::{BufferAddress, DynamicOffset};
 
 use std::sync::Arc;
 use std::{fmt, mem, str};
@@ -286,7 +284,7 @@ impl<'a, A: HalApi> State<'a, A> {
     }
 }
 
-// Common routines between render/compute
+// Running the compute pass.
 
 impl Global {
     pub fn command_encoder_run_compute_pass<A: HalApi>(
@@ -845,13 +843,10 @@ impl Global {
     }
 }
 
-pub mod compute_commands {
-    use super::{ComputeCommand, ComputePass};
-    use crate::id;
-    use std::convert::TryInto;
-    use wgt::{BufferAddress, DynamicOffset};
-
-    pub fn wgpu_compute_pass_set_bind_group(
+// Recording a compute pass.
+impl Global {
+    pub fn compute_pass_set_bind_group<A: HalApi>(
+        &self,
         pass: &mut ComputePass,
         index: u32,
         bind_group_id: id::BindGroupId,
@@ -875,7 +870,8 @@ pub mod compute_commands {
         });
     }
 
-    pub fn wgpu_compute_pass_set_pipeline(
+    pub fn compute_pass_set_pipeline<A: HalApi>(
+        &self,
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
@@ -888,7 +884,12 @@ pub mod compute_commands {
             .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
-    pub fn wgpu_compute_pass_set_push_constant(pass: &mut ComputePass, offset: u32, data: &[u8]) {
+    pub fn compute_pass_set_push_constant<A: HalApi>(
+        &self,
+        pass: &mut ComputePass,
+        offset: u32,
+        data: &[u8],
+    ) {
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
@@ -915,7 +916,8 @@ pub mod compute_commands {
         });
     }
 
-    pub fn wgpu_compute_pass_dispatch_workgroups(
+    pub fn compute_pass_dispatch_workgroups<A: HalApi>(
+        &self,
         pass: &mut ComputePass,
         groups_x: u32,
         groups_y: u32,
@@ -926,7 +928,8 @@ pub mod compute_commands {
             .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
     }
 
-    pub fn wgpu_compute_pass_dispatch_workgroups_indirect(
+    pub fn compute_pass_dispatch_workgroups_indirect<A: HalApi>(
+        &self,
         pass: &mut ComputePass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -936,7 +939,12 @@ pub mod compute_commands {
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
-    pub fn wgpu_compute_pass_push_debug_group(pass: &mut ComputePass, label: &str, color: u32) {
+    pub fn compute_pass_push_debug_group<A: HalApi>(
+        &self,
+        pass: &mut ComputePass,
+        label: &str,
+        color: u32,
+    ) {
         let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -946,11 +954,16 @@ pub mod compute_commands {
         });
     }
 
-    pub fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
+    pub fn compute_pass_pop_debug_group<A: HalApi>(&self, pass: &mut ComputePass) {
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
-    pub fn wgpu_compute_pass_insert_debug_marker(pass: &mut ComputePass, label: &str, color: u32) {
+    pub fn compute_pass_insert_debug_marker<A: HalApi>(
+        &self,
+        pass: &mut ComputePass,
+        label: &str,
+        color: u32,
+    ) {
         let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -960,7 +973,8 @@ pub mod compute_commands {
         });
     }
 
-    pub fn wgpu_compute_pass_write_timestamp(
+    pub fn compute_pass_write_timestamp<A: HalApi>(
+        &self,
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -971,7 +985,8 @@ pub mod compute_commands {
         });
     }
 
-    pub fn wgpu_compute_pass_begin_pipeline_statistics_query(
+    pub fn compute_pass_begin_pipeline_statistics_query<A: HalApi>(
+        &self,
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -984,7 +999,7 @@ pub mod compute_commands {
             });
     }
 
-    pub fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
+    pub fn compute_pass_end_pipeline_statistics_query<A: HalApi>(&self, pass: &mut ComputePass) {
         pass.base
             .commands
             .push(ComputeCommand::EndPipelineStatisticsQuery);
