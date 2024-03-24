@@ -422,7 +422,9 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
     Ok(InstanceDevice { dc, _tx: drop_tx })
 }
 
-impl crate::Instance<super::Api> for Instance {
+impl crate::Instance for Instance {
+    type A = super::Api;
+
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WGL) Backend");
         let opengl_module = unsafe { LoadLibraryA("opengl32.dll\0".as_ptr() as *const _) };
@@ -676,7 +678,9 @@ impl Surface {
     }
 }
 
-impl crate::Surface<super::Api> for Surface {
+impl crate::Surface for Surface {
+    type A = super::Api;
+
     unsafe fn configure(
         &self,
         device: &super::Device,

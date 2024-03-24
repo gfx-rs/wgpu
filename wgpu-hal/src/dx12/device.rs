@@ -323,7 +323,9 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+impl crate::Device for super::Device {
+    type A = super::Api;
+
     unsafe fn exit(mut self, _queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         self.mem_allocator = None;

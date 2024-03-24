@@ -210,6 +210,7 @@ pub(crate) struct TextureStateSet {
     simple: Vec<TextureUses>,
     complex: FastHashMap<usize, ComplexTextureState>,
 }
+
 impl TextureStateSet {
     fn new() -> Self {
         Self {
@@ -235,15 +236,16 @@ pub(crate) struct TextureUsageScope<A: HalApi> {
     metadata: ResourceMetadata<Texture<A>>,
 }
 
-impl<A: HalApi> TextureUsageScope<A> {
-    pub fn new() -> Self {
+impl<A: HalApi> Default for TextureUsageScope<A> {
+    fn default() -> Self {
         Self {
             set: TextureStateSet::new(),
-
             metadata: ResourceMetadata::new(),
         }
     }
+}
 
+impl<A: HalApi> TextureUsageScope<A> {
     fn tracker_assert_in_bounds(&self, index: usize) {
         self.metadata.tracker_assert_in_bounds(index);
 
@@ -256,6 +258,11 @@ impl<A: HalApi> TextureUsageScope<A> {
         } else {
             true
         });
+    }
+
+    pub fn clear(&mut self) {
+        self.set.clear();
+        self.metadata.clear();
     }
 
     /// Sets the size of all the vectors inside the tracker.
