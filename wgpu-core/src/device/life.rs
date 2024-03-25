@@ -12,6 +12,7 @@ use crate::{
         self, Buffer, DestroyedBuffer, DestroyedTexture, QuerySet, Resource, Sampler,
         StagingBuffer, Texture, TextureView,
     },
+    snatch::SnatchGuard,
     track::{ResourceTracker, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
@@ -309,12 +310,12 @@ impl<A: HalApi> LifetimeTracker<A> {
     }
 
     pub fn post_submit(&mut self) {
-        for v in self.future_suspected_buffers.drain(..).take(1) {
+        for v in self.future_suspected_buffers.drain(..) {
             self.suspected_resources
                 .buffers
                 .insert(v.as_info().tracker_index(), v);
         }
-        for v in self.future_suspected_textures.drain(..).take(1) {
+        for v in self.future_suspected_textures.drain(..) {
             self.suspected_resources
                 .textures
                 .insert(v.as_info().tracker_index(), v);
@@ -780,6 +781,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         &mut self,
         raw: &A::Device,
         trackers: &Mutex<Tracker<A>>,
+        snatch_guard: &SnatchGuard,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
@@ -816,7 +818,14 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::debug!("Buffer {tracker_index:?} map state -> Active");
                     let host = mapping.op.host;
                     let size = mapping.range.end - mapping.range.start;
-                    match super::map_buffer(raw, &buffer, mapping.range.start, size, host) {
+                    match super::map_buffer(
+                        raw,
+                        &buffer,
+                        mapping.range.start,
+                        size,
+                        host,
+                        snatch_guard,
+                    ) {
                         Ok(ptr) => {
                             *buffer.map_state.lock() = resource::BufferMapState::Active {
                                 ptr,

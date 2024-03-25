@@ -1748,7 +1748,9 @@ impl super::Queue {
     }
 }
 
-impl crate::Queue<super::Api> for super::Queue {
+impl crate::Queue for super::Queue {
+    type A = super::Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&super::CommandBuffer],

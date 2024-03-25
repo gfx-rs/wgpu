@@ -3,9 +3,10 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
-    resource::{Buffer, BufferAccessResult},
-    resource::{BufferAccessError, BufferMapOperation},
-    resource_log, Label, DOWNLEVEL_ERROR_MESSAGE,
+    resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
+    resource_log,
+    snatch::SnatchGuard,
+    Label, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -317,10 +318,10 @@ fn map_buffer<A: HalApi>(
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
+    snatch_guard: &SnatchGuard,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
-    let snatch_guard = buffer.device.snatchable_lock.read();
     let raw_buffer = buffer
-        .raw(&snatch_guard)
+        .raw(snatch_guard)
         .ok_or(BufferAccessError::Destroyed)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)

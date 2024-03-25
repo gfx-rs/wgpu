@@ -272,14 +272,14 @@ where
     }
 }
 
-struct State<A: HalApi> {
+struct State<'a, A: HalApi> {
     binder: Binder<A>,
     pipeline: Option<id::ComputePipelineId>,
-    scope: UsageScope<A>,
+    scope: UsageScope<'a, A>,
     debug_scope_depth: u32,
 }
 
-impl<A: HalApi> State<A> {
+impl<'a, A: HalApi> State<'a, A> {
     fn is_ready(&self) -> Result<(), DispatchError> {
         let bind_mask = self.binder.invalid_mask();
         if bind_mask != 0 {
@@ -407,7 +407,7 @@ impl Global {
         let mut state = State {
             binder: Binder::new(),
             pipeline: None,
-            scope: UsageScope::new(&device.tracker_indices),
+            scope: device.new_usage_scope(),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
@@ -868,6 +868,7 @@ impl Global {
             transit,
             &mut tracker.textures,
             device,
+            &snatch_guard,
         );
         CommandBuffer::insert_barriers_from_tracker(
             transit,

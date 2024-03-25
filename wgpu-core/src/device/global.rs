@@ -192,7 +192,15 @@ impl Global {
                 let ptr = if map_size == 0 {
                     std::ptr::NonNull::dangling()
                 } else {
-                    match map_buffer(device.raw(), &buffer, 0, map_size, HostMap::Write) {
+                    let snatch_guard = device.snatchable_lock.read();
+                    match map_buffer(
+                        device.raw(),
+                        &buffer,
+                        0,
+                        map_size,
+                        HostMap::Write,
+                        &snatch_guard,
+                    ) {
                         Ok(ptr) => ptr,
                         Err(e) => {
                             to_destroy.push(buffer);
@@ -2008,9 +2016,10 @@ impl Global {
                 }
 
                 // Wait for all work to finish before configuring the surface.
+                let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                match device.maintain(fence, wgt::Maintain::Wait) {
+                match device.maintain(fence, wgt::Maintain::Wait, &snatch_guard) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -2120,9 +2129,10 @@ impl Global {
         device: &crate::device::Device<A>,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<DevicePoll, WaitIdleError> {
+        let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
         let fence = fence.as_ref().unwrap();
-        let (closures, queue_empty) = device.maintain(fence, maintain)?;
+        let (closures, queue_empty) = device.maintain(fence, maintain, &snatch_guard)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
@@ -2240,6 +2250,15 @@ impl Global {
         }
     }
 
+    // This is a test-only function to force the device into an
+    // invalid state by inserting an error value in its place in
+    // the registry.
+    pub fn device_make_invalid<A: HalApi>(&self, device_id: DeviceId) {
+        let hub = A::hub(self);
+        hub.devices
+            .force_replace_with_error(device_id, "Made invalid.");
+    }
+
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {device_id:?}");
@@ -2275,7 +2294,7 @@ impl Global {
     ) {
         let hub = A::hub(self);
 
-        if let Ok(device) = hub.devices.get(device_id) {
+        if let Ok(Some(device)) = hub.devices.try_get(device_id) {
             let mut life_tracker = device.lock_life();
             if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
                 // It's important to not hold the lock while calling the closure.
@@ -2284,6 +2303,12 @@ impl Global {
                 life_tracker = device.lock_life();
             }
             life_tracker.device_lost_closure = Some(device_lost_closure);
+        } else {
+            // No device? Okay. Just like we have to call any existing closure
+            // before we drop it, we need to call this closure before we exit
+            // this function, because there's no device that is ever going to
+            // call it.
+            device_lost_closure.call(DeviceLostReason::DeviceInvalid, "".to_string());
         }
     }
 

@@ -18,7 +18,9 @@ impl super::Adapter {
     }
 }
 
-impl crate::Adapter<super::Api> for super::Adapter {
+impl crate::Adapter for super::Adapter {
+    type A = super::Api;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
