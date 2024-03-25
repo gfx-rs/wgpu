@@ -121,7 +121,7 @@ Bottom level categories:
 
 #### WebGPU
 
-- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBamble in [#5434](https://github.com/gfx-rs/wgpu/pull/5434) 
+- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434) 
 
 ### Bug Fixes
 
