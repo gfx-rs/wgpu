@@ -579,7 +579,9 @@ impl Drop for super::InstanceShared {
     }
 }
 
-impl crate::Instance<super::Api> for super::Instance {
+impl crate::Instance for super::Instance {
+    type A = super::Api;
+
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Vulkan Backend");
         use crate::auxil::cstr_from_bytes_until_nul;
@@ -956,7 +958,9 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 }
 
-impl crate::Surface<super::Api> for super::Surface {
+impl crate::Surface for super::Surface {
+    type A = super::Api;
+
     unsafe fn configure(
         &self,
         device: &super::Device,
