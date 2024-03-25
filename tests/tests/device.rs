@@ -661,7 +661,8 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
         // 2. Having more of one type of resource in the bind group than another.
         //
         // …such that internals would accidentally attempt to use an out-of-bounds index (of one
-        // resource type) in the wrong list for resources. Let's reproduce that here.
+        // resource type) in the wrong list of a different resource type. Let's reproduce that
+        // here.
 
         let trivial_shaders_with_some_reversed_bindings = "\
 @group(0) @binding(3) var myTexture2: texture_2d<f32>;
