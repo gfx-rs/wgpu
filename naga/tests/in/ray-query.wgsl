@@ -3,8 +3,8 @@ var acc_struct: acceleration_structure;
 
 /*
 let RAY_FLAG_NONE = 0x00u;
-let RAY_FLAG_OPAQUE = 0x01u;
-let RAY_FLAG_NO_OPAQUE = 0x02u;
+let RAY_FLAG_FORCE_OPAQUE = 0x01u;
+let RAY_FLAG_FORCE_NO_OPAQUE = 0x02u;
 let RAY_FLAG_TERMINATE_ON_FIRST_HIT = 0x04u;
 let RAY_FLAG_SKIP_CLOSEST_HIT_SHADER = 0x08u;
 let RAY_FLAG_CULL_BACK_FACING = 0x10u;
