@@ -1,10 +1,11 @@
 use super::PipelineConstants;
 use crate::{
-    proc::{ConstantEvaluator, ConstantEvaluatorError},
+    proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter},
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
-    Constant, Expression, Handle, Literal, Module, Override, Scalar, Span, TypeInner, WithSpan,
+    Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
+    Span, Statement, TypeInner, WithSpan,
 };
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, collections::HashSet, mem};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -175,9 +176,21 @@ pub(super) fn process_overrides<'a>(
         }
     }
 
-    // Now that the global expression arena has changed, we need to
-    // recompute those expressions' types. For the time being, do a
-    // full re-validation.
+    let mut functions = mem::take(&mut module.functions);
+    for (_, function) in functions.iter_mut() {
+        process_function(&mut module, &override_map, function)?;
+    }
+    module.functions = functions;
+
+    let mut entry_points = mem::take(&mut module.entry_points);
+    for ep in entry_points.iter_mut() {
+        process_function(&mut module, &override_map, &mut ep.function)?;
+    }
+    module.entry_points = entry_points;
+
+    // Now that we've rewritten all the expressions, we need to
+    // recompute their types and other metadata. For the time being,
+    // do a full re-validation.
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
     let module_info = validator.validate_no_overrides(&module)?;
 
@@ -237,6 +250,72 @@ fn process_override(
     Ok(h)
 }
 
+/// Replace all override expressions in `function` with fully-evaluated constants.
+///
+/// Replace all `Expression::Override`s in `function`'s expression arena with
+/// the corresponding `Expression::Constant`s, as given in `override_map`.
+/// Replace any expressions whose values are now known with their fully
+/// evaluated form.
+///
+/// If `h` is a `Handle<Override>`, then `override_map[h.index()]` is the
+/// `Handle<Constant>` for the override's final value.
+fn process_function(
+    module: &mut Module,
+    override_map: &[Handle<Constant>],
+    function: &mut Function,
+) -> Result<(), ConstantEvaluatorError> {
+    // A map from original local expression handles to
+    // handles in the new, local expression arena.
+    let mut adjusted_local_expressions = Vec::with_capacity(function.expressions.len());
+
+    let mut local_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
+
+    let mut expressions = mem::take(&mut function.expressions);
+
+    // Dummy `emitter` and `block` for the constant evaluator.
+    // We can ignore the concept of emitting expressions here since
+    // expressions have already been covered by a `Statement::Emit`
+    // in the frontend.
+    // The only thing we might have to do is remove some expressions
+    // that have been covered by a `Statement::Emit`. See the docs of
+    // `filter_emits_in_block` for the reasoning.
+    let mut emitter = Emitter::default();
+    let mut block = Block::new();
+
+    let mut evaluator = ConstantEvaluator::for_wgsl_function(
+        module,
+        &mut function.expressions,
+        &mut local_expression_kind_tracker,
+        &mut emitter,
+        &mut block,
+    );
+
+    for (old_h, mut expr, span) in expressions.drain() {
+        if let Expression::Override(h) = expr {
+            expr = Expression::Constant(override_map[h.index()]);
+        }
+        adjust_expr(&adjusted_local_expressions, &mut expr);
+        let h = evaluator.try_eval_and_append(expr, span)?;
+        debug_assert_eq!(old_h.index(), adjusted_local_expressions.len());
+        adjusted_local_expressions.push(h);
+    }
+
+    adjust_block(&adjusted_local_expressions, &mut function.body);
+
+    filter_emits_in_block(&mut function.body, &function.expressions);
+
+    // We've changed the keys of `function.named_expression`, so we have to
+    // rebuild it from scratch.
+    let named_expressions = mem::take(&mut function.named_expressions);
+    for (expr_h, name) in named_expressions {
+        function
+            .named_expressions
+            .insert(adjusted_local_expressions[expr_h.index()], name);
+    }
+
+    Ok(())
+}
+
 /// Replace every expression handle in `expr` with its counterpart
 /// given by `new_pos`.
 fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
@@ -245,7 +324,8 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
     };
     match *expr {
         Expression::Compose {
-            ref mut components, ..
+            ref mut components,
+            ty: _,
         } => {
             for c in components.iter_mut() {
                 adjust(c);
@@ -258,13 +338,23 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             adjust(base);
             adjust(index);
         }
-        Expression::AccessIndex { ref mut base, .. } => {
+        Expression::AccessIndex {
+            ref mut base,
+            index: _,
+        } => {
             adjust(base);
         }
-        Expression::Splat { ref mut value, .. } => {
+        Expression::Splat {
+            ref mut value,
+            size: _,
+        } => {
             adjust(value);
         }
-        Expression::Swizzle { ref mut vector, .. } => {
+        Expression::Swizzle {
+            ref mut vector,
+            size: _,
+            pattern: _,
+        } => {
             adjust(vector);
         }
         Expression::Load { ref mut pointer } => {
@@ -278,7 +368,7 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             ref mut offset,
             ref mut level,
             ref mut depth_ref,
-            ..
+            gather: _,
         } => {
             adjust(image);
             adjust(sampler);
@@ -337,16 +427,21 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
                         adjust(e);
                     }
                 }
-                _ => {}
+                crate::ImageQuery::NumLevels
+                | crate::ImageQuery::NumLayers
+                | crate::ImageQuery::NumSamples => {}
             }
         }
-        Expression::Unary { ref mut expr, .. } => {
+        Expression::Unary {
+            ref mut expr,
+            op: _,
+        } => {
             adjust(expr);
         }
         Expression::Binary {
             ref mut left,
             ref mut right,
-            ..
+            op: _,
         } => {
             adjust(left);
             adjust(right);
@@ -360,11 +455,16 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             adjust(accept);
             adjust(reject);
         }
-        Expression::Derivative { ref mut expr, .. } => {
+        Expression::Derivative {
+            ref mut expr,
+            axis: _,
+            ctrl: _,
+        } => {
             adjust(expr);
         }
         Expression::Relational {
-            ref mut argument, ..
+            ref mut argument,
+            fun: _,
         } => {
             adjust(argument);
         }
@@ -373,7 +473,7 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             ref mut arg1,
             ref mut arg2,
             ref mut arg3,
-            ..
+            fun: _,
         } => {
             adjust(arg);
             if let Some(e) = arg1.as_mut() {
@@ -386,13 +486,20 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
                 adjust(e);
             }
         }
-        Expression::As { ref mut expr, .. } => {
+        Expression::As {
+            ref mut expr,
+            kind: _,
+            convert: _,
+        } => {
             adjust(expr);
         }
         Expression::ArrayLength(ref mut expr) => {
             adjust(expr);
         }
-        Expression::RayQueryGetIntersection { ref mut query, .. } => {
+        Expression::RayQueryGetIntersection {
+            ref mut query,
+            committed: _,
+        } => {
             adjust(query);
         }
         Expression::Literal(_)
@@ -404,8 +511,246 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
         | Expression::Constant(_)
         | Expression::Override(_)
         | Expression::ZeroValue(_)
-        | Expression::AtomicResult { .. }
-        | Expression::WorkGroupUniformLoadResult { .. } => {}
+        | Expression::AtomicResult {
+            ty: _,
+            comparison: _,
+        }
+        | Expression::WorkGroupUniformLoadResult { ty: _ } => {}
+    }
+}
+
+/// Replace every expression handle in `block` with its counterpart
+/// given by `new_pos`.
+fn adjust_block(new_pos: &[Handle<Expression>], block: &mut Block) {
+    for stmt in block.iter_mut() {
+        adjust_stmt(new_pos, stmt);
+    }
+}
+
+/// Replace every expression handle in `stmt` with its counterpart
+/// given by `new_pos`.
+fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
+    let adjust = |expr: &mut Handle<Expression>| {
+        *expr = new_pos[expr.index()];
+    };
+    match *stmt {
+        Statement::Emit(ref mut range) => {
+            if let Some((mut first, mut last)) = range.first_and_last() {
+                adjust(&mut first);
+                adjust(&mut last);
+                *range = Range::new_from_bounds(first, last);
+            }
+        }
+        Statement::Block(ref mut block) => {
+            adjust_block(new_pos, block);
+        }
+        Statement::If {
+            ref mut condition,
+            ref mut accept,
+            ref mut reject,
+        } => {
+            adjust(condition);
+            adjust_block(new_pos, accept);
+            adjust_block(new_pos, reject);
+        }
+        Statement::Switch {
+            ref mut selector,
+            ref mut cases,
+        } => {
+            adjust(selector);
+            for case in cases.iter_mut() {
+                adjust_block(new_pos, &mut case.body);
+            }
+        }
+        Statement::Loop {
+            ref mut body,
+            ref mut continuing,
+            ref mut break_if,
+        } => {
+            adjust_block(new_pos, body);
+            adjust_block(new_pos, continuing);
+            if let Some(e) = break_if.as_mut() {
+                adjust(e);
+            }
+        }
+        Statement::Return { ref mut value } => {
+            if let Some(e) = value.as_mut() {
+                adjust(e);
+            }
+        }
+        Statement::Store {
+            ref mut pointer,
+            ref mut value,
+        } => {
+            adjust(pointer);
+            adjust(value);
+        }
+        Statement::ImageStore {
+            ref mut image,
+            ref mut coordinate,
+            ref mut array_index,
+            ref mut value,
+        } => {
+            adjust(image);
+            adjust(coordinate);
+            if let Some(e) = array_index.as_mut() {
+                adjust(e);
+            }
+            adjust(value);
+        }
+        crate::Statement::Atomic {
+            ref mut pointer,
+            ref mut value,
+            ref mut result,
+            ref mut fun,
+        } => {
+            adjust(pointer);
+            adjust(value);
+            adjust(result);
+            match *fun {
+                crate::AtomicFunction::Exchange {
+                    compare: Some(ref mut compare),
+                } => {
+                    adjust(compare);
+                }
+                crate::AtomicFunction::Add
+                | crate::AtomicFunction::Subtract
+                | crate::AtomicFunction::And
+                | crate::AtomicFunction::ExclusiveOr
+                | crate::AtomicFunction::InclusiveOr
+                | crate::AtomicFunction::Min
+                | crate::AtomicFunction::Max
+                | crate::AtomicFunction::Exchange { compare: None } => {}
+            }
+        }
+        Statement::WorkGroupUniformLoad {
+            ref mut pointer,
+            ref mut result,
+        } => {
+            adjust(pointer);
+            adjust(result);
+        }
+        Statement::Call {
+            ref mut arguments,
+            ref mut result,
+            function: _,
+        } => {
+            for argument in arguments.iter_mut() {
+                adjust(argument);
+            }
+            if let Some(e) = result.as_mut() {
+                adjust(e);
+            }
+        }
+        Statement::RayQuery {
+            ref mut query,
+            ref mut fun,
+        } => {
+            adjust(query);
+            match *fun {
+                crate::RayQueryFunction::Initialize {
+                    ref mut acceleration_structure,
+                    ref mut descriptor,
+                } => {
+                    adjust(acceleration_structure);
+                    adjust(descriptor);
+                }
+                crate::RayQueryFunction::Proceed { ref mut result } => {
+                    adjust(result);
+                }
+                crate::RayQueryFunction::Terminate => {}
+            }
+        }
+        Statement::Break | Statement::Continue | Statement::Kill | Statement::Barrier(_) => {}
+    }
+}
+
+/// Adjust [`Emit`] statements in `block` to skip [`needs_pre_emit`] expressions we have introduced.
+///
+/// According to validation, [`Emit`] statements must not cover any expressions
+/// for which [`Expression::needs_pre_emit`] returns true. All expressions built
+/// by successful constant evaluation fall into that category, meaning that
+/// `process_function` will usually rewrite [`Override`] expressions and those
+/// that use their values into pre-emitted expressions, leaving any [`Emit`]
+/// statements that cover them invalid.
+///
+/// This function rewrites all [`Emit`] statements into zero or more new
+/// [`Emit`] statements covering only those expressions in the original range
+/// that are not pre-emitted.
+///
+/// [`Emit`]: Statement::Emit
+/// [`needs_pre_emit`]: Expression::needs_pre_emit
+/// [`Override`]: Expression::Override
+fn filter_emits_in_block(block: &mut Block, expressions: &Arena<Expression>) {
+    let original = std::mem::replace(block, Block::with_capacity(block.len()));
+    for (stmt, span) in original.span_into_iter() {
+        match stmt {
+            Statement::Emit(range) => {
+                let mut current = None;
+                for expr_h in range {
+                    if expressions[expr_h].needs_pre_emit() {
+                        if let Some((first, last)) = current {
+                            block.push(Statement::Emit(Range::new_from_bounds(first, last)), span);
+                        }
+
+                        current = None;
+                    } else if let Some((_, ref mut last)) = current {
+                        *last = expr_h;
+                    } else {
+                        current = Some((expr_h, expr_h));
+                    }
+                }
+                if let Some((first, last)) = current {
+                    block.push(Statement::Emit(Range::new_from_bounds(first, last)), span);
+                }
+            }
+            Statement::Block(mut child) => {
+                filter_emits_in_block(&mut child, expressions);
+                block.push(Statement::Block(child), span);
+            }
+            Statement::If {
+                condition,
+                mut accept,
+                mut reject,
+            } => {
+                filter_emits_in_block(&mut accept, expressions);
+                filter_emits_in_block(&mut reject, expressions);
+                block.push(
+                    Statement::If {
+                        condition,
+                        accept,
+                        reject,
+                    },
+                    span,
+                );
+            }
+            Statement::Switch {
+                selector,
+                mut cases,
+            } => {
+                for case in &mut cases {
+                    filter_emits_in_block(&mut case.body, expressions);
+                }
+                block.push(Statement::Switch { selector, cases }, span);
+            }
+            Statement::Loop {
+                mut body,
+                mut continuing,
+                break_if,
+            } => {
+                filter_emits_in_block(&mut body, expressions);
+                filter_emits_in_block(&mut continuing, expressions);
+                block.push(
+                    Statement::Loop {
+                        body,
+                        continuing,
+                        break_if,
+                    },
+                    span,
+                );
+            }
+            stmt => block.push(stmt.clone(), span),
+        }
     }
 }
 

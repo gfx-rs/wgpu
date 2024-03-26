@@ -1,0 +1,259 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: AccelerationStructure,
+        ),
+        (
+            name: None,
+            inner: RayQuery,
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: Some("RayDesc"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("flags"),
+                        ty: 4,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("cull_mask"),
+                        ty: 4,
+                        binding: None,
+                        offset: 4,
+                    ),
+                    (
+                        name: Some("tmin"),
+                        ty: 1,
+                        binding: None,
+                        offset: 8,
+                    ),
+                    (
+                        name: Some("tmax"),
+                        ty: 1,
+                        binding: None,
+                        offset: 12,
+                    ),
+                    (
+                        name: Some("origin"),
+                        ty: 5,
+                        binding: None,
+                        offset: 16,
+                    ),
+                    (
+                        name: Some("dir"),
+                        ty: 5,
+                        binding: None,
+                        offset: 32,
+                    ),
+                ],
+                span: 48,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: Some(6),
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [
+        (
+            name: Some("o"),
+            id: None,
+            ty: 1,
+            init: None,
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("acc_struct"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 2,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [
+                    (
+                        name: Some("rq"),
+                        ty: 3,
+                        init: None,
+                    ),
+                ],
+                expressions: [
+                    LocalVariable(1),
+                    Literal(U32(4)),
+                    Literal(U32(255)),
+                    Override(1),
+                    Literal(F32(17.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 4,
+                        right: 5,
+                    ),
+                    Override(1),
+                    Literal(F32(19.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 7,
+                        right: 8,
+                    ),
+                    Override(1),
+                    Literal(F32(23.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 10,
+                        right: 11,
+                    ),
+                    Splat(
+                        size: Tri,
+                        value: 12,
+                    ),
+                    Override(1),
+                    Literal(F32(29.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 14,
+                        right: 15,
+                    ),
+                    Override(1),
+                    Literal(F32(31.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 17,
+                        right: 18,
+                    ),
+                    Override(1),
+                    Literal(F32(37.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 20,
+                        right: 21,
+                    ),
+                    Compose(
+                        ty: 5,
+                        components: [
+                            16,
+                            19,
+                            22,
+                        ],
+                    ),
+                    Compose(
+                        ty: 6,
+                        components: [
+                            2,
+                            3,
+                            6,
+                            9,
+                            13,
+                            23,
+                        ],
+                    ),
+                    GlobalVariable(1),
+                    RayQueryProceedResult,
+                ],
+                named_expressions: {
+                    24: "desc",
+                },
+                body: [
+                    Emit((
+                        start: 5,
+                        end: 6,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 9,
+                    )),
+                    Emit((
+                        start: 11,
+                        end: 13,
+                    )),
+                    Emit((
+                        start: 15,
+                        end: 16,
+                    )),
+                    Emit((
+                        start: 18,
+                        end: 19,
+                    )),
+                    Emit((
+                        start: 21,
+                        end: 24,
+                    )),
+                    RayQuery(
+                        query: 1,
+                        fun: Initialize(
+                            acceleration_structure: 25,
+                            descriptor: 24,
+                        ),
+                    ),
+                    Loop(
+                        body: [
+                            RayQuery(
+                                query: 1,
+                                fun: Proceed(
+                                    result: 26,
+                                ),
+                            ),
+                            If(
+                                condition: 26,
+                                accept: [],
+                                reject: [
+                                    Break,
+                                ],
+                            ),
+                            Block([]),
+                        ],
+                        continuing: [],
+                        break_if: None,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)
