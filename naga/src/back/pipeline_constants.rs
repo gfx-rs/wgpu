@@ -633,7 +633,7 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
         Statement::Call {
             ref mut arguments,
             ref mut result,
-            ..
+            function: _,
         } => {
             for argument in arguments.iter_mut() {
                 adjust(argument);
@@ -642,8 +642,24 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
                 adjust(e);
             }
         }
-        Statement::RayQuery { ref mut query, .. } => {
+        Statement::RayQuery {
+            ref mut query,
+            ref mut fun,
+        } => {
             adjust(query);
+            match *fun {
+                crate::RayQueryFunction::Initialize {
+                    ref mut acceleration_structure,
+                    ref mut descriptor,
+                } => {
+                    adjust(acceleration_structure);
+                    adjust(descriptor);
+                }
+                crate::RayQueryFunction::Proceed { ref mut result } => {
+                    adjust(result);
+                }
+                crate::RayQueryFunction::Terminate => {}
+            }
         }
         Statement::Break | Statement::Continue | Statement::Kill | Statement::Barrier(_) => {}
     }
