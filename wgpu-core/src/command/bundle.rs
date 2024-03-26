@@ -1548,15 +1548,14 @@ pub mod bundle_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = unsafe {
-            bundle.current_bind_groups.set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut bundle.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            )
-        };
+        let offsets = unsafe { slice::from_raw_parts(offsets, offset_length) };
+
+        let redundant = bundle.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut bundle.base.dynamic_offsets,
+            offsets,
+        );
 
         if redundant {
             return;
