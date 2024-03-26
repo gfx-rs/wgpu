@@ -22,6 +22,7 @@ bitflags::bitflags! {
         const DOT = 0x20;
         const HLSL = 0x40;
         const WGSL = 0x80;
+        const RUST = 0x100;
     }
 }
 
@@ -57,6 +58,13 @@ struct SpirvOutParameters {
 struct WgslOutParameters {
     #[serde(default)]
     explicit_types: bool,
+}
+
+#[derive(Default, serde::Deserialize)]
+struct RustOutParameters {
+    #[cfg(all(feature = "deserialize", feature = "rust-out"))]
+    #[serde(default)]
+    target: naga::back::rust::Target,
 }
 
 #[derive(Default, serde::Deserialize)]

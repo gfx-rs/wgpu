@@ -29,6 +29,7 @@ msl-out = []
 serialize = ["serde", "bitflags/serde", "indexmap/serde"]
 deserialize = ["serde", "bitflags/serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
+rust-out = ["clone", "syn", "prettyplease", "proc-macro2", "quote"]
 spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
 wgsl-in = ["hexf-parse", "unicode-xid", "compact"]
@@ -60,6 +61,10 @@ petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
+quote = { version = "1.0.35", optional = true }
+proc-macro2 = { version = "1.0.71", optional = true }
+syn = { version = "2.0.42", optional = true, features = ["full", "parsing"] }
+prettyplease = { version = "0.2.15", optional = true }
 arrayvec.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

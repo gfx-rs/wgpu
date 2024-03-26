@@ -4,3 +4,6 @@ Lists of reserved keywords for each shading language with a [frontend][crate::fr
 
 #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
 pub mod wgsl;
+
+#[cfg(feature = "rust-out")]
+pub mod rust;
