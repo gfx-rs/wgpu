@@ -998,7 +998,7 @@ pub struct LocalVariable {
     ///
     /// This handle refers to this `LocalVariable`'s function's
     /// [`expressions`] arena, but it is required to be an evaluated
-    /// constant expression.
+    /// override expression.
     ///
     /// [`expressions`]: Function::expressions
     pub init: Option<Handle<Expression>>,
