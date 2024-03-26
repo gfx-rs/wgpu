@@ -58,10 +58,14 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
         });
 
         // Set a bad viewport on renderpass, triggering an error.
-        fail(&ctx.device, || {
-            renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
-            drop(renderpass);
-        });
+        fail(
+            &ctx.device,
+            || {
+                renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
+                drop(renderpass);
+            },
+            None,
+        );
 
         // This is the actual interesting error condition. We've created
         // a CommandEncoder which errored out when processing a command.

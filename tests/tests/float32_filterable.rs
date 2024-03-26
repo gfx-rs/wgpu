@@ -58,9 +58,13 @@ static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfigu
         // Float 32 textures can be used as non-filterable only
         create_texture_binding(device, wgpu::TextureFormat::R32Float, false);
         // This is supposed to fail, since we have not activated the feature
-        fail(&ctx.device, || {
-            create_texture_binding(device, wgpu::TextureFormat::R32Float, true);
-        });
+        fail(
+            &ctx.device,
+            || {
+                create_texture_binding(device, wgpu::TextureFormat::R32Float, true);
+            },
+            None,
+        );
     });
 
 #[gpu_test]
