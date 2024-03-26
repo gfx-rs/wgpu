@@ -324,7 +324,8 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
     };
     match *expr {
         Expression::Compose {
-            ref mut components, ..
+            ref mut components,
+            ty: _,
         } => {
             for c in components.iter_mut() {
                 adjust(c);
@@ -337,13 +338,23 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             adjust(base);
             adjust(index);
         }
-        Expression::AccessIndex { ref mut base, .. } => {
+        Expression::AccessIndex {
+            ref mut base,
+            index: _,
+        } => {
             adjust(base);
         }
-        Expression::Splat { ref mut value, .. } => {
+        Expression::Splat {
+            ref mut value,
+            size: _,
+        } => {
             adjust(value);
         }
-        Expression::Swizzle { ref mut vector, .. } => {
+        Expression::Swizzle {
+            ref mut vector,
+            size: _,
+            pattern: _,
+        } => {
             adjust(vector);
         }
         Expression::Load { ref mut pointer } => {
@@ -357,7 +368,7 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             ref mut offset,
             ref mut level,
             ref mut depth_ref,
-            ..
+            gather: _,
         } => {
             adjust(image);
             adjust(sampler);
@@ -416,16 +427,21 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
                         adjust(e);
                     }
                 }
-                _ => {}
+                crate::ImageQuery::NumLevels
+                | crate::ImageQuery::NumLayers
+                | crate::ImageQuery::NumSamples => {}
             }
         }
-        Expression::Unary { ref mut expr, .. } => {
+        Expression::Unary {
+            ref mut expr,
+            op: _,
+        } => {
             adjust(expr);
         }
         Expression::Binary {
             ref mut left,
             ref mut right,
-            ..
+            op: _,
         } => {
             adjust(left);
             adjust(right);
@@ -439,11 +455,16 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             adjust(accept);
             adjust(reject);
         }
-        Expression::Derivative { ref mut expr, .. } => {
+        Expression::Derivative {
+            ref mut expr,
+            axis: _,
+            ctrl: _,
+        } => {
             adjust(expr);
         }
         Expression::Relational {
-            ref mut argument, ..
+            ref mut argument,
+            fun: _,
         } => {
             adjust(argument);
         }
@@ -452,7 +473,7 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             ref mut arg1,
             ref mut arg2,
             ref mut arg3,
-            ..
+            fun: _,
         } => {
             adjust(arg);
             if let Some(e) = arg1.as_mut() {
@@ -465,13 +486,20 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
                 adjust(e);
             }
         }
-        Expression::As { ref mut expr, .. } => {
+        Expression::As {
+            ref mut expr,
+            kind: _,
+            convert: _,
+        } => {
             adjust(expr);
         }
         Expression::ArrayLength(ref mut expr) => {
             adjust(expr);
         }
-        Expression::RayQueryGetIntersection { ref mut query, .. } => {
+        Expression::RayQueryGetIntersection {
+            ref mut query,
+            committed: _,
+        } => {
             adjust(query);
         }
         Expression::Literal(_)
@@ -483,8 +511,11 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
         | Expression::Constant(_)
         | Expression::Override(_)
         | Expression::ZeroValue(_)
-        | Expression::AtomicResult { .. }
-        | Expression::WorkGroupUniformLoadResult { .. } => {}
+        | Expression::AtomicResult {
+            ty: _,
+            comparison: _,
+        }
+        | Expression::WorkGroupUniformLoadResult { ty: _ } => {}
     }
 }
 
