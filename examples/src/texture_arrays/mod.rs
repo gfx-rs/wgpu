@@ -320,7 +320,7 @@ impl crate::framework::Example for Example {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &base_shader_module,
-                entry_point: "vert_main",
+                entry_point: Some("vert_main"),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -329,7 +329,7 @@ impl crate::framework::Example for Example {
             },
             fragment: Some(wgpu::FragmentState {
                 module: fragment_shader_module,
-                entry_point: fragment_entry_point,
+                entry_point: Some(fragment_entry_point),
                 targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {

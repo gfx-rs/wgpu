@@ -297,7 +297,7 @@ fn compute_pass(
         label: None,
         layout: None,
         module,
-        entry_point: "main_cs",
+        entry_point: Some("main_cs"),
     });
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -351,12 +351,12 @@ fn render_pass(
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             targets: &[Some(format.into())],
         }),
         primitive: wgpu::PrimitiveState::default(),

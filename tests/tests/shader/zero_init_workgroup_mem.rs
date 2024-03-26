@@ -86,7 +86,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: Some("pipeline read"),
                 layout: Some(&pll),
                 module: &sm,
-                entry_point: "read",
+                entry_point: Some("read"),
             });
 
         let pipeline_write = ctx
@@ -95,7 +95,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: Some("pipeline write"),
                 layout: None,
                 module: &sm,
-                entry_point: "write",
+                entry_point: Some("write"),
             });
 
         // -- Initializing data --

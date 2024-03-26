@@ -109,7 +109,7 @@ async fn run() {
         label: None,
         layout: Some(&pipeline_layout),
         module: &shader,
-        entry_point: "main",
+        entry_point: Some("main"),
     });
 
     //----------------------------------------------------------

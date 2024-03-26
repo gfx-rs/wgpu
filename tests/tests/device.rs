@@ -479,7 +479,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     layout: None,
                     vertex: wgpu::VertexState {
                         module: &shader_module,
-                        entry_point: "",
+                        entry_point: Some(""),
                         buffers: &[],
                     },
                     primitive: wgpu::PrimitiveState::default(),
@@ -497,7 +497,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     label: None,
                     layout: None,
                     module: &shader_module,
-                    entry_point: "",
+                    entry_point: Some(""),
                 });
         });
 

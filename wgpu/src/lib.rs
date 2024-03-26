@@ -1464,9 +1464,12 @@ static_assertions::assert_impl_all!(VertexBufferLayout<'_>: Send, Sync);
 pub struct VertexState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a function with this name and no return value in the shader.
+    /// Otherwise, there must be exactly one `@compute` entry point in the provided `module`, which
+    /// will be used for the pipeline.
+    pub entry_point: Option<&'a str>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
@@ -1483,9 +1486,12 @@ static_assertions::assert_impl_all!(VertexState<'_>: Send, Sync);
 pub struct FragmentState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a function with this name and no return value in the shader.
+    /// Otherwise, there must be exactly one `@compute` entry point in the provided `module`, which
+    /// will be used for the pipeline.
+    pub entry_point: Option<&'a str>,
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
@@ -1572,9 +1578,12 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// and no return value in the shader.
-    pub entry_point: &'a str,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a function with this name and no return value in the shader.
+    /// Otherwise, there must be exactly one `@compute` entry point in the provided `module`, which
+    /// will be used for the pipeline.
+    pub entry_point: Option<&'a str>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
@@ -4019,27 +4028,6 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-/// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
-    /// Issue a timestamp command at this point in the queue. The
-    /// timestamp will be written to the specified query set, at the specified index.
-    ///
-    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
-    /// the value in nanoseconds. Absolute values have no meaning,
-    /// but timestamps can be subtracted to get the time it takes
-    /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
-        DynContext::render_pass_write_timestamp(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-            &query_set.id,
-            query_set.data.as_ref(),
-            query_index,
-        )
-    }
-}
-
 impl<'a> RenderPass<'a> {
     /// Start a occlusion query on this render pass. It can be ended with
     /// `end_occlusion_query`. Occlusion queries may not be nested.
@@ -4218,26 +4206,6 @@ impl<'a> ComputePass<'a> {
             offset,
             data,
         );
-    }
-}
-
-/// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
-    /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
-    ///
-    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
-    /// the value in nanoseconds. Absolute values have no meaning,
-    /// but timestamps can be subtracted to get the time it takes
-    /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
-        DynContext::compute_pass_write_timestamp(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-            &query_set.id,
-            query_set.data.as_ref(),
-            query_index,
-        )
     }
 }
 

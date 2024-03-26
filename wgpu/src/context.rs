@@ -506,14 +506,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         encoder_data: &Self::CommandEncoderData,
     );
 
-    fn command_encoder_write_timestamp(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        query_set: &Self::QuerySetId,
-        query_set_data: &Self::QuerySetData,
-        query_index: u32,
-    );
     #[allow(clippy::too_many_arguments)]
     fn command_encoder_resolve_query_set(
         &self,
@@ -645,14 +637,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
-    );
-    fn compute_pass_write_timestamp(
-        &self,
-        pass: &mut Self::ComputePassId,
-        pass_data: &mut Self::ComputePassData,
-        query_set: &Self::QuerySetId,
-        query_set_data: &Self::QuerySetData,
-        query_index: u32,
     );
     fn compute_pass_begin_pipeline_statistics_query(
         &self,
@@ -976,14 +960,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-    );
-    fn render_pass_write_timestamp(
-        &self,
-        pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-        query_set: &Self::QuerySetId,
-        query_set_data: &Self::QuerySetData,
-        query_index: u32,
     );
     fn render_pass_begin_occlusion_query(
         &self,
@@ -1488,14 +1464,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     );
     fn command_encoder_pop_debug_group(&self, encoder: &ObjectId, encoder_data: &crate::Data);
 
-    fn command_encoder_write_timestamp(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        query_set: &ObjectId,
-        query_set_data: &crate::Data,
-        query_index: u32,
-    );
     #[allow(clippy::too_many_arguments)]
     fn command_encoder_resolve_query_set(
         &self,
@@ -1620,14 +1588,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         group_label: &str,
     );
     fn compute_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
-    fn compute_pass_write_timestamp(
-        &self,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-        query_set: &ObjectId,
-        query_set_data: &crate::Data,
-        query_index: u32,
-    );
     fn compute_pass_begin_pipeline_statistics_query(
         &self,
         pass: &mut ObjectId,
@@ -1947,14 +1907,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         group_label: &str,
     );
     fn render_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
-    fn render_pass_write_timestamp(
-        &self,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-        query_set: &ObjectId,
-        query_set_data: &crate::Data,
-        query_index: u32,
-    );
     fn render_pass_begin_occlusion_query(
         &self,
         pass: &mut ObjectId,
@@ -2840,28 +2792,6 @@ where
         Context::command_encoder_pop_debug_group(self, &encoder, encoder_data)
     }
 
-    fn command_encoder_write_timestamp(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        query_set: &ObjectId,
-        query_set_data: &crate::Data,
-        query_index: u32,
-    ) {
-        let encoder = <T::CommandEncoderId>::from(*encoder);
-        let encoder_data = downcast_ref(encoder_data);
-        let query_set = <T::QuerySetId>::from(*query_set);
-        let query_set_data = downcast_ref(query_set_data);
-        Context::command_encoder_write_timestamp(
-            self,
-            &encoder,
-            encoder_data,
-            &query_set,
-            query_set_data,
-            query_index,
-        )
-    }
-
     fn command_encoder_resolve_query_set(
         &self,
         encoder: &ObjectId,
@@ -3131,28 +3061,6 @@ where
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         Context::compute_pass_pop_debug_group(self, &mut pass, pass_data)
-    }
-
-    fn compute_pass_write_timestamp(
-        &self,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-        query_set: &ObjectId,
-        query_set_data: &crate::Data,
-        query_index: u32,
-    ) {
-        let mut pass = <T::ComputePassId>::from(*pass);
-        let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
-        let query_set = <T::QuerySetId>::from(*query_set);
-        let query_set_data = downcast_ref(query_set_data);
-        Context::compute_pass_write_timestamp(
-            self,
-            &mut pass,
-            pass_data,
-            &query_set,
-            query_set_data,
-            query_index,
-        )
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -3897,28 +3805,6 @@ where
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_pop_debug_group(self, &mut pass, pass_data)
-    }
-
-    fn render_pass_write_timestamp(
-        &self,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-        query_set: &ObjectId,
-        query_set_data: &crate::Data,
-        query_index: u32,
-    ) {
-        let mut pass = <T::RenderPassId>::from(*pass);
-        let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let query_set = <T::QuerySetId>::from(*query_set);
-        let query_set_data = downcast_ref(query_set_data);
-        Context::render_pass_write_timestamp(
-            self,
-            &mut pass,
-            pass_data,
-            &query_set,
-            query_set_data,
-            query_index,
-        )
     }
 
     fn render_pass_begin_occlusion_query(
