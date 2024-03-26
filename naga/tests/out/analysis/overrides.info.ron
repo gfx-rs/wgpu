@@ -53,18 +53,6 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(4),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Pointer(
-                        base: 2,
-                        space: Function,
-                    )),
-                ),
-                (
-                    uniformity: (
                         non_uniform_result: None,
                         requirements: (""),
                     ),
@@ -83,7 +71,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(7),
+                        non_uniform_result: Some(6),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -95,7 +83,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(8),
+                        non_uniform_result: Some(7),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -107,7 +95,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(8),
+                        non_uniform_result: Some(7),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -128,7 +116,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(8),
+                        non_uniform_result: Some(7),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -140,7 +128,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(12),
+                        non_uniform_result: Some(11),
                         requirements: (""),
                     ),
                     ref_count: 1,

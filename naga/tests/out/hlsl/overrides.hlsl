@@ -11,13 +11,12 @@ static float gain_x_10_ = 11.0;
 [numthreads(1, 1, 1)]
 void main()
 {
-    float t = (float)0;
+    float t = 23.0;
     bool x = (bool)0;
     float gain_x_100_ = (float)0;
 
-    t = 23.0;
     x = true;
-    float _expr10 = gain_x_10_;
-    gain_x_100_ = (_expr10 * 10.0);
+    float _expr9 = gain_x_10_;
+    gain_x_100_ = (_expr9 * 10.0);
     return;
 }

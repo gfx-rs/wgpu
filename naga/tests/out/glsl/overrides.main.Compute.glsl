@@ -17,13 +17,12 @@ float gain_x_10_ = 11.0;
 
 
 void main() {
-    float t = 0.0;
+    float t = 23.0;
     bool x = false;
     float gain_x_100_ = 0.0;
-    t = 23.0;
     x = true;
-    float _e10 = gain_x_10_;
-    gain_x_100_ = (_e10 * 10.0);
+    float _e9 = gain_x_10_;
+    gain_x_100_ = (_e9 * 10.0);
     return;
 }
 

@@ -304,6 +304,13 @@ fn process_function(
 
     filter_emits_in_block(&mut function.body, &function.expressions);
 
+    // Update local expression initializers.
+    for (_, local) in function.local_variables.iter_mut() {
+        if let &mut Some(ref mut init) = &mut local.init {
+            *init = adjusted_local_expressions[init.index()];
+        }
+    }
+
     // We've changed the keys of `function.named_expression`, so we have to
     // rebuild it from scratch.
     let named_expressions = mem::take(&mut function.named_expressions);

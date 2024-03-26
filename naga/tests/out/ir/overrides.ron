@@ -109,7 +109,7 @@
                     (
                         name: Some("t"),
                         ty: 2,
-                        init: None,
+                        init: Some(3),
                     ),
                     (
                         name: Some("x"),
@@ -130,56 +130,51 @@
                         left: 1,
                         right: 2,
                     ),
-                    LocalVariable(1),
                     Override(1),
                     Unary(
                         op: LogicalNot,
-                        expr: 5,
+                        expr: 4,
                     ),
                     LocalVariable(2),
                     GlobalVariable(1),
                     Load(
-                        pointer: 8,
+                        pointer: 7,
                     ),
                     Literal(F32(10.0)),
                     Binary(
                         op: Multiply,
-                        left: 9,
-                        right: 10,
+                        left: 8,
+                        right: 9,
                     ),
                     LocalVariable(3),
                 ],
                 named_expressions: {
-                    6: "a",
+                    5: "a",
                 },
                 body: [
                     Emit((
                         start: 2,
                         end: 3,
                     )),
+                    Emit((
+                        start: 4,
+                        end: 5,
+                    )),
                     Store(
-                        pointer: 4,
-                        value: 3,
+                        pointer: 6,
+                        value: 5,
                     ),
                     Emit((
-                        start: 5,
-                        end: 6,
-                    )),
-                    Store(
-                        pointer: 7,
-                        value: 6,
-                    ),
-                    Emit((
-                        start: 8,
-                        end: 9,
+                        start: 7,
+                        end: 8,
                     )),
                     Emit((
-                        start: 10,
-                        end: 11,
+                        start: 9,
+                        end: 10,
                     )),
                     Store(
-                        pointer: 12,
-                        value: 11,
+                        pointer: 11,
+                        value: 10,
                     ),
                     Return(
                         value: None,
