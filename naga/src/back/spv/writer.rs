@@ -565,36 +565,38 @@ impl Writer {
             // Handle globals are pre-emitted and should be loaded automatically.
             //
             // Any that are binding arrays we skip as we cannot load the array, we must load the result after indexing.
-            let is_binding_array = match ir_module.types[var.ty].inner {
-                crate::TypeInner::BindingArray { .. } => true,
-                _ => false,
-            };
-
-            if var.space == crate::AddressSpace::Handle && !is_binding_array {
-                let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
-                let id = self.id_gen.next();
-                prelude
-                    .body
-                    .push(Instruction::load(var_type_id, id, gv.var_id, None));
-                gv.access_id = gv.var_id;
-                gv.handle_id = id;
-            } else if global_needs_wrapper(ir_module, var) {
-                let class = map_storage_class(var.space);
-                let pointer_type_id = self.get_pointer_id(&ir_module.types, var.ty, class)?;
-                let index_id = self.get_index_constant(0);
-
-                let id = self.id_gen.next();
-                prelude.body.push(Instruction::access_chain(
-                    pointer_type_id,
-                    id,
-                    gv.var_id,
-                    &[index_id],
-                ));
-                gv.access_id = id;
-            } else {
-                // by default, the variable ID is accessed as is
-                gv.access_id = gv.var_id;
-            };
+            match ir_module.types[var.ty].inner {
+                crate::TypeInner::BindingArray { .. } => {
+                    gv.access_id = gv.var_id;
+                }
+                _ => {
+                    if var.space == crate::AddressSpace::Handle {
+                        let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
+                        let id = self.id_gen.next();
+                        prelude
+                            .body
+                            .push(Instruction::load(var_type_id, id, gv.var_id, None));
+                        gv.access_id = gv.var_id;
+                        gv.handle_id = id;
+                    } else if global_needs_wrapper(ir_module, var) {
+                        let class = map_storage_class(var.space);
+                        let pointer_type_id =
+                            self.get_pointer_id(&ir_module.types, var.ty, class)?;
+                        let index_id = self.get_index_constant(0);
+                        let id = self.id_gen.next();
+                        prelude.body.push(Instruction::access_chain(
+                            pointer_type_id,
+                            id,
+                            gv.var_id,
+                            &[index_id],
+                        ));
+                        gv.access_id = id;
+                    } else {
+                        // by default, the variable ID is accessed as is
+                        gv.access_id = gv.var_id;
+                    };
+                }
+            }
 
             // work around borrow checking in the presence of `self.xxx()` calls
             self.global_variables[handle.index()] = gv;
