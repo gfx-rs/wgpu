@@ -15,6 +15,6 @@ publish = false
 proc-macro = true
 
 [dependencies]
-heck = "0.4"
+heck = "0.5"
 quote = "1"
 syn = { version = "2", features = ["full"] }
