@@ -2,7 +2,7 @@ use parking_lot::RwLock;
 use winapi::shared::{dxgi1_5, minwindef};
 
 use super::SurfaceTarget;
-use crate::auxil::{self, dxgi::result::HResult as _};
+use crate::auxil::{self, dxgi::result::HResult as _, RequestedValidation};
 use std::{mem, sync::Arc};
 
 impl Drop for super::Instance {
@@ -22,21 +22,17 @@ impl crate::Instance for super::Instance {
             crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
         })?;
 
-        if desc
-            .flags
-            .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION)
-        {
+        if let Some(requested_validation) = RequestedValidation::from_flags(desc.flags) {
+            let RequestedValidation {
+                gpu_based_validation,
+            } = requested_validation;
+
             // Enable debug layer
             match lib_main.get_debug_interface() {
                 Ok(pair) => match pair.into_result() {
                     Ok(debug_controller) => {
-                        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
-                            debug_controller.enable_layer();
-                        }
-                        if desc
-                            .flags
-                            .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
-                        {
+                        debug_controller.enable_layer();
+                        if gpu_based_validation {
                             #[allow(clippy::collapsible_if)]
                             if !debug_controller.enable_gpu_based_validation() {
                                 log::warn!("Failed to enable GPU-based validation");
