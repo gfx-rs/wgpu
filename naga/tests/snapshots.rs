@@ -853,6 +853,10 @@ fn convert_wgsl() {
             "overrides",
             Targets::IR | Targets::ANALYSIS | Targets::SPIRV | Targets::METAL | Targets::HLSL,
         ),
+        (
+            "overrides-atomicCompareExchangeWeak",
+            Targets::IR | Targets::SPIRV,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
