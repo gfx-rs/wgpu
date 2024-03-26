@@ -571,11 +571,26 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
             ref mut pointer,
             ref mut value,
             ref mut result,
-            ..
+            ref mut fun,
         } => {
             adjust(pointer);
             adjust(value);
             adjust(result);
+            match *fun {
+                crate::AtomicFunction::Exchange {
+                    compare: Some(ref mut compare),
+                } => {
+                    adjust(compare);
+                }
+                crate::AtomicFunction::Add
+                | crate::AtomicFunction::Subtract
+                | crate::AtomicFunction::And
+                | crate::AtomicFunction::ExclusiveOr
+                | crate::AtomicFunction::InclusiveOr
+                | crate::AtomicFunction::Min
+                | crate::AtomicFunction::Max
+                | crate::AtomicFunction::Exchange { compare: None } => {}
+            }
         }
         Statement::WorkGroupUniformLoad {
             ref mut pointer,
