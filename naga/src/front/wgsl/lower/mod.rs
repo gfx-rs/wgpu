@@ -1317,7 +1317,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 //   expression, so its value depends on the
                                 //   state at the point of initialization.
                                 if is_inside_loop
-                                    || !ctx.local_expression_kind_tracker.is_const(init)
+                                    || !ctx.local_expression_kind_tracker.is_const_or_override(init)
                                 {
                                     (None, Some(init))
                                 } else {

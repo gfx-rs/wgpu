@@ -54,8 +54,8 @@ pub enum LocalVariableError {
     InvalidType(Handle<crate::Type>),
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
-    #[error("Initializer is not const")]
-    NonConstInitializer,
+    #[error("Initializer is not a const or override expression")]
+    NonConstOrOverrideInitializer,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -945,8 +945,8 @@ impl super::Validator {
                 return Err(LocalVariableError::InitializerType);
             }
 
-            if !local_expr_kind.is_const(init) {
-                return Err(LocalVariableError::NonConstInitializer);
+            if !local_expr_kind.is_const_or_override(init) {
+                return Err(LocalVariableError::NonConstOrOverrideInitializer);
             }
         }
 
