@@ -708,7 +708,9 @@ impl crate::Device for super::Device {
         for (&stage, counter) in super::NAGA_STAGES.iter().zip(bg.counters.iter_mut()) {
             let stage_bit = map_naga_stage(stage);
             let mut dynamic_offsets_count = 0u32;
+            log::info!("creating bind group: {desc:#?}");
             for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+                // assert_eq!(entry.binding, layout.binding);
                 let size = layout.count.map_or(1, |c| c.get());
                 if let wgt::BindingType::Buffer {
                     has_dynamic_offset: true,
