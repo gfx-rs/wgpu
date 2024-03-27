@@ -325,8 +325,18 @@ impl crate::Device for super::Device {
     unsafe fn unmap_buffer(&self, _buffer: &super::Buffer) -> DeviceResult<()> {
         Ok(())
     }
-    unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
-    unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
+    unsafe fn flush_mapped_ranges(
+        &self,
+        _buffer: &super::Buffer,
+        _ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
+    }
+    unsafe fn invalidate_mapped_ranges(
+        &self,
+        _buffer: &super::Buffer,
+        _ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
+    }
 
     unsafe fn create_texture(
         &self,

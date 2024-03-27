@@ -953,10 +953,11 @@ impl crate::Device for super::Device {
         }
     }
 
-    unsafe fn flush_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
-    where
-        I: Iterator<Item = crate::MemoryRange>,
-    {
+    unsafe fn flush_mapped_ranges(
+        &self,
+        buffer: &super::Buffer,
+        ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
         if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
             unsafe {
                 self.shared
@@ -968,10 +969,11 @@ impl crate::Device for super::Device {
             .unwrap();
         }
     }
-    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
-    where
-        I: Iterator<Item = crate::MemoryRange>,
-    {
+    unsafe fn invalidate_mapped_ranges(
+        &self,
+        buffer: &super::Buffer,
+        ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
         if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
             unsafe {
                 self.shared

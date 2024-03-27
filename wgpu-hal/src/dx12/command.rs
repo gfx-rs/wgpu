@@ -302,17 +302,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .into_device_result("GraphicsCommandList::close")?;
         Ok(super::CommandBuffer { raw })
     }
-    unsafe fn reset_all<I: Iterator<Item = super::CommandBuffer>>(&mut self, command_buffers: I) {
+    unsafe fn reset_all(
+        &mut self,
+        command_buffers: &mut dyn Iterator<Item = super::CommandBuffer>,
+    ) {
         for cmd_buf in command_buffers {
             self.free_lists.push(cmd_buf.raw);
         }
         self.allocator.reset();
     }
 
-    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_buffers<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+    ) {
         self.temp.barriers.clear();
 
         log::trace!(
@@ -368,10 +371,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_textures<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+    ) {
         self.temp.barriers.clear();
 
         log::trace!(
@@ -494,14 +497,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_buffer_to_buffer<T>(
+    unsafe fn copy_buffer_to_buffer(
         &mut self,
         src: &super::Buffer,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferCopy>,
+    ) {
         let list = self.list.as_ref().unwrap();
         for r in regions {
             unsafe {
@@ -516,15 +517,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_texture_to_texture<T>(
+    unsafe fn copy_texture_to_texture(
         &mut self,
         src: &super::Texture,
         _src_usage: crate::TextureUses,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::TextureCopy>,
+    ) {
         let list = self.list.as_ref().unwrap();
         let mut src_location = d3d12_ty::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource.as_mut_ptr(),
@@ -559,14 +558,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_buffer_to_texture<T>(
+    unsafe fn copy_buffer_to_texture(
         &mut self,
         src: &super::Buffer,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let list = self.list.as_ref().unwrap();
         let mut src_location = d3d12_ty::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource.as_mut_ptr(),
@@ -600,15 +597,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_texture_to_buffer<T>(
+    unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &super::Texture,
         _src_usage: crate::TextureUses,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let list = self.list.as_ref().unwrap();
         let mut src_location = d3d12_ty::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource.as_mut_ptr(),
@@ -1207,13 +1202,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn build_acceleration_structures<'a, T>(
+    unsafe fn build_acceleration_structures<'a>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        _descriptors: &mut dyn Iterator<
+            Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>,
+        >,
     ) where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
     {
         // Implement using `BuildRaytracingAccelerationStructure`:
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
