@@ -236,7 +236,7 @@ impl<A: HalApi> BakedCommands<A> {
 
             unsafe {
                 self.encoder.transition_buffers(
-                    transition
+                    &mut transition
                         .map(|pending| pending.into_hal(&buffer, snatch_guard))
                         .into_iter(),
                 );

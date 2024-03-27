@@ -409,9 +409,10 @@ impl Global {
                 .map_err(DeviceError::from)?;
             ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
             if !mapping.is_coherent {
-                device
-                    .raw()
-                    .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
+                device.raw().flush_mapped_ranges(
+                    raw_buf,
+                    &mut iter::once(offset..offset + data.len() as u64),
+                );
             }
             device
                 .raw()
@@ -462,7 +463,7 @@ impl Global {
             if !mapping.is_coherent {
                 device.raw().invalidate_mapped_ranges(
                     raw_buf,
-                    iter::once(offset..offset + data.len() as u64),
+                    &mut iter::once(offset..offset + data.len() as u64),
                 );
             }
             ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());

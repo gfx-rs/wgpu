@@ -160,7 +160,7 @@ pub(crate) struct EncoderInFlight<A: HalApi> {
 
 impl<A: HalApi> EncoderInFlight<A> {
     pub(crate) unsafe fn land(mut self) -> A::CommandEncoder {
-        unsafe { self.raw.reset_all(self.cmd_buffers.into_iter()) };
+        unsafe { self.raw.reset_all(&mut self.cmd_buffers.into_iter()) };
         self.raw
     }
 }
@@ -220,7 +220,7 @@ impl<A: HalApi> PendingWrites<A> {
                 self.command_encoder.discard_encoding();
             }
             self.command_encoder
-                .reset_all(self.executing_command_buffers.into_iter());
+                .reset_all(&mut self.executing_command_buffers.into_iter());
             device.destroy_command_encoder(self.command_encoder);
         }
 
@@ -326,7 +326,7 @@ impl<A: HalApi> StagingBuffer<A> {
             unsafe {
                 device.flush_mapped_ranges(
                     self.raw.lock().as_ref().unwrap(),
-                    iter::once(0..self.size),
+                    &mut iter::once(0..self.size),
                 )
             };
         }
@@ -638,7 +638,7 @@ impl Global {
             size,
         });
         let inner_buffer = staging_buffer.raw.lock();
-        let barriers = iter::once(hal::BufferBarrier {
+        let barriers = &mut iter::once(hal::BufferBarrier {
             buffer: inner_buffer.as_ref().unwrap(),
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
@@ -649,7 +649,7 @@ impl Global {
             encoder.copy_buffer_to_buffer(
                 inner_buffer.as_ref().unwrap(),
                 dst_raw,
-                region.into_iter(),
+                &mut region.into_iter(),
             );
         }
         let dst = hub.buffers.get(buffer_id).unwrap();
@@ -890,7 +890,7 @@ impl Global {
             return Err(e.into());
         }
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
+        let regions = &mut (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
             texture_base.array_layer += rel_array_layer;
             hal::BufferTextureCopy {
@@ -919,8 +919,9 @@ impl Global {
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
             unsafe {
-                encoder.transition_textures(transition.map(|pending| pending.into_hal(dst_raw)));
-                encoder.transition_buffers(iter::once(barrier));
+                encoder
+                    .transition_textures(&mut transition.map(|pending| pending.into_hal(dst_raw)));
+                encoder.transition_buffers(&mut iter::once(barrier));
                 encoder.copy_buffer_to_texture(inner_buffer.as_ref().unwrap(), dst_raw, regions);
             }
         }
@@ -1429,7 +1430,7 @@ impl Global {
                                 .set_from_usage_scope(&used_surface_textures);
                             let (transitions, textures) =
                                 trackers.textures.drain_transitions(&snatch_guard);
-                            let texture_barriers = transitions
+                            let texture_barriers = &mut transitions
                                 .into_iter()
                                 .enumerate()
                                 .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
@@ -1485,7 +1486,7 @@ impl Global {
                         .set_from_usage_scope(&used_surface_textures);
                     let (transitions, textures) =
                         trackers.textures.drain_transitions(&snatch_guard);
-                    let texture_barriers = transitions
+                    let texture_barriers = &mut transitions
                         .into_iter()
                         .enumerate()
                         .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));

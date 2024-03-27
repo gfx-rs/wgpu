@@ -246,7 +246,7 @@ impl<A: HalApi> Device<A> {
         unsafe {
             pending_writes
                 .command_encoder
-                .transition_buffers(iter::once(hal::BufferBarrier {
+                .transition_buffers(&mut iter::once(hal::BufferBarrier {
                     buffer: &zero_buffer,
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 }));
@@ -255,7 +255,7 @@ impl<A: HalApi> Device<A> {
                 .clear_buffer(&zero_buffer, 0..ZERO_BUFFER_SIZE);
             pending_writes
                 .command_encoder
-                .transition_buffers(iter::once(hal::BufferBarrier {
+                .transition_buffers(&mut iter::once(hal::BufferBarrier {
                     buffer: &zero_buffer,
                     usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
                 }));
@@ -3587,7 +3587,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer<A>) {
         let mut baked = cmd_buf.extract_baked_commands();
         unsafe {
-            baked.encoder.reset_all(baked.list.into_iter());
+            baked.encoder.reset_all(&mut baked.list.into_iter());
         }
         unsafe {
             self.raw

@@ -54,7 +54,7 @@ struct ExecutionContext<A: hal::Api> {
 impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
         device.wait(&self.fence, self.fence_value, !0).unwrap();
-        self.encoder.reset_all(self.used_cmd_bufs.drain(..));
+        self.encoder.reset_all(&mut self.used_cmd_bufs.drain(..));
         for view in self.used_views.drain(..) {
             device.destroy_texture_view(view);
         }
@@ -63,7 +63,15 @@ impl<A: hal::Api> ExecutionContext<A> {
 }
 
 #[allow(dead_code)]
-struct Example<A: hal::Api> {
+struct Example<A: hal::Api>
+where
+    A::Instance: Sized,
+    A::Adapter: Sized,
+    A::Surface: Sized,
+    A::Device: Sized,
+    A::Queue: Sized,
+    A::CommandEncoder: Sized,
+{
     instance: A::Instance,
     adapter: A::Adapter,
     surface: A::Surface,
@@ -351,10 +359,14 @@ impl<A: hal::Api> Example<A> {
                 },
             };
             unsafe {
-                cmd_encoder.transition_buffers(iter::once(buffer_barrier));
-                cmd_encoder.transition_textures(iter::once(texture_barrier1));
-                cmd_encoder.copy_buffer_to_texture(&staging_buffer, &texture, iter::once(copy));
-                cmd_encoder.transition_textures(iter::once(texture_barrier2));
+                cmd_encoder.transition_buffers(&mut iter::once(buffer_barrier));
+                cmd_encoder.transition_textures(&mut iter::once(texture_barrier1));
+                cmd_encoder.copy_buffer_to_texture(
+                    &staging_buffer,
+                    &texture,
+                    &mut iter::once(copy),
+                );
+                cmd_encoder.transition_textures(&mut iter::once(texture_barrier2));
             }
         }
 
@@ -494,7 +506,7 @@ impl<A: hal::Api> Example<A> {
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
             device.destroy_buffer(staging_buffer);
-            cmd_encoder.reset_all(iter::once(init_cmd));
+            cmd_encoder.reset_all(&mut iter::once(init_cmd));
             fence
         };
 
@@ -651,7 +663,8 @@ impl<A: hal::Api> Example<A> {
         };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
-            ctx.encoder.transition_textures(iter::once(target_barrier0));
+            ctx.encoder
+                .transition_textures(&mut iter::once(target_barrier0));
         }
 
         let surface_view_desc = hal::TextureViewDescriptor {
@@ -719,7 +732,8 @@ impl<A: hal::Api> Example<A> {
         };
         unsafe {
             ctx.encoder.end_render_pass();
-            ctx.encoder.transition_textures(iter::once(target_barrier1));
+            ctx.encoder
+                .transition_textures(&mut iter::once(target_barrier1));
         }
 
         unsafe {

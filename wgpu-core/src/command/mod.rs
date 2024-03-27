@@ -149,7 +149,7 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
         resource_log!("resource::CommandBuffer::drop {:?}", self.info.label());
         let mut baked = self.extract_baked_commands();
         unsafe {
-            baked.encoder.reset_all(baked.list.into_iter());
+            baked.encoder.reset_all(&mut baked.list.into_iter());
         }
         unsafe {
             use hal::Device;
@@ -233,9 +233,9 @@ impl<A: HalApi> CommandBuffer<A> {
     ) {
         profiling::scope!("drain_barriers");
 
-        let buffer_barriers = base.buffers.drain_transitions(snatch_guard);
+        let buffer_barriers = &mut base.buffers.drain_transitions(snatch_guard);
         let (transitions, textures) = base.textures.drain_transitions(snatch_guard);
-        let texture_barriers = transitions
+        let texture_barriers = &mut transitions
             .into_iter()
             .enumerate()
             .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));

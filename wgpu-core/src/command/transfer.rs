@@ -722,8 +722,8 @@ impl Global {
         };
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_buffers(src_barrier.into_iter().chain(dst_barrier));
-            cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, iter::once(region));
+            cmd_buf_raw.transition_buffers(&mut src_barrier.into_iter().chain(dst_barrier));
+            cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, &mut iter::once(region));
         }
         Ok(())
     }
@@ -869,7 +869,7 @@ impl Global {
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
+        let regions = &mut (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
             texture_base.array_layer += rel_array_layer;
             let mut buffer_layout = source.layout;
@@ -883,8 +883,8 @@ impl Global {
 
         let cmd_buf_raw = encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_textures(dst_barrier.into_iter());
-            cmd_buf_raw.transition_buffers(src_barrier.into_iter());
+            cmd_buf_raw.transition_textures(&mut dst_barrier.into_iter());
+            cmd_buf_raw.transition_buffers(&mut src_barrier.into_iter());
             cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, regions);
         }
         Ok(())
@@ -1039,7 +1039,7 @@ impl Global {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
+        let regions = &mut (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = src_base.clone();
             texture_base.array_layer += rel_array_layer;
             let mut buffer_layout = destination.layout;
@@ -1052,8 +1052,8 @@ impl Global {
         });
         let cmd_buf_raw = encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
-            cmd_buf_raw.transition_textures(src_barrier.into_iter());
+            cmd_buf_raw.transition_buffers(&mut dst_barrier.into_iter());
+            cmd_buf_raw.transition_textures(&mut src_barrier.into_iter());
             cmd_buf_raw.copy_texture_to_buffer(
                 src_raw,
                 hal::TextureUses::COPY_SRC,
@@ -1213,7 +1213,7 @@ impl Global {
             height: src_copy_size.height.min(dst_copy_size.height),
             depth: src_copy_size.depth.min(dst_copy_size.depth),
         };
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
+        let regions = &mut (0..array_layer_count).map(|rel_array_layer| {
             let mut src_base = src_tex_base.clone();
             let mut dst_base = dst_tex_base.clone();
             src_base.array_layer += rel_array_layer;
@@ -1226,7 +1226,7 @@ impl Global {
         });
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_textures(barriers.into_iter());
+            cmd_buf_raw.transition_textures(&mut barriers.into_iter());
             cmd_buf_raw.copy_texture_to_texture(
                 src_raw,
                 hal::TextureUses::COPY_SRC,

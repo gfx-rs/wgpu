@@ -175,7 +175,7 @@ struct ExecutionContext<A: hal::Api> {
 impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
         device.wait(&self.fence, self.fence_value, !0).unwrap();
-        self.encoder.reset_all(self.used_cmd_bufs.drain(..));
+        self.encoder.reset_all(&mut self.used_cmd_bufs.drain(..));
         for view in self.used_views.drain(..) {
             device.destroy_texture_view(view);
         }
@@ -700,7 +700,7 @@ impl<A: hal::Api> Example<A> {
 
             cmd_encoder.build_acceleration_structures(
                 1,
-                [hal::BuildAccelerationStructureDescriptor {
+                &mut [hal::BuildAccelerationStructureDescriptor {
                     mode: hal::AccelerationStructureBuildMode::Build,
                     flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
                     destination_acceleration_structure: &blas,
@@ -708,7 +708,8 @@ impl<A: hal::Api> Example<A> {
                     entries: &blas_entries,
                     source_acceleration_structure: None,
                     scratch_buffer_offset: 0,
-                }],
+                }]
+                .into_iter(),
             );
 
             let scratch_buffer_barrier = hal::BufferBarrier {
@@ -716,7 +717,7 @@ impl<A: hal::Api> Example<A> {
                 usage: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
                     ..hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
             };
-            cmd_encoder.transition_buffers(iter::once(scratch_buffer_barrier));
+            cmd_encoder.transition_buffers(&mut iter::once(scratch_buffer_barrier));
 
             cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
                 usage: hal::AccelerationStructureUses::BUILD_OUTPUT
@@ -725,7 +726,7 @@ impl<A: hal::Api> Example<A> {
 
             cmd_encoder.build_acceleration_structures(
                 1,
-                [hal::BuildAccelerationStructureDescriptor {
+                &mut [hal::BuildAccelerationStructureDescriptor {
                     mode: hal::AccelerationStructureBuildMode::Build,
                     flags: tlas_flags,
                     destination_acceleration_structure: &tlas,
@@ -733,7 +734,8 @@ impl<A: hal::Api> Example<A> {
                     entries: &tlas_entries,
                     source_acceleration_structure: None,
                     scratch_buffer_offset: 0,
-                }],
+                }]
+                .into_iter(),
             );
 
             cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
@@ -747,7 +749,7 @@ impl<A: hal::Api> Example<A> {
                 usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::STORAGE_READ_WRITE,
             };
 
-            cmd_encoder.transition_textures(iter::once(texture_barrier));
+            cmd_encoder.transition_textures(&mut iter::once(texture_barrier));
         }
 
         let init_fence_value = 1;
@@ -758,7 +760,7 @@ impl<A: hal::Api> Example<A> {
                 .submit(&[&init_cmd], &[], Some((&mut fence, init_fence_value)))
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
-            cmd_encoder.reset_all(iter::once(init_cmd));
+            cmd_encoder.reset_all(&mut iter::once(init_cmd));
             fence
         };
 
@@ -853,7 +855,7 @@ impl<A: hal::Api> Example<A> {
 
             ctx.encoder.build_acceleration_structures(
                 1,
-                [hal::BuildAccelerationStructureDescriptor {
+                &mut [hal::BuildAccelerationStructureDescriptor {
                     mode: hal::AccelerationStructureBuildMode::Update,
                     flags: tlas_flags,
                     destination_acceleration_structure: &self.tlas,
@@ -861,7 +863,8 @@ impl<A: hal::Api> Example<A> {
                     entries: &hal::AccelerationStructureEntries::Instances(instances),
                     source_acceleration_structure: Some(&self.tlas),
                     scratch_buffer_offset: 0,
-                }],
+                }]
+                .into_iter(),
             );
 
             ctx.encoder
@@ -876,9 +879,10 @@ impl<A: hal::Api> Example<A> {
                     ..hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
             };
             ctx.encoder
-                .transition_buffers(iter::once(scratch_buffer_barrier));
+                .transition_buffers(&mut iter::once(scratch_buffer_barrier));
 
-            ctx.encoder.transition_textures(iter::once(target_barrier0));
+            ctx.encoder
+                .transition_textures(&mut iter::once(target_barrier0));
         }
 
         let surface_view_desc = hal::TextureViewDescriptor {
@@ -924,12 +928,13 @@ impl<A: hal::Api> Example<A> {
         };
         unsafe {
             ctx.encoder.end_compute_pass();
-            ctx.encoder.transition_textures(iter::once(target_barrier2));
+            ctx.encoder
+                .transition_textures(&mut iter::once(target_barrier2));
             ctx.encoder.copy_texture_to_texture(
                 &self.texture,
                 hal::TextureUses::COPY_SRC,
                 surface_tex.borrow(),
-                std::iter::once(hal::TextureCopy {
+                &mut std::iter::once(hal::TextureCopy {
                     src_base: hal::TextureCopyBase {
                         mip_level: 0,
                         array_layer: 0,
@@ -949,8 +954,10 @@ impl<A: hal::Api> Example<A> {
                     },
                 }),
             );
-            ctx.encoder.transition_textures(iter::once(target_barrier1));
-            ctx.encoder.transition_textures(iter::once(target_barrier3));
+            ctx.encoder
+                .transition_textures(&mut iter::once(target_barrier1));
+            ctx.encoder
+                .transition_textures(&mut iter::once(target_barrier3));
         }
 
         unsafe {
