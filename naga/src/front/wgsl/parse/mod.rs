@@ -1619,6 +1619,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
+        brace_nesting_level: u8,
     ) -> Result<(), Error<'a>> {
         self.push_rule_span(Rule::Statement, lexer);
         match lexer.peek() {
@@ -1627,7 +1628,22 @@ impl Parser {
                 self.pop_rule_span(lexer);
             }
             (Token::Paren('{'), _) => {
-                let (inner, span) = self.block(lexer, ctx)?;
+                // From [spec.](https://gpuweb.github.io/gpuweb/wgsl/#limits):
+                //
+                // > § 2.4. Limits
+                // >
+                // > …
+                // >
+                // > Maximum nesting depth of brace-enclosed statements in a function[:] 127
+                const SPEC_DEFINED_BRACE_NESTING_MAXIMUM: u8 = 127;
+                if brace_nesting_level > SPEC_DEFINED_BRACE_NESTING_MAXIMUM {
+                    return Err(Error::ExceededLimitForNestedBraces {
+                        span: self.peek_rule_span(lexer),
+                        limit: SPEC_DEFINED_BRACE_NESTING_MAXIMUM,
+                    });
+                }
+
+                let (inner, span) = self.block(lexer, ctx, brace_nesting_level)?;
                 block.stmts.push(ast::Statement {
                     kind: ast::StatementKind::Block(inner),
                     span,
@@ -1709,7 +1725,7 @@ impl Parser {
                         let _ = lexer.next();
                         let condition = self.general_expression(lexer, ctx)?;
 
-                        let accept = self.block(lexer, ctx)?.0;
+                        let accept = self.block(lexer, ctx, brace_nesting_level)?.0;
 
                         let mut elsif_stack = Vec::new();
                         let mut elseif_span_start = lexer.start_byte_offset();
@@ -1720,12 +1736,12 @@ impl Parser {
 
                             if !lexer.skip(Token::Word("if")) {
                                 // ... else { ... }
-                                break self.block(lexer, ctx)?.0;
+                                break self.block(lexer, ctx, brace_nesting_level)?.0;
                             }
 
                             // ... else if (...) { ... }
                             let other_condition = self.general_expression(lexer, ctx)?;
-                            let other_block = self.block(lexer, ctx)?;
+                            let other_block = self.block(lexer, ctx, brace_nesting_level)?;
                             elsif_stack.push((elseif_span_start, other_condition, other_block));
                             elseif_span_start = lexer.start_byte_offset();
                         };
@@ -1782,7 +1798,7 @@ impl Parser {
                                         });
                                     };
 
-                                    let body = self.block(lexer, ctx)?.0;
+                                    let body = self.block(lexer, ctx, brace_nesting_level)?.0;
 
                                     cases.push(ast::SwitchCase {
                                         value,
@@ -1792,7 +1808,7 @@ impl Parser {
                                 }
                                 (Token::Word("default"), _) => {
                                     lexer.skip(Token::Separator(':'));
-                                    let body = self.block(lexer, ctx)?.0;
+                                    let body = self.block(lexer, ctx, brace_nesting_level)?.0;
                                     cases.push(ast::SwitchCase {
                                         value: ast::SwitchValue::Default,
                                         body,
@@ -1808,7 +1824,7 @@ impl Parser {
 
                         ast::StatementKind::Switch { selector, cases }
                     }
-                    "loop" => self.r#loop(lexer, ctx)?,
+                    "loop" => self.r#loop(lexer, ctx, brace_nesting_level)?,
                     "while" => {
                         let _ = lexer.next();
                         let mut body = ast::Block::default();
@@ -1832,7 +1848,7 @@ impl Parser {
                             span,
                         });
 
-                        let (block, span) = self.block(lexer, ctx)?;
+                        let (block, span) = self.block(lexer, ctx, brace_nesting_level)?;
                         body.stmts.push(ast::Statement {
                             kind: ast::StatementKind::Block(block),
                             span,
@@ -1855,7 +1871,9 @@ impl Parser {
                             let (_, span) = {
                                 let ctx = &mut *ctx;
                                 let block = &mut *block;
-                                lexer.capture_span(|lexer| self.statement(lexer, ctx, block))?
+                                lexer.capture_span(|lexer| {
+                                    self.statement(lexer, ctx, block, brace_nesting_level)
+                                })?
                             };
 
                             if block.stmts.len() != num_statements {
@@ -1900,7 +1918,7 @@ impl Parser {
                             lexer.expect(Token::Paren(')'))?;
                         }
 
-                        let (block, span) = self.block(lexer, ctx)?;
+                        let (block, span) = self.block(lexer, ctx, brace_nesting_level)?;
                         body.stmts.push(ast::Statement {
                             kind: ast::StatementKind::Block(block),
                             span,
@@ -1962,6 +1980,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
+        brace_nesting_level: u8,
     ) -> Result<ast::StatementKind<'a>, Error<'a>> {
         let _ = lexer.next();
         let mut body = ast::Block::default();
@@ -1969,6 +1988,7 @@ impl Parser {
         let mut break_if = None;
 
         lexer.expect(Token::Paren('{'))?;
+        let brace_nesting_level = brace_nesting_level + 1;
 
         ctx.local_table.push_scope();
 
@@ -1979,6 +1999,7 @@ impl Parser {
 
                 // Expect a opening brace to start the continuing block
                 lexer.expect(Token::Paren('{'))?;
+                let brace_nesting_level = brace_nesting_level + 1;
                 loop {
                     if lexer.skip(Token::Word("break")) {
                         // Branch for the `break if` statement, this statement
@@ -2007,7 +2028,7 @@ impl Parser {
                         break;
                     } else {
                         // Otherwise try to parse a statement
-                        self.statement(lexer, ctx, &mut continuing)?;
+                        self.statement(lexer, ctx, &mut continuing, brace_nesting_level)?;
                     }
                 }
                 // Since the continuing block must be the last part of the loop body,
@@ -2021,7 +2042,7 @@ impl Parser {
                 break;
             }
             // Otherwise try to parse a statement
-            self.statement(lexer, ctx, &mut body)?;
+            self.statement(lexer, ctx, &mut body, brace_nesting_level)?;
         }
 
         ctx.local_table.pop_scope();
@@ -2038,6 +2059,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
+        brace_nesting_level: u8,
     ) -> Result<(ast::Block<'a>, Span), Error<'a>> {
         self.push_rule_span(Rule::Block, lexer);
 
@@ -2046,7 +2068,7 @@ impl Parser {
         lexer.expect(Token::Paren('{'))?;
         let mut block = ast::Block::default();
         while !lexer.skip(Token::Paren('}')) {
-            self.statement(lexer, ctx, &mut block)?;
+            self.statement(lexer, ctx, &mut block, brace_nesting_level + 1)?;
         }
 
         ctx.local_table.pop_scope();
@@ -2135,7 +2157,7 @@ impl Parser {
         lexer.expect(Token::Paren('{'))?;
         let mut body = ast::Block::default();
         while !lexer.skip(Token::Paren('}')) {
-            self.statement(lexer, &mut ctx, &mut body)?;
+            self.statement(lexer, &mut ctx, &mut body, 1)?;
         }
 
         ctx.local_table.pop_scope();

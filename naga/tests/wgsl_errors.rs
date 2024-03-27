@@ -2151,3 +2151,28 @@ fn compaction_preserves_spans() {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }
 }
+
+#[test]
+fn limit_braced_statement_nesting() {
+    let too_many_braces = "fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
+
+    let expected_diagnostic = r###"error: bruh dis too many braces
+  ┌─ wgsl:1:136
+  │
+1 │ fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+  │                                                                                                                                        ^ dis da brace yo
+  │
+  = note: write code for human not machine kthxbai, nesting limit 127
+
+"###;
+
+    // In debug builds, we might actually overflow the stack before exercising this error case,
+    // depending on the platform and the `RUST_MIN_STACK` env. var. Use a thread with a custom
+    // stack size that works on all platforms.
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024 * 8 /* MB */)
+        .spawn(|| check(too_many_braces, expected_diagnostic))
+        .unwrap()
+        .join()
+        .unwrap()
+}

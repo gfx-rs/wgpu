@@ -269,6 +269,10 @@ pub enum Error<'a> {
         scalar: String,
         inner: ConstantEvaluatorError,
     },
+    ExceededLimitForNestedBraces {
+        span: Span,
+        limit: u8,
+    },
 }
 
 impl<'a> Error<'a> {
@@ -769,6 +773,13 @@ impl<'a> Error<'a> {
                 notes: vec![
                     format!("the expression should have been converted to have {} scalar type", scalar),
                 ]
+            },
+            Error::ExceededLimitForNestedBraces { span, limit } => ParseError {
+                message: "bruh dis too many braces".into(),
+                labels: vec![(span, "dis da brace yo".into())],
+                notes: vec![
+                    format!("write code for human not machine kthxbai, nesting limit {limit}"),
+                ],
             },
         }
     }
