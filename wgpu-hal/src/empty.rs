@@ -148,8 +148,18 @@ impl crate::Device for Context {
     unsafe fn unmap_buffer(&self, buffer: &Resource) -> DeviceResult<()> {
         Ok(())
     }
-    unsafe fn flush_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
-    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
+    unsafe fn flush_mapped_ranges(
+        &self,
+        buffer: &Resource,
+        ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
+    }
+    unsafe fn invalidate_mapped_ranges(
+        &self,
+        buffer: &Resource,
+        ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
+    }
 
     unsafe fn create_texture(&self, desc: &crate::TextureDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
@@ -279,53 +289,63 @@ impl crate::CommandEncoder for Encoder {
     unsafe fn end_encoding(&mut self) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn reset_all<I>(&mut self, command_buffers: I) {}
+    unsafe fn reset_all(&mut self, command_buffers: &mut dyn Iterator<Item = Resource>) {}
 
-    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::BufferBarrier<'a, Api>>,
-    {
+    unsafe fn transition_buffers<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::BufferBarrier<'a, Api>>,
+    ) {
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::TextureBarrier<'a, Api>>,
-    {
+    unsafe fn transition_textures<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::TextureBarrier<'a, Api>>,
+    ) {
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange) {}
 
-    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
+    unsafe fn copy_buffer_to_buffer(
+        &mut self,
+        src: &Resource,
+        dst: &Resource,
+        regions: &mut dyn Iterator<Item = crate::BufferCopy>,
+    ) {
+    }
 
     #[cfg(webgl)]
-    unsafe fn copy_external_image_to_texture<T>(
+    unsafe fn copy_external_image_to_texture(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
         dst: &Resource,
         dst_premultiplication: bool,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
-    }
-
-    unsafe fn copy_texture_to_texture<T>(
-        &mut self,
-        src: &Resource,
-        src_usage: crate::TextureUses,
-        dst: &Resource,
-        regions: T,
+        regions: &mut dyn Iterator<Item = crate::TextureCopy>,
     ) {
     }
 
-    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
-
-    unsafe fn copy_texture_to_buffer<T>(
+    unsafe fn copy_texture_to_texture(
         &mut self,
         src: &Resource,
         src_usage: crate::TextureUses,
         dst: &Resource,
-        regions: T,
+        regions: &mut dyn Iterator<Item = crate::TextureCopy>,
+    ) {
+    }
+
+    unsafe fn copy_buffer_to_texture(
+        &mut self,
+        src: &Resource,
+        dst: &Resource,
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
+    }
+
+    unsafe fn copy_texture_to_buffer(
+        &mut self,
+        src: &Resource,
+        src_usage: crate::TextureUses,
+        dst: &Resource,
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
     ) {
     }
 
@@ -444,13 +464,12 @@ impl crate::CommandEncoder for Encoder {
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
     unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
 
-    unsafe fn build_acceleration_structures<'a, T>(
+    unsafe fn build_acceleration_structures<'a>(
         &mut self,
         _descriptor_count: u32,
-        descriptors: T,
+        descriptors: &mut dyn Iterator<Item = crate::BuildAccelerationStructureDescriptor<'a, Api>>,
     ) where
         Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, Api>>,
     {
     }
 

@@ -7118,7 +7118,7 @@ pub use send_sync::*;
 #[doc(hidden)]
 mod send_sync {
     pub trait WasmNotSendSync: WasmNotSend + WasmNotSync {}
-    impl<T: WasmNotSend + WasmNotSync> WasmNotSendSync for T {}
+    impl<T: WasmNotSend + WasmNotSync + ?Sized> WasmNotSendSync for T {}
     #[cfg(any(
         not(target_arch = "wasm32"),
         all(
@@ -7134,7 +7134,7 @@ mod send_sync {
             not(target_feature = "atomics")
         )
     ))]
-    impl<T: Send> WasmNotSend for T {}
+    impl<T: Send + ?Sized> WasmNotSend for T {}
     #[cfg(not(any(
         not(target_arch = "wasm32"),
         all(
@@ -7150,7 +7150,7 @@ mod send_sync {
             not(target_feature = "atomics")
         )
     )))]
-    impl<T> WasmNotSend for T {}
+    impl<T: ?Sized> WasmNotSend for T {}
 
     #[cfg(any(
         not(target_arch = "wasm32"),
@@ -7167,7 +7167,7 @@ mod send_sync {
             not(target_feature = "atomics")
         )
     ))]
-    impl<T: Sync> WasmNotSync for T {}
+    impl<T: Sync + ?Sized> WasmNotSync for T {}
     #[cfg(not(any(
         not(target_arch = "wasm32"),
         all(
@@ -7183,7 +7183,7 @@ mod send_sync {
             not(target_feature = "atomics")
         )
     )))]
-    impl<T> WasmNotSync for T {}
+    impl<T: ?Sized> WasmNotSync for T {}
 }
 
 /// Reason for "lose the device".

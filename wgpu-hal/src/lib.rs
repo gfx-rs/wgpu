@@ -81,7 +81,10 @@ pub mod api {
     pub use super::vulkan::Api as Vulkan;
 }
 
+pub mod dynamic;
+
 use std::{
+    any::Any,
     borrow::{Borrow, Cow},
     fmt,
     num::NonZeroU32,
@@ -111,7 +114,7 @@ pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 
 /// Drop guard to signal wgpu-hal is no longer using an externally created object.
-pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
+pub type DropGuard = Box<dyn Any + Send + Sync>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum DeviceError {
@@ -190,48 +193,97 @@ impl InstanceError {
     }
 }
 
-pub trait Api: Clone + fmt::Debug + Sized {
-    type Instance: Instance<A = Self>;
-    type Surface: Surface<A = Self>;
-    type Adapter: Adapter<A = Self>;
-    type Device: Device<A = Self>;
-
-    type Queue: Queue<A = Self>;
-    type CommandEncoder: CommandEncoder<A = Self>;
-    type CommandBuffer: WasmNotSendSync + fmt::Debug;
-
-    type Buffer: fmt::Debug + WasmNotSendSync + 'static;
-    type Texture: fmt::Debug + WasmNotSendSync + 'static;
-    type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + WasmNotSendSync;
-    type Sampler: fmt::Debug + WasmNotSendSync;
-    type QuerySet: fmt::Debug + WasmNotSendSync;
-    type Fence: fmt::Debug + WasmNotSendSync;
-
-    type BindGroupLayout: fmt::Debug + WasmNotSendSync;
-    type BindGroup: fmt::Debug + WasmNotSendSync;
-    type PipelineLayout: fmt::Debug + WasmNotSendSync;
-    type ShaderModule: fmt::Debug + WasmNotSendSync;
-    type RenderPipeline: fmt::Debug + WasmNotSendSync;
-    type ComputePipeline: fmt::Debug + WasmNotSendSync;
-
-    type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
+macro_rules! resource {
+    ($name:ident $(: $($bounds:tt)*)?) => {
+        pub trait $name: Resource $(+ $($bounds)*)? {}
+        impl<T: Resource $(+ $($bounds)*)?> $name for T {}
+    };
 }
 
-pub trait Instance: Sized + WasmNotSendSync {
+pub trait Resource: WasmNotSendSync + 'static {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+impl<T: WasmNotSendSync + 'static> Resource for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+resource!(CommandBuffer: fmt::Debug);
+
+resource!(Buffer: fmt::Debug + 'static);
+resource!(Texture: fmt::Debug + 'static);
+resource!(TextureView: fmt::Debug);
+resource!(Sampler: fmt::Debug);
+resource!(QuerySet: fmt::Debug);
+resource!(Fence: fmt::Debug);
+
+resource!(BindGroupLayout: fmt::Debug);
+resource!(BindGroup: fmt::Debug);
+resource!(PipelineLayout: fmt::Debug);
+resource!(ShaderModule: fmt::Debug);
+resource!(RenderPipeline: fmt::Debug);
+resource!(ComputePipeline: fmt::Debug);
+
+resource!(AccelerationStructure: fmt::Debug + 'static);
+
+pub trait SurfaceTexture<T: Texture + ?Sized>: Resource + fmt::Debug + Borrow<T> {}
+impl<T: Resource + fmt::Debug + Borrow<Tex>, Tex: Texture> SurfaceTexture<Tex> for T {}
+
+pub trait Api: Clone + fmt::Debug + Sized {
+    type Instance: Instance<A = Self> + ?Sized;
+    type Surface: Surface<A = Self> + ?Sized;
+    type Adapter: Adapter<A = Self> + ?Sized;
+    type Device: Device<A = Self> + ?Sized;
+
+    type Queue: Queue<A = Self> + ?Sized;
+    type CommandEncoder: CommandEncoder<A = Self> + ?Sized;
+    type CommandBuffer: CommandBuffer + ?Sized;
+
+    type Buffer: Buffer + ?Sized;
+    type Texture: Texture + ?Sized;
+    type SurfaceTexture: SurfaceTexture<Self::Texture> + ?Sized;
+    type TextureView: TextureView + ?Sized;
+    type Sampler: Sampler + ?Sized;
+    type QuerySet: QuerySet + ?Sized;
+    type Fence: Fence + ?Sized;
+
+    type BindGroupLayout: BindGroupLayout + ?Sized;
+    type BindGroup: BindGroup + ?Sized;
+    type PipelineLayout: PipelineLayout + ?Sized;
+    type ShaderModule: ShaderModule + ?Sized;
+    type RenderPipeline: RenderPipeline + ?Sized;
+    type ComputePipeline: ComputePipeline + ?Sized;
+
+    type AccelerationStructure: AccelerationStructure + ?Sized;
+}
+
+pub trait Instance: Resource {
     type A: Api;
 
-    unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
+    unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>
+    where
+        Self: Sized;
     unsafe fn create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<<Self::A as Api>::Surface, InstanceError>;
-    unsafe fn destroy_surface(&self, surface: <Self::A as Api>::Surface);
-    unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<Self::A>>;
+    ) -> Result<<Self::A as Api>::Surface, InstanceError>
+    where
+        <Self::A as Api>::Surface: Sized;
+    unsafe fn destroy_surface(&self, surface: <Self::A as Api>::Surface)
+    where
+        <Self::A as Api>::Surface: Sized;
+    unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<Self::A>>
+    where
+        <Self::A as Api>::Adapter: Sized;
 }
 
-pub trait Surface: WasmNotSendSync {
+pub trait Surface: Resource {
     type A: Api;
 
     /// Configures the surface to use the given device.
@@ -271,18 +323,25 @@ pub trait Surface: WasmNotSendSync {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
-    ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
-    unsafe fn discard_texture(&self, texture: <Self::A as Api>::SurfaceTexture);
+    ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>
+    where
+        <Self::A as Api>::SurfaceTexture: Sized;
+    unsafe fn discard_texture(&self, texture: <Self::A as Api>::SurfaceTexture)
+    where
+        <Self::A as Api>::SurfaceTexture: Sized;
 }
 
-pub trait Adapter: WasmNotSendSync {
+pub trait Adapter: Resource {
     type A: Api;
 
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
-    ) -> Result<OpenDevice<Self::A>, DeviceError>;
+    ) -> Result<OpenDevice<Self::A>, DeviceError>
+    where
+        <Self::A as Api>::Device: Sized,
+        <Self::A as Api>::Queue: Sized;
 
     /// Return the set of supported capabilities for a texture format.
     unsafe fn texture_format_capabilities(
@@ -304,19 +363,25 @@ pub trait Adapter: WasmNotSendSync {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
-pub trait Device: WasmNotSendSync {
+pub trait Device: Resource {
     type A: Api;
 
     /// Exit connection to this logical device.
-    unsafe fn exit(self, queue: <Self::A as Api>::Queue);
+    unsafe fn exit(self, queue: <Self::A as Api>::Queue)
+    where
+        <Self::A as Api>::Queue: Sized;
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUses::empty()`.
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
-    ) -> Result<<Self::A as Api>::Buffer, DeviceError>;
-    unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer);
+    ) -> Result<<Self::A as Api>::Buffer, DeviceError>
+    where
+        <Self::A as Api>::Buffer: Sized;
+    unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer)
+    where
+        <Self::A as Api>::Buffer: Sized;
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
         &self,
@@ -324,12 +389,16 @@ pub trait Device: WasmNotSendSync {
         range: MemoryRange,
     ) -> Result<BufferMapping, DeviceError>;
     unsafe fn unmap_buffer(&self, buffer: &<Self::A as Api>::Buffer) -> Result<(), DeviceError>;
-    unsafe fn flush_mapped_ranges<I>(&self, buffer: &<Self::A as Api>::Buffer, ranges: I)
-    where
-        I: Iterator<Item = MemoryRange>;
-    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &<Self::A as Api>::Buffer, ranges: I)
-    where
-        I: Iterator<Item = MemoryRange>;
+    unsafe fn flush_mapped_ranges(
+        &self,
+        buffer: &<Self::A as Api>::Buffer,
+        ranges: &mut dyn Iterator<Item = MemoryRange>,
+    );
+    unsafe fn invalidate_mapped_ranges(
+        &self,
+        buffer: &<Self::A as Api>::Buffer,
+        ranges: &mut dyn Iterator<Item = MemoryRange>,
+    );
 
     /// Creates a new texture.
     ///
@@ -337,19 +406,31 @@ pub trait Device: WasmNotSendSync {
     unsafe fn create_texture(
         &self,
         desc: &TextureDescriptor,
-    ) -> Result<<Self::A as Api>::Texture, DeviceError>;
-    unsafe fn destroy_texture(&self, texture: <Self::A as Api>::Texture);
+    ) -> Result<<Self::A as Api>::Texture, DeviceError>
+    where
+        <Self::A as Api>::Texture: Sized;
+    unsafe fn destroy_texture(&self, texture: <Self::A as Api>::Texture)
+    where
+        <Self::A as Api>::Texture: Sized;
     unsafe fn create_texture_view(
         &self,
         texture: &<Self::A as Api>::Texture,
         desc: &TextureViewDescriptor,
-    ) -> Result<<Self::A as Api>::TextureView, DeviceError>;
-    unsafe fn destroy_texture_view(&self, view: <Self::A as Api>::TextureView);
+    ) -> Result<<Self::A as Api>::TextureView, DeviceError>
+    where
+        <Self::A as Api>::TextureView: Sized;
+    unsafe fn destroy_texture_view(&self, view: <Self::A as Api>::TextureView)
+    where
+        <Self::A as Api>::TextureView: Sized;
     unsafe fn create_sampler(
         &self,
         desc: &SamplerDescriptor,
-    ) -> Result<<Self::A as Api>::Sampler, DeviceError>;
-    unsafe fn destroy_sampler(&self, sampler: <Self::A as Api>::Sampler);
+    ) -> Result<<Self::A as Api>::Sampler, DeviceError>
+    where
+        <Self::A as Api>::Sampler: Sized;
+    unsafe fn destroy_sampler(&self, sampler: <Self::A as Api>::Sampler)
+    where
+        <Self::A as Api>::Sampler: Sized;
 
     /// Create a fresh [`CommandEncoder`].
     ///
@@ -357,50 +438,86 @@ pub trait Device: WasmNotSendSync {
     unsafe fn create_command_encoder(
         &self,
         desc: &CommandEncoderDescriptor<Self::A>,
-    ) -> Result<<Self::A as Api>::CommandEncoder, DeviceError>;
-    unsafe fn destroy_command_encoder(&self, pool: <Self::A as Api>::CommandEncoder);
+    ) -> Result<<Self::A as Api>::CommandEncoder, DeviceError>
+    where
+        <Self::A as Api>::CommandEncoder: Sized;
+    unsafe fn destroy_command_encoder(&self, pool: <Self::A as Api>::CommandEncoder)
+    where
+        <Self::A as Api>::CommandEncoder: Sized;
 
     /// Creates a bind group layout.
     unsafe fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor,
-    ) -> Result<<Self::A as Api>::BindGroupLayout, DeviceError>;
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: <Self::A as Api>::BindGroupLayout);
+    ) -> Result<<Self::A as Api>::BindGroupLayout, DeviceError>
+    where
+        <Self::A as Api>::BindGroupLayout: Sized;
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: <Self::A as Api>::BindGroupLayout)
+    where
+        <Self::A as Api>::BindGroupLayout: Sized;
     unsafe fn create_pipeline_layout(
         &self,
         desc: &PipelineLayoutDescriptor<Self::A>,
-    ) -> Result<<Self::A as Api>::PipelineLayout, DeviceError>;
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: <Self::A as Api>::PipelineLayout);
+    ) -> Result<<Self::A as Api>::PipelineLayout, DeviceError>
+    where
+        <Self::A as Api>::PipelineLayout: Sized;
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: <Self::A as Api>::PipelineLayout)
+    where
+        <Self::A as Api>::PipelineLayout: Sized;
     unsafe fn create_bind_group(
         &self,
         desc: &BindGroupDescriptor<Self::A>,
-    ) -> Result<<Self::A as Api>::BindGroup, DeviceError>;
-    unsafe fn destroy_bind_group(&self, group: <Self::A as Api>::BindGroup);
+    ) -> Result<<Self::A as Api>::BindGroup, DeviceError>
+    where
+        <Self::A as Api>::BindGroup: Sized;
+    unsafe fn destroy_bind_group(&self, group: <Self::A as Api>::BindGroup)
+    where
+        <Self::A as Api>::BindGroup: Sized;
 
     unsafe fn create_shader_module(
         &self,
         desc: &ShaderModuleDescriptor,
         shader: ShaderInput,
-    ) -> Result<<Self::A as Api>::ShaderModule, ShaderError>;
-    unsafe fn destroy_shader_module(&self, module: <Self::A as Api>::ShaderModule);
+    ) -> Result<<Self::A as Api>::ShaderModule, ShaderError>
+    where
+        <Self::A as Api>::ShaderModule: Sized;
+    unsafe fn destroy_shader_module(&self, module: <Self::A as Api>::ShaderModule)
+    where
+        <Self::A as Api>::ShaderModule: Sized;
     unsafe fn create_render_pipeline(
         &self,
         desc: &RenderPipelineDescriptor<Self::A>,
-    ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
-    unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
+    ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>
+    where
+        <Self::A as Api>::RenderPipeline: Sized;
+    unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline)
+    where
+        <Self::A as Api>::RenderPipeline: Sized;
     unsafe fn create_compute_pipeline(
         &self,
         desc: &ComputePipelineDescriptor<Self::A>,
-    ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
-    unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
+    ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>
+    where
+        <Self::A as Api>::ComputePipeline: Sized;
+    unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline)
+    where
+        <Self::A as Api>::ComputePipeline: Sized;
 
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<Label>,
-    ) -> Result<<Self::A as Api>::QuerySet, DeviceError>;
-    unsafe fn destroy_query_set(&self, set: <Self::A as Api>::QuerySet);
-    unsafe fn create_fence(&self) -> Result<<Self::A as Api>::Fence, DeviceError>;
-    unsafe fn destroy_fence(&self, fence: <Self::A as Api>::Fence);
+    ) -> Result<<Self::A as Api>::QuerySet, DeviceError>
+    where
+        <Self::A as Api>::QuerySet: Sized;
+    unsafe fn destroy_query_set(&self, set: <Self::A as Api>::QuerySet)
+    where
+        <Self::A as Api>::QuerySet: Sized;
+    unsafe fn create_fence(&self) -> Result<<Self::A as Api>::Fence, DeviceError>
+    where
+        <Self::A as Api>::Fence: Sized;
+    unsafe fn destroy_fence(&self, fence: <Self::A as Api>::Fence)
+    where
+        <Self::A as Api>::Fence: Sized;
     unsafe fn get_fence_value(
         &self,
         fence: &<Self::A as Api>::Fence,
@@ -419,7 +536,9 @@ pub trait Device: WasmNotSendSync {
     unsafe fn create_acceleration_structure(
         &self,
         desc: &AccelerationStructureDescriptor,
-    ) -> Result<<Self::A as Api>::AccelerationStructure, DeviceError>;
+    ) -> Result<<Self::A as Api>::AccelerationStructure, DeviceError>
+    where
+        <Self::A as Api>::AccelerationStructure: Sized;
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
         desc: &GetAccelerationStructureBuildSizesDescriptor<Self::A>,
@@ -431,10 +550,11 @@ pub trait Device: WasmNotSendSync {
     unsafe fn destroy_acceleration_structure(
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
-    );
+    ) where
+        <Self::A as Api>::AccelerationStructure: Sized;
 }
 
-pub trait Queue: WasmNotSendSync {
+pub trait Queue: Resource {
     type A: Api;
 
     /// Submits the command buffers for execution on GPU.
@@ -455,7 +575,9 @@ pub trait Queue: WasmNotSendSync {
         &self,
         surface: &<Self::A as Api>::Surface,
         texture: <Self::A as Api>::SurfaceTexture,
-    ) -> Result<(), SurfaceError>;
+    ) -> Result<(), SurfaceError>
+    where
+        <Self::A as Api>::SurfaceTexture: Sized;
     unsafe fn get_timestamp_period(&self) -> f32;
 }
 
@@ -497,7 +619,7 @@ pub trait Queue: WasmNotSendSync {
 ///   built it.
 ///
 /// - A `CommandEncoder` must not outlive its `Device`.
-pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
+pub trait CommandEncoder: Resource + fmt::Debug {
     type A: Api;
 
     /// Begin encoding a new command buffer.
@@ -537,7 +659,9 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     ///
     /// [`CommandBuffer`]: Api::CommandBuffer
     /// [`begin_encoding`]: CommandEncoder::begin_encoding
-    unsafe fn end_encoding(&mut self) -> Result<<Self::A as Api>::CommandBuffer, DeviceError>;
+    unsafe fn end_encoding(&mut self) -> Result<<Self::A as Api>::CommandBuffer, DeviceError>
+    where
+        <Self::A as Api>::CommandBuffer: Sized;
 
     /// Reclaim all resources belonging to this `CommandEncoder`.
     ///
@@ -550,80 +674,79 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// is, every extant `CommandBuffer` returned from `end_encoding`.
     ///
     /// [`CommandBuffer`]: Api::CommandBuffer
-    unsafe fn reset_all<I>(&mut self, command_buffers: I)
-    where
-        I: Iterator<Item = <Self::A as Api>::CommandBuffer>;
+    unsafe fn reset_all(
+        &mut self,
+        command_buffers: &mut dyn Iterator<Item = <Self::A as Api>::CommandBuffer>,
+    ) where
+        <Self::A as Api>::CommandBuffer: Sized;
 
-    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = BufferBarrier<'a, Self::A>>;
+    unsafe fn transition_buffers<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = BufferBarrier<'a, Self::A>>,
+    );
 
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = TextureBarrier<'a, Self::A>>;
+    unsafe fn transition_textures<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = TextureBarrier<'a, Self::A>>,
+    );
 
     // copy operations
 
     unsafe fn clear_buffer(&mut self, buffer: &<Self::A as Api>::Buffer, range: MemoryRange);
 
-    unsafe fn copy_buffer_to_buffer<T>(
+    unsafe fn copy_buffer_to_buffer(
         &mut self,
         src: &<Self::A as Api>::Buffer,
         dst: &<Self::A as Api>::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = BufferCopy>;
+        regions: &mut dyn Iterator<Item = BufferCopy>,
+    );
 
     /// Copy from an external image to an internal texture.
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
     #[cfg(webgl)]
-    unsafe fn copy_external_image_to_texture<T>(
+    unsafe fn copy_external_image_to_texture(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
         dst: &<Self::A as Api>::Texture,
         dst_premultiplication: bool,
-        regions: T,
-    ) where
-        T: Iterator<Item = TextureCopy>;
+        regions: &mut dyn Iterator<Item = TextureCopy>,
+    );
 
     /// Copy from one texture to another.
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
-    unsafe fn copy_texture_to_texture<T>(
+    unsafe fn copy_texture_to_texture(
         &mut self,
         src: &<Self::A as Api>::Texture,
         src_usage: TextureUses,
         dst: &<Self::A as Api>::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = TextureCopy>;
+        regions: &mut dyn Iterator<Item = TextureCopy>,
+    );
 
     /// Copy from buffer to texture.
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
-    unsafe fn copy_buffer_to_texture<T>(
+    unsafe fn copy_buffer_to_texture(
         &mut self,
         src: &<Self::A as Api>::Buffer,
         dst: &<Self::A as Api>::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = BufferTextureCopy>;
+        regions: &mut dyn Iterator<Item = BufferTextureCopy>,
+    );
 
     /// Copy from texture to buffer.
     /// Works with a single array layer.
     /// Note: the copy extent is in physical size (rounded to the block size)
-    unsafe fn copy_texture_to_buffer<T>(
+    unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &<Self::A as Api>::Texture,
         src_usage: TextureUses,
         dst: &<Self::A as Api>::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = BufferTextureCopy>;
+        regions: &mut dyn Iterator<Item = BufferTextureCopy>,
+    );
 
     // pass common
 
@@ -763,13 +886,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// Consequences of this limitation:
     /// - scratch buffers need to be unique
     /// - a tlas can't be build in the same call with a blas it contains
-    unsafe fn build_acceleration_structures<'a, T>(
+    unsafe fn build_acceleration_structures<'a>(
         &mut self,
         descriptor_count: u32,
-        descriptors: T,
+        descriptors: &mut dyn Iterator<Item = BuildAccelerationStructureDescriptor<'a, Self::A>>,
     ) where
-        Self::A: 'a,
-        T: IntoIterator<Item = BuildAccelerationStructureDescriptor<'a, Self::A>>;
+        Self::A: 'a;
 
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
@@ -1029,7 +1151,10 @@ pub struct Capabilities {
 }
 
 #[derive(Debug)]
-pub struct ExposedAdapter<A: Api> {
+pub struct ExposedAdapter<A: Api>
+where
+    A::Adapter: Sized,
+{
     pub adapter: A::Adapter,
     pub info: wgt::AdapterInfo,
     pub features: wgt::Features,
@@ -1074,7 +1199,10 @@ pub struct SurfaceCapabilities {
 }
 
 #[derive(Debug)]
-pub struct AcquiredSurfaceTexture<A: Api> {
+pub struct AcquiredSurfaceTexture<A: Api>
+where
+    A::SurfaceTexture: Sized,
+{
     pub texture: A::SurfaceTexture,
     /// The presentation configuration no longer matches
     /// the surface properties exactly, but can still be used to present
@@ -1083,7 +1211,11 @@ pub struct AcquiredSurfaceTexture<A: Api> {
 }
 
 #[derive(Debug)]
-pub struct OpenDevice<A: Api> {
+pub struct OpenDevice<A: Api>
+where
+    A::Device: Sized,
+    A::Queue: Sized,
+{
     pub device: A::Device,
     pub queue: A::Queue,
 }
