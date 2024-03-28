@@ -291,10 +291,10 @@ impl crate::Module {
                                 name: Some("exchanged".to_string()),
                                 ty: bool_ty,
                                 binding: None,
-                                offset: 4,
+                                offset: scalar.width as u32,
                             },
                         ],
-                        span: 8,
+                        span: scalar.width as u32 * 2,
                     },
                 }
             }

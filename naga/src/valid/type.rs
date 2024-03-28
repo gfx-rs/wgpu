@@ -353,16 +353,29 @@ impl super::Validator {
                 )
             }
             Ti::Atomic(crate::Scalar { kind, width }) => {
-                let good = match kind {
+                match kind {
                     crate::ScalarKind::Bool
                     | crate::ScalarKind::Float
                     | crate::ScalarKind::AbstractInt
-                    | crate::ScalarKind::AbstractFloat => false,
-                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
+                    | crate::ScalarKind::AbstractFloat => {
+                        return Err(TypeError::InvalidAtomicWidth(kind, width))
+                    }
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                        if width == 8 {
+                            if self
+                                .capabilities
+                                .contains(Capabilities::SHADER_INT64_ATOMIC)
+                            {
+                            } else {
+                                return Err(TypeError::MissingCapability(
+                                    Capabilities::SHADER_INT64_ATOMIC,
+                                ));
+                            }
+                        } else if width != 4 {
+                            return Err(TypeError::InvalidAtomicWidth(kind, width));
+                        }
+                    }
                 };
-                if !good {
-                    return Err(TypeError::InvalidAtomicWidth(kind, width));
-                }
                 TypeInfo::new(
                     TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
                     Alignment::from_width(width),

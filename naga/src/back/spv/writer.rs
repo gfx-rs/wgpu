@@ -876,6 +876,11 @@ impl Writer {
             crate::TypeInner::RayQuery => {
                 self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
             }
+            crate::TypeInner::Atomic(crate::Scalar { width, kind: _ }) => {
+                if width == 8 {
+                    self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
+                }
+            }
             _ => {}
         }
         Ok(())

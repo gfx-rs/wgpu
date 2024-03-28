@@ -63,6 +63,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Int8,
     spirv::Capability::Int16,
     spirv::Capability::Int64,
+    spirv::Capability::Int64Atomics,
     spirv::Capability::Float16,
     spirv::Capability::Float64,
     spirv::Capability::Geometry,
