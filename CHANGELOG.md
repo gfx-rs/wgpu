@@ -119,6 +119,11 @@ Bottom level categories:
 
 - Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
 
+#### WebGPU
+
+- Implement the `device_set_device_lost_callback` method for `ContextWebGpu`. By @suti in [#5438](https://github.com/gfx-rs/wgpu/pull/5438)
+- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434) 
+
 ### Bug Fixes
 
 #### General
