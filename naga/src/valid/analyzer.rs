@@ -787,6 +787,14 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
+            E::SubgroupBallotResult => Uniformity {
+                non_uniform_result: Some(handle),
+                requirements: UniformityRequirements::empty(),
+            },
+            E::SubgroupOperationResult { .. } => Uniformity {
+                non_uniform_result: Some(handle),
+                requirements: UniformityRequirements::empty(),
+            },
         };
 
         let ty = resolve_context.resolve(expression, |h| Ok(&self[h].ty))?;
@@ -1026,6 +1034,42 @@ impl FunctionInfo {
                     {
                         let _ = self.add_ref(acceleration_structure);
                         let _ = self.add_ref(descriptor);
+                    }
+                    FunctionUniformity::new()
+                }
+                S::SubgroupBallot {
+                    result: _,
+                    predicate,
+                } => {
+                    if let Some(predicate) = predicate {
+                        let _ = self.add_ref(predicate);
+                    }
+                    FunctionUniformity::new()
+                }
+                S::SubgroupCollectiveOperation {
+                    op: _,
+                    collective_op: _,
+                    argument,
+                    result: _,
+                } => {
+                    let _ = self.add_ref(argument);
+                    FunctionUniformity::new()
+                }
+                S::SubgroupGather {
+                    mode,
+                    argument,
+                    result: _,
+                } => {
+                    let _ = self.add_ref(argument);
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            let _ = self.add_ref(index);
+                        }
                     }
                     FunctionUniformity::new()
                 }

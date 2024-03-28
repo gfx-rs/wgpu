@@ -1623,6 +1623,7 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidRayQueryType(query));
                 }
             },
+            E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
         };
         Ok(stages)
     }

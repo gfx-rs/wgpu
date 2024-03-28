@@ -162,6 +162,10 @@ impl VaryingContext<'_> {
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
+                    Bi::NumSubgroups
+                    | Bi::SubgroupId
+                    | Bi::SubgroupSize
+                    | Bi::SubgroupInvocationId => Capabilities::SUBGROUP,
                     _ => Capabilities::empty(),
                 };
                 if !self.capabilities.contains(required) {
@@ -248,6 +252,17 @@ impl VaryingContext<'_> {
                                 size: Vs::Tri,
                                 scalar: crate::Scalar::U32,
                             },
+                    ),
+                    Bi::NumSubgroups | Bi::SubgroupId => (
+                        self.stage == St::Compute && !self.output,
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
+                    ),
+                    Bi::SubgroupSize | Bi::SubgroupInvocationId => (
+                        match self.stage {
+                            St::Compute | St::Fragment => !self.output,
+                            St::Vertex => false,
+                        },
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                 };
 

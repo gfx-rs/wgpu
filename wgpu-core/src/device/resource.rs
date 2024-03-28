@@ -1540,6 +1540,11 @@ impl<A: HalApi> Device<A> {
                 .flags
                 .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
         );
+        caps.set(
+            Caps::SUBGROUP,
+            self.features
+                .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX),
+        );
 
         let debug_source =
             if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) && !source.is_empty() {
@@ -1555,7 +1560,26 @@ impl<A: HalApi> Device<A> {
                 None
             };
 
+        let mut subgroup_stages = naga::valid::ShaderStages::empty();
+        subgroup_stages.set(
+            naga::valid::ShaderStages::COMPUTE | naga::valid::ShaderStages::FRAGMENT,
+            self.features.contains(wgt::Features::SUBGROUP),
+        );
+        subgroup_stages.set(
+            naga::valid::ShaderStages::VERTEX,
+            self.features.contains(wgt::Features::SUBGROUP_VERTEX),
+        );
+
+        let subgroup_operations = if caps.contains(Caps::SUBGROUP) {
+            use naga::valid::SubgroupOperationSet as S;
+            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+        } else {
+            naga::valid::SubgroupOperationSet::empty()
+        };
+
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
+            .subgroup_stages(subgroup_stages)
+            .subgroup_operations(subgroup_operations)
             .validate(&module)
             .map_err(|inner| {
                 pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {

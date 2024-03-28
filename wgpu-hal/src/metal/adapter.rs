@@ -809,6 +809,10 @@ impl super::PrivateCapabilities {
                 None
             },
             timestamp_query_support,
+            supports_simd_scoped_operations: family_check
+                && (device.supports_family(MTLGPUFamily::Metal3)
+                    || device.supports_family(MTLGPUFamily::Mac2)
+                    || device.supports_family(MTLGPUFamily::Apple7)),
         }
     }
 
@@ -893,6 +897,10 @@ impl super::PrivateCapabilities {
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
         features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
+
+        if self.supports_simd_scoped_operations {
+            features.insert(F::SUBGROUP);
+        }
 
         features
     }
