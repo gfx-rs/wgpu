@@ -923,9 +923,10 @@ impl super::InstanceShared {
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
                 if supports_maintenance3 {
-                    capabilities.maintenance_3 =
-                        Some(vk::PhysicalDeviceMaintenance3Properties::default());
-                    builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
+                    let next = capabilities
+                        .maintenance_3
+                        .insert(vk::PhysicalDeviceMaintenance3Properties::default());
+                    builder = builder.push_next(next);
                 }
 
                 if supports_descriptor_indexing {
