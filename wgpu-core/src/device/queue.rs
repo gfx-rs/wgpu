@@ -1120,12 +1120,12 @@ impl Global {
                 .textures
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
-            encoder.transition_textures(transitions.map(|pending| pending.into_hal(dst_raw)));
+            encoder.transition_textures(&mut transitions.map(|pending| pending.into_hal(dst_raw)));
             encoder.copy_external_image_to_texture(
                 source,
                 dst_raw,
                 destination.premultiplied_alpha,
-                iter::once(regions),
+                &mut iter::once(regions),
             );
         }
 
