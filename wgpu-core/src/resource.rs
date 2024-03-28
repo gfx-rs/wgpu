@@ -462,7 +462,7 @@ impl<A: HalApi> Buffer<A> {
                     unsafe {
                         device.raw().flush_mapped_ranges(
                             stage_buffer.raw(&snatch_guard).unwrap(),
-                            iter::once(0..self.size),
+                            &mut iter::once(0..self.size),
                         );
                     }
                 }
@@ -487,13 +487,13 @@ impl<A: HalApi> Buffer<A> {
                 let encoder = pending_writes.activate();
                 unsafe {
                     encoder.transition_buffers(
-                        iter::once(transition_src).chain(iter::once(transition_dst)),
+                        &mut iter::once(transition_src).chain(iter::once(transition_dst)),
                     );
                     if self.size > 0 {
                         encoder.copy_buffer_to_buffer(
                             stage_buffer.raw(&snatch_guard).unwrap(),
                             raw_buf,
-                            region.into_iter(),
+                            &mut region.into_iter(),
                         );
                     }
                 }

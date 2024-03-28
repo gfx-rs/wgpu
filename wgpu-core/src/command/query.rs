@@ -493,7 +493,7 @@ impl Global {
             .ok_or(QueryError::InvalidBuffer(destination))?;
 
         unsafe {
-            raw_encoder.transition_buffers(dst_barrier.into_iter());
+            raw_encoder.transition_buffers(&mut dst_barrier.into_iter());
             raw_encoder.copy_query_results(
                 query_set.raw(),
                 start_query..end_query,

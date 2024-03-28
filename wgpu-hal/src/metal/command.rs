@@ -221,23 +221,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
         })
     }
 
-    unsafe fn reset_all<I>(&mut self, _cmd_bufs: I)
-    where
-        I: Iterator<Item = super::CommandBuffer>,
-    {
+    unsafe fn reset_all(&mut self, _cmd_bufs: &mut dyn Iterator<Item = super::CommandBuffer>) {
         //do nothing
     }
 
-    unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
-    where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_buffers<'a>(
+        &mut self,
+        _barriers: &mut dyn Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+    ) {
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, _barriers: T)
-    where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_textures<'a>(
+        &mut self,
+        _barriers: &mut dyn Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+    ) {
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
@@ -245,14 +242,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         encoder.fill_buffer(&buffer.raw, conv::map_range(&range), 0);
     }
 
-    unsafe fn copy_buffer_to_buffer<T>(
+    unsafe fn copy_buffer_to_buffer(
         &mut self,
         src: &super::Buffer,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferCopy>,
+    ) {
         let encoder = self.enter_blit();
         for copy in regions {
             encoder.copy_from_buffer(
@@ -265,15 +260,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_texture_to_texture<T>(
+    unsafe fn copy_texture_to_texture(
         &mut self,
         src: &super::Texture,
         _src_usage: crate::TextureUses,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::TextureCopy>,
+    ) {
         let dst_texture = if src.format != dst.format {
             let raw_format = self.shared.private_caps.map_format(src.format);
             Cow::Owned(objc::rc::autoreleasepool(|| {
@@ -302,14 +295,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_buffer_to_texture<T>(
+    unsafe fn copy_buffer_to_texture(
         &mut self,
         src: &super::Buffer,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let encoder = self.enter_blit();
         for copy in regions {
             let dst_origin = conv::map_origin(&copy.texture_base.origin);
@@ -344,15 +335,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_texture_to_buffer<T>(
+    unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &super::Texture,
         _src_usage: crate::TextureUses,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.texture_base.origin);
@@ -1219,13 +1208,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
     }
 
-    unsafe fn build_acceleration_structures<'a, T>(
+    unsafe fn build_acceleration_structures<'a>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        _descriptors: &mut dyn Iterator<
+            Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>,
+        >,
     ) where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
     {
         unimplemented!()
     }

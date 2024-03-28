@@ -330,7 +330,7 @@ fn map_buffer<A: HalApi>(
 
     *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
-            raw.invalidate_mapped_ranges(raw_buffer, iter::once(offset..offset + size));
+            raw.invalidate_mapped_ranges(raw_buffer, &mut iter::once(offset..offset + size));
             None
         },
         HostMap::Write if !mapping.is_coherent => Some(offset..offset + size),
@@ -370,7 +370,7 @@ fn map_buffer<A: HalApi>(
         mapped[fill_range].fill(0);
 
         if zero_init_needs_flush_now {
-            unsafe { raw.flush_mapped_ranges(raw_buffer, iter::once(uninitialized)) };
+            unsafe { raw.flush_mapped_ranges(raw_buffer, &mut iter::once(uninitialized)) };
         }
     }
 

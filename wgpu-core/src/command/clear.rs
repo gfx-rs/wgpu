@@ -161,7 +161,7 @@ impl Global {
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
+            cmd_buf_raw.transition_buffers(&mut dst_barrier.into_iter());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
         }
         Ok(())
@@ -308,7 +308,7 @@ pub(crate) fn clear_texture<A: HalApi>(
         .unwrap()
         .map(|pending| pending.into_hal(dst_raw));
     unsafe {
-        encoder.transition_textures(dst_barrier.into_iter());
+        encoder.transition_textures(&mut dst_barrier.into_iter());
     }
 
     // Record actual clearing
@@ -426,7 +426,11 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
     }
 
     unsafe {
-        encoder.copy_buffer_to_texture(zero_buffer, dst_raw, zero_buffer_copy_regions.into_iter());
+        encoder.copy_buffer_to_texture(
+            zero_buffer,
+            dst_raw,
+            &mut zero_buffer_copy_regions.into_iter(),
+        );
     }
 }
 

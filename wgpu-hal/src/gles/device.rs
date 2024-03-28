@@ -676,10 +676,11 @@ impl crate::Device for super::Device {
         }
         Ok(())
     }
-    unsafe fn flush_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
-    where
-        I: Iterator<Item = crate::MemoryRange>,
-    {
+    unsafe fn flush_mapped_ranges(
+        &self,
+        buffer: &super::Buffer,
+        ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
         if let Some(raw) = buffer.raw {
             let gl = &self.shared.context.lock();
             unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
@@ -694,7 +695,11 @@ impl crate::Device for super::Device {
             }
         }
     }
-    unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {
+    unsafe fn invalidate_mapped_ranges(
+        &self,
+        _buffer: &super::Buffer,
+        _ranges: &mut dyn Iterator<Item = crate::MemoryRange>,
+    ) {
         //TODO: do we need to do anything?
     }
 

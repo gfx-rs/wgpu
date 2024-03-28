@@ -108,10 +108,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.active = vk::CommandBuffer::null();
     }
 
-    unsafe fn reset_all<I>(&mut self, cmd_bufs: I)
-    where
-        I: Iterator<Item = super::CommandBuffer>,
-    {
+    unsafe fn reset_all(&mut self, cmd_bufs: &mut dyn Iterator<Item = super::CommandBuffer>) {
         self.temp.clear();
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
@@ -123,10 +120,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_buffers<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+    ) {
         //Note: this is done so that we never end up with empty stage flags
         let mut src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
         let mut dst_stages = vk::PipelineStageFlags::BOTTOM_OF_PIPE;
@@ -164,10 +161,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_textures<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+    ) {
         let mut src_stages = vk::PipelineStageFlags::empty();
         let mut dst_stages = vk::PipelineStageFlags::empty();
         let vk_barriers = &mut self.temp.image_barriers;
@@ -254,14 +251,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_buffer_to_buffer<T>(
+    unsafe fn copy_buffer_to_buffer(
         &mut self,
         src: &super::Buffer,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferCopy>,
+    ) {
         let vk_regions_iter = regions.map(|r| vk::BufferCopy {
             src_offset: r.src_offset,
             dst_offset: r.dst_offset,
@@ -278,15 +273,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn copy_texture_to_texture<T>(
+    unsafe fn copy_texture_to_texture(
         &mut self,
         src: &super::Texture,
         src_usage: crate::TextureUses,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::TextureCopy>,
+    ) {
         let src_layout = conv::derive_image_layout(src_usage, src.format);
 
         let vk_regions_iter = regions.map(|r| {
@@ -317,14 +310,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn copy_buffer_to_texture<T>(
+    unsafe fn copy_buffer_to_texture(
         &mut self,
         src: &super::Buffer,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let vk_regions_iter = dst.map_buffer_copies(regions);
 
         unsafe {
@@ -338,15 +329,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn copy_texture_to_buffer<T>(
+    unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &super::Texture,
         src_usage: crate::TextureUses,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let src_layout = conv::derive_image_layout(src_usage, src.format);
         let vk_regions_iter = src.map_buffer_copies(regions);
 
@@ -416,10 +405,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
 
-    unsafe fn build_acceleration_structures<'a, T>(&mut self, descriptor_count: u32, descriptors: T)
-    where
+    unsafe fn build_acceleration_structures<'a>(
+        &mut self,
+        descriptor_count: u32,
+        descriptors: &mut dyn Iterator<
+            Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>,
+        >,
+    ) where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
     {
         const CAPACITY_OUTER: usize = 8;
         const CAPACITY_INNER: usize = 1;

@@ -264,14 +264,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         Ok(mem::take(&mut self.cmd_buffer))
     }
-    unsafe fn reset_all<I>(&mut self, _command_buffers: I) {
+    unsafe fn reset_all(
+        &mut self,
+        _command_buffers: &mut dyn Iterator<Item = super::CommandBuffer>,
+    ) {
         //TODO: could re-use the allocations in all these command buffers
     }
 
-    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_buffers<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+    ) {
         if !self
             .private_caps
             .contains(super::PrivateCapabilities::MEMORY_BARRIERS)
@@ -293,10 +296,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
-    {
+    unsafe fn transition_textures<'a>(
+        &mut self,
+        barriers: &mut dyn Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+    ) {
         if !self
             .private_caps
             .contains(super::PrivateCapabilities::MEMORY_BARRIERS)
@@ -334,14 +337,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         });
     }
 
-    unsafe fn copy_buffer_to_buffer<T>(
+    unsafe fn copy_buffer_to_buffer(
         &mut self,
         src: &super::Buffer,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferCopy>,
+    ) {
         let (src_target, dst_target) = if src.target == dst.target {
             (glow::COPY_READ_BUFFER, glow::COPY_WRITE_BUFFER)
         } else {
@@ -359,15 +360,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     #[cfg(webgl)]
-    unsafe fn copy_external_image_to_texture<T>(
+    unsafe fn copy_external_image_to_texture(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
         dst: &super::Texture,
         dst_premultiplication: bool,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::TextureCopy>,
+    ) {
         let (dst_raw, dst_target) = dst.inner.as_native();
         for copy in regions {
             self.cmd_buffer
@@ -383,15 +382,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_texture_to_texture<T>(
+    unsafe fn copy_texture_to_texture(
         &mut self,
         src: &super::Texture,
         _src_usage: crate::TextureUses,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::TextureCopy>,
+    ) {
         let (src_raw, src_target) = src.inner.as_native();
         let (dst_raw, dst_target) = dst.inner.as_native();
         for mut copy in regions {
@@ -406,14 +403,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_buffer_to_texture<T>(
+    unsafe fn copy_buffer_to_texture(
         &mut self,
         src: &super::Buffer,
         dst: &super::Texture,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let (dst_raw, dst_target) = dst.inner.as_native();
 
         for mut copy in regions {
@@ -429,15 +424,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn copy_texture_to_buffer<T>(
+    unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &super::Texture,
         _src_usage: crate::TextureUses,
         dst: &super::Buffer,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::BufferTextureCopy>,
-    {
+        regions: &mut dyn Iterator<Item = crate::BufferTextureCopy>,
+    ) {
         let (src_raw, src_target) = src.inner.as_native();
         for mut copy in regions {
             copy.clamp_size_to_virtual(&src.copy_size);
@@ -1176,13 +1169,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         });
     }
 
-    unsafe fn build_acceleration_structures<'a, T>(
+    unsafe fn build_acceleration_structures<'a>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        _descriptors: &mut dyn Iterator<
+            Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>,
+        >,
     ) where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
     {
         unimplemented!()
     }
