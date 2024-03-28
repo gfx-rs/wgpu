@@ -233,31 +233,31 @@ pub trait SurfaceTexture<T: Texture + ?Sized>: Resource + fmt::Debug + Borrow<T>
 impl<T: Resource + fmt::Debug + Borrow<Tex>, Tex: Texture> SurfaceTexture<Tex> for T {}
 
 pub trait Api: Clone + fmt::Debug + Sized {
-    type Instance: Instance<A = Self>;
-    type Surface: Surface<A = Self>;
-    type Adapter: Adapter<A = Self>;
-    type Device: Device<A = Self>;
+    type Instance: Instance<A = Self> + ?Sized;
+    type Surface: Surface<A = Self> + ?Sized;
+    type Adapter: Adapter<A = Self> + ?Sized;
+    type Device: Device<A = Self> + ?Sized;
 
-    type Queue: Queue<A = Self>;
-    type CommandEncoder: CommandEncoder<A = Self>;
-    type CommandBuffer: CommandBuffer;
+    type Queue: Queue<A = Self> + ?Sized;
+    type CommandEncoder: CommandEncoder<A = Self> + ?Sized;
+    type CommandBuffer: CommandBuffer + ?Sized;
 
-    type Buffer: Buffer;
-    type Texture: Texture;
-    type SurfaceTexture: SurfaceTexture<Self::Texture>;
-    type TextureView: TextureView;
-    type Sampler: Sampler;
-    type QuerySet: QuerySet;
-    type Fence: Fence;
+    type Buffer: Buffer + ?Sized;
+    type Texture: Texture + ?Sized;
+    type SurfaceTexture: SurfaceTexture<Self::Texture> + ?Sized;
+    type TextureView: TextureView + ?Sized;
+    type Sampler: Sampler + ?Sized;
+    type QuerySet: QuerySet + ?Sized;
+    type Fence: Fence + ?Sized;
 
-    type BindGroupLayout: BindGroupLayout;
-    type BindGroup: BindGroup;
-    type PipelineLayout: PipelineLayout;
-    type ShaderModule: ShaderModule;
-    type RenderPipeline: RenderPipeline;
-    type ComputePipeline: ComputePipeline;
+    type BindGroupLayout: BindGroupLayout + ?Sized;
+    type BindGroup: BindGroup + ?Sized;
+    type PipelineLayout: PipelineLayout + ?Sized;
+    type ShaderModule: ShaderModule + ?Sized;
+    type RenderPipeline: RenderPipeline + ?Sized;
+    type ComputePipeline: ComputePipeline + ?Sized;
 
-    type AccelerationStructure: AccelerationStructure;
+    type AccelerationStructure: AccelerationStructure + ?Sized;
 }
 
 pub trait Instance: Resource {
