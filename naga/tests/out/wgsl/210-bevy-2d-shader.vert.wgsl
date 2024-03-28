@@ -12,7 +12,7 @@ struct Sprite_size {
 
 struct VertexOutput {
     @location(0) v_Uv: vec2<f32>,
-    @builtin(position) member: vec4<f32>,
+    @builtin(position) gl_Position: vec4<f32>,
 }
 
 var<private> Vertex_Position_1: vec3<f32>;

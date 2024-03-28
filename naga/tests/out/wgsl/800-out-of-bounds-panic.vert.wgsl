@@ -8,7 +8,7 @@ struct VertexPushConstants {
 
 struct VertexOutput {
     @location(0) frag_color: vec4<f32>,
-    @builtin(position) member: vec4<f32>,
+    @builtin(position) gl_Position: vec4<f32>,
 }
 
 @group(0) @binding(0) 

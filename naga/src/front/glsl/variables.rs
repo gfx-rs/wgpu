@@ -65,7 +65,7 @@ impl Frontend {
 
         let idx = self.entry_args.len();
         self.entry_args.push(EntryArg {
-            name: None,
+            name: Some(name.into()),
             binding: Binding::BuiltIn(data.builtin),
             handle,
             storage: data.storage,
