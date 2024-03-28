@@ -155,7 +155,7 @@ Bottom level categories:
 - In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 - GLSL 410 does not support layout(binding = ...), enable only for GLSL 420. By @bes in [#5357](https://github.com/gfx-rs/wgpu/pull/5357)
 - In spv-out, check for acceleration and ray-query types when enabling ray-query extension to prevent validation error. By @Vecvec in [#5463](https://github.com/gfx-rs/wgpu/pull/5463)
-- Add a limit for curly brace nesting in WGSL parsing. By @ErichDonGubler in [#5447](https://github.com/gfx-rs/wgpu/pull/5447).
+- Add a limit for curly brace nesting in WGSL parsing, plus a note about stack size requirements. By @ErichDonGubler in [#5447](https://github.com/gfx-rs/wgpu/pull/5447).
 
 #### Tests
 
