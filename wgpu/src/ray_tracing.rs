@@ -81,7 +81,7 @@ pub struct Blas(Arc<BlasInternal>);
 static_assertions::assert_impl_all!(Blas: WasmNotSendSync);
 
 #[derive(Debug)]
-struct BlasInternal {
+pub(crate) struct BlasInternal {
     pub(crate) context: Arc<C>,
     pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
@@ -470,7 +470,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
                 }
             };
             DynContextBlasBuildEntry {
-                blas_id: e.blas.id,
+                blas_id: e.blas.0.id,
                 geometries,
             }
         });
@@ -478,7 +478,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
         let mut tlas = tlas.into_iter().map(|e: &TlasPackage| {
             let instances = e.instances.iter().map(|instance: &Option<TlasInstance>| {
                 instance.as_ref().map(|instance| DynContextTlasInstance {
-                    blas: instance.blas,
+                    blas: instance.blas.id,
                     transform: &instance.transform,
                     custom_index: instance.custom_index,
                     mask: instance.mask,
@@ -533,7 +533,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
                 }
             };
             DynContextBlasBuildEntry {
-                blas_id: e.blas.id,
+                blas_id: e.blas.0.id,
                 geometries,
             }
         });

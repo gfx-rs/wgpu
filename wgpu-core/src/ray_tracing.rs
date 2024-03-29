@@ -17,7 +17,7 @@ use crate::{
 };
 
 use thiserror::Error;
-use wgt::BufferAddress;
+use wgt::{AccelerationStructureGeometryFlags, BufferAddress};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {
@@ -77,6 +77,15 @@ pub enum BuildAccelerationStructureError {
         "Blas {0:?} build sizes to may be greater than the descriptor at build time specified"
     )]
     IncompatibleBlasBuildSizes(BlasId),
+
+    #[error("The flags between the creation descriptor of Blas {0:?} and build descriptors do not match: creation {1:?}, build {2:?}")]
+    MismatchedFlags(BlasId, AccelerationStructureGeometryFlags, AccelerationStructureGeometryFlags),
+
+    #[error("The vertex data of Blas {0:?} creation and build descriptors do not match")]
+    MismatchedVertexData(BlasId),
+
+    #[error("The index data of Blas {0:?} creation and build descriptors do not match")]
+    MismatchedIndexData(BlasId),
 
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(BlasId),

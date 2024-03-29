@@ -174,22 +174,41 @@ impl Global {
                         }
                         let size_desc = &size_desc[i];
 
-                        if size_desc.flags != mesh.size.flags
-                            || size_desc.vertex_count < mesh.size.vertex_count
-                            || size_desc.vertex_format != mesh.size.vertex_format
-                            || size_desc.index_count.is_none() != mesh.size.index_count.is_none()
-                            || (size_desc.index_count.is_none()
-                                || size_desc.index_count.unwrap() < mesh.size.index_count.unwrap())
-                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none()
-                            || (size_desc.index_format.is_none()
-                                || size_desc.index_format.unwrap()
-                                    != mesh.size.index_format.unwrap())
-                        {
+                        if size_desc.flags != mesh.size.flags {
                             return Err(
-                                BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
+                                BuildAccelerationStructureError::MismatchedFlags(
                                     entry.blas_id,
+                                    size_desc.flags,
+                                    mesh.size.flags,
                                 ),
                             );
+                        }
+
+                        if size_desc.vertex_count < mesh.size.vertex_count
+                            || size_desc.vertex_format != mesh.size.vertex_format {
+                            return Err(
+                                BuildAccelerationStructureError::MismatchedVertexData(
+                                    entry.blas_id,
+                                )
+                            )
+                        }
+
+                        if size_desc.index_count.is_none() != mesh.size.index_count.is_none()
+                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none() {
+                            return Err(
+                                BuildAccelerationStructureError::MismatchedIndexData(
+                                    entry.blas_id,
+                                )
+                            )
+                        }
+
+                        if size_desc.index_count.as_ref().map_or(false, |index_count| *index_count < mesh.size.index_count.unwrap())
+                            || size_desc.index_format.as_ref().map_or(false, |format| *format != mesh.size.index_format.unwrap())  {
+                            return Err(
+                                BuildAccelerationStructureError::MismatchedIndexData(
+                                    entry.blas_id,
+                                )
+                            )
                         }
 
                         if size_desc.index_count.is_some() && mesh.index_buffer.is_none() {
@@ -881,22 +900,41 @@ impl Global {
                         }
                         let size_desc = &size_desc[i];
 
-                        if size_desc.flags != mesh.size.flags
-                            || size_desc.vertex_count < mesh.size.vertex_count
-                            || size_desc.vertex_format != mesh.size.vertex_format
-                            || size_desc.index_count.is_none() != mesh.size.index_count.is_none()
-                            || (size_desc.index_count.is_none()
-                                || size_desc.index_count.unwrap() < mesh.size.index_count.unwrap())
-                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none()
-                            || (size_desc.index_format.is_none()
-                                || size_desc.index_format.unwrap()
-                                    != mesh.size.index_format.unwrap())
-                        {
+                        if size_desc.flags != mesh.size.flags {
                             return Err(
-                                BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
+                                BuildAccelerationStructureError::MismatchedFlags(
                                     entry.blas_id,
+                                    size_desc.flags,
+                                    mesh.size.flags,
                                 ),
                             );
+                        }
+
+                        if size_desc.vertex_count < mesh.size.vertex_count
+                            || size_desc.vertex_format != mesh.size.vertex_format {
+                            return Err(
+                                BuildAccelerationStructureError::MismatchedVertexData(
+                                    entry.blas_id,
+                                )
+                            )
+                        }
+
+                        if size_desc.index_count.is_none() != mesh.size.index_count.is_none()
+                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none() {
+                            return Err(
+                                BuildAccelerationStructureError::MismatchedIndexData(
+                                    entry.blas_id,
+                                )
+                            )
+                        }
+
+                        if size_desc.index_count.as_ref().map_or(false, |index_count| *index_count < mesh.size.index_count.unwrap())
+                            || size_desc.index_format.as_ref().map_or(false, |format| *format != mesh.size.index_format.unwrap())  {
+                            return Err(
+                                BuildAccelerationStructureError::MismatchedIndexData(
+                                    entry.blas_id,
+                                )
+                            )
                         }
 
                         if size_desc.index_count.is_some() && mesh.index_buffer.is_none() {

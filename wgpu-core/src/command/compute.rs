@@ -540,7 +540,7 @@ impl Global {
                         .acceleration_structures
                         .used_resources()
                         .map(|tlas| {
-                            tracker.tlas_s.add_single(&tlas_guard, tlas.as_info().id());
+                            tracker.tlas_s.insert_single(tlas.as_info().id(), tlas.clone());
                             crate::ray_tracing::TlasAction {
                                 id: tlas.as_info().id(),
                                 kind: crate::ray_tracing::TlasActionKind::Use,

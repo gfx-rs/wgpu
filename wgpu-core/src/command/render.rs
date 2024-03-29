@@ -1514,11 +1514,11 @@ impl Global {
                             .used
                             .acceleration_structures
                             .used_resources()
-                            .map(|blas| {
-                                tracker.tlas_s.add_single(&tlas_guard, blas.as_info().id());
+                            .map(|tlas| {
+                                tracker.tlas_s.insert_single(tlas.as_info().id(), tlas.clone());
 
                                 crate::ray_tracing::TlasAction {
-                                    id: blas.as_info().id(),
+                                    id: tlas.as_info().id(),
                                     kind: crate::ray_tracing::TlasActionKind::Use,
                                 }
                             });

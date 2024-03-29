@@ -27,8 +27,6 @@ mod poll;
 mod push_constants;
 mod query_set;
 mod queue_transfer;
-mod ray_tracing;
-mod ray_tracing_use_after_free;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod scissor_tests;
@@ -41,5 +39,7 @@ mod transfer;
 mod vertex_indices;
 mod write_texture;
 mod zero_init_texture_after_discard;
+mod ray_tracing;
+mod ray_tracing_use_after_free;
 
 wgpu_test::gpu_test_main!();

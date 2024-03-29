@@ -21,6 +21,13 @@ fn required_features() -> wgpu::Features {
 }
 
 fn execute(ctx: TestingContext) {
+    let blas_size = BlasTriangleGeometrySizeDescriptor {
+        vertex_format: VertexFormat::Float32x3,
+        vertex_count: 3,
+        index_format: None,
+        index_count: None,
+        flags: AccelerationStructureGeometryFlags::empty(),
+    };
     let blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
             label: Some("blas use after free"),
@@ -28,13 +35,7 @@ fn execute(ctx: TestingContext) {
             update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {
-            desc: vec![BlasTriangleGeometrySizeDescriptor {
-                vertex_format: VertexFormat::Float32x3,
-                vertex_count: 3,
-                index_format: None,
-                index_count: None,
-                flags: AccelerationStructureGeometryFlags::empty(),
-            }],
+            desc: vec![blas_size.clone()],
         },
     );
     let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
@@ -62,13 +63,7 @@ fn execute(ctx: TestingContext) {
         iter::once(&BlasBuildEntry {
             blas: &blas,
             geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
-                size: &BlasTriangleGeometrySizeDescriptor {
-                    vertex_format: VertexFormat::Float32x3,
-                    vertex_count: 3,
-                    index_format: None,
-                    index_count: None,
-                    flags: AccelerationStructureGeometryFlags::empty(),
-                },
+                size: &blas_size,
                 vertex_buffer: &vertices,
                 first_vertex: 0,
                 vertex_stride: mem::size_of::<[f32; 3]>() as BufferAddress,
