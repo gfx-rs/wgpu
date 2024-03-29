@@ -52,44 +52,44 @@ Bottom level categories:
 #### General
 
 - Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
-    - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
-        - `abs`
-        - `acos`
-        - `acosh`
-        - `asin`
-        - `asinh`
-        - `atan`
-        - `atanh`
-        - `cos`
-        - `cosh`
-        - `round`
-        - `saturate`
-        - `sin`
-        - `sinh`
-        - `sqrt`
-        - `step`
-        - `tan`
-        - `tanh`
-    - [#5098](https://github.com/gfx-rs/wgpu/pull/5098) by @ErichDonGubler:
-        - `ceil`
-        - `countLeadingZeros`
-        - `countOneBits`
-        - `countTrailingZeros`
-        - `degrees`
-        - `exp`
-        - `exp2`
-        - `floor`
-        - `fract`
-        - `fma`
-        - `inverseSqrt`
-        - `log`
-        - `log2`
-        - `max`
-        - `min`
-        - `radians`
-        - `reverseBits`
-        - `sign`
-        - `trunc`
+  - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
+    - `abs`
+    - `acos`
+    - `acosh`
+    - `asin`
+    - `asinh`
+    - `atan`
+    - `atanh`
+    - `cos`
+    - `cosh`
+    - `round`
+    - `saturate`
+    - `sin`
+    - `sinh`
+    - `sqrt`
+    - `step`
+    - `tan`
+    - `tanh`
+  - [#5098](https://github.com/gfx-rs/wgpu/pull/5098) by @ErichDonGubler:
+    - `ceil`
+    - `countLeadingZeros`
+    - `countOneBits`
+    - `countTrailingZeros`
+    - `degrees`
+    - `exp`
+    - `exp2`
+    - `floor`
+    - `fract`
+    - `fma`
+    - `inverseSqrt`
+    - `log`
+    - `log2`
+    - `max`
+    - `min`
+    - `radians`
+    - `reverseBits`
+    - `sign`
+    - `trunc`
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 - `wgpu-types`'s `trace` and `replay` features have been replaced by the `serde` feature. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
@@ -101,10 +101,12 @@ Bottom level categories:
   By @ErichDonGubler in [#5146](https://github.com/gfx-rs/wgpu/pull/5146), [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
 - Signed and unsigned 64 bit integer support in shaders. By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 - `wgpu::Instance` can now report which `wgpu::Backends` are available based on the build configuration. By @wumpf [#5167](https://github.com/gfx-rs/wgpu/pull/5167)
-```diff
--wgpu::Instance::any_backend_feature_enabled()
-+!wgpu::Instance::enabled_backend_features().is_empty()
-```
+
+  ```diff
+  -wgpu::Instance::any_backend_feature_enabled()
+  +!wgpu::Instance::enabled_backend_features().is_empty()
+  ```
+
 - `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU). By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 - `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
