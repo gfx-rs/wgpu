@@ -924,11 +924,11 @@ impl Global {
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
-    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         id: TextureId,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
@@ -937,7 +937,7 @@ impl Global {
         let snatch_guard = texture.device.snatchable_lock.read();
         let hal_texture = texture.raw(&snatch_guard);
 
-        hal_texture_callback(hal_texture);
+        hal_texture_callback(hal_texture)
     }
 
     /// # Safety

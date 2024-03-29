@@ -207,14 +207,18 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn texture_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Texture>) -> R,
+        R,
+    >(
         &self,
         texture: &Texture,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         unsafe {
             self.0
-                .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+                .texture_as_hal::<A, F, R>(texture.id, hal_texture_callback)
         }
     }
 
