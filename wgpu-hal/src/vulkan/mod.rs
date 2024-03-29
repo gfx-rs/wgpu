@@ -413,6 +413,15 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl TextureView {
+    /// # Safety
+    ///
+    /// - The image view handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::ImageView {
+        self.raw
+    }
+}
+
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
