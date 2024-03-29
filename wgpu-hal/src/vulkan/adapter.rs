@@ -49,10 +49,10 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_timeline_semaphore`, promoted to Vulkan 1.2
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
 
-    /// Features provided by `VK_KHR_image_robustness`, promoted to Vulkan 1.3
+    /// Features provided by `VK_EXT_image_robustness`, promoted to Vulkan 1.3
     image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
 
-    /// Features provided by `VK_KHR_robustness2`.
+    /// Features provided by `VK_EXT_robustness2`.
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
 
     /// Features provided by `VK_KHR_multiview`, promoted to Vulkan 1.1.
