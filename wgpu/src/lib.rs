@@ -5021,6 +5021,34 @@ impl TextureView {
     pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), PhantomData)
     }
+
+    /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
+    /// backend type argument does not match with this wgpu Texture
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal TextureView must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        hal_texture_view_callback: F,
+    ) -> R {
+        use core::id::TextureViewId;
+
+        let texture_view_id = TextureViewId::from(self.id);
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe {
+                ctx.texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+            }
+        } else {
+            hal_texture_view_callback(None)
+        }
+    }
 }
 
 impl Sampler {

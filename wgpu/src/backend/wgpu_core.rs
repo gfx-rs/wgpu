@@ -22,8 +22,11 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::device::DeviceLostClosure;
+use wgc::{
+    command::{bundle_ffi::*, compute_ffi::*, render_ffi::*},
+    id::TextureViewId,
+};
 use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
@@ -219,6 +222,21 @@ impl ContextWgpuCore {
         unsafe {
             self.0
                 .texture_as_hal::<A, F, R>(texture.id, hal_texture_callback)
+        }
+    }
+
+    pub unsafe fn texture_view_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::TextureView>) -> R,
+        R,
+    >(
+        &self,
+        texture_view_id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        unsafe {
+            self.0
+                .texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
         }
     }
 

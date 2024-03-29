@@ -8,7 +8,7 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId},
+    id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId, TextureViewId},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
@@ -938,6 +938,25 @@ impl Global {
         let hal_texture = texture.raw(&snatch_guard);
 
         hal_texture_callback(hal_texture)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw texture view handle must not be manually destroyed
+    pub unsafe fn texture_view_as_hal<A: HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        profiling::scope!("TextureView::as_hal");
+
+        let hub = A::hub(self);
+        let texture_view_opt = { hub.texture_views.try_get(id).ok().flatten() };
+        let texture_view = texture_view_opt.as_ref().unwrap();
+        let snatch_guard = texture_view.device.snatchable_lock.read();
+        let hal_texture_view = texture_view.raw(&snatch_guard);
+
+        hal_texture_view_callback(hal_texture_view)
     }
 
     /// # Safety
