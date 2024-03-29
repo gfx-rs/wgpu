@@ -3470,6 +3470,34 @@ impl CommandEncoder {
             destination_offset,
         )
     }
+
+    /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
+    /// backend type argument does not match with this wgpu CommandEncoder
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_command_encoder_callback: F,
+    ) -> Option<R> {
+        use core::id::CommandEncoderId;
+
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.command_encoder_as_hal_mut::<A, F, R>(
+                    CommandEncoderId::from(self.id.unwrap()),
+                    hal_command_encoder_callback,
+                )
+            })
+    }
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] must be enabled on the device in order to call these functions.

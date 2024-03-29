@@ -22,10 +22,10 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgc::device::DeviceLostClosure;
 use wgc::{
     command::{bundle_ffi::*, compute_ffi::*, render_ffi::*},
-    id::TextureViewId,
+    device::DeviceLostClosure,
+    id::{CommandEncoderId, TextureViewId},
 };
 use wgt::WasmNotSendSync;
 
@@ -237,6 +237,23 @@ impl ContextWgpuCore {
         unsafe {
             self.0
                 .texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+        }
+    }
+
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        unsafe {
+            self.0.command_encoder_as_hal_mut::<A, F, R>(
+                command_encoder_id,
+                hal_command_encoder_callback,
+            )
         }
     }
 

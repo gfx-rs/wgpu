@@ -8,7 +8,10 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId, TextureViewId},
+    id::{
+        AdapterId, BufferId, CommandEncoderId, DeviceId, Id, Marker, SurfaceId, TextureId,
+        TextureViewId,
+    },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
@@ -1023,6 +1026,29 @@ impl Global {
         let hal_surface = surface.as_ref().and_then(|surface| A::get_surface(surface));
 
         hal_surface_callback(hal_surface)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw command encoder handle must not be manually destroyed
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        profiling::scope!("CommandEncoder::as_hal");
+
+        let hub = A::hub(self);
+        let cmd_buf = hub.command_buffers.get(id.transmute()).unwrap();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let cmd_buf_raw = cmd_buf_data.encoder.open().ok();
+
+        hal_command_encoder_callback(cmd_buf_raw)
     }
 }
 
