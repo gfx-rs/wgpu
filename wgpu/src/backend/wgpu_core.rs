@@ -24,9 +24,10 @@ use std::{
 };
 use wgc::{
     command::{bundle_ffi::*, render_commands::*},
-    device::DeviceLostClosure,
-    id::{CommandEncoderId, TextureViewId},
+    gfx_select,
+    id::CommandEncoderId,
 };
+use wgc::{device::DeviceLostClosure, id::TextureViewId};
 use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
@@ -470,6 +471,12 @@ impl Queue {
 }
 
 #[derive(Debug)]
+pub struct ComputePass {
+    pass: wgc::command::ComputePass,
+    error_sink: ErrorSink,
+}
+
+#[derive(Debug)]
 pub struct CommandEncoder {
     error_sink: ErrorSink,
     open: bool,
@@ -507,7 +514,7 @@ impl crate::Context for ContextWgpuCore {
     type CommandEncoderId = wgc::id::CommandEncoderId;
     type CommandEncoderData = CommandEncoder;
     type ComputePassId = Unused;
-    type ComputePassData = wgc::command::ComputePass;
+    type ComputePassData = ComputePass;
     type RenderPassId = Unused;
     type RenderPassData = wgc::command::RenderPass;
     type CommandBufferId = wgc::id::CommandBufferId;
@@ -1816,7 +1823,7 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_begin_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
+        encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor<'_>,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
         let timestamp_writes =
@@ -1827,15 +1834,19 @@ impl crate::Context for ContextWgpuCore {
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
+
         (
             Unused,
-            wgc::command::ComputePass::new(
-                *encoder,
-                &wgc::command::ComputePassDescriptor {
-                    label: desc.label.map(Borrowed),
-                    timestamp_writes: timestamp_writes.as_ref(),
-                },
-            ),
+            Self::ComputePassData {
+                pass: gfx_select!(encoder => self.0.command_encoder_create_compute_pass(
+                    *encoder,
+                    &wgc::command::ComputePassDescriptor {
+                        label: desc.label.map(Borrowed),
+                        timestamp_writes: timestamp_writes.as_ref(),
+                    },
+                )),
+                error_sink: encoder_data.error_sink.clone(),
+            },
         )
     }
 
@@ -1847,7 +1858,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
     ) {
         if let Err(cause) = wgc::gfx_select!(
-            encoder => self.0.command_encoder_run_compute_pass(*encoder, pass_data)
+            encoder => self.0.command_encoder_run_compute_pass(*encoder, &pass_data.pass)
         ) {
             let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
             self.handle_error(
@@ -2311,8 +2322,8 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::ComputePipelineId,
         _pipeline_data: &Self::ComputePipelineData,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_set_pipeline(pass_data, *pipeline))
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_set_pipeline(&mut pass_data.pass, *pipeline));
     }
 
     fn compute_pass_set_bind_group(
@@ -2324,8 +2335,8 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_set_bind_group(pass_data, index, *bind_group, offsets));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets));
     }
 
     fn compute_pass_set_push_constants(
@@ -2335,8 +2346,8 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_set_push_constant(pass_data, offset, data));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_set_push_constant(&mut pass_data.pass, offset, data));
     }
 
     fn compute_pass_insert_debug_marker(
@@ -2345,8 +2356,8 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         label: &str,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_insert_debug_marker(pass_data, label, 0));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_insert_debug_marker(&mut pass_data.pass, label, 0));
     }
 
     fn compute_pass_push_debug_group(
@@ -2355,8 +2366,8 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_push_debug_group(pass_data, group_label, 0));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_push_debug_group(&mut pass_data.pass, group_label, 0));
     }
 
     fn compute_pass_pop_debug_group(
@@ -2364,8 +2375,8 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_pop_debug_group(pass_data));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_pop_debug_group(&mut pass_data.pass));
     }
 
     fn compute_pass_write_timestamp(
@@ -2376,8 +2387,8 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_write_timestamp(pass_data, *query_set, query_index));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index));
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -2388,8 +2399,8 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_begin_pipeline_statistics_query(pass_data, *query_set, query_index));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_begin_pipeline_statistics_query(&mut pass_data.pass, *query_set, query_index));
     }
 
     fn compute_pass_end_pipeline_statistics_query(
@@ -2397,8 +2408,8 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_end_pipeline_statistics_query(pass_data));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_end_pipeline_statistics_query(&mut pass_data.pass));
     }
 
     fn compute_pass_dispatch_workgroups(
@@ -2409,8 +2420,8 @@ impl crate::Context for ContextWgpuCore {
         y: u32,
         z: u32,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups(pass_data, x, y, z));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups(&mut pass_data.pass, x, y, z));
     }
 
     fn compute_pass_dispatch_workgroups_indirect(
@@ -2421,8 +2432,8 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        let encoder = pass_data.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups_indirect(pass_data, *indirect_buffer, indirect_offset));
+        let encoder = pass_data.pass.parent_id();
+        wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups_indirect(&mut pass_data.pass, *indirect_buffer, indirect_offset));
     }
 
     fn render_bundle_encoder_set_pipeline(
