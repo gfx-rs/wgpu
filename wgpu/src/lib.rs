@@ -3474,6 +3474,8 @@ impl CommandEncoder {
     /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
     /// backend type argument does not match with this wgpu CommandEncoder
     ///
+    /// This method will start the wgpu_core level command recording.
+    ///
     /// # Safety
     ///
     /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed

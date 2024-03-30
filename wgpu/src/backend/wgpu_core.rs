@@ -240,6 +240,7 @@ impl ContextWgpuCore {
         }
     }
 
+    /// This method will start the wgpu_core level command recording.
     pub unsafe fn command_encoder_as_hal_mut<
         A: wgc::hal_api::HalApi,
         F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
