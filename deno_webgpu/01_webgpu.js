@@ -6,12 +6,15 @@
 /// <reference path="../web/lib.deno_web.d.ts" />
 /// <reference path="./lib.deno_webgpu.d.ts" />
 
-const core = globalThis.Deno.core;
-const ops = core.ops;
-const primordials = globalThis.__bootstrap.primordials;
+import { core, primordials } from "ext:core/mod.js";
+const {
+  isDataView,
+  isTypedArray,
+} = core;
+import * as ops from "ext:core/ops";
 import * as webidl from "ext:deno_webidl/00_webidl.js";
 import { EventTarget } from "ext:deno_web/02_event.js";
-import DOMException from "ext:deno_web/01_dom_exception.js";
+import { DOMException } from "ext:deno_web/01_dom_exception.js";
 import { createFilteredInspectProxy } from "ext:deno_console/01_console.js";
 const {
   ArrayBuffer,
@@ -677,6 +680,7 @@ class GPUSupportedFeatures {
   constructor() {
     webidl.illegalConstructor();
   }
+
   [SymbolFor("Deno.privateCustomInspect")](inspect, inspectOptions) {
     if (ObjectPrototypeIsPrototypeOf(GPUSupportedFeaturesPrototype, this)) {
       return `${this.constructor.name} ${
@@ -687,23 +691,23 @@ class GPUSupportedFeatures {
       return `${this.constructor.name} ${inspect({}, inspectOptions)}`;
     }
   }
+}
+const GPUSupportedFeaturesPrototype = GPUSupportedFeatures.prototype;
 
-  const GPUSupportedFeaturesPrototype = GPUSupportedFeatures.prototype;
+/**
+ * @param {string | undefined} reason
+ * @param {string} message
+ * @returns {GPUDeviceLostInfo}
+ */
+function createGPUDeviceLostInfo(reason, message) {
+  /** @type {GPUDeviceLostInfo} */
+  const deviceLostInfo = webidl.createBranded(GPUDeviceLostInfo);
+  deviceLostInfo[_reason] = reason ?? "unknown";
+  deviceLostInfo[_message] = message;
+  return deviceLostInfo;
+}
 
-  /**
-   * @param {string | undefined} reason
-   * @param {string} message
-   * @returns {GPUDeviceLostInfo}
-   */
-  function createGPUDeviceLostInfo(reason, message) {
-    /** @type {GPUDeviceLostInfo} */
-    const deviceLostInfo = webidl.createBranded(GPUDeviceLostInfo);
-    deviceLostInfo[_reason] = reason ?? "unknown";
-    deviceLostInfo[_message] = message;
-    return deviceLostInfo;
-  }
-
-  class GPUDeviceLostInfo {
+class GPUDeviceLostInfo {
   /** @type {string} */
   [_reason];
   /** @type {string} */
