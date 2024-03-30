@@ -18,7 +18,6 @@ use crate::{
 };
 use smallvec::SmallVec;
 
-use crate::id::{BlasId, TlasId};
 use crate::resource::{Blas, Tlas};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -312,10 +311,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .insert(destroyed.tracker_index, destroyed);
                 }
                 TempResource::Tlas(raw) => {
-                    last_resources.tlas_s.insert(raw.as_info().id(), raw);
+                    last_resources.tlas_s.insert(raw.as_info().tracker_index(), raw);
                 }
                 TempResource::Blas(raw) => {
-                    last_resources.blas_s.insert(raw.as_info().id(), raw);
+                    last_resources.blas_s.insert(raw.as_info().tracker_index(), raw);
                 }
             }
         }
@@ -432,10 +431,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .insert(destroyed.tracker_index, destroyed);
                 }
                 TempResource::Tlas(raw) => {
-                    resources.tlas_s.insert(raw.as_info().id(), raw);
+                    resources.tlas_s.insert(raw.as_info().tracker_index(), raw);
                 }
                 TempResource::Blas(raw) => {
-                    resources.blas_s.insert(raw.as_info().id(), raw);
+                    resources.blas_s.insert(raw.as_info().tracker_index(), raw);
                 }
             }
         }
@@ -555,7 +554,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     .insert(v.as_info().tracker_index(), v);
             }
             for v in bind_group.used.acceleration_structures.drain_resources() {
-                self.suspected_resources.tlas_s.insert(v.as_info().id(), v);
+                self.suspected_resources.tlas_s.insert(v.as_info().tracker_index(), v);
             }
 
             self.suspected_resources.bind_group_layouts.insert(

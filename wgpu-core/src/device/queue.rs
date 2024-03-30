@@ -1391,7 +1391,7 @@ impl Global {
                                         .as_mut()
                                         .unwrap()
                                         .blas_s
-                                        .insert(blas.as_info().id(), blas.clone());
+                                        .insert(blas.as_info().tracker_index(), blas.clone());
                                 }
                             }
                             for tlas in cmd_buf_trackers.tlas_s.used_resources() {
@@ -1401,7 +1401,7 @@ impl Global {
                                         .as_mut()
                                         .unwrap()
                                         .tlas_s
-                                        .insert(tlas.as_info().id(), tlas.clone());
+                                        .insert(tlas.as_info().tracker_index(), tlas.clone());
                                 }
                             }
                         }

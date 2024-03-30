@@ -403,7 +403,6 @@ impl Global {
         let pipeline_guard = hub.compute_pipelines.read();
         let query_set_guard = hub.query_sets.read();
         let buffer_guard = hub.buffers.read();
-        let tlas_guard = hub.tlas_s.read();
 
         let mut state = State {
             binder: Binder::new(),
@@ -461,7 +460,7 @@ impl Global {
             .compute_pipelines
             .set_size(indices.compute_pipelines.size());
         tracker.query_sets.set_size(indices.query_sets.size());
-        tracker.tlas_s.set_size(indices.tlas_s.size);
+        tracker.tlas_s.set_size(indices.tlas_s.size());
 
         let discard_hal_labels = self
             .instance
@@ -536,7 +535,7 @@ impl Global {
                         .acceleration_structures
                         .used_resources()
                         .map(|tlas| {
-                            tracker.tlas_s.insert_single(tlas.as_info().id(), tlas.clone());
+                            tracker.tlas_s.insert_single(tlas.clone());
                             crate::ray_tracing::TlasAction {
                                 id: tlas.as_info().id(),
                                 kind: crate::ray_tracing::TlasActionKind::Use,

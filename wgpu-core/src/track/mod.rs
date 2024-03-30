@@ -220,6 +220,8 @@ pub(crate) struct TrackerIndexAllocators {
     pub pipeline_layouts: Arc<SharedTrackerIndexAllocator>,
     pub bundles: Arc<SharedTrackerIndexAllocator>,
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
+    pub tlas_s: Arc<SharedTrackerIndexAllocator>,
+    pub blas_s: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
@@ -237,6 +239,8 @@ impl TrackerIndexAllocators {
             pipeline_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
+            tlas_s: Arc::new(SharedTrackerIndexAllocator::new()),
+            blas_s: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
 }

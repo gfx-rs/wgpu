@@ -81,6 +81,7 @@ impl<A: HalApi> Device<A> {
                     .label
                     .to_hal(self.instance_flags)
                     .unwrap_or("<BindGroupLayoyt>"),
+                Some(self.tracker_indices.blas_s.clone()),
             ),
             size_info,
             sizes,
@@ -143,6 +144,7 @@ impl<A: HalApi> Device<A> {
                 desc.label
                     .to_hal(self.instance_flags)
                     .unwrap_or("<BindGroupLayoyt>"),
+                Some(self.tracker_indices.tlas_s.clone()),
             ),
             size_info,
             flags: desc.flags,
@@ -196,7 +198,7 @@ impl Global {
             let (id, resource) = fid.assign(blas);
             log::info!("Created blas {:?} with {:?}", id, desc);
 
-            device.trackers.lock().blas_s.insert_single(id, resource);
+            device.trackers.lock().blas_s.insert_single(resource);
 
             return (id, Some(handle), None);
         };
@@ -238,7 +240,7 @@ impl Global {
             let id = fid.assign(tlas);
             log::info!("Created tlas {:?} with {:?}", id.0, desc);
 
-            device.trackers.lock().tlas_s.insert_single(id.0, id.1);
+            device.trackers.lock().tlas_s.insert_single(id.1);
 
             return (id.0, None);
         };
@@ -292,7 +294,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .blas_s
-                .insert(blas_id, blas.clone());
+                .insert(blas.info.tracker_index(), blas.clone());
 
             if wait {
                 match blas.device.wait_for_submit(last_submit_index) {
@@ -339,7 +341,7 @@ impl Global {
                     raw: Mutex::new(Some(e)),
                     device: device.clone(),
                     size,
-                    info: ResourceInfo::new("Raytracing scratch buffer"),
+                    info: ResourceInfo::new("Raytracing scratch buffer", Some(device.tracker_indices.staging_buffers.clone())),
                     is_coherent: mapping.is_coherent,
                 })))
             }
@@ -371,7 +373,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .tlas_s
-                .insert(tlas_id, tlas.clone());
+                .insert(tlas.info.tracker_index(), tlas.clone());
 
             if wait {
                 match tlas.device.wait_for_submit(last_submit_index) {
