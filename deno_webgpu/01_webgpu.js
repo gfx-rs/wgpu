@@ -7,10 +7,6 @@
 /// <reference path="./lib.deno_webgpu.d.ts" />
 
 import { core, primordials } from "ext:core/mod.js";
-const {
-  isDataView,
-  isTypedArray,
-} = core;
 import * as ops from "ext:core/ops";
 import * as webidl from "ext:deno_webidl/00_webidl.js";
 import { EventTarget } from "ext:deno_web/02_event.js";
@@ -250,8 +246,7 @@ class GPU {
       "Argument 1",
     );
 
-    const { err, ...data } = await core.opAsync(
-      "op_webgpu_request_adapter",
+    const { err, ...data } = await ops.op_webgpu_request_adapter(
       options.powerPreference,
       options.forceFallbackAdapter,
     );
@@ -341,8 +336,7 @@ class GPUAdapter {
       }
     }
 
-    const { rid, features, limits } = await core.opAsync(
-      "op_webgpu_request_device",
+    const { rid, features, limits } = await ops.op_webgpu_request_device(
       this[_adapter].rid,
       descriptor.label,
       requiredFeatures,
@@ -380,10 +374,7 @@ class GPUAdapter {
       architecture,
       device,
       description,
-    } = await core.opAsync(
-      "op_webgpu_request_adapter_info",
-      this[_adapter].rid,
-    );
+    } = await ops.op_webgpu_request_adapter_info(this[_adapter].rid);
 
     const adapterInfo = webidl.createBranded(GPUAdapterInfo);
     adapterInfo[_vendor] = unmaskHints.includes("vendor") ? vendor : "";
