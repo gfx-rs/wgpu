@@ -510,7 +510,7 @@ impl PhysicalDeviceFeatures {
             self.core.shader_sampled_image_array_dynamic_indexing != 0,
         );
         features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
-        if Self::all_features_supported(
+        if Self::prerequisites_satisfied(
             &features,
             &[
                 (
@@ -547,7 +547,7 @@ impl PhysicalDeviceFeatures {
 
         if let Some(ref descriptor_indexing) = self.descriptor_indexing {
             const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
-            if Self::all_features_supported(
+            if Self::prerequisites_satisfied(
                 &features,
                 &[
                     (
@@ -562,7 +562,7 @@ impl PhysicalDeviceFeatures {
             ) {
                 features.insert(F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
             }
-            if Self::all_features_supported(
+            if Self::prerequisites_satisfied(
                 &features,
                 &[
                     (
@@ -689,13 +689,39 @@ impl PhysicalDeviceFeatures {
         (features, dl_flags)
     }
 
-    fn all_features_supported(
+    /// Check whether the Vulkan features needed for a wgpu [`Features`] flag are present.
+    ///
+    /// Some wgpu `Features` flags describe an extension to multiple other
+    /// flags. For example, [`STORAGE_RESOURCE_BINDING_ARRAY`] says that if
+    /// [`BUFFER_BINDING_ARRAY`] or [`TEXTURE_BINDING_ARRAY`] is present, then
+    /// those arrays can, furthermore, be dynamically indexed. For each of the
+    /// basic `Features` flags, a specific set of Vulkan features must be
+    /// available for the extending flag to be available.
+    ///
+    /// Given `features`, the set of [`Features`] already discovered, check if:
+    /// - some `Features` set in `implications` is present, and
+    /// - for any set that is present, the corresponding Vulkan features
+    ///   (evaluated by the caller and passed as a bool) are available.
+    ///
+    /// [`Features`]: wgt::Features
+    /// [`STORAGE_RESOURCE_BINDING_ARRAY`]: wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
+    /// [`BUFFER_BINDING_ARRAY`]: wgt::Features::BUFFER_BINDING_ARRAY
+    /// [`TEXTURE_BINDING_ARRAY`]: wgt::Features::TEXTURE_BINDING_ARRAY
+    fn prerequisites_satisfied(
         features: &wgt::Features,
         implications: &[(wgt::Features, vk::Bool32)],
     ) -> bool {
-        implications
-            .iter()
-            .all(|&(flag, support)| !features.contains(flag) || support != 0)
+        // This is both a conjunction (all the implications must be true) and a
+        // disjunction (at least one of them must have its antecedent
+        // satisfied), so the `Iterator` adapters don't clarify very much.
+        let mut any = false;
+        for &(wgpu_base_feature, vulkan_support) in implications.iter() {
+            if features.contains(wgpu_base_feature) && vulkan_support == 0 {
+                return false;
+            }
+            any = true;
+        }
+        any
     }
 }
 
