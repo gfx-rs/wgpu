@@ -12,7 +12,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label,
-    id::{self, QueueId},
+    id::{self, DeviceId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, Resource,
@@ -313,7 +313,10 @@ fn prepare_staging_buffer<A: HalApi>(
         raw: Mutex::new(Some(buffer)),
         device: device.clone(),
         size,
-        info: ResourceInfo::new("<StagingBuffer>"),
+        info: ResourceInfo::new(
+            "<StagingBuffer>",
+            Some(device.tracker_indices.staging_buffers.clone()),
+        ),
         is_coherent: mapping.is_coherent,
     };
 
@@ -342,6 +345,15 @@ pub struct InvalidQueue;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueWriteError {
+    #[error(
+        "Device of queue ({:?}) does not match device of write recipient ({:?})",
+        queue_device_id,
+        target_device_id
+    )]
+    DeviceMismatch {
+        queue_device_id: DeviceId,
+        target_device_id: DeviceId,
+    },
     #[error(transparent)]
     Queue(#[from] DeviceError),
     #[error(transparent)]
@@ -390,12 +402,30 @@ impl Global {
 
         let hub = A::hub(self);
 
+        let buffer_device_id = hub
+            .buffers
+            .get(buffer_id)
+            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?
+            .device
+            .as_info()
+            .id();
+
         let queue = hub
             .queues
             .get(queue_id)
             .map_err(|_| DeviceError::InvalidQueueId)?;
 
         let device = queue.device.as_ref().unwrap();
+
+        {
+            let queue_device_id = device.as_info().id();
+            if buffer_device_id != queue_device_id {
+                return Err(QueueWriteError::DeviceMismatch {
+                    queue_device_id,
+                    target_device_id: buffer_device_id,
+                });
+            }
+        }
 
         let data_size = data.len() as wgt::BufferAddress;
 
@@ -792,6 +822,7 @@ impl Global {
                         &mut trackers.textures,
                         &device.alignments,
                         device.zero_buffer.as_ref().unwrap(),
+                        &device.snatchable_lock.read(),
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -1061,6 +1092,7 @@ impl Global {
                         &mut trackers.textures,
                         &device.alignments,
                         device.zero_buffer.as_ref().unwrap(),
+                        &device.snatchable_lock.read(),
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -1124,6 +1156,9 @@ impl Global {
 
             let device = queue.device.as_ref().unwrap();
 
+            let snatch_guard = device.snatchable_lock.read();
+
+            // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
             let mut fence = device.fence.write();
             let fence = fence.as_mut().unwrap();
             let submit_index = device
@@ -1132,9 +1167,7 @@ impl Global {
                 + 1;
             let mut active_executions = Vec::new();
 
-            let mut used_surface_textures = track::TextureUsageScope::new();
-
-            let snatch_guard = device.snatchable_lock.read();
+            let mut used_surface_textures = track::TextureUsageScope::default();
 
             let mut submit_surface_textures_owned = SmallVec::<[_; 2]>::new();
 
@@ -1157,7 +1190,7 @@ impl Global {
                     for &cmb_id in command_buffer_ids {
                         // we reset the used surface textures every time we use
                         // it, so make sure to set_size on it.
-                        used_surface_textures.set_size(hub.textures.read().len());
+                        used_surface_textures.set_size(device.tracker_indices.textures.size());
 
                         #[allow(unused_mut)]
                         let mut cmdbuf = match command_buffer_guard.replace_with_error(cmb_id) {
@@ -1202,11 +1235,13 @@ impl Global {
 
                             // update submission IDs
                             for buffer in cmd_buf_trackers.buffers.used_resources() {
-                                let id = buffer.info.id();
+                                let tracker_index = buffer.info.tracker_index();
                                 let raw_buf = match buffer.raw.get(&snatch_guard) {
                                     Some(raw) => raw,
                                     None => {
-                                        return Err(QueueSubmitError::DestroyedBuffer(id));
+                                        return Err(QueueSubmitError::DestroyedBuffer(
+                                            buffer.info.id(),
+                                        ));
                                     }
                                 };
                                 buffer.info.use_at(submit_index);
@@ -1221,19 +1256,25 @@ impl Global {
                                         .as_mut()
                                         .unwrap()
                                         .buffers
-                                        .insert(id, buffer.clone());
+                                        .insert(tracker_index, buffer.clone());
                                 } else {
                                     match *buffer.map_state.lock() {
                                         BufferMapState::Idle => (),
-                                        _ => return Err(QueueSubmitError::BufferStillMapped(id)),
+                                        _ => {
+                                            return Err(QueueSubmitError::BufferStillMapped(
+                                                buffer.info.id(),
+                                            ))
+                                        }
                                     }
                                 }
                             }
                             for texture in cmd_buf_trackers.textures.used_resources() {
-                                let id = texture.info.id();
+                                let tracker_index = texture.info.tracker_index();
                                 let should_extend = match texture.inner.get(&snatch_guard) {
                                     None => {
-                                        return Err(QueueSubmitError::DestroyedTexture(id));
+                                        return Err(QueueSubmitError::DestroyedTexture(
+                                            texture.info.id(),
+                                        ));
                                     }
                                     Some(TextureInner::Native { .. }) => false,
                                     Some(TextureInner::Surface { ref raw, .. }) => {
@@ -1250,7 +1291,7 @@ impl Global {
                                         .as_mut()
                                         .unwrap()
                                         .textures
-                                        .insert(id, texture.clone());
+                                        .insert(tracker_index, texture.clone());
                                 }
                                 if should_extend {
                                     unsafe {
@@ -1263,11 +1304,10 @@ impl Global {
                             for texture_view in cmd_buf_trackers.views.used_resources() {
                                 texture_view.info.use_at(submit_index);
                                 if texture_view.is_unique() {
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .texture_views
-                                        .insert(texture_view.as_info().id(), texture_view.clone());
+                                    temp_suspected.as_mut().unwrap().texture_views.insert(
+                                        texture_view.as_info().tracker_index(),
+                                        texture_view.clone(),
+                                    );
                                 }
                             }
                             {
@@ -1287,7 +1327,7 @@ impl Global {
                                             .as_mut()
                                             .unwrap()
                                             .bind_groups
-                                            .insert(bg.as_info().id(), bg.clone());
+                                            .insert(bg.as_info().tracker_index(), bg.clone());
                                     }
                                 }
                             }
@@ -1298,7 +1338,7 @@ impl Global {
                                 compute_pipeline.info.use_at(submit_index);
                                 if compute_pipeline.is_unique() {
                                     temp_suspected.as_mut().unwrap().compute_pipelines.insert(
-                                        compute_pipeline.as_info().id(),
+                                        compute_pipeline.as_info().tracker_index(),
                                         compute_pipeline.clone(),
                                     );
                                 }
@@ -1309,7 +1349,7 @@ impl Global {
                                 render_pipeline.info.use_at(submit_index);
                                 if render_pipeline.is_unique() {
                                     temp_suspected.as_mut().unwrap().render_pipelines.insert(
-                                        render_pipeline.as_info().id(),
+                                        render_pipeline.as_info().tracker_index(),
                                         render_pipeline.clone(),
                                     );
                                 }
@@ -1317,11 +1357,10 @@ impl Global {
                             for query_set in cmd_buf_trackers.query_sets.used_resources() {
                                 query_set.info.use_at(submit_index);
                                 if query_set.is_unique() {
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .query_sets
-                                        .insert(query_set.as_info().id(), query_set.clone());
+                                    temp_suspected.as_mut().unwrap().query_sets.insert(
+                                        query_set.as_info().tracker_index(),
+                                        query_set.clone(),
+                                    );
                                 }
                             }
                             for bundle in cmd_buf_trackers.bundles.used_resources() {
@@ -1342,7 +1381,7 @@ impl Global {
                                         .as_mut()
                                         .unwrap()
                                         .render_bundles
-                                        .insert(bundle.as_info().id(), bundle.clone());
+                                        .insert(bundle.as_info().tracker_index(), bundle.clone());
                                 }
                             }
                             for blas in cmd_buf_trackers.blas_s.used_resources() {
@@ -1383,10 +1422,10 @@ impl Global {
                         //Note: locking the trackers has to be done after the storages
                         let mut trackers = device.trackers.lock();
                         baked
-                            .initialize_buffer_memory(&mut *trackers)
+                            .initialize_buffer_memory(&mut *trackers, &snatch_guard)
                             .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
                         baked
-                            .initialize_texture_memory(&mut *trackers, device)
+                            .initialize_texture_memory(&mut *trackers, device, &snatch_guard)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                         let mut blas_guard = hub.blas_s.write();
                         baked.validate_blas_actions(&mut blas_guard)?;
@@ -1432,7 +1471,7 @@ impl Global {
                                 baked.encoder.end_encoding().unwrap()
                             };
                             baked.list.push(present);
-                            used_surface_textures = track::TextureUsageScope::new();
+                            used_surface_textures = track::TextureUsageScope::default();
                         }
 
                         // done
@@ -1539,7 +1578,7 @@ impl Global {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll) {
+            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll, &snatch_guard) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),

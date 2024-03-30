@@ -238,6 +238,9 @@ struct DeviceShared {
     heap_samplers: descriptor::GeneralHeap,
 }
 
+unsafe impl Send for DeviceShared {}
+unsafe impl Sync for DeviceShared {}
+
 pub struct Device {
     raw: d3d12::Device,
     present_queue: d3d12::CommandQueue,
@@ -636,7 +639,9 @@ impl SwapChain {
     }
 }
 
-impl crate::Surface<Api> for Surface {
+impl crate::Surface for Surface {
+    type A = Api;
+
     unsafe fn configure(
         &self,
         device: &Device,
@@ -881,7 +886,9 @@ impl crate::Surface<Api> for Surface {
     }
 }
 
-impl crate::Queue<Api> for Queue {
+impl crate::Queue for Queue {
+    type A = Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],

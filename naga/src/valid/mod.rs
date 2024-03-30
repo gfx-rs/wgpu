@@ -28,7 +28,7 @@ pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, TypeError, TypeFlags};
+pub use r#type::{Disalignment, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
@@ -108,6 +108,8 @@ bitflags::bitflags! {
         const DUAL_SOURCE_BLENDING = 0x2000;
         /// Support for arrayed cube textures.
         const CUBE_ARRAY_TEXTURES = 0x4000;
+        /// Support for 64-bit signed and unsigned integers.
+        const SHADER_INT64 = 0x8000;
     }
 }
 

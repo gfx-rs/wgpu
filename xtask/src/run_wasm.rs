@@ -1,10 +1,11 @@
 use anyhow::Context;
 
 use pico_args::Arguments;
+use xshell::Shell;
 
 use crate::util::{check_all_programs, Program};
 
-pub(crate) fn run_wasm(mut args: Arguments) -> Result<(), anyhow::Error> {
+pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> Result<(), anyhow::Error> {
     let no_serve = args.contains("--no-serve");
     let release = args.contains("--release");
 
@@ -30,9 +31,6 @@ pub(crate) fn run_wasm(mut args: Arguments) -> Result<(), anyhow::Error> {
 
     let release_flag: &[_] = if release { &["--release"] } else { &[] };
     let output_dir = if release { "release" } else { "debug" };
-
-    let shell = xshell::Shell::new().context("Couldn't create xshell shell")?;
-    shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     log::info!("building webgpu examples");
 

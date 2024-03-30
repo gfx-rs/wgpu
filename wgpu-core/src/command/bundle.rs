@@ -99,6 +99,7 @@ use crate::{
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{Buffer, Resource, ResourceInfo, ResourceType},
     resource_log,
+    snatch::SnatchGuard,
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers,
@@ -350,24 +351,44 @@ impl RenderBundleEncoder {
     ) -> Result<RenderBundle<A>, RenderBundleError> {
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.render_pipelines.read();
-        let query_set_guard = hub.query_sets.read();
         let buffer_guard = hub.buffers.read();
-        let texture_guard = hub.textures.read();
 
         let mut state = State {
-            trackers: RenderBundleScope::new(
-                &*buffer_guard,
-                &*texture_guard,
-                &*bind_group_guard,
-                &*pipeline_guard,
-                &*query_set_guard,
-            ),
+            trackers: RenderBundleScope::new(),
             pipeline: None,
             bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
             vertex: (0..hal::MAX_VERTEX_BUFFERS).map(|_| None).collect(),
             index: None,
             flat_dynamic_offsets: Vec::new(),
         };
+
+        let indices = &device.tracker_indices;
+        state
+            .trackers
+            .buffers
+            .write()
+            .set_size(indices.buffers.size());
+        state
+            .trackers
+            .textures
+            .write()
+            .set_size(indices.textures.size());
+        state
+            .trackers
+            .bind_groups
+            .write()
+            .set_size(indices.bind_groups.size());
+        state
+            .trackers
+            .render_pipelines
+            .write()
+            .set_size(indices.render_pipelines.size());
+        state
+            .trackers
+            .query_sets
+            .write()
+            .set_size(indices.query_sets.size());
+
         let mut commands = Vec::new();
         let mut buffer_memory_init_actions = Vec::new();
         let mut texture_memory_init_actions = Vec::new();
@@ -404,7 +425,6 @@ impl RenderBundleEncoder {
                     }
 
                     // Identify the next `num_dynamic_offsets` entries from `base.dynamic_offsets`.
-                    let num_dynamic_offsets = num_dynamic_offsets;
                     let offsets_range =
                         next_dynamic_offset..next_dynamic_offset + num_dynamic_offsets;
                     next_dynamic_offset = offsets_range.end;
@@ -758,7 +778,10 @@ impl RenderBundleEncoder {
             buffer_memory_init_actions,
             texture_memory_init_actions,
             context: self.context,
-            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(device.tracker_indices.bundles.clone()),
+            ),
             discard_hal_labels: device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS),
@@ -872,7 +895,11 @@ impl<A: HalApi> RenderBundle<A> {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(super) unsafe fn execute(&self, raw: &mut A::CommandEncoder) -> Result<(), ExecutionError> {
+    pub(super) unsafe fn execute(
+        &self,
+        raw: &mut A::CommandEncoder,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout = None::<Arc<PipelineLayout<A>>>;
         if !self.discard_hal_labels {
@@ -880,8 +907,6 @@ impl<A: HalApi> RenderBundle<A> {
                 unsafe { raw.begin_debug_marker(label) };
             }
         }
-
-        let snatch_guard = self.device.snatchable_lock.read();
 
         use ArcRenderCommand as Cmd;
         for command in self.base.commands.iter() {
@@ -892,7 +917,7 @@ impl<A: HalApi> RenderBundle<A> {
                     bind_group,
                 } => {
                     let raw_bg = bind_group
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::InvalidBindGroup(bind_group.info.id()))?;
                     unsafe {
                         raw.set_bind_group(
@@ -916,7 +941,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffer: &A::Buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     let bb = hal::BufferBinding {
                         buffer,
@@ -932,7 +957,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     let bb = hal::BufferBinding {
                         buffer,
@@ -1019,7 +1044,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: false,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     unsafe { raw.draw_indirect(buffer, *offset, 1) };
                 }
@@ -1030,7 +1055,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: true,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     unsafe { raw.draw_indexed_indirect(buffer, *offset, 1) };
                 }

@@ -1182,6 +1182,9 @@ impl Writer {
             crate::Literal::F32(value) => Instruction::constant_32bit(type_id, id, value.to_bits()),
             crate::Literal::U32(value) => Instruction::constant_32bit(type_id, id, value),
             crate::Literal::I32(value) => Instruction::constant_32bit(type_id, id, value as u32),
+            crate::Literal::U64(value) => {
+                Instruction::constant_64bit(type_id, id, value as u32, (value >> 32) as u32)
+            }
             crate::Literal::I64(value) => {
                 Instruction::constant_64bit(type_id, id, value as u32, (value >> 32) as u32)
             }
@@ -1855,8 +1858,13 @@ impl Writer {
             .iter()
             .flat_map(|entry| entry.function.arguments.iter())
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
-        let has_ray_query = ir_module.special_types.ray_desc.is_some()
-            | ir_module.special_types.ray_intersection.is_some();
+        let mut has_ray_query = false;
+
+        for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
+            if let &crate::TypeInner::AccelerationStructure | &crate::TypeInner::RayQuery = inner {
+                has_ray_query = true
+            }
+        }
 
         if self.physical_layout.version < 0x10300 && has_storage_buffers {
             // enable the storage buffer class on < SPV-1.3

@@ -118,13 +118,7 @@ mod native {
         deno_core::error::get_custom_error_class(e)
             .or_else(|| deno_webgpu::error::get_error_class_name(e))
             .unwrap_or_else(|| {
-                panic!(
-                    "Error '{}' contains boxed error of unsupported type:{}",
-                    e,
-                    e.chain()
-                        .map(|e| format!("\n  {:?}", e))
-                        .collect::<String>()
-                );
+                panic!("Error '{e}' contains boxed error of unsupported type: {e:#}");
             })
     }
 

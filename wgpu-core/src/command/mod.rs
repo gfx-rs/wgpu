@@ -180,6 +180,7 @@ impl<A: HalApi> CommandBuffer<A> {
                     .as_ref()
                     .unwrap_or(&String::from("<CommandBuffer>"))
                     .as_str(),
+                None,
             ),
             //Todo come back
             data: Mutex::new(Some(CommandBufferMutable {

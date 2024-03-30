@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.70"
+rust-version = "1.74"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -36,8 +36,8 @@ bitflags = "2"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3.67"
-web-sys = { version = "0.3.67", features = [
+js-sys = "0.3.69"
+web-sys = { version = "0.3.69", features = [
     "ImageBitmap",
     "HtmlVideoElement",
     "HtmlCanvasElement",
@@ -46,4 +46,4 @@ web-sys = { version = "0.3.67", features = [
 
 [dev-dependencies]
 serde = { version = "1", features = ["serde_derive"] }
-serde_json = "1.0.111"
+serde_json = "1.0.113"

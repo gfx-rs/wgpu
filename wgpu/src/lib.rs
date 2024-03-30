@@ -1804,7 +1804,7 @@ impl Instance {
             );
         }
 
-        #[cfg(all(webgpu, web_sys_unstable_apis))]
+        #[cfg(webgpu)]
         {
             let is_only_available_backend = !cfg!(wgpu_core);
             let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
@@ -2719,6 +2719,12 @@ impl Device {
             Box::new(callback),
         )
     }
+
+    /// Test-only function to make this device invalid.
+    #[doc(hidden)]
+    pub fn make_invalid(&self) {
+        DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
+    }
 }
 
 impl Drop for Device {
@@ -3078,7 +3084,7 @@ impl<'a> BufferSlice<'a> {
     /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
     ///
     /// This is only available on WebGPU, on any other backends this will return `None`.
-    #[cfg(all(webgpu, web_sys_unstable_apis))]
+    #[cfg(webgpu)]
     pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
         self.buffer
             .context
@@ -4253,7 +4259,7 @@ impl<'a> ComputePass<'a> {
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
 impl<'a> ComputePass<'a> {
-    /// Start a pipeline statistics query on this render pass. It can be ended with
+    /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
@@ -4266,7 +4272,7 @@ impl<'a> ComputePass<'a> {
         );
     }
 
-    /// End the pipeline statistics query on this render pass. It can be started with
+    /// End the pipeline statistics query on this compute pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
@@ -4793,11 +4799,11 @@ impl Surface<'_> {
         let caps = self.get_capabilities(adapter);
         Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: *caps.formats.get(0)?,
+            format: *caps.formats.first()?,
             width,
             height,
             desired_maximum_frame_latency: 2,
-            present_mode: *caps.present_modes.get(0)?,
+            present_mode: *caps.present_modes.first()?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
             view_formats: vec![],
         })
@@ -4947,7 +4953,7 @@ impl<T> Eq for Id<T> {}
 
 impl<T> PartialOrd for Id<T> {
     fn partial_cmp(&self, other: &Id<T>) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 

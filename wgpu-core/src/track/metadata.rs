@@ -1,6 +1,6 @@
 //! The `ResourceMetadata` type.
 
-use crate::{resource::Resource, Epoch};
+use crate::resource::Resource;
 use bit_vec::BitVec;
 use std::{borrow::Cow, mem, sync::Arc};
 use wgt::strict_assert;
@@ -37,6 +37,11 @@ impl<T: Resource> ResourceMetadata<T> {
     pub(super) fn set_size(&mut self, size: usize) {
         self.resources.resize(size, None);
         resize_bitvec(&mut self.owned, size);
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.resources.clear();
+        self.owned.clear();
     }
 
     /// Ensures a given index is in bounds for all arrays and does
@@ -193,15 +198,6 @@ impl<T: Resource> ResourceMetadataProvider<'_, T> {
                 }
             }
         }
-    }
-    /// Get the epoch from this.
-    ///
-    /// # Safety
-    ///
-    /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
-    #[inline(always)]
-    pub(super) unsafe fn get_epoch(self, index: usize) -> Epoch {
-        unsafe { self.get_own(index).as_info().id().unzip().1 }
     }
 }
 
