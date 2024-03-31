@@ -2194,7 +2194,9 @@ impl Writer {
         }
         if has_vertex_return {
             Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
-                .to_words(&mut self.logical_layout.extensions)
+                .to_words(&mut self.logical_layout.extensions);
+            Instruction::capability(spirv::Capability::RayQueryPositionFetchKHR)
+                .to_words(&mut self.logical_layout.capabilities)
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
