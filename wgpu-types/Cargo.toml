@@ -46,4 +46,4 @@ web-sys = { version = "0.3.69", features = [
 
 [dev-dependencies]
 serde = { version = "1", features = ["serde_derive"] }
-serde_json = "1.0.113"
+serde_json = "1.0.115"
