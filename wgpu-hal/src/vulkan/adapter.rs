@@ -418,7 +418,7 @@ impl PhysicalDeviceFeatures {
         &self,
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
-        caps: &PhysicalDeviceCapabilities,
+        caps: &PhysicalDeviceProperties,
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use crate::auxil::db;
         use wgt::{DownlevelFlags as Df, Features as F};
@@ -699,11 +699,13 @@ impl PhysicalDeviceFeatures {
     }
 }
 
-/// Information gathered about a physical device.
+/// Vulkan "properties" structures gathered about a physical device.
 ///
-/// This structure holds the results from the queries we make about a
-/// [`vk::PhysicalDevice`], other than features: its device properties,
-/// supported extensions, and whatever properties those extensions provide.
+/// This structure holds the properties of a [`vk::PhysicalDevice`]:
+/// - the standard Vulkan device properties
+/// - the `VkExtensionProperties` structs for all available extensions, and
+/// - the per-extension properties structures for the available extensions that
+///   `wgpu` cares about.
 ///
 /// Generally, if you get it from any of these functions, it's stored
 /// here:
@@ -718,7 +720,7 @@ impl PhysicalDeviceFeatures {
 /// This does not include device features; for those, see
 /// [`PhysicalDeviceFeatures`].
 #[derive(Default, Debug)]
-pub struct PhysicalDeviceCapabilities {
+pub struct PhysicalDeviceProperties {
     /// Extensions supported by the `vk::PhysicalDevice`,
     /// as returned by `vkEnumerateDeviceExtensionProperties`.
     supported_extensions: Vec<vk::ExtensionProperties>,
@@ -752,10 +754,10 @@ pub struct PhysicalDeviceCapabilities {
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
-unsafe impl Send for PhysicalDeviceCapabilities {}
-unsafe impl Sync for PhysicalDeviceCapabilities {}
+unsafe impl Send for PhysicalDeviceProperties {}
+unsafe impl Sync for PhysicalDeviceProperties {}
 
-impl PhysicalDeviceCapabilities {
+impl PhysicalDeviceProperties {
     pub fn properties(&self) -> vk::PhysicalDeviceProperties {
         self.properties
     }
@@ -994,9 +996,9 @@ impl super::InstanceShared {
     fn inspect(
         &self,
         phd: vk::PhysicalDevice,
-    ) -> (PhysicalDeviceCapabilities, PhysicalDeviceFeatures) {
+    ) -> (PhysicalDeviceProperties, PhysicalDeviceFeatures) {
         let capabilities = {
-            let mut capabilities = PhysicalDeviceCapabilities::default();
+            let mut capabilities = PhysicalDeviceProperties::default();
             capabilities.supported_extensions =
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
             capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
@@ -1393,7 +1395,7 @@ impl super::Adapter {
         self.raw
     }
 
-    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceCapabilities {
+    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceProperties {
         &self.phd_capabilities
     }
 
