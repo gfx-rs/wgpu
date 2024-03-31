@@ -1858,7 +1858,8 @@ impl Writer {
             .iter()
             .flat_map(|entry| entry.function.arguments.iter())
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
-        let mut has_ray_query = false;
+        let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
+            | ir_module.special_types.ray_intersection.is_some();
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
             if let &crate::TypeInner::AccelerationStructure | &crate::TypeInner::RayQuery = inner {
