@@ -45,13 +45,13 @@ mod native {
             ],
             ..Default::default()
         };
-        let mut isolate = JsRuntime::new(options);
+        let mut js_runtime = JsRuntime::new(options);
         let args = args_iter.collect::<Vec<String>>();
         let cfg = json!({"args": args, "cwd": env::current_dir().unwrap().to_string_lossy() });
 
         {
-            let context = isolate.main_context();
-            let scope = &mut isolate.handle_scope();
+            let context = js_runtime.main_context();
+            let scope = &mut js_runtime.handle_scope();
             let context_local = v8::Local::new(scope, context);
             let global_obj = context_local.global(scope);
             let bootstrap_str = v8::String::new(scope, "bootstrap").unwrap();
@@ -65,20 +65,12 @@ mod native {
                 .unwrap();
         }
 
-        isolate.op_state().borrow_mut().put(Permissions {});
+        js_runtime.op_state().borrow_mut().put(Permissions {});
 
-        let mod_id = isolate.load_main_module(&specifier, None).await?;
-        let mod_rx = isolate.mod_evaluate(mod_id);
-
-        let rx = tokio::spawn(async move {
-            match mod_rx.await {
-                Ok(err @ Err(_)) => err,
-                _ => Ok(()),
-            }
-        });
-
-        isolate.run_event_loop(false).await?;
-        rx.await.unwrap()?;
+        let mod_id = js_runtime.load_main_es_module(&specifier).await?;
+        let result = js_runtime.mod_evaluate(mod_id);
+        js_runtime.run_event_loop(Default::default()).await?;
+        result.await?;
 
         Ok(())
     }
@@ -87,7 +79,7 @@ mod native {
         cts_runner,
         deps = [deno_webidl, deno_web],
         ops = [op_exit, op_read_file_sync, op_write_file_sync],
-        esm_entry_point = "ext:cts_runner/bootstrap.js",
+        esm_entry_point = "ext:cts_runner/src/bootstrap.js",
         esm = ["src/bootstrap.js"],
     );
 
