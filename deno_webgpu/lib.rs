@@ -1,4 +1,4 @@
-// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
 
@@ -18,6 +18,8 @@ pub use wgpu_types;
 
 use error::DomExceptionOperationError;
 use error::WebGpuResult;
+
+pub const UNSTABLE_FEATURE_NAME: &str = "webgpu";
 
 #[macro_use]
 mod macros {
@@ -71,6 +73,7 @@ mod macros {
 pub mod binding;
 pub mod buffer;
 pub mod bundle;
+pub mod byow;
 pub mod command_encoder;
 pub mod compute_pass;
 pub mod error;
@@ -79,22 +82,8 @@ pub mod queue;
 pub mod render_pass;
 pub mod sampler;
 pub mod shader;
-#[cfg(feature = "surface")]
 pub mod surface;
 pub mod texture;
-
-pub struct Unstable(pub bool);
-
-fn check_unstable(state: &OpState, api_name: &str) {
-    let unstable = state.borrow::<Unstable>();
-    if !unstable.0 {
-        eprintln!(
-            "Unstable API '{}'. The --unstable flag must be provided.",
-            api_name
-        );
-        std::process::exit(70);
-    }
-}
 
 pub type Instance = std::sync::Arc<wgpu_core::global::Global>;
 
@@ -224,12 +213,15 @@ deno_core::extension!(
         queue::op_webgpu_write_texture,
         // shader
         shader::op_webgpu_create_shader_module,
+        // surface
+        surface::op_webgpu_surface_configure,
+        surface::op_webgpu_surface_get_current_texture,
+        surface::op_webgpu_surface_present,
+        // byow
+        //byow::op_webgpu_surface_create,
     ],
-    esm = ["01_webgpu.js"],
-    options = { unstable: bool },
-    state = |state, options| {
-        state.put(Unstable(options.unstable));
-    },
+    esm = ["00_init.js", "02_surface.js"],
+    lazy_loaded_esm = ["01_webgpu.js"],
 );
 
 fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
@@ -391,15 +383,21 @@ pub struct GpuAdapterDevice {
     is_software: bool,
 }
 
-#[op2(async)]
+#[op2]
 #[serde]
-pub async fn op_webgpu_request_adapter(
+pub fn op_webgpu_request_adapter(
     state: Rc<RefCell<OpState>>,
     #[serde] power_preference: Option<wgpu_types::PowerPreference>,
     force_fallback_adapter: bool,
 ) -> Result<GpuAdapterDeviceOrErr, AnyError> {
     let mut state = state.borrow_mut();
-    check_unstable(&state, "navigator.gpu.requestAdapter");
+
+    // TODO(bartlomieju): replace with `state.feature_checker.check_or_exit`
+    // once we phase out `check_or_exit_with_legacy_fallback`
+    state
+        .feature_checker
+        .check_or_exit_with_legacy_fallback(UNSTABLE_FEATURE_NAME, "navigator.gpu.requestAdapter");
+
     let backends = std::env::var("DENO_WEBGPU_BACKEND").map_or_else(
         |_| wgpu_types::Backends::all(),
         |s| wgpu_core::instance::parse_backends_from_comma_list(&s),
@@ -649,9 +647,9 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
     }
 }
 
-#[op2(async)]
+#[op2]
 #[serde]
-pub async fn op_webgpu_request_device(
+pub fn op_webgpu_request_device(
     state: Rc<RefCell<OpState>>,
     #[smi] adapter_rid: ResourceId,
     #[string] label: String,
@@ -705,9 +703,9 @@ pub struct GPUAdapterInfo {
     description: String,
 }
 
-#[op2(async)]
+#[op2]
 #[serde]
-pub async fn op_webgpu_request_adapter_info(
+pub fn op_webgpu_request_adapter_info(
     state: Rc<RefCell<OpState>>,
     #[smi] adapter_rid: ResourceId,
 ) -> Result<GPUAdapterInfo, AnyError> {

@@ -40,7 +40,7 @@ mod native {
                     Arc::new(BlobStore::default()),
                     None,
                 ),
-                deno_webgpu::deno_webgpu::init_ops_and_esm(true),
+                deno_webgpu::deno_webgpu::init_ops_and_esm(),
                 cts_runner::init_ops_and_esm(),
             ],
             ..Default::default()
