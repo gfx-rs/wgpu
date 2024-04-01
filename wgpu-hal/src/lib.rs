@@ -260,6 +260,107 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type AccelerationStructure: AccelerationStructure + ?Sized;
 }
 
+pub trait ConcreteApi:
+    Api<
+    Instance = Self::ConcreteInstance,
+    Surface = Self::ConcreteSurface,
+    Adapter = Self::ConcreteAdapter,
+    Device = Self::ConcreteDevice,
+    Queue = Self::ConcreteQueue,
+    CommandEncoder = Self::ConcreteCommandEncoder,
+    CommandBuffer = Self::ConcreteCommandBuffer,
+    Buffer = Self::ConcreteBuffer,
+    Texture = Self::ConcreteTexture,
+    SurfaceTexture = Self::ConcreteSurfaceTexture,
+    TextureView = Self::ConcreteTextureView,
+    Sampler = Self::ConcreteSampler,
+    QuerySet = Self::ConcreteQuerySet,
+    Fence = Self::ConcreteFence,
+    BindGroupLayout = Self::ConcreteBindGroupLayout,
+    BindGroup = Self::ConcreteBindGroup,
+    PipelineLayout = Self::ConcretePipelineLayout,
+    ShaderModule = Self::ConcreteShaderModule,
+    RenderPipeline = Self::ConcreteRenderPipeline,
+    ComputePipeline = Self::ConcreteComputePipeline,
+    AccelerationStructure = Self::ConcreteAccelerationStructure,
+>
+{
+    type ConcreteInstance: Instance<A = Self>;
+    type ConcreteSurface: Surface<A = Self>;
+    type ConcreteAdapter: Adapter<A = Self>;
+    type ConcreteDevice: Device<A = Self>;
+
+    type ConcreteQueue: Queue<A = Self>;
+    type ConcreteCommandEncoder: CommandEncoder<A = Self>;
+    type ConcreteCommandBuffer: CommandBuffer;
+
+    type ConcreteBuffer: Buffer;
+    type ConcreteTexture: Texture;
+    type ConcreteSurfaceTexture: SurfaceTexture<Self::ConcreteTexture>;
+    type ConcreteTextureView: TextureView;
+    type ConcreteSampler: Sampler;
+    type ConcreteQuerySet: QuerySet;
+    type ConcreteFence: Fence;
+
+    type ConcreteBindGroupLayout: BindGroupLayout;
+    type ConcreteBindGroup: BindGroup;
+    type ConcretePipelineLayout: PipelineLayout;
+    type ConcreteShaderModule: ShaderModule;
+    type ConcreteRenderPipeline: RenderPipeline;
+    type ConcreteComputePipeline: ComputePipeline;
+
+    type ConcreteAccelerationStructure: AccelerationStructure;
+}
+impl<T: Api> ConcreteApi for T
+where
+    Self::Instance: Sized,
+    Self::Surface: Sized,
+    Self::Adapter: Sized,
+    Self::Device: Sized,
+    Self::Queue: Sized,
+    Self::CommandEncoder: Sized,
+    Self::CommandBuffer: Sized,
+    Self::Buffer: Sized,
+    Self::Texture: Sized,
+    Self::SurfaceTexture: Sized,
+    Self::TextureView: Sized,
+    Self::Sampler: Sized,
+    Self::QuerySet: Sized,
+    Self::Fence: Sized,
+    Self::BindGroupLayout: Sized,
+    Self::BindGroup: Sized,
+    Self::PipelineLayout: Sized,
+    Self::ShaderModule: Sized,
+    Self::RenderPipeline: Sized,
+    Self::ComputePipeline: Sized,
+    Self::AccelerationStructure: Sized,
+{
+    type ConcreteInstance = Self::Instance;
+    type ConcreteSurface = Self::Surface;
+    type ConcreteAdapter = Self::Adapter;
+    type ConcreteDevice = Self::Device;
+
+    type ConcreteQueue = Self::Queue;
+    type ConcreteCommandEncoder = Self::CommandEncoder;
+    type ConcreteCommandBuffer = Self::CommandBuffer;
+
+    type ConcreteBuffer = Self::Buffer;
+    type ConcreteTexture = Self::Texture;
+    type ConcreteSurfaceTexture = Self::SurfaceTexture;
+    type ConcreteTextureView = Self::TextureView;
+    type ConcreteSampler = Self::Sampler;
+    type ConcreteQuerySet = Self::QuerySet;
+    type ConcreteFence = Self::Fence;
+
+    type ConcreteBindGroupLayout = Self::BindGroupLayout;
+    type ConcreteBindGroup = Self::BindGroup;
+    type ConcretePipelineLayout = Self::PipelineLayout;
+    type ConcreteShaderModule = Self::ShaderModule;
+    type ConcreteRenderPipeline = Self::RenderPipeline;
+    type ConcreteComputePipeline = Self::ComputePipeline;
+    type ConcreteAccelerationStructure = Self::AccelerationStructure;
+}
+
 pub trait Instance: Resource {
     type A: Api;
 

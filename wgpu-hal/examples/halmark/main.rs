@@ -42,7 +42,7 @@ struct Locals {
     _pad: u32,
 }
 
-struct ExecutionContext<A: hal::Api> {
+struct ExecutionContext<A: hal::ConcreteApi> {
     encoder: A::CommandEncoder,
     fence: A::Fence,
     fence_value: hal::FenceValue,
@@ -51,7 +51,7 @@ struct ExecutionContext<A: hal::Api> {
     frames_recorded: usize,
 }
 
-impl<A: hal::Api> ExecutionContext<A> {
+impl<A: hal::ConcreteApi> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
         device.wait(&self.fence, self.fence_value, !0).unwrap();
         self.encoder.reset_all(&mut self.used_cmd_bufs.drain(..));
@@ -63,7 +63,7 @@ impl<A: hal::Api> ExecutionContext<A> {
 }
 
 #[allow(dead_code)]
-struct Example<A: hal::Api>
+struct Example<A: hal::ConcreteApi>
 where
     A::Instance: Sized,
     A::Adapter: Sized,
@@ -98,7 +98,7 @@ where
     start: Instant,
 }
 
-impl<A: hal::Api> Example<A> {
+impl<A: hal::ConcreteApi> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
