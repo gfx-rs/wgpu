@@ -1110,7 +1110,16 @@ impl crate::Device for super::Device {
         }
         let mut dynamic_buffers = Vec::new();
 
-        for (layout, entry) in desc.layout.entries.iter().zip(desc.entries.iter()) {
+        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+            let layout = desc
+                .layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (layout, entry)
+        });
+        for (layout, entry) in layout_and_entry_iter {
             match layout.ty {
                 wgt::BindingType::Buffer {
                     has_dynamic_offset: true,
