@@ -74,7 +74,7 @@ pub enum GPUPipelineLayoutOrGPUAutoLayoutMode {
 #[serde(rename_all = "camelCase")]
 pub struct GpuProgrammableStage {
     module: ResourceId,
-    entry_point: String,
+    entry_point: Option<String>,
     // constants: HashMap<String, GPUPipelineConstantValue>
 }
 
@@ -110,7 +110,7 @@ pub fn op_webgpu_create_compute_pipeline(
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
             module: compute_shader_module_resource.1,
-            entry_point: Some(Cow::from(compute.entry_point)),
+            entry_point: compute.entry_point.map(Cow::from),
             // TODO(lucacasonato): support args.compute.constants
         },
     };

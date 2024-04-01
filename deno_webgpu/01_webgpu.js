@@ -454,17 +454,10 @@ class GPUAdapter {
   }
 
   /**
-   * @param {string[]} unmaskHints
    * @returns {Promise<GPUAdapterInfo>}
    */
-  requestAdapterInfo(unmaskHints = []) {
+  requestAdapterInfo() {
     webidl.assertBranded(this, GPUAdapterPrototype);
-    const prefix = "Failed to execute 'requestAdapterInfo' on 'GPUAdapter'";
-    unmaskHints = webidl.converters["sequence<DOMString>"](
-      unmaskHints,
-      prefix,
-      "Argument 1",
-    );
 
     const {
       vendor,
@@ -474,16 +467,10 @@ class GPUAdapter {
     } = op_webgpu_request_adapter_info(this[_adapter].rid);
 
     const adapterInfo = webidl.createBranded(GPUAdapterInfo);
-    adapterInfo[_vendor] = ArrayPrototypeIncludes(unmaskHints, "vendor")
-      ? vendor
-      : "";
-    adapterInfo[_architecture] =
-      ArrayPrototypeIncludes(unmaskHints, "architecture") ? architecture : "";
-    adapterInfo[_device] = ArrayPrototypeIncludes(unmaskHints, "device")
-      ? device
-      : "";
-    adapterInfo[_description] =
-      ArrayPrototypeIncludes(unmaskHints, "description") ? description : "";
+    adapterInfo[_vendor] = vendor;
+    adapterInfo[_architecture] = architecture;
+    adapterInfo[_device] = device;
+    adapterInfo[_description] = description;
     return PromiseResolve(adapterInfo);
   }
 
@@ -687,6 +674,14 @@ class GPUSupportedLimits {
     webidl.assertBranded(this, GPUSupportedLimitsPrototype);
     return this[_limits].maxInterStageShaderComponents;
   }
+  get maxColorAttachments() {
+    webidl.assertBranded(this, GPUSupportedLimitsPrototype);
+    return this[_limits].maxColorAttachments;
+  }
+  get maxColorAttachmentBytesPerSample() {
+    webidl.assertBranded(this, GPUSupportedLimitsPrototype);
+    return this[_limits].maxColorAttachmentBytesPerSample;
+  }
   get maxComputeWorkgroupStorageSize() {
     webidl.assertBranded(this, GPUSupportedLimitsPrototype);
     return this[_limits].maxComputeWorkgroupStorageSize;
@@ -743,6 +738,8 @@ class GPUSupportedLimits {
           "maxVertexAttributes",
           "maxVertexBufferArrayStride",
           "maxInterStageShaderComponents",
+          "maxColorAttachments",
+          "maxColorAttachmentBytesPerSample",
           "maxComputeWorkgroupStorageSize",
           "maxComputeInvocationsPerWorkgroup",
           "maxComputeWorkgroupSizeX",
@@ -5354,6 +5351,7 @@ webidl.converters["GPUTextureFormat"] = webidl.createEnumConverter(
     "bgra8unorm",
     "bgra8unorm-srgb",
     "rgb9e5ufloat",
+    "rgb10a2uint",
     "rgb10a2unorm",
     "rg11b10ufloat",
     "rg32uint",
@@ -5769,6 +5767,8 @@ webidl.converters["GPUStorageTextureAccess"] = webidl.createEnumConverter(
   "GPUStorageTextureAccess",
   [
     "write-only",
+    "read-only",
+    "read-write",
   ],
 );
 
@@ -6028,7 +6028,6 @@ const dictMembersGPUProgrammableStage = [
   {
     key: "entryPoint",
     converter: webidl.converters["USVString"],
-    required: true,
   },
   {
     key: "constants",

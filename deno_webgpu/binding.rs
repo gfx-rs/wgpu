@@ -112,23 +112,9 @@ impl From<GpuTextureSampleType> for wgpu_types::TextureSampleType {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GpuStorageTextureBindingLayout {
-    access: GpuStorageTextureAccess,
+    access: wgpu_types::StorageTextureAccess,
     format: wgpu_types::TextureFormat,
     view_dimension: wgpu_types::TextureViewDimension,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum GpuStorageTextureAccess {
-    WriteOnly,
-}
-
-impl From<GpuStorageTextureAccess> for wgpu_types::StorageTextureAccess {
-    fn from(access: GpuStorageTextureAccess) -> Self {
-        match access {
-            GpuStorageTextureAccess::WriteOnly => wgpu_types::StorageTextureAccess::WriteOnly,
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -165,7 +151,7 @@ impl From<GpuBindingType> for wgpu_types::BindingType {
             },
             GpuBindingType::StorageTexture(storage_texture) => {
                 wgpu_types::BindingType::StorageTexture {
-                    access: storage_texture.access.into(),
+                    access: storage_texture.access,
                     format: storage_texture.format,
                     view_dimension: storage_texture.view_dimension,
                 }
