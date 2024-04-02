@@ -2019,7 +2019,7 @@ impl Global {
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                match device.maintain(fence, wgt::Maintain::Wait, &snatch_guard) {
+                match device.maintain(fence, wgt::Maintain::Wait, snatch_guard) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -2132,7 +2132,7 @@ impl Global {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
         let fence = fence.as_ref().unwrap();
-        let (closures, queue_empty) = device.maintain(fence, maintain, &snatch_guard)?;
+        let (closures, queue_empty) = device.maintain(fence, maintain, snatch_guard)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
