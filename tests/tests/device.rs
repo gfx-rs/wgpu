@@ -776,3 +776,42 @@ fn vs_main() -> @builtin(position) vec4<f32> {
             ],
         });
     });
+
+#[gpu_test]
+static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        // When a device is destroyed, its resources should be released,
+        // without causing a deadlock.
+
+        // Create a buffer to be left around until the device is destroyed.
+        let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 256,
+            usage: wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        // Create a texture to be left around until the device is destroyed.
+        let texture_extent = wgpu::Extent3d {
+            width: 512,
+            height: 512,
+            depth_or_array_layers: 1,
+        };
+        let _texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: texture_extent,
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Uint,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+
+        // Destroy the device.
+        ctx.device.destroy();
+
+        // Poll the device, which should try to clean up its resources.
+        ctx.instance.poll_all(true);
+    });
