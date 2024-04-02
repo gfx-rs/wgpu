@@ -692,12 +692,12 @@ pub fn op_webgpu_request_device(
     let features = deserialize_features(&device_features);
     let limits = gfx_select!(device => instance.device_limits(device))?;
 
-    let rid = state
-        .resource_table
-        .add(WebGpuDevice(instance.clone(), device));
+    let instance = instance.clone();
+    let instance2 = instance.clone();
+    let rid = state.resource_table.add(WebGpuDevice(instance, device));
     let queue_rid = state
         .resource_table
-        .add(queue::WebGpuQueue(instance.clone(), queue));
+        .add(queue::WebGpuQueue(instance2, queue));
 
     Ok(GpuDeviceRes {
         rid,
