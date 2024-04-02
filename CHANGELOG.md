@@ -111,6 +111,11 @@ Bottom level categories:
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 - `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
 
+- More as_hal methods and improvements by @JMS55 in [#5452](https://github.com/gfx-rs/wgpu/pull/5452)
+  - Added `wgpu::CommandEncoder::as_hal_mut`
+  - Added `wgpu::TextureView::as_hal`
+  - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
+
 #### GLES
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
@@ -125,7 +130,7 @@ Bottom level categories:
 #### WebGPU
 
 - Implement the `device_set_device_lost_callback` method for `ContextWebGpu`. By @suti in [#5438](https://github.com/gfx-rs/wgpu/pull/5438)
-- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434) 
+- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434)
 
 ### Bug Fixes
 
@@ -181,7 +186,7 @@ This release includes `wgpu`, `wgpu-core`, and `wgpu-hal`. All other crates are 
 
 ### Major Changes
 
-#### Vendored WebGPU Bindings from `web_sys` 
+#### Vendored WebGPU Bindings from `web_sys`
 
 **`--cfg=web_sys_unstable_apis` is no longer needed in your `RUSTFLAGS` to compile for WebGPU!!!**
 

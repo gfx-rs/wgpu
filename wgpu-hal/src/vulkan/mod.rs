@@ -413,6 +413,15 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl TextureView {
+    /// # Safety
+    ///
+    /// - The image view handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::ImageView {
+        self.raw
+    }
+}
+
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
@@ -479,6 +488,15 @@ pub struct CommandEncoder {
     /// If set, the end of the next render/compute pass will write a timestamp at
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
+}
+
+impl CommandEncoder {
+    /// # Safety
+    ///
+    /// - The command buffer handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::CommandBuffer {
+        self.active
+    }
 }
 
 impl fmt::Debug for CommandEncoder {

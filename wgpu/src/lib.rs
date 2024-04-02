@@ -3115,10 +3115,10 @@ impl Texture {
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         let texture = self.data.as_ref().downcast_ref().unwrap();
 
         if let Some(ctx) = self
@@ -3126,7 +3126,7 @@ impl Texture {
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.texture_as_hal::<A, F>(texture, hal_texture_callback) }
+            unsafe { ctx.texture_as_hal::<A, F, R>(texture, hal_texture_callback) }
         } else {
             hal_texture_callback(None)
         }
@@ -3469,6 +3469,36 @@ impl CommandEncoder {
             destination.data.as_ref(),
             destination_offset,
         )
+    }
+
+    /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
+    /// backend type argument does not match with this wgpu CommandEncoder
+    ///
+    /// This method will start the wgpu_core level command recording.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_command_encoder_callback: F,
+    ) -> Option<R> {
+        use core::id::CommandEncoderId;
+
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.command_encoder_as_hal_mut::<A, F, R>(
+                    CommandEncoderId::from(self.id.unwrap()),
+                    hal_command_encoder_callback,
+                )
+            })
     }
 }
 
@@ -5020,6 +5050,34 @@ impl TextureView {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), PhantomData)
+    }
+
+    /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
+    /// backend type argument does not match with this wgpu Texture
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal TextureView must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        hal_texture_view_callback: F,
+    ) -> R {
+        use core::id::TextureViewId;
+
+        let texture_view_id = TextureViewId::from(self.id);
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe {
+                ctx.texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+            }
+        } else {
+            hal_texture_view_callback(None)
+        }
     }
 }
 
