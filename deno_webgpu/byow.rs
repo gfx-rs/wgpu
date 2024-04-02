@@ -113,7 +113,7 @@ fn raw_window(
 
     let display_handle = {
         let mut handle =
-            raw_window_handle::XlibDisplayHandle::new(NonNull::new(display as *mut c_void));
+            raw_window_handle::XlibDisplayHandle::new(NonNull::new(display as *mut c_void), 0);
 
         raw_window_handle::RawDisplayHandle::Xlib(handle)
     };
