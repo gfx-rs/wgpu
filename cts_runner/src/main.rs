@@ -29,7 +29,7 @@ mod native {
             .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
         let specifier = resolve_url_or_path(&url, &env::current_dir()?)?;
 
-        let mut feature_checker: deno_core::FeatureChecker = Default::default();
+        let mut feature_checker = deno_core::FeatureChecker::default();
         feature_checker.enable_feature(deno_webgpu::UNSTABLE_FEATURE_NAME);
 
         let options = RuntimeOptions {
