@@ -1,4 +1,4 @@
-// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::type_error;
 use deno_core::error::AnyError;
@@ -163,6 +163,7 @@ pub fn op_webgpu_buffer_get_mapped_range(
     ))
     .map_err(|e| DomExceptionOperationError::new(&e.to_string()))?;
 
+    // SAFETY: guarantee to be safe from wgpu
     let slice = unsafe { std::slice::from_raw_parts_mut(slice_pointer, range_size as usize) };
     buf.copy_from_slice(slice);
 
@@ -189,6 +190,7 @@ pub fn op_webgpu_buffer_unmap(
     let buffer = buffer_resource.1;
 
     if let Some(buf) = buf {
+        // SAFETY: guarantee to be safe from wgpu
         let slice = unsafe { std::slice::from_raw_parts_mut(mapped_resource.0, mapped_resource.1) };
         slice.copy_from_slice(buf);
     }

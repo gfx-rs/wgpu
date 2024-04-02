@@ -29,6 +29,9 @@ mod native {
             .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
         let specifier = resolve_url_or_path(&url, &env::current_dir()?)?;
 
+        let mut feature_checker = deno_core::FeatureChecker::default();
+        feature_checker.enable_feature(deno_webgpu::UNSTABLE_FEATURE_NAME);
+
         let options = RuntimeOptions {
             module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
             get_error_class_fn: Some(&get_error_class_name),
@@ -40,9 +43,10 @@ mod native {
                     Arc::new(BlobStore::default()),
                     None,
                 ),
-                deno_webgpu::deno_webgpu::init_ops_and_esm(true),
+                deno_webgpu::deno_webgpu::init_ops_and_esm(),
                 cts_runner::init_ops_and_esm(),
             ],
+            feature_checker: Some(Arc::new(feature_checker)),
             ..Default::default()
         };
         let mut js_runtime = JsRuntime::new(options);
