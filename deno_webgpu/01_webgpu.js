@@ -93,7 +93,6 @@ const {
   ArrayBufferPrototypeGetByteLength,
   ArrayIsArray,
   ArrayPrototypeFilter,
-  ArrayPrototypeIncludes,
   ArrayPrototypeMap,
   ArrayPrototypePop,
   ArrayPrototypePush,
@@ -313,6 +312,42 @@ class GPUOutOfMemoryError extends GPUError {
   }
 }
 const GPUOutOfMemoryErrorPrototype = GPUOutOfMemoryError.prototype;
+
+class GPUInternalError extends GPUError {
+  name = "GPUInternalError";
+  constructor() {
+    super(illegalConstructorKey);
+    this[webidl.brand] = webidl.brand;
+  }
+}
+const GPUInternalErrorPrototype = GPUInternalError.prototype;
+
+class GPUUncapturedErrorEvent extends Event {
+  #error;
+
+  constructor(type, gpuUncapturedErrorEventInitDict) {
+    super(type, gpuUncapturedErrorEventInitDict);
+    this[webidl.brand] = webidl.brand;
+
+    const prefix = "Failed to construct 'GPUUncapturedErrorEvent'";
+    webidl.requiredArguments(arguments.length, 2, prefix);
+    gpuUncapturedErrorEventInitDict = webidl.converters
+      .gpuUncapturedErrorEventInitDict(
+        gpuUncapturedErrorEventInitDict,
+        prefix,
+        "Argument 2",
+      );
+
+    this.#error = gpuUncapturedErrorEventInitDict.error;
+  }
+
+  get error() {
+    webidl.assertBranded(this, GPUUncapturedErrorEventPrototype);
+    return this.#error;
+  }
+}
+const GPUUncapturedErrorEventPrototype = GPUUncapturedErrorEvent.prototype;
+defineEventHandler(GPUUncapturedErrorEvent.prototype, "uncapturederror");
 
 class GPU {
   [webidl.brand] = webidl.brand;
@@ -897,6 +932,8 @@ class InnerGPUDevice {
   resolveLost;
   /** @type {ErrorScope[]} */
   errorScopeStack;
+  /** @type {GPUDevice} */
+  device;
 
   /**
    * @param {InnerGPUDeviceOptions} options
@@ -942,6 +979,8 @@ class InnerGPUDevice {
             );
           case "out-of-memory":
             return PromiseReject(new GPUOutOfMemoryError());
+          case "internal":
+            return PromiseReject(new GPUInternalError());
         }
       }
     });
@@ -966,8 +1005,12 @@ class InnerGPUDevice {
         validationFilteredPromise,
       );
     } else {
-      PromisePrototypeCatch(validationFilteredPromise, () => {
-        // TODO(lucacasonato): emit an UncapturedErrorEvent
+      PromisePrototypeCatch(validationFilteredPromise, (err) => {
+        this.device.dispatchEvent(
+          new GPUUncapturedErrorEvent("uncapturederror", {
+            error: err,
+          }),
+        );
       });
     }
     // prevent uncaptured promise rejections
@@ -987,12 +1030,41 @@ class InnerGPUDevice {
     if (oomScope) {
       ArrayPrototypePush(oomScope.operations, oomFilteredPromise);
     } else {
-      PromisePrototypeCatch(oomFilteredPromise, () => {
-        // TODO(lucacasonato): emit an UncapturedErrorEvent
+      PromisePrototypeCatch(oomFilteredPromise, (err) => {
+        this.device.dispatchEvent(
+          new GPUUncapturedErrorEvent("uncapturederror", {
+            error: err,
+          }),
+        );
       });
     }
     // prevent uncaptured promise rejections
     PromisePrototypeCatch(oomFilteredPromise, (_err) => {});
+
+    const internalStack = ArrayPrototypeFilter(
+      this.errorScopeStack,
+      ({ filter }) => filter == "internal",
+    );
+    const internalScope = internalStack[internalStack.length - 1];
+    const internalFilteredPromise = PromisePrototypeCatch(operation, (err) => {
+      if (ObjectPrototypeIsPrototypeOf(GPUInternalErrorPrototype, err)) {
+        return PromiseReject(err);
+      }
+      return PromiseResolve();
+    });
+    if (internalScope) {
+      ArrayPrototypePush(internalScope.operations, internalFilteredPromise);
+    } else {
+      PromisePrototypeCatch(internalFilteredPromise, (err) => {
+        this.device.dispatchEvent(
+          new GPUUncapturedErrorEvent("uncapturederror", {
+            error: err,
+          }),
+        );
+      });
+    }
+    // prevent uncaptured promise rejections
+    PromisePrototypeCatch(internalFilteredPromise, (_err) => {});
   }
 }
 
@@ -1506,12 +1578,166 @@ class GPUDevice extends EventTarget {
 
   createComputePipelineAsync(descriptor) {
     // TODO(lucacasonato): this should be real async
-    return PromiseResolve(this.createComputePipeline(descriptor));
+
+    webidl.assertBranded(this, GPUDevicePrototype);
+    const prefix =
+      "Failed to execute 'createComputePipelineAsync' on 'GPUDevice'";
+    webidl.requiredArguments(arguments.length, 1, prefix);
+    descriptor = webidl.converters.GPUComputePipelineDescriptor(
+      descriptor,
+      prefix,
+      "Argument 1",
+    );
+    const device = assertDevice(this, prefix, "this");
+    let layout = descriptor.layout;
+    if (typeof descriptor.layout !== "string") {
+      const context = "layout";
+      layout = assertResource(descriptor.layout, prefix, context);
+      assertDeviceMatch(device, descriptor.layout, {
+        prefix,
+        resourceContext: context,
+        selfContext: "this",
+      });
+    }
+    const module = assertResource(
+      descriptor.compute.module,
+      prefix,
+      "compute shader module",
+    );
+    assertDeviceMatch(device, descriptor.compute.module, {
+      prefix,
+      resourceContext: "compute shader module",
+      selfContext: "this",
+    });
+
+    const { rid, err } = op_webgpu_create_compute_pipeline(
+      device.rid,
+      descriptor.label,
+      layout,
+      {
+        module,
+        entryPoint: descriptor.compute.entryPoint,
+        constants: descriptor.compute.constants,
+      },
+    );
+    device.pushError(err);
+    if (err) {
+      switch (err.type) {
+        case "validation":
+          return PromiseReject(
+            new GPUPipelineError(err.value ?? "validation error", {
+              reason: "validation",
+            }),
+          );
+        case "internal":
+          return PromiseReject(
+            new GPUPipelineError("internal error", {
+              reason: "validation",
+            }),
+          );
+      }
+    }
+
+    const computePipeline = createGPUComputePipeline(
+      descriptor.label,
+      device,
+      rid,
+    );
+    device.trackResource(computePipeline);
+    return PromiseResolve(computePipeline);
   }
 
   createRenderPipelineAsync(descriptor) {
     // TODO(lucacasonato): this should be real async
-    return PromiseResolve(this.createRenderPipeline(descriptor));
+
+    webidl.assertBranded(this, GPUDevicePrototype);
+    const prefix =
+      "Failed to execute 'createRenderPipelineAsync' on 'GPUDevice'";
+    webidl.requiredArguments(arguments.length, 1, prefix);
+    descriptor = webidl.converters.GPURenderPipelineDescriptor(
+      descriptor,
+      prefix,
+      "Argument 1",
+    );
+    const device = assertDevice(this, prefix, "this");
+    let layout = descriptor.layout;
+    if (typeof descriptor.layout !== "string") {
+      const context = "layout";
+      layout = assertResource(descriptor.layout, prefix, context);
+      assertDeviceMatch(device, descriptor.layout, {
+        prefix,
+        resourceContext: context,
+        selfContext: "this",
+      });
+    }
+    const module = assertResource(
+      descriptor.vertex.module,
+      prefix,
+      "vertex shader module",
+    );
+    assertDeviceMatch(device, descriptor.vertex.module, {
+      prefix,
+      resourceContext: "vertex shader module",
+      selfContext: "this",
+    });
+    let fragment = undefined;
+    if (descriptor.fragment) {
+      const module = assertResource(
+        descriptor.fragment.module,
+        prefix,
+        "fragment shader module",
+      );
+      assertDeviceMatch(device, descriptor.fragment.module, {
+        prefix,
+        resourceContext: "fragment shader module",
+        selfContext: "this",
+      });
+      fragment = {
+        module,
+        entryPoint: descriptor.fragment.entryPoint,
+        targets: descriptor.fragment.targets,
+      };
+    }
+
+    const { rid, err } = op_webgpu_create_render_pipeline({
+      deviceRid: device.rid,
+      label: descriptor.label,
+      layout,
+      vertex: {
+        module,
+        entryPoint: descriptor.vertex.entryPoint,
+        buffers: descriptor.vertex.buffers,
+      },
+      primitive: descriptor.primitive,
+      depthStencil: descriptor.depthStencil,
+      multisample: descriptor.multisample,
+      fragment,
+    });
+    device.pushError(err);
+    if (err) {
+      switch (err.type) {
+        case "validation":
+          return PromiseReject(
+            new GPUPipelineError(err.value ?? "validation error", {
+              reason: "validation",
+            }),
+          );
+        case "internal":
+          return PromiseReject(
+            new GPUPipelineError("internal error", {
+              reason: "validation",
+            }),
+          );
+      }
+    }
+
+    const renderPipeline = createGPURenderPipeline(
+      descriptor.label,
+      device,
+      rid,
+    );
+    device.trackResource(renderPipeline);
+    return renderPipeline;
   }
 
   /**
@@ -1673,6 +1899,29 @@ class GPUDevice extends EventTarget {
 }
 GPUObjectBaseMixin("GPUDevice", GPUDevice);
 const GPUDevicePrototype = GPUDevice.prototype;
+
+class GPUPipelineError extends DOMException {
+  #reason;
+
+  constructor(message = "", options = {}) {
+    const prefix = "Failed to construct 'GPUPipelineError'";
+    message = webidl.converters.DOMString(message, prefix, "Argument 1");
+    options = webidl.converters.GPUPipelineErrorInit(
+      options,
+      prefix,
+      "Argument 2",
+    );
+    super(message, "GPUPipelineError");
+
+    this.#reason = options.reason;
+  }
+
+  get reason() {
+    webidl.assertBranded(this, GPUPipelineErrorPrototype);
+    return this.#reason;
+  }
+}
+const GPUPipelineErrorPrototype = GPUPipelineError.prototype;
 
 /**
  * @param {string | null} label
@@ -3083,7 +3332,7 @@ class GPUCommandEncoder {
       timestampWrites = {
         querySet,
         beginningOfPassWriteIndex:
-          descriptor.timestampWrites.beginningOfPassWriteIndex,
+        descriptor.timestampWrites.beginningOfPassWriteIndex,
         endOfPassWriteIndex: descriptor.timestampWrites.endOfPassWriteIndex,
       };
     }
@@ -3133,7 +3382,7 @@ class GPUCommandEncoder {
       timestampWrites = {
         querySet,
         beginningOfPassWriteIndex:
-          descriptor.timestampWrites.beginningOfPassWriteIndex,
+        descriptor.timestampWrites.beginningOfPassWriteIndex,
         endOfPassWriteIndex: descriptor.timestampWrites.endOfPassWriteIndex,
       };
     }
@@ -3851,7 +4100,7 @@ class GPURenderPassEncoder {
     });
     if (
       TypedArrayPrototypeGetSymbolToStringTag(dynamicOffsetsData) !==
-        "Uint32Array"
+      "Uint32Array"
     ) {
       dynamicOffsetsData = new Uint32Array(dynamicOffsetsData ?? []);
       dynamicOffsetsDataStart = 0;
@@ -4408,7 +4657,7 @@ class GPUComputePassEncoder {
     });
     if (
       TypedArrayPrototypeGetSymbolToStringTag(dynamicOffsetsData) !==
-        "Uint32Array"
+      "Uint32Array"
     ) {
       dynamicOffsetsData = new Uint32Array(dynamicOffsetsData ?? []);
       dynamicOffsetsDataStart = 0;
@@ -4624,7 +4873,7 @@ class GPURenderBundleEncoder {
     });
     if (
       TypedArrayPrototypeGetSymbolToStringTag(dynamicOffsetsData) !==
-        "Uint32Array"
+      "Uint32Array"
     ) {
       dynamicOffsetsData = new Uint32Array(dynamicOffsetsData ?? []);
       dynamicOffsetsDataStart = 0;
@@ -5169,6 +5418,27 @@ webidl.converters["GPUFeatureName"] = webidl.createEnumConverter(
     "shader-i16",
     "shader-primitive-index",
     "shader-early-depth-test",
+  ],
+);
+
+// DICTIONARY: GPUPipelineErrorInit
+webidl.converters["GPUPipelineErrorInit"] = webidl.createDictionaryConverter(
+  "GPUPipelineErrorInit",
+  [
+    {
+      key: "reason",
+      converter: webidl.converters.GPUPipelineErrorReason,
+      required: true,
+    },
+  ],
+);
+
+// ENUM: GPUPipelineErrorReason
+webidl.converters["GPUPipelineErrorReason"] = webidl.createEnumConverter(
+  "GPUPipelineErrorReason",
+  [
+    "validation",
+    "internal",
   ],
 );
 
@@ -7070,7 +7340,7 @@ webidl.converters["GPUErrorFilter"] = webidl.createEnumConverter(
   [
     "out-of-memory",
     "validation",
-    "internal"
+    "internal",
   ],
 );
 
@@ -7210,6 +7480,7 @@ export {
   GPUDevice,
   GPUDeviceLostInfo,
   GPUError,
+  GPUInternalError,
   GPUMapMode,
   GPUOutOfMemoryError,
   GPUPipelineLayout,
@@ -7227,5 +7498,6 @@ export {
   GPUTexture,
   GPUTextureUsage,
   GPUTextureView,
+  GPUUncapturedErrorEvent,
   GPUValidationError,
 };

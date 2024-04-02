@@ -87,6 +87,7 @@ pub enum WebGpuError {
     Lost,
     OutOfMemory,
     Validation(String),
+    Internal,
 }
 
 impl From<CreateBufferError> for WebGpuError {

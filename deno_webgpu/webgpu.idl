@@ -607,6 +607,21 @@ interface GPUCompilationInfo {
     readonly attribute FrozenArray<GPUCompilationMessage> messages;
 };
 
+[Exposed=(Window, Worker), SecureContext, Serializable]
+interface GPUPipelineError : DOMException {
+    constructor(optional DOMString message = "", GPUPipelineErrorInit options);
+    readonly attribute GPUPipelineErrorReason reason;
+};
+
+dictionary GPUPipelineErrorInit {
+    required GPUPipelineErrorReason reason;
+};
+
+enum GPUPipelineErrorReason {
+    "validation",
+    "internal",
+};
+
 enum GPUAutoLayoutMode {
     "auto",
 };
@@ -1179,6 +1194,12 @@ interface GPUOutOfMemoryError
     constructor(DOMString message);
 };
 
+[Exposed=(Window, Worker), SecureContext]
+interface GPUInternalError
+        : GPUError {
+    constructor(DOMString message);
+};
+
 enum GPUErrorFilter {
     "validation",
     "out-of-memory",
@@ -1188,6 +1209,19 @@ enum GPUErrorFilter {
 partial interface GPUDevice {
     undefined pushErrorScope(GPUErrorFilter filter);
     Promise<GPUError?> popErrorScope();
+};
+
+[Exposed=(Window, Worker), SecureContext]
+interface GPUUncapturedErrorEvent : Event {
+    constructor(
+        DOMString type,
+        GPUUncapturedErrorEventInit gpuUncapturedErrorEventInitDict
+    );
+    [SameObject] readonly attribute GPUError error;
+};
+
+dictionary GPUUncapturedErrorEventInit : EventInit {
+    required GPUError error;
 };
 
 partial interface GPUDevice {
