@@ -369,14 +369,23 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
 
 #[derive(Serialize)]
 #[serde(untagged)]
-pub enum GpuAdapterDeviceOrErr {
+pub enum GpuAdapterResOrErr {
     Error { err: String },
-    Features(GpuAdapterDevice),
+    Features(GpuAdapterRes),
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GpuAdapterDevice {
+pub struct GpuAdapterRes {
+    rid: ResourceId,
+    limits: wgpu_types::Limits,
+    features: Vec<&'static str>,
+    is_software: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuDeviceRes {
     rid: ResourceId,
     queue_rid: ResourceId,
     limits: wgpu_types::Limits,
@@ -390,7 +399,7 @@ pub fn op_webgpu_request_adapter(
     state: Rc<RefCell<OpState>>,
     #[serde] power_preference: Option<wgpu_types::PowerPreference>,
     force_fallback_adapter: bool,
-) -> Result<GpuAdapterDeviceOrErr, AnyError> {
+) -> Result<GpuAdapterResOrErr, AnyError> {
     let mut state = state.borrow_mut();
 
     // TODO(bartlomieju): replace with `state.feature_checker.check_or_exit`
@@ -431,7 +440,7 @@ pub fn op_webgpu_request_adapter(
     let adapter = match res {
         Ok(adapter) => adapter,
         Err(err) => {
-            return Ok(GpuAdapterDeviceOrErr::Error {
+            return Ok(GpuAdapterResOrErr::Error {
                 err: err.to_string(),
             })
         }
@@ -444,7 +453,7 @@ pub fn op_webgpu_request_adapter(
 
     let rid = state.resource_table.add(WebGpuAdapter(instance, adapter));
 
-    Ok(GpuAdapterDeviceOrErr::Features(GpuAdapterDevice {
+    Ok(GpuAdapterResOrErr::Features(GpuAdapterRes {
         rid,
         features,
         limits: adapter_limits,
@@ -656,7 +665,7 @@ pub fn op_webgpu_request_device(
     #[string] label: String,
     #[serde] required_features: GpuRequiredFeatures,
     #[serde] required_limits: Option<wgpu_types::Limits>,
-) -> Result<GpuAdapterDevice, AnyError> {
+) -> Result<GpuDeviceRes, AnyError> {
     let mut state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
     let adapter = adapter_resource.1;
@@ -690,7 +699,7 @@ pub fn op_webgpu_request_device(
         .resource_table
         .add(queue::WebGpuQueue(instance.clone(), queue));
 
-    Ok(GpuAdapterDevice {
+    Ok(GpuDeviceRes {
         rid,
         queue_rid,
         features,
