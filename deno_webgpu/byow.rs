@@ -60,13 +60,11 @@ fn raw_window(
         return Err(type_error("Invalid system on macOS"));
     }
 
-    let win_handle = {
-        let handle = raw_window_handle::AppKitWindowHandle::new(
+    let win_handle =
+        raw_window_handle::RawWindowHandle::AppKit(raw_window_handle::AppKitWindowHandle::new(
             NonNull::new(ns_view as *mut c_void).ok_or(type_error("ns_view is null"))?,
-        );
+        ));
 
-        raw_window_handle::RawWindowHandle::AppKit(handle)
-    };
     let display_handle =
         raw_window_handle::RawDisplayHandle::AppKit(raw_window_handle::AppKitDisplayHandle::new());
     Ok((win_handle, display_handle))
@@ -105,18 +103,13 @@ fn raw_window(
         return Err(type_error("Invalid system on Linux"));
     }
 
-    let win_handle = {
-        let mut handle = raw_window_handle::XlibWindowHandle::new(window as *mut c_void as _);
+    let win_handle = raw_window_handle::RawWindowHandle::Xlib(
+        raw_window_handle::XlibWindowHandle::new(window as *mut c_void as _),
+    );
 
-        raw_window_handle::RawWindowHandle::Xlib(handle)
-    };
-
-    let display_handle = {
-        let mut handle =
-            raw_window_handle::XlibDisplayHandle::new(NonNull::new(display as *mut c_void), 0);
-
-        raw_window_handle::RawDisplayHandle::Xlib(handle)
-    };
+    let display_handle = raw_window_handle::RawDisplayHandle::Xlib(
+        raw_window_handle::XlibDisplayHandle::new(NonNull::new(display as *mut c_void), 0),
+    );
 
     Ok((win_handle, display_handle))
 }
