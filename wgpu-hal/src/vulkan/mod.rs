@@ -594,9 +594,7 @@ impl Fence {
     }
 }
 
-impl crate::Queue for Queue {
-    type A = Api;
-
+impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],

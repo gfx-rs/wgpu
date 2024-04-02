@@ -830,9 +830,7 @@ impl super::Device {
     }
 }
 
-impl crate::Device for super::Device {
-    type A = super::Api;
-
+impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
         unsafe { self.mem_allocator.into_inner().cleanup(&*self.shared) };
         unsafe { self.desc_allocator.into_inner().cleanup(&*self.shared) };

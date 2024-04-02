@@ -39,9 +39,7 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-impl crate::Instance for Context {
-    type A = Api;
-
+impl crate::Instance<Api> for Context {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         Ok(Context)
     }
@@ -58,9 +56,7 @@ impl crate::Instance for Context {
     }
 }
 
-impl crate::Surface for Context {
-    type A = Api;
-
+impl crate::Surface<Api> for Context {
     unsafe fn configure(
         &self,
         device: &Context,
@@ -80,9 +76,7 @@ impl crate::Surface for Context {
     unsafe fn discard_texture(&self, texture: Resource) {}
 }
 
-impl crate::Adapter for Context {
-    type A = Api;
-
+impl crate::Adapter<Api> for Context {
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -106,9 +100,7 @@ impl crate::Adapter for Context {
     }
 }
 
-impl crate::Queue for Context {
-    type A = Api;
-
+impl crate::Queue<Api> for Context {
     unsafe fn submit(
         &self,
         command_buffers: &[&Resource],
@@ -130,9 +122,7 @@ impl crate::Queue for Context {
     }
 }
 
-impl crate::Device for Context {
-    type A = Api;
-
+impl crate::Device<Api> for Context {
     unsafe fn exit(self, queue: Context) {}
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
@@ -279,9 +269,7 @@ impl crate::Device for Context {
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
 }
 
-impl crate::CommandEncoder for Encoder {
-    type A = Api;
-
+impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> DeviceResult<()> {
         Ok(())
     }

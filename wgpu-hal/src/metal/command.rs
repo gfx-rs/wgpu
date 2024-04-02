@@ -168,9 +168,7 @@ impl super::CommandState {
     }
 }
 
-impl crate::CommandEncoder for super::CommandEncoder {
-    type A = super::Api;
-
+impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let queue = &self.raw_queue.lock();
         let retain_references = self.shared.settings.retain_command_buffer_references;

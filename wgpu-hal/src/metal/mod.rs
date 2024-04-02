@@ -80,9 +80,7 @@ impl Instance {
     }
 }
 
-impl crate::Instance for Instance {
-    type A = Api;
-
+impl crate::Instance<Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
@@ -367,9 +365,7 @@ impl std::borrow::Borrow<Texture> for SurfaceTexture {
 unsafe impl Send for SurfaceTexture {}
 unsafe impl Sync for SurfaceTexture {}
 
-impl crate::Queue for Queue {
-    type A = Api;
-
+impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],

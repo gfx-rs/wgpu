@@ -169,9 +169,7 @@ impl super::Surface {
     }
 }
 
-impl crate::Surface for super::Surface {
-    type A = super::Api;
-
+impl crate::Surface<super::Api> for super::Surface {
     unsafe fn configure(
         &self,
         device: &super::Device,
