@@ -378,6 +378,7 @@ pub enum GpuAdapterDeviceOrErr {
 #[serde(rename_all = "camelCase")]
 pub struct GpuAdapterDevice {
     rid: ResourceId,
+    queue_rid: ResourceId,
     limits: wgpu_types::Limits,
     features: Vec<&'static str>,
     is_software: bool,
@@ -667,7 +668,7 @@ pub fn op_webgpu_request_device(
         required_limits: required_limits.unwrap_or_default(),
     };
 
-    let (device, _queue, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
+    let (device, queue, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
       adapter,
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
@@ -682,11 +683,16 @@ pub fn op_webgpu_request_device(
     let features = deserialize_features(&device_features);
     let limits = gfx_select!(device => instance.device_limits(device))?;
 
-    let instance = instance.clone();
-    let rid = state.resource_table.add(WebGpuDevice(instance, device));
+    let rid = state
+        .resource_table
+        .add(WebGpuDevice(instance.clone(), device));
+    let queue_rid = state
+        .resource_table
+        .add(queue::WebGpuQueue(instance.clone(), queue));
 
     Ok(GpuAdapterDevice {
         rid,
+        queue_rid,
         features,
         limits,
         // TODO(lucacasonato): report correctly from wgpu

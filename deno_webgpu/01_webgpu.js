@@ -468,7 +468,7 @@ class GPUAdapter {
       }
     }
 
-    const { rid, features, limits } = op_webgpu_request_device(
+    const { rid, queueRid, features, limits } = op_webgpu_request_device(
       this[_adapter].rid,
       descriptor.label,
       requiredFeatures,
@@ -481,11 +481,13 @@ class GPUAdapter {
       features: createGPUSupportedFeatures(features),
       limits: createGPUSupportedLimits(limits),
     });
-    return createGPUDevice(
+    const device = createGPUDevice(
       descriptor.label,
       inner,
-      createGPUQueue(descriptor.label, inner),
+      createGPUQueue(descriptor.label, inner, queueRid),
     );
+    inner.device = device;
+    return device;
   }
 
   /**
@@ -911,6 +913,7 @@ function GPUObjectBaseMixin(name, type) {
  * @property {number | undefined} rid
  * @property {GPUSupportedFeatures} features
  * @property {GPUSupportedLimits} limits
+ * @property {GPUDevice} device
  */
 
 class InnerGPUDevice {
@@ -1926,19 +1929,23 @@ const GPUPipelineErrorPrototype = GPUPipelineError.prototype;
 /**
  * @param {string | null} label
  * @param {InnerGPUDevice} device
+ * @param {number} rid
  * @returns {GPUQueue}
  */
-function createGPUQueue(label, device) {
+function createGPUQueue(label, device, rid) {
   /** @type {GPUQueue} */
   const queue = webidl.createBranded(GPUQueue);
   queue[_label] = label;
   queue[_device] = device;
+  queue[_rid] = rid;
   return queue;
 }
 
 class GPUQueue {
   /** @type {InnerGPUDevice} */
   [_device];
+  /** @type {number} */
+  [_rid];
 
   constructor() {
     webidl.illegalConstructor();
@@ -1972,7 +1979,7 @@ class GPUQueue {
         return rid;
       },
     );
-    const { err } = op_webgpu_queue_submit(device.rid, commandBufferRids);
+    const { err } = op_webgpu_queue_submit(this[_rid], commandBufferRids);
     for (let i = 0; i < commandBuffers.length; ++i) {
       commandBuffers[i][_rid] = undefined;
     }
@@ -2028,7 +2035,7 @@ class GPUQueue {
     }
 
     const { err } = op_webgpu_write_buffer(
-      device.rid,
+      this[_rid],
       bufferRid,
       bufferOffset,
       dataOffset,
@@ -2079,7 +2086,7 @@ class GPUQueue {
     }
 
     const { err } = op_webgpu_write_texture(
-      device.rid,
+      this[_rid],
       {
         texture: textureRid,
         mipLevel: destination.mipLevel,
