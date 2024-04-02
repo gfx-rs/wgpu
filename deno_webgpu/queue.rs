@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use super::error::WebGpuResult;
 
-pub struct WebGpuQueue(Instance, wgpu_core::id::QueueId);
+pub struct WebGpuQueue(pub Instance, pub wgpu_core::id::QueueId);
 impl Resource for WebGpuQueue {
     fn name(&self) -> Cow<str> {
         "webGPUQueue".into()
