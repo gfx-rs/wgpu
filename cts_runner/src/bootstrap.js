@@ -26,8 +26,9 @@ import { Console } from "ext:deno_console/01_console.js";
 import * as url from "ext:deno_url/00_url.js";
 import { DOMException } from "ext:deno_web/01_dom_exception.js";
 import * as performance from "ext:deno_web/15_performance.js";
-import * as webgpu from "ext:deno_webgpu/01_webgpu.js";
+import { loadWebGPU } from "ext:deno_webgpu/00_init.js";
 import * as imageData from "ext:deno_web/16_image_data.js";
+const webgpu = loadWebGPU();
 
 // imports needed to pass module evaluation
 import "ext:deno_url/01_urlpattern.js";
@@ -39,6 +40,7 @@ import "ext:deno_web/10_filereader.js";
 import "ext:deno_web/12_location.js";
 import "ext:deno_web/13_message_port.js";
 import "ext:deno_web/14_compression.js";
+import "ext:deno_webgpu/02_surface.js";
 
 let globalThis_;
 
