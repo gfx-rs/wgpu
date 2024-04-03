@@ -1,2 +1,3 @@
 *.mtl binary
 *.obj binary
+wgpu/src/backend/webgpu/webgpu_sys/** linguist-generated=true

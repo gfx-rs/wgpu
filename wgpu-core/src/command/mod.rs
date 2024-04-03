@@ -75,14 +75,14 @@ impl<A: HalApi> CommandEncoder<A> {
         Ok(())
     }
 
-    fn discard(&mut self) {
+    pub(crate) fn discard(&mut self) {
         if self.is_open {
             self.is_open = false;
             unsafe { self.raw.discard_encoding() };
         }
     }
 
-    fn open(&mut self) -> Result<&mut A::CommandEncoder, DeviceError> {
+    pub(crate) fn open(&mut self) -> Result<&mut A::CommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
             let label = self.label.as_deref();
@@ -112,7 +112,7 @@ pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 pub struct CommandBufferMutable<A: HalApi> {
-    encoder: CommandEncoder<A>,
+    pub(crate) encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
@@ -174,6 +174,7 @@ impl<A: HalApi> CommandBuffer<A> {
                     .as_ref()
                     .unwrap_or(&String::from("<CommandBuffer>"))
                     .as_str(),
+                None,
             ),
             data: Mutex::new(Some(CommandBufferMutable {
                 encoder: CommandEncoder {

@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.70"
+rust-version = "1.74"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -42,8 +42,16 @@ vulkan = [
     "gpu-descriptor",
     "libloading",
     "smallvec",
+    "android_system_properties",
 ]
-gles = ["naga/glsl-out", "glow", "glutin_wgl_sys", "khronos-egl", "libloading"]
+gles = [
+    "naga/glsl-out",
+    "glow",
+    "glutin_wgl_sys",
+    "khronos-egl",
+    "libloading",
+    "ndk-sys",
+]
 dx12 = [
     "naga/hlsl-out",
     "d3d12",
@@ -63,6 +71,18 @@ dxc_shader_compiler = ["hassle-rs"]
 renderdoc = ["libloading", "renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
 link = ["metal/link"]
+# Panic when running into an out-of-memory error (for debugging purposes).
+#
+# Only affects the d3d12 and vulkan backends.
+oom_panic = []
+# Panic when running into a device lost error (for debugging purposes).
+# Only affects the d3d12 and vulkan backends.
+device_lost_panic = []
+# Panic when running into an internal error other than out-of-memory and device lost
+# (for debugging purposes).
+#
+# Only affects the d3d12 and vulkan backends.
+internal_error_panic = []
 
 [[example]]
 name = "halmark"
@@ -101,7 +121,7 @@ smallvec = { version = "1", optional = true, features = ["union"] }
 
 khronos-egl = { version = "6", features = ["dynamic"], optional = true }
 libloading = { version = ">=0.7, <0.9", optional = true }
-renderdoc-sys = { version = "1.0.0", optional = true }
+renderdoc-sys = { version = "1.1.0", optional = true }
 
 [target.'cfg(target_os = "emscripten")'.dependencies]
 khronos-egl = { version = "6", features = ["static", "no-pkg-config"] }
@@ -141,19 +161,20 @@ core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = "0.2.87"
-web-sys = { version = "0.3.67", features = [
+web-sys = { version = "0.3.69", features = [
     "Window",
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = "0.3.67"
+js-sys = "0.3.69"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [target.'cfg(target_os = "android")'.dependencies]
-android_system_properties = "0.1.1"
+android_system_properties = { version = "0.1.1", optional = true }
+ndk-sys = { version = "0.5.0", optional = true }
 
 [dependencies.naga]
 path = "../naga"
@@ -171,9 +192,9 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 cfg-if = "1"
-env_logger = "0.10"
+env_logger = "0.11"
 glam = "0.25.0" # for ray-traced-triangle example
-winit = { version = "0.29.10", features = [
+winit = { version = "0.29.14", features = [
     "android-native-activity",
 ] } # for "halmark" example
 

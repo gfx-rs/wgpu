@@ -147,9 +147,6 @@ pub enum WidthError {
         flag: &'static str,
     },
 
-    #[error("64-bit integers are not yet supported")]
-    Unsupported64Bit,
-
     #[error("Abstract types may only appear in constant expressions")]
     Abstract,
 }
@@ -251,11 +248,31 @@ impl super::Validator {
                     scalar.width == 4
                 }
             }
-            crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+            crate::ScalarKind::Sint => {
                 if scalar.width == 8 {
-                    return Err(WidthError::Unsupported64Bit);
+                    if !self.capabilities.contains(Capabilities::SHADER_INT64) {
+                        return Err(WidthError::MissingCapability {
+                            name: "i64",
+                            flag: "SHADER_INT64",
+                        });
+                    }
+                    true
+                } else {
+                    scalar.width == 4
                 }
-                scalar.width == 4
+            }
+            crate::ScalarKind::Uint => {
+                if scalar.width == 8 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT64) {
+                        return Err(WidthError::MissingCapability {
+                            name: "u64",
+                            flag: "SHADER_INT64",
+                        });
+                    }
+                    true
+                } else {
+                    scalar.width == 4
+                }
             }
             crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
                 return Err(WidthError::Abstract);
@@ -493,7 +510,6 @@ impl super::Validator {
                 ti.uniform_layout = Ok(Alignment::MIN_UNIFORM);
 
                 let mut min_offset = 0;
-
                 let mut prev_struct_data: Option<(u32, u32)> = None;
 
                 for (i, member) in members.iter().enumerate() {
@@ -645,6 +661,7 @@ impl super::Validator {
                     // Currently Naga only supports binding arrays of structs for non-handle types.
                     match gctx.types[base].inner {
                         crate::TypeInner::Struct { .. } => {}
+                        crate::TypeInner::Array { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
                 }

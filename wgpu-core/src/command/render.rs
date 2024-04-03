@@ -22,7 +22,7 @@ use crate::{
     hal_label, id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource::{Buffer, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
+    resource::{QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
     storage::Storage,
     track::{TextureSelector, Tracker, UsageConflict, UsageScope},
     validation::{
@@ -739,9 +739,9 @@ impl<A: HalApi> TextureView<A> {
 const MAX_TOTAL_ATTACHMENTS: usize = hal::MAX_COLOR_ATTACHMENTS + hal::MAX_COLOR_ATTACHMENTS + 1;
 type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 
-struct RenderPassInfo<'a, A: HalApi> {
+struct RenderPassInfo<'a, 'd, A: HalApi> {
     context: RenderPassContext,
-    usage_scope: UsageScope<A>,
+    usage_scope: UsageScope<'d, A>,
     /// All render attachments, including depth/stencil
     render_attachments: AttachmentDataVec<RenderAttachment<'a, A>>,
     is_depth_read_only: bool,
@@ -754,7 +754,7 @@ struct RenderPassInfo<'a, A: HalApi> {
     multiview: Option<NonZeroU32>,
 }
 
-impl<'a, A: HalApi> RenderPassInfo<'a, A> {
+impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
     fn add_pass_texture_init_actions<V>(
         channel: &PassChannel<V>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
@@ -790,7 +790,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     }
 
     fn start(
-        device: &Device<A>,
+        device: &'d Device<A>,
         label: Option<&str>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
@@ -801,8 +801,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         pending_query_resets: &mut QueryResetMap<A>,
         view_guard: &'a Storage<TextureView<A>>,
-        buffer_guard: &'a Storage<Buffer<A>>,
-        texture_guard: &'a Storage<Texture<A>>,
         query_set_guard: &'a Storage<QuerySet<A>>,
         snatch_guard: &SnatchGuard<'a>,
     ) -> Result<Self, RenderPassErrorInner> {
@@ -1216,7 +1214,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         Ok(Self {
             context,
-            usage_scope: UsageScope::new(buffer_guard, texture_guard),
+            usage_scope: device.new_usage_scope(),
             render_attachments,
             is_depth_read_only,
             is_stencil_read_only,
@@ -1232,7 +1230,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         snatch_guard: &SnatchGuard,
-    ) -> Result<(UsageScope<A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
+    ) -> Result<(UsageScope<'d, A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
         unsafe {
             raw.end_render_pass();
@@ -1388,7 +1386,6 @@ impl Global {
             let render_pipeline_guard = hub.render_pipelines.read();
             let query_set_guard = hub.query_sets.read();
             let buffer_guard = hub.buffers.read();
-            let texture_guard = hub.textures.read();
             let view_guard = hub.texture_views.read();
 
             log::trace!(
@@ -1408,24 +1405,21 @@ impl Global {
                 texture_memory_actions,
                 pending_query_resets,
                 &*view_guard,
-                &*buffer_guard,
-                &*texture_guard,
                 &*query_set_guard,
                 &snatch_guard,
             )
             .map_pass_err(pass_scope)?;
 
-            tracker.set_size(
-                Some(&*buffer_guard),
-                Some(&*texture_guard),
-                Some(&*view_guard),
-                None,
-                Some(&*bind_group_guard),
-                None,
-                Some(&*render_pipeline_guard),
-                Some(&*bundle_guard),
-                Some(&*query_set_guard),
-            );
+            let indices = &device.tracker_indices;
+            tracker.buffers.set_size(indices.buffers.size());
+            tracker.textures.set_size(indices.textures.size());
+            tracker.views.set_size(indices.texture_views.size());
+            tracker.bind_groups.set_size(indices.bind_groups.size());
+            tracker
+                .render_pipelines
+                .set_size(indices.render_pipelines.size());
+            tracker.bundles.set_size(indices.bundles.size());
+            tracker.query_sets.set_size(indices.query_sets.size());
 
             let raw = &mut encoder.raw;
 
@@ -1677,7 +1671,7 @@ impl Global {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
-                        check_buffer_usage(buffer.usage, BufferUsages::INDEX)
+                        check_buffer_usage(buffer_id, buffer.usage, BufferUsages::INDEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
@@ -1739,7 +1733,7 @@ impl Global {
                             .map_pass_err(scope);
                         }
 
-                        check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
+                        check_buffer_usage(buffer_id, buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
@@ -2036,8 +2030,12 @@ impl Global {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
-                        check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
-                            .map_pass_err(scope)?;
+                        check_buffer_usage(
+                            buffer_id,
+                            indirect_buffer.usage,
+                            BufferUsages::INDIRECT,
+                        )
+                        .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
                             .get(&snatch_guard)
@@ -2108,8 +2106,12 @@ impl Global {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
-                        check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
-                            .map_pass_err(scope)?;
+                        check_buffer_usage(
+                            buffer_id,
+                            indirect_buffer.usage,
+                            BufferUsages::INDIRECT,
+                        )
+                        .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
                             .get(&snatch_guard)
@@ -2125,7 +2127,7 @@ impl Global {
                                 hal::BufferUses::INDIRECT,
                             )
                             .map_pass_err(scope)?;
-                        check_buffer_usage(count_buffer.usage, BufferUsages::INDIRECT)
+                        check_buffer_usage(buffer_id, count_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let count_raw = count_buffer
                             .raw
@@ -2372,7 +2374,7 @@ impl Global {
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        unsafe { bundle.execute(raw) }
+                        unsafe { bundle.execute(raw, &snatch_guard) }
                             .map_err(|e| match e {
                                 ExecutionError::DestroyedBuffer(id) => {
                                     RenderCommandError::DestroyedBuffer(id)
@@ -2425,6 +2427,7 @@ impl Global {
                 transit,
                 &mut tracker.textures,
                 &cmd_buf.device,
+                &snatch_guard,
             );
 
             cmd_buf_data

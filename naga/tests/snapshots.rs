@@ -807,6 +807,10 @@ fn convert_wgsl() {
             "abstract-types-operators",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        (
+            "int64",
+            Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -886,6 +890,12 @@ fn convert_spv_all() {
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+    convert_spv(
+        "unnamed-gl-per-vertex",
+        true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
 }
 
 #[cfg(feature = "glsl-in")]

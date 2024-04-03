@@ -4,7 +4,7 @@ use hal::CommandEncoder as _;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    device::DeviceError,
+    device::{DeviceError, MissingFeatures},
     global::Global,
     hal_api::HalApi,
     id::{self, Id},
@@ -108,6 +108,8 @@ pub enum QueryError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+    #[error(transparent)]
+    MissingFeature(#[from] MissingFeatures),
     #[error("Error encountered while trying to use queries")]
     Use(#[from] QueryUseError),
     #[error("Error encountered while trying to resolve a query")]
@@ -355,6 +357,11 @@ impl Global {
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+
+        cmd_buf
+            .device
+            .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

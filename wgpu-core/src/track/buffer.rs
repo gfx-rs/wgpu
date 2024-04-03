@@ -7,7 +7,7 @@
 
 use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
-use super::{PendingTransition, ResourceTracker};
+use super::{PendingTransition, ResourceTracker, TrackerIndex};
 use crate::{
     hal_api::HalApi,
     id::BufferId,
@@ -64,16 +64,16 @@ impl<A: HalApi> BufferBindGroupState<A> {
     #[allow(clippy::pattern_type_mismatch)]
     pub(crate) fn optimize(&self) {
         let mut buffers = self.buffers.lock();
-        buffers.sort_unstable_by_key(|(b, _)| b.as_info().id().unzip().0);
+        buffers.sort_unstable_by_key(|(b, _)| b.as_info().tracker_index());
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
     #[allow(clippy::pattern_type_mismatch)]
-    pub fn used_ids(&self) -> impl Iterator<Item = BufferId> + '_ {
+    pub fn used_tracker_indices(&self) -> impl Iterator<Item = TrackerIndex> + '_ {
         let buffers = self.buffers.lock();
         buffers
             .iter()
-            .map(|(ref b, _)| b.as_info().id())
+            .map(|(ref b, _)| b.as_info().tracker_index())
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -108,22 +108,26 @@ impl<A: HalApi> BufferBindGroupState<A> {
 #[derive(Debug)]
 pub(crate) struct BufferUsageScope<A: HalApi> {
     state: Vec<BufferUses>,
-
     metadata: ResourceMetadata<Buffer<A>>,
 }
 
-impl<A: HalApi> BufferUsageScope<A> {
-    pub fn new() -> Self {
+impl<A: HalApi> Default for BufferUsageScope<A> {
+    fn default() -> Self {
         Self {
             state: Vec::new(),
-
             metadata: ResourceMetadata::new(),
         }
     }
+}
 
+impl<A: HalApi> BufferUsageScope<A> {
     fn tracker_assert_in_bounds(&self, index: usize) {
         strict_assert!(index < self.state.len());
         self.metadata.tracker_assert_in_bounds(index);
+    }
+    pub fn clear(&mut self) {
+        self.state.clear();
+        self.metadata.clear();
     }
 
     /// Sets the size of all the vectors inside the tracker.
@@ -149,20 +153,6 @@ impl<A: HalApi> BufferUsageScope<A> {
         resources.into_iter()
     }
 
-    pub fn get(&self, id: BufferId) -> Option<&Arc<Buffer<A>>> {
-        let index = id.unzip().0 as usize;
-        if index > self.metadata.size() {
-            return None;
-        }
-        self.tracker_assert_in_bounds(index);
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                return Some(self.metadata.get_resource_unchecked(index));
-            }
-        }
-        None
-    }
-
     /// Merge the list of buffer states in the given bind group into this usage scope.
     ///
     /// If any of the resulting states is invalid, stops the merge and returns a usage
@@ -181,7 +171,7 @@ impl<A: HalApi> BufferUsageScope<A> {
     ) -> Result<(), UsageConflict> {
         let buffers = bind_group.buffers.lock();
         for &(ref resource, state) in &*buffers {
-            let index = resource.as_info().id().unzip().0 as usize;
+            let index = resource.as_info().tracker_index().as_usize();
 
             unsafe {
                 insert_or_merge(
@@ -255,7 +245,7 @@ impl<A: HalApi> BufferUsageScope<A> {
             .get(id)
             .map_err(|_| UsageConflict::BufferInvalid { id })?;
 
-        let index = id.unzip().0 as usize;
+        let index = buffer.info.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -292,7 +282,7 @@ pub(crate) struct BufferTracker<A: HalApi> {
     temp: Vec<PendingTransition<BufferUses>>,
 }
 
-impl<A: HalApi> ResourceTracker<Buffer<A>> for BufferTracker<A> {
+impl<A: HalApi> ResourceTracker for BufferTracker<A> {
     /// Try to remove the buffer `id` from this tracker if it is otherwise unused.
     ///
     /// A buffer is 'otherwise unused' when the only references to it are:
@@ -313,8 +303,8 @@ impl<A: HalApi> ResourceTracker<Buffer<A>> for BufferTracker<A> {
     /// [`Device::trackers`]: crate::device::Device
     /// [`self.metadata`]: BufferTracker::metadata
     /// [`Hub::buffers`]: crate::hub::Hub::buffers
-    fn remove_abandoned(&mut self, id: BufferId) -> bool {
-        let index = id.unzip().0 as usize;
+    fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
+        let index = index.as_usize();
 
         if index > self.metadata.size() {
             return false;
@@ -329,16 +319,10 @@ impl<A: HalApi> ResourceTracker<Buffer<A>> for BufferTracker<A> {
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
                     self.metadata.remove(index);
-                    log::trace!("Buffer {:?} is not tracked anymore", id,);
                     return true;
-                } else {
-                    log::trace!(
-                        "Buffer {:?} is still referenced from {}",
-                        id,
-                        existing_ref_count
-                    );
-                    return false;
                 }
+
+                return false;
             }
         }
         true
@@ -404,8 +388,8 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, id: BufferId, resource: Arc<Buffer<A>>, state: BufferUses) {
-        let index = id.unzip().0 as usize;
+    pub fn insert_single(&mut self, resource: Arc<Buffer<A>>, state: BufferUses) {
+        let index = resource.info.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -440,7 +424,7 @@ impl<A: HalApi> BufferTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_single(&mut self, buffer: &Arc<Buffer<A>>, state: BufferUses) -> SetSingleResult<A> {
-        let index: usize = buffer.as_info().id().unzip().0 as usize;
+        let index: usize = buffer.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -561,16 +545,15 @@ impl<A: HalApi> BufferTracker<A> {
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut BufferUsageScope<A>,
-        id_source: impl IntoIterator<Item = BufferId>,
+        index_source: impl IntoIterator<Item = TrackerIndex>,
     ) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
             self.set_size(incoming_size);
         }
 
-        for id in id_source {
-            let (index32, _, _) = id.unzip();
-            let index = index32 as usize;
+        for index in index_source {
+            let index = index.as_usize();
 
             scope.tracker_assert_in_bounds(index);
 
@@ -599,8 +582,8 @@ impl<A: HalApi> BufferTracker<A> {
     }
 
     #[allow(dead_code)]
-    pub fn get(&self, id: BufferId) -> Option<&Arc<Buffer<A>>> {
-        let index = id.unzip().0 as usize;
+    pub fn get(&self, index: TrackerIndex) -> Option<&Arc<Buffer<A>>> {
+        let index = index.as_usize();
         if index > self.metadata.size() {
             return None;
         }
@@ -785,11 +768,7 @@ unsafe fn merge<A: HalApi>(
 
     if invalid_resource_state(merged_state) {
         return Err(UsageConflict::from_buffer(
-            BufferId::zip(
-                index32,
-                unsafe { metadata_provider.get_epoch(index) },
-                A::VARIANT,
-            ),
+            unsafe { metadata_provider.get_own(index).info.id() },
             *current_state,
             new_state,
         ));

@@ -87,7 +87,7 @@ impl ParseError {
 
     /// Returns a [`SourceLocation`] for the first label in the error message.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
-        self.labels.get(0).map(|label| label.0.location(source))
+        self.labels.first().map(|label| label.0.location(source))
     }
 }
 

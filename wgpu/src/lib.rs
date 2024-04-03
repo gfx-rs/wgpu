@@ -358,7 +358,7 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
-/// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
+/// be presented. A `Surface` may be created with the function [`Instance::create_surface`].
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
@@ -1788,7 +1788,7 @@ impl Instance {
             );
         }
 
-        #[cfg(all(webgpu, web_sys_unstable_apis))]
+        #[cfg(webgpu)]
         {
             let is_only_available_backend = !cfg!(wgpu_core);
             let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
@@ -1943,7 +1943,7 @@ impl Instance {
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
     /// See [`SurfaceTarget`] for what targets are supported.
-    /// See [`Instance::create_surface`] for surface creation with unsafe target variants.
+    /// See [`Instance::create_surface_unsafe`] for surface creation with unsafe target variants.
     ///
     /// Most commonly used are window handles (or provider of windows handles)
     /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
@@ -2703,6 +2703,12 @@ impl Device {
             Box::new(callback),
         )
     }
+
+    /// Test-only function to make this device invalid.
+    #[doc(hidden)]
+    pub fn make_invalid(&self) {
+        DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
+    }
 }
 
 impl Drop for Device {
@@ -3062,7 +3068,7 @@ impl<'a> BufferSlice<'a> {
     /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
     ///
     /// This is only available on WebGPU, on any other backends this will return `None`.
-    #[cfg(all(webgpu, web_sys_unstable_apis))]
+    #[cfg(webgpu)]
     pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
         self.buffer
             .context
@@ -3109,10 +3115,10 @@ impl Texture {
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         let texture = self.data.as_ref().downcast_ref().unwrap();
 
         if let Some(ctx) = self
@@ -3120,7 +3126,7 @@ impl Texture {
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.texture_as_hal::<A, F>(texture, hal_texture_callback) }
+            unsafe { ctx.texture_as_hal::<A, F, R>(texture, hal_texture_callback) }
         } else {
             hal_texture_callback(None)
         }
@@ -3400,7 +3406,7 @@ impl CommandEncoder {
     /// # Panics
     ///
     /// - Buffer does not have `COPY_DST` usage.
-    /// - Range it out of bounds
+    /// - Range is out of bounds
     pub fn clear_buffer(
         &mut self,
         buffer: &Buffer,
@@ -3464,9 +3470,39 @@ impl CommandEncoder {
             destination_offset,
         )
     }
+
+    /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
+    /// backend type argument does not match with this wgpu CommandEncoder
+    ///
+    /// This method will start the wgpu_core level command recording.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_command_encoder_callback: F,
+    ) -> Option<R> {
+        use core::id::CommandEncoderId;
+
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.command_encoder_as_hal_mut::<A, F, R>(
+                    CommandEncoderId::from(self.id.unwrap()),
+                    hal_command_encoder_callback,
+                )
+            })
+    }
 }
 
-/// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
+/// [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
     /// Issue a timestamp command at this point in the queue.
     /// The timestamp will be written to the specified query set, at the specified index.
@@ -3475,6 +3511,11 @@ impl CommandEncoder {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
+    ///
+    /// Attention: Since commands within a command recorder may be reordered,
+    /// there is no strict guarantee that timestamps are taken after all commands
+    /// recorded so far and all before all commands recorded after.
+    /// This may depend both on the backend and the driver.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::command_encoder_write_timestamp(
             &*self.context,
@@ -4232,7 +4273,7 @@ impl<'a> ComputePass<'a> {
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
 impl<'a> ComputePass<'a> {
-    /// Start a pipeline statistics query on this render pass. It can be ended with
+    /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
@@ -4245,7 +4286,7 @@ impl<'a> ComputePass<'a> {
         );
     }
 
-    /// End the pipeline statistics query on this render pass. It can be started with
+    /// End the pipeline statistics query on this compute pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
@@ -4772,11 +4813,11 @@ impl Surface<'_> {
         let caps = self.get_capabilities(adapter);
         Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: *caps.formats.get(0)?,
+            format: *caps.formats.first()?,
             width,
             height,
             desired_maximum_frame_latency: 2,
-            present_mode: *caps.present_modes.get(0)?,
+            present_mode: *caps.present_modes.first()?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
             view_formats: vec![],
         })
@@ -4926,7 +4967,7 @@ impl<T> Eq for Id<T> {}
 
 impl<T> PartialOrd for Id<T> {
     fn partial_cmp(&self, other: &Id<T>) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 
@@ -5009,6 +5050,34 @@ impl TextureView {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), PhantomData)
+    }
+
+    /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
+    /// backend type argument does not match with this wgpu Texture
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal TextureView must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        hal_texture_view_callback: F,
+    ) -> R {
+        use core::id::TextureViewId;
+
+        let texture_view_id = TextureViewId::from(self.id);
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe {
+                ctx.texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+            }
+        } else {
+            hal_texture_view_callback(None)
+        }
     }
 }
 

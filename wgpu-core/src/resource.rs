@@ -8,12 +8,14 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId},
-    identity::IdentityManager,
+    id::{
+        AdapterId, BufferId, CommandEncoderId, DeviceId, Id, Marker, SurfaceId, TextureId,
+        TextureViewId,
+    },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
-    track::TextureSelector,
+    track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
 };
@@ -58,7 +60,8 @@ use std::{
 #[derive(Debug)]
 pub struct ResourceInfo<T: Resource> {
     id: Option<Id<T::Marker>>,
-    identity: Option<Arc<IdentityManager<T::Marker>>>,
+    tracker_index: TrackerIndex,
+    tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -74,19 +77,26 @@ pub struct ResourceInfo<T: Resource> {
 
 impl<T: Resource> Drop for ResourceInfo<T> {
     fn drop(&mut self) {
-        if let Some(identity) = self.identity.as_ref() {
-            let id = self.id.as_ref().unwrap();
-            identity.free(*id);
+        if let Some(indices) = &self.tracker_indices {
+            indices.free(self.tracker_index);
         }
     }
 }
 
 impl<T: Resource> ResourceInfo<T> {
     #[allow(unused_variables)]
-    pub(crate) fn new(label: &str) -> Self {
+    pub(crate) fn new(
+        label: &str,
+        tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
+    ) -> Self {
+        let tracker_index = tracker_indices
+            .as_ref()
+            .map(|indices| indices.alloc())
+            .unwrap_or(TrackerIndex::INVALID);
         Self {
             id: None,
-            identity: None,
+            tracker_index,
+            tracker_indices,
             submission_index: AtomicUsize::new(0),
             label: label.to_string(),
         }
@@ -111,9 +121,13 @@ impl<T: Resource> ResourceInfo<T> {
         self.id.unwrap()
     }
 
-    pub(crate) fn set_id(&mut self, id: Id<T::Marker>, identity: &Arc<IdentityManager<T::Marker>>) {
+    pub(crate) fn tracker_index(&self) -> TrackerIndex {
+        debug_assert!(self.tracker_index != TrackerIndex::INVALID);
+        self.tracker_index
+    }
+
+    pub(crate) fn set_id(&mut self, id: Id<T::Marker>) {
         self.id = Some(id);
-        self.identity = Some(identity.clone());
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -551,6 +565,7 @@ impl<A: HalApi> Buffer<A> {
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
                 id: self.info.id.unwrap(),
+                tracker_index: self.info.tracker_index(),
                 label: self.info.label.clone(),
                 bind_groups,
             }))
@@ -611,6 +626,7 @@ pub struct DestroyedBuffer<A: HalApi> {
     device: Arc<Device<A>>,
     label: String,
     pub(crate) id: BufferId,
+    pub(crate) tracker_index: TrackerIndex,
     pub(crate) submission_index: u64,
     bind_groups: Vec<Weak<BindGroup<A>>>,
 }
@@ -885,6 +901,7 @@ impl<A: HalApi> Texture<A> {
                 views,
                 bind_groups,
                 device: Arc::clone(&self.device),
+                tracker_index: self.info.tracker_index(),
                 submission_index: self.info.submission_index(),
                 id: self.info.id.unwrap(),
                 label: self.info.label.clone(),
@@ -910,11 +927,11 @@ impl Global {
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
-    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         id: TextureId,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
@@ -923,7 +940,26 @@ impl Global {
         let snatch_guard = texture.device.snatchable_lock.read();
         let hal_texture = texture.raw(&snatch_guard);
 
-        hal_texture_callback(hal_texture);
+        hal_texture_callback(hal_texture)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw texture view handle must not be manually destroyed
+    pub unsafe fn texture_view_as_hal<A: HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        profiling::scope!("TextureView::as_hal");
+
+        let hub = A::hub(self);
+        let texture_view_opt = { hub.texture_views.try_get(id).ok().flatten() };
+        let texture_view = texture_view_opt.as_ref().unwrap();
+        let snatch_guard = texture_view.device.snatchable_lock.read();
+        let hal_texture_view = texture_view.raw(&snatch_guard);
+
+        hal_texture_view_callback(hal_texture_view)
     }
 
     /// # Safety
@@ -991,6 +1027,29 @@ impl Global {
 
         hal_surface_callback(hal_surface)
     }
+
+    /// # Safety
+    ///
+    /// - The raw command encoder handle must not be manually destroyed
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        profiling::scope!("CommandEncoder::as_hal");
+
+        let hub = A::hub(self);
+        let cmd_buf = hub.command_buffers.get(id.transmute()).unwrap();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let cmd_buf_raw = cmd_buf_data.encoder.open().ok();
+
+        hal_command_encoder_callback(cmd_buf_raw)
+    }
 }
 
 /// A texture that has been marked as destroyed and is staged for actual deletion soon.
@@ -1002,6 +1061,7 @@ pub struct DestroyedTexture<A: HalApi> {
     device: Arc<Device<A>>,
     label: String,
     pub(crate) id: TextureId,
+    pub(crate) tracker_index: TrackerIndex,
     pub(crate) submission_index: u64,
 }
 

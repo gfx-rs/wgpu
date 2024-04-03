@@ -124,6 +124,14 @@ pub fn get_scalar_type(word: &str) -> Option<Scalar> {
             kind: Sk::Uint,
             width: 4,
         }),
+        "i64" => Some(Scalar {
+            kind: Sk::Sint,
+            width: 8,
+        }),
+        "u64" => Some(Scalar {
+            kind: Sk::Uint,
+            width: 8,
+        }),
         "bool" => Some(Scalar {
             kind: Sk::Bool,
             width: crate::BOOL_WIDTH,

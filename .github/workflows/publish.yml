@@ -12,7 +12,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
-  RUSTFLAGS: --cfg=web_sys_unstable_apis
+  RUSTFLAGS:
 
 jobs:
   publish:

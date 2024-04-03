@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 
 use crate::{id::Id, resource::Resource, resource_log, storage::Storage, track::ResourceMetadata};
 
-use super::ResourceTracker;
+use super::{ResourceTracker, TrackerIndex};
 
 /// Satisfy clippy.
 type Pair<T> = (Id<<T as Resource>::Marker>, Arc<T>);
@@ -74,7 +74,7 @@ pub(crate) struct StatelessTracker<T: Resource> {
     metadata: ResourceMetadata<T>,
 }
 
-impl<T: Resource> ResourceTracker<T> for StatelessTracker<T> {
+impl<T: Resource> ResourceTracker for StatelessTracker<T> {
     /// Try to remove the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
@@ -82,14 +82,14 @@ impl<T: Resource> ResourceTracker<T> for StatelessTracker<T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    fn remove_abandoned(&mut self, id: Id<T::Marker>) -> bool {
-        let index = id.unzip().0 as usize;
+    fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
+        let index = index.as_usize();
 
         if index >= self.metadata.size() {
             return false;
         }
 
-        resource_log!("StatelessTracker::remove_abandoned {id:?}");
+        resource_log!("StatelessTracker::remove_abandoned {index:?}");
 
         self.tracker_assert_in_bounds(index);
 
@@ -100,17 +100,10 @@ impl<T: Resource> ResourceTracker<T> for StatelessTracker<T> {
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
                     self.metadata.remove(index);
-                    log::trace!("{} {:?} is not tracked anymore", T::TYPE, id,);
                     return true;
-                } else {
-                    log::trace!(
-                        "{} {:?} is still referenced from {}",
-                        T::TYPE,
-                        id,
-                        existing_ref_count
-                    );
-                    return false;
                 }
+
+                return false;
             }
         }
         true
@@ -160,9 +153,8 @@ impl<T: Resource> StatelessTracker<T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, id: Id<T::Marker>, resource: Arc<T>) {
-        let (index32, _epoch, _) = id.unzip();
-        let index = index32 as usize;
+    pub fn insert_single(&mut self, resource: Arc<T>) {
+        let index = resource.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -184,8 +176,7 @@ impl<T: Resource> StatelessTracker<T> {
     ) -> Option<&'a Arc<T>> {
         let resource = storage.get(id).ok()?;
 
-        let (index32, _epoch, _) = id.unzip();
-        let index = index32 as usize;
+        let index = resource.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -220,19 +211,5 @@ impl<T: Resource> StatelessTracker<T> {
                 }
             }
         }
-    }
-
-    pub fn get(&self, id: Id<T::Marker>) -> Option<&Arc<T>> {
-        let index = id.unzip().0 as usize;
-        if index > self.metadata.size() {
-            return None;
-        }
-        self.tracker_assert_in_bounds(index);
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                return Some(self.metadata.get_resource_unchecked(index));
-            }
-        }
-        None
     }
 }

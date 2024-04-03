@@ -9,7 +9,7 @@ keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 resolver = "2"
-rust-version = "1.70"
+rust-version = "1.74"
 autotests = false
 
 [[test]]
@@ -54,8 +54,8 @@ indexmap = { version = "2", features = ["std"] }
 log = "0.4"
 num-traits = "0.2"
 spirv = { version = "0.3", optional = true }
-thiserror = "1.0.56"
-serde = { version = "1.0.195", features = ["derive"], optional = true }
+thiserror = "1.0.57"
+serde = { version = "1.0.196", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
@@ -68,7 +68,7 @@ criterion = { version = "0.5", features = [] }
 [dev-dependencies]
 bincode = "1"
 diff = "0.1"
-env_logger = "0.10"
+env_logger = "0.11"
 # This _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
 # are allowed through though.

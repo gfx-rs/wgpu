@@ -70,7 +70,7 @@ pub enum ConfigureSurfaceError {
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
     ZeroArea,
-    #[error("`Surface` width and height must be within the maximum supported texture size. Requested was ({width}, {height}), maximum extent is {max_texture_dimension_2d}.")]
+    #[error("`Surface` width and height must be within the maximum supported texture size. Requested was ({width}, {height}), maximum extent for either dimension is {max_texture_dimension_2d}.")]
     TooLarge {
         width: u32,
         height: u32,
@@ -220,7 +220,10 @@ impl Global {
                         layers: 0..1,
                         mips: 0..1,
                     },
-                    info: ResourceInfo::new("<Surface>"),
+                    info: ResourceInfo::new(
+                        "<Surface Texture>",
+                        Some(device.tracker_indices.textures.clone()),
+                    ),
                     clear_mode: RwLock::new(resource::TextureClearMode::Surface {
                         clear_view: Some(clear_view),
                     }),
@@ -236,7 +239,7 @@ impl Global {
                     let mut trackers = device.trackers.lock();
                     trackers
                         .textures
-                        .insert_single(id, resource, hal::TextureUses::UNINITIALIZED);
+                        .insert_single(resource, hal::TextureUses::UNINITIALIZED);
                 }
 
                 if present.acquired_texture.is_some() {
@@ -294,8 +297,7 @@ impl Global {
         if !device.is_valid() {
             return Err(DeviceError::Lost.into());
         }
-        let queue_id = device.queue_id.read().unwrap();
-        let queue = hub.queues.get(queue_id).unwrap();
+        let queue = device.get_queue().unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
@@ -314,10 +316,13 @@ impl Global {
                 "Removing swapchain texture {:?} from the device tracker",
                 texture_id
             );
-            device.trackers.lock().textures.remove(texture_id);
-
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
+                device
+                    .trackers
+                    .lock()
+                    .textures
+                    .remove(texture.info.tracker_index());
                 let mut exclusive_snatch_guard = device.snatchable_lock.write();
                 let suf = A::get_surface(&surface);
                 let mut inner = texture.inner_mut(&mut exclusive_snatch_guard);
@@ -404,10 +409,15 @@ impl Global {
                 "Removing swapchain texture {:?} from the device tracker",
                 texture_id
             );
-            device.trackers.lock().textures.remove(texture_id);
 
             let texture = hub.textures.unregister(texture_id);
+
             if let Some(texture) = texture {
+                device
+                    .trackers
+                    .lock()
+                    .textures
+                    .remove(texture.info.tracker_index());
                 let suf = A::get_surface(&surface);
                 let exclusive_snatch_guard = device.snatchable_lock.write();
                 match texture.inner.snatch(exclusive_snatch_guard).unwrap() {

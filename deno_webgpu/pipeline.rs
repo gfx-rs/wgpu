@@ -1,4 +1,4 @@
-// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
 use deno_core::op2;
@@ -74,7 +74,7 @@ pub enum GPUPipelineLayoutOrGPUAutoLayoutMode {
 #[serde(rename_all = "camelCase")]
 pub struct GpuProgrammableStage {
     module: ResourceId,
-    entry_point: String,
+    entry_point: Option<String>,
     // constants: HashMap<String, GPUPipelineConstantValue>
 }
 
@@ -110,7 +110,7 @@ pub fn op_webgpu_create_compute_pipeline(
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
             module: compute_shader_module_resource.1,
-            entry_point: Cow::from(compute.entry_point),
+            entry_point: compute.entry_point.map(Cow::from),
             // TODO(lucacasonato): support args.compute.constants
         },
     };
@@ -355,7 +355,7 @@ pub fn op_webgpu_create_render_pipeline(
         Some(wgpu_core::pipeline::FragmentState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: fragment_shader_module_resource.1,
-                entry_point: Cow::from(fragment.entry_point),
+                entry_point: Some(Cow::from(fragment.entry_point)),
             },
             targets: Cow::from(fragment.targets),
         })
@@ -377,7 +377,7 @@ pub fn op_webgpu_create_render_pipeline(
         vertex: wgpu_core::pipeline::VertexState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: vertex_shader_module_resource.1,
-                entry_point: Cow::Owned(args.vertex.entry_point),
+                entry_point: Some(Cow::Owned(args.vertex.entry_point)),
             },
             buffers: Cow::Owned(vertex_buffers),
         },
