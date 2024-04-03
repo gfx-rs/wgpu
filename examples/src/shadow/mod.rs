@@ -708,7 +708,7 @@ impl crate::framework::Example for Example {
         for entity in self.entities.iter_mut() {
             if entity.rotation_speed != 0.0 {
                 let rotation =
-                    glam::Mat4::from_rotation_x(entity.rotation_speed * consts::PI / 180.);
+                    glam::Mat4::from_rotation_x(entity.rotation_speed * 60. * consts::PI / 180.);
                 entity.mx_world *= rotation;
             }
             let data = EntityUniforms {

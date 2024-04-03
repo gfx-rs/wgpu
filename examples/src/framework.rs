@@ -464,6 +464,22 @@ async fn start<E: Example>(title: &str) {
 
                         frame.present();
 
+                        // Copy-paste the above to send another frame in rapid succession.
+                        let frame = surface.acquire(&context);
+                        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                            format: Some(surface.config().view_formats[0]),
+                            ..wgpu::TextureViewDescriptor::default()
+                        });
+
+                        example
+                            .as_mut()
+                            .unwrap()
+                            .render(&view, &context.device, &context.queue);
+
+                        frame.present();
+
+                        // Create a delay to more easily observe the tearing.
+                        std::thread::sleep(std::time::Duration::from_secs(1));
                         window_loop.window.request_redraw();
                     }
                     _ => example.as_mut().unwrap().update(event),
