@@ -3041,8 +3041,10 @@ pub struct QueueWriteBuffer {
 }
 
 impl crate::context::QueueWriteBuffer for QueueWriteBuffer {
+    #[inline]
     fn slice(&self) -> &[u8] {
-        panic!()
+        use crate::context::BufferMappedRange;
+        self.mapping.slice()
     }
 
     #[inline]
