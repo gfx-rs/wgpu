@@ -775,10 +775,10 @@ impl<'a> Error<'a> {
                 ]
             },
             Error::ExceededLimitForNestedBraces { span, limit } => ParseError {
-                message: "brace nesting limit reached".into(),
-                labels: vec![(span, "limit reached at this brace".into())],
+                message: "Statements nested too deeply".into(),
+                labels: vec![(span, "nesting limit reached at this brace".into())],
                 notes: vec![
-                    format!("nesting limit is currently set to {limit}"),
+                    format!("The maximum nesting depth of brace-enclosed statements in a function is {limit}."),
                 ],
             },
         }
