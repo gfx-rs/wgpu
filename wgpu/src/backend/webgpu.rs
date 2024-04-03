@@ -480,6 +480,7 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x2 => vf::Sint32x2,
         VertexFormat::Sint32x3 => vf::Sint32x3,
         VertexFormat::Sint32x4 => vf::Sint32x4,
+        VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
