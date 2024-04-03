@@ -2518,7 +2518,6 @@ impl crate::context::Context for ContextWebGpu {
         // Not available in gecko yet
         // encoder.pop_debug_group();
     }
-    
     fn command_encoder_write_timestamp(
         &self,
         _encoder: &Self::CommandEncoderId,
