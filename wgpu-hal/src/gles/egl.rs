@@ -938,6 +938,7 @@ impl crate::Instance<super::Api> for Instance {
             srgb_kind: inner.srgb_kind,
         })
     }
+
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
@@ -953,6 +954,10 @@ impl crate::Instance<super::Api> for Instance {
                     .map_or(ptr::null(), |p| p as *const _)
             })
         };
+
+        if !matches!(inner.srgb_kind, SrgbFrameBufferKind::None) {
+            unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
+        }
 
         if self.flags.contains(wgt::InstanceFlags::DEBUG) && gl.supports_debug() {
             log::debug!("Max label length: {}", unsafe {
