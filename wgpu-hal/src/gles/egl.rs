@@ -496,7 +496,7 @@ impl Inner {
         }
 
         let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
-        egl.bind_api(khronos_egl::OPENGL_ES_API).unwrap();
+        egl.bind_api(khronos_egl::OPENGL_API).unwrap();
 
         let needs_robustness = true;
         let mut khr_context_flags = 0;
