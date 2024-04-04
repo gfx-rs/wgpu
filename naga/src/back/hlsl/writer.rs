@@ -1228,10 +1228,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 } else {
                     let stage = module.entry_points[ep_index as usize].stage;
-                    let mut arg_num = 0;
                     for (index, arg) in func.arguments.iter().enumerate() {
-                        arg_num += 1;
-
                         if index != 0 {
                             write!(self.out, ", ")?;
                         }
@@ -1249,7 +1246,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     if need_workgroup_variables_initialization {
-                        if arg_num > 0 {
+                        if !func.arguments.is_empty() {
                             write!(self.out, ", ")?;
                         }
                         write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
