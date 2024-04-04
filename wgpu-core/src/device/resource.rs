@@ -28,7 +28,10 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     storage::Storage,
-    track::{BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators},
+    track::{
+        BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope,
+        UsageScopePool,
+    },
     validation::{
         self, check_buffer_usage, check_texture_usage, validate_color_attachment_bytes_per_sample,
     },
@@ -97,6 +100,8 @@ pub struct Device<A: HalApi> {
     pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
+    // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
+    // `fence` lock to avoid deadlocks.
     pub(crate) fence: RwLock<Option<A::Fence>>,
     pub(crate) snatchable_lock: SnatchLock,
 
@@ -135,6 +140,7 @@ pub struct Device<A: HalApi> {
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
+    pub(crate) usage_scopes: UsageScopePool<A>,
 }
 
 pub(crate) enum DeferredDestroy<A: HalApi> {
@@ -296,6 +302,7 @@ impl<A: HalApi> Device<A> {
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
             deferred_destroy: Mutex::new(Vec::new()),
+            usage_scopes: Default::default(),
         })
     }
 
@@ -387,6 +394,7 @@ impl<A: HalApi> Device<A> {
         &'this self,
         fence: &A::Fence,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
+        snatch_guard: SnatchGuard,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
         let last_done_index = if maintain.is_wait() {
@@ -440,7 +448,8 @@ impl<A: HalApi> Device<A> {
             life_tracker.triage_mapped();
         }
 
-        let mapping_closures = life_tracker.handle_mapping(self.raw(), &self.trackers);
+        let mapping_closures =
+            life_tracker.handle_mapping(self.raw(), &self.trackers, &snatch_guard);
 
         let queue_empty = life_tracker.queue_empty();
 
@@ -467,8 +476,9 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        // Don't hold the lock while calling release_gpu_resources.
+        // Don't hold the locks while calling release_gpu_resources.
         drop(life_tracker);
+        drop(snatch_guard);
 
         if should_release_gpu_resource {
             self.release_gpu_resources();
@@ -3567,6 +3577,10 @@ impl<A: HalApi> Device<A> {
         for texture in trackers.textures.used_resources() {
             let _ = texture.destroy();
         }
+    }
+
+    pub(crate) fn new_usage_scope(&self) -> UsageScope<'_, A> {
+        UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
     }
 }
 

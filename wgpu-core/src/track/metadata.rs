@@ -39,6 +39,11 @@ impl<T: Resource> ResourceMetadata<T> {
         resize_bitvec(&mut self.owned, size);
     }
 
+    pub(super) fn clear(&mut self) {
+        self.resources.clear();
+        self.owned.clear();
+    }
+
     /// Ensures a given index is in bounds for all arrays and does
     /// sanity checks of the presence of a refcount.
     ///

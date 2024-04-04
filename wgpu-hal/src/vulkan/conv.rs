@@ -399,6 +399,7 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
         Vf::Float64x2 => vk::Format::R64G64_SFLOAT,
         Vf::Float64x3 => vk::Format::R64G64B64_SFLOAT,
         Vf::Float64x4 => vk::Format::R64G64B64A64_SFLOAT,
+        Vf::Unorm10_10_10_2 => vk::Format::A2B10G10R10_UNORM_PACK32,
     }
 }
 

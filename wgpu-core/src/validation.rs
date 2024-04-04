@@ -655,7 +655,8 @@ impl NumericType {
             | Vf::Unorm16x4
             | Vf::Snorm16x4
             | Vf::Float16x4
-            | Vf::Float32x4 => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
+            | Vf::Float32x4
+            | Vf::Unorm10_10_10_2 => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
             Vf::Float64 => (NumericDimension::Scalar, Scalar::F64),
             Vf::Float64x2 => (NumericDimension::Vector(Vs::Bi), Scalar::F64),
             Vf::Float64x3 => (NumericDimension::Vector(Vs::Tri), Scalar::F64),
