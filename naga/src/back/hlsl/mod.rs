@@ -195,14 +195,6 @@ pub struct Options {
     pub zero_initialize_workgroup_memory: bool,
 }
 
-#[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct PipelineOptions {
-    /// Pipeline constants.
-    pub constants: back::PipelineConstants,
-}
-
 impl Default for Options {
     fn default() -> Self {
         Options {
@@ -255,8 +247,8 @@ pub enum Error {
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]
     Custom(String),
-    #[error(transparent)]
-    PipelineConstant(#[from] Box<back::pipeline_constants::PipelineConstantError>),
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 #[derive(Default)]

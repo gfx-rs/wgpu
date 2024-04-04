@@ -1,7 +1,7 @@
 use super::{
     help::{WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess},
     storage::StoreValue,
-    BackendResult, Error, Options, PipelineOptions,
+    BackendResult, Error, Options,
 };
 use crate::{
     back,
@@ -167,16 +167,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         module_info: &valid::ModuleInfo,
-        pipeline_options: &PipelineOptions,
     ) -> Result<super::ReflectionInfo, Error> {
-        let (module, module_info) = back::pipeline_constants::process_overrides(
-            module,
-            module_info,
-            &pipeline_options.constants,
-        )
-        .map_err(Box::new)?;
-        let module = module.as_ref();
-        let module_info = module_info.as_ref();
+        if !module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
 
         self.reset(module);
 
@@ -2150,9 +2144,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     |writer, expr| writer.write_expr(module, expr, func_ctx),
                 )?;
             }
-            Expression::Override(_) => {
-                return Err(Error::Unimplemented("overrides are WIP".into()))
-            }
+            Expression::Override(_) => return Err(Error::Override),
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
             Expression::Binary {

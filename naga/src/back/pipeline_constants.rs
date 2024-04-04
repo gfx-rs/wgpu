@@ -36,7 +36,7 @@ pub enum PipelineConstantError {
 /// fully-evaluated expressions.
 ///
 /// [`global_expressions`]: Module::global_expressions
-pub(super) fn process_overrides<'a>(
+pub fn process_overrides<'a>(
     module: &'a Module,
     module_info: &'a ModuleInfo,
     pipeline_constants: &PipelineConstants,

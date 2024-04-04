@@ -734,7 +734,6 @@ impl super::Device {
                 let pipeline_options = naga::back::spv::PipelineOptions {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
-                    constants: stage.constants.to_owned(),
                 };
                 let needs_temp_options = !runtime_checks
                     || !binding_map.is_empty()
@@ -766,14 +765,17 @@ impl super::Device {
                 } else {
                     &self.naga_options
                 };
+
+                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    stage.constants,
+                )
+                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
+
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(
-                        &naga_shader.module,
-                        &naga_shader.info,
-                        options,
-                        Some(&pipeline_options),
-                    )
+                    naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
                 }
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv)?
