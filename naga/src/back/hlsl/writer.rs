@@ -581,8 +581,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     }
 
     /// Writes special interface structures for an entry point. The special structures have
-    /// all the fields flattened into them and sorted by binding. They are only needed for
-    /// VS outputs and FS inputs, so that these interfaces match.
+    /// all the fields flattened into them and sorted by binding. They are needed to emulate
+    /// subgroup built-ins and to make the interfaces between VS outputs and FS inputs match.
     fn write_ep_interface(
         &mut self,
         module: &Module,
