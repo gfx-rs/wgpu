@@ -457,7 +457,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     fn write_interface_struct(
         &mut self,
         module: &Module,
-        func: &crate::Function,
         shader_stage: (ShaderStage, Io),
         struct_name: String,
         mut members: Vec<EpStructMember>,
@@ -482,7 +481,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_semantic(&m.binding, Some(shader_stage))?;
             writeln!(self.out, ";")?;
         }
-        if func.arguments.iter().any(|arg| {
+        if members.iter().any(|arg| {
             matches!(
                 arg.binding,
                 Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
@@ -554,7 +553,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
-        self.write_interface_struct(module, func, (stage, Io::Input), struct_name, fake_members)
+        self.write_interface_struct(module, (stage, Io::Input), struct_name, fake_members)
     }
 
     /// Flatten all entry point results into a single struct.
@@ -563,7 +562,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     fn write_ep_output_struct(
         &mut self,
         module: &Module,
-        func: &crate::Function,
         result: &crate::FunctionResult,
         stage: ShaderStage,
         entry_point_name: &str,
@@ -591,7 +589,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             });
         }
 
-        self.write_interface_struct(module, func, (stage, Io::Output), struct_name, fake_members)
+        self.write_interface_struct(module, (stage, Io::Output), struct_name, fake_members)
     }
 
     /// Writes special interface structures for an entry point. The special structures have
@@ -618,7 +616,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             },
             output: match func.result {
                 Some(ref fr) if fr.binding.is_none() && stage == ShaderStage::Vertex => {
-                    Some(self.write_ep_output_struct(module, func, fr, stage, ep_name)?)
+                    Some(self.write_ep_output_struct(module, fr, stage, ep_name)?)
                 }
                 _ => None,
             },
