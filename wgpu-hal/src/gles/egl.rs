@@ -496,7 +496,24 @@ impl Inner {
         }
 
         let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
-        egl.bind_api(khronos_egl::OPENGL_API).unwrap();
+
+        let supports_opengl = if version >= (1, 4) {
+            let client_apis = egl
+                .query_string(Some(display), khronos_egl::CLIENT_APIS)
+                .unwrap()
+                .to_string_lossy();
+            client_apis
+                .split(' ')
+                .any(|client_api| client_api == "OpenGL")
+        } else {
+            false
+        };
+        egl.bind_api(if supports_opengl {
+            khronos_egl::OPENGL_API
+        } else {
+            khronos_egl::OPENGL_ES_API
+        })
+        .unwrap();
 
         let needs_robustness = true;
         let mut khr_context_flags = 0;
