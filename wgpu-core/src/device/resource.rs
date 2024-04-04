@@ -1536,6 +1536,10 @@ impl<A: HalApi> Device<A> {
             self.features
                 .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX),
         );
+        caps.set(
+            Caps::SUBGROUP_BARRIER,
+            self.features.intersects(wgt::Features::SUBGROUP_BARRIER),
+        );
 
         let debug_source =
             if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) && !source.is_empty() {

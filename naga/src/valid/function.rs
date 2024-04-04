@@ -754,9 +754,12 @@ impl super::Validator {
                 S::Barrier(barrier) => {
                     stages &= super::ShaderStages::COMPUTE;
                     if barrier.contains(crate::Barrier::SUB_GROUP) {
-                        if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
+                        if !self.capabilities.contains(
+                            super::Capabilities::SUBGROUP | super::Capabilities::SUBGROUP_BARRIER,
+                        ) {
                             return Err(FunctionError::MissingCapability(
-                                super::Capabilities::SUBGROUP,
+                                super::Capabilities::SUBGROUP
+                                    | super::Capabilities::SUBGROUP_BARRIER,
                             )
                             .with_span_static(span, "missing capability for this operation"));
                         }

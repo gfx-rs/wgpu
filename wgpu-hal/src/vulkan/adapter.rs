@@ -571,6 +571,7 @@ impl PhysicalDeviceFeatures {
                         .supported_stages
                         .contains(vk::ShaderStageFlags::VERTEX),
                 );
+                features.insert(F::SUBGROUP_BARRIER);
             }
         }
 

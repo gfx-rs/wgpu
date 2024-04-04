@@ -906,6 +906,14 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SUBGROUP_VERTEX = 1 << 57;
+        /// Allows shaders to use the subgroup barrier
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_BARRIER = 1 << 58;
     }
 }
 

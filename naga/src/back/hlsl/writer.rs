@@ -488,7 +488,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
             )
         }) {
-            writeln!(self.out, "{}uint __local_invocation_index : SV_GroupIndex;", back::INDENT)?;
+            writeln!(
+                self.out,
+                "{}uint __local_invocation_index : SV_GroupIndex;",
+                back::INDENT
+            )?;
         }
         writeln!(self.out, "}};")?;
         writeln!(self.out)?;
@@ -640,7 +644,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ep.workgroup_size[0] * ep.workgroup_size[1] * ep.workgroup_size[2]
             )?,
             Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId)) => {
-                write!(self.out, "{}.__local_invocation_index / WaveGetLaneCount()", ep_input.arg_name)?;
+                write!(
+                    self.out,
+                    "{}.__local_invocation_index / WaveGetLaneCount()",
+                    ep_input.arg_name
+                )?;
             }
             _ => {
                 write!(self.out, "{}.{}", ep_input.arg_name, fake_member.name)?;

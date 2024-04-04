@@ -110,8 +110,10 @@ bitflags::bitflags! {
         const CUBE_ARRAY_TEXTURES = 0x4000;
         /// Support for 64-bit signed and unsigned integers.
         const SHADER_INT64 = 0x8000;
-        /// Support for subgroup operations
+        /// Support for subgroup operations.
         const SUBGROUP = 0x10000;
+        /// Support for subgroup barriers.
+        const SUBGROUP_BARRIER = 0x20000;
     }
 }
 
