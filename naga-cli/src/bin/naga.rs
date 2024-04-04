@@ -597,17 +597,18 @@ fn write_output(
             let mut options = params.msl.clone();
             options.bounds_check_policies = params.bounds_check_policies;
 
+            let info = info.as_ref().ok_or(CliError(
+                "Generating metal output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let pipeline_options = msl::PipelineOptions::default();
-            let (msl, _) = msl::write_string(
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating metal output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
-                &options,
-                &pipeline_options,
-            )
-            .unwrap_pretty();
+            let (msl, _) =
+                msl::write_string(&module, &info, &options, &pipeline_options).unwrap_pretty();
             fs::write(output_path, msl)?;
         }
         "spv" => {
@@ -624,23 +625,23 @@ fn write_output(
                     pipeline_options_owned = spv::PipelineOptions {
                         entry_point: name.clone(),
                         shader_stage: module.entry_points[ep_index].stage,
-                        constants: naga::back::PipelineConstants::default(),
                     };
                     Some(&pipeline_options_owned)
                 }
                 None => None,
             };
 
-            let spv = spv::write_vec(
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating SPIR-V output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
-                &params.spv_out,
-                pipeline_options,
-            )
-            .unwrap_pretty();
+            let info = info.as_ref().ok_or(CliError(
+                "Generating SPIR-V output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
+            let spv =
+                spv::write_vec(&module, &info, &params.spv_out, pipeline_options).unwrap_pretty();
             let bytes = spv
                 .iter()
                 .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -665,17 +666,22 @@ fn write_output(
                     _ => unreachable!(),
                 },
                 multiview: None,
-                constants: naga::back::PipelineConstants::default(),
             };
+
+            let info = info.as_ref().ok_or(CliError(
+                "Generating glsl output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
 
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
                 &mut buffer,
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating glsl output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
+                &module,
+                &info,
                 &params.glsl,
                 &pipeline_options,
                 params.bounds_check_policies,
@@ -692,20 +698,19 @@ fn write_output(
         }
         "hlsl" => {
             use naga::back::hlsl;
+
+            let info = info.as_ref().ok_or(CliError(
+                "Generating hlsl output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let mut buffer = String::new();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-            writer
-                .write(
-                    module,
-                    info.as_ref().ok_or(CliError(
-                        "Generating hlsl output requires validation to \
-                         succeed, and it failed in a previous step",
-                    ))?,
-                    &hlsl::PipelineOptions {
-                        constants: params.overrides.clone(),
-                    },
-                )
-                .unwrap_pretty();
+            writer.write(&module, &info).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {

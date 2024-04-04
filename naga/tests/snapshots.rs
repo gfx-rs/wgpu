@@ -349,19 +349,14 @@ fn check_targets(
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     {
         if targets.contains(Targets::METAL) {
-            if !params.msl_pipeline.constants.is_empty() {
-                panic!("Supply pipeline constants via pipeline_constants instead of msl_pipeline.constants!");
-            }
-            let mut pipeline_options = params.msl_pipeline.clone();
-            pipeline_options.constants = params.pipeline_constants.clone();
-
             write_output_msl(
                 input,
                 module,
                 &info,
                 &params.msl,
-                &pipeline_options,
+                &params.msl_pipeline,
                 params.bounds_check_policies,
+                &params.pipeline_constants,
             );
         }
     }
@@ -449,25 +444,27 @@ fn write_output_spv(
         debug_info,
     };
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     if params.separate_entry_points {
         for ep in module.entry_points.iter() {
             let pipeline_options = spv::PipelineOptions {
                 entry_point: ep.name.clone(),
                 shader_stage: ep.stage,
-                constants: pipeline_constants.clone(),
             };
             write_output_spv_inner(
                 input,
-                module,
-                info,
+                &module,
+                &info,
                 &options,
                 Some(&pipeline_options),
                 &format!("{}.spvasm", ep.name),
             );
         }
     } else {
-        assert!(pipeline_constants.is_empty());
-        write_output_spv_inner(input, module, info, &options, None, "spvasm");
+        write_output_spv_inner(input, &module, &info, &options, None, "spvasm");
     }
 }
 
@@ -505,14 +502,19 @@ fn write_output_msl(
     options: &naga::back::msl::Options,
     pipeline_options: &naga::back::msl::PipelineOptions,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::msl;
 
     println!("generating MSL");
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
-    let (string, tr_info) = msl::write_string(module, info, &options, pipeline_options)
+    let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
@@ -545,14 +547,16 @@ fn write_output_glsl(
         shader_stage: stage,
         entry_point: ep_name.to_string(),
         multiview,
-        constants: pipeline_constants.clone(),
     };
 
     let mut buffer = String::new();
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
-        module,
-        info,
+        &module,
+        &info,
         options,
         &pipeline_options,
         bounds_check_policies,
@@ -577,17 +581,13 @@ fn write_output_hlsl(
 
     println!("generating HLSL");
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
-    let reflection_info = writer
-        .write(
-            module,
-            info,
-            &hlsl::PipelineOptions {
-                constants: pipeline_constants.clone(),
-            },
-        )
-        .expect("HLSL write failed");
+    let reflection_info = writer.write(&module, &info).expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer);
 
@@ -852,7 +852,12 @@ fn convert_wgsl() {
         ),
         (
             "overrides",
-            Targets::IR | Targets::ANALYSIS | Targets::SPIRV | Targets::METAL | Targets::HLSL,
+            Targets::IR
+                | Targets::ANALYSIS
+                | Targets::SPIRV
+                | Targets::METAL
+                | Targets::HLSL
+                | Targets::GLSL,
         ),
         (
             "overrides-atomicCompareExchangeWeak",
