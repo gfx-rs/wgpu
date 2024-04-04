@@ -1170,6 +1170,20 @@ impl Global {
         }
     }
 
+    /// Create a shader module with the given `source`.
+    ///
+    /// <div class="warning">
+    // NOTE: Keep this in sync with `naga::front::wgsl::parse_str`!
+    // NOTE: Keep this in sync with `wgpu::Device::create_shader_module`!
+    ///
+    /// This function may consume a lot of stack space. Compiler-enforced limits for parsing
+    /// recursion exist; if shader compilation runs into them, it will return an error gracefully.
+    /// However, on some build profiles and platforms, the default stack size for a thread may be
+    /// exceeded before this limit is reached during parsing. Callers should ensure that there is
+    /// enough stack space for this, particularly if calls to this method are exposed to user
+    /// input.
+    ///
+    /// </div>
     pub fn device_create_shader_module<A: HalApi>(
         &self,
         device_id: DeviceId,
@@ -2019,7 +2033,7 @@ impl Global {
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                match device.maintain(fence, wgt::Maintain::Wait, &snatch_guard) {
+                match device.maintain(fence, wgt::Maintain::Wait, snatch_guard) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -2132,7 +2146,7 @@ impl Global {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
         let fence = fence.as_ref().unwrap();
-        let (closures, queue_empty) = device.maintain(fence, maintain, &snatch_guard)?;
+        let (closures, queue_empty) = device.maintain(fence, maintain, snatch_guard)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.

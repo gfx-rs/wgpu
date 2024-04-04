@@ -84,7 +84,7 @@ impl<A: HalApi> CommandEncoder<A> {
         }
     }
 
-    fn open(&mut self) -> Result<&mut A::CommandEncoder, DeviceError> {
+    pub(crate) fn open(&mut self) -> Result<&mut A::CommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
             let label = self.label.as_deref();

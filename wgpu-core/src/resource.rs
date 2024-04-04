@@ -8,7 +8,10 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId},
+    id::{
+        AdapterId, BufferId, CommandEncoderId, DeviceId, Id, Marker, SurfaceId, TextureId,
+        TextureViewId,
+    },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
@@ -924,11 +927,11 @@ impl Global {
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
-    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         id: TextureId,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
@@ -937,7 +940,26 @@ impl Global {
         let snatch_guard = texture.device.snatchable_lock.read();
         let hal_texture = texture.raw(&snatch_guard);
 
-        hal_texture_callback(hal_texture);
+        hal_texture_callback(hal_texture)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw texture view handle must not be manually destroyed
+    pub unsafe fn texture_view_as_hal<A: HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        profiling::scope!("TextureView::as_hal");
+
+        let hub = A::hub(self);
+        let texture_view_opt = { hub.texture_views.try_get(id).ok().flatten() };
+        let texture_view = texture_view_opt.as_ref().unwrap();
+        let snatch_guard = texture_view.device.snatchable_lock.read();
+        let hal_texture_view = texture_view.raw(&snatch_guard);
+
+        hal_texture_view_callback(hal_texture_view)
     }
 
     /// # Safety
@@ -1004,6 +1026,29 @@ impl Global {
         let hal_surface = surface.as_ref().and_then(|surface| A::get_surface(surface));
 
         hal_surface_callback(hal_surface)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw command encoder handle must not be manually destroyed
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        profiling::scope!("CommandEncoder::as_hal");
+
+        let hub = A::hub(self);
+        let cmd_buf = hub.command_buffers.get(id.transmute()).unwrap();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let cmd_buf_raw = cmd_buf_data.encoder.open().ok();
+
+        hal_command_encoder_callback(cmd_buf_raw)
     }
 }
 

@@ -22,8 +22,11 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
-use wgc::device::DeviceLostClosure;
+use wgc::{
+    command::{bundle_ffi::*, compute_ffi::*, render_ffi::*},
+    device::DeviceLostClosure,
+    id::{CommandEncoderId, TextureViewId},
+};
 use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
@@ -207,14 +210,51 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn texture_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Texture>) -> R,
+        R,
+    >(
         &self,
         texture: &Texture,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         unsafe {
             self.0
-                .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+                .texture_as_hal::<A, F, R>(texture.id, hal_texture_callback)
+        }
+    }
+
+    pub unsafe fn texture_view_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::TextureView>) -> R,
+        R,
+    >(
+        &self,
+        texture_view_id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        unsafe {
+            self.0
+                .texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+        }
+    }
+
+    /// This method will start the wgpu_core level command recording.
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        unsafe {
+            self.0.command_encoder_as_hal_mut::<A, F, R>(
+                command_encoder_id,
+                hal_command_encoder_callback,
+            )
         }
     }
 
