@@ -273,7 +273,9 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+impl crate::Device for super::Device {
+    type A = super::Api;
+
     unsafe fn exit(self, _queue: super::Queue) {}
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
@@ -706,7 +708,16 @@ impl crate::Device<super::Api> for super::Device {
         for (&stage, counter) in super::NAGA_STAGES.iter().zip(bg.counters.iter_mut()) {
             let stage_bit = map_naga_stage(stage);
             let mut dynamic_offsets_count = 0u32;
-            for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+            let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+                let layout = desc
+                    .layout
+                    .entries
+                    .iter()
+                    .find(|layout_entry| layout_entry.binding == entry.binding)
+                    .expect("internal error: no layout entry found with binding slot");
+                (entry, layout)
+            });
+            for (entry, layout) in layout_and_entry_iter {
                 let size = layout.count.map_or(1, |c| c.get());
                 if let wgt::BindingType::Buffer {
                     has_dynamic_offset: true,

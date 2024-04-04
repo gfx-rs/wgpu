@@ -480,6 +480,7 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x2 => vf::Sint32x2,
         VertexFormat::Sint32x3 => vf::Sint32x3,
         VertexFormat::Sint32x4 => vf::Sint32x4,
+        VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
@@ -1578,10 +1579,10 @@ impl crate::context::Context for ContextWebGpu {
                                 webgpu_sys::GpuStorageTextureAccess::WriteOnly
                             }
                             wgt::StorageTextureAccess::ReadOnly => {
-                                panic!("ReadOnly is not available")
+                                webgpu_sys::GpuStorageTextureAccess::ReadOnly
                             }
                             wgt::StorageTextureAccess::ReadWrite => {
-                                panic!("ReadWrite is not available")
+                                webgpu_sys::GpuStorageTextureAccess::ReadWrite
                             }
                         };
                         let mut storage_texture = webgpu_sys::GpuStorageTextureBindingLayout::new(
@@ -1948,6 +1949,11 @@ impl crate::context::Context for ContextWebGpu {
         create_identified(device_data.0.create_render_bundle_encoder(&mapped_desc))
     }
 
+    #[doc(hidden)]
+    fn device_make_invalid(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        // Unimplemented
+    }
+
     fn device_drop(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         // Device is dropped automatically
     }
@@ -1974,10 +1980,23 @@ impl crate::context::Context for ContextWebGpu {
     fn device_set_device_lost_callback(
         &self,
         _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
-        _device_lost_callback: crate::context::DeviceLostCallback,
+        device_data: &Self::DeviceData,
+        device_lost_callback: crate::context::DeviceLostCallback,
     ) {
-        unimplemented!();
+        use webgpu_sys::{GpuDeviceLostInfo, GpuDeviceLostReason};
+
+        let closure = Closure::once(move |info: JsValue| {
+            let info = info.dyn_into::<GpuDeviceLostInfo>().unwrap();
+            device_lost_callback(
+                match info.reason() {
+                    GpuDeviceLostReason::Destroyed => crate::DeviceLostReason::Destroyed,
+                    GpuDeviceLostReason::Unknown => crate::DeviceLostReason::Unknown,
+                    _ => crate::DeviceLostReason::Unknown,
+                },
+                info.message(),
+            );
+        });
+        let _ = device_data.0.lost().then(&closure);
     }
 
     fn device_poll(

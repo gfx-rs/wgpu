@@ -639,7 +639,9 @@ impl SwapChain {
     }
 }
 
-impl crate::Surface<Api> for Surface {
+impl crate::Surface for Surface {
+    type A = Api;
+
     unsafe fn configure(
         &self,
         device: &Device,
@@ -884,7 +886,9 @@ impl crate::Surface<Api> for Surface {
     }
 }
 
-impl crate::Queue<Api> for Queue {
+impl crate::Queue for Queue {
+    type A = Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],

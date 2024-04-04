@@ -99,6 +99,7 @@ use crate::{
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{Buffer, Resource, ResourceInfo, ResourceType},
     resource_log,
+    snatch::SnatchGuard,
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers,
@@ -165,7 +166,7 @@ fn validate_indexed_draw<A: HalApi>(
 ) -> Result<(), DrawError> {
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = index_state.limit();
-    if last_index <= index_limit {
+    if last_index > index_limit {
         return Err(DrawError::IndexBeyondLimit {
             last_index,
             index_limit,
@@ -894,7 +895,11 @@ impl<A: HalApi> RenderBundle<A> {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(super) unsafe fn execute(&self, raw: &mut A::CommandEncoder) -> Result<(), ExecutionError> {
+    pub(super) unsafe fn execute(
+        &self,
+        raw: &mut A::CommandEncoder,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout = None::<Arc<PipelineLayout<A>>>;
         if !self.discard_hal_labels {
@@ -902,8 +907,6 @@ impl<A: HalApi> RenderBundle<A> {
                 unsafe { raw.begin_debug_marker(label) };
             }
         }
-
-        let snatch_guard = self.device.snatchable_lock.read();
 
         use ArcRenderCommand as Cmd;
         for command in self.base.commands.iter() {
@@ -914,7 +917,7 @@ impl<A: HalApi> RenderBundle<A> {
                     bind_group,
                 } => {
                     let raw_bg = bind_group
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::InvalidBindGroup(bind_group.info.id()))?;
                     unsafe {
                         raw.set_bind_group(
@@ -938,7 +941,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffer: &A::Buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     let bb = hal::BufferBinding {
                         buffer,
@@ -954,7 +957,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     let bb = hal::BufferBinding {
                         buffer,
@@ -1041,7 +1044,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: false,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     unsafe { raw.draw_indirect(buffer, *offset, 1) };
                 }
@@ -1052,7 +1055,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: true,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     unsafe { raw.draw_indexed_indirect(buffer, *offset, 1) };
                 }
