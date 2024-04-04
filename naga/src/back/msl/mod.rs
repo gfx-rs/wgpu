@@ -143,8 +143,8 @@ pub enum Error {
     UnsupportedArrayOfType(Handle<crate::Type>),
     #[error("ray tracing is not supported prior to MSL 2.3")]
     UnsupportedRayTracing,
-    #[error(transparent)]
-    PipelineConstant(#[from] Box<crate::back::pipeline_constants::PipelineConstantError>),
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -234,8 +234,6 @@ pub struct PipelineOptions {
     ///
     /// Enable this for vertex shaders with point primitive topologies.
     pub allow_and_force_point_size: bool,
-    /// Pipeline constants.
-    pub constants: crate::back::PipelineConstants,
 }
 
 impl Options {

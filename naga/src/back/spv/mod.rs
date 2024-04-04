@@ -70,8 +70,8 @@ pub enum Error {
     FeatureNotImplemented(&'static str),
     #[error("module is not validated properly: {0}")]
     Validation(&'static str),
-    #[error(transparent)]
-    PipelineConstant(#[from] Box<crate::back::pipeline_constants::PipelineConstantError>),
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 #[derive(Default)]
@@ -773,8 +773,6 @@ pub struct PipelineOptions {
     ///
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
-    /// Pipeline constants.
-    pub constants: crate::back::PipelineConstants,
 }
 
 pub fn write_vec(

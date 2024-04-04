@@ -22,7 +22,7 @@ pub mod wgsl;
     feature = "spv-out",
     feature = "glsl-out"
 ))]
-mod pipeline_constants;
+pub mod pipeline_constants;
 
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
