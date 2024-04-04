@@ -183,7 +183,7 @@ impl crate::BuiltIn {
             Self::SubgroupSize
             | Self::SubgroupInvocationId
             | Self::NumSubgroups
-            | Self::SubgroupId => return Err(Error::Unimplemented(format!("builtin {self:?}"))),
+            | Self::SubgroupId => unreachable!(),
             Self::BaseInstance | Self::BaseVertex | Self::WorkGroupSize => {
                 return Err(Error::Unimplemented(format!("builtin {self:?}")))
             }
