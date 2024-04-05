@@ -88,6 +88,8 @@ impl super::Device {
                 metal::MTLLanguageVersion::V2_2 => (2, 2),
                 metal::MTLLanguageVersion::V2_3 => (2, 3),
                 metal::MTLLanguageVersion::V2_4 => (2, 4),
+                metal::MTLLanguageVersion::V3_0 => (3, 0),
+                metal::MTLLanguageVersion::V3_1 => (3, 1),
             },
             inline_samplers: Default::default(),
             spirv_cross_compatibility: false,
