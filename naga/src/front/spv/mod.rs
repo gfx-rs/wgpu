@@ -3703,7 +3703,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         .ok()
                         .filter(|predicate_const| {
                             matches!(
-                                ctx.gctx().const_expressions
+                                ctx.gctx().global_expressions
                                     [ctx.gctx().constants[predicate_const.handle].init],
                                 crate::Expression::Literal(crate::Literal::Bool(true))
                             )
