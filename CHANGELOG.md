@@ -117,6 +117,8 @@ Bottom level categories:
   - Added `wgpu::TextureView::as_hal`
   - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
 
+- Added support for pipeline-overridable constants. By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
+
 #### GLES
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
