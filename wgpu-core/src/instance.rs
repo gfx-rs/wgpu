@@ -525,6 +525,7 @@ impl Global {
             raw: hal_surface,
         };
 
+        #[allow(clippy::arc_with_non_send_sync)]
         let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
