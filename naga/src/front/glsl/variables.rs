@@ -472,7 +472,6 @@ impl Frontend {
 
                 let constant = Constant {
                     name: name.clone(),
-                    r#override: crate::Override::None,
                     ty,
                     init,
                 };

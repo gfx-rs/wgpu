@@ -122,6 +122,7 @@ impl<T> Handle<T> {
     serde(transparent)
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct Range<T> {
     inner: ops::Range<u32>,
     #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
@@ -140,6 +141,7 @@ impl<T> Range<T> {
 
 // NOTE: Keep this diagnostic in sync with that of [`BadHandle`].
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 #[error("Handle range {range:?} of {kind} is either not present, or inaccessible yet")]
 pub struct BadRangeError {
     // This error is used for many `Handle` types, but there's no point in making this generic, so
@@ -239,7 +241,7 @@ impl<T> Range<T> {
 /// Adding new items to the arena produces a strongly-typed [`Handle`].
 /// The arena can be indexed using the given handle to obtain
 /// a reference to the stored item.
-#[cfg_attr(feature = "clone", derive(Clone))]
+#[derive(Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialize", serde(transparent))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -295,6 +297,17 @@ impl<T> Arena<T> {
             .iter()
             .enumerate()
             .map(|(i, v)| unsafe { (Handle::from_usize_unchecked(i), v) })
+    }
+
+    /// Drains the arena, returning an iterator over the items stored.
+    pub fn drain(&mut self) -> impl DoubleEndedIterator<Item = (Handle<T>, T, Span)> {
+        let arena = std::mem::take(self);
+        arena
+            .data
+            .into_iter()
+            .zip(arena.span_info)
+            .enumerate()
+            .map(|(i, (v, span))| unsafe { (Handle::from_usize_unchecked(i), v, span) })
     }
 
     /// Returns a iterator over the items stored in this arena,
@@ -531,7 +544,7 @@ mod tests {
 ///
 /// `UniqueArena` is similar to [`Arena`]: If `Arena` is vector-like,
 /// `UniqueArena` is `HashSet`-like.
-#[cfg_attr(feature = "clone", derive(Clone))]
+#[derive(Clone)]
 pub struct UniqueArena<T> {
     set: FastIndexSet<T>,
 

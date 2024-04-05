@@ -282,7 +282,7 @@ impl Default for Options {
 }
 
 /// A subset of options meant to be changed per pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
@@ -497,6 +497,8 @@ pub enum Error {
     ImageMultipleSamplers,
     #[error("{0}")]
     Custom(String),
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 /// Binary operation with a different logic on the GLSL side.
@@ -565,6 +567,10 @@ impl<'a, W: Write> Writer<'a, W> {
         pipeline_options: &'a PipelineOptions,
         policies: proc::BoundsCheckPolicies,
     ) -> Result<Self, Error> {
+        if !module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
+
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -2402,7 +2408,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_const_expr(&mut self, expr: Handle<crate::Expression>) -> BackendResult {
         self.write_possibly_const_expr(
             expr,
-            &self.module.const_expressions,
+            &self.module.global_expressions,
             |expr| &self.info[expr],
             |writer, expr| writer.write_const_expr(expr),
         )
@@ -2536,6 +2542,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     |writer, expr| writer.write_expr(expr, ctx),
                 )?;
             }
+            Expression::Override(_) => return Err(Error::Override),
             // `Access` is applied to arrays, vectors and matrices and is written as indexing
             Expression::Access { base, index } => {
                 self.write_expr(base, ctx)?;

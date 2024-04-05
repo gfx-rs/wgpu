@@ -1,0 +1,43 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 31
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %18 "main"
+OpExecutionMode %18 LocalSize 1 1 1
+%2 = OpTypeVoid
+%3 = OpTypeBool
+%4 = OpTypeFloat 32
+%5 = OpConstantTrue  %3
+%6 = OpConstant  %4  2.3
+%7 = OpConstant  %4  0.0
+%8 = OpConstantFalse  %3
+%9 = OpConstant  %4  1.1
+%10 = OpConstant  %4  2.0
+%11 = OpConstant  %4  4.6
+%12 = OpConstant  %4  2.718
+%13 = OpConstant  %4  10.0
+%14 = OpConstant  %4  11.0
+%16 = OpTypePointer Private %4
+%15 = OpVariable  %16  Private %14
+%19 = OpTypeFunction %2
+%20 = OpConstant  %4  23.0
+%22 = OpTypePointer Function %4
+%24 = OpTypePointer Function %3
+%25 = OpConstantNull  %3
+%27 = OpConstantNull  %4
+%18 = OpFunction  %2  None %19
+%17 = OpLabel
+%21 = OpVariable  %22  Function %20
+%23 = OpVariable  %24  Function %25
+%26 = OpVariable  %22  Function %27
+OpBranch %28
+%28 = OpLabel
+OpStore %23 %5
+%29 = OpLoad  %4  %15
+%30 = OpFMul  %4  %29 %13
+OpStore %26 %30
+OpReturn
+OpFunctionEnd
