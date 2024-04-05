@@ -587,7 +587,7 @@ impl Global {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         id
     }
 
@@ -616,7 +616,7 @@ impl Global {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         id
     }
 
@@ -647,7 +647,7 @@ impl Global {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         id
     }
 
