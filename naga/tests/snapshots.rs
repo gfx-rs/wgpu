@@ -87,6 +87,17 @@ struct Parameters {
     #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
     #[serde(default)]
     glsl_multiview: Option<std::num::NonZeroU32>,
+    #[cfg(all(
+        feature = "deserialize",
+        any(
+            feature = "hlsl-out",
+            feature = "msl-out",
+            feature = "spv-out",
+            feature = "glsl-out"
+        )
+    ))]
+    #[serde(default)]
+    pipeline_constants: naga::back::PipelineConstants,
 }
 
 /// Information about a shader input file.
@@ -343,6 +354,7 @@ fn check_targets(
                 debug_info,
                 &params.spv,
                 params.bounds_check_policies,
+                &params.pipeline_constants,
             );
         }
     }
@@ -356,6 +368,7 @@ fn check_targets(
                 &params.msl,
                 &params.msl_pipeline,
                 params.bounds_check_policies,
+                &params.pipeline_constants,
             );
         }
     }
@@ -375,6 +388,7 @@ fn check_targets(
                     &params.glsl,
                     params.bounds_check_policies,
                     params.glsl_multiview,
+                    &params.pipeline_constants,
                 );
             }
         }
@@ -389,7 +403,13 @@ fn check_targets(
     #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
     {
         if targets.contains(Targets::HLSL) {
-            write_output_hlsl(input, module, &info, &params.hlsl);
+            write_output_hlsl(
+                input,
+                module,
+                &info,
+                &params.hlsl,
+                &params.pipeline_constants,
+            );
         }
     }
     #[cfg(all(feature = "deserialize", feature = "wgsl-out"))]
@@ -408,6 +428,7 @@ fn write_output_spv(
     debug_info: Option<naga::back::spv::DebugInfo>,
     params: &SpirvOutParameters,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
@@ -435,6 +456,10 @@ fn write_output_spv(
         debug_info,
     };
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     if params.separate_entry_points {
         for ep in module.entry_points.iter() {
             let pipeline_options = spv::PipelineOptions {
@@ -443,15 +468,15 @@ fn write_output_spv(
             };
             write_output_spv_inner(
                 input,
-                module,
-                info,
+                &module,
+                &info,
                 &options,
                 Some(&pipeline_options),
                 &format!("{}.spvasm", ep.name),
             );
         }
     } else {
-        write_output_spv_inner(input, module, info, &options, None, "spvasm");
+        write_output_spv_inner(input, &module, &info, &options, None, "spvasm");
     }
 }
 
@@ -489,14 +514,19 @@ fn write_output_msl(
     options: &naga::back::msl::Options,
     pipeline_options: &naga::back::msl::PipelineOptions,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::msl;
 
     println!("generating MSL");
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
-    let (string, tr_info) = msl::write_string(module, info, &options, pipeline_options)
+    let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
@@ -519,6 +549,7 @@ fn write_output_glsl(
     options: &naga::back::glsl::Options,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     multiview: Option<std::num::NonZeroU32>,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::glsl;
 
@@ -531,10 +562,13 @@ fn write_output_glsl(
     };
 
     let mut buffer = String::new();
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
-        module,
-        info,
+        &module,
+        &info,
         options,
         &pipeline_options,
         bounds_check_policies,
@@ -552,15 +586,20 @@ fn write_output_hlsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
     options: &naga::back::hlsl::Options,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::hlsl;
     use std::fmt::Write as _;
 
     println!("generating HLSL");
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
-    let reflection_info = writer.write(module, info).expect("HLSL write failed");
+    let reflection_info = writer.write(&module, &info).expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer);
 
@@ -826,6 +865,23 @@ fn convert_wgsl() {
         (
             "subgroup-operations",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "overrides",
+            Targets::IR
+                | Targets::ANALYSIS
+                | Targets::SPIRV
+                | Targets::METAL
+                | Targets::HLSL
+                | Targets::GLSL,
+        ),
+        (
+            "overrides-atomicCompareExchangeWeak",
+            Targets::IR | Targets::SPIRV,
+        ),
+        (
+            "overrides-ray-query",
+            Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
     ];
 

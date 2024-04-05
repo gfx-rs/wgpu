@@ -69,7 +69,13 @@ impl super::Device {
     ) -> Result<CompiledShader, crate::PipelineError> {
         let stage_bit = map_naga_stage(naga_stage);
 
-        let module = &stage.module.naga.module;
+        let (module, module_info) = naga::back::pipeline_constants::process_overrides(
+            &stage.module.naga.module,
+            &stage.module.naga.info,
+            stage.constants,
+        )
+        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
+
         let ep_resources = &layout.per_stage_map[naga_stage];
 
         let bounds_check_policy = if stage.module.runtime_checks {
@@ -88,6 +94,8 @@ impl super::Device {
                 metal::MTLLanguageVersion::V2_2 => (2, 2),
                 metal::MTLLanguageVersion::V2_3 => (2, 3),
                 metal::MTLLanguageVersion::V2_4 => (2, 4),
+                metal::MTLLanguageVersion::V3_0 => (3, 0),
+                metal::MTLLanguageVersion::V3_1 => (3, 1),
             },
             inline_samplers: Default::default(),
             spirv_cross_compatibility: false,
@@ -114,13 +122,9 @@ impl super::Device {
             },
         };
 
-        let (source, info) = naga::back::msl::write_string(
-            module,
-            &stage.module.naga.info,
-            &options,
-            &pipeline_options,
-        )
-        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
+        let (source, info) =
+            naga::back::msl::write_string(&module, &module_info, &options, &pipeline_options)
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
 
         log::debug!(
             "Naga generated shader for entry point '{}' and stage {:?}\n{}",
@@ -168,7 +172,7 @@ impl super::Device {
         })?;
 
         // collect sizes indices, immutable buffers, and work group memory sizes
-        let ep_info = &stage.module.naga.info.get_entry_point(ep_index);
+        let ep_info = &module_info.get_entry_point(ep_index);
         let mut wg_memory_sizes = Vec::new();
         let mut sized_bindings = Vec::new();
         let mut immutable_buffer_mask = 0;

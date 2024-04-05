@@ -97,11 +97,13 @@ impl crate::framework::Example for Example {
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
                     entry_point: "vs_main",
+                    constants: &Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
                     entry_point: "fs_main_red",
+                    constants: &Default::default(),
                     targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
                 primitive: wgpu::PrimitiveState {
@@ -120,11 +122,13 @@ impl crate::framework::Example for Example {
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
                     entry_point: "vs_main",
+                    constants: &Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
                     entry_point: "fs_main_blue",
+                    constants: &Default::default(),
                     targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
                 primitive: wgpu::PrimitiveState::default(),
@@ -144,11 +148,13 @@ impl crate::framework::Example for Example {
                     vertex: wgpu::VertexState {
                         module: &shader_triangle_and_lines,
                         entry_point: "vs_main",
+                        constants: &Default::default(),
                         buffers: &[],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_triangle_and_lines,
                         entry_point: "fs_main_white",
+                        constants: &Default::default(),
                         targets: &[Some(config.view_formats[0].into())],
                     }),
                     primitive: wgpu::PrimitiveState {
@@ -205,11 +211,13 @@ impl crate::framework::Example for Example {
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: "vs_main",
+                        constants: &Default::default(),
                         buffers: &[],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: "fs_main",
+                        constants: &Default::default(),
                         targets: &[Some(config.view_formats[0].into())],
                     }),
                     primitive: wgpu::PrimitiveState::default(),

@@ -117,6 +117,8 @@ Bottom level categories:
   - Added `wgpu::TextureView::as_hal`
   - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
 
+- Added support for pipeline-overridable constants. By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
+
 #### GLES
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
@@ -178,6 +180,7 @@ Bottom level categories:
 #### Metal
 
 - Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Metal 3.0 and 3.1 detection. By @atlv24 in [#5497](https://github.com/gfx-rs/wgpu/pull/5497)
 
 #### DX12
 
