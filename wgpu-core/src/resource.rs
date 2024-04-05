@@ -373,10 +373,10 @@ pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping<A: HalApi> {
-    pub range: Range<wgt::BufferAddress>,
-    pub op: BufferMapOperation,
+    pub(crate) range: Range<wgt::BufferAddress>,
+    pub(crate) op: BufferMapOperation,
     // hold the parent alive while the mapping is active
-    pub _parent_buffer: Arc<Buffer<A>>,
+    pub(crate) _parent_buffer: Arc<Buffer<A>>,
 }
 
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
@@ -737,7 +737,7 @@ pub(crate) enum TextureInner<A: HalApi> {
 }
 
 impl<A: HalApi> TextureInner<A> {
-    pub fn raw(&self) -> Option<&A::Texture> {
+    pub(crate) fn raw(&self) -> Option<&A::Texture> {
         match self {
             Self::Native { raw } => Some(raw),
             Self::Surface { raw: Some(tex), .. } => Some(tex.borrow()),
