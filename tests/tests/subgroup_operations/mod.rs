@@ -82,54 +82,44 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             });
             cpass.set_pipeline(&compute_pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.dispatch_workgroups(THREAD_COUNT as u32, 1, 1);
+            cpass.dispatch_workgroups(1, 1, 1);
         }
-
-        let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Mapping buffer"),
-            size: THREAD_COUNT * std::mem::size_of::<u32>() as u64,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        encoder.copy_buffer_to_buffer(
-            &storage_buffer,
-            0,
-            &mapping_buffer,
-            0,
-            THREAD_COUNT * std::mem::size_of::<u32>() as u64,
-        );
         ctx.queue.submit(Some(encoder.finish()));
 
-        mapping_buffer
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, |_| ());
-        ctx.device.poll(wgpu::Maintain::Wait);
-        let mapping_buffer_view = mapping_buffer.slice(..).get_mapped_range();
-        let result: &[u32; THREAD_COUNT as usize] = bytemuck::from_bytes(&mapping_buffer_view);
-        let expected_mask = (1u64 << (TEST_COUNT)) - 1; // generate full mask
-        let expected_array = [expected_mask as u32; THREAD_COUNT as usize];
-        if result != &expected_array {
-            use std::fmt::Write;
-            let mut msg = String::new();
-            writeln!(
-                &mut msg,
-                "Got from GPU:\n{:x?}\n  expected:\n{:x?}",
-                result, &expected_array,
-            )
-            .unwrap();
-            for (thread, (result, expected)) in result
-                .iter()
-                .zip(expected_array)
-                .enumerate()
-                .filter(|(_, (r, e))| *r != e)
-            {
-                write!(&mut msg, "thread {} failed tests:", thread).unwrap();
-                let difference = result ^ expected;
-                for i in (0..u32::BITS).filter(|i| (difference & (1 << i)) != 0) {
-                    write!(&mut msg, " {},", i).unwrap();
+        wgpu::util::DownloadBuffer::read_buffer(
+            device,
+            &ctx.queue,
+            &storage_buffer.slice(..),
+            |mapping_buffer_view| {
+                let mapping_buffer_view = mapping_buffer_view.unwrap();
+                let result: &[u32; THREAD_COUNT as usize] =
+                    bytemuck::from_bytes(&mapping_buffer_view);
+                let expected_mask = (1u64 << (TEST_COUNT)) - 1; // generate full mask
+                let expected_array = [expected_mask as u32; THREAD_COUNT as usize];
+                if result != &expected_array {
+                    use std::fmt::Write;
+                    let mut msg = String::new();
+                    writeln!(
+                        &mut msg,
+                        "Got from GPU:\n{:x?}\n  expected:\n{:x?}",
+                        result, &expected_array,
+                    )
+                    .unwrap();
+                    for (thread, (result, expected)) in result
+                        .iter()
+                        .zip(expected_array)
+                        .enumerate()
+                        .filter(|(_, (r, e))| *r != e)
+                    {
+                        write!(&mut msg, "thread {} failed tests:", thread).unwrap();
+                        let difference = result ^ expected;
+                        for i in (0..u32::BITS).filter(|i| (difference & (1 << i)) != 0) {
+                            write!(&mut msg, " {},", i).unwrap();
+                        }
+                        writeln!(&mut msg).unwrap();
+                    }
+                    panic!("{}", msg);
                 }
-                writeln!(&mut msg).unwrap();
-            }
-            panic!("{}", msg);
-        }
+            },
+        );
     });
