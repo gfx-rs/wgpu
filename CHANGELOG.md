@@ -110,9 +110,9 @@ Bottom level categories:
 - Device lost callbacks are invoked when replaced and when global is dropped. By @bradwerth in [#5168](https://github.com/gfx-rs/wgpu/pull/5168)
 - Fix panic when creating a surface while no backend is available. By @wumpf [#5166](https://github.com/gfx-rs/wgpu/pull/5166)
 
-#### WGL
-
-- In Surface::configure and Surface::present, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
+#### OpenGL
+- In WGL Surface::configure and Surface::present, fix the current GL context not being unset when releasing the lock that guards access to making the context current. This was causing other threads to panic when trying to make the context current. By @Imberflur in [#5087](https://github.com/gfx-rs/wgpu/pull/5087).
+- OpenGL will now be preferred over OpenGL ES on EGL, making it consistent with WGL. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
 
 #### Naga
 - Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
