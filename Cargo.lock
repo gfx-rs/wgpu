@@ -2088,8 +2088,7 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c43f73953f8cbe511f021b58f18c3ce1c3d1ae13fe953293e13345bf83217f25"
+source = "git+https://github.com/gfx-rs/metal-rs?rev=ff8fd3d6dc7792852f8a015458d7e6d42d7fb352#ff8fd3d6dc7792852f8a015458d7e6d42d7fb352"
 dependencies = [
  "bitflags 2.4.2",
  "block",
@@ -2427,7 +2426,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "915b1b472bc21c53464d6c8461c9d3af805ba1ef837e1cac254428f4a77177b1"
 dependencies = [
  "malloc_buf",
- "objc_exception",
 ]
 
 [[package]]
@@ -2451,15 +2449,6 @@ name = "objc2-encode"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d079845b37af429bfe5dfa76e6d087d788031045b25cfc6fd898486fd9847666"
-
-[[package]]
-name = "objc_exception"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad970fb455818ad6cba4c122ad012fae53ae8b4795f86378bce65e4f6bab2ca4"
-dependencies = [
- "cc",
-]
 
 [[package]]
 name = "object"

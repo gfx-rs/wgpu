@@ -179,6 +179,7 @@ Bottom level categories:
 #### Metal
 
 - Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Metal 3.0 and 3.1 detection. By @atlv24 in [#5497](https://github.com/gfx-rs/wgpu/pull/5497)
 
 #### DX12
 
