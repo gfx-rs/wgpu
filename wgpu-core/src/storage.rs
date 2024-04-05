@@ -36,7 +36,7 @@ pub(crate) struct InvalidId;
 /// values, so you should use an id allocator like `IdentityManager`
 /// that keeps the index values dense and close to zero.
 #[derive(Debug)]
-pub struct Storage<T>
+pub(crate) struct Storage<T>
 where
     T: Resource,
 {

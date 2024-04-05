@@ -58,7 +58,7 @@ use std::{
 /// [`Device`]: crate::device::resource::Device
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
-pub struct ResourceInfo<T: Resource> {
+pub(crate) struct ResourceInfo<T: Resource> {
     id: Option<Id<T::Marker>>,
     tracker_index: TrackerIndex,
     tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
@@ -144,7 +144,7 @@ impl<T: Resource> ResourceInfo<T> {
 
 pub(crate) type ResourceType = &'static str;
 
-pub trait Resource: 'static + Sized + WasmNotSendSync {
+pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     type Marker: Marker;
     const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Self>;

@@ -45,7 +45,7 @@ impl GlobalReport {
 
 pub struct Global {
     pub instance: Instance,
-    pub surfaces: Registry<Surface>,
+    pub(crate) surfaces: Registry<Surface>,
     pub(crate) hubs: Hubs,
 }
 
