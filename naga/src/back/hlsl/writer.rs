@@ -1256,13 +1256,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                         self.write_semantic(&arg.binding, Some((stage, Io::Input)))?;
                     }
-
-                    if need_workgroup_variables_initialization {
-                        if !func.arguments.is_empty() {
-                            write!(self.out, ", ")?;
-                        }
-                        write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
+                }
+                if need_workgroup_variables_initialization {
+                    if self.entry_point_io[ep_index as usize].input.is_some()
+                        || !func.arguments.is_empty()
+                    {
+                        write!(self.out, ", ")?;
                     }
+                    write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
                 }
             }
         }
