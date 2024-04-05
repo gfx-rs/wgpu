@@ -80,8 +80,7 @@ pub fn validate_pipeline_cache<'d>(
     if remaining_data.len() > data_size {
         return Err(PipelineCacheValidationError::Extended);
     }
-    let hash = hash(remaining_data);
-    if header.data_hash != hash {
+    if header.hash_space != HASH_SPACE_VALUE {
         return Err(PipelineCacheValidationError::Corrupted);
     }
     Ok(remaining_data)
@@ -94,7 +93,6 @@ pub fn add_cache_header(
     validation_key: [u8; 16],
 ) {
     assert_eq!(in_region.len(), HEADER_LENGTH);
-    let data_hash = hash(data);
     let header = PipelineCacheHeader {
         adapter_key: adapter_key(adapter)
             .expect("Called add_cache_header for an adapter which doesn't support cache data. This is a wgpu internal bug"),
@@ -103,7 +101,7 @@ pub fn add_cache_header(
         magic: MAGIC,
         header_version: HEADER_VERSION,
         validation_key,
-        data_hash,
+        hash_space: HASH_SPACE_VALUE,
         data_size: data
             .len()
             .try_into()
@@ -115,6 +113,17 @@ pub fn add_cache_header(
 const MAGIC: [u8; 8] = *b"WGPUPLCH";
 const HEADER_VERSION: u32 = 1;
 const ABI: u32 = std::mem::size_of::<*const ()>() as u32;
+
+/// The value used to fill [`PipelineCacheHeader::hash_space`]
+///
+/// If we receive reports of pipeline cache data corruption which is not otherwise caught
+/// on a real device, it would be worth modifying this
+///
+/// Note that wgpu does not protect against malicious writes to e.g. a file used
+/// to store a pipeline cache.
+/// That is the resonsibility of the end application, such as by using a
+/// private space.
+const HASH_SPACE_VALUE: u64 = 0xFEDCBA9_876543210;
 
 #[repr(C)]
 #[derive(PartialEq, Eq)]
@@ -135,7 +144,7 @@ struct PipelineCacheHeader {
     cache_abi: u32,
     /// The id for the backend in use, from [wgt::Backend]
     backend: u8,
-    /// The hash key which identifiers the device/adapter.
+    /// The key which identifiers the device/adapter.
     /// This is used to validate that this pipeline cache (probably) was produced for
     /// the expected device.
     /// On Vulkan: it is a combination of vendor ID and device ID
@@ -146,9 +155,13 @@ struct PipelineCacheHeader {
     validation_key: [u8; 16],
     /// The length of the data which is sent to/recieved from the backend
     data_size: u64,
-    /// The hash of the data which is sent to/recieved from the backend, and which
-    /// follows this header. That should be the remainder of the memory
-    data_hash: u64,
+    /// Space reserved for a hash of the data in future
+    ///
+    /// We assume that your cache storage system will be relatively robust, and so
+    /// do not validate this hash
+    ///
+    /// Therefore, this will always have a value of [`RESERVED_FOR_HASH`]
+    hash_space: u64,
 }
 
 impl PipelineCacheHeader {
@@ -180,7 +193,7 @@ impl PipelineCacheHeader {
                 adapter_key,
                 validation_key,
                 data_size,
-                data_hash,
+                hash_space: data_hash,
             },
             reader.data,
         ))
@@ -195,7 +208,7 @@ impl PipelineCacheHeader {
         writer.write_array(&self.adapter_key)?;
         writer.write_array(&self.validation_key)?;
         writer.write_u64(self.data_size)?;
-        writer.write_u64(self.data_hash)?;
+        writer.write_u64(self.hash_space)?;
 
         assert_eq!(writer.data.len(), 0);
         Some(())
@@ -216,15 +229,6 @@ fn adapter_key(adapter: &AdapterInfo) -> Result<[u8; 15], PipelineCacheValidatio
         }
         _ => Err(PipelineCacheValidationError::Unsupported),
     }
-}
-
-fn hash(data: &[u8]) -> u64 {
-    log::warn!(
-        "Using fake 'hash' for {} bytes of data. Data might become invalid",
-        data.len()
-    );
-    // TODO: Actually do a proper hash
-    0xFEDCBA9_876543210
 }
 
 struct Reader<'a> {
