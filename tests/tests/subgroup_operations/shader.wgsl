@@ -2,6 +2,8 @@
 @binding(0)
 var<storage, read_write> storage_buffer: array<u32>;
 
+var<workgroup> workgroup_buffer: u32;
+
 fn add_result_to_mask(mask: ptr<function, u32>, index: u32, value: bool) {
    (*mask) |= u32(value) << index;
 }
@@ -141,8 +143,14 @@ fn main(
     }
     add_result_to_mask(&passed, 29u, expected == (subgroup_invocation_id + 1u));
 
+    if global_id.x == 0u {
+        workgroup_buffer = subgroup_size;
+    }
+    workgroupBarrier();
+    add_result_to_mask(&passed, 30u, workgroup_buffer == subgroup_size);
+
     // Keep this test last, verify we are still convergent after running other tests
-    add_result_to_mask(&passed, 30u, subgroupAdd(1u) == subgroup_size);
+    add_result_to_mask(&passed, 31u, subgroupAdd(1u) == subgroup_size);
 
     // Increment TEST_COUNT in subgroup_operations/mod.rs if adding more tests
 

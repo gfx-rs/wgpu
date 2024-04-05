@@ -3,7 +3,7 @@ use std::{borrow::Cow, num::NonZeroU64};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 const THREAD_COUNT: u64 = 128;
-const TEST_COUNT: u32 = 31;
+const TEST_COUNT: u32 = 32;
 
 #[gpu_test]
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
