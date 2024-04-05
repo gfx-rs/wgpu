@@ -181,6 +181,37 @@ impl super::Adapter {
             hr == 0 && features3.CastingFullyTypedFormatSupported != 0
         };
 
+        let shader_model = {
+            let mut sm: crate::dx12::types::D3D12_FEATURE_DATA_SHADER_MODEL =
+                unsafe { mem::zeroed() };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    7, // D3D12_FEATURE_SHADER_MODEL
+                    &mut sm as *mut _ as *mut _,
+                    mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_SHADER_MODEL>() as _,
+                )
+            };
+            if hr == 0 {
+                match sm.HighestShaderModel {
+                    crate::dx12::types::D3D_SHADER_MODEL_5_1 => naga::back::hlsl::ShaderModel::V5_1,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_0 => naga::back::hlsl::ShaderModel::V6_0,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_1 => naga::back::hlsl::ShaderModel::V6_1,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_2 => naga::back::hlsl::ShaderModel::V6_2,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_3 => naga::back::hlsl::ShaderModel::V6_3,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_4 => naga::back::hlsl::ShaderModel::V6_4,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_5 => naga::back::hlsl::ShaderModel::V6_5,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_6 => naga::back::hlsl::ShaderModel::V6_6,
+                    crate::dx12::types::D3D_SHADER_MODEL_6_7 => naga::back::hlsl::ShaderModel::V6_7,
+                    _ => unreachable!(),
+                }
+            } else {
+                match dxc_container {
+                    Some(_) => naga::back::hlsl::ShaderModel::V6_0,
+                    None => naga::back::hlsl::ShaderModel::V5_1,
+                }
+            }
+        };
+
         let private_caps = super::PrivateCapabilities {
             instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
@@ -196,6 +227,7 @@ impl super::Adapter {
             casting_fully_typed_format_supported,
             // See https://github.com/gfx-rs/wgpu/issues/3552
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
+            shader_model,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
