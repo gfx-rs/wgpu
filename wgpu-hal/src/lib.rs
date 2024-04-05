@@ -260,6 +260,19 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type AccelerationStructure: AccelerationStructure + ?Sized;
 }
 
+/// A bound for `Api` implementations that contain only `Sized` associated
+/// types.
+///
+/// This is useful for users that only care about a specific set of
+/// `Api`s. For example, the crate examples, that only use the ones in the `api`
+/// module.
+///
+/// # Usage
+/// Implementors of this trait can be used just as an implementor of `Api` could
+/// be used. The only difference is the bound is `: ConcreteApi` instead. The
+/// `Concrete*` associated types do exist, but they are guaranteed to be equal
+/// to the same types without the `Concrete` prefix, and their use is not
+/// necessary nor recommended.
 pub trait ConcreteApi:
     Api<
     Instance = Self::ConcreteInstance,
