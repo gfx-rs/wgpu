@@ -166,7 +166,7 @@ fn validate_indexed_draw<A: HalApi>(
 ) -> Result<(), DrawError> {
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = index_state.limit();
-    if last_index <= index_limit {
+    if last_index > index_limit {
         return Err(DrawError::IndexBeyondLimit {
             last_index,
             index_limit,

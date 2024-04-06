@@ -220,9 +220,17 @@ impl super::Device {
             multiview: context.multiview,
         };
 
-        let shader = &stage.module.naga;
-        let entry_point_index = shader
-            .module
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &stage.module.naga.module,
+            &stage.module.naga.info,
+            stage.constants,
+        )
+        .map_err(|e| {
+            let msg = format!("{e}");
+            crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+        })?;
+
+        let entry_point_index = module
             .entry_points
             .iter()
             .position(|ep| ep.name.as_str() == stage.entry_point)
@@ -249,8 +257,8 @@ impl super::Device {
         let mut output = String::new();
         let mut writer = glsl::Writer::new(
             &mut output,
-            &shader.module,
-            &shader.info,
+            &module,
+            &info,
             &context.layout.naga_options,
             &pipeline_options,
             policies,
@@ -269,8 +277,8 @@ impl super::Device {
 
         context.consume_reflection(
             gl,
-            &shader.module,
-            shader.info.get_entry_point(entry_point_index),
+            &module,
+            info.get_entry_point(entry_point_index),
             reflection_info,
             naga_stage,
             program,
@@ -1125,8 +1133,10 @@ impl crate::Device for super::Device {
                 !0;
                 bg_layout
                     .entries
-                    .last()
-                    .map_or(0, |b| b.binding as usize + 1)
+                    .iter()
+                    .map(|b| b.binding)
+                    .max()
+                    .map_or(0, |idx| idx as usize + 1)
             ]
             .into_boxed_slice();
 
@@ -1179,7 +1189,16 @@ impl crate::Device for super::Device {
     ) -> Result<super::BindGroup, crate::DeviceError> {
         let mut contents = Vec::new();
 
-        for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+            let layout = desc
+                .layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (entry, layout)
+        });
+        for (entry, layout) in layout_and_entry_iter {
             let binding = match layout.ty {
                 wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];

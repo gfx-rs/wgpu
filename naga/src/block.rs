@@ -65,6 +65,12 @@ impl Block {
         self.span_info.splice(range.clone(), other.span_info);
         self.body.splice(range, other.body);
     }
+
+    pub fn span_into_iter(self) -> impl Iterator<Item = (Statement, Span)> {
+        let Block { body, span_info } = self;
+        body.into_iter().zip(span_info)
+    }
+
     pub fn span_iter(&self) -> impl Iterator<Item = (&Statement, &Span)> {
         let span_iter = self.span_info.iter();
         self.body.iter().zip(span_iter)

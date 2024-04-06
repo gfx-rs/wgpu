@@ -1248,7 +1248,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
-            &module.const_expressions,
+            &module.global_expressions,
             module,
             mod_info,
             &(module, mod_info),
@@ -1431,6 +1431,7 @@ impl<W: Write> Writer<W> {
                     |writer, context, expr| writer.put_expression(expr, context, true),
                 )?;
             }
+            crate::Expression::Override(_) => return Err(Error::Override),
             crate::Expression::Access { base, .. }
             | crate::Expression::AccessIndex { base, .. } => {
                 // This is an acceptable place to generate a `ReadZeroSkipWrite` check.
@@ -3220,6 +3221,10 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        if !module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
+
         self.names.clear();
         self.namer.reset(
             module,

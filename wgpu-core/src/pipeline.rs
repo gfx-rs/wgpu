@@ -233,6 +233,14 @@ pub struct ProgrammableStageDescriptor<'a> {
     /// * If a single entry point associated with this stage must be in the shader, then proceed as
     ///   if `Some(…)` was specified with that entry point's name.
     pub entry_point: Option<Cow<'a, str>>,
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: Cow<'a, naga::back::PipelineConstants>,
 }
 
 /// Number of implicit bind groups derived at pipeline creation.

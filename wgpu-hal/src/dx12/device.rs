@@ -218,14 +218,21 @@ impl super::Device {
         use naga::back::hlsl;
 
         let stage_bit = crate::auxil::map_naga_stage(naga_stage);
-        let module = &stage.module.naga.module;
+
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &stage.module.naga.module,
+            &stage.module.naga.info,
+            stage.constants,
+        )
+        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
+
         //TODO: reuse the writer
         let mut source = String::new();
         let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
-                .write(module, &stage.module.naga.info)
+                .write(&module, &info)
                 .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?
         };
 
@@ -1100,7 +1107,16 @@ impl crate::Device for super::Device {
         }
         let mut dynamic_buffers = Vec::new();
 
-        for (layout, entry) in desc.layout.entries.iter().zip(desc.entries.iter()) {
+        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+            let layout = desc
+                .layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (layout, entry)
+        });
+        for (layout, entry) in layout_and_entry_iter {
             match layout.ty {
                 wgt::BindingType::Buffer {
                     has_dynamic_offset: true,

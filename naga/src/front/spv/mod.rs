@@ -196,7 +196,6 @@ struct Decoration {
     location: Option<spirv::Word>,
     desc_set: Option<spirv::Word>,
     desc_index: Option<spirv::Word>,
-    specialization: Option<spirv::Word>,
     storage_buffer: bool,
     offset: Option<spirv::Word>,
     array_stride: Option<NonZeroU32>,
@@ -214,11 +213,6 @@ impl Decoration {
             Some(ref name) => name.as_str(),
             None => "?",
         }
-    }
-
-    fn specialization(&self) -> crate::Override {
-        self.specialization
-            .map_or(crate::Override::None, crate::Override::ByNameOrId)
     }
 
     const fn resource_binding(&self) -> Option<crate::ResourceBinding> {
@@ -537,7 +531,8 @@ struct BlockContext<'function> {
     local_arena: &'function mut Arena<crate::LocalVariable>,
     /// Constants arena of the module being processed
     const_arena: &'function mut Arena<crate::Constant>,
-    const_expressions: &'function mut Arena<crate::Expression>,
+    overrides: &'function mut Arena<crate::Override>,
+    global_expressions: &'function mut Arena<crate::Expression>,
     /// Type arena of the module being processed
     type_arena: &'function UniqueArena<crate::Type>,
     /// Global arena of the module being processed
@@ -755,9 +750,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             spirv::Decoration::RowMajor => {
                 dec.matrix_major = Some(Majority::Row);
-            }
-            spirv::Decoration::SpecId => {
-                dec.specialization = Some(self.next()?);
             }
             other => {
                 log::warn!("Unknown decoration {:?}", other);
@@ -3943,7 +3935,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::TypeImage => self.parse_type_image(inst, &mut module),
                 Op::TypeSampledImage => self.parse_type_sampled_image(inst),
                 Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
-                Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
+                Op::Constant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
                 Op::ConstantNull | Op::Undef => self.parse_null_constant(inst, &mut module),
                 Op::ConstantTrue => self.parse_bool_constant(inst, true, &mut module),
@@ -4924,14 +4916,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let span = self.span_from_with_op(start);
 
         let init = module
-            .const_expressions
+            .global_expressions
             .append(crate::Expression::Literal(literal), span);
         self.lookup_constant.insert(
             id,
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        r#override: decor.specialization(),
                         name: decor.name,
                         ty,
                         init,
@@ -4965,7 +4956,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let span = self.span_from_with_op(start);
             let constant = self.lookup_constant.lookup(component_id)?;
             let expr = module
-                .const_expressions
+                .global_expressions
                 .append(crate::Expression::Constant(constant.handle), span);
             components.push(expr);
         }
@@ -4975,14 +4966,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let span = self.span_from_with_op(start);
 
         let init = module
-            .const_expressions
+            .global_expressions
             .append(crate::Expression::Compose { ty, components }, span);
         self.lookup_constant.insert(
             id,
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        r#override: decor.specialization(),
                         name: decor.name,
                         ty,
                         init,
@@ -5013,11 +5003,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
         let init = module
-            .const_expressions
+            .global_expressions
             .append(crate::Expression::ZeroValue(ty), span);
         let handle = module.constants.append(
             crate::Constant {
-                r#override: decor.specialization(),
                 name: decor.name,
                 ty,
                 init,
@@ -5047,7 +5036,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
-        let init = module.const_expressions.append(
+        let init = module.global_expressions.append(
             crate::Expression::Literal(crate::Literal::Bool(value)),
             span,
         );
@@ -5056,7 +5045,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        r#override: decor.specialization(),
                         name: decor.name,
                         ty,
                         init,
@@ -5087,7 +5075,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let span = self.span_from_with_op(start);
             let lconst = self.lookup_constant.lookup(init_id)?;
             let expr = module
-                .const_expressions
+                .global_expressions
                 .append(crate::Expression::Constant(lconst.handle), span);
             Some(expr)
         } else {
@@ -5209,7 +5197,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         match null::generate_default_built_in(
                             Some(built_in),
                             ty,
-                            &mut module.const_expressions,
+                            &mut module.global_expressions,
                             span,
                         ) {
                             Ok(handle) => Some(handle),
@@ -5231,14 +5219,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                 let handle = null::generate_default_built_in(
                                     built_in,
                                     member.ty,
-                                    &mut module.const_expressions,
+                                    &mut module.global_expressions,
                                     span,
                                 )?;
                                 components.push(handle);
                             }
                             Some(
                                 module
-                                    .const_expressions
+                                    .global_expressions
                                     .append(crate::Expression::Compose { ty, components }, span),
                             )
                         }
@@ -5307,7 +5295,7 @@ fn resolve_constant(
     gctx: crate::proc::GlobalCtx,
     constant: Handle<crate::Constant>,
 ) -> Option<u32> {
-    match gctx.const_expressions[gctx.constants[constant].init] {
+    match gctx.global_expressions[gctx.constants[constant].init] {
         crate::Expression::Literal(crate::Literal::U32(id)) => Some(id),
         crate::Expression::Literal(crate::Literal::I32(id)) => Some(id as u32),
         _ => None,

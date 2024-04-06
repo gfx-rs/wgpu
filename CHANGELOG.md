@@ -51,45 +51,46 @@ Bottom level categories:
 
 #### General
 
+- Implemented the `Unorm10_10_10_2` VertexFormat.
 - Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
-    - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
-        - `abs`
-        - `acos`
-        - `acosh`
-        - `asin`
-        - `asinh`
-        - `atan`
-        - `atanh`
-        - `cos`
-        - `cosh`
-        - `round`
-        - `saturate`
-        - `sin`
-        - `sinh`
-        - `sqrt`
-        - `step`
-        - `tan`
-        - `tanh`
-    - [#5098](https://github.com/gfx-rs/wgpu/pull/5098) by @ErichDonGubler:
-        - `ceil`
-        - `countLeadingZeros`
-        - `countOneBits`
-        - `countTrailingZeros`
-        - `degrees`
-        - `exp`
-        - `exp2`
-        - `floor`
-        - `fract`
-        - `fma`
-        - `inverseSqrt`
-        - `log`
-        - `log2`
-        - `max`
-        - `min`
-        - `radians`
-        - `reverseBits`
-        - `sign`
-        - `trunc`
+  - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
+    - `abs`
+    - `acos`
+    - `acosh`
+    - `asin`
+    - `asinh`
+    - `atan`
+    - `atanh`
+    - `cos`
+    - `cosh`
+    - `round`
+    - `saturate`
+    - `sin`
+    - `sinh`
+    - `sqrt`
+    - `step`
+    - `tan`
+    - `tanh`
+  - [#5098](https://github.com/gfx-rs/wgpu/pull/5098) by @ErichDonGubler:
+    - `ceil`
+    - `countLeadingZeros`
+    - `countOneBits`
+    - `countTrailingZeros`
+    - `degrees`
+    - `exp`
+    - `exp2`
+    - `floor`
+    - `fract`
+    - `fma`
+    - `inverseSqrt`
+    - `log`
+    - `log2`
+    - `max`
+    - `min`
+    - `radians`
+    - `reverseBits`
+    - `sign`
+    - `trunc`
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 - `wgpu-types`'s `trace` and `replay` features have been replaced by the `serde` feature. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
@@ -101,13 +102,22 @@ Bottom level categories:
   By @ErichDonGubler in [#5146](https://github.com/gfx-rs/wgpu/pull/5146), [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
 - Signed and unsigned 64 bit integer support in shaders. By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 - `wgpu::Instance` can now report which `wgpu::Backends` are available based on the build configuration. By @wumpf [#5167](https://github.com/gfx-rs/wgpu/pull/5167)
-```diff
--wgpu::Instance::any_backend_feature_enabled()
-+!wgpu::Instance::enabled_backend_features().is_empty()
-```
+
+  ```diff
+  -wgpu::Instance::any_backend_feature_enabled()
+  +!wgpu::Instance::enabled_backend_features().is_empty()
+  ```
+
 - `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU). By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 - `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
+
+- More as_hal methods and improvements by @JMS55 in [#5452](https://github.com/gfx-rs/wgpu/pull/5452)
+  - Added `wgpu::CommandEncoder::as_hal_mut`
+  - Added `wgpu::TextureView::as_hal`
+  - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
+
+- Added support for pipeline-overridable constants. By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
 
 #### GLES
 
@@ -118,6 +128,12 @@ Bottom level categories:
 #### Naga
 
 - Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
+- Support `arrayLength` for runtime-sized arrays inside binding arrays (for WGSL input and SPIR-V output). By @kvark in [#5428](https://github.com/gfx-rs/wgpu/pull/5428)
+
+#### WebGPU
+
+- Implement the `device_set_device_lost_callback` method for `ContextWebGpu`. By @suti in [#5438](https://github.com/gfx-rs/wgpu/pull/5438)
+- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434)
 
 ### Bug Fixes
 
@@ -141,6 +157,8 @@ Bottom level categories:
 #### Naga
 - In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 - GLSL 410 does not support layout(binding = ...), enable only for GLSL 420. By @bes in [#5357](https://github.com/gfx-rs/wgpu/pull/5357)
+- In spv-out, check for acceleration and ray-query types when enabling ray-query extension to prevent validation error. By @Vecvec in [#5463](https://github.com/gfx-rs/wgpu/pull/5463)
+- Add a limit for curly brace nesting in WGSL parsing, plus a note about stack size requirements. By @ErichDonGubler in [#5447](https://github.com/gfx-rs/wgpu/pull/5447).
 
 #### Tests
 
@@ -153,10 +171,20 @@ Bottom level categories:
 - Fixes for being able to use an OpenGL 4.1 core context provided by macOS with wgpu. By @bes in [#5331](https://github.com/gfx-rs/wgpu/pull/5331).
 - Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
 - Fix crash when holding multiple devices on wayland/surfaceless. By @ashdnazg in [#5351](https://github.com/gfx-rs/wgpu/pull/5351).
+- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
 
 #### Vulkan
 
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
+
+#### Metal
+
+- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Metal 3.0 and 3.1 detection. By @atlv24 in [#5497](https://github.com/gfx-rs/wgpu/pull/5497)
+
+#### DX12
+
+- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
 
 ## v0.19.3 (2024-03-01)
 
@@ -164,7 +192,7 @@ This release includes `wgpu`, `wgpu-core`, and `wgpu-hal`. All other crates are 
 
 ### Major Changes
 
-#### Vendored WebGPU Bindings from `web_sys` 
+#### Vendored WebGPU Bindings from `web_sys`
 
 **`--cfg=web_sys_unstable_apis` is no longer needed in your `RUSTFLAGS` to compile for WebGPU!!!**
 
@@ -179,6 +207,7 @@ By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
 #### General
 
 - Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
+- Fix incorrect validation causing all indexed draws on render bundles to fail. By @wumpf in [#5430](https://github.com/gfx-rs/wgpu/pull/5340).
 
 #### Android
 - Fix linking error when targeting android without `winit`. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).

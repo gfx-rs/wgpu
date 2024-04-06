@@ -82,6 +82,7 @@ pub enum GlobalDeclKind<'a> {
     Fn(Function<'a>),
     Var(GlobalVariable<'a>),
     Const(Const<'a>),
+    Override(Override<'a>),
     Struct(Struct<'a>),
     Type(TypeAlias<'a>),
 }
@@ -198,6 +199,14 @@ pub struct Const<'a> {
     pub name: Ident<'a>,
     pub ty: Option<Handle<Type<'a>>>,
     pub init: Handle<Expression<'a>>,
+}
+
+#[derive(Debug)]
+pub struct Override<'a> {
+    pub name: Ident<'a>,
+    pub id: Option<Handle<Expression<'a>>>,
+    pub ty: Option<Handle<Type<'a>>>,
+    pub init: Option<Handle<Expression<'a>>>,
 }
 
 /// The size of an [`Array`] or [`BindingArray`].

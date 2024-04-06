@@ -129,7 +129,7 @@ winit = { version = "0.29", features = ["android-native-activity"] }
 # Metal dependencies
 block = "0.1"
 core-graphics-types = "0.1"
-metal = "0.27.0"
+metal = { version = "0.27.0", git = "https://github.com/gfx-rs/metal-rs", rev = "ff8fd3d6dc7792852f8a015458d7e6d42d7fb352" }
 objc = "0.2.5"
 
 # Vulkan dependencies
@@ -165,12 +165,12 @@ web-sys = "0.3.69"
 web-time = "0.2.4"
 
 # deno dependencies
-deno_console = "0.125.0"
-deno_core = "0.232.0"
-deno_url = "0.125.0"
-deno_web = "0.156.0"
-deno_webidl = "0.125.0"
-deno_webgpu = { version = "0.85.0", path = "./deno_webgpu" }
+deno_console = "0.143.0"
+deno_core = "0.272.0"
+deno_url = "0.143.0"
+deno_web = "0.174.0"
+deno_webidl = "0.143.0"
+deno_webgpu = { version = "0.110.0", path = "./deno_webgpu" }
 tokio = "1.36.0"
 termcolor = "1.4.1"
 
