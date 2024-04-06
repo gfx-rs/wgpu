@@ -1065,7 +1065,7 @@ impl crate::context::Context for ContextWebGpu {
     type BlasId = ObjectId;
     type TlasData = ();
     type TlasId = ObjectId;
-    type TlasInstanceId = ();
+    type TlasInstanceId = ObjectId;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let Some(gpu) = get_browser_gpu_property() else {
@@ -3496,6 +3496,23 @@ impl crate::context::Context for ContextWebGpu {
         unimplemented!("Raytracing not implemented for web");
     }
 
+    fn create_tlas_instance(
+        &self,
+        _blas: &Self::BlasId,
+        _blas_data: &Self::BlasData,
+    ) -> Self::TlasInstanceId {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn tlas_instance_set_blas(
+        &self,
+        _tlas_instance: &Self::TlasInstanceId,
+        _blas: &Self::BlasId,
+        _blas_data: &Self::BlasData,
+    ) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &'a self,
         _encoder: &Self::CommandEncoderId,
@@ -3529,6 +3546,9 @@ impl crate::context::Context for ContextWebGpu {
     }
 
     fn tlas_drop(&self, _tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+    fn tlas_instance_drop(&self, _tlas_instance: &Self::TlasInstanceId) {
         unimplemented!("Raytracing not implemented for web");
     }
 }

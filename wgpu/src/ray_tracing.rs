@@ -163,7 +163,7 @@ impl TlasInstance {
     pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
         let tlas_instance_id = blas
             .context
-            .blas_create_tlas_instance(&blas.id, blas.data.as_ref());
+            .create_tlas_instance(&blas.id, blas.data.as_ref());
         Self {
             context: blas.context.clone(),
             transform,

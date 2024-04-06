@@ -2993,13 +2993,13 @@ impl crate::Context for ContextWgpuCore {
         )
     }
 
-    fn blas_create_tlas_instance(
+    fn create_tlas_instance(
         &self,
         blas: &Self::BlasId,
         blas_data: &Self::BlasData,
     ) -> TlasInstanceId {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(blas => global.blas_create_tlas_instance(
+        let (id, error) = wgc::gfx_select!(blas => global.create_tlas_instance(
             *blas,
             None,
         ));

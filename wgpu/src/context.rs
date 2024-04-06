@@ -1035,7 +1035,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (Self::TlasId, Self::TlasData);
-    fn blas_create_tlas_instance(
+    fn create_tlas_instance(
         &self,
         blas: &Self::BlasId,
         blas_data: &Self::BlasData,
@@ -2044,7 +2044,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
-    fn blas_create_tlas_instance(&self, blas: &ObjectId, blas_data: &crate::Data) -> ObjectId;
+    fn create_tlas_instance(&self, blas: &ObjectId, blas_data: &crate::Data) -> ObjectId;
     fn tlas_instance_set_blas(
         &self,
         tlas_instance: &ObjectId,
@@ -4100,10 +4100,10 @@ where
         (tlas.into(), Box::new(data) as _)
     }
 
-    fn blas_create_tlas_instance(&self, blas: &ObjectId, blas_data: &crate::Data) -> ObjectId {
+    fn create_tlas_instance(&self, blas: &ObjectId, blas_data: &crate::Data) -> ObjectId {
         let blas = <T::BlasId>::from(*blas);
         let blas_data = downcast_ref(blas_data);
-        let tlas_instance = Context::blas_create_tlas_instance(self, &blas, blas_data);
+        let tlas_instance = Context::create_tlas_instance(self, &blas, blas_data);
         tlas_instance.into()
     }
 

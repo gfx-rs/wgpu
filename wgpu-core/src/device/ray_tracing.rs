@@ -251,7 +251,7 @@ impl Global {
         (id, Some(error))
     }
 
-    pub fn blas_create_tlas_instance<A: HalApi>(
+    pub fn create_tlas_instance<A: HalApi>(
         &self,
         blas_id: BlasId,
         id_in: Option<TlasInstanceId>,
