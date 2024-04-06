@@ -35,7 +35,6 @@ use std::{
     },
 };
 
-use crate::id::BlasId;
 use std::num::NonZeroU64;
 
 /// Information about the wgpu-core resource.
@@ -1579,7 +1578,7 @@ pub struct Tlas<A: HalApi> {
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
-    pub(crate) dependencies: RwLock<Vec<BlasId>>,
+    pub(crate) dependencies: RwLock<Vec<Arc<Blas<A>>>>,
     pub(crate) instance_buffer: RwLock<Option<A::Buffer>>,
 }
 
@@ -1606,6 +1605,25 @@ impl<A: HalApi> Resource for Tlas<A> {
     const TYPE: &'static str = "Tlas";
 
     type Marker = crate::id::markers::Tlas;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
+        &mut self.info
+    }
+}
+
+#[derive(Debug)]
+pub struct TlasInstance<A: HalApi> {
+    pub(crate) blas: RwLock<Arc<Blas<A>>>,
+    pub(crate) info: ResourceInfo<TlasInstance<A>>,
+}
+
+impl<A: HalApi> Resource for TlasInstance<A> {
+    const TYPE: &'static str = "Tlas";
+    type Marker = crate::id::markers::TlasInstance;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info

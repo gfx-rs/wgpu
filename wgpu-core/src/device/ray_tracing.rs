@@ -11,7 +11,9 @@ use crate::{
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 
-use crate::resource::{ResourceInfo, StagingBuffer};
+use crate::id::TlasInstanceId;
+use crate::ray_tracing::TlasInstanceError;
+use crate::resource::{ResourceInfo, StagingBuffer, TlasInstance};
 use hal::{AccelerationStructureTriangleIndices, Device as _};
 
 impl<A: HalApi> Device<A> {
@@ -249,6 +251,63 @@ impl Global {
         (id, Some(error))
     }
 
+    pub fn blas_create_tlas_instance<A: HalApi>(
+        &self,
+        blas_id: BlasId,
+        id_in: Option<TlasInstanceId>,
+    ) -> (TlasInstanceId, Option<TlasInstanceError>) {
+        profiling::scope!("TlasInstance::new");
+
+        let hub = A::hub(self);
+        let fid = hub.tlas_instances.prepare(id_in);
+        return match hub.blas_s.read().get(blas_id) {
+            Ok(blas) => {
+                let tlas_instance = TlasInstance {
+                    blas: RwLock::new(blas.clone()),
+                    info: ResourceInfo::new(
+                        blas.info.label.as_str(),
+                        Some(blas.device.tracker_indices.tlas_instances.clone()),
+                    ),
+                };
+                let id = fid.assign(tlas_instance);
+                log::info!("Created tlas instance {:?}", id.0);
+
+                blas.device
+                    .trackers
+                    .lock()
+                    .tlas_instances
+                    .insert_single(id.1);
+
+                (id.0, None)
+            }
+            Err(_) => {
+                let id = fid.assign_error("");
+                (id, Some(TlasInstanceError::InvalidBlas(blas_id)))
+            }
+        };
+    }
+
+    pub fn tlas_instance_set_blas<A: HalApi>(
+        &self,
+        blas_id: BlasId,
+        tlas_instance_id: TlasInstanceId,
+    ) -> Option<TlasInstanceError> {
+        profiling::scope!("TlasInstance::set_blas");
+
+        let hub = A::hub(self);
+        let tlas_instance = match hub.tlas_instances.read().get(tlas_instance_id) {
+            Ok(tlas_instance) => tlas_instance.clone(),
+            Err(_) => return Some(TlasInstanceError::InvalidTlasInstance(tlas_instance_id)),
+        };
+        match hub.blas_s.read().get(blas_id) {
+            Ok(blas) => {
+                *tlas_instance.blas.write() = blas.clone();
+            }
+            Err(_) => return Some(TlasInstanceError::InvalidBlas(blas_id)),
+        };
+        None
+    }
+
     pub fn blas_destroy<A: HalApi>(&self, blas_id: BlasId) -> Result<(), resource::DestroyError> {
         profiling::scope!("Blas::destroy");
 
@@ -341,7 +400,10 @@ impl Global {
                     raw: Mutex::new(Some(e)),
                     device: device.clone(),
                     size,
-                    info: ResourceInfo::new("Raytracing scratch buffer", Some(device.tracker_indices.staging_buffers.clone())),
+                    info: ResourceInfo::new(
+                        "Raytracing scratch buffer",
+                        Some(device.tracker_indices.staging_buffers.clone()),
+                    ),
                     is_coherent: mapping.is_coherent,
                 })))
             }
@@ -379,6 +441,29 @@ impl Global {
                 match tlas.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
                     Err(e) => log::error!("Failed to wait for blas {:?}: {:?}", tlas_id, e),
+                }
+            }
+        }
+    }
+    pub fn tlas_instance_drop<A: HalApi>(&self, tlas_instance_id: TlasInstanceId, wait: bool) {
+        profiling::scope!("Tlas::drop");
+        log::debug!("Tlas Instance {:?} is dropped", tlas_instance_id);
+
+        let hub = A::hub(self);
+
+        if let Some(tlas_instance) = hub.tlas_instances.unregister(tlas_instance_id) {
+            let last_submit_index = tlas_instance.info.submission_index();
+            let device = tlas_instance.blas.read().device.clone();
+            device
+                .lock_life()
+                .suspected_resources
+                .tlas_instances
+                .insert(tlas_instance.info.tracker_index(), tlas_instance.clone());
+
+            if wait {
+                match device.wait_for_submit(last_submit_index) {
+                    Ok(()) => (),
+                    Err(e) => log::error!("Failed to wait for blas {:?}: {:?}", tlas_instance, e),
                 }
             }
         }

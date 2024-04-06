@@ -24,6 +24,7 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::device::DeviceLostClosure;
+use wgc::id::TlasInstanceId;
 use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
@@ -437,7 +438,7 @@ pub struct CommandEncoder {
 
 #[derive(Debug)]
 pub struct Blas {
-    // error_sink: ErrorSink,
+    error_sink: ErrorSink,
 }
 
 #[derive(Debug)]
@@ -499,6 +500,7 @@ impl crate::Context for ContextWgpuCore {
     type BlasData = Blas;
     type TlasId = wgc::id::TlasId;
     type TlasData = Tlas;
+    type TlasInstanceId = wgc::id::TlasInstanceId;
 
     #[allow(clippy::type_complexity)]
     type RequestDeviceFuture = Ready<
@@ -2957,7 +2959,7 @@ impl crate::Context for ContextWgpuCore {
             id,
             handle,
             Blas {
-                // error_sink: Arc::clone(&device_data.error_sink),
+                error_sink: Arc::clone(&device_data.error_sink),
             },
         )
     }
@@ -2989,6 +2991,50 @@ impl crate::Context for ContextWgpuCore {
                 // error_sink: Arc::clone(&device_data.error_sink),
             },
         )
+    }
+
+    fn blas_create_tlas_instance(
+        &self,
+        blas: &Self::BlasId,
+        blas_data: &Self::BlasData,
+    ) -> TlasInstanceId {
+        let global = &self.0;
+        let (id, error) = wgc::gfx_select!(blas => global.blas_create_tlas_instance(
+            *blas,
+            None,
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &blas_data.error_sink,
+                cause,
+                LABEL,
+                None,
+                "TlasInstance::new",
+            );
+        }
+        id
+    }
+
+    fn tlas_instance_set_blas(
+        &self,
+        tlas_instance: &Self::TlasInstanceId,
+        blas: &Self::BlasId,
+        blas_data: &Self::BlasData,
+    ) {
+        let global = &self.0;
+        let error = wgc::gfx_select!(blas => global.tlas_instance_set_blas(
+            *blas,
+            *tlas_instance,
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &blas_data.error_sink,
+                cause,
+                LABEL,
+                None,
+                "TlasInstance::set_blas",
+            );
+        }
     }
 
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
@@ -3088,7 +3134,7 @@ impl crate::Context for ContextWgpuCore {
             let instances = e.instances.map(
                 |instance: Option<crate::ray_tracing::ContextTlasInstance<'_, _>>| {
                     instance.map(|instance| wgc::ray_tracing::TlasInstance {
-                        blas_id: instance.blas_id,
+                        tlas_instance_id: instance.tlas_instance,
                         transform: instance.transform,
                         custom_index: instance.custom_index,
                         mask: instance.mask,
@@ -3123,6 +3169,11 @@ impl crate::Context for ContextWgpuCore {
     fn blas_drop(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
         let global = &self.0;
         wgc::gfx_select!(blas => global.blas_drop(*blas, false))
+    }
+
+    fn tlas_instance_drop(&self, tlas_instance: &Self::TlasInstanceId) {
+        let global = &self.0;
+        wgc::gfx_select!(tlas_instance => global.tlas_instance_drop(*tlas_instance, false))
     }
 
     fn tlas_destroy(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {

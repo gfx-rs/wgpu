@@ -1427,10 +1427,8 @@ impl Global {
                         baked
                             .initialize_texture_memory(&mut *trackers, device, &snatch_guard)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
-                        let mut blas_guard = hub.blas_s.write();
-                        baked.validate_blas_actions(&mut blas_guard)?;
-                        let mut tlas_guard = hub.tlas_s.write();
-                        baked.validate_tlas_actions(&blas_guard, &mut tlas_guard)?;
+                        baked.validate_blas_actions()?;
+                        baked.validate_tlas_actions()?;
 
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.

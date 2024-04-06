@@ -1065,6 +1065,7 @@ impl crate::context::Context for ContextWebGpu {
     type BlasId = ObjectId;
     type TlasData = ();
     type TlasId = ObjectId;
+    type TlasInstanceId = ();
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let Some(gpu) = get_browser_gpu_property() else {

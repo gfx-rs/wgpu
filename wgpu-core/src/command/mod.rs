@@ -108,8 +108,8 @@ pub struct BakedCommands<A: HalApi> {
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
-    blas_actions: Vec<BlasAction>,
-    tlas_actions: Vec<TlasAction>,
+    blas_actions: Vec<BlasAction<A>>,
+    tlas_actions: Vec<TlasAction<A>>,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
@@ -122,8 +122,8 @@ pub struct CommandBufferMutable<A: HalApi> {
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
     pub(crate) pending_query_resets: QueryResetMap<A>,
-    blas_actions: Vec<BlasAction>,
-    tlas_actions: Vec<TlasAction>,
+    blas_actions: Vec<BlasAction<A>>,
+    tlas_actions: Vec<TlasAction<A>>,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }

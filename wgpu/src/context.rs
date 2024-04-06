@@ -78,6 +78,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type BlasData: ContextData;
     type TlasId: ContextId + WasmNotSendSync;
     type TlasData: ContextData;
+    type TlasInstanceId: ContextId + WasmNotSendSync;
 
     type SurfaceOutputDetail: WasmNotSendSync + 'static;
     type SubmissionIndex: ContextId + Clone + Copy + WasmNotSendSync;
@@ -1034,6 +1035,17 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (Self::TlasId, Self::TlasData);
+    fn blas_create_tlas_instance(
+        &self,
+        blas: &Self::BlasId,
+        blas_data: &Self::BlasData,
+    ) -> Self::TlasInstanceId;
+    fn tlas_instance_set_blas(
+        &self,
+        tlas_instance: &Self::TlasInstanceId,
+        blas: &Self::BlasId,
+        blas_data: &Self::BlasData,
+    );
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &'a self,
         encoder: &Self::CommandEncoderId,
@@ -1050,6 +1062,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     );
     fn blas_destroy(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
     fn blas_drop(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
+    fn tlas_instance_drop(&self, tlas_instance: &Self::TlasInstanceId);
     fn tlas_destroy(&self, tlas: &Self::TlasId, tlas_data: &Self::TlasData);
     fn tlas_drop(&self, tlas: &Self::TlasId, tlas_data: &Self::TlasData);
 }
@@ -2031,6 +2044,13 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
+    fn blas_create_tlas_instance(&self, blas: &ObjectId, blas_data: &crate::Data) -> ObjectId;
+    fn tlas_instance_set_blas(
+        &self,
+        tlas_instance: &ObjectId,
+        blas: &ObjectId,
+        blas_data: &crate::Data,
+    );
     fn command_encoder_build_acceleration_structures_unsafe_tlas(
         &self,
         encoder: &ObjectId,
@@ -2047,6 +2067,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     );
     fn blas_destroy(&self, blas: &ObjectId, blas_data: &crate::Data);
     fn blas_drop(&self, blas: &ObjectId, blas_data: &crate::Data);
+    fn tlas_instance_drop(&self, tlas_instance: &ObjectId);
     fn tlas_destroy(&self, tlas: &ObjectId, tlas_data: &crate::Data);
     fn tlas_drop(&self, tlas: &ObjectId, tlas_data: &crate::Data);
 }
@@ -4079,6 +4100,25 @@ where
         (tlas.into(), Box::new(data) as _)
     }
 
+    fn blas_create_tlas_instance(&self, blas: &ObjectId, blas_data: &crate::Data) -> ObjectId {
+        let blas = <T::BlasId>::from(*blas);
+        let blas_data = downcast_ref(blas_data);
+        let tlas_instance = Context::blas_create_tlas_instance(self, &blas, blas_data);
+        tlas_instance.into()
+    }
+
+    fn tlas_instance_set_blas(
+        &self,
+        tlas_instance: &ObjectId,
+        blas: &ObjectId,
+        blas_data: &crate::Data,
+    ) {
+        let blas = <T::BlasId>::from(*blas);
+        let blas_data = downcast_ref(blas_data);
+        let tlas_instance = <T::TlasInstanceId>::from(*tlas_instance);
+        Context::tlas_instance_set_blas(self, &tlas_instance, &blas, blas_data)
+    }
+
     fn command_encoder_build_acceleration_structures_unsafe_tlas(
         &self,
         encoder: &ObjectId,
@@ -4180,7 +4220,7 @@ where
                 let instances = e.instances.map(
                     |instance: Option<crate::ray_tracing::DynContextTlasInstance<'_>>| {
                         instance.map(|instance| crate::ray_tracing::ContextTlasInstance {
-                            blas_id: <T::BlasId>::from(instance.blas),
+                            tlas_instance: <T::TlasInstanceId>::from(instance.tlas_instance),
                             transform: instance.transform,
                             custom_index: instance.custom_index,
                             mask: instance.mask,
@@ -4213,6 +4253,11 @@ where
         let blas = <T::BlasId>::from(*blas);
         let blas_data = downcast_ref(blas_data);
         Context::blas_drop(self, &blas, blas_data)
+    }
+
+    fn tlas_instance_drop(&self, tlas_instance: &ObjectId) {
+        let tlas_instance = <T::TlasInstanceId>::from(*tlas_instance);
+        Context::tlas_instance_drop(self, &tlas_instance)
     }
 
     fn tlas_destroy(&self, tlas: &ObjectId, tlas_data: &crate::Data) {

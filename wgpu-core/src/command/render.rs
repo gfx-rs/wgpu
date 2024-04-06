@@ -1510,7 +1510,7 @@ impl Global {
                                 tracker.tlas_s.insert_single(tlas.clone());
 
                                 crate::ray_tracing::TlasAction {
-                                    id: tlas.as_info().id(),
+                                    tlas: tlas.clone(),
                                     kind: crate::ray_tracing::TlasActionKind::Use,
                                 }
                             });

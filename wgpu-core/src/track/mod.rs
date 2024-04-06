@@ -221,6 +221,7 @@ pub(crate) struct TrackerIndexAllocators {
     pub bundles: Arc<SharedTrackerIndexAllocator>,
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
     pub tlas_s: Arc<SharedTrackerIndexAllocator>,
+    pub tlas_instances: Arc<SharedTrackerIndexAllocator>,
     pub blas_s: Arc<SharedTrackerIndexAllocator>,
 }
 
@@ -240,6 +241,7 @@ impl TrackerIndexAllocators {
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
             tlas_s: Arc::new(SharedTrackerIndexAllocator::new()),
+            tlas_instances: Arc::new(SharedTrackerIndexAllocator::new()),
             blas_s: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
@@ -625,6 +627,7 @@ pub(crate) struct Tracker<A: HalApi> {
     pub query_sets: StatelessTracker<resource::QuerySet<A>>,
     pub blas_s: StatelessTracker<resource::Blas<A>>,
     pub tlas_s: StatelessTracker<resource::Tlas<A>>,
+    pub tlas_instances: StatelessTracker<resource::TlasInstance<A>>,
 }
 
 impl<A: HalApi> Tracker<A> {
@@ -641,6 +644,7 @@ impl<A: HalApi> Tracker<A> {
             query_sets: StatelessTracker::new(),
             blas_s: StatelessTracker::new(),
             tlas_s: StatelessTracker::new(),
+            tlas_instances: StatelessTracker::new(),
         }
     }
 

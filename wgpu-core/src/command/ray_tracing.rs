@@ -11,7 +11,6 @@ use crate::{
         ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
-    storage::Storage,
     FastHashSet,
 };
 
@@ -155,7 +154,7 @@ impl Global {
             }
 
             cmd_buf_data.blas_actions.push(BlasAction {
-                id: entry.blas_id,
+                blas: blas.clone(),
                 kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
             });
 
@@ -175,40 +174,39 @@ impl Global {
                         let size_desc = &size_desc[i];
 
                         if size_desc.flags != mesh.size.flags {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedFlags(
-                                    entry.blas_id,
-                                    size_desc.flags,
-                                    mesh.size.flags,
-                                ),
-                            );
+                            return Err(BuildAccelerationStructureError::MismatchedFlags(
+                                entry.blas_id,
+                                size_desc.flags,
+                                mesh.size.flags,
+                            ));
                         }
 
                         if size_desc.vertex_count < mesh.size.vertex_count
-                            || size_desc.vertex_format != mesh.size.vertex_format {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedVertexData(
-                                    entry.blas_id,
-                                )
-                            )
+                            || size_desc.vertex_format != mesh.size.vertex_format
+                        {
+                            return Err(BuildAccelerationStructureError::MismatchedVertexData(
+                                entry.blas_id,
+                            ));
                         }
 
                         if size_desc.index_count.is_none() != mesh.size.index_count.is_none()
-                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none() {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedIndexData(
-                                    entry.blas_id,
-                                )
-                            )
+                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none()
+                        {
+                            return Err(BuildAccelerationStructureError::MismatchedIndexData(
+                                entry.blas_id,
+                            ));
                         }
 
-                        if size_desc.index_count.as_ref().map_or(false, |index_count| *index_count < mesh.size.index_count.unwrap())
-                            || size_desc.index_format.as_ref().map_or(false, |format| *format != mesh.size.index_format.unwrap())  {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedIndexData(
-                                    entry.blas_id,
-                                )
-                            )
+                        if size_desc.index_count.as_ref().map_or(false, |index_count| {
+                            *index_count < mesh.size.index_count.unwrap()
+                        }) || size_desc
+                            .index_format
+                            .as_ref()
+                            .map_or(false, |format| *format != mesh.size.index_format.unwrap())
+                        {
+                            return Err(BuildAccelerationStructureError::MismatchedIndexData(
+                                entry.blas_id,
+                            ));
                         }
 
                         if size_desc.index_count.is_some() && mesh.index_buffer.is_none() {
@@ -570,7 +568,7 @@ impl Global {
             }
 
             cmd_buf_data.tlas_actions.push(TlasAction {
-                id: entry.tlas_id,
+                tlas: tlas.clone(),
                 kind: crate::ray_tracing::TlasActionKind::Build {
                     build_index: build_command_index,
                     dependencies: Vec::new(),
@@ -721,7 +719,10 @@ impl Global {
                 raw: Mutex::new(Some(scratch_buffer)),
                 device: device.clone(),
                 size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
-                info: ResourceInfo::new("Raytracing scratch buffer", Some(device.tracker_indices.staging_buffers.clone())),
+                info: ResourceInfo::new(
+                    "Raytracing scratch buffer",
+                    Some(device.tracker_indices.staging_buffers.clone()),
+                ),
                 is_coherent: scratch_mapping.is_coherent,
             })));
 
@@ -741,6 +742,7 @@ impl Global {
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let buffer_guard = hub.buffers.read();
         let blas_guard = hub.blas_s.read();
+        let tlas_instance_guard = hub.tlas_instances.read();
         let tlas_guard = hub.tlas_s.read();
 
         let device = &cmd_buf.device;
@@ -788,7 +790,7 @@ impl Global {
                     .instances
                     .map(|instance| {
                         instance.map(|instance| crate::ray_tracing::TraceTlasInstance {
-                            blas_id: instance.blas_id,
+                            tlas_instance_id: instance.tlas_instance_id,
                             transform: *instance.transform,
                             custom_index: instance.custom_index,
                             mask: instance.mask,
@@ -842,7 +844,7 @@ impl Global {
                 instance
                     .as_ref()
                     .map(|instance| crate::ray_tracing::TlasInstance {
-                        blas_id: instance.blas_id,
+                        tlas_instance_id: instance.tlas_instance_id,
                         transform: &instance.transform,
                         custom_index: instance.custom_index,
                         mask: instance.mask,
@@ -881,7 +883,7 @@ impl Global {
             }
 
             cmd_buf_data.blas_actions.push(BlasAction {
-                id: entry.blas_id,
+                blas: blas.clone(),
                 kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
             });
 
@@ -901,40 +903,39 @@ impl Global {
                         let size_desc = &size_desc[i];
 
                         if size_desc.flags != mesh.size.flags {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedFlags(
-                                    entry.blas_id,
-                                    size_desc.flags,
-                                    mesh.size.flags,
-                                ),
-                            );
+                            return Err(BuildAccelerationStructureError::MismatchedFlags(
+                                entry.blas_id,
+                                size_desc.flags,
+                                mesh.size.flags,
+                            ));
                         }
 
                         if size_desc.vertex_count < mesh.size.vertex_count
-                            || size_desc.vertex_format != mesh.size.vertex_format {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedVertexData(
-                                    entry.blas_id,
-                                )
-                            )
+                            || size_desc.vertex_format != mesh.size.vertex_format
+                        {
+                            return Err(BuildAccelerationStructureError::MismatchedVertexData(
+                                entry.blas_id,
+                            ));
                         }
 
                         if size_desc.index_count.is_none() != mesh.size.index_count.is_none()
-                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none() {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedIndexData(
-                                    entry.blas_id,
-                                )
-                            )
+                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none()
+                        {
+                            return Err(BuildAccelerationStructureError::MismatchedIndexData(
+                                entry.blas_id,
+                            ));
                         }
 
-                        if size_desc.index_count.as_ref().map_or(false, |index_count| *index_count < mesh.size.index_count.unwrap())
-                            || size_desc.index_format.as_ref().map_or(false, |format| *format != mesh.size.index_format.unwrap())  {
-                            return Err(
-                                BuildAccelerationStructureError::MismatchedIndexData(
-                                    entry.blas_id,
-                                )
-                            )
+                        if size_desc.index_count.as_ref().map_or(false, |index_count| {
+                            *index_count < mesh.size.index_count.unwrap()
+                        }) || size_desc
+                            .index_format
+                            .as_ref()
+                            .map_or(false, |format| *format != mesh.size.index_format.unwrap())
+                        {
+                            return Err(BuildAccelerationStructureError::MismatchedIndexData(
+                                entry.blas_id,
+                            ));
                         }
 
                         if size_desc.index_count.is_some() && mesh.index_buffer.is_none() {
@@ -1283,34 +1284,35 @@ impl Global {
 
             let mut instance_count = 0;
             for instance in package.instances.flatten() {
+                let tlas_instance = cmd_buf_data
+                    .trackers
+                    .tlas_instances
+                    .add_single(&tlas_instance_guard, instance.tlas_instance_id)
+                    .ok_or(BuildAccelerationStructureError::InvalidInstance(
+                        instance.tlas_instance_id,
+                    ))?;
                 if instance.custom_index >= (1u32 << 24u32) {
                     return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                         package.tlas_id,
                     ));
                 }
-                let blas = cmd_buf_data
-                    .trackers
-                    .blas_s
-                    .add_single(&blas_guard, instance.blas_id)
-                    .ok_or(BuildAccelerationStructureError::InvalidBlasForInstance(
-                        instance.blas_id,
-                    ))?;
+                let blas = tlas_instance.blas.read().clone();
 
                 instance_buffer_staging_source
                     .extend(tlas_instance_into_bytes::<A>(&instance, blas.handle));
 
                 instance_count += 1;
 
-                dependencies.push(instance.blas_id);
+                dependencies.push(blas.clone());
 
                 cmd_buf_data.blas_actions.push(BlasAction {
-                    id: instance.blas_id,
+                    blas: blas.clone(),
                     kind: crate::ray_tracing::BlasActionKind::Use,
                 });
             }
 
             cmd_buf_data.tlas_actions.push(TlasAction {
-                id: package.tlas_id,
+                tlas: tlas.clone(),
                 kind: crate::ray_tracing::TlasActionKind::Build {
                     build_index: build_command_index,
                     dependencies,
@@ -1384,7 +1386,10 @@ impl Global {
                     raw: Mutex::new(Some(staging_buffer)),
                     device: device.clone(),
                     size: instance_buffer_staging_source.len() as u64,
-                    info: ResourceInfo::new("Raytracing staging buffer", Some(device.tracker_indices.staging_buffers.clone())),
+                    info: ResourceInfo::new(
+                        "Raytracing staging buffer",
+                        Some(device.tracker_indices.staging_buffers.clone()),
+                    ),
                     is_coherent: mapping.is_coherent,
                 };
                 let staging_fid = hub.staging_buffers.request();
@@ -1572,7 +1577,10 @@ impl Global {
             raw: Mutex::new(Some(scratch_buffer)),
             device: device.clone(),
             size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
-            info: ResourceInfo::new("Ratracing scratch buffer", Some(device.tracker_indices.staging_buffers.clone())),
+            info: ResourceInfo::new(
+                "Ratracing scratch buffer",
+                Some(device.tracker_indices.staging_buffers.clone()),
+            ),
             is_coherent: scratch_mapping.is_coherent,
         };
         let staging_fid = hub.staging_buffers.request();
@@ -1592,29 +1600,22 @@ impl Global {
 
 impl<A: HalApi> BakedCommands<A> {
     // makes sure a blas is build before it is used
-    pub(crate) fn validate_blas_actions(
-        &mut self,
-        blas_guard: &mut Storage<Blas<A>>,
-    ) -> Result<(), ValidateBlasActionsError> {
+    pub(crate) fn validate_blas_actions(&mut self) -> Result<(), ValidateBlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_blas_actions");
         let mut built = FastHashSet::default();
         for action in self.blas_actions.drain(..) {
             match action.kind {
                 crate::ray_tracing::BlasActionKind::Build(id) => {
-                    built.insert(action.id);
-                    let blas = blas_guard
-                        .get(action.id)
-                        .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
-                    *blas.built_index.write() = Some(id);
+                    built.insert(action.blas.as_info().id());
+                    *action.blas.built_index.write() = Some(id);
                 }
                 crate::ray_tracing::BlasActionKind::Use => {
-                    if !built.contains(&action.id) {
-                        let blas = blas_guard
-                            .get(action.id)
-                            .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
-                        if (*blas.built_index.read()).is_none() {
-                            return Err(ValidateBlasActionsError::UsedUnbuilt(action.id));
-                        }
+                    if !built.contains(&action.blas.as_info().id())
+                        && (*action.blas.built_index.read()).is_none()
+                    {
+                        return Err(ValidateBlasActionsError::UsedUnbuilt(
+                            action.blas.as_info().id(),
+                        ));
                     }
                 }
             }
@@ -1623,11 +1624,7 @@ impl<A: HalApi> BakedCommands<A> {
     }
 
     // makes sure a tlas is build before it is used
-    pub(crate) fn validate_tlas_actions(
-        &mut self,
-        blas_guard: &Storage<Blas<A>>,
-        tlas_guard: &mut Storage<Tlas<A>>,
-    ) -> Result<(), ValidateTlasActionsError> {
+    pub(crate) fn validate_tlas_actions(&mut self) -> Result<(), ValidateTlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
         for action in self.tlas_actions.drain(..) {
             match action.kind {
@@ -1635,36 +1632,29 @@ impl<A: HalApi> BakedCommands<A> {
                     build_index,
                     dependencies,
                 } => {
-                    let tlas = tlas_guard
-                        .get(action.id)
-                        .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
-
-                    *tlas.built_index.write() = Some(build_index);
-                    *tlas.dependencies.write() = dependencies;
+                    *action.tlas.built_index.write() = Some(build_index);
+                    *action.tlas.dependencies.write() = dependencies;
                 }
                 crate::ray_tracing::TlasActionKind::Use => {
-                    let tlas = tlas_guard
-                        .get(action.id)
-                        .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
-
-                    let tlas_build_index = tlas.built_index.read();
-                    let dependencies = tlas.dependencies.read();
+                    let tlas_build_index = action.tlas.built_index.read();
+                    let dependencies = action.tlas.dependencies.read();
 
                     if (*tlas_build_index).is_none() {
-                        return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
+                        return Err(ValidateTlasActionsError::UsedUnbuilt(
+                            action.tlas.as_info().id(),
+                        ));
                     }
                     for dependency in dependencies.deref() {
-                        let blas = blas_guard.get(*dependency).map_err(|_| {
-                            ValidateTlasActionsError::InvalidBlas(*dependency, action.id)
-                        })?;
-                        let blas_build_index = *blas.built_index.read();
+                        let blas_build_index = *dependency.built_index.read();
                         if blas_build_index.is_none() {
-                            return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
+                            return Err(ValidateTlasActionsError::UsedUnbuilt(
+                                action.tlas.as_info().id(),
+                            ));
                         }
                         if blas_build_index.unwrap() > tlas_build_index.unwrap() {
                             return Err(ValidateTlasActionsError::BlasNewerThenTlas(
-                                *dependency,
-                                action.id,
+                                dependency.as_info().id(),
+                                action.tlas.as_info().id(),
                             ));
                         }
                     }

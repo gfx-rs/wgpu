@@ -104,6 +104,7 @@ flagged as errors as well.
 
 */
 
+use crate::resource::TlasInstance;
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
@@ -188,6 +189,7 @@ pub struct Hub<A: HalApi> {
     pub samplers: Registry<Sampler<A>>,
     pub blas_s: Registry<Blas<A>>,
     pub tlas_s: Registry<Tlas<A>>,
+    pub tlas_instances: Registry<TlasInstance<A>>,
 }
 
 impl<A: HalApi> Hub<A> {
@@ -212,6 +214,7 @@ impl<A: HalApi> Hub<A> {
             samplers: Registry::new(A::VARIANT),
             blas_s: Registry::new(A::VARIANT),
             tlas_s: Registry::new(A::VARIANT),
+            tlas_instances: Registry::new(A::VARIANT),
         }
     }
 

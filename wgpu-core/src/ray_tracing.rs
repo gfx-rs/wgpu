@@ -1,3 +1,4 @@
+use std::sync::Arc;
 /// Ray tracing
 /// Major missing optimizations (no api surface changes needed):
 /// - use custom tracker to track build state
@@ -16,6 +17,8 @@ use crate::{
     resource::CreateBufferError,
 };
 
+use crate::id::TlasInstanceId;
+use crate::resource::{Blas, Tlas};
 use thiserror::Error;
 use wgt::{AccelerationStructureGeometryFlags, BufferAddress};
 
@@ -38,6 +41,16 @@ pub enum CreateTlasError {
     #[error(transparent)]
     CreateBufferError(#[from] CreateBufferError),
     #[error("Unimplemented Tlas error: this error is not yet implemented")]
+    Unimplemented,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum TlasInstanceError {
+    #[error("Invalid Blas {0:?}")]
+    InvalidBlas(BlasId),
+    #[error("Invalid Blas {0:?}")]
+    InvalidTlasInstance(TlasInstanceId),
+    #[error("Unimplemented Tlas Instance error: this error is not yet implemented")]
     Unimplemented,
 }
 
@@ -79,7 +92,11 @@ pub enum BuildAccelerationStructureError {
     IncompatibleBlasBuildSizes(BlasId),
 
     #[error("The flags between the creation descriptor of Blas {0:?} and build descriptors do not match: creation {1:?}, build {2:?}")]
-    MismatchedFlags(BlasId, AccelerationStructureGeometryFlags, AccelerationStructureGeometryFlags),
+    MismatchedFlags(
+        BlasId,
+        AccelerationStructureGeometryFlags,
+        AccelerationStructureGeometryFlags,
+    ),
 
     #[error("The vertex data of Blas {0:?} creation and build descriptors do not match")]
     MismatchedVertexData(BlasId),
@@ -105,6 +122,9 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} is invalid or destroyed (for instance)")]
     InvalidBlasForInstance(BlasId),
+
+    #[error("Blas {0:?} is invalid or destroyed (for instance)")]
+    InvalidInstance(TlasInstanceId),
 
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(TlasId),
@@ -171,7 +191,7 @@ pub struct TlasBuildEntry {
 
 #[derive(Debug)]
 pub struct TlasInstance<'a> {
-    pub blas_id: BlasId,
+    pub tlas_instance_id: TlasInstanceId,
     pub transform: &'a [f32; 12],
     pub custom_index: u32,
     pub mask: u8,
@@ -190,24 +210,24 @@ pub(crate) enum BlasActionKind {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum TlasActionKind {
+pub(crate) enum TlasActionKind<A: HalApi> {
     Build {
         build_index: NonZeroU64,
-        dependencies: Vec<BlasId>,
+        dependencies: Vec<Arc<Blas<A>>>,
     },
     Use,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct BlasAction {
-    pub id: BlasId,
+pub(crate) struct BlasAction<A: HalApi> {
+    pub blas: Arc<Blas<A>>,
     pub kind: BlasActionKind,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TlasAction {
-    pub id: TlasId,
-    pub kind: TlasActionKind,
+pub(crate) struct TlasAction<A: HalApi> {
+    pub tlas: Arc<Tlas<A>>,
+    pub kind: TlasActionKind<A>,
 }
 
 #[derive(Debug, Clone)]
@@ -239,7 +259,7 @@ pub struct TraceBlasBuildEntry {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TraceTlasInstance {
-    pub blas_id: BlasId,
+    pub tlas_instance_id: TlasInstanceId,
     pub transform: [f32; 12],
     pub custom_index: u32,
     pub mask: u8,

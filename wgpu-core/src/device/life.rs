@@ -18,7 +18,7 @@ use crate::{
 };
 use smallvec::SmallVec;
 
-use crate::resource::{Blas, Tlas};
+use crate::resource::{Blas, Tlas, TlasInstance};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use thiserror::Error;
@@ -42,6 +42,7 @@ pub(crate) struct ResourceMaps<A: HalApi> {
     pub destroyed_textures: FastHashMap<TrackerIndex, Arc<DestroyedTexture<A>>>,
     pub blas_s: FastHashMap<TrackerIndex, Arc<Blas<A>>>,
     pub tlas_s: FastHashMap<TrackerIndex, Arc<Tlas<A>>>,
+    pub tlas_instances: FastHashMap<TrackerIndex, Arc<TlasInstance<A>>>,
 }
 
 impl<A: HalApi> ResourceMaps<A> {
@@ -63,6 +64,7 @@ impl<A: HalApi> ResourceMaps<A> {
             tlas_s: FastHashMap::default(),
             destroyed_buffers: FastHashMap::default(),
             destroyed_textures: FastHashMap::default(),
+            tlas_instances: FastHashMap::default(),
         }
     }
 
@@ -84,6 +86,7 @@ impl<A: HalApi> ResourceMaps<A> {
             tlas_s,
             blas_s,
             destroyed_textures,
+            tlas_instances,
         } = self;
         buffers.clear();
         staging_buffers.clear();
@@ -101,6 +104,7 @@ impl<A: HalApi> ResourceMaps<A> {
         tlas_s.clear();
         destroyed_buffers.clear();
         destroyed_textures.clear();
+        tlas_instances.clear();
     }
 
     pub(crate) fn extend(&mut self, mut other: Self) {
@@ -121,6 +125,7 @@ impl<A: HalApi> ResourceMaps<A> {
             blas_s,
             destroyed_buffers,
             destroyed_textures,
+            tlas_instances,
         } = self;
         buffers.extend(other.buffers.drain());
         staging_buffers.extend(other.staging_buffers.drain());
@@ -138,6 +143,7 @@ impl<A: HalApi> ResourceMaps<A> {
         blas_s.extend(other.blas_s.drain());
         destroyed_buffers.extend(other.destroyed_buffers.drain());
         destroyed_textures.extend(other.destroyed_textures.drain());
+        tlas_instances.extend(other.tlas_instances.drain());
     }
 }
 
@@ -311,10 +317,14 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .insert(destroyed.tracker_index, destroyed);
                 }
                 TempResource::Tlas(raw) => {
-                    last_resources.tlas_s.insert(raw.as_info().tracker_index(), raw);
+                    last_resources
+                        .tlas_s
+                        .insert(raw.as_info().tracker_index(), raw);
                 }
                 TempResource::Blas(raw) => {
-                    last_resources.blas_s.insert(raw.as_info().tracker_index(), raw);
+                    last_resources
+                        .blas_s
+                        .insert(raw.as_info().tracker_index(), raw);
                 }
             }
         }
@@ -554,7 +564,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                     .insert(v.as_info().tracker_index(), v);
             }
             for v in bind_group.used.acceleration_structures.drain_resources() {
-                self.suspected_resources.tlas_s.insert(v.as_info().tracker_index(), v);
+                self.suspected_resources
+                    .tlas_s
+                    .insert(v.as_info().tracker_index(), v);
             }
 
             self.suspected_resources.bind_group_layouts.insert(
