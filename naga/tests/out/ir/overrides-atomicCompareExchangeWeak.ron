@@ -1,0 +1,128 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Atomic((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: Some("__atomic_compare_exchange_result<Uint,4>"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("old_value"),
+                        ty: 3,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("exchanged"),
+                        ty: 4,
+                        binding: None,
+                        offset: 4,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {
+            AtomicCompareExchangeWeakResult((
+                kind: Uint,
+                width: 4,
+            )): 5,
+        },
+    ),
+    constants: [],
+    overrides: [
+        (
+            name: Some("o"),
+            id: None,
+            ty: 1,
+            init: None,
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("a"),
+            space: WorkGroup,
+            binding: None,
+            ty: 2,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "f",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            function: (
+                name: Some("f"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(1),
+                    Override(1),
+                    As(
+                        expr: 2,
+                        kind: Uint,
+                        convert: Some(4),
+                    ),
+                    Literal(U32(1)),
+                    AtomicResult(
+                        ty: 5,
+                        comparison: true,
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    Atomic(
+                        pointer: 1,
+                        fun: Exchange(
+                            compare: Some(3),
+                        ),
+                        value: 4,
+                        result: 5,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)

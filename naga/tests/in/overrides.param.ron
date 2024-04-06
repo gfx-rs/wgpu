@@ -1,0 +1,11 @@
+(
+    spv: (
+        version: (1, 0),
+		separate_entry_points: true,
+	),
+    pipeline_constants: {
+        "0": NaN,
+        "1300": 1.1,
+        "depth": 2.3,
+    }
+)

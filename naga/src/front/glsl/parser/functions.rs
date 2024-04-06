@@ -192,10 +192,13 @@ impl<'source> ParsingContext<'source> {
                         TokenValue::Case => {
                             self.bump(frontend)?;
 
-                            let (const_expr, meta) =
-                                self.parse_constant_expression(frontend, ctx.module)?;
+                            let (const_expr, meta) = self.parse_constant_expression(
+                                frontend,
+                                ctx.module,
+                                ctx.global_expression_kind_tracker,
+                            )?;
 
-                            match ctx.module.const_expressions[const_expr] {
+                            match ctx.module.global_expressions[const_expr] {
                                 Expression::Literal(Literal::I32(value)) => match uint {
                                     // This unchecked cast isn't good, but since
                                     // we only reach this code when the selector

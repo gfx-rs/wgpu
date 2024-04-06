@@ -1,0 +1,186 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [
+        (
+            name: Some("has_point_light"),
+            id: Some(0),
+            ty: 1,
+            init: Some(1),
+        ),
+        (
+            name: Some("specular_param"),
+            id: Some(1200),
+            ty: 2,
+            init: Some(2),
+        ),
+        (
+            name: Some("gain"),
+            id: Some(1300),
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("width"),
+            id: None,
+            ty: 2,
+            init: Some(3),
+        ),
+        (
+            name: Some("depth"),
+            id: None,
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("height"),
+            id: None,
+            ty: 2,
+            init: Some(6),
+        ),
+        (
+            name: Some("inferred_f32"),
+            id: None,
+            ty: 2,
+            init: Some(7),
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("gain_x_10"),
+            space: Private,
+            binding: None,
+            ty: 2,
+            init: Some(10),
+        ),
+    ],
+    global_expressions: [
+        Literal(Bool(true)),
+        Literal(F32(2.3)),
+        Literal(F32(0.0)),
+        Override(5),
+        Literal(F32(2.0)),
+        Binary(
+            op: Multiply,
+            left: 5,
+            right: 4,
+        ),
+        Literal(F32(2.718)),
+        Override(3),
+        Literal(F32(10.0)),
+        Binary(
+            op: Multiply,
+            left: 8,
+            right: 9,
+        ),
+    ],
+    functions: [],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [
+                    (
+                        name: Some("t"),
+                        ty: 2,
+                        init: Some(3),
+                    ),
+                    (
+                        name: Some("x"),
+                        ty: 1,
+                        init: None,
+                    ),
+                    (
+                        name: Some("gain_x_100"),
+                        ty: 2,
+                        init: None,
+                    ),
+                ],
+                expressions: [
+                    Override(6),
+                    Literal(F32(5.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 1,
+                        right: 2,
+                    ),
+                    Override(1),
+                    Unary(
+                        op: LogicalNot,
+                        expr: 4,
+                    ),
+                    LocalVariable(2),
+                    GlobalVariable(1),
+                    Load(
+                        pointer: 7,
+                    ),
+                    Literal(F32(10.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 8,
+                        right: 9,
+                    ),
+                    LocalVariable(3),
+                ],
+                named_expressions: {
+                    5: "a",
+                },
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    Emit((
+                        start: 4,
+                        end: 5,
+                    )),
+                    Store(
+                        pointer: 6,
+                        value: 5,
+                    ),
+                    Emit((
+                        start: 7,
+                        end: 8,
+                    )),
+                    Emit((
+                        start: 9,
+                        end: 10,
+                    )),
+                    Store(
+                        pointer: 11,
+                        value: 10,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)
