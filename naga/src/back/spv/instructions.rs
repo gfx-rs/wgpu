@@ -43,6 +43,42 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn source_continued(source: &[u8]) -> Self {
+        let mut instruction = Self::new(Op::SourceContinued);
+        instruction.add_operands(helpers::str_bytes_to_words(source));
+        instruction
+    }
+
+    pub(super) fn source_auto_continued(
+        source_language: spirv::SourceLanguage,
+        version: u32,
+        source: &Option<DebugInfoInner>,
+    ) -> Vec<Self> {
+        let mut instructions = vec![];
+
+        let with_continue = source.as_ref().and_then(|debug_info| {
+            (debug_info.source_code.len() > u16::MAX as usize).then_some(debug_info)
+        });
+        if let Some(debug_info) = with_continue {
+            let mut instruction = Self::new(Op::Source);
+            instruction.add_operand(source_language as u32);
+            instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
+
+            let words = helpers::string_to_byte_chunks(debug_info.source_code, u16::MAX as usize);
+            instruction.add_operand(debug_info.source_file_id);
+            instruction.add_operands(helpers::str_bytes_to_words(words[0]));
+            instructions.push(instruction);
+            for word_bytes in words[1..].iter() {
+                let instruction_continue = Self::source_continued(word_bytes);
+                instructions.push(instruction_continue);
+            }
+        } else {
+            let instruction = Self::source(source_language, version, source);
+            instructions.push(instruction);
+        }
+        instructions
+    }
+
     pub(super) fn name(target_id: Word, name: &str) -> Self {
         let mut instruction = Self::new(Op::Name);
         instruction.add_operand(target_id);
