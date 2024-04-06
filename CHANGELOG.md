@@ -257,6 +257,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
 - Add safety check to `wgpu_hal::vulkan::CommandEncoder` to make sure `discard_encoding` is not called in the closed state. By @villuna in [#5557](https://github.com/gfx-rs/wgpu/pull/5557)
 - Fix SPIR-V type capability requests to not depend on `LocalType` caching. By @atlv24 in [#5590](https://github.com/gfx-rs/wgpu/pull/5590)
+- Upgrade `ash` to `0.38`. By @MarijnS95 in [#5504](https://github.com/gfx-rs/wgpu/pull/5504).
 
 #### Tests
 
