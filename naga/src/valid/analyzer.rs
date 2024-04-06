@@ -226,7 +226,7 @@ struct Sampling {
     sampler: GlobalOrArgument,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {
@@ -574,7 +574,7 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(vector),
                 requirements: UniformityRequirements::empty(),
             },
-            E::Literal(_) | E::Constant(_) | E::ZeroValue(_) => Uniformity::new(),
+            E::Literal(_) | E::Constant(_) | E::Override(_) | E::ZeroValue(_) => Uniformity::new(),
             E::Compose { ref components, .. } => {
                 let non_uniform_result = components
                     .iter()
@@ -1047,7 +1047,7 @@ impl ModuleInfo {
         gctx: crate::proc::GlobalCtx,
     ) -> Result<(), super::ConstExpressionError> {
         self.const_expression_types[handle.index()] =
-            resolve_context.resolve(&gctx.const_expressions[handle], |h| Ok(&self[h]))?;
+            resolve_context.resolve(&gctx.global_expressions[handle], |h| Ok(&self[h]))?;
         Ok(())
     }
 
@@ -1186,6 +1186,7 @@ fn uniform_control_flow() {
     };
     let resolve_context = ResolveContext {
         constants: &Arena::new(),
+        overrides: &Arena::new(),
         types: &type_arena,
         special_types: &crate::SpecialTypes::default(),
         global_vars: &global_var_arena,

@@ -105,6 +105,10 @@ struct Args {
     #[argh(switch)]
     version: bool,
 
+    /// override value, of the form "foo=N,bar=M", repeatable
+    #[argh(option, long = "override")]
+    overrides: Vec<Overrides>,
+
     /// the input and output files.
     ///
     /// First positional argument is the input file. If not specified, the
@@ -209,12 +213,34 @@ impl FromStr for MslVersionArg {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Overrides {
+    pairs: Vec<(String, f64)>,
+}
+
+impl FromStr for Overrides {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut pairs = vec![];
+        for pair in s.split(',') {
+            let Some((name, value)) = pair.split_once('=') else {
+                return Err(format!("value needs a `=`: {pair:?}"));
+            };
+            let value = f64::from_str(value.trim()).map_err(|err| format!("{err}: {value:?}"))?;
+            pairs.push((name.trim().to_string(), value));
+        }
+        Ok(Overrides { pairs })
+    }
+}
+
 #[derive(Default)]
 struct Parameters<'a> {
     validation_flags: naga::valid::ValidationFlags,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     entry_point: Option<String>,
     keep_coordinate_space: bool,
+    overrides: naga::back::PipelineConstants,
     spv_in: naga::front::spv::Options,
     spv_out: naga::back::spv::Options<'a>,
     dot: naga::back::dot::Options,
@@ -308,7 +334,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
-
+    params.overrides = args
+        .overrides
+        .iter()
+        .flat_map(|o| &o.pairs)
+        .cloned()
+        .collect();
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
@@ -573,17 +604,18 @@ fn write_output(
             let mut options = params.msl.clone();
             options.bounds_check_policies = params.bounds_check_policies;
 
+            let info = info.as_ref().ok_or(CliError(
+                "Generating metal output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let pipeline_options = msl::PipelineOptions::default();
-            let (msl, _) = msl::write_string(
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating metal output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
-                &options,
-                &pipeline_options,
-            )
-            .unwrap_pretty();
+            let (msl, _) =
+                msl::write_string(&module, &info, &options, &pipeline_options).unwrap_pretty();
             fs::write(output_path, msl)?;
         }
         "spv" => {
@@ -606,16 +638,17 @@ fn write_output(
                 None => None,
             };
 
-            let spv = spv::write_vec(
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating SPIR-V output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
-                &params.spv_out,
-                pipeline_options,
-            )
-            .unwrap_pretty();
+            let info = info.as_ref().ok_or(CliError(
+                "Generating SPIR-V output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
+            let spv =
+                spv::write_vec(&module, &info, &params.spv_out, pipeline_options).unwrap_pretty();
             let bytes = spv
                 .iter()
                 .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -642,14 +675,20 @@ fn write_output(
                 multiview: None,
             };
 
+            let info = info.as_ref().ok_or(CliError(
+                "Generating glsl output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
                 &mut buffer,
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating glsl output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
+                &module,
+                &info,
                 &params.glsl,
                 &pipeline_options,
                 params.bounds_check_policies,
@@ -666,17 +705,19 @@ fn write_output(
         }
         "hlsl" => {
             use naga::back::hlsl;
+
+            let info = info.as_ref().ok_or(CliError(
+                "Generating hlsl output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let mut buffer = String::new();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-            writer
-                .write(
-                    module,
-                    info.as_ref().ok_or(CliError(
-                        "Generating hlsl output requires validation to \
-                         succeed, and it failed in a previous step",
-                    ))?,
-                )
-                .unwrap_pretty();
+            writer.write(&module, &info).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {

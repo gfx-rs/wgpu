@@ -765,14 +765,17 @@ impl super::Device {
                 } else {
                     &self.naga_options
                 };
+
+                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    stage.constants,
+                )
+                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
+
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(
-                        &naga_shader.module,
-                        &naga_shader.info,
-                        options,
-                        Some(&pipeline_options),
-                    )
+                    naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
                 }
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv)?
@@ -1587,6 +1590,7 @@ impl crate::Device for super::Device {
                     .shared
                     .workarounds
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
+                    || !naga_shader.module.overrides.is_empty()
                 {
                     return Ok(super::ShaderModule::Intermediate {
                         naga_shader,

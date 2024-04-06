@@ -12,7 +12,7 @@ mod r#type;
 
 use crate::{
     arena::Handle,
-    proc::{LayoutError, Layouter, TypeResolution},
+    proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -131,7 +131,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {
@@ -174,10 +174,15 @@ pub struct Validator {
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
+    override_ids: FastHashSet<u16>,
+    allow_overrides: bool,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ConstantError {
+    #[error("Initializer must be a const-expression")]
+    InitializerExprType,
     #[error("The type doesn't match the constant")]
     InvalidType,
     #[error("The type is not constructible")]
@@ -185,6 +190,26 @@ pub enum ConstantError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum OverrideError {
+    #[error("Override name and ID are missing")]
+    MissingNameAndID,
+    #[error("Override ID must be unique")]
+    DuplicateID,
+    #[error("Initializer must be a const-expression or override-expression")]
+    InitializerExprType,
+    #[error("The type doesn't match the override")]
+    InvalidType,
+    #[error("The type is not constructible")]
+    NonConstructibleType,
+    #[error("The type is not a scalar")]
+    TypeNotScalar,
+    #[error("Override declarations are not allowed")]
+    NotAllowed,
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ValidationError {
     #[error(transparent)]
     InvalidHandle(#[from] InvalidHandleError),
@@ -206,6 +231,12 @@ pub enum ValidationError {
         handle: Handle<crate::Constant>,
         name: String,
         source: ConstantError,
+    },
+    #[error("Override {handle:?} '{name}' is invalid")]
+    Override {
+        handle: Handle<crate::Override>,
+        name: String,
+        source: OverrideError,
     },
     #[error("Global variable {handle:?} '{name}' is invalid")]
     GlobalVariable {
@@ -293,6 +324,8 @@ impl Validator {
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
             valid_expression_set: BitSet::new(),
+            override_ids: FastHashSet::default(),
+            allow_overrides: true,
         }
     }
 
@@ -305,6 +338,7 @@ impl Validator {
         self.switch_values.clear();
         self.valid_expression_list.clear();
         self.valid_expression_set.clear();
+        self.override_ids.clear();
     }
 
     fn validate_constant(
@@ -312,12 +346,17 @@ impl Validator {
         handle: Handle<crate::Constant>,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
+        global_expr_kind: &ExpressionKindTracker,
     ) -> Result<(), ConstantError> {
         let con = &gctx.constants[handle];
 
         let type_info = &self.types[con.ty.index()];
         if !type_info.flags.contains(TypeFlags::CONSTRUCTIBLE) {
             return Err(ConstantError::NonConstructibleType);
+        }
+
+        if !global_expr_kind.is_const(con.init) {
+            return Err(ConstantError::InitializerExprType);
         }
 
         let decl_ty = &gctx.types[con.ty].inner;
@@ -329,8 +368,77 @@ impl Validator {
         Ok(())
     }
 
+    fn validate_override(
+        &mut self,
+        handle: Handle<crate::Override>,
+        gctx: crate::proc::GlobalCtx,
+        mod_info: &ModuleInfo,
+    ) -> Result<(), OverrideError> {
+        if !self.allow_overrides {
+            return Err(OverrideError::NotAllowed);
+        }
+
+        let o = &gctx.overrides[handle];
+
+        if o.name.is_none() && o.id.is_none() {
+            return Err(OverrideError::MissingNameAndID);
+        }
+
+        if let Some(id) = o.id {
+            if !self.override_ids.insert(id) {
+                return Err(OverrideError::DuplicateID);
+            }
+        }
+
+        let type_info = &self.types[o.ty.index()];
+        if !type_info.flags.contains(TypeFlags::CONSTRUCTIBLE) {
+            return Err(OverrideError::NonConstructibleType);
+        }
+
+        let decl_ty = &gctx.types[o.ty].inner;
+        match decl_ty {
+            &crate::TypeInner::Scalar(scalar) => match scalar {
+                crate::Scalar::BOOL
+                | crate::Scalar::I32
+                | crate::Scalar::U32
+                | crate::Scalar::F32
+                | crate::Scalar::F64 => {}
+                _ => return Err(OverrideError::TypeNotScalar),
+            },
+            _ => return Err(OverrideError::TypeNotScalar),
+        }
+
+        if let Some(init) = o.init {
+            let init_ty = mod_info[init].inner_with(gctx.types);
+            if !decl_ty.equivalent(init_ty, gctx.types) {
+                return Err(OverrideError::InvalidType);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Check the given module to be valid.
     pub fn validate(
+        &mut self,
+        module: &crate::Module,
+    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+        self.allow_overrides = true;
+        self.validate_impl(module)
+    }
+
+    /// Check the given module to be valid.
+    ///
+    /// With the additional restriction that overrides are not present.
+    pub fn validate_no_overrides(
+        &mut self,
+        module: &crate::Module,
+    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+        self.allow_overrides = false;
+        self.validate_impl(module)
+    }
+
+    fn validate_impl(
         &mut self,
         module: &crate::Module,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
@@ -354,7 +462,7 @@ impl Validator {
             type_flags: Vec::with_capacity(module.types.len()),
             functions: Vec::with_capacity(module.functions.len()),
             entry_points: Vec::with_capacity(module.entry_points.len()),
-            const_expression_types: vec![placeholder; module.const_expressions.len()]
+            const_expression_types: vec![placeholder; module.global_expressions.len()]
                 .into_boxed_slice(),
         };
 
@@ -376,27 +484,34 @@ impl Validator {
         {
             let t = crate::Arena::new();
             let resolve_context = crate::proc::ResolveContext::with_locals(module, &t, &[]);
-            for (handle, _) in module.const_expressions.iter() {
+            for (handle, _) in module.global_expressions.iter() {
                 mod_info
                     .process_const_expression(handle, &resolve_context, module.to_ctx())
                     .map_err(|source| {
                         ValidationError::ConstExpression { handle, source }
-                            .with_span_handle(handle, &module.const_expressions)
+                            .with_span_handle(handle, &module.global_expressions)
                     })?
             }
         }
 
+        let global_expr_kind = ExpressionKindTracker::from_arena(&module.global_expressions);
+
         if self.flags.contains(ValidationFlags::CONSTANTS) {
-            for (handle, _) in module.const_expressions.iter() {
-                self.validate_const_expression(handle, module.to_ctx(), &mod_info)
-                    .map_err(|source| {
-                        ValidationError::ConstExpression { handle, source }
-                            .with_span_handle(handle, &module.const_expressions)
-                    })?
+            for (handle, _) in module.global_expressions.iter() {
+                self.validate_const_expression(
+                    handle,
+                    module.to_ctx(),
+                    &mod_info,
+                    &global_expr_kind,
+                )
+                .map_err(|source| {
+                    ValidationError::ConstExpression { handle, source }
+                        .with_span_handle(handle, &module.global_expressions)
+                })?
             }
 
             for (handle, constant) in module.constants.iter() {
-                self.validate_constant(handle, module.to_ctx(), &mod_info)
+                self.validate_constant(handle, module.to_ctx(), &mod_info, &global_expr_kind)
                     .map_err(|source| {
                         ValidationError::Constant {
                             handle,
@@ -406,10 +521,22 @@ impl Validator {
                         .with_span_handle(handle, &module.constants)
                     })?
             }
+
+            for (handle, override_) in module.overrides.iter() {
+                self.validate_override(handle, module.to_ctx(), &mod_info)
+                    .map_err(|source| {
+                        ValidationError::Override {
+                            handle,
+                            name: override_.name.clone().unwrap_or_default(),
+                            source,
+                        }
+                        .with_span_handle(handle, &module.overrides)
+                    })?
+            }
         }
 
         for (var_handle, var) in module.global_variables.iter() {
-            self.validate_global_var(var, module.to_ctx(), &mod_info)
+            self.validate_global_var(var, module.to_ctx(), &mod_info, &global_expr_kind)
                 .map_err(|source| {
                     ValidationError::GlobalVariable {
                         handle: var_handle,
@@ -421,7 +548,7 @@ impl Validator {
         }
 
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info, false) {
+            match self.validate_function(fun, module, &mod_info, false, &global_expr_kind) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {
@@ -447,7 +574,7 @@ impl Validator {
                 .with_span()); // TODO: keep some EP span information?
             }
 
-            match self.validate_entry_point(ep, module, &mod_info) {
+            match self.validate_entry_point(ep, module, &mod_info, &global_expr_kind) {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {
