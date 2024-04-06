@@ -39,7 +39,6 @@ kernel void main_(
     metal::uint2 cit0_ = metal::uint2(0u);
     metal::float2x2 cit1_ = metal::float2x2(metal::float2(0.0), metal::float2(0.0));
     type_11 cit2_ = type_11 {0, 1, 2, 3};
-    bool ic0_ = static_cast<bool>(bool {});
     metal::uint2 ic4_ = metal::uint2(0u, 0u);
     metal::float2x3 ic5_ = metal::float2x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
 }

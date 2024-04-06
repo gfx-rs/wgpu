@@ -615,7 +615,7 @@ impl Writer {
             // Steal the Writer's temp list for a bit.
             temp_list: std::mem::take(&mut self.temp_list),
             writer: self,
-            expression_constness: crate::proc::ExpressionConstnessTracker::from_arena(
+            expression_constness: super::ExpressionConstnessTracker::from_arena(
                 &ir_function.expressions,
             ),
         };
@@ -1258,7 +1258,7 @@ impl Writer {
         ir_module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<Word, Error> {
-        let id = match ir_module.const_expressions[handle] {
+        let id = match ir_module.global_expressions[handle] {
             crate::Expression::Literal(literal) => self.get_constant_scalar(literal),
             crate::Expression::Constant(constant) => {
                 let constant = &ir_module.constants[constant];
@@ -1272,7 +1272,7 @@ impl Writer {
                 let component_ids: Vec<_> = crate::proc::flatten_compose(
                     ty,
                     components,
-                    &ir_module.const_expressions,
+                    &ir_module.global_expressions,
                     &ir_module.types,
                 )
                 .map(|component| self.constant_ids[component.index()])
@@ -1914,8 +1914,8 @@ impl Writer {
 
         // write all const-expressions as constants
         self.constant_ids
-            .resize(ir_module.const_expressions.len(), 0);
-        for (handle, _) in ir_module.const_expressions.iter() {
+            .resize(ir_module.global_expressions.len(), 0);
+        for (handle, _) in ir_module.global_expressions.iter() {
             self.write_constant_expr(handle, ir_module, mod_info)?;
         }
         debug_assert!(self.constant_ids.iter().all(|&id| id != 0));
@@ -2029,6 +2029,10 @@ impl Writer {
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
+        if !ir_module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
+
         self.reset();
 
         // Try to find the entry point and corresponding index

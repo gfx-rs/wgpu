@@ -135,6 +135,7 @@
                 stage: (
                     module: Id(0, 1, Empty),
                     entry_point: None,
+                    constants: {},
                 ),
             ),
         ),

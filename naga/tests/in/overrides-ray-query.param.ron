@@ -1,0 +1,18 @@
+(
+    god_mode: true,
+    spv: (
+        version: (1, 4),
+        separate_entry_points: true,
+    ),
+    msl: (
+        lang_version: (2, 4),
+        spirv_cross_compatibility: false,
+        fake_missing_bindings: true,
+        zero_initialize_workgroup_memory: false,
+        per_entry_point_map: {},
+        inline_samplers: [],
+    ),
+    pipeline_constants: {
+        "o": 2.0
+    }
+)

@@ -78,12 +78,20 @@ impl<T: Resource> FutureId<'_, T> {
         Arc::new(value)
     }
 
+    pub fn init_in_place(&self, mut value: Arc<T>) -> Arc<T> {
+        Arc::get_mut(&mut value)
+            .unwrap()
+            .as_info_mut()
+            .set_id(self.id);
+        value
+    }
+
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry, and fills out the resource info.
-    pub fn assign(self, value: T) -> (Id<T::Marker>, Arc<T>) {
+    pub fn assign(self, value: Arc<T>) -> (Id<T::Marker>, Arc<T>) {
         let mut data = self.data.write();
-        data.insert(self.id, self.init(value));
+        data.insert(self.id, self.init_in_place(value));
         (self.id, data.get(self.id).unwrap().clone())
     }
 
