@@ -657,10 +657,20 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
             adjust(result);
         }
         Statement::SubgroupGather {
+            ref mut mode,
             ref mut argument,
             ref mut result,
-            ..
         } => {
+            match *mode {
+                crate::GatherMode::BroadcastFirst => {}
+                crate::GatherMode::Broadcast(ref mut index)
+                | crate::GatherMode::Shuffle(ref mut index)
+                | crate::GatherMode::ShuffleDown(ref mut index)
+                | crate::GatherMode::ShuffleUp(ref mut index)
+                | crate::GatherMode::ShuffleXor(ref mut index) => {
+                    adjust(index);
+                }
+            }
             adjust(argument);
             adjust(result)
         }
