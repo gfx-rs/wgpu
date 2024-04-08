@@ -782,8 +782,14 @@ impl super::Device {
             }
         };
 
+        let mut flags = vk::PipelineShaderStageCreateFlags::empty();
+        if self.shared.private_caps.subgroup_size_control {
+            flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE
+        }
+
         let entry_point = CString::new(stage.entry_point).unwrap();
         let create_info = vk::PipelineShaderStageCreateInfo::builder()
+            .flags(flags)
             .stage(conv::map_shader_stage(stage_flags))
             .module(vk_module)
             .name(&entry_point)
