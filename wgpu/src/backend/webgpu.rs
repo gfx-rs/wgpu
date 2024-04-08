@@ -737,6 +737,8 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
         max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
         // The following are not part of WebGPU
+        min_subgroup_size: wgt::Limits::default().min_subgroup_size,
+        max_subgroup_size: wgt::Limits::default().max_subgroup_size,
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
     }

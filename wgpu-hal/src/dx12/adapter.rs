@@ -389,6 +389,8 @@ impl super::Adapter {
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: d3d12_ty::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: d3d12_ty::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
+                    min_subgroup_size: 4, // Not using `features1.WaveLaneCountMin` as it is unreliable
+                    max_subgroup_size: 128,
                     // The push constants are part of the root signature which
                     // has a limit of 64 DWORDS (256 bytes), but other resources
                     // also share the root signature:
