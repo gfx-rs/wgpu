@@ -2,7 +2,9 @@ use super::conv;
 
 use arrayvec::ArrayVec;
 use ash::{extensions::khr, vk};
+use naga::back::spv::ZeroInitializeWorkgroupMemoryMode;
 use parking_lot::Mutex;
+use wgt::ZeroInitializeWorkgroupMemory;
 
 use std::{
     borrow::Cow,
@@ -723,6 +725,7 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         naga_stage: naga::ShaderStage,
         binding_map: &naga::back::spv::BindingMap,
+        zero_initialise_workgroup_memory: ZeroInitializeWorkgroupMemory,
     ) -> Result<CompiledStage, crate::PipelineError> {
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
         let vk_module = match *stage.module {
@@ -737,7 +740,8 @@ impl super::Device {
                 };
                 let needs_temp_options = !runtime_checks
                     || !binding_map.is_empty()
-                    || naga_shader.debug_source.is_some();
+                    || naga_shader.debug_source.is_some()
+                    || zero_initialise_workgroup_memory != ZeroInitializeWorkgroupMemory::always();
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -759,6 +763,10 @@ impl super::Device {
                             source_code: &debug.source_code,
                             file_name: debug.file_name.as_ref().as_ref(),
                         })
+                    }
+                    if zero_initialise_workgroup_memory != ZeroInitializeWorkgroupMemory::always() {
+                        temp_options.zero_initialize_workgroup_memory =
+                            ZeroInitializeWorkgroupMemoryMode::None;
                     }
 
                     &temp_options
@@ -1700,6 +1708,8 @@ impl crate::Device for super::Device {
             &desc.vertex_stage,
             naga::ShaderStage::Vertex,
             &desc.layout.binding_arrays,
+            // Unused as not compute
+            ZeroInitializeWorkgroupMemory::always(),
         )?;
         stages.push(compiled_vs.create_info);
         let compiled_fs = match desc.fragment_stage {
@@ -1708,6 +1718,8 @@ impl crate::Device for super::Device {
                     stage,
                     naga::ShaderStage::Fragment,
                     &desc.layout.binding_arrays,
+                    // Unused as not compute
+                    ZeroInitializeWorkgroupMemory::always(),
                 )?;
                 stages.push(compiled.create_info);
                 Some(compiled)
@@ -1894,6 +1906,7 @@ impl crate::Device for super::Device {
             &desc.stage,
             naga::ShaderStage::Compute,
             &desc.layout.binding_arrays,
+            desc.zero_initialise_workgroup_memory,
         )?;
 
         let vk_infos = [{
