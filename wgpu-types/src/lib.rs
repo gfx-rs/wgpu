@@ -6166,11 +6166,15 @@ impl ZeroInitializeWorkgroupMemory {
         Self(ZeroInitializeWorkgroupMemoryInner::Always)
     }
 
-    /// Don't zero out workgroup memory (without explicit initializers)
-    /// (unless required by the underlying device)
+    /// Don't zero out workgroup memory (without explicit initializers),
+    /// unless this is required by the underlying device.
+    ///
+    /// This will be ignored when running under WebGPU
+    ///
+    /// # Safety
     ///
     /// Using this requires that the corresponding shader will not read from
-    /// an address in workgroup memory before writing to it
+    /// uninitialised workgroup memory
     pub const unsafe fn never() -> Self {
         Self(ZeroInitializeWorkgroupMemoryInner::Never)
     }
