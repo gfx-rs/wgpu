@@ -269,7 +269,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
     /// Whether to initialise workgroup scoped memory to have a value of zero.
-    /// In most cases, you should set this to [`ZeroInitializeWorkgroupMemory::always()`],
+    /// In most cases, you should set this to [`wgt::ZeroInitializeWorkgroupMemory::always()`],
     /// which is the default value.
     pub zero_initialise_workgroup_memory: wgt::ZeroInitializeWorkgroupMemory,
 }
