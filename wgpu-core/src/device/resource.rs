@@ -2766,6 +2766,7 @@ impl<A: HalApi> Device<A> {
                 entry_point: final_entry_point_name.as_ref(),
                 constants: desc.stage.constants.as_ref(),
             },
+            zero_initialise_workgroup_memory: desc.zero_initialise_workgroup_memory,
         };
 
         let raw = unsafe {

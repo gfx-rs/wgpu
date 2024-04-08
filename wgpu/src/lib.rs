@@ -1575,6 +1575,8 @@ pub struct ComputePassDescriptor<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePassDescriptor<'_>: Send, Sync);
 
+pub use wgt::ZeroInitializeWorkgroupMemory;
+
 /// Describes a compute pipeline.
 ///
 /// For use with [`Device::create_compute_pipeline`].
@@ -1592,6 +1594,13 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// and no return value in the shader.
     pub entry_point: &'a str,
+    /// Whether to initialise workgroup scoped memory to have a value of zero.
+    /// In most cases, you should set this to [`ZeroInitializeWorkgroupMemory::always()`],
+    /// which is the default value.
+    ///
+    /// This is a newtype rather than a boolean because the alternative,
+    /// [`ZeroInitializeWorkgroupMemory::never()`], is unsafe.
+    pub zero_initialise_workgroup_memory: wgt::ZeroInitializeWorkgroupMemory,
     /// Specifies the values of pipeline-overridable constants in the shader module.
     ///
     /// If an `@id` attribute was specified on the declaration,

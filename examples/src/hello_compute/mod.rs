@@ -109,6 +109,7 @@ async fn execute_gpu_inner(
         layout: None,
         module: &cs_module,
         entry_point: "main",
+        zero_initialise_workgroup_memory: Default::default(),
         constants: &Default::default(),
     });
 

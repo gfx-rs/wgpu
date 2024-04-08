@@ -6148,6 +6148,42 @@ pub enum BufferBindingType {
     },
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub(crate) enum ZeroInitializeWorkgroupMemoryInner {
+    Always,
+    Never,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// A policy for zero initialising workgroup memory
+pub struct ZeroInitializeWorkgroupMemory(ZeroInitializeWorkgroupMemoryInner);
+
+impl ZeroInitializeWorkgroupMemory {
+    /// Always zero out workgroup memory (without explicit initializers)
+    pub const fn always() -> Self {
+        Self(ZeroInitializeWorkgroupMemoryInner::Always)
+    }
+
+    /// Don't zero out workgroup memory (without explicit initializers)
+    /// (unless required by the underlying device)
+    ///
+    /// Using this requires that the corresponding shader will not read from
+    /// an address in workgroup memory before writing to it
+    pub const unsafe fn never() -> Self {
+        Self(ZeroInitializeWorkgroupMemoryInner::Never)
+    }
+}
+
+impl Default for ZeroInitializeWorkgroupMemory {
+    fn default() -> Self {
+        Self::always()
+    }
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ZeroInitializeWorkgroupMemory<'_>: Send, Sync);
+
 /// Specific type of a sample in a texture binding.
 ///
 /// Corresponds to [WebGPU `GPUTextureSampleType`](

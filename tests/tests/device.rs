@@ -499,6 +499,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     layout: None,
                     module: &shader_module,
                     entry_point: "",
+                    zero_initialise_workgroup_memory: Default::default(),
                     constants: &Default::default(),
                 });
         });

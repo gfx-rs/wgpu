@@ -103,6 +103,7 @@ async fn partial_update_test(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &sm,
             entry_point: "main",
+            zero_initialise_workgroup_memory: Default::default(),
             constants: &Default::default(),
         });
 

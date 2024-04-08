@@ -1205,6 +1205,7 @@ impl crate::Context for ContextWgpuCore {
                 entry_point: Some(Borrowed(desc.entry_point)),
                 constants: Borrowed(desc.constants),
             },
+            zero_initialise_workgroup_memory: desc.zero_initialise_workgroup_memory,
         };
 
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_compute_pipeline(
