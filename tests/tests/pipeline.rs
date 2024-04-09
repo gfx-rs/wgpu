@@ -28,7 +28,7 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
                     layout: None,
                     module: &module,
                     entry_point: "doesn't exist",
-                    zero_initialise_workgroup_memory: Default::default(),
+                    compilation_options: Default::default(),
                     constants: &Default::default(),
                 });
 

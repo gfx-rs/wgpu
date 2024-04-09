@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
-use wgpu_types::ZeroInitializeWorkgroupMemory;
+use wgpu_types::PipelineCompilationOptions;
 
 use super::error::WebGpuError;
 use super::error::WebGpuResult;
@@ -115,7 +115,7 @@ pub fn op_webgpu_create_compute_pipeline(
             entry_point: compute.entry_point.map(Cow::from),
             constants: Cow::Owned(compute.constants),
         },
-        zero_initialise_workgroup_memory: ZeroInitializeWorkgroupMemory::always(),
+        compilation_options: PipelineCompilationOptions::default(),
     };
     let implicit_pipelines = match layout {
         GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,

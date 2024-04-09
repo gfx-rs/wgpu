@@ -136,7 +136,6 @@
                     entry_point: None,
                     constants: {},
                 ),
-                zero_initialise_workgroup_memory: ZeroInitializeWorkgroupMemory(Always)
             ),
         ),
         Submit(1, [

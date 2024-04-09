@@ -298,7 +298,7 @@ fn compute_pass(
         layout: None,
         module,
         entry_point: "main_cs",
-        zero_initialise_workgroup_memory: Default::default(),
+        compilation_options: Default::default(),
         constants: &Default::default(),
     });
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);

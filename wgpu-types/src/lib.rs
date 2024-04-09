@@ -6150,39 +6150,16 @@ pub enum BufferBindingType {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub(crate) enum ZeroInitializeWorkgroupMemoryInner {
-    Always,
-    Never,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A policy for zero initialising workgroup memory
-pub struct ZeroInitializeWorkgroupMemory(ZeroInitializeWorkgroupMemoryInner);
-
-impl ZeroInitializeWorkgroupMemory {
-    /// Always zero out workgroup memory (without explicit initializers)
-    pub const fn always() -> Self {
-        Self(ZeroInitializeWorkgroupMemoryInner::Always)
-    }
-
-    /// Don't zero out workgroup memory (without explicit initializers),
-    /// unless this is required by the underlying device.
-    ///
-    /// This will be ignored when running under WebGPU
-    ///
-    /// # Safety
-    ///
-    /// Using this requires that the corresponding shader will not read from
-    /// uninitialised workgroup memory
-    pub const unsafe fn never() -> Self {
-        Self(ZeroInitializeWorkgroupMemoryInner::Never)
-    }
+pub struct PipelineCompilationOptions {
+    pub zero_initialize_workgroup_memory: bool,
 }
 
-impl Default for ZeroInitializeWorkgroupMemory {
+impl Default for PipelineCompilationOptions {
     fn default() -> Self {
-        Self::always()
+        PipelineCompilationOptions {
+            zero_initialize_workgroup_memory: true,
+        }
     }
 }
 #[cfg(send_sync)]

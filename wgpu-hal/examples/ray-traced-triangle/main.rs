@@ -373,7 +373,7 @@ impl<A: hal::Api> Example<A> {
                     entry_point: "main",
                     constants: &Default::default(),
                 },
-                zero_initialise_workgroup_memory: Default::default(),
+                compilation_options: Default::default(),
             })
         }
         .unwrap();

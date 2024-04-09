@@ -307,7 +307,7 @@ async fn shader_input_output_test(
                 layout: Some(&pll),
                 module: &sm,
                 entry_point: "cs_main",
-                zero_initialise_workgroup_memory: Default::default(),
+                compilation_options: Default::default(),
                 constants: &Default::default(),
             });
 

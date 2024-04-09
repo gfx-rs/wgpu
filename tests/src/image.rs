@@ -369,7 +369,7 @@ fn copy_via_compute(
         layout: Some(&pll),
         module: &sm,
         entry_point: "copy_texture_to_buffer",
-        zero_initialise_workgroup_memory: Default::default(),
+        compilation_options: Default::default(),
         constants: &Default::default(),
     });
 

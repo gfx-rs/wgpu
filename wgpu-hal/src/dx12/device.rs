@@ -214,7 +214,7 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         layout: &super::PipelineLayout,
         naga_stage: naga::ShaderStage,
-        zero_initialise_workgroup_memory: bool,
+        zero_initialize_workgroup_memory: bool,
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         use naga::back::hlsl;
 
@@ -228,9 +228,9 @@ impl super::Device {
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
 
         let mut cloned_naga_options;
-        let naga_options = if !zero_initialise_workgroup_memory {
+        let naga_options = if !zero_initialize_workgroup_memory {
             cloned_naga_options = layout.naga_options.clone();
-            cloned_naga_options.zero_initialize_workgroup_memory = zero_initialise_workgroup_memory;
+            cloned_naga_options.zero_initialize_workgroup_memory = zero_initialize_workgroup_memory;
             &cloned_naga_options
         } else {
             &layout.naga_options
@@ -1491,7 +1491,7 @@ impl crate::Device for super::Device {
             &desc.stage,
             desc.layout,
             naga::ShaderStage::Compute,
-            desc.zero_initialise_workgroup_memory == wgt::ZeroInitializeWorkgroupMemory::always(),
+            desc.compilation_options.zero_initialize_workgroup_memory,
         )?;
 
         let pair = {

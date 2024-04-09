@@ -165,7 +165,7 @@ impl crate::framework::Example for Example {
             layout: Some(&compute_pipeline_layout),
             module: &compute_shader,
             entry_point: "main",
-            zero_initialise_workgroup_memory: Default::default(),
+            compilation_options: Default::default(),
             constants: &Default::default(),
         });
 

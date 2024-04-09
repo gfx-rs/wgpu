@@ -69,7 +69,7 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             layout: Some(&pipeline_layout),
             module: &cs_module,
             entry_point: "main",
-            zero_initialise_workgroup_memory: Default::default(),
+            compilation_options: Default::default(),
             constants: &Default::default(),
         });
 

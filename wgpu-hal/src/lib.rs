@@ -1344,7 +1344,7 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     /// Whether to initialise workgroup scoped memory to have a value of zero.
     /// In most cases, you should set this to [`wgt::ZeroInitializeWorkgroupMemory::always()`],
     /// which is the default value.
-    pub zero_initialise_workgroup_memory: wgt::ZeroInitializeWorkgroupMemory,
+    pub compilation_options: wgt::PipelineCompilationOptions,
 }
 
 /// Describes how the vertex buffer is interpreted.

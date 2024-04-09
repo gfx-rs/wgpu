@@ -90,7 +90,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &module,
             entry_point: "no_resources",
-            zero_initialise_workgroup_memory: Default::default(),
+            compilation_options: Default::default(),
             constants: &Default::default(),
         };
 
@@ -220,7 +220,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &module,
             entry_point: "no_resources",
-            zero_initialise_workgroup_memory: Default::default(),
+            compilation_options: Default::default(),
             constants: &Default::default(),
         });
 
@@ -267,7 +267,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             layout: None,
             module: &module,
             entry_point: "resources",
-            zero_initialise_workgroup_memory: Default::default(),
+            compilation_options: Default::default(),
             constants: &Default::default(),
         });
 
@@ -339,7 +339,7 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
         layout: None,
         module: &module,
         entry_point: "resources",
-        zero_initialise_workgroup_memory: Default::default(),
+        compilation_options: Default::default(),
         constants: &Default::default(),
     };
     // Create two pipelines, creating a BG from the second.
@@ -402,7 +402,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
             layout: None,
             module: &module,
             entry_point: "resources",
-            zero_initialise_workgroup_memory: Default::default(),
+            compilation_options: Default::default(),
             constants: &Default::default(),
         });
 

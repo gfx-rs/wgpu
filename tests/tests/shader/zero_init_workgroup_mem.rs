@@ -87,7 +87,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 layout: Some(&pll),
                 module: &sm,
                 entry_point: "read",
-                zero_initialise_workgroup_memory: Default::default(),
+                compilation_options: Default::default(),
                 constants: &Default::default(),
             });
 
@@ -98,7 +98,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 layout: None,
                 module: &sm,
                 entry_point: "write",
-                zero_initialise_workgroup_memory: Default::default(),
+                compilation_options: Default::default(),
                 constants: &Default::default(),
             });
 

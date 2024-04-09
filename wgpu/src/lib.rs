@@ -1575,7 +1575,7 @@ pub struct ComputePassDescriptor<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePassDescriptor<'_>: Send, Sync);
 
-pub use wgt::ZeroInitializeWorkgroupMemory;
+pub use wgt::PipelineCompilationOptions;
 
 /// Describes a compute pipeline.
 ///
@@ -1600,7 +1600,7 @@ pub struct ComputePipelineDescriptor<'a> {
     ///
     /// This is a newtype rather than a boolean because the alternative,
     /// [`ZeroInitializeWorkgroupMemory::never()`], is unsafe.
-    pub zero_initialise_workgroup_memory: wgt::ZeroInitializeWorkgroupMemory,
+    pub compilation_options: wgt::PipelineCompilationOptions,
     /// Specifies the values of pipeline-overridable constants in the shader module.
     ///
     /// If an `@id` attribute was specified on the declaration,

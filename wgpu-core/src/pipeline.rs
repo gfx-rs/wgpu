@@ -271,7 +271,8 @@ pub struct ComputePipelineDescriptor<'a> {
     /// Whether to initialise workgroup scoped memory to have a value of zero.
     /// In most cases, you should set this to [`wgt::ZeroInitializeWorkgroupMemory::always()`],
     /// which is the default value.
-    pub zero_initialise_workgroup_memory: wgt::ZeroInitializeWorkgroupMemory,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub compilation_options: wgt::PipelineCompilationOptions,
 }
 
 #[derive(Clone, Debug, Error)]

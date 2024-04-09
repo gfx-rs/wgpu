@@ -110,7 +110,7 @@ async fn run() {
         layout: Some(&pipeline_layout),
         module: &shader,
         entry_point: "main",
-        zero_initialise_workgroup_memory: Default::default(),
+        compilation_options: Default::default(),
         constants: &Default::default(),
     });
 
