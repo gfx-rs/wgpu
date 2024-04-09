@@ -2409,7 +2409,10 @@ impl Global {
             (trackers, pending_discard_init_fixups)
         };
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.transmute()).unwrap();
+        let cmd_buf = hub
+            .command_buffers
+            .get(encoder_id.into_command_buffer_id())
+            .unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

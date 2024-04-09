@@ -707,7 +707,7 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        if dst.device.as_info().id() != queue_id.transmute() {
+        if dst.device.as_info().id().into_queue_id() != queue_id {
             return Err(DeviceError::WrongDevice.into());
         }
 
@@ -1191,7 +1191,7 @@ impl Global {
                             Err(_) => continue,
                         };
 
-                        if cmdbuf.device.as_info().id() != queue_id.transmute() {
+                        if cmdbuf.device.as_info().id().into_queue_id() != queue_id {
                             return Err(DeviceError::WrongDevice.into());
                         }
 

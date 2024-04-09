@@ -1043,7 +1043,10 @@ impl Global {
         profiling::scope!("CommandEncoder::as_hal");
 
         let hub = A::hub(self);
-        let cmd_buf = hub.command_buffers.get(id.transmute()).unwrap();
+        let cmd_buf = hub
+            .command_buffers
+            .get(id.into_command_buffer_id())
+            .unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         let cmd_buf_raw = cmd_buf_data.encoder.open().ok();

@@ -631,7 +631,7 @@ impl crate::Context for ContextWgpuCore {
             id: queue_id,
             error_sink,
         };
-        ready(Ok((device_id, device, device_id.transmute(), queue)))
+        ready(Ok((device_id, device, device_id.into_queue_id(), queue)))
     }
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
@@ -1839,8 +1839,7 @@ impl crate::Context for ContextWgpuCore {
         if let Err(cause) = wgc::gfx_select!(
             encoder => self.0.command_encoder_run_compute_pass(*encoder, pass_data)
         ) {
-            let name =
-                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
+            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
@@ -1923,8 +1922,7 @@ impl crate::Context for ContextWgpuCore {
         if let Err(cause) =
             wgc::gfx_select!(encoder => self.0.command_encoder_run_render_pass(*encoder, pass_data))
         {
-            let name =
-                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
+            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
