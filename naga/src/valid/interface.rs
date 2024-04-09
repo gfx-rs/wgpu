@@ -112,6 +112,8 @@ pub enum EntryPointError {
         "Invalid locations {location_mask:?} are set while dual source blending. Only location 0 may be set."
     )]
     InvalidLocationsWhileDualSourceBlending { location_mask: BitSet },
+    #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
+    InvalidMultiDimensionalSubgroupBuiltIn,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -613,6 +615,17 @@ impl super::Validator {
         let mut argument_built_ins = crate::FastHashSet::default();
         // TODO: add span info to function arguments
         for (index, fa) in ep.function.arguments.iter().enumerate() {
+            if ep.workgroup_size[1..].iter().any(|&s| s > 1)
+                && matches!(
+                    fa.binding,
+                    Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
+                        | Some(crate::Binding::BuiltIn(
+                            crate::BuiltIn::SubgroupInvocationId
+                        ))
+                )
+            {
+                return Err(EntryPointError::InvalidMultiDimensionalSubgroupBuiltIn.with_span());
+            }
             let mut ctx = VaryingContext {
                 stage: ep.stage,
                 output: false,
