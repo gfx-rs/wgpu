@@ -1210,13 +1210,10 @@ impl Global {
                             ));
                         }
                         if !cmdbuf.is_finished() {
-                            if let Some(cmdbuf) = Arc::into_inner(cmdbuf) {
-                                device.destroy_command_buffer(cmdbuf);
-                            } else {
-                                panic!(
-                                    "Command buffer cannot be destroyed because is still in use"
-                                );
-                            }
+                            let cmdbuf = Arc::into_inner(cmdbuf).expect(
+                                "Command buffer cannot be destroyed because is still in use",
+                            );
+                            device.destroy_command_buffer(cmdbuf);
                             continue;
                         }
 
