@@ -182,15 +182,6 @@ where
         self.0.backend()
     }
 
-    /// Transmute this identifier to one with a different marker trait.
-    ///
-    /// Legal use is governed through a sealed trait, however it's correctness
-    /// depends on the current implementation of `wgpu-core`.
-    #[inline]
-    pub const fn transmute<U: self::transmute::Transmute<T>>(self) -> Id<U> {
-        Id(self.0, PhantomData)
-    }
-
     #[inline]
     pub fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
         Id(RawId::zip(index, epoch, backend), PhantomData)
@@ -200,20 +191,6 @@ where
     pub fn unzip(self) -> (Index, Epoch, Backend) {
         self.0.unzip()
     }
-}
-
-pub(crate) mod transmute {
-    // This trait is effectively sealed to prevent illegal transmutes.
-    pub trait Transmute<U>: super::Marker {}
-
-    // Self-transmute is always legal.
-    impl<T> Transmute<T> for T where T: super::Marker {}
-
-    // TODO: Remove these once queues have their own identifiers.
-    impl Transmute<super::markers::Queue> for super::markers::Device {}
-    impl Transmute<super::markers::Device> for super::markers::Queue {}
-    impl Transmute<super::markers::CommandBuffer> for super::markers::CommandEncoder {}
-    impl Transmute<super::markers::CommandEncoder> for super::markers::CommandBuffer {}
 }
 
 impl<T> Copy for Id<T> where T: Marker {}
@@ -347,6 +324,24 @@ ids! {
     pub type RenderBundleEncoderId RenderBundleEncoder;
     pub type RenderBundleId RenderBundle;
     pub type QuerySetId QuerySet;
+}
+
+impl CommandEncoderId {
+    pub fn into_command_buffer_id(self) -> CommandBufferId {
+        Id(self.0, PhantomData)
+    }
+}
+
+impl CommandBufferId {
+    pub fn into_command_encoder_id(self) -> CommandEncoderId {
+        Id(self.0, PhantomData)
+    }
+}
+
+impl DeviceId {
+    pub fn into_queue_id(self) -> QueueId {
+        Id(self.0, PhantomData)
+    }
 }
 
 #[test]

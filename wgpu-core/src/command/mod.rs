@@ -253,7 +253,7 @@ impl<A: HalApi> CommandBuffer<A> {
         id: id::CommandEncoderId,
     ) -> Result<Arc<Self>, CommandEncoderError> {
         let storage = hub.command_buffers.read();
-        match storage.get(id.transmute()) {
+        match storage.get(id.into_command_buffer_id()) {
             Ok(cmd_buf) => match cmd_buf.data.lock().as_ref().unwrap().status {
                 CommandEncoderStatus::Recording => Ok(cmd_buf.clone()),
                 CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
@@ -418,7 +418,7 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let error = match hub.command_buffers.get(encoder_id.transmute()) {
+        let error = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => {
                 let mut cmd_buf_data = cmd_buf.data.lock();
                 let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -444,7 +444,7 @@ impl Global {
             Err(_) => Some(CommandEncoderError::Invalid),
         };
 
-        (encoder_id.transmute(), error)
+        (encoder_id.into_command_buffer_id(), error)
     }
 
     pub fn command_encoder_push_debug_group<A: HalApi>(
@@ -700,7 +700,7 @@ impl PrettyError for PassErrorScope {
         // This error is not in the error chain, only notes are needed
         match *self {
             Self::Pass(id) => {
-                fmt.command_buffer_label(&id.transmute());
+                fmt.command_buffer_label(&id.into_command_buffer_id());
             }
             Self::SetBindGroup(id) => {
                 fmt.bind_group_label(&id);

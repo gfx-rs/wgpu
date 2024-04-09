@@ -1334,7 +1334,9 @@ impl Global {
         profiling::scope!("Device::create_command_encoder");
 
         let hub = A::hub(self);
-        let fid = hub.command_buffers.prepare(id_in.map(|id| id.transmute()));
+        let fid = hub
+            .command_buffers
+            .prepare(id_in.map(|id| id.into_command_buffer_id()));
 
         let error = loop {
             let device = match hub.devices.get(device_id) {
@@ -1369,11 +1371,11 @@ impl Global {
 
             let (id, _) = fid.assign(Arc::new(command_buffer));
             api_log!("Device::create_command_encoder -> {id:?}");
-            return (id.transmute(), None);
+            return (id.into_command_encoder_id(), None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
-        (id.transmute(), Some(error))
+        (id.into_command_encoder_id(), Some(error))
     }
 
     pub fn command_buffer_label<A: HalApi>(&self, id: id::CommandBufferId) -> String {
@@ -1388,7 +1390,7 @@ impl Global {
 
         if let Some(cmd_buf) = hub
             .command_buffers
-            .unregister(command_encoder_id.transmute())
+            .unregister(command_encoder_id.into_command_buffer_id())
         {
             cmd_buf.data.lock().as_mut().unwrap().encoder.discard();
             cmd_buf
@@ -1400,7 +1402,7 @@ impl Global {
     pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("CommandBuffer::drop");
         api_log!("CommandBuffer::drop {command_buffer_id:?}");
-        self.command_encoder_drop::<A>(command_buffer_id.transmute())
+        self.command_encoder_drop::<A>(command_buffer_id.into_command_encoder_id())
     }
 
     pub fn device_create_render_bundle_encoder(
@@ -2121,7 +2123,7 @@ impl Global {
             .map_err(|_| DeviceError::Invalid)?;
 
         if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
-            if submission_index.queue_id != device_id.transmute() {
+            if submission_index.queue_id != device_id.into_queue_id() {
                 return Err(WaitIdleError::WrongSubmissionIndex(
                     submission_index.queue_id,
                     device_id,
