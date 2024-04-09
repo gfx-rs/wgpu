@@ -6152,6 +6152,8 @@ pub enum BufferBindingType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A policy for zero initialising workgroup memory
 pub struct PipelineCompilationOptions {
+    /// Workgroup scoped memory in compute pipelines will have a value of zero.
+    /// In most cases, you should set this to true, which is the default value.
     pub zero_initialize_workgroup_memory: bool,
 }
 

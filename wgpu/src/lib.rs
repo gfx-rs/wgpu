@@ -1597,9 +1597,6 @@ pub struct ComputePipelineDescriptor<'a> {
     /// Whether to initialise workgroup scoped memory to have a value of zero.
     /// In most cases, you should set this to [`ZeroInitializeWorkgroupMemory::always()`],
     /// which is the default value.
-    ///
-    /// This is a newtype rather than a boolean because the alternative,
-    /// [`ZeroInitializeWorkgroupMemory::never()`], is unsafe.
     pub compilation_options: wgt::PipelineCompilationOptions,
     /// Specifies the values of pipeline-overridable constants in the shader module.
     ///
