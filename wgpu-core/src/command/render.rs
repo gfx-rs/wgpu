@@ -1343,7 +1343,8 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
+        let cmd_buf: Arc<CommandBuffer<A>> =
+            CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
         let device = &cmd_buf.device;
         let snatch_guard = device.snatchable_lock.read();
 
