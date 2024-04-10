@@ -34,9 +34,9 @@ use thiserror::Error;
 use super::Device;
 
 pub struct Queue<A: HalApi> {
-    pub device: Option<Arc<Device<A>>>,
-    pub raw: Option<A::Queue>,
-    pub info: ResourceInfo<Queue<A>>,
+    pub(crate) device: Option<Arc<Device<A>>>,
+    pub(crate) raw: Option<A::Queue>,
+    pub(crate) info: ResourceInfo<Queue<A>>,
 }
 
 impl<A: HalApi> Resource for Queue<A> {
