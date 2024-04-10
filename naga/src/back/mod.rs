@@ -24,6 +24,14 @@ pub mod wgsl;
 ))]
 pub mod pipeline_constants;
 
+#[cfg(any(
+    feature = "hlsl-out",
+    feature = "msl-out",
+    feature = "spv-out",
+    feature = "glsl-out"
+))]
+pub(crate) mod zero_init;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
