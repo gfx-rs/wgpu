@@ -91,8 +91,7 @@ pub fn as_option_slice<T: Marker>(ids: &[Id<T>]) -> &[Option<Id<T>>] {
 
 /// An identifier for a wgpu object.
 ///
-/// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`]'s [`Storage`].
-/// `Storage` implements [`Index`] and [`IndexMut`], accepting `Id` values as indices.
+/// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`].
 ///
 /// ## Note on `Id` typing
 ///
@@ -112,10 +111,7 @@ pub fn as_option_slice<T: Marker>(ids: &[Id<T>]) -> &[Option<Id<T>>] {
 /// [`Global`]: crate::global::Global
 /// [`Hub`]: crate::hub::Hub
 /// [`Hub<A>`]: crate::hub::Hub
-/// [`Storage`]: crate::storage::Storage
 /// [`Texture<A>`]: crate::resource::Texture
-/// [`Index`]: std::ops::Index
-/// [`IndexMut`]: std::ops::IndexMut
 /// [`Registry`]: crate::hub::Registry
 /// [`Empty`]: hal::api::Empty
 #[repr(transparent)]
