@@ -1,5 +1,5 @@
 use super::{
-    block::{BlockExit, DebugInfoInner},
+    block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
     make_local, Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo,
     EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
@@ -1392,12 +1392,12 @@ impl Writer {
 
             id
         };
-        let mut barrier_block_id = self.id_gen.next();
+        let barrier_block_id = self.id_gen.next();
 
-        let mut block_id = self.id_gen.next();
+        let block_id = self.id_gen.next();
         function.consume(pre_if_block, Instruction::branch(block_id));
 
-        let mut remainder = None;
+        let remainder = None;
         let mut additions = HashMap::<u32, u32>::new();
         self.handle_first_zero_init(
             &mut additions,
@@ -1432,11 +1432,11 @@ impl Writer {
         ir_module: &crate::Module,
         function: &mut Function,
     ) {
+        let block = Block::new(block_id);
         let Some(((handle, kind), remainder)) = variables.split_first() else {
+            function.consume(block, Instruction::branch(exit_block));
             return;
         };
-
-        let block = Block::new(block_id);
 
         match kind {
             crate::back::zero_init::ZeroInitKind::LocalPlusIndex {
@@ -1604,8 +1604,26 @@ impl Writer {
             local_invocation_index
         };
         let var_id = self.global_variables[handle.index()].var_id;
-        let var_type_id =
-            self.get_type_id(LookupType::Handle(ir_module.global_variables[*handle].ty));
+        let handle = ir_module.global_variables[*handle].ty;
+        let crate::TypeInner::Array { base, .. } = ir_module.types[handle].inner else {
+            unreachable!("We know that the type is an array")
+        };
+        let result_type_id = self.get_type_id(LookupType::Handle(base));
+        let pointer_type = self.id_gen.next();
+        block.body.push(Instruction::type_pointer(
+            pointer_type,
+            spirv::StorageClass::Workgroup,
+            result_type_id,
+        ));
+        let pointer_id = self.id_gen.next();
+        block.body.push(Instruction::access_chain(
+            pointer_type,
+            pointer_id,
+            var_id,
+            &[index_id],
+        ));
+        let null = self.get_constant_null(result_type_id);
+        block.body.push(Instruction::store(pointer_id, null, None));
     }
 
     /// Generate an `OpVariable` for one value in an [`EntryPoint`]'s IO interface.
