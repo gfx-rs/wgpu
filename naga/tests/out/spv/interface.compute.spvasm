@@ -43,11 +43,11 @@ OpDecorate %27 BuiltIn NumWorkgroups
 %27 = OpVariable  %18  Input
 %30 = OpTypeFunction %2
 %36 = OpConstant  %6  0
+%40 = OpTypePointer Workgroup %6
 %42 = OpConstantNull  %6
 %44 = OpConstant  %6  2
 %45 = OpConstant  %6  264
 %47 = OpTypePointer Workgroup %6
-%40 = OpTypePointer Workgroup %6
 %29 = OpFunction  %2  None %30
 %16 = OpLabel
 %19 = OpLoad  %11  %17

@@ -26,11 +26,11 @@ OpDecorate %18 BuiltIn LocalInvocationIndex
 %18 = OpVariable  %19  Input
 %56 = OpConstant  %3  0
 %57 = OpTypeBool
+%61 = OpTypePointer Workgroup %4
 %63 = OpConstantNull  %4
 %65 = OpConstant  %3  2
 %66 = OpConstant  %3  264
 %69 = OpTypePointer Workgroup %4
-%61 = OpTypePointer Workgroup %4
 %14 = OpFunction  %2  None %15
 %10 = OpLabel
 %13 = OpLoad  %7  %11

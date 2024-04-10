@@ -1610,11 +1610,9 @@ impl Writer {
         };
         let result_type_id = self.get_type_id(LookupType::Handle(base));
         let pointer_type = self.id_gen.next();
-        block.body.push(Instruction::type_pointer(
-            pointer_type,
-            spirv::StorageClass::Workgroup,
-            result_type_id,
-        ));
+        let instruction =
+            Instruction::type_pointer(pointer_type, spirv::StorageClass::Workgroup, result_type_id);
+        instruction.to_words(&mut self.logical_layout.declarations);
         let pointer_id = self.id_gen.next();
         block.body.push(Instruction::access_chain(
             pointer_type,
