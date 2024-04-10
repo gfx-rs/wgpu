@@ -1589,6 +1589,9 @@ pub struct PipelineCompilationOptions<'a> {
 
 impl<'a> Default for PipelineCompilationOptions<'a> {
     fn default() -> Self {
+        // HashMap doesn't have a const constructor, due to the use of RandomState
+        // This does introduce some synchronisation costs, but these should be minor,
+        // and might be cheaper than the alternative of getting new random state
         static DEFAULT_CONSTANTS: std::sync::OnceLock<HashMap<String, f64>> =
             std::sync::OnceLock::new();
         let constants = DEFAULT_CONSTANTS.get_or_init(Default::default);
