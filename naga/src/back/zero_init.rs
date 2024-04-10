@@ -35,7 +35,14 @@ pub(crate) fn zero_init<'a>(
     let mut workgroup_variables = variables
         .map(|(handle, var)| {
             debug_assert_eq!(var.space, crate::AddressSpace::WorkGroup);
-            let len = array_len(module, var.ty);
+            let len = if workgroup_length == 1 {
+                // Treat workgroups of size one as not an array, because otherwise we'd output loads of statements for them
+                // TODO: Heuristics here?
+                None
+            } else {
+                array_len(module, var.ty)
+            };
+
             total_len += len.map(|len| (len / workgroup_length) + 1).unwrap_or(1);
             (handle, var, len)
         })
