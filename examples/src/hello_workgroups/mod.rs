@@ -111,7 +111,6 @@ async fn run() {
         module: &shader,
         entry_point: "main",
         compilation_options: Default::default(),
-        constants: &Default::default(),
     });
 
     //----------------------------------------------------------

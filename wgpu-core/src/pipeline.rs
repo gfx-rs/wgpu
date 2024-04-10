@@ -241,6 +241,11 @@ pub struct ProgrammableStageDescriptor<'a> {
     ///
     /// The value may represent any of WGSL's concrete scalar types.
     pub constants: Cow<'a, naga::back::PipelineConstants>,
+    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
+    ///
+    /// This is required by the WebGPU spec, but may have overhead which can be avoided
+    /// for cross-platform applications
+    pub zero_initialize_workgroup_memory: bool,
 }
 
 /// Number of implicit bind groups derived at pipeline creation.
@@ -268,11 +273,6 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<PipelineLayoutId>,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
-    /// Whether to initialise workgroup scoped memory to have a value of zero.
-    /// In most cases, you should set this to [`wgt::ZeroInitializeWorkgroupMemory::always()`],
-    /// which is the default value.
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub compilation_options: wgt::PipelineCompilationOptions,
 }
 
 #[derive(Clone, Debug, Error)]

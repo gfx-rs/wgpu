@@ -88,7 +88,6 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 module: &sm,
                 entry_point: "read",
                 compilation_options: Default::default(),
-                constants: &Default::default(),
             });
 
         let pipeline_write = ctx
@@ -99,7 +98,6 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 module: &sm,
                 entry_point: "write",
                 compilation_options: Default::default(),
-                constants: &Default::default(),
             });
 
         // -- Initializing data --

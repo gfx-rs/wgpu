@@ -4,7 +4,6 @@ use arrayvec::ArrayVec;
 use ash::{extensions::khr, vk};
 use naga::back::spv::ZeroInitializeWorkgroupMemoryMode;
 use parking_lot::Mutex;
-use wgt::PipelineCompilationOptions;
 
 use std::{
     borrow::Cow,
@@ -725,7 +724,6 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         naga_stage: naga::ShaderStage,
         binding_map: &naga::back::spv::BindingMap,
-        compilation_options: PipelineCompilationOptions,
     ) -> Result<CompiledStage, crate::PipelineError> {
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
         let vk_module = match *stage.module {
@@ -741,7 +739,7 @@ impl super::Device {
                 let needs_temp_options = !runtime_checks
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
-                    || !compilation_options.zero_initialize_workgroup_memory;
+                    || !stage.zero_initialize_workgroup_memory;
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -764,7 +762,7 @@ impl super::Device {
                             file_name: debug.file_name.as_ref().as_ref(),
                         })
                     }
-                    if !compilation_options.zero_initialize_workgroup_memory {
+                    if !stage.zero_initialize_workgroup_memory {
                         temp_options.zero_initialize_workgroup_memory =
                             ZeroInitializeWorkgroupMemoryMode::None;
                     }
@@ -1708,8 +1706,6 @@ impl crate::Device for super::Device {
             &desc.vertex_stage,
             naga::ShaderStage::Vertex,
             &desc.layout.binding_arrays,
-            // Currently unused as not compute
-            PipelineCompilationOptions::default(),
         )?;
         stages.push(compiled_vs.create_info);
         let compiled_fs = match desc.fragment_stage {
@@ -1718,7 +1714,6 @@ impl crate::Device for super::Device {
                     stage,
                     naga::ShaderStage::Fragment,
                     &desc.layout.binding_arrays,
-                    PipelineCompilationOptions::default(),
                 )?;
                 stages.push(compiled.create_info);
                 Some(compiled)
@@ -1905,7 +1900,6 @@ impl crate::Device for super::Device {
             &desc.stage,
             naga::ShaderStage::Compute,
             &desc.layout.binding_arrays,
-            desc.compilation_options,
         )?;
 
         let vk_infos = [{

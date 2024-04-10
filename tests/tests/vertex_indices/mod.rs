@@ -272,7 +272,6 @@ async fn vertex_index_common(ctx: TestingContext) {
             push_constant_ranges: &[],
         });
 
-    let constants = &Default::default();
     let mut pipeline_desc = wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&ppl),
@@ -280,7 +279,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             buffers: &[],
             module: &shader,
             entry_point: "vs_main_builtin",
-            constants,
+            compilation_options: Default::default(),
         },
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
@@ -288,7 +287,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: "fs_main",
-            constants,
+            compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 blend: None,

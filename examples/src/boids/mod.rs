@@ -132,7 +132,7 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &draw_shader,
                 entry_point: "main_vs",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 buffers: &[
                     wgpu::VertexBufferLayout {
                         array_stride: 4 * 4,
@@ -149,7 +149,7 @@ impl crate::framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
                 entry_point: "main_fs",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
@@ -166,7 +166,6 @@ impl crate::framework::Example for Example {
             module: &compute_shader,
             entry_point: "main",
             compilation_options: Default::default(),
-            constants: &Default::default(),
         });
 
         // buffer for the three 2d triangle vertices of each instance

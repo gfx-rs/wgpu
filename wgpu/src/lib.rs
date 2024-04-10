@@ -1468,14 +1468,10 @@ pub struct VertexState<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// in the shader.
     pub entry_point: &'a str,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
+    /// Advanced options for when this pipeline is compiled
     ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a HashMap<String, f64>,
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
@@ -1495,14 +1491,10 @@ pub struct FragmentState<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// in the shader.
     pub entry_point: &'a str,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
+    /// Advanced options for when this pipeline is compiled
     ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a HashMap<String, f64>,
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
@@ -1575,7 +1567,37 @@ pub struct ComputePassDescriptor<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePassDescriptor<'_>: Send, Sync);
 
-pub use wgt::PipelineCompilationOptions;
+#[derive(Clone, Debug)]
+/// Advanced options for use when a pipeline is compiled
+///
+/// This implements `Default`, and for most users can be set to `Default::default()`
+pub struct PipelineCompilationOptions<'a> {
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: &'a HashMap<String, f64>,
+    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
+    ///
+    /// This is required by the WebGPU spec, but may have overhead which can be avoided
+    /// for cross-platform applications
+    pub zero_initialize_workgroup_memory: bool,
+}
+
+impl<'a> Default for PipelineCompilationOptions<'a> {
+    fn default() -> Self {
+        static DEFAULT_CONSTANTS: std::sync::OnceLock<HashMap<String, f64>> =
+            std::sync::OnceLock::new();
+        let constants = DEFAULT_CONSTANTS.get_or_init(Default::default);
+        Self {
+            constants,
+            zero_initialize_workgroup_memory: true,
+        }
+    }
+}
 
 /// Describes a compute pipeline.
 ///
@@ -1594,18 +1616,10 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// and no return value in the shader.
     pub entry_point: &'a str,
-    /// Whether to initialise workgroup scoped memory to have a value of zero.
-    /// In most cases, you should set this to [`ZeroInitializeWorkgroupMemory::always()`],
-    /// which is the default value.
-    pub compilation_options: wgt::PipelineCompilationOptions,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
+    /// Advanced options for when this pipeline is compiled
     ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a HashMap<String, f64>,
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);

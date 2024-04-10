@@ -6148,25 +6148,6 @@ pub enum BufferBindingType {
     },
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// A policy for zero initialising workgroup memory
-pub struct PipelineCompilationOptions {
-    /// Workgroup scoped memory in compute pipelines will have a value of zero.
-    /// In most cases, you should set this to true, which is the default value.
-    pub zero_initialize_workgroup_memory: bool,
-}
-
-impl Default for PipelineCompilationOptions {
-    fn default() -> Self {
-        PipelineCompilationOptions {
-            zero_initialize_workgroup_memory: true,
-        }
-    }
-}
-#[cfg(send_sync)]
-static_assertions::assert_impl_all!(ZeroInitializeWorkgroupMemory<'_>: Send, Sync);
-
 /// Specific type of a sample in a texture binding.
 ///
 /// Corresponds to [WebGPU `GPUTextureSampleType`](

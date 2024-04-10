@@ -10,7 +10,6 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
-use wgpu_types::PipelineCompilationOptions;
 
 use super::error::WebGpuError;
 use super::error::WebGpuResult;
@@ -114,8 +113,8 @@ pub fn op_webgpu_create_compute_pipeline(
             module: compute_shader_module_resource.1,
             entry_point: compute.entry_point.map(Cow::from),
             constants: Cow::Owned(compute.constants),
+            zero_initialize_workgroup_memory: true,
         },
-        compilation_options: PipelineCompilationOptions::default(),
     };
     let implicit_pipelines = match layout {
         GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,
@@ -361,6 +360,8 @@ pub fn op_webgpu_create_render_pipeline(
                 module: fragment_shader_module_resource.1,
                 entry_point: Some(Cow::from(fragment.entry_point)),
                 constants: Cow::Owned(fragment.constants),
+                // Required to be true for WebGPU
+                zero_initialize_workgroup_memory: true,
             },
             targets: Cow::Owned(fragment.targets),
         })
@@ -384,6 +385,8 @@ pub fn op_webgpu_create_render_pipeline(
                 module: vertex_shader_module_resource.1,
                 entry_point: Some(Cow::Owned(args.vertex.entry_point)),
                 constants: Cow::Owned(args.vertex.constants),
+                // Required to be true for WebGPU
+                zero_initialize_workgroup_memory: true,
             },
             buffers: Cow::Owned(vertex_buffers),
         },

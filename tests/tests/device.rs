@@ -480,7 +480,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     vertex: wgpu::VertexState {
                         module: &shader_module,
                         entry_point: "",
-                        constants: &Default::default(),
+                        compilation_options: Default::default(),
                         buffers: &[],
                     },
                     primitive: wgpu::PrimitiveState::default(),
@@ -500,7 +500,6 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     module: &shader_module,
                     entry_point: "",
                     compilation_options: Default::default(),
-                    constants: &Default::default(),
                 });
         });
 
@@ -737,7 +736,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                 fragment: Some(wgpu::FragmentState {
                     module: &trivial_shaders_with_some_reversed_bindings,
                     entry_point: "fs_main",
-                    constants: &Default::default(),
+                    compilation_options: Default::default(),
                     targets: &[Some(wgt::ColorTargetState {
                         format: wgt::TextureFormat::Bgra8Unorm,
                         blend: None,
@@ -751,7 +750,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                 vertex: wgpu::VertexState {
                     module: &trivial_shaders_with_some_reversed_bindings,
                     entry_point: "vs_main",
-                    constants: &Default::default(),
+                    compilation_options: Default::default(),
                     buffers: &[],
                 },
                 primitive: wgt::PrimitiveState::default(),

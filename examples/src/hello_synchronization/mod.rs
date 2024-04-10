@@ -104,7 +104,6 @@ async fn execute(
         module: &shaders_module,
         entry_point: "patient_main",
         compilation_options: Default::default(),
-        constants: &Default::default(),
     });
     let hasty_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
@@ -112,7 +111,6 @@ async fn execute(
         module: &shaders_module,
         entry_point: "hasty_main",
         compilation_options: Default::default(),
-        constants: &Default::default(),
     });
 
     //----------------------------------------------------------

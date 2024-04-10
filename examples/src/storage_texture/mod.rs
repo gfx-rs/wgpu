@@ -101,7 +101,6 @@ async fn run(_path: Option<String>) {
         module: &shader,
         entry_point: "main",
         compilation_options: Default::default(),
-        constants: &Default::default(),
     });
 
     log::info!("Wgpu context set up.");

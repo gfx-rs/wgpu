@@ -1320,6 +1320,11 @@ pub struct ProgrammableStage<'a, A: Api> {
     pub entry_point: &'a str,
     /// Pipeline constants
     pub constants: &'a naga::back::PipelineConstants,
+    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
+    ///
+    /// This is required by the WebGPU spec, but may have overhead which can be avoided
+    /// for cross-platform applications
+    pub zero_initialize_workgroup_memory: bool,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1329,6 +1334,7 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
             module: self.module,
             entry_point: self.entry_point,
             constants: self.constants,
+            zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
         }
     }
 }
@@ -1341,10 +1347,6 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     pub layout: &'a A::PipelineLayout,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStage<'a, A>,
-    /// Whether to initialise workgroup scoped memory to have a value of zero.
-    /// In most cases, you should set this to [`wgt::ZeroInitializeWorkgroupMemory::always()`],
-    /// which is the default value.
-    pub compilation_options: wgt::PipelineCompilationOptions,
 }
 
 /// Describes how the vertex buffer is interpreted.

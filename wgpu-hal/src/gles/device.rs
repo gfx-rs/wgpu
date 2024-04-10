@@ -7,7 +7,6 @@ use std::{
     ptr,
     sync::{Arc, Mutex},
 };
-use wgt::PipelineCompilationOptions;
 
 use arrayvec::ArrayVec;
 #[cfg(native)]
@@ -17,7 +16,6 @@ use std::sync::atomic::Ordering;
 type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::Api>,
-    PipelineCompilationOptions,
 );
 type NameBindingMap = rustc_hash::FxHashMap<String, (super::BindingRegister, u8)>;
 
@@ -214,7 +212,6 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         context: CompilationContext,
         program: glow::Program,
-        compilation_options: PipelineCompilationOptions,
     ) -> Result<glow::Shader, crate::PipelineError> {
         use naga::back::glsl;
         let pipeline_options = glsl::PipelineOptions {
@@ -258,15 +255,14 @@ impl super::Device {
         };
 
         let mut output = String::new();
-        let needs_temp_options = compilation_options.zero_initialize_workgroup_memory
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
             != context.layout.naga_options.zero_initialize_workgroup_memory;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             // We use a conditional here, as cloning the naga_options could be expensive
             // That is, we want to avoid doing that unless we cannot avoid it
             temp_options = context.layout.naga_options.clone();
-            temp_options.zero_initialize_workgroup_memory =
-                compilation_options.zero_initialize_workgroup_memory;
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
             &temp_options
         } else {
             &context.layout.naga_options
@@ -316,13 +312,12 @@ impl super::Device {
         for group in &*layout.group_infos {
             group_to_binding_to_slot.push(group.binding_to_slot.clone());
         }
-        for &(naga_stage, stage, compilation_options) in &shaders {
+        for &(naga_stage, stage) in &shaders {
             program_stages.push(super::ProgramStage {
                 naga_stage: naga_stage.to_owned(),
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
-                zero_initialize_workgroup_memory: compilation_options
-                    .zero_initialize_workgroup_memory,
+                zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
             });
         }
         let mut guard = self
@@ -382,7 +377,7 @@ impl super::Device {
         let mut has_stages = wgt::ShaderStages::empty();
         let mut shaders_to_delete = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
 
-        for &(naga_stage, stage, compilation_options) in &shaders {
+        for &(naga_stage, stage) in &shaders {
             has_stages |= map_naga_stage(naga_stage);
             let pc_item = {
                 push_constant_items.push(Vec::new());
@@ -396,8 +391,7 @@ impl super::Device {
                 multiview,
             };
 
-            let shader =
-                Self::create_shader(gl, naga_stage, stage, context, program, compilation_options)?;
+            let shader = Self::create_shader(gl, naga_stage, stage, context, program)?;
             shaders_to_delete.push(shader);
         }
 
@@ -1306,18 +1300,9 @@ impl crate::Device for super::Device {
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let gl = &self.shared.context.lock();
         let mut shaders = ArrayVec::new();
-        shaders.push((
-            naga::ShaderStage::Vertex,
-            &desc.vertex_stage,
-            // Currently unused as not compute
-            PipelineCompilationOptions::default(),
-        ));
+        shaders.push((naga::ShaderStage::Vertex, &desc.vertex_stage));
         if let Some(ref fs) = desc.fragment_stage {
-            shaders.push((
-                naga::ShaderStage::Fragment,
-                fs,
-                PipelineCompilationOptions::default(),
-            ));
+            shaders.push((naga::ShaderStage::Fragment, fs));
         }
         let inner =
             unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview) }?;
@@ -1400,11 +1385,7 @@ impl crate::Device for super::Device {
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let gl = &self.shared.context.lock();
         let mut shaders = ArrayVec::new();
-        shaders.push((
-            naga::ShaderStage::Compute,
-            &desc.stage,
-            desc.compilation_options,
-        ));
+        shaders.push((naga::ShaderStage::Compute, &desc.stage));
         let inner = unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, None) }?;
 
         Ok(super::ComputePipeline { inner })

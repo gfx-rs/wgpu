@@ -29,7 +29,6 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
                     module: &module,
                     entry_point: "doesn't exist",
                     compilation_options: Default::default(),
-                    constants: &Default::default(),
                 });
 
             pipeline.get_bind_group_layout(0);

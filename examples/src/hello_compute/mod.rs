@@ -110,7 +110,6 @@ async fn execute_gpu_inner(
         module: &cs_module,
         entry_point: "main",
         compilation_options: Default::default(),
-        constants: &Default::default(),
     });
 
     // Instantiates the bind group, once again specifying the binding of buffers.

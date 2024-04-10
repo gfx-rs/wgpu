@@ -225,7 +225,6 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                     module: &shader_module,
                     entry_point: "main",
                     compilation_options: Default::default(),
-                    constants: &Default::default(),
                 });
         });
     });
@@ -295,7 +294,6 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 module: &shader_module,
                 entry_point: "main",
                 compilation_options: Default::default(),
-                constants: &Default::default(),
             });
 
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
