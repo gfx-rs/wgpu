@@ -1639,7 +1639,7 @@ impl super::Adapter {
                     .private_caps
                     .zero_initialize_workgroup_memory
                 {
-                    spv::ZeroInitializeWorkgroupMemoryMode::Native
+                    spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 } else {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
