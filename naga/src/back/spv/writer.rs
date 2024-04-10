@@ -1562,6 +1562,7 @@ impl Writer {
             }
         } else {
             let next_id = self.id_gen.next();
+            f(&mut *self, &mut consuming, additions, ir_module);
             function.consume(consuming, Instruction::branch(next_id));
 
             self.handle_first_zero_init(

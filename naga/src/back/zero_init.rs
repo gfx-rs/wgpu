@@ -2,6 +2,7 @@ use std::num::NonZeroU32;
 
 use crate::{GlobalVariable, Handle, Module, Type};
 
+#[derive(Debug)]
 pub(crate) enum ZeroInitKind {
     LocalPlusIndex {
         // The amount local_invocation_index should be multiplied by
