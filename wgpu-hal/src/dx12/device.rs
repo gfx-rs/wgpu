@@ -214,7 +214,6 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         layout: &super::PipelineLayout,
         naga_stage: naga::ShaderStage,
-        zero_initialize_workgroup_memory: bool,
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         use naga::back::hlsl;
 
@@ -227,11 +226,13 @@ impl super::Device {
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
 
-        let mut cloned_naga_options;
-        let naga_options = if !zero_initialize_workgroup_memory {
-            cloned_naga_options = layout.naga_options.clone();
-            cloned_naga_options.zero_initialize_workgroup_memory = zero_initialize_workgroup_memory;
-            &cloned_naga_options
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            temp_options = layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
         } else {
             &layout.naga_options
         };
@@ -1299,16 +1300,12 @@ impl crate::Device for super::Device {
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut shader_stages = wgt::ShaderStages::VERTEX;
 
-        let blob_vs = self.load_shader(
-            &desc.vertex_stage,
-            desc.layout,
-            naga::ShaderStage::Vertex,
-            true,
-        )?;
+        let blob_vs =
+            self.load_shader(&desc.vertex_stage, desc.layout, naga::ShaderStage::Vertex)?;
         let blob_fs = match desc.fragment_stage {
             Some(ref stage) => {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
-                Some(self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment, true)?)
+                Some(self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?)
             }
             None => None,
         };
@@ -1487,12 +1484,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
-        let blob_cs = self.load_shader(
-            &desc.stage,
-            desc.layout,
-            naga::ShaderStage::Compute,
-            desc.compilation_options.zero_initialize_workgroup_memory,
-        )?;
+        let blob_cs = self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute)?;
 
         let pair = {
             profiling::scope!("ID3D12Device::CreateComputePipelineState");
