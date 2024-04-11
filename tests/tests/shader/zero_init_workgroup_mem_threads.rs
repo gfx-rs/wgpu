@@ -156,11 +156,11 @@ static ZERO_INIT_WORKGROUP_MEMORY_THREADS: GpuTestConfiguration = GpuTestConfigu
         mapping_buffer.unmap();
     });
 
-const DISPATCH_SIZE: (u32, u32, u32) = (32, 64, 64);
+const DISPATCH_SIZE: (u32, u32, u32) = (64, 64, 64);
 const TOTAL_WORK_GROUPS: u32 = DISPATCH_SIZE.0 * DISPATCH_SIZE.1 * DISPATCH_SIZE.2;
 
 /// nr of bytes we use in the shader
-const SHADER_WORKGROUP_MEMORY: u32 = 544 * 8 * 4;
+const SHADER_WORKGROUP_MEMORY: u32 = 480 * 8 * 4;
 // assume we have this much workgroup memory (2GB)
 const MAX_DEVICE_WORKGROUP_MEMORY: u32 = i32::MAX as u32;
 const NR_OF_DISPATCHES: u32 =

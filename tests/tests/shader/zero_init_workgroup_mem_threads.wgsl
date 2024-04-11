@@ -1,5 +1,5 @@
 // Not a multiple of the workgroup size
-const array_size = 544u; // 8.5 * 64
+const array_size = 480u; // 7.5 * 64
 
 var<workgroup> w_mem_array: array<array<u32,8>, array_size>;
 
