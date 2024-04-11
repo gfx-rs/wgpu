@@ -791,30 +791,35 @@ impl<A: HalApi> LifetimeTracker<A> {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
                 log::trace!("Buffer ready to map {:?} is not tracked anymore", buffer_id);
             } else {
-                let mapping = match std::mem::replace(
+                // This _cannot_ be inlined into the match. If it is, the lock will be held
+                // open through the whole match, resulting in a deadlock when we try to re-lock
+                // the buffer back to active.
+                let mapping = std::mem::replace(
                     &mut *buffer.map_state.lock(),
                     resource::BufferMapState::Idle,
-                ) {
+                );
+                let pending_mapping = match mapping {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     // Mapping cancelled
                     resource::BufferMapState::Idle => continue,
                     // Mapping queued at least twice by map -> unmap -> map
                     // and was already successfully mapped below
-                    active @ resource::BufferMapState::Active { .. } => {
-                        *buffer.map_state.lock() = active;
+                    resource::BufferMapState::Active { .. } => {
+                        *buffer.map_state.lock() = mapping;
                         continue;
                     }
                     _ => panic!("No pending mapping."),
                 };
-                let status = if mapping.range.start != mapping.range.end {
+                let status = if pending_mapping.range.start != pending_mapping.range.end {
                     log::debug!("Buffer {:?} map state -> Active", buffer_id);
-                    let host = mapping.op.host;
-                    let size = mapping.range.end - mapping.range.start;
-                    match super::map_buffer(raw, &buffer, mapping.range.start, size, host) {
+                    let host = pending_mapping.op.host;
+                    let size = pending_mapping.range.end - pending_mapping.range.start;
+                    match super::map_buffer(raw, &buffer, pending_mapping.range.start, size, host) {
                         Ok(ptr) => {
                             *buffer.map_state.lock() = resource::BufferMapState::Active {
                                 ptr,
-                                range: mapping.range.start..mapping.range.start + size,
+                                range: pending_mapping.range.start
+                                    ..pending_mapping.range.start + size,
                                 host,
                             };
                             Ok(())
@@ -827,12 +832,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                 } else {
                     *buffer.map_state.lock() = resource::BufferMapState::Active {
                         ptr: std::ptr::NonNull::dangling(),
-                        range: mapping.range,
-                        host: mapping.op.host,
+                        range: pending_mapping.range,
+                        host: pending_mapping.op.host,
                     };
                     Ok(())
                 };
-                pending_callbacks.push((mapping.op, status));
+                pending_callbacks.push((pending_mapping.op, status));
             }
         }
         pending_callbacks
