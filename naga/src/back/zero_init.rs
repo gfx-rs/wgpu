@@ -42,9 +42,16 @@ pub(crate) fn zero_init<'a>(
             } else {
                 array_len(module, var.ty)
             };
+            let item = len.map(|len| {
+                let multiples = len / workgroup_length;
+                let remainder = len % workgroup_length;
+                (multiples, remainder)
+            });
 
-            total_len += len.map(|len| (len / workgroup_length) + 1).unwrap_or(1);
-            (handle, var, len)
+            total_len += item
+                .map(|(multiples, remainder)| multiples + (remainder != 0) as u32)
+                .unwrap_or(1);
+            (handle, var, item)
         })
         .collect::<Vec<_>>();
 
@@ -53,8 +60,7 @@ pub(crate) fn zero_init<'a>(
     let mut results = Vec::with_capacity(total_len as usize);
 
     for &(handle, _, len) in &workgroup_variables {
-        if let Some(len) = len {
-            let multiples = len / workgroup_length;
+        if let Some((multiples, _)) = len {
             // Consider 6 items, with workgroup length of 2
             // multiples is 3
             // We output: +0, +2, +4, which give correct maximum index of five for thread index 1
@@ -73,9 +79,10 @@ pub(crate) fn zero_init<'a>(
     }
 
     for &(handle, _, len) in &workgroup_variables {
-        if let Some(len) = len {
-            let multiples = len / workgroup_length;
-            let remainder = len % workgroup_length;
+        if let Some((multiples, remainder)) = len {
+            if remainder == 0 {
+                continue;
+            }
 
             // Consider 3 items, with workgroup length of 2
             // multiples is 1, remainder is 1

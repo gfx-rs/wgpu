@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 199
+; Bound: 194
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
@@ -58,16 +58,16 @@ OpDecorate %40 BuiltIn LocalInvocationIndex
 %38 = OpConstant  %4  1
 %41 = OpTypePointer Input %3
 %40 = OpVariable  %41  Input
-%47 = OpTypeBool
-%51 = OpTypePointer Workgroup %4
-%53 = OpConstantNull  %4
-%58 = OpConstantNull  %3
-%60 = OpConstant  %3  264
-%62 = OpConstant  %3  64
-%63 = OpTypePointer StorageBuffer %4
-%67 = OpConstant  %4  2
-%68 = OpConstant  %3  256
-%69 = OpTypePointer Workgroup %4
+%46 = OpTypePointer Workgroup %4
+%48 = OpConstantNull  %4
+%50 = OpTypeBool
+%53 = OpConstantNull  %3
+%55 = OpConstant  %3  264
+%57 = OpConstant  %3  64
+%58 = OpTypePointer StorageBuffer %4
+%62 = OpConstant  %4  2
+%63 = OpConstant  %3  256
+%64 = OpTypePointer Workgroup %4
 %28 = OpFunction  %2  None %29
 %24 = OpLabel
 %27 = OpLoad  %8  %25
@@ -79,180 +79,171 @@ OpBranch %39
 %42 = OpLoad  %3  %40
 OpBranch %44
 %44 = OpLabel
+%47 = OpAccessChain  %46  %20 %42
+OpStore %47 %48
 OpBranch %45
 %45 = OpLabel
-%46 = OpULessThan  %47  %42 %31
-OpSelectionMerge %48 None
-OpBranchConditional %46 %49 %48
-%49 = OpLabel
-%50 = OpIAdd  %3  %42 %6
-%52 = OpAccessChain  %51  %20 %50
-OpStore %52 %53
+%49 = OpULessThan  %50  %42 %37
+OpSelectionMerge %51 None
+OpBranchConditional %49 %52 %51
+%52 = OpLabel
+OpStore %18 %53
 OpBranch %54
 %54 = OpLabel
-%55 = OpULessThan  %47  %42 %37
-OpSelectionMerge %56 None
-OpBranchConditional %55 %57 %56
-%57 = OpLabel
-OpStore %18 %58
-OpBranch %59
-%59 = OpLabel
-OpBranch %56
-%56 = OpLabel
-OpBranch %48
-%48 = OpLabel
+OpBranch %51
+%51 = OpLabel
 OpBranch %43
 %43 = OpLabel
-OpControlBarrier %6 %6 %60
-OpBranch %61
-%61 = OpLabel
-OpAtomicStore %32 %38 %62 %37
-%64 = OpAccessChain  %63  %34 %37
-OpAtomicStore %64 %38 %62 %38
-%65 = OpAccessChain  %30  %36 %31
-OpAtomicStore %65 %38 %62 %37
-%66 = OpAccessChain  %63  %36 %37 %37
-OpAtomicStore %66 %38 %62 %38
-OpAtomicStore %18 %67 %68 %37
-%70 = OpAccessChain  %69  %20 %37
-OpAtomicStore %70 %67 %68 %38
-%71 = OpAccessChain  %19  %22 %31
-OpAtomicStore %71 %67 %68 %37
-%72 = OpAccessChain  %69  %22 %37 %37
-OpAtomicStore %72 %67 %68 %38
-OpControlBarrier %6 %6 %60
-%73 = OpAtomicLoad  %3  %32 %38 %62
-%74 = OpAccessChain  %63  %34 %37
-%75 = OpAtomicLoad  %4  %74 %38 %62
-%76 = OpAccessChain  %30  %36 %31
-%77 = OpAtomicLoad  %3  %76 %38 %62
-%78 = OpAccessChain  %63  %36 %37 %37
-%79 = OpAtomicLoad  %4  %78 %38 %62
-%80 = OpAtomicLoad  %3  %18 %67 %68
-%81 = OpAccessChain  %69  %20 %37
-%82 = OpAtomicLoad  %4  %81 %67 %68
-%83 = OpAccessChain  %19  %22 %31
-%84 = OpAtomicLoad  %3  %83 %67 %68
-%85 = OpAccessChain  %69  %22 %37 %37
-%86 = OpAtomicLoad  %4  %85 %67 %68
-OpControlBarrier %6 %6 %60
-%87 = OpAtomicIAdd  %3  %32 %38 %62 %37
-%89 = OpAccessChain  %63  %34 %37
-%88 = OpAtomicIAdd  %4  %89 %38 %62 %38
-%91 = OpAccessChain  %30  %36 %31
-%90 = OpAtomicIAdd  %3  %91 %38 %62 %37
-%93 = OpAccessChain  %63  %36 %37 %37
-%92 = OpAtomicIAdd  %4  %93 %38 %62 %38
-%94 = OpAtomicIAdd  %3  %18 %67 %68 %37
-%96 = OpAccessChain  %69  %20 %37
-%95 = OpAtomicIAdd  %4  %96 %67 %68 %38
-%98 = OpAccessChain  %19  %22 %31
-%97 = OpAtomicIAdd  %3  %98 %67 %68 %37
-%100 = OpAccessChain  %69  %22 %37 %37
-%99 = OpAtomicIAdd  %4  %100 %67 %68 %38
-OpControlBarrier %6 %6 %60
-%101 = OpAtomicISub  %3  %32 %38 %62 %37
-%103 = OpAccessChain  %63  %34 %37
-%102 = OpAtomicISub  %4  %103 %38 %62 %38
-%105 = OpAccessChain  %30  %36 %31
-%104 = OpAtomicISub  %3  %105 %38 %62 %37
-%107 = OpAccessChain  %63  %36 %37 %37
-%106 = OpAtomicISub  %4  %107 %38 %62 %38
-%108 = OpAtomicISub  %3  %18 %67 %68 %37
-%110 = OpAccessChain  %69  %20 %37
-%109 = OpAtomicISub  %4  %110 %67 %68 %38
-%112 = OpAccessChain  %19  %22 %31
-%111 = OpAtomicISub  %3  %112 %67 %68 %37
-%114 = OpAccessChain  %69  %22 %37 %37
-%113 = OpAtomicISub  %4  %114 %67 %68 %38
-OpControlBarrier %6 %6 %60
-%115 = OpAtomicUMax  %3  %32 %38 %62 %37
-%117 = OpAccessChain  %63  %34 %37
-%116 = OpAtomicSMax  %4  %117 %38 %62 %38
-%119 = OpAccessChain  %30  %36 %31
-%118 = OpAtomicUMax  %3  %119 %38 %62 %37
-%121 = OpAccessChain  %63  %36 %37 %37
-%120 = OpAtomicSMax  %4  %121 %38 %62 %38
-%122 = OpAtomicUMax  %3  %18 %67 %68 %37
-%124 = OpAccessChain  %69  %20 %37
-%123 = OpAtomicSMax  %4  %124 %67 %68 %38
-%126 = OpAccessChain  %19  %22 %31
-%125 = OpAtomicUMax  %3  %126 %67 %68 %37
-%128 = OpAccessChain  %69  %22 %37 %37
-%127 = OpAtomicSMax  %4  %128 %67 %68 %38
-OpControlBarrier %6 %6 %60
-%129 = OpAtomicUMin  %3  %32 %38 %62 %37
-%131 = OpAccessChain  %63  %34 %37
-%130 = OpAtomicSMin  %4  %131 %38 %62 %38
-%133 = OpAccessChain  %30  %36 %31
-%132 = OpAtomicUMin  %3  %133 %38 %62 %37
-%135 = OpAccessChain  %63  %36 %37 %37
-%134 = OpAtomicSMin  %4  %135 %38 %62 %38
-%136 = OpAtomicUMin  %3  %18 %67 %68 %37
-%138 = OpAccessChain  %69  %20 %37
-%137 = OpAtomicSMin  %4  %138 %67 %68 %38
-%140 = OpAccessChain  %19  %22 %31
-%139 = OpAtomicUMin  %3  %140 %67 %68 %37
-%142 = OpAccessChain  %69  %22 %37 %37
-%141 = OpAtomicSMin  %4  %142 %67 %68 %38
-OpControlBarrier %6 %6 %60
-%143 = OpAtomicAnd  %3  %32 %38 %62 %37
-%145 = OpAccessChain  %63  %34 %37
-%144 = OpAtomicAnd  %4  %145 %38 %62 %38
-%147 = OpAccessChain  %30  %36 %31
-%146 = OpAtomicAnd  %3  %147 %38 %62 %37
-%149 = OpAccessChain  %63  %36 %37 %37
-%148 = OpAtomicAnd  %4  %149 %38 %62 %38
-%150 = OpAtomicAnd  %3  %18 %67 %68 %37
-%152 = OpAccessChain  %69  %20 %37
-%151 = OpAtomicAnd  %4  %152 %67 %68 %38
-%154 = OpAccessChain  %19  %22 %31
-%153 = OpAtomicAnd  %3  %154 %67 %68 %37
-%156 = OpAccessChain  %69  %22 %37 %37
-%155 = OpAtomicAnd  %4  %156 %67 %68 %38
-OpControlBarrier %6 %6 %60
-%157 = OpAtomicOr  %3  %32 %38 %62 %37
-%159 = OpAccessChain  %63  %34 %37
-%158 = OpAtomicOr  %4  %159 %38 %62 %38
-%161 = OpAccessChain  %30  %36 %31
-%160 = OpAtomicOr  %3  %161 %38 %62 %37
-%163 = OpAccessChain  %63  %36 %37 %37
-%162 = OpAtomicOr  %4  %163 %38 %62 %38
-%164 = OpAtomicOr  %3  %18 %67 %68 %37
-%166 = OpAccessChain  %69  %20 %37
-%165 = OpAtomicOr  %4  %166 %67 %68 %38
-%168 = OpAccessChain  %19  %22 %31
-%167 = OpAtomicOr  %3  %168 %67 %68 %37
-%170 = OpAccessChain  %69  %22 %37 %37
-%169 = OpAtomicOr  %4  %170 %67 %68 %38
-OpControlBarrier %6 %6 %60
-%171 = OpAtomicXor  %3  %32 %38 %62 %37
-%173 = OpAccessChain  %63  %34 %37
-%172 = OpAtomicXor  %4  %173 %38 %62 %38
-%175 = OpAccessChain  %30  %36 %31
-%174 = OpAtomicXor  %3  %175 %38 %62 %37
-%177 = OpAccessChain  %63  %36 %37 %37
-%176 = OpAtomicXor  %4  %177 %38 %62 %38
-%178 = OpAtomicXor  %3  %18 %67 %68 %37
-%180 = OpAccessChain  %69  %20 %37
-%179 = OpAtomicXor  %4  %180 %67 %68 %38
-%182 = OpAccessChain  %19  %22 %31
-%181 = OpAtomicXor  %3  %182 %67 %68 %37
-%184 = OpAccessChain  %69  %22 %37 %37
-%183 = OpAtomicXor  %4  %184 %67 %68 %38
-%185 = OpAtomicExchange  %3  %32 %38 %62 %37
-%187 = OpAccessChain  %63  %34 %37
-%186 = OpAtomicExchange  %4  %187 %38 %62 %38
-%189 = OpAccessChain  %30  %36 %31
-%188 = OpAtomicExchange  %3  %189 %38 %62 %37
-%191 = OpAccessChain  %63  %36 %37 %37
-%190 = OpAtomicExchange  %4  %191 %38 %62 %38
-%192 = OpAtomicExchange  %3  %18 %67 %68 %37
-%194 = OpAccessChain  %69  %20 %37
-%193 = OpAtomicExchange  %4  %194 %67 %68 %38
-%196 = OpAccessChain  %19  %22 %31
-%195 = OpAtomicExchange  %3  %196 %67 %68 %37
-%198 = OpAccessChain  %69  %22 %37 %37
-%197 = OpAtomicExchange  %4  %198 %67 %68 %38
+OpControlBarrier %6 %6 %55
+OpBranch %56
+%56 = OpLabel
+OpAtomicStore %32 %38 %57 %37
+%59 = OpAccessChain  %58  %34 %37
+OpAtomicStore %59 %38 %57 %38
+%60 = OpAccessChain  %30  %36 %31
+OpAtomicStore %60 %38 %57 %37
+%61 = OpAccessChain  %58  %36 %37 %37
+OpAtomicStore %61 %38 %57 %38
+OpAtomicStore %18 %62 %63 %37
+%65 = OpAccessChain  %64  %20 %37
+OpAtomicStore %65 %62 %63 %38
+%66 = OpAccessChain  %19  %22 %31
+OpAtomicStore %66 %62 %63 %37
+%67 = OpAccessChain  %64  %22 %37 %37
+OpAtomicStore %67 %62 %63 %38
+OpControlBarrier %6 %6 %55
+%68 = OpAtomicLoad  %3  %32 %38 %57
+%69 = OpAccessChain  %58  %34 %37
+%70 = OpAtomicLoad  %4  %69 %38 %57
+%71 = OpAccessChain  %30  %36 %31
+%72 = OpAtomicLoad  %3  %71 %38 %57
+%73 = OpAccessChain  %58  %36 %37 %37
+%74 = OpAtomicLoad  %4  %73 %38 %57
+%75 = OpAtomicLoad  %3  %18 %62 %63
+%76 = OpAccessChain  %64  %20 %37
+%77 = OpAtomicLoad  %4  %76 %62 %63
+%78 = OpAccessChain  %19  %22 %31
+%79 = OpAtomicLoad  %3  %78 %62 %63
+%80 = OpAccessChain  %64  %22 %37 %37
+%81 = OpAtomicLoad  %4  %80 %62 %63
+OpControlBarrier %6 %6 %55
+%82 = OpAtomicIAdd  %3  %32 %38 %57 %37
+%84 = OpAccessChain  %58  %34 %37
+%83 = OpAtomicIAdd  %4  %84 %38 %57 %38
+%86 = OpAccessChain  %30  %36 %31
+%85 = OpAtomicIAdd  %3  %86 %38 %57 %37
+%88 = OpAccessChain  %58  %36 %37 %37
+%87 = OpAtomicIAdd  %4  %88 %38 %57 %38
+%89 = OpAtomicIAdd  %3  %18 %62 %63 %37
+%91 = OpAccessChain  %64  %20 %37
+%90 = OpAtomicIAdd  %4  %91 %62 %63 %38
+%93 = OpAccessChain  %19  %22 %31
+%92 = OpAtomicIAdd  %3  %93 %62 %63 %37
+%95 = OpAccessChain  %64  %22 %37 %37
+%94 = OpAtomicIAdd  %4  %95 %62 %63 %38
+OpControlBarrier %6 %6 %55
+%96 = OpAtomicISub  %3  %32 %38 %57 %37
+%98 = OpAccessChain  %58  %34 %37
+%97 = OpAtomicISub  %4  %98 %38 %57 %38
+%100 = OpAccessChain  %30  %36 %31
+%99 = OpAtomicISub  %3  %100 %38 %57 %37
+%102 = OpAccessChain  %58  %36 %37 %37
+%101 = OpAtomicISub  %4  %102 %38 %57 %38
+%103 = OpAtomicISub  %3  %18 %62 %63 %37
+%105 = OpAccessChain  %64  %20 %37
+%104 = OpAtomicISub  %4  %105 %62 %63 %38
+%107 = OpAccessChain  %19  %22 %31
+%106 = OpAtomicISub  %3  %107 %62 %63 %37
+%109 = OpAccessChain  %64  %22 %37 %37
+%108 = OpAtomicISub  %4  %109 %62 %63 %38
+OpControlBarrier %6 %6 %55
+%110 = OpAtomicUMax  %3  %32 %38 %57 %37
+%112 = OpAccessChain  %58  %34 %37
+%111 = OpAtomicSMax  %4  %112 %38 %57 %38
+%114 = OpAccessChain  %30  %36 %31
+%113 = OpAtomicUMax  %3  %114 %38 %57 %37
+%116 = OpAccessChain  %58  %36 %37 %37
+%115 = OpAtomicSMax  %4  %116 %38 %57 %38
+%117 = OpAtomicUMax  %3  %18 %62 %63 %37
+%119 = OpAccessChain  %64  %20 %37
+%118 = OpAtomicSMax  %4  %119 %62 %63 %38
+%121 = OpAccessChain  %19  %22 %31
+%120 = OpAtomicUMax  %3  %121 %62 %63 %37
+%123 = OpAccessChain  %64  %22 %37 %37
+%122 = OpAtomicSMax  %4  %123 %62 %63 %38
+OpControlBarrier %6 %6 %55
+%124 = OpAtomicUMin  %3  %32 %38 %57 %37
+%126 = OpAccessChain  %58  %34 %37
+%125 = OpAtomicSMin  %4  %126 %38 %57 %38
+%128 = OpAccessChain  %30  %36 %31
+%127 = OpAtomicUMin  %3  %128 %38 %57 %37
+%130 = OpAccessChain  %58  %36 %37 %37
+%129 = OpAtomicSMin  %4  %130 %38 %57 %38
+%131 = OpAtomicUMin  %3  %18 %62 %63 %37
+%133 = OpAccessChain  %64  %20 %37
+%132 = OpAtomicSMin  %4  %133 %62 %63 %38
+%135 = OpAccessChain  %19  %22 %31
+%134 = OpAtomicUMin  %3  %135 %62 %63 %37
+%137 = OpAccessChain  %64  %22 %37 %37
+%136 = OpAtomicSMin  %4  %137 %62 %63 %38
+OpControlBarrier %6 %6 %55
+%138 = OpAtomicAnd  %3  %32 %38 %57 %37
+%140 = OpAccessChain  %58  %34 %37
+%139 = OpAtomicAnd  %4  %140 %38 %57 %38
+%142 = OpAccessChain  %30  %36 %31
+%141 = OpAtomicAnd  %3  %142 %38 %57 %37
+%144 = OpAccessChain  %58  %36 %37 %37
+%143 = OpAtomicAnd  %4  %144 %38 %57 %38
+%145 = OpAtomicAnd  %3  %18 %62 %63 %37
+%147 = OpAccessChain  %64  %20 %37
+%146 = OpAtomicAnd  %4  %147 %62 %63 %38
+%149 = OpAccessChain  %19  %22 %31
+%148 = OpAtomicAnd  %3  %149 %62 %63 %37
+%151 = OpAccessChain  %64  %22 %37 %37
+%150 = OpAtomicAnd  %4  %151 %62 %63 %38
+OpControlBarrier %6 %6 %55
+%152 = OpAtomicOr  %3  %32 %38 %57 %37
+%154 = OpAccessChain  %58  %34 %37
+%153 = OpAtomicOr  %4  %154 %38 %57 %38
+%156 = OpAccessChain  %30  %36 %31
+%155 = OpAtomicOr  %3  %156 %38 %57 %37
+%158 = OpAccessChain  %58  %36 %37 %37
+%157 = OpAtomicOr  %4  %158 %38 %57 %38
+%159 = OpAtomicOr  %3  %18 %62 %63 %37
+%161 = OpAccessChain  %64  %20 %37
+%160 = OpAtomicOr  %4  %161 %62 %63 %38
+%163 = OpAccessChain  %19  %22 %31
+%162 = OpAtomicOr  %3  %163 %62 %63 %37
+%165 = OpAccessChain  %64  %22 %37 %37
+%164 = OpAtomicOr  %4  %165 %62 %63 %38
+OpControlBarrier %6 %6 %55
+%166 = OpAtomicXor  %3  %32 %38 %57 %37
+%168 = OpAccessChain  %58  %34 %37
+%167 = OpAtomicXor  %4  %168 %38 %57 %38
+%170 = OpAccessChain  %30  %36 %31
+%169 = OpAtomicXor  %3  %170 %38 %57 %37
+%172 = OpAccessChain  %58  %36 %37 %37
+%171 = OpAtomicXor  %4  %172 %38 %57 %38
+%173 = OpAtomicXor  %3  %18 %62 %63 %37
+%175 = OpAccessChain  %64  %20 %37
+%174 = OpAtomicXor  %4  %175 %62 %63 %38
+%177 = OpAccessChain  %19  %22 %31
+%176 = OpAtomicXor  %3  %177 %62 %63 %37
+%179 = OpAccessChain  %64  %22 %37 %37
+%178 = OpAtomicXor  %4  %179 %62 %63 %38
+%180 = OpAtomicExchange  %3  %32 %38 %57 %37
+%182 = OpAccessChain  %58  %34 %37
+%181 = OpAtomicExchange  %4  %182 %38 %57 %38
+%184 = OpAccessChain  %30  %36 %31
+%183 = OpAtomicExchange  %3  %184 %38 %57 %37
+%186 = OpAccessChain  %58  %36 %37 %37
+%185 = OpAtomicExchange  %4  %186 %38 %57 %38
+%187 = OpAtomicExchange  %3  %18 %62 %63 %37
+%189 = OpAccessChain  %64  %20 %37
+%188 = OpAtomicExchange  %4  %189 %62 %63 %38
+%191 = OpAccessChain  %19  %22 %31
+%190 = OpAtomicExchange  %3  %191 %62 %63 %37
+%193 = OpAccessChain  %64  %22 %37 %37
+%192 = OpAtomicExchange  %4  %193 %62 %63 %38
 OpReturn
 OpFunctionEnd
