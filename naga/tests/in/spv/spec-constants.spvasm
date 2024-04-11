@@ -1,0 +1,143 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Google Shaderc over Glslang; 11
+; Bound: 74
+; Schema: 0
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Vertex %main "main" %v_Uv %Vertex_Uv %Vertex_Position %__0 %Vertex_Normal
+               OpSource GLSL 450
+               OpSourceExtension "GL_GOOGLE_cpp_style_line_directive"
+               OpSourceExtension "GL_GOOGLE_include_directive"
+               OpName %main "main"
+               OpName %test_constant "test_constant"
+               OpName %TEST_CONSTANT "TEST_CONSTANT"
+               OpName %TEST_CONSTANT_TRUE "TEST_CONSTANT_TRUE"
+               OpName %TEST_CONSTANT_FALSE "TEST_CONSTANT_FALSE"
+               OpName %v_Uv "v_Uv"
+               OpName %Vertex_Uv "Vertex_Uv"
+               OpName %position "position"
+               OpName %Vertex_Position "Vertex_Position"
+               OpName %Sprite_size "Sprite_size"
+               OpMemberName %Sprite_size 0 "size"
+               OpName %_ ""
+               OpName %gl_PerVertex "gl_PerVertex"
+               OpMemberName %gl_PerVertex 0 "gl_Position"
+               OpMemberName %gl_PerVertex 1 "gl_PointSize"
+               OpMemberName %gl_PerVertex 2 "gl_ClipDistance"
+               OpMemberName %gl_PerVertex 3 "gl_CullDistance"
+               OpName %__0 ""
+               OpName %Camera "Camera"
+               OpMemberName %Camera 0 "ViewProj"
+               OpName %__1 ""
+               OpName %Transform "Transform"
+               OpMemberName %Transform 0 "Model"
+               OpName %__2 ""
+               OpName %Vertex_Normal "Vertex_Normal"
+               OpDecorate %TEST_CONSTANT SpecId 0
+               OpDecorate %TEST_CONSTANT_TRUE SpecId 1
+               OpDecorate %TEST_CONSTANT_FALSE SpecId 2
+               OpDecorate %v_Uv Location 0
+               OpDecorate %Vertex_Uv Location 2
+               OpDecorate %Vertex_Position Location 0
+               OpMemberDecorate %Sprite_size 0 Offset 0
+               OpDecorate %Sprite_size Block
+               OpDecorate %_ DescriptorSet 2
+               OpDecorate %_ Binding 1
+               OpMemberDecorate %gl_PerVertex 0 BuiltIn Position
+               OpMemberDecorate %gl_PerVertex 1 BuiltIn PointSize
+               OpMemberDecorate %gl_PerVertex 2 BuiltIn ClipDistance
+               OpMemberDecorate %gl_PerVertex 3 BuiltIn CullDistance
+               OpDecorate %gl_PerVertex Block
+               OpMemberDecorate %Camera 0 ColMajor
+               OpMemberDecorate %Camera 0 Offset 0
+               OpMemberDecorate %Camera 0 MatrixStride 16
+               OpDecorate %Camera Block
+               OpDecorate %__1 DescriptorSet 0
+               OpDecorate %__1 Binding 0
+               OpMemberDecorate %Transform 0 ColMajor
+               OpMemberDecorate %Transform 0 Offset 0
+               OpMemberDecorate %Transform 0 MatrixStride 16
+               OpDecorate %Transform Block
+               OpDecorate %__2 DescriptorSet 2
+               OpDecorate %__2 Binding 0
+               OpDecorate %Vertex_Normal Location 1
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+%_ptr_Function_float = OpTypePointer Function %float
+%TEST_CONSTANT = OpSpecConstant %float 64
+       %bool = OpTypeBool
+%TEST_CONSTANT_TRUE = OpSpecConstantTrue %bool
+    %float_0 = OpConstant %float 0
+    %float_1 = OpConstant %float 1
+%TEST_CONSTANT_FALSE = OpSpecConstantFalse %bool
+    %v2float = OpTypeVector %float 2
+%_ptr_Output_v2float = OpTypePointer Output %v2float
+       %v_Uv = OpVariable %_ptr_Output_v2float Output
+%_ptr_Input_v2float = OpTypePointer Input %v2float
+  %Vertex_Uv = OpVariable %_ptr_Input_v2float Input
+    %v3float = OpTypeVector %float 3
+%_ptr_Function_v3float = OpTypePointer Function %v3float
+%_ptr_Input_v3float = OpTypePointer Input %v3float
+%Vertex_Position = OpVariable %_ptr_Input_v3float Input
+%Sprite_size = OpTypeStruct %v2float
+%_ptr_Uniform_Sprite_size = OpTypePointer Uniform %Sprite_size
+          %_ = OpVariable %_ptr_Uniform_Sprite_size Uniform
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+%_ptr_Uniform_v2float = OpTypePointer Uniform %v2float
+    %v4float = OpTypeVector %float 4
+       %uint = OpTypeInt 32 0
+     %uint_1 = OpConstant %uint 1
+%_arr_float_uint_1 = OpTypeArray %float %uint_1
+%gl_PerVertex = OpTypeStruct %v4float %float %_arr_float_uint_1 %_arr_float_uint_1
+%_ptr_Output_gl_PerVertex = OpTypePointer Output %gl_PerVertex
+        %__0 = OpVariable %_ptr_Output_gl_PerVertex Output
+%mat4v4float = OpTypeMatrix %v4float 4
+     %Camera = OpTypeStruct %mat4v4float
+%_ptr_Uniform_Camera = OpTypePointer Uniform %Camera
+        %__1 = OpVariable %_ptr_Uniform_Camera Uniform
+%_ptr_Uniform_mat4v4float = OpTypePointer Uniform %mat4v4float
+  %Transform = OpTypeStruct %mat4v4float
+%_ptr_Uniform_Transform = OpTypePointer Uniform %Transform
+        %__2 = OpVariable %_ptr_Uniform_Transform Uniform
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%Vertex_Normal = OpVariable %_ptr_Input_v3float Input
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+%test_constant = OpVariable %_ptr_Function_float Function
+   %position = OpVariable %_ptr_Function_v3float Function
+         %14 = OpSelect %float %TEST_CONSTANT_TRUE %float_1 %float_0
+         %15 = OpFMul %float %TEST_CONSTANT %14
+         %17 = OpSelect %float %TEST_CONSTANT_FALSE %float_1 %float_0
+         %18 = OpFMul %float %15 %17
+               OpStore %test_constant %18
+         %24 = OpLoad %v2float %Vertex_Uv
+               OpStore %v_Uv %24
+         %30 = OpLoad %v3float %Vertex_Position
+         %37 = OpAccessChain %_ptr_Uniform_v2float %_ %int_0
+         %38 = OpLoad %v2float %37
+         %39 = OpCompositeExtract %float %38 0
+         %40 = OpCompositeExtract %float %38 1
+         %41 = OpCompositeConstruct %v3float %39 %40 %float_1
+         %42 = OpFMul %v3float %30 %41
+               OpStore %position %42
+         %55 = OpAccessChain %_ptr_Uniform_mat4v4float %__1 %int_0
+         %56 = OpLoad %mat4v4float %55
+         %60 = OpAccessChain %_ptr_Uniform_mat4v4float %__2 %int_0
+         %61 = OpLoad %mat4v4float %60
+         %62 = OpMatrixTimesMatrix %mat4v4float %56 %61
+         %63 = OpLoad %v3float %position
+         %64 = OpCompositeExtract %float %63 0
+         %65 = OpCompositeExtract %float %63 1
+         %66 = OpCompositeExtract %float %63 2
+         %67 = OpCompositeConstruct %v4float %64 %65 %66 %float_1
+         %68 = OpMatrixTimesVector %v4float %62 %67
+         %69 = OpLoad %float %test_constant
+         %70 = OpVectorTimesScalar %v4float %68 %69
+         %72 = OpAccessChain %_ptr_Output_v4float %__0 %int_0
+               OpStore %72 %70
+               OpReturn
+               OpFunctionEnd
