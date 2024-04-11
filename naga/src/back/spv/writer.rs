@@ -1545,7 +1545,7 @@ impl Writer {
                 self.handle_first_zero_init(
                     additions,
                     remainder,
-                    current_remainder,
+                    Some(target_remainder),
                     next_id,
                     merge_id,
                     local_invocation_index,
