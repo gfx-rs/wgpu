@@ -45,27 +45,27 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.19.0"
+version = "0.19.3"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.19.0"
+version = "0.19.3"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.19.0"
+version = "0.19.2"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.19.0"
+version = "0.19.3"
 
 [workspace.dependencies.naga]
 path = "./naga"
-version = "0.19.0"
+version = "0.19.2"
 
 [workspace.dependencies]
 anyhow = "1.0"
@@ -114,16 +114,16 @@ renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.113"
+serde_json = "1.0.115"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.19.0", path = "./wgpu" }
-wgpu-core = { version = "0.19.0", path = "./wgpu-core" }
+wgpu = { version = "0.19.3", path = "./wgpu" }
+wgpu-core = { version = "0.19.3", path = "./wgpu-core" }
 wgpu-example = { version = "0.19.0", path = "./examples/common" }
 wgpu-macros = { version = "0.19.0", path = "./wgpu-macros" }
 wgpu-test = { version = "0.19.0", path = "./tests" }
-wgpu-types = { version = "0.19.0", path = "./wgpu-types" }
+wgpu-types = { version = "0.19.2", path = "./wgpu-types" }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
@@ -171,7 +171,7 @@ deno_url = "0.143.0"
 deno_web = "0.174.0"
 deno_webidl = "0.143.0"
 deno_webgpu = { version = "0.110.0", path = "./deno_webgpu" }
-tokio = "1.36.0"
+tokio = "1.37.0"
 termcolor = "1.4.1"
 
 [patch."https://github.com/gfx-rs/naga"]

@@ -34,9 +34,9 @@ use thiserror::Error;
 use super::Device;
 
 pub struct Queue<A: HalApi> {
-    pub device: Option<Arc<Device<A>>>,
-    pub raw: Option<A::Queue>,
-    pub info: ResourceInfo<Queue<A>>,
+    pub(crate) device: Option<Arc<Device<A>>>,
+    pub(crate) raw: Option<A::Queue>,
+    pub(crate) info: ResourceInfo<Queue<A>>,
 }
 
 impl<A: HalApi> Resource for Queue<A> {
@@ -707,7 +707,7 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        if dst.device.as_info().id() != queue_id.transmute() {
+        if dst.device.as_info().id().into_queue_id() != queue_id {
             return Err(DeviceError::WrongDevice.into());
         }
 
@@ -1191,7 +1191,7 @@ impl Global {
                             Err(_) => continue,
                         };
 
-                        if cmdbuf.device.as_info().id() != queue_id.transmute() {
+                        if cmdbuf.device.as_info().id().into_queue_id() != queue_id {
                             return Err(DeviceError::WrongDevice.into());
                         }
 
@@ -1210,13 +1210,10 @@ impl Global {
                             ));
                         }
                         if !cmdbuf.is_finished() {
-                            if let Some(cmdbuf) = Arc::into_inner(cmdbuf) {
-                                device.destroy_command_buffer(cmdbuf);
-                            } else {
-                                panic!(
-                                    "Command buffer cannot be destroyed because is still in use"
-                                );
-                            }
+                            let cmdbuf = Arc::into_inner(cmdbuf).expect(
+                                "Command buffer cannot be destroyed because is still in use",
+                            );
+                            device.destroy_command_buffer(cmdbuf);
                             continue;
                         }
 

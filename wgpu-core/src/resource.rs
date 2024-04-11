@@ -58,7 +58,7 @@ use std::{
 /// [`Device`]: crate::device::resource::Device
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
-pub struct ResourceInfo<T: Resource> {
+pub(crate) struct ResourceInfo<T: Resource> {
     id: Option<Id<T::Marker>>,
     tracker_index: TrackerIndex,
     tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
@@ -144,7 +144,7 @@ impl<T: Resource> ResourceInfo<T> {
 
 pub(crate) type ResourceType = &'static str;
 
-pub trait Resource: 'static + Sized + WasmNotSendSync {
+pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     type Marker: Marker;
     const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Self>;
@@ -373,10 +373,10 @@ pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping<A: HalApi> {
-    pub range: Range<wgt::BufferAddress>,
-    pub op: BufferMapOperation,
+    pub(crate) range: Range<wgt::BufferAddress>,
+    pub(crate) op: BufferMapOperation,
     // hold the parent alive while the mapping is active
-    pub _parent_buffer: Arc<Buffer<A>>,
+    pub(crate) _parent_buffer: Arc<Buffer<A>>,
 }
 
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
@@ -737,7 +737,7 @@ pub(crate) enum TextureInner<A: HalApi> {
 }
 
 impl<A: HalApi> TextureInner<A> {
-    pub fn raw(&self) -> Option<&A::Texture> {
+    pub(crate) fn raw(&self) -> Option<&A::Texture> {
         match self {
             Self::Native { raw } => Some(raw),
             Self::Surface { raw: Some(tex), .. } => Some(tex.borrow()),
@@ -1043,7 +1043,10 @@ impl Global {
         profiling::scope!("CommandEncoder::as_hal");
 
         let hub = A::hub(self);
-        let cmd_buf = hub.command_buffers.get(id.transmute()).unwrap();
+        let cmd_buf = hub
+            .command_buffers
+            .get(id.into_command_buffer_id())
+            .unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         let cmd_buf_raw = cmd_buf_data.encoder.open().ok();

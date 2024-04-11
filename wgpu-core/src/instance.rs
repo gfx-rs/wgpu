@@ -667,22 +667,19 @@ impl Global {
         }
 
         let surface = self.surfaces.unregister(id);
-        if let Some(surface) = Arc::into_inner(surface.unwrap()) {
-            if let Some(present) = surface.presentation.lock().take() {
-                #[cfg(vulkan)]
-                unconfigure::<hal::api::Vulkan>(self, &surface.raw, &present);
-                #[cfg(metal)]
-                unconfigure::<hal::api::Metal>(self, &surface.raw, &present);
-                #[cfg(dx12)]
-                unconfigure::<hal::api::Dx12>(self, &surface.raw, &present);
-                #[cfg(gles)]
-                unconfigure::<hal::api::Gles>(self, &surface.raw, &present);
-            }
-
-            self.instance.destroy_surface(surface);
-        } else {
-            panic!("Surface cannot be destroyed because is still in use");
+        let surface = Arc::into_inner(surface.unwrap())
+            .expect("Surface cannot be destroyed because is still in use");
+        if let Some(present) = surface.presentation.lock().take() {
+            #[cfg(vulkan)]
+            unconfigure::<hal::api::Vulkan>(self, &surface.raw, &present);
+            #[cfg(metal)]
+            unconfigure::<hal::api::Metal>(self, &surface.raw, &present);
+            #[cfg(dx12)]
+            unconfigure::<hal::api::Dx12>(self, &surface.raw, &present);
+            #[cfg(gles)]
+            unconfigure::<hal::api::Gles>(self, &surface.raw, &present);
         }
+        self.instance.destroy_surface(surface);
     }
 
     fn enumerate<A: HalApi>(
