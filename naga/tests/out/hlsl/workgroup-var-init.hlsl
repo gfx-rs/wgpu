@@ -8,10 +8,10 @@ groupshared WStruct w_mem;
 RWByteAddressBuffer output : register(u0);
 
 [numthreads(1, 1, 1)]
-void main(uint3 __local_invocation_id : SV_GroupThreadID)
+void main(uint __local_invocation_index : SV_GroupIndex)
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
-        w_mem = (WStruct)0;
+    if (__local_invocation_index < 1u) {
+            w_mem = (WStruct)0;
     }
     GroupMemoryBarrierWithGroupSync();
     uint _expr3[512] = w_mem.arr;

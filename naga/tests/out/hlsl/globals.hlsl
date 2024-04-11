@@ -105,11 +105,10 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 }
 
 [numthreads(1, 1, 1)]
-void main(uint3 __local_invocation_id : SV_GroupThreadID)
+void main(uint __local_invocation_index : SV_GroupIndex)
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
-        wg = (float[10])0;
-        at_1 = (uint)0;
+    if (__local_invocation_index < 1u) {
+            wg = (float[10])0;
     }
     GroupMemoryBarrierWithGroupSync();
     float Foo = 1.0;

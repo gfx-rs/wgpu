@@ -4,7 +4,7 @@ use super::{
     BackendResult, Error, Options,
 };
 use crate::{
-    back,
+    back::{self, zero_init},
     proc::{self, NameKey},
     valid, Handle, Module, ScalarKind, ShaderStage, TypeInner,
 };
@@ -1113,8 +1113,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write function name
         write!(self.out, " {name}(")?;
 
-        let need_workgroup_variables_initialization =
-            self.need_workgroup_variables_initialization(func_ctx, module);
+        let workgroup_size_for_initialization =
+            self.workgroup_size_for_variables_initialization(func_ctx, module);
 
         // Write function arguments for non entry point functions
         match func_ctx.ty {
@@ -1169,11 +1169,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
 
-                    if need_workgroup_variables_initialization {
+                    if workgroup_size_for_initialization.is_some() {
                         if !func.arguments.is_empty() {
                             write!(self.out, ", ")?;
                         }
-                        write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
+                        write!(self.out, "uint __local_invocation_index : SV_GroupIndex")?;
                     }
                 }
             }
@@ -1197,8 +1197,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out)?;
         writeln!(self.out, "{{")?;
 
-        if need_workgroup_variables_initialization {
-            self.write_workgroup_variables_initialization(func_ctx, module)?;
+        if let Some(workgroup_size) = workgroup_size_for_initialization {
+            self.write_workgroup_variables_initialization(func_ctx, module, workgroup_size)?;
         }
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
@@ -1249,46 +1249,95 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
-    fn need_workgroup_variables_initialization(
+    fn workgroup_size_for_variables_initialization(
         &mut self,
         func_ctx: &back::FunctionCtx,
         module: &Module,
-    ) -> bool {
-        self.options.zero_initialize_workgroup_memory
-            && func_ctx
-                .ty
-                .compute_entry_point_workgroup_size(module)
-                .is_some()
+    ) -> Option<[u32; 3]> {
+        (self.options.zero_initialize_workgroup_memory
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            })
+            }))
+        .then_some(|| ())
+        .and(func_ctx.ty.compute_entry_point_workgroup_size(module))
     }
 
     fn write_workgroup_variables_initialization(
         &mut self,
         func_ctx: &back::FunctionCtx,
         module: &Module,
+        workgroup_size: [u32; 3],
     ) -> BackendResult {
-        let level = back::Level(1);
-
-        writeln!(
-            self.out,
-            "{level}if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {{"
-        )?;
-
         let vars = module.global_variables.iter().filter(|&(handle, var)| {
             !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
         });
 
-        for (handle, var) in vars {
-            let name = &self.names[&NameKey::GlobalVariable(handle)];
-            write!(self.out, "{}{} = ", level.next(), name)?;
-            self.write_default_init(module, var.ty)?;
-            writeln!(self.out, ";")?;
+        let zero_init_res =
+            zero_init::zero_init(&module, vars, workgroup_size.into_iter().product());
+        if zero_init_res.is_empty() {
+            return Ok(());
         }
 
-        writeln!(self.out, "{level}}}")?;
-        self.write_barrier(crate::Barrier::WORK_GROUP, level)
+        let mut level = back::Level(1);
+        let mut remainder = None;
+
+        for (handle, init) in zero_init_res {
+            match init {
+                zero_init::ZeroInitKind::LocalPlusIndex {
+                    index,
+                    if_less_than,
+                } => {
+                    if if_less_than != remainder {
+                        let Some(if_less_than) = if_less_than else {
+                            panic!("Got decrementing index")
+                        };
+                        remainder = Some(if_less_than);
+                        writeln!(
+                            self.out,
+                            "{level}if (__local_invocation_index < {if_less_than}u) {{"
+                        )?;
+                        level = level.next();
+                    }
+                    let var = &module.global_variables[handle];
+                    let base_type = match &module.types[var.ty].inner {
+                        TypeInner::Array { base, .. } => base,
+                        _ => unreachable!(),
+                    };
+                    let name = &self.names[&NameKey::GlobalVariable(handle)];
+                    if let Some(index) = index {
+                        write!(
+                            self.out,
+                            "{}{}[__local_invocation_index + {index}u] = ",
+                            level, name
+                        )?;
+                    } else {
+                        write!(self.out, "{}{}[__local_invocation_index] = ", level, name)?;
+                    }
+                    self.write_default_init(module, *base_type)?;
+                    writeln!(self.out, ";")?;
+                }
+                zero_init::ZeroInitKind::NotArray => {
+                    if remainder != Some(1) {
+                        writeln!(self.out, "{level}if (__local_invocation_index < 1u) {{")?;
+                        level = level.next();
+                        remainder = Some(1);
+                    }
+                    let name = &self.names[&NameKey::GlobalVariable(handle)];
+                    write!(self.out, "{}{} = ", level.next(), name)?;
+                    let var = &module.global_variables[handle];
+                    self.write_default_init(module, var.ty)?;
+                    writeln!(self.out, ";")?;
+                }
+            }
+        }
+        // Close all opened brackets
+        for level in (1..level.0).rev() {
+            writeln!(self.out, "{}}}", back::Level(level))?;
+        }
+        level = back::Level(1);
+
+        self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+        Ok(())
     }
 
     /// Helper method used to write statements
