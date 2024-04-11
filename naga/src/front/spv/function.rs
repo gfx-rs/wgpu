@@ -59,8 +59,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     })
                 },
                 local_variables: Arena::new(),
-                expressions: self
-                    .make_expression_storage(&module.global_variables, &module.constants),
+                expressions: self.make_expression_storage(
+                    &module.global_variables,
+                    &module.constants,
+                    &module.overrides,
+                ),
                 named_expressions: crate::NamedExpressions::default(),
                 body: crate::Block::new(),
             }
