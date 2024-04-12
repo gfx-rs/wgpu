@@ -972,7 +972,7 @@ impl crate::Instance<super::Api> for Instance {
             })
         };
 
-        // In contract with OpenGL ES, OpenGL requires explicitly enabling sRGB conversions,
+        // In contrast to OpenGL ES, OpenGL requires explicitly enabling sRGB conversions,
         // as otherwise the user has to do the sRGB conversion.
         if !matches!(inner.srgb_kind, SrgbFrameBufferKind::None) {
             unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
