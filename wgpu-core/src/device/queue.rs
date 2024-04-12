@@ -152,13 +152,18 @@ pub enum TempResource<A: HalApi> {
     Texture(Arc<Texture<A>>),
 }
 
-/// A queue execution for a particular command encoder.
+/// A series of [`CommandBuffers`] that have been submitted to a
+/// queue, and the [`wgpu_hal::CommandEncoder`] that built them.
 pub(crate) struct EncoderInFlight<A: HalApi> {
     raw: A::CommandEncoder,
     cmd_buffers: Vec<A::CommandBuffer>,
 }
 
 impl<A: HalApi> EncoderInFlight<A> {
+    /// Free all of our command buffers.
+    ///
+    /// Return the command encoder, fully reset and ready to be
+    /// reused.
     pub(crate) unsafe fn land(mut self) -> A::CommandEncoder {
         unsafe { self.raw.reset_all(self.cmd_buffers.into_iter()) };
         self.raw
