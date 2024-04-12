@@ -178,7 +178,7 @@ impl Version {
     /// Note: `location=` for vertex inputs and fragment outputs is supported
     /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Desktop(410) || *self >= Version::new_gles(310)
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(310)
     }
 
     fn supports_early_depth_test(&self) -> bool {
@@ -282,7 +282,7 @@ impl Default for Options {
 }
 
 /// A subset of options meant to be changed per pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
@@ -497,6 +497,8 @@ pub enum Error {
     ImageMultipleSamplers,
     #[error("{0}")]
     Custom(String),
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 /// Binary operation with a different logic on the GLSL side.
@@ -565,6 +567,10 @@ impl<'a, W: Write> Writer<'a, W> {
         pipeline_options: &'a PipelineOptions,
         policies: proc::BoundsCheckPolicies,
     ) -> Result<Self, Error> {
+        if !module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
+
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -1290,7 +1296,14 @@ impl<'a, W: Write> Writer<'a, W> {
 
             let inner = expr_info.ty.inner_with(&self.module.types);
 
-            if let Expression::Math { fun, arg, arg1, .. } = *expr {
+            if let Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+                ..
+            } = *expr
+            {
                 match fun {
                     crate::MathFunction::Dot => {
                         // if the expression is a Dot product with integer arguments,
@@ -1304,6 +1317,14 @@ impl<'a, W: Write> Writer<'a, W> {
                                 _ => {}
                             }
                         }
+                    }
+                    crate::MathFunction::ExtractBits => {
+                        // Only argument 1 is re-used.
+                        self.need_bake_expressions.insert(arg1.unwrap());
+                    }
+                    crate::MathFunction::InsertBits => {
+                        // Only argument 2 is re-used.
+                        self.need_bake_expressions.insert(arg2.unwrap());
                     }
                     crate::MathFunction::CountLeadingZeros => {
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
@@ -2387,7 +2408,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_const_expr(&mut self, expr: Handle<crate::Expression>) -> BackendResult {
         self.write_possibly_const_expr(
             expr,
-            &self.module.const_expressions,
+            &self.module.global_expressions,
             |expr| &self.info[expr],
             |writer, expr| writer.write_const_expr(expr),
         )
@@ -2439,6 +2460,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
                     crate::Literal::I64(_) => {
+                        return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
+                    }
+                    crate::Literal::U64(_) => {
                         return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
                     }
                     crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
@@ -2518,6 +2542,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     |writer, expr| writer.write_expr(expr, ctx),
                 )?;
             }
+            Expression::Override(_) => return Err(Error::Override),
             // `Access` is applied to arrays, vectors and matrices and is written as indexing
             Expression::Access { base, index } => {
                 self.write_expr(base, ctx)?;
@@ -3138,7 +3163,29 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Abs => "abs",
                     Mf::Min => "min",
                     Mf::Max => "max",
-                    Mf::Clamp => "clamp",
+                    Mf::Clamp => {
+                        let scalar_kind = ctx
+                            .resolve_type(arg, &self.module.types)
+                            .scalar_kind()
+                            .unwrap();
+                        match scalar_kind {
+                            crate::ScalarKind::Float => "clamp",
+                            // Clamp is undefined if min > max. In practice this means it can use a median-of-three
+                            // instruction to determine the value. This is fine according to the WGSL spec for float
+                            // clamp, but integer clamp _must_ use min-max. As such we write out min/max.
+                            _ => {
+                                write!(self.out, "min(max(")?;
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, ", ")?;
+                                self.write_expr(arg1.unwrap(), ctx)?;
+                                write!(self.out, "), ")?;
+                                self.write_expr(arg2.unwrap(), ctx)?;
+                                write!(self.out, ")")?;
+
+                                return Ok(());
+                            }
+                        }
+                    }
                     Mf::Saturate => {
                         write!(self.out, "clamp(")?;
 
@@ -3353,8 +3400,59 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     Mf::CountOneBits => "bitCount",
                     Mf::ReverseBits => "bitfieldReverse",
-                    Mf::ExtractBits => "bitfieldExtract",
-                    Mf::InsertBits => "bitfieldInsert",
+                    Mf::ExtractBits => {
+                        // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
+                        // to first sanitize the offset and count first. If we don't do this, AMD and Intel chips
+                        // will return out-of-spec values if the extracted range is not within the bit width.
+                        //
+                        // This encodes the exact formula specified by the wgsl spec, without temporary values:
+                        // https://gpuweb.github.io/gpuweb/wgsl/#extractBits-unsigned-builtin
+                        //
+                        // w = sizeof(x) * 8
+                        // o = min(offset, w)
+                        // c = min(count, w - o)
+                        //
+                        // bitfieldExtract(x, o, c)
+                        //
+                        // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
+                        let scalar_bits = ctx
+                            .resolve_type(arg, &self.module.types)
+                            .scalar_width()
+                            .unwrap();
+
+                        write!(self.out, "bitfieldExtract(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, ", int(min(")?;
+                        self.write_expr(arg1.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u)), int(min(",)?;
+                        self.write_expr(arg2.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u - min(")?;
+                        self.write_expr(arg1.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u))))")?;
+
+                        return Ok(());
+                    }
+                    Mf::InsertBits => {
+                        // InsertBits has the same considerations as ExtractBits above
+                        let scalar_bits = ctx
+                            .resolve_type(arg, &self.module.types)
+                            .scalar_width()
+                            .unwrap();
+
+                        write!(self.out, "bitfieldInsert(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(arg1.unwrap(), ctx)?;
+                        write!(self.out, ", int(min(")?;
+                        self.write_expr(arg2.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u)), int(min(",)?;
+                        self.write_expr(arg3.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u - min(")?;
+                        self.write_expr(arg2.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u))))")?;
+
+                        return Ok(());
+                    }
                     Mf::FindLsb => "findLSB",
                     Mf::FindMsb => "findMSB",
                     // data packing

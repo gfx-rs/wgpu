@@ -40,10 +40,10 @@ env:
   # Once 1.76 coes out, we can use that instead of nightly.
   DOCS_RUST_VERSION: "nightly-2023-12-17"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.71"
+  REPO_MSRV: "1.76"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.70"
+  CORE_MSRV: "1.74"
 
   #
   # Environment variables
@@ -55,8 +55,8 @@ env:
   RUST_LOG: info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
-  RUSTDOCFLAGS: --cfg=web_sys_unstable_apis -D warnings
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
 
@@ -344,7 +344,7 @@ jobs:
   wasm-test:
     # runtime is normally 2 minutes
     timeout-minutes: 10
-    
+
     name: Test WebAssembly
     runs-on: ubuntu-latest
     needs: [check]
@@ -614,7 +614,7 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.18.0
+        uses: crate-ci/typos@v1.19.0
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -672,7 +672,7 @@ jobs:
   cargo-deny-check-rest:
     # runtime is normally 1 minute
     timeout-minutes: 5
-    
+
     name: "cargo-deny"
     runs-on: ubuntu-latest
     steps:

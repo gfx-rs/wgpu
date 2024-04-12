@@ -1,7 +1,8 @@
 use anyhow::Context;
 use pico_args::Arguments;
+use xshell::Shell;
 
-pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
+pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
     // These needs to match the command in "run wgpu-info" in `.github/workflows/ci.yml`
     let llvm_cov_flags: &[_] = if llvm_cov {
@@ -14,10 +15,6 @@ pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
     } else {
         &["nextest", "run"]
     };
-
-    let shell = xshell::Shell::new().context("Couldn't create xshell shell")?;
-
-    shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     log::info!("Generating .gpuconfig file based on gpus on the system");
 

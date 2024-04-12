@@ -1,4 +1,8 @@
-use crate::{device::bgl, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl,
+    id::{markers::Buffer, Id},
+    FastHashMap, FastHashSet,
+};
 use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
@@ -134,8 +138,11 @@ pub struct Interface {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("Buffer usage is {actual:?} which does not contain required usage {expected:?}")]
+#[error(
+    "Usage flags {actual:?} for buffer {id:?} do not contain required usage flags {expected:?}"
+)]
 pub struct MissingBufferUsageError {
+    pub(crate) id: Id<Buffer>,
     pub(crate) actual: wgt::BufferUsages,
     pub(crate) expected: wgt::BufferUsages,
 }
@@ -143,11 +150,16 @@ pub struct MissingBufferUsageError {
 /// Checks that the given buffer usage contains the required buffer usage,
 /// returns an error otherwise.
 pub fn check_buffer_usage(
+    id: Id<Buffer>,
     actual: wgt::BufferUsages,
     expected: wgt::BufferUsages,
 ) -> Result<(), MissingBufferUsageError> {
     if !actual.contains(expected) {
-        Err(MissingBufferUsageError { actual, expected })
+        Err(MissingBufferUsageError {
+            id,
+            actual,
+            expected,
+        })
     } else {
         Ok(())
     }
@@ -271,6 +283,16 @@ pub enum StageError {
     },
     #[error("Location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
     InputNotConsumed { location: wgt::ShaderLocation },
+    #[error(
+        "Unable to select an entry point: no entry point was found in the provided shader module"
+    )]
+    NoEntryPointFound,
+    #[error(
+        "Unable to select an entry point: \
+        multiple entry points were found in the provided shader module, \
+        but no entry point was specified"
+    )]
+    MultipleEntryPointsFound,
 }
 
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -633,7 +655,8 @@ impl NumericType {
             | Vf::Unorm16x4
             | Vf::Snorm16x4
             | Vf::Float16x4
-            | Vf::Float32x4 => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
+            | Vf::Float32x4
+            | Vf::Unorm10_10_10_2 => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
             Vf::Float64 => (NumericDimension::Scalar, Scalar::F64),
             Vf::Float64x2 => (NumericDimension::Vector(Vs::Bi), Scalar::F64),
             Vf::Float64x3 => (NumericDimension::Vector(Vs::Tri), Scalar::F64),
@@ -892,9 +915,15 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                naga::TypeInner::Array { stride, .. } => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(stride as u64).unwrap(),
-                },
+                naga::TypeInner::Array { stride, size, .. } => {
+                    let size = match size {
+                        naga::ArraySize::Constant(size) => size.get() * stride,
+                        naga::ArraySize::Dynamic => stride,
+                    };
+                    ResourceType::Buffer {
+                        size: wgt::BufferSize::new(size as u64).unwrap(),
+                    }
+                }
                 ref other => ResourceType::Buffer {
                     size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
                 },
@@ -953,6 +982,37 @@ impl Interface {
         }
     }
 
+    pub fn finalize_entry_point_name(
+        &self,
+        stage_bit: wgt::ShaderStages,
+        entry_point_name: Option<&str>,
+    ) -> Result<String, StageError> {
+        let stage = Self::shader_stage_from_stage_bit(stage_bit);
+        entry_point_name
+            .map(|ep| ep.to_string())
+            .map(Ok)
+            .unwrap_or_else(|| {
+                let mut entry_points = self
+                    .entry_points
+                    .keys()
+                    .filter_map(|(ep_stage, name)| (ep_stage == &stage).then_some(name));
+                let first = entry_points.next().ok_or(StageError::NoEntryPointFound)?;
+                if entry_points.next().is_some() {
+                    return Err(StageError::MultipleEntryPointsFound);
+                }
+                Ok(first.clone())
+            })
+    }
+
+    pub(crate) fn shader_stage_from_stage_bit(stage_bit: wgt::ShaderStages) -> naga::ShaderStage {
+        match stage_bit {
+            wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
+            wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
+            wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
+            _ => unreachable!(),
+        }
+    }
+
     pub fn check_stage(
         &self,
         layouts: &mut BindingLayoutSource<'_>,
@@ -964,17 +1024,13 @@ impl Interface {
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let shader_stage = match stage_bit {
-            wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
-            wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
-            wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
-            _ => unreachable!(),
-        };
+        let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);
         let pair = (shader_stage, entry_point_name.to_string());
-        let entry_point = self
-            .entry_points
-            .get(&pair)
-            .ok_or(StageError::MissingEntryPoint(pair.1))?;
+        let entry_point = match self.entry_points.get(&pair) {
+            Some(some) => some,
+            None => return Err(StageError::MissingEntryPoint(pair.1)),
+        };
+        let (_stage, entry_point_name) = pair;
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
@@ -1245,4 +1301,32 @@ impl Interface {
             .ok_or(StageError::MissingEntryPoint(pair.1))
             .map(|ep| ep.dual_source_blending)
     }
+}
+
+// https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample
+pub fn validate_color_attachment_bytes_per_sample(
+    attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
+    limit: u32,
+) -> Result<(), u32> {
+    let mut total_bytes_per_sample = 0;
+    for format in attachment_formats {
+        let Some(format) = format else {
+            continue;
+        };
+
+        let byte_cost = format.target_pixel_byte_cost().unwrap();
+        let alignment = format.target_component_alignment().unwrap();
+
+        let rem = total_bytes_per_sample % alignment;
+        if rem != 0 {
+            total_bytes_per_sample += alignment - rem;
+        }
+        total_bytes_per_sample += byte_cost;
+    }
+
+    if total_bytes_per_sample > limit {
+        return Err(total_bytes_per_sample);
+    }
+
+    Ok(())
 }

@@ -121,8 +121,8 @@ pub enum Error {
     UnsupportedCall(String),
     #[error("feature '{0}' is not implemented yet")]
     FeatureNotImplemented(String),
-    #[error("module is not valid")]
-    Validation,
+    #[error("internal naga error: module should not have validated: {0}")]
+    GenericValidation(String),
     #[error("BuiltIn {0:?} is not supported")]
     UnsupportedBuiltIn(crate::BuiltIn),
     #[error("capability {0:?} is not supported")]
@@ -143,6 +143,8 @@ pub enum Error {
     UnsupportedArrayOfType(Handle<crate::Type>),
     #[error("ray tracing is not supported prior to MSL 2.3")]
     UnsupportedRayTracing,
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -221,7 +223,7 @@ impl Default for Options {
 }
 
 /// A subset of options that are meant to be changed per pipeline.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
@@ -306,13 +308,10 @@ impl Options {
                         },
                     })
                 }
-                LocationMode::Uniform => {
-                    log::error!(
-                        "Unexpected Binding::Location({}) for the Uniform mode",
-                        location
-                    );
-                    Err(Error::Validation)
-                }
+                LocationMode::Uniform => Err(Error::GenericValidation(format!(
+                    "Unexpected Binding::Location({}) for the Uniform mode",
+                    location
+                ))),
             },
         }
     }

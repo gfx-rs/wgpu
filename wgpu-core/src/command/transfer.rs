@@ -14,6 +14,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{Resource, Texture, TextureErrorDimension},
+    snatch::SnatchGuard,
     track::{TextureSelector, Tracker},
 };
 
@@ -452,6 +453,7 @@ fn handle_texture_init<A: HalApi>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Arc<Texture<A>>,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
     let init_action = TextureInitTrackerAction {
         texture: texture.clone(),
@@ -480,6 +482,7 @@ fn handle_texture_init<A: HalApi>(
                 &mut trackers.textures,
                 &device.alignments,
                 device.zero_buffer.as_ref().unwrap(),
+                snatch_guard,
             )?;
         }
     }
@@ -499,6 +502,7 @@ fn handle_src_texture_init<A: HalApi>(
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Arc<Texture<A>>,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     handle_texture_init(
         MemoryInitKind::NeedsInitializedMemory,
@@ -509,6 +513,7 @@ fn handle_src_texture_init<A: HalApi>(
         source,
         copy_size,
         texture,
+        snatch_guard,
     )?;
     Ok(())
 }
@@ -525,6 +530,7 @@ fn handle_dst_texture_init<A: HalApi>(
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Arc<Texture<A>>,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     // Attention: If we don't write full texture subresources, we need to a full
     // clear first since we don't track subrects. This means that in rare cases
@@ -549,6 +555,7 @@ fn handle_dst_texture_init<A: HalApi>(
         destination,
         copy_size,
         texture,
+        snatch_guard,
     )?;
     Ok(())
 }
@@ -779,6 +786,8 @@ impl Global {
 
         let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, &dst_texture)?;
 
+        let snatch_guard = device.snatchable_lock.read();
+
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
@@ -790,9 +799,8 @@ impl Global {
             destination,
             copy_size,
             &dst_texture,
+            &snatch_guard,
         )?;
-
-        let snatch_guard = device.snatchable_lock.read();
 
         let (src_buffer, src_pending) = {
             let buffer_guard = hub.buffers.read();
@@ -935,6 +943,8 @@ impl Global {
 
         let (src_range, src_base) = extract_texture_selector(source, copy_size, &src_texture)?;
 
+        let snatch_guard = device.snatchable_lock.read();
+
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
@@ -946,9 +956,8 @@ impl Global {
             source,
             copy_size,
             &src_texture,
+            &snatch_guard,
         )?;
-
-        let snatch_guard = device.snatchable_lock.read();
 
         let src_pending = tracker
             .textures
@@ -1152,6 +1161,7 @@ impl Global {
             source,
             copy_size,
             &src_texture,
+            &snatch_guard,
         )?;
         handle_dst_texture_init(
             encoder,
@@ -1161,6 +1171,7 @@ impl Global {
             destination,
             copy_size,
             &dst_texture,
+            &snatch_guard,
         )?;
 
         let src_pending = cmd_buf_data

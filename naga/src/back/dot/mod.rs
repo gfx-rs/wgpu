@@ -404,6 +404,7 @@ fn write_function_expressions(
         let (label, color_id) = match *expression {
             E::Literal(_) => ("Literal".into(), 2),
             E::Constant(_) => ("Constant".into(), 2),
+            E::Override(_) => ("Override".into(), 2),
             E::ZeroValue(_) => ("ZeroValue".into(), 2),
             E::Compose { ref components, .. } => {
                 payload = Some(Payload::Arguments(components));

@@ -37,7 +37,7 @@ impl RegistryReport {
 /// any other dependent resource
 ///
 #[derive(Debug)]
-pub struct Registry<T: Resource> {
+pub(crate) struct Registry<T: Resource> {
     identity: Arc<IdentityManager<T::Marker>>,
     storage: RwLock<Storage<T>>,
     backend: Backend,
@@ -60,7 +60,6 @@ impl<T: Resource> Registry<T> {
 #[must_use]
 pub(crate) struct FutureId<'a, T: Resource> {
     id: Id<T::Marker>,
-    identity: Arc<IdentityManager<T::Marker>>,
     data: &'a RwLock<Storage<T>>,
 }
 
@@ -75,16 +74,24 @@ impl<T: Resource> FutureId<'_, T> {
     }
 
     pub fn init(&self, mut value: T) -> Arc<T> {
-        value.as_info_mut().set_id(self.id, &self.identity);
+        value.as_info_mut().set_id(self.id);
         Arc::new(value)
+    }
+
+    pub fn init_in_place(&self, mut value: Arc<T>) -> Arc<T> {
+        Arc::get_mut(&mut value)
+            .unwrap()
+            .as_info_mut()
+            .set_id(self.id);
+        value
     }
 
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry, and fills out the resource info.
-    pub fn assign(self, value: T) -> (Id<T::Marker>, Arc<T>) {
+    pub fn assign(self, value: Arc<T>) -> (Id<T::Marker>, Arc<T>) {
         let mut data = self.data.write();
-        data.insert(self.id, self.init(value));
+        data.insert(self.id, self.init_in_place(value));
         (self.id, data.get(self.id).unwrap().clone())
     }
 
@@ -117,7 +124,6 @@ impl<T: Resource> Registry<T> {
                 }
                 None => self.identity.process(self.backend),
             },
-            identity: self.identity.clone(),
             data: &self.storage,
         }
     }
@@ -125,7 +131,6 @@ impl<T: Resource> Registry<T> {
     pub(crate) fn request(&self) -> FutureId<T> {
         FutureId {
             id: self.identity.process(self.backend),
-            identity: self.identity.clone(),
             data: &self.storage,
         }
     }
@@ -141,26 +146,32 @@ impl<T: Resource> Registry<T> {
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub fn unregister_locked(&self, id: Id<T::Marker>, storage: &mut Storage<T>) -> Option<Arc<T>> {
+    pub(crate) fn unregister_locked(
+        &self,
+        id: Id<T::Marker>,
+        storage: &mut Storage<T>,
+    ) -> Option<Arc<T>> {
+        self.identity.free(id);
         storage.remove(id)
     }
-    pub fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
+    pub(crate) fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
         let mut storage = self.storage.write();
-        value.as_info_mut().set_id(id, &self.identity);
+        value.as_info_mut().set_id(id);
         storage.force_replace(id, value)
     }
-    pub fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
+    pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
         let mut storage = self.storage.write();
         storage.remove(id);
         storage.insert_error(id, label);
     }
     pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
+        self.identity.free(id);
         let value = self.storage.write().remove(id);
         //Returning None is legal if it's an error ID
         value
     }
 
-    pub fn label_for_resource(&self, id: Id<T::Marker>) -> String {
+    pub(crate) fn label_for_resource(&self, id: Id<T::Marker>) -> String {
         let guard = self.storage.read();
 
         let type_name = guard.kind();

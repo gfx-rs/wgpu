@@ -174,11 +174,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
 /// 16 for that variable's group/index. Pipeline creation should fail.
 #[gpu_test]
 static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .skip(FailureCase::always()), // https://github.com/gfx-rs/wgpu/issues/5219
-    )
+    .parameters(TestParameters::default().test_features_limits())
     .run_sync(|ctx| {
         // Create a shader module that statically uses a storage buffer.
         let shader_module = ctx
@@ -228,6 +224,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                     layout: Some(&pipeline_layout),
                     module: &shader_module,
                     entry_point: "main",
+                    constants: &Default::default(),
                 });
         });
     });
@@ -242,11 +239,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
 /// binding. Command recording should fail.
 #[gpu_test]
 static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .skip(FailureCase::always()), // https://github.com/gfx-rs/wgpu/issues/5219
-    )
+    .parameters(TestParameters::default().test_features_limits())
     .run_sync(|ctx| {
         // This test tries to use a bindgroup layout with a
         // min_binding_size of 16 to an index whose WGSL type requires 32
@@ -300,6 +293,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 layout: Some(&pipeline_layout),
                 module: &shader_module,
                 entry_point: "main",
+                constants: &Default::default(),
             });
 
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -318,18 +312,78 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             }],
         });
 
-        let mut encoder = ctx.device.create_command_encoder(&Default::default());
-
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        });
-
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.set_pipeline(&pipeline);
-        pass.dispatch_workgroups(1, 1, 1);
-
         wgpu_test::fail(&ctx.device, || {
+            let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_pipeline(&pipeline);
+            pass.dispatch_workgroups(1, 1, 1);
+
             drop(pass);
+            let _ = encoder.finish();
         });
     });
+
+#[gpu_test]
+static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        let size = 16;
+
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size,
+            usage: wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let out_of_bounds = size.checked_add(wgpu::COPY_BUFFER_ALIGNMENT).unwrap();
+
+        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        ctx.device
+            .create_command_encoder(&Default::default())
+            .clear_buffer(&buffer, out_of_bounds, None);
+        let err_msg = pollster::block_on(ctx.device.pop_error_scope())
+            .unwrap()
+            .to_string();
+        assert!(err_msg.contains(
+            "Clear of 20..20 would end up overrunning the bounds of the buffer of size 16"
+        ));
+    });
+
+#[gpu_test]
+static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default())
+        .run_sync(|ctx| {
+            let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 16, // unimportant for this test
+                usage: wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            let max_valid_offset = u64::MAX - (u64::MAX % wgpu::COPY_BUFFER_ALIGNMENT);
+            let smallest_aligned_invalid_size = wgpu::COPY_BUFFER_ALIGNMENT;
+
+            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            ctx.device
+                .create_command_encoder(&Default::default())
+                .clear_buffer(
+                    &buffer,
+                    max_valid_offset,
+                    Some(smallest_aligned_invalid_size),
+                );
+            let err_msg = pollster::block_on(ctx.device.pop_error_scope())
+                .unwrap()
+                .to_string();
+            assert!(err_msg.contains(concat!(
+                "Clear starts at offset 18446744073709551612 with size of 4, ",
+                "but these added together exceed `u64::MAX`"
+            )));
+        });

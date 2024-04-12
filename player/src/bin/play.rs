@@ -87,7 +87,7 @@ fn main() {
                 &desc,
                 None,
                 Some(id),
-                Some(id.transmute())
+                Some(id.into_queue_id())
             ));
             if let Some(e) = error {
                 panic!("{:?}", e);

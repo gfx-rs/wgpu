@@ -192,10 +192,13 @@ impl<'source> ParsingContext<'source> {
                         TokenValue::Case => {
                             self.bump(frontend)?;
 
-                            let (const_expr, meta) =
-                                self.parse_constant_expression(frontend, ctx.module)?;
+                            let (const_expr, meta) = self.parse_constant_expression(
+                                frontend,
+                                ctx.module,
+                                ctx.global_expression_kind_tracker,
+                            )?;
 
-                            match ctx.module.const_expressions[const_expr] {
+                            match ctx.module.global_expressions[const_expr] {
                                 Expression::Literal(Literal::I32(value)) => match uint {
                                     // This unchecked cast isn't good, but since
                                     // we only reach this code when the selector
@@ -435,7 +438,7 @@ impl<'source> ParsingContext<'source> {
 
                 if self.bump_if(frontend, TokenValue::Semicolon).is_none() {
                     if self.peek_type_name(frontend) || self.peek_type_qualifier(frontend) {
-                        self.parse_declaration(frontend, ctx, false, false)?;
+                        self.parse_declaration(frontend, ctx, false, is_inside_loop)?;
                     } else {
                         let mut stmt = ctx.stmt_ctx();
                         let expr = self.parse_expression(frontend, ctx, &mut stmt)?;

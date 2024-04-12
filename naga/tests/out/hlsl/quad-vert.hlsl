@@ -22,7 +22,7 @@ gl_PerVertex Constructgl_PerVertex(float4 arg0, float arg1, float arg2[1], float
 
 static float2 v_uv = (float2)0;
 static float2 a_uv_1 = (float2)0;
-static gl_PerVertex perVertexStruct = Constructgl_PerVertex(float4(0.0, 0.0, 0.0, 1.0), 1.0, (float[1])0, (float[1])0);
+static gl_PerVertex unnamed = Constructgl_PerVertex(float4(0.0, 0.0, 0.0, 1.0), 1.0, (float[1])0, (float[1])0);
 static float2 a_pos_1 = (float2)0;
 
 struct VertexOutput_main {
@@ -35,7 +35,7 @@ void main_1()
     float2 _expr6 = a_uv_1;
     v_uv = _expr6;
     float2 _expr7 = a_pos_1;
-    perVertexStruct.gl_Position = float4(_expr7.x, _expr7.y, 0.0, 1.0);
+    unnamed.gl_Position = float4(_expr7.x, _expr7.y, 0.0, 1.0);
     return;
 }
 
@@ -52,7 +52,7 @@ VertexOutput_main main(float2 a_uv : LOC1, float2 a_pos : LOC0)
     a_pos_1 = a_pos;
     main_1();
     float2 _expr7 = v_uv;
-    float4 _expr8 = perVertexStruct.gl_Position;
+    float4 _expr8 = unnamed.gl_Position;
     const type_4 type_4_ = Constructtype_4(_expr7, _expr8);
     const VertexOutput_main type_4_1 = { type_4_.member, type_4_.gl_Position };
     return type_4_1;

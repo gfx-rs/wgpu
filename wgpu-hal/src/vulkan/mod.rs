@@ -101,17 +101,25 @@ pub struct DebugUtilsCreateInfo {
     callback_data: Box<DebugUtilsMessengerUserData>,
 }
 
+#[derive(Debug)]
+/// The properties related to the validation layer needed for the
+/// DebugUtilsMessenger for their workarounds
+struct ValidationLayerProperties {
+    /// Validation layer description, from `vk::LayerProperties`.
+    layer_description: std::ffi::CString,
+
+    /// Validation layer specification version, from `vk::LayerProperties`.
+    layer_spec_version: u32,
+}
+
 /// User data needed by `instance::debug_utils_messenger_callback`.
 ///
 /// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
 /// pointer refers to one of these values.
 #[derive(Debug)]
 pub struct DebugUtilsMessengerUserData {
-    /// Validation layer description, from `vk::LayerProperties`.
-    validation_layer_description: std::ffi::CString,
-
-    /// Validation layer specification version, from `vk::LayerProperties`.
-    validation_layer_spec_version: u32,
+    /// The properties related to the validation layer, if present
+    validation_layer_properties: Option<ValidationLayerProperties>,
 
     /// If the OBS layer is present. OBS never increments the version of their layer,
     /// so there's no reason to have the version.
@@ -181,7 +189,7 @@ pub struct Adapter {
     instance: Arc<InstanceShared>,
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
-    phd_capabilities: adapter::PhysicalDeviceCapabilities,
+    phd_capabilities: adapter::PhysicalDeviceProperties,
     //phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
@@ -405,6 +413,15 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl TextureView {
+    /// # Safety
+    ///
+    /// - The image view handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::ImageView {
+        self.raw
+    }
+}
+
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
@@ -471,6 +488,15 @@ pub struct CommandEncoder {
     /// If set, the end of the next render/compute pass will write a timestamp at
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
+}
+
+impl CommandEncoder {
+    /// # Safety
+    ///
+    /// - The command buffer handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::CommandBuffer {
+        self.active
+    }
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -586,7 +612,9 @@ impl Fence {
     }
 }
 
-impl crate::Queue<Api> for Queue {
+impl crate::Queue for Queue {
+    type A = Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
@@ -724,13 +752,25 @@ impl crate::Queue<Api> for Queue {
 
 impl From<vk::Result> for crate::DeviceError {
     fn from(result: vk::Result) -> Self {
+        #![allow(unreachable_code)]
         match result {
             vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                #[cfg(feature = "oom_panic")]
+                panic!("Out of memory ({result:?})");
+
                 Self::OutOfMemory
             }
-            vk::Result::ERROR_DEVICE_LOST => Self::Lost,
+            vk::Result::ERROR_DEVICE_LOST => {
+                #[cfg(feature = "device_lost_panic")]
+                panic!("Device lost");
+
+                Self::Lost
+            }
             _ => {
-                log::warn!("Unrecognized device error {:?}", result);
+                #[cfg(feature = "internal_error_panic")]
+                panic!("Internal error: {result:?}");
+
+                log::warn!("Unrecognized device error {result:?}");
                 Self::Lost
             }
         }

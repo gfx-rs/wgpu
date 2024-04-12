@@ -115,7 +115,7 @@ impl Test<'_> {
             },
             None,
             Some(device_id),
-            Some(device_id.transmute())
+            Some(device_id.into_queue_id())
         ));
         if let Some(e) = error {
             panic!("{:?}", e);
@@ -131,7 +131,8 @@ impl Test<'_> {
             let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch, backend);
             wgc::gfx_select!(device_id => global.buffer_map_async(
                 buffer,
-                expect.offset .. expect.offset+expect.data.len() as wgt::BufferAddress,
+                expect.offset,
+                Some(expect.data.len() as u64),
                 wgc::resource::BufferMapOperation {
                     host: wgc::device::HostMap::Read,
                     callback: Some(wgc::resource::BufferMapCallback::from_rust(
