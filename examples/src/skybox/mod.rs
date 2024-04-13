@@ -199,11 +199,13 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_sky",
+                constants: &Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_sky",
+                constants: &Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
@@ -226,6 +228,7 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_entity",
+                constants: &Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -235,6 +238,7 @@ impl crate::framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_entity",
+                constants: &Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {

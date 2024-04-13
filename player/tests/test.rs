@@ -115,7 +115,7 @@ impl Test<'_> {
             },
             None,
             Some(device_id),
-            Some(device_id.transmute())
+            Some(device_id.into_queue_id())
         ));
         if let Some(e) = error {
             panic!("{:?}", e);

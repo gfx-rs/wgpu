@@ -42,6 +42,7 @@ use std::{
     any::Any,
     borrow::Cow,
     cmp::Ordering,
+    collections::HashMap,
     error, fmt,
     future::Future,
     marker::PhantomData,
@@ -1483,6 +1484,14 @@ pub struct VertexState<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// in the shader.
     pub entry_point: &'a str,
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: &'a HashMap<String, f64>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
@@ -1502,6 +1511,14 @@ pub struct FragmentState<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// in the shader.
     pub entry_point: &'a str,
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: &'a HashMap<String, f64>,
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
@@ -1591,6 +1608,14 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// and no return value in the shader.
     pub entry_point: &'a str,
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: &'a HashMap<String, f64>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
@@ -2312,6 +2337,19 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
+    ///
+    /// <div class="warning">
+    // NOTE: Keep this in sync with `naga::front::wgsl::parse_str`!
+    // NOTE: Keep this in sync with `wgpu_core::Global::device_create_shader_module`!
+    ///
+    /// This function may consume a lot of stack space. Compiler-enforced limits for parsing
+    /// recursion exist; if shader compilation runs into them, it will return an error gracefully.
+    /// However, on some build profiles and platforms, the default stack size for a thread may be
+    /// exceeded before this limit is reached during parsing. Callers should ensure that there is
+    /// enough stack space for this, particularly if calls to this method are exposed to user
+    /// input.
+    ///
+    /// </div>
     pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
@@ -3131,10 +3169,10 @@ impl Texture {
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         let texture = self.data.as_ref().downcast_ref().unwrap();
 
         if let Some(ctx) = self
@@ -3142,7 +3180,7 @@ impl Texture {
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.texture_as_hal::<A, F>(texture, hal_texture_callback) }
+            unsafe { ctx.texture_as_hal::<A, F, R>(texture, hal_texture_callback) }
         } else {
             hal_texture_callback(None)
         }
@@ -3485,6 +3523,36 @@ impl CommandEncoder {
             destination.data.as_ref(),
             destination_offset,
         )
+    }
+
+    /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
+    /// backend type argument does not match with this wgpu CommandEncoder
+    ///
+    /// This method will start the wgpu_core level command recording.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_command_encoder_callback: F,
+    ) -> Option<R> {
+        use core::id::CommandEncoderId;
+
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+            .map(|ctx| unsafe {
+                ctx.command_encoder_as_hal_mut::<A, F, R>(
+                    CommandEncoderId::from(self.id.unwrap()),
+                    hal_command_encoder_callback,
+                )
+            })
     }
 }
 
@@ -5036,6 +5104,34 @@ impl TextureView {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), PhantomData)
+    }
+
+    /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
+    /// backend type argument does not match with this wgpu Texture
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal TextureView must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        hal_texture_view_callback: F,
+    ) -> R {
+        use core::id::TextureViewId;
+
+        let texture_view_id = TextureViewId::from(self.id);
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe {
+                ctx.texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+            }
+        } else {
+            hal_texture_view_callback(None)
+        }
     }
 }
 

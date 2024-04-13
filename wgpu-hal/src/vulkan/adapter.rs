@@ -151,9 +151,32 @@ impl PhysicalDeviceFeatures {
         info
     }
 
-    /// Create a `PhysicalDeviceFeatures` that will be used to create a logical device.
+    /// Create a `PhysicalDeviceFeatures` that can be used to create a logical
+    /// device.
     ///
-    /// `requested_features` should be the same as what was used to generate `enabled_extensions`.
+    /// Return a `PhysicalDeviceFeatures` value capturing all the Vulkan
+    /// features needed for the given [`Features`], [`DownlevelFlags`], and
+    /// [`PrivateCapabilities`]. You can use the returned value's
+    /// [`add_to_device_create_builder`] method to configure a
+    /// [`DeviceCreateInfoBuilder`] to build a logical device providing those
+    /// features.
+    ///
+    /// To ensure that the returned value is able to select all the Vulkan
+    /// features needed to express `requested_features`, `downlevel_flags`, and
+    /// `private_caps`:
+    ///
+    /// - The given `enabled_extensions` set must include all the extensions
+    ///   selected by [`Adapter::required_device_extensions`] when passed
+    ///   `features`.
+    ///
+    /// - The given `device_api_version` must be the Vulkan API version of the
+    ///   physical device we will use to create the logical device.
+    ///
+    /// [`Features`]: wgt::Features
+    /// [`DownlevelFlags`]: wgt::DownlevelFlags
+    /// [`PrivateCapabilities`]: super::PrivateCapabilities
+    /// [`DeviceCreateInfoBuilder`]: vk::DeviceCreateInfoBuilder
+    /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
         device_api_version: u32,
         enabled_extensions: &[&'static CStr],
@@ -414,11 +437,16 @@ impl PhysicalDeviceFeatures {
         }
     }
 
+    /// Compute the wgpu [`Features`] and [`DownlevelFlags`] supported by a physical device.
+    ///
+    /// Given `self`, together with the instance and physical device it was
+    /// built from, and a `caps` also built from those, determine which wgpu
+    /// features and downlevel flags the device can support.
     fn to_wgpu(
         &self,
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
-        caps: &PhysicalDeviceCapabilities,
+        caps: &PhysicalDeviceProperties,
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use crate::auxil::db;
         use wgt::{DownlevelFlags as Df, Features as F};
@@ -699,11 +727,13 @@ impl PhysicalDeviceFeatures {
     }
 }
 
-/// Information gathered about a physical device.
+/// Vulkan "properties" structures gathered about a physical device.
 ///
-/// This structure holds the results from the queries we make about a
-/// [`vk::PhysicalDevice`], other than features: its device properties,
-/// supported extensions, and whatever properties those extensions provide.
+/// This structure holds the properties of a [`vk::PhysicalDevice`]:
+/// - the standard Vulkan device properties
+/// - the `VkExtensionProperties` structs for all available extensions, and
+/// - the per-extension properties structures for the available extensions that
+///   `wgpu` cares about.
 ///
 /// Generally, if you get it from any of these functions, it's stored
 /// here:
@@ -718,7 +748,7 @@ impl PhysicalDeviceFeatures {
 /// This does not include device features; for those, see
 /// [`PhysicalDeviceFeatures`].
 #[derive(Default, Debug)]
-pub struct PhysicalDeviceCapabilities {
+pub struct PhysicalDeviceProperties {
     /// Extensions supported by the `vk::PhysicalDevice`,
     /// as returned by `vkEnumerateDeviceExtensionProperties`.
     supported_extensions: Vec<vk::ExtensionProperties>,
@@ -752,10 +782,10 @@ pub struct PhysicalDeviceCapabilities {
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
-unsafe impl Send for PhysicalDeviceCapabilities {}
-unsafe impl Sync for PhysicalDeviceCapabilities {}
+unsafe impl Send for PhysicalDeviceProperties {}
+unsafe impl Sync for PhysicalDeviceProperties {}
 
-impl PhysicalDeviceCapabilities {
+impl PhysicalDeviceProperties {
     pub fn properties(&self) -> vk::PhysicalDeviceProperties {
         self.properties
     }
@@ -994,9 +1024,9 @@ impl super::InstanceShared {
     fn inspect(
         &self,
         phd: vk::PhysicalDevice,
-    ) -> (PhysicalDeviceCapabilities, PhysicalDeviceFeatures) {
+    ) -> (PhysicalDeviceProperties, PhysicalDeviceFeatures) {
         let capabilities = {
-            let mut capabilities = PhysicalDeviceCapabilities::default();
+            let mut capabilities = PhysicalDeviceProperties::default();
             capabilities.supported_extensions =
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
             capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
@@ -1393,7 +1423,7 @@ impl super::Adapter {
         self.raw
     }
 
-    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceCapabilities {
+    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceProperties {
         &self.phd_capabilities
     }
 
@@ -1418,7 +1448,20 @@ impl super::Adapter {
         supported_extensions
     }
 
-    /// `features` must be the same features used to create `enabled_extensions`.
+    /// Create a `PhysicalDeviceFeatures` for opening a logical device with
+    /// `features` from this adapter.
+    ///
+    /// The given `enabled_extensions` set must include all the extensions
+    /// selected by [`required_device_extensions`] when passed `features`.
+    /// Otherwise, the `PhysicalDeviceFeatures` value may not be able to select
+    /// all the Vulkan features needed to represent `features` and this
+    /// adapter's characteristics.
+    ///
+    /// Typically, you'd simply call `required_device_extensions`, and then pass
+    /// its return value and the feature set you gave it directly to this
+    /// function. But it's fine to add more extensions to the list.
+    ///
+    /// [`required_device_extensions`]: Self::required_device_extensions
     pub fn physical_device_features(
         &self,
         enabled_extensions: &[&'static CStr],

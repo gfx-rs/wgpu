@@ -35,9 +35,9 @@ use thiserror::Error;
 use super::Device;
 
 pub struct Queue<A: HalApi> {
-    pub device: Option<Arc<Device<A>>>,
-    pub raw: Option<A::Queue>,
-    pub info: ResourceInfo<Queue<A>>,
+    pub(crate) device: Option<Arc<Device<A>>>,
+    pub(crate) raw: Option<A::Queue>,
+    pub(crate) info: ResourceInfo<Queue<A>>,
 }
 
 impl<A: HalApi> Resource for Queue<A> {
@@ -497,7 +497,7 @@ impl Global {
             prepare_staging_buffer(device, buffer_size.get(), device.instance_flags)?;
 
         let fid = hub.staging_buffers.prepare(id_in);
-        let (id, _) = fid.assign(staging_buffer);
+        let (id, _) = fid.assign(Arc::new(staging_buffer));
         resource_log!("Queue::create_staging_buffer {id:?}");
 
         Ok((id, staging_buffer_ptr))
@@ -714,7 +714,7 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        if dst.device.as_info().id() != queue_id.transmute() {
+        if dst.device.as_info().id().into_queue_id() != queue_id {
             return Err(DeviceError::WrongDevice.into());
         }
 
@@ -1198,7 +1198,7 @@ impl Global {
                             Err(_) => continue,
                         };
 
-                        if cmdbuf.device.as_info().id() != queue_id.transmute() {
+                        if cmdbuf.device.as_info().id().into_queue_id() != queue_id {
                             return Err(DeviceError::WrongDevice.into());
                         }
 
@@ -1217,13 +1217,10 @@ impl Global {
                             ));
                         }
                         if !cmdbuf.is_finished() {
-                            if let Some(cmdbuf) = Arc::into_inner(cmdbuf) {
-                                device.destroy_command_buffer(cmdbuf);
-                            } else {
-                                panic!(
-                                    "Command buffer cannot be destroyed because is still in use"
-                                );
-                            }
+                            let cmdbuf = Arc::into_inner(cmdbuf).expect(
+                                "Command buffer cannot be destroyed because is still in use",
+                            );
+                            device.destroy_command_buffer(cmdbuf);
                             continue;
                         }
 
@@ -1576,7 +1573,7 @@ impl Global {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll, &snatch_guard) {
+            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll, snatch_guard) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),

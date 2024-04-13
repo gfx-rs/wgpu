@@ -8,7 +8,10 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, BufferId, DeviceId, Id, Marker, SurfaceId, TextureId},
+    id::{
+        AdapterId, BufferId, CommandEncoderId, DeviceId, Id, Marker, SurfaceId, TextureId,
+        TextureViewId,
+    },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
@@ -57,7 +60,7 @@ use std::num::NonZeroU64;
 /// [`Device`]: crate::device::resource::Device
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
-pub struct ResourceInfo<T: Resource> {
+pub(crate) struct ResourceInfo<T: Resource> {
     id: Option<Id<T::Marker>>,
     tracker_index: TrackerIndex,
     tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
@@ -143,7 +146,7 @@ impl<T: Resource> ResourceInfo<T> {
 
 pub(crate) type ResourceType = &'static str;
 
-pub trait Resource: 'static + Sized + WasmNotSendSync {
+pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     type Marker: Marker;
     const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Self>;
@@ -372,10 +375,10 @@ pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping<A: HalApi> {
-    pub range: Range<wgt::BufferAddress>,
-    pub op: BufferMapOperation,
+    pub(crate) range: Range<wgt::BufferAddress>,
+    pub(crate) op: BufferMapOperation,
     // hold the parent alive while the mapping is active
-    pub _parent_buffer: Arc<Buffer<A>>,
+    pub(crate) _parent_buffer: Arc<Buffer<A>>,
 }
 
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
@@ -736,7 +739,7 @@ pub(crate) enum TextureInner<A: HalApi> {
 }
 
 impl<A: HalApi> TextureInner<A> {
-    pub fn raw(&self) -> Option<&A::Texture> {
+    pub(crate) fn raw(&self) -> Option<&A::Texture> {
         match self {
             Self::Native { raw } => Some(raw),
             Self::Surface { raw: Some(tex), .. } => Some(tex.borrow()),
@@ -926,11 +929,11 @@ impl Global {
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
-    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         id: TextureId,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
@@ -939,7 +942,26 @@ impl Global {
         let snatch_guard = texture.device.snatchable_lock.read();
         let hal_texture = texture.raw(&snatch_guard);
 
-        hal_texture_callback(hal_texture);
+        hal_texture_callback(hal_texture)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw texture view handle must not be manually destroyed
+    pub unsafe fn texture_view_as_hal<A: HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        profiling::scope!("TextureView::as_hal");
+
+        let hub = A::hub(self);
+        let texture_view_opt = { hub.texture_views.try_get(id).ok().flatten() };
+        let texture_view = texture_view_opt.as_ref().unwrap();
+        let snatch_guard = texture_view.device.snatchable_lock.read();
+        let hal_texture_view = texture_view.raw(&snatch_guard);
+
+        hal_texture_view_callback(hal_texture_view)
     }
 
     /// # Safety
@@ -1006,6 +1028,32 @@ impl Global {
         let hal_surface = surface.as_ref().and_then(|surface| A::get_surface(surface));
 
         hal_surface_callback(hal_surface)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw command encoder handle must not be manually destroyed
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        profiling::scope!("CommandEncoder::as_hal");
+
+        let hub = A::hub(self);
+        let cmd_buf = hub
+            .command_buffers
+            .get(id.into_command_buffer_id())
+            .unwrap();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let cmd_buf_raw = cmd_buf_data.encoder.open().ok();
+
+        hal_command_encoder_callback(cmd_buf_raw)
     }
 }
 

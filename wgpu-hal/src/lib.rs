@@ -1318,6 +1318,8 @@ pub struct ProgrammableStage<'a, A: Api> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     ///  in the shader.
     pub entry_point: &'a str,
+    /// Pipeline constants
+    pub constants: &'a naga::back::PipelineConstants,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1326,6 +1328,7 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
         Self {
             module: self.module,
             entry_point: self.entry_point,
+            constants: self.constants,
         }
     }
 }

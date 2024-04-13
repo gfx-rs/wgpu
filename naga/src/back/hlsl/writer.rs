@@ -168,6 +168,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
         module_info: &valid::ModuleInfo,
     ) -> Result<super::ReflectionInfo, Error> {
+        if !module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
+
         self.reset(module);
 
         // Write special constants, if needed
@@ -233,7 +237,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.write_special_functions(module)?;
 
-        self.write_wrapped_compose_functions(module, &module.const_expressions)?;
+        self.write_wrapped_compose_functions(module, &module.global_expressions)?;
 
         // Write all named constants
         let mut constants = module
@@ -1997,7 +2001,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.write_possibly_const_expression(
             module,
             expr,
-            &module.const_expressions,
+            &module.global_expressions,
             |writer, expr| writer.write_const_expression(module, expr),
         )
     }
@@ -2140,6 +2144,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     |writer, expr| writer.write_expr(module, expr, func_ctx),
                 )?;
             }
+            Expression::Override(_) => return Err(Error::Override),
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
             Expression::Binary {

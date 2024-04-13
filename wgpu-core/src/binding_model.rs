@@ -467,8 +467,6 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
-pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>>;
-
 /// Bind group layout.
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {

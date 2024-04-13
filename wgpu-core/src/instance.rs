@@ -525,7 +525,8 @@ impl Global {
             raw: hal_surface,
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        #[allow(clippy::arc_with_non_send_sync)]
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
 
@@ -558,7 +559,7 @@ impl Global {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         id
     }
 
@@ -587,7 +588,7 @@ impl Global {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         id
     }
 
@@ -616,7 +617,7 @@ impl Global {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         id
     }
 
@@ -647,7 +648,7 @@ impl Global {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         id
     }
 
@@ -666,22 +667,19 @@ impl Global {
         }
 
         let surface = self.surfaces.unregister(id);
-        if let Some(surface) = Arc::into_inner(surface.unwrap()) {
-            if let Some(present) = surface.presentation.lock().take() {
-                #[cfg(vulkan)]
-                unconfigure::<hal::api::Vulkan>(self, &surface.raw, &present);
-                #[cfg(metal)]
-                unconfigure::<hal::api::Metal>(self, &surface.raw, &present);
-                #[cfg(dx12)]
-                unconfigure::<hal::api::Dx12>(self, &surface.raw, &present);
-                #[cfg(gles)]
-                unconfigure::<hal::api::Gles>(self, &surface.raw, &present);
-            }
-
-            self.instance.destroy_surface(surface);
-        } else {
-            panic!("Surface cannot be destroyed because is still in use");
+        let surface = Arc::into_inner(surface.unwrap())
+            .expect("Surface cannot be destroyed because is still in use");
+        if let Some(present) = surface.presentation.lock().take() {
+            #[cfg(vulkan)]
+            unconfigure::<hal::api::Vulkan>(self, &surface.raw, &present);
+            #[cfg(metal)]
+            unconfigure::<hal::api::Metal>(self, &surface.raw, &present);
+            #[cfg(dx12)]
+            unconfigure::<hal::api::Dx12>(self, &surface.raw, &present);
+            #[cfg(gles)]
+            unconfigure::<hal::api::Gles>(self, &surface.raw, &present);
         }
+        self.instance.destroy_surface(surface);
     }
 
     fn enumerate<A: HalApi>(
@@ -707,7 +705,7 @@ impl Global {
         for raw in hal_adapters {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-            let (id, _) = hub.adapters.prepare(id_backend).assign(adapter);
+            let (id, _) = hub.adapters.prepare(id_backend).assign(Arc::new(adapter));
             list.push(id);
         }
     }
@@ -754,7 +752,10 @@ impl Global {
             None => {
                 let adapter = Adapter::new(list.swap_remove(*selected));
                 log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-                let (id, _) = HalApi::hub(self).adapters.prepare(new_id).assign(adapter);
+                let (id, _) = HalApi::hub(self)
+                    .adapters
+                    .prepare(new_id)
+                    .assign(Arc::new(adapter));
                 Some(id)
             }
         }
@@ -937,13 +938,13 @@ impl Global {
 
         let (id, _adapter): (_, Arc<Adapter<A>>) = match A::VARIANT {
             #[cfg(vulkan)]
-            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Vulkan => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(metal)]
-            Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Metal => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(dx12)]
-            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Dx12 => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(gles)]
-            Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Gl => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             _ => unreachable!(),
         };
         resource_log!("Created Adapter {:?}", id);
@@ -1066,13 +1067,13 @@ impl Global {
                     Ok((device, queue)) => (device, queue),
                     Err(e) => break e,
                 };
-            let (device_id, _) = device_fid.assign(device);
+            let (device_id, _) = device_fid.assign(Arc::new(device));
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
-            let (queue_id, queue) = queue_fid.assign(queue);
+            let (queue_id, queue) = queue_fid.assign(Arc::new(queue));
             resource_log!("Created Queue {:?}", queue_id);
 
             device.set_queue(queue);
@@ -1118,13 +1119,13 @@ impl Global {
                 Ok(device) => device,
                 Err(e) => break e,
             };
-            let (device_id, _) = devices_fid.assign(device);
+            let (device_id, _) = devices_fid.assign(Arc::new(device));
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
-            let (queue_id, queue) = queues_fid.assign(queue);
+            let (queue_id, queue) = queues_fid.assign(Arc::new(queue));
             resource_log!("Created Queue {:?}", queue_id);
 
             device.set_queue(queue);

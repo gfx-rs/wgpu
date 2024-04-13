@@ -9,7 +9,7 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::borrow::Borrow;
+use std::{borrow::Borrow, sync::Arc};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -231,7 +231,7 @@ impl Global {
                     bind_groups: Mutex::new(Vec::new()),
                 };
 
-                let (id, resource) = fid.assign(texture);
+                let (id, resource) = fid.assign(Arc::new(texture));
                 log::debug!("Created CURRENT Surface Texture {:?}", id);
 
                 {

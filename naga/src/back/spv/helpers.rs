@@ -10,11 +10,30 @@ pub(super) fn bytes_to_words(bytes: &[u8]) -> Vec<Word> {
 
 pub(super) fn string_to_words(input: &str) -> Vec<Word> {
     let bytes = input.as_bytes();
-    let mut words = bytes_to_words(bytes);
 
+    str_bytes_to_words(bytes)
+}
+
+pub(super) fn str_bytes_to_words(bytes: &[u8]) -> Vec<Word> {
+    let mut words = bytes_to_words(bytes);
     if bytes.len() % 4 == 0 {
         // nul-termination
         words.push(0x0u32);
+    }
+
+    words
+}
+
+/// split a string into chunks and keep utf8 valid
+#[allow(unstable_name_collisions)]
+pub(super) fn string_to_byte_chunks(input: &str, limit: usize) -> Vec<&[u8]> {
+    let mut offset: usize = 0;
+    let mut start: usize = 0;
+    let mut words = vec![];
+    while offset < input.len() {
+        offset = input.floor_char_boundary(offset + limit);
+        words.push(input[start..offset].as_bytes());
+        start = offset;
     }
 
     words
@@ -105,5 +124,37 @@ pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariab
         crate::TypeInner::BindingArray { .. } => false,
         // if it's not a structure or a binding array, let's wrap it to be able to put "Block"
         _ => true,
+    }
+}
+
+///HACK: this is taken from std unstable, remove it when std's floor_char_boundary is stable
+trait U8Internal {
+    fn is_utf8_char_boundary(&self) -> bool;
+}
+
+impl U8Internal for u8 {
+    fn is_utf8_char_boundary(&self) -> bool {
+        // This is bit magic equivalent to: b < 128 || b >= 192
+        (*self as i8) >= -0x40
+    }
+}
+
+trait StrUnstable {
+    fn floor_char_boundary(&self, index: usize) -> usize;
+}
+
+impl StrUnstable for str {
+    fn floor_char_boundary(&self, index: usize) -> usize {
+        if index >= self.len() {
+            self.len()
+        } else {
+            let lower_bound = index.saturating_sub(3);
+            let new_index = self.as_bytes()[lower_bound..=index]
+                .iter()
+                .rposition(|b| b.is_utf8_char_boundary());
+
+            // SAFETY: we know that the character boundary will be within four bytes
+            unsafe { lower_bound + new_index.unwrap_unchecked() }
+        }
     }
 }
