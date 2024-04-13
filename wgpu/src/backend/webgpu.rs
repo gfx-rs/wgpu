@@ -2331,6 +2331,20 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
+
+        if let Some(ref timestamp_writes) = desc.timestamp_writes {
+            let query_set: &<ContextWebGpu as crate::Context>::QuerySetData =
+                downcast_ref(timestamp_writes.query_set.data.as_ref());
+            let mut writes = webgpu_sys::GpuComputePassTimestampWrites::new(&query_set.0);
+            if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
+                writes.beginning_of_pass_write_index(index);
+            }
+            if let Some(index) = timestamp_writes.end_of_pass_write_index {
+                writes.end_of_pass_write_index(index);
+            }
+            mapped_desc.timestamp_writes(&writes);
+        }
+
         create_identified(
             encoder_data
                 .0
@@ -2428,6 +2442,19 @@ impl crate::context::Context for ContextWebGpu {
             }
             mapped_depth_stencil_attachment.stencil_read_only(dsa.stencil_ops.is_none());
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
+        }
+
+        if let Some(ref timestamp_writes) = desc.timestamp_writes {
+            let query_set: &<ContextWebGpu as crate::Context>::QuerySetData =
+                downcast_ref(timestamp_writes.query_set.data.as_ref());
+            let mut writes = webgpu_sys::GpuRenderPassTimestampWrites::new(&query_set.0);
+            if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
+                writes.beginning_of_pass_write_index(index);
+            }
+            if let Some(index) = timestamp_writes.end_of_pass_write_index {
+                writes.end_of_pass_write_index(index);
+            }
+            mapped_desc.timestamp_writes(&writes);
         }
 
         create_identified(encoder_data.0.begin_render_pass(&mapped_desc))
