@@ -250,7 +250,6 @@ struct Example {
     uniform_buf: wgpu::Buffer,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    blas: rt::Blas,
     tlas_package: rt::TlasPackage,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
@@ -396,6 +395,7 @@ impl crate::framework::Example for Example {
             layout: None,
             module: &shader,
             entry_point: "main",
+            constants: &Default::default(),
         });
 
         let compute_bind_group_layout = compute_pipeline.get_bind_group_layout(0);
@@ -425,11 +425,13 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &blit_shader,
                 entry_point: "vs_main",
+                constants: &Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &blit_shader,
                 entry_point: "fs_main",
+                constants: &Default::default(),
                 targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
@@ -516,7 +518,6 @@ impl crate::framework::Example for Example {
             uniform_buf,
             vertex_buf,
             index_buf,
-            blas,
             tlas_package,
             compute_pipeline,
             compute_bind_group,

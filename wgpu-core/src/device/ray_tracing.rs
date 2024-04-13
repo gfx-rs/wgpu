@@ -197,7 +197,7 @@ impl Global {
             };
             let handle = blas.handle;
 
-            let (id, resource) = fid.assign(blas);
+            let (id, resource) = fid.assign(Arc::new(blas));
             log::info!("Created blas {:?} with {:?}", id, desc);
 
             device.trackers.lock().blas_s.insert_single(resource);
@@ -239,7 +239,7 @@ impl Global {
                 Err(e) => break e,
             };
 
-            let id = fid.assign(tlas);
+            let id = fid.assign(Arc::new(tlas));
             log::info!("Created tlas {:?} with {:?}", id.0, desc);
 
             device.trackers.lock().tlas_s.insert_single(id.1);
@@ -269,7 +269,7 @@ impl Global {
                         Some(blas.device.tracker_indices.tlas_instances.clone()),
                     ),
                 };
-                let id = fid.assign(tlas_instance);
+                let id = fid.assign(Arc::new(tlas_instance));
                 log::info!("Created tlas instance {:?}", id.0);
 
                 blas.device

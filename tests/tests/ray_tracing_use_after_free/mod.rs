@@ -5,16 +5,15 @@ use wgpu::ray_tracing::{
 };
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindingResource,
-    ComputePassDescriptor, ComputePipelineDescriptor,
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, ComputePassDescriptor,
+    ComputePipelineDescriptor,
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 use wgt::{
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BindGroupLayoutEntry,
-    BindingType, BlasGeometrySizeDescriptors, BlasTriangleGeometrySizeDescriptor, BufferAddress,
-    BufferUsages, CommandEncoderDescriptor, CreateBlasDescriptor, CreateTlasDescriptor,
-    ShaderStages, VertexFormat,
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BlasGeometrySizeDescriptors,
+    BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
+    CreateBlasDescriptor, CreateTlasDescriptor, VertexFormat,
 };
 
 fn required_features() -> wgpu::Features {
@@ -93,21 +92,11 @@ fn execute(ctx: TestingContext) {
             layout: None,
             module: &shader,
             entry_point: "comp_main",
-        });
-    let bind_group_layout = ctx
-        .device
-        .create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::AccelerationStructure,
-                count: None,
-            }],
+            constants: &Default::default(),
         });
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
-        layout: &bind_group_layout,
+        layout: &compute_pipeline.get_bind_group_layout(0),
         entries: &[BindGroupEntry {
             binding: 0,
             resource: BindingResource::AccelerationStructure(tlas_package.tlas()),

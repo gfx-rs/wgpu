@@ -379,11 +379,13 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
+                constants: &Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
+                constants: &Default::default(),
                 targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
