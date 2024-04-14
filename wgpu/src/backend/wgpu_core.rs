@@ -559,7 +559,7 @@ impl crate::Context for ContextWgpuCore {
 
             #[cfg(metal)]
             SurfaceTargetUnsafe::CoreAnimationLayer(layer) => unsafe {
-                self.0.instance_create_surface_metal(layer, None)?
+                self.0.instance_create_surface_metal(layer, None)
             },
 
             #[cfg(dx12)]
