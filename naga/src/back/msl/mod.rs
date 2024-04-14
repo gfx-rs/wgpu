@@ -538,3 +538,19 @@ fn test_error_size() {
     use std::mem::size_of;
     assert_eq!(size_of::<Error>(), 32);
 }
+
+impl crate::AtomicFunction {
+    const fn to_msl(self) -> &'static str {
+        match self {
+            Self::Add => "fetch_add",
+            Self::Subtract => "fetch_sub",
+            Self::And => "fetch_and",
+            Self::InclusiveOr => "fetch_or",
+            Self::ExclusiveOr => "fetch_xor",
+            Self::Min => "fetch_min",
+            Self::Max => "fetch_max",
+            Self::Exchange { compare: None } => "exchange",
+            Self::Exchange { compare: Some(_) } => "", //TODO
+        }
+    }
+}

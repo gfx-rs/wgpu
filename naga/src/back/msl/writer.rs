@@ -1131,21 +1131,10 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_atomic_fetch(
-        &mut self,
-        pointer: Handle<crate::Expression>,
-        key: &str,
-        value: Handle<crate::Expression>,
-        context: &ExpressionContext,
-    ) -> BackendResult {
-        self.put_atomic_operation(pointer, "fetch_", key, value, context)
-    }
-
     fn put_atomic_operation(
         &mut self,
         pointer: Handle<crate::Expression>,
-        key1: &str,
-        key2: &str,
+        key: &str,
         value: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
@@ -1163,7 +1152,7 @@ impl<W: Write> Writer<W> {
 
         write!(
             self.out,
-            "{NAMESPACE}::atomic_{key1}{key2}_explicit({ATOMIC_REFERENCE}"
+            "{NAMESPACE}::atomic_{key}_explicit({ATOMIC_REFERENCE}"
         )?;
         self.put_access_chain(pointer, policy, context)?;
         write!(self.out, ", ")?;
@@ -2995,43 +2984,13 @@ impl<W: Write> Writer<W> {
                     let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                     self.start_baking_expression(result, &context.expression, &res_name)?;
                     self.named_expressions.insert(result, res_name);
-                    match *fun {
-                        crate::AtomicFunction::Add => {
-                            self.put_atomic_fetch(pointer, "add", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Subtract => {
-                            self.put_atomic_fetch(pointer, "sub", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::And => {
-                            self.put_atomic_fetch(pointer, "and", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::InclusiveOr => {
-                            self.put_atomic_fetch(pointer, "or", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::ExclusiveOr => {
-                            self.put_atomic_fetch(pointer, "xor", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Min => {
-                            self.put_atomic_fetch(pointer, "min", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Max => {
-                            self.put_atomic_fetch(pointer, "max", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Exchange { compare: None } => {
-                            self.put_atomic_operation(
-                                pointer,
-                                "exchange",
-                                "",
-                                value,
-                                &context.expression,
-                            )?;
-                        }
-                        crate::AtomicFunction::Exchange { .. } => {
-                            return Err(Error::FeatureNotImplemented(
-                                "atomic CompareExchange".to_string(),
-                            ));
-                        }
+                    if let crate::AtomicFunction::Exchange { compare: Some(_) } = *fun {
+                        return Err(Error::FeatureNotImplemented(
+                            "atomic CompareExchange".to_string(),
+                        ));
                     }
+                    let fun_str = fun.to_msl();
+                    self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
                     // done
                     writeln!(self.out, ";")?;
                 }
