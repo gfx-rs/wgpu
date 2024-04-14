@@ -2099,66 +2099,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::Store { pointer, value }, span);
                             return Ok(None);
                         }
-                        "atomicAdd" => {
+                        "atomicAdd" | "atomicSub" | "atomicAnd" | "atomicOr" | "atomicXor"
+                        | "atomicMax" | "atomicMin" | "atomicExchange" => {
                             return Ok(Some(self.atomic_helper(
                                 span,
-                                crate::AtomicFunction::Add,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicSub" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Subtract,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicAnd" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::And,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicOr" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::InclusiveOr,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicXor" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::ExclusiveOr,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicMin" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Min,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicMax" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Max,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicExchange" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Exchange { compare: None },
+                                to_atomic(function.name),
                                 arguments,
                                 ctx,
                             )?))
@@ -2875,5 +2820,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Err(Error::InvalidRayQueryPointer(span))
             }
         }
+    }
+}
+
+fn to_atomic(name: &str) -> crate::AtomicFunction {
+    match name {
+        "atomicAdd" => crate::AtomicFunction::Add,
+        "atomicSub" => crate::AtomicFunction::Subtract,
+        "atomicAnd" => crate::AtomicFunction::And,
+        "atomicOr" => crate::AtomicFunction::InclusiveOr,
+        "atomicXor" => crate::AtomicFunction::ExclusiveOr,
+        "atomicMin" => crate::AtomicFunction::Min,
+        "atomicMax" => crate::AtomicFunction::Max,
+        "atomicExchange" => crate::AtomicFunction::Exchange { compare: None },
+        _ => unreachable!(),
     }
 }
