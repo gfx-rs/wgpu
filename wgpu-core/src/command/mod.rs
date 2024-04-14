@@ -100,7 +100,7 @@ impl<A: HalApi> CommandEncoder<A> {
     }
 }
 
-pub struct BakedCommands<A: HalApi> {
+pub(crate) struct BakedCommands<A: HalApi> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: Tracker<A>,
