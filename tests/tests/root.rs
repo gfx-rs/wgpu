@@ -1,6 +1,7 @@
 mod regression {
     mod issue_3349;
     mod issue_3457;
+    mod issue_3748;
     mod issue_4024;
     mod issue_4122;
 }

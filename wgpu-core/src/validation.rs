@@ -128,7 +128,6 @@ struct EntryPoint {
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
-    features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -232,8 +231,6 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
-    #[error("Location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
-    InputNotConsumed { location: wgt::ShaderLocation },
     #[error(
         "Unable to select an entry point: no entry point was found in the provided shader module"
     )]
@@ -838,12 +835,7 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(
-        module: &naga::Module,
-        info: &naga::valid::ModuleInfo,
-        limits: wgt::Limits,
-        features: wgt::Features,
-    ) -> Self {
+    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -921,7 +913,6 @@ impl Interface {
 
         Self {
             limits,
-            features,
             resources,
             entry_points,
         }
@@ -1143,6 +1134,11 @@ impl Interface {
                                             ));
                                         }
                                         (
+                                            // TODO: is a subtype allowed here? This isn't clear
+                                            // from the line in the spec: "For each user-defined
+                                            // input of descriptor.fragment there must be a
+                                            // user-defined output of descriptor.vertex that
+                                            // location, type, and interpolation of the input."
                                             iv.ty.is_subtype_of(&provided.ty),
                                             iv.ty.dim.num_components(),
                                         )
@@ -1168,35 +1164,23 @@ impl Interface {
                         }
                     }
                 }
+                // TODO: front_facing, sample_index, and sample_mask builtin's should all increase
+                // components count for fragment input.
                 Varying::BuiltIn(_) => {}
             }
         }
 
-        // Check all vertex outputs and make sure the fragment shader consumes them.
-        // This requirement is removed if the `SHADER_UNUSED_VERTEX_OUTPUT` feature is enabled.
-        if shader_stage == naga::ShaderStage::Fragment
-            && !self
-                .features
-                .contains(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT)
-        {
-            for &index in inputs.keys() {
-                // This is a linear scan, but the count should be low enough
-                // that this should be fine.
-                let found = entry_point.inputs.iter().any(|v| match *v {
-                    Varying::Local { location, .. } => location == index,
-                    Varying::BuiltIn(_) => false,
-                });
-
-                if !found {
-                    return Err(StageError::InputNotConsumed { location: index });
-                }
-            }
-        }
-
         if shader_stage == naga::ShaderStage::Vertex {
+            // TODO: if topology is point we should add 1 to inter_stage_components?
             for output in entry_point.outputs.iter() {
                 //TODO: count builtins towards the limit?
                 inter_stage_components += match *output {
+                    // TODO: Spec mentions "Each user-defined output of descriptor.vertex consumes
+                    // 4 scalar components". Not that it varies based on the type. So is there an
+                    // inconsistency here? Also are all these "user-defined" or is that unknown at
+                    // this stage?
+                    // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-inter-stage-interfaces
+                    // (same applies to counting components for fragment inputs)
                     Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
                     Varying::BuiltIn(_) => 0,
                 };
@@ -1218,6 +1202,9 @@ impl Interface {
             }
         }
 
+        // TODO: spec also has a max_inter_stage_shader_variables
+        // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-inter-stage-interfaces and
+        // the location of user defined outputs(vertex)/inputs(fragment) must all be less than this
         if inter_stage_components > self.limits.max_inter_stage_shader_components {
             return Err(StageError::TooManyVaryings {
                 used: inter_stage_components,

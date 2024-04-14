@@ -4,7 +4,7 @@ use super::{
         WrappedZeroValue,
     },
     storage::StoreValue,
-    BackendResult, Error, Options,
+    BackendResult, Error, FragmentEntryPoint, Options,
 };
 use crate::{
     back::{self, Baked},
@@ -28,6 +28,7 @@ pub(crate) const INSERT_BITS_FUNCTION: &str = "naga_insertBits";
 struct EpStructMember {
     name: String,
     ty: Handle<crate::Type>,
+    // TODO: log error if binding is none?
     // technically, this should always be `Some`
     binding: Option<crate::Binding>,
     index: u32,
@@ -200,6 +201,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         module_info: &valid::ModuleInfo,
+        fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
         if !module.overrides.is_empty() {
             return Err(Error::Override);
@@ -300,7 +302,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write all entry points wrapped structs
         for (index, ep) in module.entry_points.iter().enumerate() {
             let ep_name = self.names[&NameKey::EntryPoint(index as u16)].clone();
-            let ep_io = self.write_ep_interface(module, &ep.function, ep.stage, &ep_name)?;
+            let ep_io = self.write_ep_interface(
+                module,
+                &ep.function,
+                ep.stage,
+                &ep_name,
+                fragment_entry_point,
+            )?;
             self.entry_point_io.push(ep_io);
         }
 
@@ -508,6 +516,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out, "}};")?;
         writeln!(self.out)?;
 
+        // See ordering notes on EntryPointInterface fields
         match shader_stage.1 {
             Io::Input => {
                 // bring back the original order
@@ -541,6 +550,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         for arg in func.arguments.iter() {
             match module.types[arg.ty].inner {
                 TypeInner::Struct { ref members, .. } => {
+                    // TODO: what about nested structs? Is that possible? Maybe try an unwrap on
+                    // the binding?
                     for member in members.iter() {
                         let name = self.namer.call_or(&member.name, "member");
                         let index = fake_members.len() as u32;
@@ -577,10 +588,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         result: &crate::FunctionResult,
         stage: ShaderStage,
         entry_point_name: &str,
+        frag_ep: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<EntryPointBinding, Error> {
         let struct_name = format!("{stage:?}Output_{entry_point_name}");
 
-        let mut fake_members = Vec::new();
         let empty = [];
         let members = match module.types[result.ty].inner {
             TypeInner::Struct { ref members, .. } => members,
@@ -590,14 +601,60 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         };
 
-        for member in members.iter() {
+        // Gather list of fragment input locations. We use this below to remove user-defined
+        // varyings from VS outputs that aren't in the FS inputs. This makes the VS interface match
+        // as long as the FS inputs are a subset of the VS outputs. This is only applied if the
+        // writer is supplied with information about the fragment entry point.
+        let fs_input_locs = if let (Some(frag_ep), ShaderStage::Vertex) = (frag_ep, stage) {
+            let mut fs_input_locs = Vec::new();
+            for arg in frag_ep.func.arguments.iter() {
+                let mut push_if_location = |binding: &Option<crate::Binding>| {
+                    match *binding {
+                        Some(crate::Binding::Location { location, .. }) => {
+                            fs_input_locs.push(location)
+                        }
+                        Some(crate::Binding::BuiltIn(_)) => {}
+                        // Log error?
+                        None => {}
+                    }
+                };
+                match frag_ep.module.types[arg.ty].inner {
+                    TypeInner::Struct { ref members, .. } => {
+                        // TODO: nesting?
+                        for member in members.iter() {
+                            push_if_location(&member.binding);
+                        }
+                    }
+                    _ => push_if_location(&arg.binding),
+                }
+            }
+            fs_input_locs.sort();
+            Some(fs_input_locs)
+        } else {
+            None
+        };
+
+        let mut fake_members = Vec::new();
+        for (index, member) in members.iter().enumerate() {
+            if let Some(ref fs_input_locs) = fs_input_locs {
+                match member.binding {
+                    Some(crate::Binding::Location { location, .. }) => {
+                        if fs_input_locs.binary_search(&location).is_err() {
+                            continue;
+                        }
+                    }
+                    Some(crate::Binding::BuiltIn(_)) => {}
+                    // Log error?
+                    None => {}
+                }
+            }
+
             let member_name = self.namer.call_or(&member.name, "member");
-            let index = fake_members.len() as u32;
             fake_members.push(EpStructMember {
                 name: member_name,
                 ty: member.ty,
                 binding: member.binding.clone(),
-                index,
+                index: index as u32,
             });
         }
 
@@ -613,6 +670,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         func: &crate::Function,
         stage: ShaderStage,
         ep_name: &str,
+        frag_ep: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<EntryPointInterface, Error> {
         Ok(EntryPointInterface {
             input: if !func.arguments.is_empty()
@@ -628,7 +686,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             },
             output: match func.result {
                 Some(ref fr) if fr.binding.is_none() && stage == ShaderStage::Vertex => {
-                    Some(self.write_ep_output_struct(module, fr, stage, ep_name)?)
+                    Some(self.write_ep_output_struct(module, fr, stage, ep_name, frag_ep)?)
                 }
                 _ => None,
             },
