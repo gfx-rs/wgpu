@@ -18,6 +18,7 @@ use crate::{
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance::Adapter,
+    lock::{rank, Mutex, MutexGuard},
     pipeline,
     pool::ResourcePool,
     registry::Registry,
@@ -41,7 +42,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
 use once_cell::sync::OnceCell;
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use parking_lot::RwLock;
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -274,33 +275,39 @@ impl<A: HalApi> Device<A> {
             fence: RwLock::new(Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new() },
             valid: AtomicBool::new(true),
-            trackers: Mutex::new(Tracker::new()),
+            trackers: Mutex::new(rank::DEVICE_TRACKERS, Tracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
-            life_tracker: Mutex::new(life::LifetimeTracker::new()),
-            temp_suspected: Mutex::new(Some(life::ResourceMaps::new())),
+            life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, life::LifetimeTracker::new()),
+            temp_suspected: Mutex::new(
+                rank::DEVICE_TEMP_SUSPECTED,
+                Some(life::ResourceMaps::new()),
+            ),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
-            trace: Mutex::new(trace_path.and_then(|path| match trace::Trace::new(path) {
-                Ok(mut trace) => {
-                    trace.add(trace::Action::Init {
-                        desc: desc.clone(),
-                        backend: A::VARIANT,
-                    });
-                    Some(trace)
-                }
-                Err(e) => {
-                    log::error!("Unable to start a trace in '{path:?}': {e}");
-                    None
-                }
-            })),
+            trace: Mutex::new(
+                rank::DEVICE_TRACE,
+                trace_path.and_then(|path| match trace::Trace::new(path) {
+                    Ok(mut trace) => {
+                        trace.add(trace::Action::Init {
+                            desc: desc.clone(),
+                            backend: A::VARIANT,
+                        });
+                        Some(trace)
+                    }
+                    Err(e) => {
+                        log::error!("Unable to start a trace in '{path:?}': {e}");
+                        None
+                    }
+                }),
+            ),
             alignments,
             limits: desc.required_limits.clone(),
             features: desc.required_features,
             downlevel,
             instance_flags,
-            pending_writes: Mutex::new(Some(pending_writes)),
-            deferred_destroy: Mutex::new(Vec::new()),
-            usage_scopes: Default::default(),
+            pending_writes: Mutex::new(rank::DEVICE_PENDING_WRITES, Some(pending_writes)),
+            deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
+            usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
         })
     }
 
@@ -650,13 +657,13 @@ impl<A: HalApi> Device<A> {
             usage: desc.usage,
             size: desc.size,
             initialization_status: RwLock::new(BufferInitTracker::new(aligned_size)),
-            sync_mapped_writes: Mutex::new(None),
-            map_state: Mutex::new(resource::BufferMapState::Idle),
+            sync_mapped_writes: Mutex::new(rank::BUFFER_SYNC_MAPPED_WRITES, None),
+            map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             info: ResourceInfo::new(
                 desc.label.borrow_or_default(),
                 Some(self.tracker_indices.buffers.clone()),
             ),
-            bind_groups: Mutex::new(Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
         })
     }
 
@@ -689,8 +696,8 @@ impl<A: HalApi> Device<A> {
                 Some(self.tracker_indices.textures.clone()),
             ),
             clear_mode: RwLock::new(clear_mode),
-            views: Mutex::new(Vec::new()),
-            bind_groups: Mutex::new(Vec::new()),
+            views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
         }
     }
 
@@ -707,13 +714,13 @@ impl<A: HalApi> Device<A> {
             usage: desc.usage,
             size: desc.size,
             initialization_status: RwLock::new(BufferInitTracker::new(0)),
-            sync_mapped_writes: Mutex::new(None),
-            map_state: Mutex::new(resource::BufferMapState::Idle),
+            sync_mapped_writes: Mutex::new(rank::BUFFER_SYNC_MAPPED_WRITES, None),
+            map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             info: ResourceInfo::new(
                 desc.label.borrow_or_default(),
                 Some(self.tracker_indices.buffers.clone()),
             ),
-            bind_groups: Mutex::new(Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
         }
     }
 

@@ -14,6 +14,7 @@ use crate::{
     hal_label,
     id::{self, DeviceId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
+    lock::{rank, Mutex},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, Resource,
         ResourceInfo, ResourceType, StagingBuffer, Texture, TextureInner,
@@ -22,7 +23,6 @@ use crate::{
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
-use parking_lot::Mutex;
 use smallvec::SmallVec;
 
 use std::{
@@ -317,7 +317,7 @@ fn prepare_staging_buffer<A: HalApi>(
     let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size) }?;
 
     let staging_buffer = StagingBuffer {
-        raw: Mutex::new(Some(buffer)),
+        raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(buffer)),
         device: device.clone(),
         size,
         info: ResourceInfo::new(

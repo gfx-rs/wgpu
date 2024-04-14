@@ -11,6 +11,7 @@ use super::{PendingTransition, ResourceTracker, TrackerIndex};
 use crate::{
     hal_api::HalApi,
     id::BufferId,
+    lock::{rank, Mutex},
     resource::{Buffer, Resource},
     snatch::SnatchGuard,
     storage::Storage,
@@ -20,7 +21,6 @@ use crate::{
     },
 };
 use hal::{BufferBarrier, BufferUses};
-use parking_lot::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 impl ResourceUses for BufferUses {
@@ -51,7 +51,7 @@ pub(crate) struct BufferBindGroupState<A: HalApi> {
 impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            buffers: Mutex::new(Vec::new()),
+            buffers: Mutex::new(rank::BUFFER_BIND_GROUP_STATE_BUFFERS, Vec::new()),
 
             _phantom: PhantomData,
         }

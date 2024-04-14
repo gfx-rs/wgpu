@@ -13,6 +13,7 @@ use crate::{
         TextureViewId,
     },
     init_tracker::{BufferInitTracker, TextureInitTracker},
+    lock::Mutex,
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
@@ -21,7 +22,7 @@ use crate::{
 };
 
 use hal::CommandEncoder;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::WasmNotSendSync;

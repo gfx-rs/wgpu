@@ -7,6 +7,7 @@ use crate::{
     },
     hal_api::HalApi,
     id,
+    lock::Mutex,
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
         self, Buffer, DestroyedBuffer, DestroyedTexture, QuerySet, Resource, Sampler,
@@ -18,7 +19,6 @@ use crate::{
 };
 use smallvec::SmallVec;
 
-use parking_lot::Mutex;
 use std::sync::Arc;
 use thiserror::Error;
 

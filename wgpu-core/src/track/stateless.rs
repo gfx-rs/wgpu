@@ -6,9 +6,14 @@
 
 use std::sync::Arc;
 
-use parking_lot::Mutex;
-
-use crate::{id::Id, resource::Resource, resource_log, storage::Storage, track::ResourceMetadata};
+use crate::{
+    id::Id,
+    lock::{rank, Mutex},
+    resource::Resource,
+    resource_log,
+    storage::Storage,
+    track::ResourceMetadata,
+};
 
 use super::{ResourceTracker, TrackerIndex};
 
@@ -24,7 +29,7 @@ pub(crate) struct StatelessBindGroupSate<T: Resource> {
 impl<T: Resource> StatelessBindGroupSate<T> {
     pub fn new() -> Self {
         Self {
-            resources: Mutex::new(Vec::new()),
+            resources: Mutex::new(rank::STATELESS_BIND_GROUP_STATE_RESOURCES, Vec::new()),
         }
     }
 

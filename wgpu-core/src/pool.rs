@@ -5,8 +5,8 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
 
+use crate::lock::{rank, Mutex};
 use crate::{PreHashedKey, PreHashedMap};
 
 type SlotInner<V> = Weak<V>;
@@ -22,7 +22,7 @@ pub struct ResourcePool<K, V> {
 impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(HashMap::default()),
+            inner: Mutex::new(rank::RESOURCE_POOL_INNER, HashMap::default()),
         }
     }
 
