@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.19.0"
+version = "0.19.3"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.70"
+rust-version = "1.74"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -117,22 +117,21 @@ thiserror = "1"
 
 [dependencies.naga]
 path = "../naga"
-version = "0.19.0"
-features = ["clone"]
+version = "0.19.2"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.19.0"
+version = "0.19.2"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.19.0"
+version = "0.19.3"
 default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.67", features = [
+web-sys = { version = "0.3.69", features = [
     "HtmlCanvasElement",
     "OffscreenCanvas",
 ] }

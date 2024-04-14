@@ -396,6 +396,7 @@ impl crate::framework::Example for Example {
             layout: None,
             module: &shader,
             entry_point: "main",
+            constants: &Default::default(),
         });
 
         let compute_bind_group_layout = compute_pipeline.get_bind_group_layout(0);
@@ -426,11 +427,13 @@ impl crate::framework::Example for Example {
                 module: &blit_shader,
                 entry_point: "vs_main",
                 buffers: &[],
+                constants: &Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &blit_shader,
                 entry_point: "fs_main",
                 targets: &[Some(config.format.into())],
+                constants: &Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,

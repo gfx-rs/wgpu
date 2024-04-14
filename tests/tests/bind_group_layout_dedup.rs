@@ -90,6 +90,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &module,
             entry_point: "no_resources",
+            constants: &Default::default(),
         };
 
         let pipeline = ctx.device.create_compute_pipeline(&desc);
@@ -128,8 +129,12 @@ async fn bgl_dedupe(ctx: TestingContext) {
         .panic_on_timeout();
 
     if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
+        // Indices are made reusable as soon as the handle is dropped so we keep them around
+        // for the duration of the loop.
+        let mut bgls = Vec::new();
+        let mut indices = Vec::new();
         // Now all of the BGL ids should be dead, so we should get the same ids again.
-        for i in 0..=2 {
+        for _ in 0..=2 {
             let test_bgl = ctx
                 .device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -138,15 +143,14 @@ async fn bgl_dedupe(ctx: TestingContext) {
                 });
 
             let test_bgl_idx = test_bgl.global_id().inner() & 0xFFFF_FFFF;
-
-            // https://github.com/gfx-rs/wgpu/issues/4912
-            //
-            // ID 2 is the deduplicated ID, which is never properly recycled.
-            if i == 2 {
-                assert_eq!(test_bgl_idx, 3);
-            } else {
-                assert_eq!(test_bgl_idx, i);
-            }
+            bgls.push(test_bgl);
+            indices.push(test_bgl_idx);
+        }
+        // We don't guarantee that the IDs will appear in the same order. Sort them
+        // and check that they all appear exactly once.
+        indices.sort();
+        for (i, index) in indices.iter().enumerate() {
+            assert_eq!(*index, i as u64);
         }
     }
 }
@@ -215,6 +219,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &module,
             entry_point: "no_resources",
+            constants: &Default::default(),
         });
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
@@ -260,6 +265,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             layout: None,
             module: &module,
             entry_point: "resources",
+            constants: &Default::default(),
         });
 
     // We create two bind groups, pulling the bind_group_layout from the pipeline each time.
@@ -330,6 +336,7 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
         layout: None,
         module: &module,
         entry_point: "resources",
+        constants: &Default::default(),
     };
     // Create two pipelines, creating a BG from the second.
     let pipeline1 = ctx.device.create_compute_pipeline(&desc);
@@ -391,6 +398,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
             layout: None,
             module: &module,
             entry_point: "resources",
+            constants: &Default::default(),
         });
 
     // Create a matching BGL

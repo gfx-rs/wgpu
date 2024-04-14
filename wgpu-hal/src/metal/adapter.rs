@@ -18,7 +18,9 @@ impl super::Adapter {
     }
 }
 
-impl crate::Adapter<super::Api> for super::Adapter {
+impl crate::Adapter for super::Adapter {
+    type A = super::Api;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -560,7 +562,11 @@ impl super::PrivateCapabilities {
 
         Self {
             family_check,
-            msl_version: if os_is_xr || version.at_least((12, 0), (15, 0), os_is_mac) {
+            msl_version: if os_is_xr || version.at_least((14, 0), (17, 0), os_is_mac) {
+                MTLLanguageVersion::V3_1
+            } else if version.at_least((13, 0), (16, 0), os_is_mac) {
+                MTLLanguageVersion::V3_0
+            } else if version.at_least((12, 0), (15, 0), os_is_mac) {
                 MTLLanguageVersion::V2_4
             } else if version.at_least((11, 0), (14, 0), os_is_mac) {
                 MTLLanguageVersion::V2_3
@@ -878,6 +884,10 @@ impl super::PrivateCapabilities {
         {
             features.insert(F::STORAGE_RESOURCE_BINDING_ARRAY);
         }
+        features.set(
+            F::SHADER_INT64,
+            self.msl_version >= MTLLanguageVersion::V2_3,
+        );
 
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,

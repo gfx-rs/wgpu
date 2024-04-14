@@ -380,11 +380,13 @@ impl crate::framework::Example for Example {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[],
+                constants: &Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(config.format.into())],
+                constants: &Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,

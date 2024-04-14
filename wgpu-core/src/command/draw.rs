@@ -277,7 +277,6 @@ pub enum ArcRenderCommand<A: HalApi> {
     SetStencilReference(u32),
     SetViewport {
         rect: Rect<f32>,
-        //TODO: use half-float to reduce the size?
         depth_min: f32,
         depth_max: f32,
     },

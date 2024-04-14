@@ -57,14 +57,16 @@
                 vertex: (
                     stage: (
                         module: Id(0, 1, Empty),
-                        entry_point: "vs_main",
+                        entry_point: None,
+                        constants: {},
                     ),
                     buffers: [],
                 ),
                 fragment: Some((
                     stage: (
                         module: Id(0, 1, Empty),
-                        entry_point: "fs_main",
+                        entry_point: None,
+                        constants: {},
                     ),
                     targets: [
                         Some((

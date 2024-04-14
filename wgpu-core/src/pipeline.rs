@@ -92,6 +92,19 @@ impl<A: HalApi> ShaderModule<A> {
     pub(crate) fn raw(&self) -> &A::ShaderModule {
         self.raw.as_ref().unwrap()
     }
+
+    pub(crate) fn finalize_entry_point_name(
+        &self,
+        stage_bit: wgt::ShaderStages,
+        entry_point: Option<&str>,
+    ) -> Result<String, validation::StageError> {
+        match &self.interface {
+            Some(interface) => interface.finalize_entry_point_name(stage_bit, entry_point),
+            None => entry_point
+                .map(|ep| ep.to_string())
+                .ok_or(validation::StageError::NoEntryPointFound),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -213,9 +226,21 @@ impl CreateShaderModuleError {
 pub struct ProgrammableStageDescriptor<'a> {
     /// The compiled shader module for this stage.
     pub module: ShaderModuleId,
-    /// The name of the entry point in the compiled shader. There must be a function with this name
-    /// in the shader.
-    pub entry_point: Cow<'a, str>,
+    /// The name of the entry point in the compiled shader. The name is selected using the
+    /// following logic:
+    ///
+    /// * If `Some(name)` is specified, there must be a function with this name in the shader.
+    /// * If a single entry point associated with this stage must be in the shader, then proceed as
+    ///   if `Some(…)` was specified with that entry point's name.
+    pub entry_point: Option<Cow<'a, str>>,
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: Cow<'a, naga::back::PipelineConstants>,
 }
 
 /// Number of implicit bind groups derived at pipeline creation.

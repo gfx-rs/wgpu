@@ -7,6 +7,7 @@ use crate::{
     hal_api::HalApi,
     init_tracker::*,
     resource::{Resource, Texture},
+    snatch::SnatchGuard,
     track::{TextureTracker, Tracker},
     FastHashMap,
 };
@@ -144,6 +145,7 @@ pub(crate) fn fixup_discarded_surfaces<
     encoder: &mut A::CommandEncoder,
     texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
+    snatch_guard: &SnatchGuard<'_>,
 ) {
     for init in inits {
         clear_texture(
@@ -156,6 +158,7 @@ pub(crate) fn fixup_discarded_surfaces<
             texture_tracker,
             &device.alignments,
             device.zero_buffer.as_ref().unwrap(),
+            snatch_guard,
         )
         .unwrap();
     }
@@ -167,6 +170,7 @@ impl<A: HalApi> BakedCommands<A> {
     pub(crate) fn initialize_buffer_memory(
         &mut self,
         device_tracker: &mut Tracker<A>,
+        snatch_guard: &SnatchGuard<'_>,
     ) -> Result<(), DestroyedBufferError> {
         // Gather init ranges for each buffer so we can collapse them.
         // It is not possible to do this at an earlier point since previously
@@ -225,16 +229,15 @@ impl<A: HalApi> BakedCommands<A> {
                 .unwrap()
                 .1;
 
-            let snatch_guard = buffer.device.snatchable_lock.read();
             let raw_buf = buffer
                 .raw
-                .get(&snatch_guard)
+                .get(snatch_guard)
                 .ok_or(DestroyedBufferError(buffer_id))?;
 
             unsafe {
                 self.encoder.transition_buffers(
                     transition
-                        .map(|pending| pending.into_hal(&buffer, &snatch_guard))
+                        .map(|pending| pending.into_hal(&buffer, snatch_guard))
                         .into_iter(),
                 );
             }
@@ -271,6 +274,7 @@ impl<A: HalApi> BakedCommands<A> {
         &mut self,
         device_tracker: &mut Tracker<A>,
         device: &Device<A>,
+        snatch_guard: &SnatchGuard<'_>,
     ) -> Result<(), DestroyedTextureError> {
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
@@ -310,6 +314,7 @@ impl<A: HalApi> BakedCommands<A> {
                     &mut device_tracker.textures,
                     &device.alignments,
                     device.zero_buffer.as_ref().unwrap(),
+                    snatch_guard,
                 );
 
                 // A Texture can be destroyed between the command recording

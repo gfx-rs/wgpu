@@ -11,7 +11,7 @@ mod terminator;
 mod typifier;
 
 pub use constant_evaluator::{
-    ConstantEvaluator, ConstantEvaluatorError, ExpressionConstnessTracker,
+    ConstantEvaluator, ConstantEvaluatorError, ExpressionKind, ExpressionKindTracker,
 };
 pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
@@ -102,6 +102,10 @@ impl super::Scalar {
         kind: crate::ScalarKind::Sint,
         width: 8,
     };
+    pub const U64: Self = Self {
+        kind: crate::ScalarKind::Uint,
+        width: 8,
+    };
     pub const BOOL: Self = Self {
         kind: crate::ScalarKind::Bool,
         width: crate::BOOL_WIDTH,
@@ -156,6 +160,7 @@ impl PartialEq for crate::Literal {
             (Self::F32(a), Self::F32(b)) => a.to_bits() == b.to_bits(),
             (Self::U32(a), Self::U32(b)) => a == b,
             (Self::I32(a), Self::I32(b)) => a == b,
+            (Self::U64(a), Self::U64(b)) => a == b,
             (Self::I64(a), Self::I64(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             _ => false,
@@ -186,8 +191,16 @@ impl std::hash::Hash for crate::Literal {
                 hasher.write_u8(4);
                 v.hash(hasher);
             }
-            Self::I64(v) | Self::AbstractInt(v) => {
+            Self::I64(v) => {
                 hasher.write_u8(5);
+                v.hash(hasher);
+            }
+            Self::U64(v) => {
+                hasher.write_u8(6);
+                v.hash(hasher);
+            }
+            Self::AbstractInt(v) => {
+                hasher.write_u8(7);
                 v.hash(hasher);
             }
         }
@@ -201,9 +214,10 @@ impl crate::Literal {
             (value, crate::ScalarKind::Float, 4) => Some(Self::F32(value as _)),
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
             (value, crate::ScalarKind::Sint, 4) => Some(Self::I32(value as _)),
+            (value, crate::ScalarKind::Uint, 8) => Some(Self::U64(value as _)),
             (value, crate::ScalarKind::Sint, 8) => Some(Self::I64(value as _)),
-            (1, crate::ScalarKind::Bool, 4) => Some(Self::Bool(true)),
-            (0, crate::ScalarKind::Bool, 4) => Some(Self::Bool(false)),
+            (1, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(true)),
+            (0, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(false)),
             _ => None,
         }
     }
@@ -218,7 +232,7 @@ impl crate::Literal {
 
     pub const fn width(&self) -> crate::Bytes {
         match *self {
-            Self::F64(_) | Self::I64(_) => 8,
+            Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
@@ -230,6 +244,7 @@ impl crate::Literal {
             Self::F32(_) => crate::Scalar::F32,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
+            Self::U64(_) => crate::Scalar::U64,
             Self::I64(_) => crate::Scalar::I64,
             Self::Bool(_) => crate::Scalar::BOOL,
             Self::AbstractInt(_) => crate::Scalar::ABSTRACT_INT,
@@ -538,13 +553,9 @@ impl crate::Expression {
     ///
     /// [`Access`]: crate::Expression::Access
     /// [`ResolveContext`]: crate::proc::ResolveContext
-    pub fn is_dynamic_index(&self, module: &crate::Module) -> bool {
+    pub const fn is_dynamic_index(&self) -> bool {
         match *self {
-            Self::Literal(_) | Self::ZeroValue(_) => false,
-            Self::Constant(handle) => {
-                let constant = &module.constants[handle];
-                !matches!(constant.r#override, crate::Override::None)
-            }
+            Self::Literal(_) | Self::ZeroValue(_) | Self::Constant(_) => false,
             _ => true,
         }
     }
@@ -637,7 +648,8 @@ impl crate::Module {
         GlobalCtx {
             types: &self.types,
             constants: &self.constants,
-            const_expressions: &self.const_expressions,
+            overrides: &self.overrides,
+            global_expressions: &self.global_expressions,
         }
     }
 }
@@ -652,17 +664,18 @@ pub(super) enum U32EvalError {
 pub struct GlobalCtx<'a> {
     pub types: &'a crate::UniqueArena<crate::Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
-    pub const_expressions: &'a crate::Arena<crate::Expression>,
+    pub overrides: &'a crate::Arena<crate::Override>,
+    pub global_expressions: &'a crate::Arena<crate::Expression>,
 }
 
 impl GlobalCtx<'_> {
-    /// Try to evaluate the expression in `self.const_expressions` using its `handle` and return it as a `u32`.
+    /// Try to evaluate the expression in `self.global_expressions` using its `handle` and return it as a `u32`.
     #[allow(dead_code)]
     pub(super) fn eval_expr_to_u32(
         &self,
         handle: crate::Handle<crate::Expression>,
     ) -> Result<u32, U32EvalError> {
-        self.eval_expr_to_u32_from(handle, self.const_expressions)
+        self.eval_expr_to_u32_from(handle, self.global_expressions)
     }
 
     /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `u32`.
@@ -685,7 +698,7 @@ impl GlobalCtx<'_> {
         &self,
         handle: crate::Handle<crate::Expression>,
     ) -> Option<crate::Literal> {
-        self.eval_expr_to_literal_from(handle, self.const_expressions)
+        self.eval_expr_to_literal_from(handle, self.global_expressions)
     }
 
     fn eval_expr_to_literal_from(
@@ -709,7 +722,7 @@ impl GlobalCtx<'_> {
         }
         match arena[handle] {
             crate::Expression::Constant(c) => {
-                get(*self, self.constants[c].init, self.const_expressions)
+                get(*self, self.constants[c].init, self.global_expressions)
             }
             _ => get(*self, handle, arena),
         }

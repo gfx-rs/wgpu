@@ -570,11 +570,11 @@ fn local_var_missing_type() {
                 var x;
             }
         "#,
-        r#"error: variable `x` needs a type
+        r#"error: declaration of `x` needs a type specifier or initializer
   ┌─ wgsl:3:21
   │
 3 │                 var x;
-  │                     ^ definition of `x`
+  │                     ^ needs a type specifier or initializer
 
 "#,
     );
@@ -870,7 +870,28 @@ fn matrix_constructor_inferred() {
 macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
         let source = $source;
-        let error = validation_error($source);
+        let error = validation_error($source, naga::valid::Capabilities::default());
+        #[allow(clippy::redundant_pattern_matching)]
+        if ! matches!(&error, $pattern $( if $guard )? ) {
+            eprintln!("validation error does not match pattern:\n\
+                       source code: {}\n\
+                       \n\
+                       actual result:\n\
+                       {:#?}\n\
+                       \n\
+                       expected match for pattern:\n\
+                       {}",
+                      &source,
+                      error,
+                      stringify!($pattern));
+            $( eprintln!("if {}", stringify!($guard)); )?
+            panic!("validation error does not match pattern");
+        }
+    };
+    ( $source:expr, $pattern:pat $( if $guard:expr )?, $capabilities:expr ) => {
+        let source = $source;
+        let error = validation_error($source, $capabilities);
+        #[allow(clippy::redundant_pattern_matching)]
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
                        source code: {}\n\
@@ -900,14 +921,27 @@ macro_rules! check_validation {
             check_one_validation!($source, $pattern);
         )*
     };
+    ( $( $source:literal ),* : $pattern:pat, $capabilities:expr ) => {
+        $(
+            check_one_validation!($source, $pattern, $capabilities);
+        )*
+    };
     ( $( $source:literal ),* : $pattern:pat if $guard:expr ) => {
         $(
             check_one_validation!($source, $pattern if $guard);
         )*
+    };
+    ( $( $source:literal ),* : $pattern:pat if $guard:expr, $capabilities:expr ) => {
+        $(
+            check_one_validation!($source, $pattern if $guard, $capabilities);
+        )*
     }
 }
 
-fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+fn validation_error(
+    source: &str,
+    caps: naga::valid::Capabilities,
+) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
     let module = match naga::front::wgsl::parse_str(source) {
         Ok(module) => module,
         Err(err) => {
@@ -915,12 +949,21 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
             panic!("{}", err.emit_to_string(source));
         }
     };
-    naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::default(),
-    )
-    .validate(&module)
-    .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
+    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
+        .validate(&module)
+        .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
+}
+
+#[test]
+fn int64_capability() {
+    check_validation! {
+        "var input: u64;",
+        "var input: i64;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "SHADER_INT64",..}),
+            ..
+        })
+    }
 }
 
 #[test]
@@ -933,6 +976,16 @@ fn invalid_arrays() {
             source: naga::valid::TypeError::InvalidArrayBaseType(_),
             ..
         })
+    }
+
+    check_validation! {
+        "var<uniform> input: array<u64, 2>;",
+        "var<uniform> input: array<vec2<u32>, 2>;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::Alignment(naga::AddressSpace::Uniform,_,_),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT64
     }
 
     check_validation! {
@@ -2097,4 +2150,130 @@ fn compaction_preserves_spans() {
     ) {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }
+}
+
+#[test]
+fn limit_braced_statement_nesting() {
+    let too_many_braces = "fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
+
+    let expected_diagnostic = r###"error: brace nesting limit reached
+  ┌─ wgsl:1:72
+  │
+1 │ fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+  │                                                                        ^ limit reached at this brace
+  │
+  = note: nesting limit is currently set to 64
+
+"###;
+
+    // In debug builds, we might actually overflow the stack before exercising this error case,
+    // depending on the platform and the `RUST_MIN_STACK` env. var. Use a thread with a custom
+    // stack size that works on all platforms.
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024 * 2 /* MB */)
+        .spawn(|| check(too_many_braces, expected_diagnostic))
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+#[test]
+fn too_many_unclosed_loops() {
+    let too_many_braces = "fn f() {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+           ";
+
+    let expected_diagnostic = r###"error: brace nesting limit reached
+   ┌─ wgsl:65:13
+   │
+65 │        loop {
+   │             ^ limit reached at this brace
+   │
+   = note: nesting limit is currently set to 64
+
+"###;
+
+    // In debug builds, we might actually overflow the stack before exercising this error case,
+    // depending on the platform and the `RUST_MIN_STACK` env. var. Use a thread with a custom
+    // stack size that works on all platforms.
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024 * 2 /* MB */)
+        .spawn(|| check(too_many_braces, expected_diagnostic))
+        .unwrap()
+        .join()
+        .unwrap()
 }

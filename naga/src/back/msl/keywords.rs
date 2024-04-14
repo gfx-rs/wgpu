@@ -4,6 +4,8 @@
 // C++ - Standard for Programming Language C++ (N4431)
 // https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/n4431.pdf
 pub const RESERVED: &[&str] = &[
+    // Undocumented
+    "assert", // found in https://github.com/gfx-rs/wgpu/issues/5347
     // Standard for Programming Language C++ (N4431): 2.5 Alternative tokens
     "and",
     "bitor",

@@ -29,11 +29,14 @@ pub(crate) struct InvalidId;
 
 /// A table of `T` values indexed by the id type `I`.
 ///
+/// `Storage` implements [`std::ops::Index`], accepting `Id` values as
+/// indices.
+///
 /// The table is represented as a vector indexed by the ids' index
 /// values, so you should use an id allocator like `IdentityManager`
 /// that keeps the index values dense and close to zero.
 #[derive(Debug)]
-pub struct Storage<T>
+pub(crate) struct Storage<T>
 where
     T: Resource,
 {

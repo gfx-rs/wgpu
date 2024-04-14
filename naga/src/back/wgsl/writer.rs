@@ -106,10 +106,16 @@ impl<W: Write> Writer<W> {
     }
 
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
+        if !module.overrides.is_empty() {
+            return Err(Error::Unimplemented(
+                "Pipeline constants are not yet supported for this back-end".to_string(),
+            ));
+        }
+
         self.reset(module);
 
         // Save all ep result types
-        for (_, ep) in module.entry_points.iter().enumerate() {
+        for ep in &module.entry_points {
             if let Some(ref result) = ep.function.result {
                 self.ep_results.push((ep.stage, result.ty));
             }
@@ -1070,7 +1076,7 @@ impl<W: Write> Writer<W> {
         self.write_possibly_const_expression(
             module,
             expr,
-            &module.const_expressions,
+            &module.global_expressions,
             |writer, expr| writer.write_const_expression(module, expr),
         )
     }
@@ -1096,16 +1102,24 @@ impl<W: Write> Writer<W> {
                     // value can only be expressed in WGSL using AbstractInt and
                     // a unary negation operator.
                     if value == i32::MIN {
-                        write!(self.out, "i32(-2147483648)")?;
+                        write!(self.out, "i32({})", value)?;
                     } else {
                         write!(self.out, "{}i", value)?;
                     }
                 }
                 crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
                 crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
-                crate::Literal::I64(_) => {
-                    return Err(Error::Custom("unsupported i64 literal".to_string()));
+                crate::Literal::I64(value) => {
+                    // `-9223372036854775808li` is not valid WGSL. The most negative `i64`
+                    // value can only be expressed in WGSL using AbstractInt and
+                    // a unary negation operator.
+                    if value == i64::MIN {
+                        write!(self.out, "i64({})", value)?;
+                    } else {
+                        write!(self.out, "{}li", value)?;
+                    }
                 }
+                crate::Literal::U64(value) => write!(self.out, "{:?}lu", value)?,
                 crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
                     return Err(Error::Custom(
                         "Abstract types should not appear in IR presented to backends".into(),
@@ -1191,6 +1205,7 @@ impl<W: Write> Writer<W> {
                     |writer, expr| writer.write_expr(module, expr, func_ctx),
                 )?;
             }
+            Expression::Override(_) => unreachable!(),
             Expression::FunctionArgument(pos) => {
                 let name_key = func_ctx.argument_key(pos);
                 let name = &self.names[&name_key];
@@ -1828,6 +1843,14 @@ const fn scalar_kind_str(scalar: crate::Scalar) -> &'static str {
             kind: Sk::Uint,
             width: 4,
         } => "u32",
+        Scalar {
+            kind: Sk::Sint,
+            width: 8,
+        } => "i64",
+        Scalar {
+            kind: Sk::Uint,
+            width: 8,
+        } => "u64",
         Scalar {
             kind: Sk::Bool,
             width: 1,

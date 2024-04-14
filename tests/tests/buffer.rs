@@ -224,6 +224,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                     layout: Some(&pipeline_layout),
                     module: &shader_module,
                     entry_point: "main",
+                    constants: &Default::default(),
                 });
         });
     });
@@ -292,6 +293,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 layout: Some(&pipeline_layout),
                 module: &shader_module,
                 entry_point: "main",
+                constants: &Default::default(),
             });
 
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -326,3 +328,62 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             let _ = encoder.finish();
         });
     });
+
+#[gpu_test]
+static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        let size = 16;
+
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size,
+            usage: wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let out_of_bounds = size.checked_add(wgpu::COPY_BUFFER_ALIGNMENT).unwrap();
+
+        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        ctx.device
+            .create_command_encoder(&Default::default())
+            .clear_buffer(&buffer, out_of_bounds, None);
+        let err_msg = pollster::block_on(ctx.device.pop_error_scope())
+            .unwrap()
+            .to_string();
+        assert!(err_msg.contains(
+            "Clear of 20..20 would end up overrunning the bounds of the buffer of size 16"
+        ));
+    });
+
+#[gpu_test]
+static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default())
+        .run_sync(|ctx| {
+            let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 16, // unimportant for this test
+                usage: wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            let max_valid_offset = u64::MAX - (u64::MAX % wgpu::COPY_BUFFER_ALIGNMENT);
+            let smallest_aligned_invalid_size = wgpu::COPY_BUFFER_ALIGNMENT;
+
+            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            ctx.device
+                .create_command_encoder(&Default::default())
+                .clear_buffer(
+                    &buffer,
+                    max_valid_offset,
+                    Some(smallest_aligned_invalid_size),
+                );
+            let err_msg = pollster::block_on(ctx.device.pop_error_scope())
+                .unwrap()
+                .to_string();
+            assert!(err_msg.contains(concat!(
+                "Clear starts at offset 18446744073709551612 with size of 4, ",
+                "but these added together exceed `u64::MAX`"
+            )));
+        });

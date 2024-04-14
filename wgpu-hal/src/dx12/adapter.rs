@@ -181,6 +181,53 @@ impl super::Adapter {
             hr == 0 && features3.CastingFullyTypedFormatSupported != 0
         };
 
+        let shader_model = if dxc_container.is_none() {
+            naga::back::hlsl::ShaderModel::V5_1
+        } else {
+            let mut versions = [
+                crate::dx12::types::D3D_SHADER_MODEL_6_7,
+                crate::dx12::types::D3D_SHADER_MODEL_6_6,
+                crate::dx12::types::D3D_SHADER_MODEL_6_5,
+                crate::dx12::types::D3D_SHADER_MODEL_6_4,
+                crate::dx12::types::D3D_SHADER_MODEL_6_3,
+                crate::dx12::types::D3D_SHADER_MODEL_6_2,
+                crate::dx12::types::D3D_SHADER_MODEL_6_1,
+                crate::dx12::types::D3D_SHADER_MODEL_6_0,
+                crate::dx12::types::D3D_SHADER_MODEL_5_1,
+            ]
+            .iter();
+            match loop {
+                if let Some(&sm) = versions.next() {
+                    let mut sm = crate::dx12::types::D3D12_FEATURE_DATA_SHADER_MODEL {
+                        HighestShaderModel: sm,
+                    };
+                    if 0 == unsafe {
+                        device.CheckFeatureSupport(
+                            7, // D3D12_FEATURE_SHADER_MODEL
+                            &mut sm as *mut _ as *mut _,
+                            mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_SHADER_MODEL>()
+                                as _,
+                        )
+                    } {
+                        break sm.HighestShaderModel;
+                    }
+                } else {
+                    break crate::dx12::types::D3D_SHADER_MODEL_5_1;
+                }
+            } {
+                crate::dx12::types::D3D_SHADER_MODEL_5_1 => naga::back::hlsl::ShaderModel::V5_1,
+                crate::dx12::types::D3D_SHADER_MODEL_6_0 => naga::back::hlsl::ShaderModel::V6_0,
+                crate::dx12::types::D3D_SHADER_MODEL_6_1 => naga::back::hlsl::ShaderModel::V6_1,
+                crate::dx12::types::D3D_SHADER_MODEL_6_2 => naga::back::hlsl::ShaderModel::V6_2,
+                crate::dx12::types::D3D_SHADER_MODEL_6_3 => naga::back::hlsl::ShaderModel::V6_3,
+                crate::dx12::types::D3D_SHADER_MODEL_6_4 => naga::back::hlsl::ShaderModel::V6_4,
+                crate::dx12::types::D3D_SHADER_MODEL_6_5 => naga::back::hlsl::ShaderModel::V6_5,
+                crate::dx12::types::D3D_SHADER_MODEL_6_6 => naga::back::hlsl::ShaderModel::V6_6,
+                crate::dx12::types::D3D_SHADER_MODEL_6_7 => naga::back::hlsl::ShaderModel::V6_7,
+                _ => unreachable!(),
+            }
+        };
+
         let private_caps = super::PrivateCapabilities {
             instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
@@ -196,6 +243,7 @@ impl super::Adapter {
             casting_fully_typed_format_supported,
             // See https://github.com/gfx-rs/wgpu/issues/3552
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
+            shader_model,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
@@ -294,6 +342,22 @@ impl super::Adapter {
             wgt::Features::BGRA8UNORM_STORAGE,
             bgra8unorm_storage_supported,
         );
+
+        // we must be using DXC because uint64_t was added with Shader Model 6
+        // and FXC only supports up to 5.1
+        let int64_shader_ops_supported = dxc_container.is_some() && {
+            let mut features1: d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1 =
+                unsafe { mem::zeroed() };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS1,
+                    &mut features1 as *mut _ as *mut _,
+                    mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1>() as _,
+                )
+            };
+            hr == 0 && features1.Int64ShaderOps != 0
+        };
+        features.set(wgt::Features::SHADER_INT64, int64_shader_ops_supported);
 
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
@@ -416,7 +480,9 @@ impl super::Adapter {
     }
 }
 
-impl crate::Adapter<super::Api> for super::Adapter {
+impl crate::Adapter for super::Adapter {
+    type A = super::Api;
+
     unsafe fn open(
         &self,
         _features: wgt::Features,
