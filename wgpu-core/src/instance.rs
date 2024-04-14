@@ -6,13 +6,14 @@ use crate::{
     device::{queue::Queue, resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
-    id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
+    id::markers,
+    id::{AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
+    lock::{rank, Mutex},
     present::Presentation,
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use parking_lot::Mutex;
 use wgt::{Backend, Backends, PowerPreference};
 
 use hal::{Adapter as _, Instance as _, OpenDevice};
@@ -530,7 +531,7 @@ impl Global {
         let mut any_created = false;
 
         let surface = Surface {
-            presentation: Mutex::new(None),
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
             info: ResourceInfo::new("<Surface>", None),
 
             #[cfg(vulkan)]
@@ -594,7 +595,7 @@ impl Global {
         profiling::scope!("Instance::create_surface_metal");
 
         let surface = Surface {
-            presentation: Mutex::new(None),
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
             info: ResourceInfo::new("<Surface>", None),
             metal: Some(self.instance.metal.as_ref().map_or(
                 Err(CreateSurfaceError::BackendNotEnabled(Backend::Metal)),
@@ -623,7 +624,7 @@ impl Global {
         create_surface_func: impl FnOnce(&HalInstance<hal::api::Dx12>) -> HalSurface<hal::api::Dx12>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = Surface {
-            presentation: Mutex::new(None),
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
             info: ResourceInfo::new("<Surface>", None),
             dx12: Some(create_surface_func(
                 self.instance

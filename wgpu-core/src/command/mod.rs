@@ -23,6 +23,7 @@ use crate::device::{Device, DeviceError};
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::hub::Hub;
 use crate::id::CommandBufferId;
+use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
@@ -31,7 +32,6 @@ use crate::track::{Tracker, UsageScope};
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
 use hal::CommandEncoder as _;
-use parking_lot::Mutex;
 use thiserror::Error;
 
 #[cfg(feature = "trace")]
@@ -338,25 +338,28 @@ impl<A: HalApi> CommandBuffer<A> {
                     .as_str(),
                 None,
             ),
-            data: Mutex::new(Some(CommandBufferMutable {
-                encoder: CommandEncoder {
-                    raw: encoder,
-                    is_open: false,
-                    list: Vec::new(),
-                    label,
-                },
-                status: CommandEncoderStatus::Recording,
-                trackers: Tracker::new(),
-                buffer_memory_init_actions: Default::default(),
-                texture_memory_actions: Default::default(),
-                pending_query_resets: QueryResetMap::new(),
-                #[cfg(feature = "trace")]
-                commands: if enable_tracing {
-                    Some(Vec::new())
-                } else {
-                    None
-                },
-            })),
+            data: Mutex::new(
+                rank::COMMAND_BUFFER_DATA,
+                Some(CommandBufferMutable {
+                    encoder: CommandEncoder {
+                        raw: encoder,
+                        is_open: false,
+                        list: Vec::new(),
+                        label,
+                    },
+                    status: CommandEncoderStatus::Recording,
+                    trackers: Tracker::new(),
+                    buffer_memory_init_actions: Default::default(),
+                    texture_memory_actions: Default::default(),
+                    pending_query_resets: QueryResetMap::new(),
+                    #[cfg(feature = "trace")]
+                    commands: if enable_tracing {
+                        Some(Vec::new())
+                    } else {
+                        None
+                    },
+                }),
+            ),
         }
     }
 

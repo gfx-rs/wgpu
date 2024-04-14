@@ -1,8 +1,8 @@
-use parking_lot::Mutex;
 use wgt::Backend;
 
 use crate::{
     id::{Id, Marker},
+    lock::{rank, Mutex},
     Epoch, Index,
 };
 use std::{fmt::Debug, marker::PhantomData};
@@ -117,12 +117,15 @@ impl<T: Marker> IdentityManager<T> {
 impl<T: Marker> IdentityManager<T> {
     pub fn new() -> Self {
         Self {
-            values: Mutex::new(IdentityValues {
-                free: Vec::new(),
-                next_index: 0,
-                count: 0,
-                id_source: IdSource::None,
-            }),
+            values: Mutex::new(
+                rank::IDENTITY_MANAGER_VALUES,
+                IdentityValues {
+                    free: Vec::new(),
+                    next_index: 0,
+                    count: 0,
+                    id_source: IdSource::None,
+                },
+            ),
             _phantom: PhantomData,
         }
     }

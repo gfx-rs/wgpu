@@ -102,10 +102,15 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,
+    binding_model, command, conv,
+    hal_api::HalApi,
+    id,
+    lock::{rank, Mutex},
+    pipeline, resource,
+    snatch::SnatchGuard,
 };
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
@@ -191,7 +196,10 @@ pub(crate) struct SharedTrackerIndexAllocator {
 impl SharedTrackerIndexAllocator {
     pub fn new() -> Self {
         SharedTrackerIndexAllocator {
-            inner: Mutex::new(TrackerIndexAllocator::new()),
+            inner: Mutex::new(
+                rank::SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+                TrackerIndexAllocator::new(),
+            ),
         }
     }
 

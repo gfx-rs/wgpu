@@ -2,7 +2,7 @@ use crate::hal_api::HalApi;
 use crate::resource_log;
 use hal::Device as _;
 
-use parking_lot::Mutex;
+use crate::lock::{rank, Mutex};
 
 /// A pool of free [`wgpu_hal::CommandEncoder`]s, owned by a `Device`.
 ///
@@ -21,7 +21,7 @@ pub(crate) struct CommandAllocator<A: HalApi> {
 impl<A: HalApi> CommandAllocator<A> {
     pub(crate) fn new() -> Self {
         Self {
-            free_encoders: Mutex::new(Vec::new()),
+            free_encoders: Mutex::new(rank::COMMAND_ALLOCATOR_FREE_ENCODERS, Vec::new()),
         }
     }
 
