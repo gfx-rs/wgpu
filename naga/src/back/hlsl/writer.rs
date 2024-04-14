@@ -2593,7 +2593,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         true
                     }
                     None => {
-                        if inner.scalar_width() == Some(64) {
+                        if inner.scalar_width() == Some(8) {
                             false
                         } else {
                             write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
