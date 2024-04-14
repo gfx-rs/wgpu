@@ -64,8 +64,58 @@ impl<T> std::fmt::Debug for Snatchable<T> {
 
 unsafe impl<T> Sync for Snatchable<T> {}
 
+struct LockTrace {
+    purpose: &'static str,
+    caller: &'static Location<'static>,
+    backtrace: Backtrace,
+}
+
+impl std::fmt::Display for LockTrace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "a {} lock at {}\n{}",
+            self.purpose, self.caller, self.backtrace
+        )
+    }
+}
+
+#[cfg(debug_assertions)]
+impl LockTrace {
+    #[track_caller]
+    fn enter(purpose: &'static str) {
+        let new = LockTrace {
+            purpose,
+            caller: Location::caller(),
+            backtrace: Backtrace::capture(),
+        };
+
+        if let Some(prev) = SNATCH_LOCK_TRACE.take() {
+            let current = thread::current();
+            let name = current.name().unwrap_or("<unnamed>");
+            panic!(
+                "thread '{name}' attempted to acquire a snatch lock recursively.\n\
+                 - Currently trying to acquire {new}\n\
+                 - Previously acquired {prev}",
+            );
+        } else {
+            SNATCH_LOCK_TRACE.set(Some(new));
+        }
+    }
+
+    fn exit() {
+        SNATCH_LOCK_TRACE.take();
+    }
+}
+
+#[cfg(not(debug_assertions))]
+impl LockTrace {
+    fn enter(purpose: &'static str) {}
+    fn exit() {}
+}
+
 thread_local! {
-    static READ_LOCK_LOCATION: Cell<Option<(&'static Location<'static>, Backtrace)>> = const { Cell::new(None) };
+    static SNATCH_LOCK_TRACE: Cell<Option<LockTrace>> = const { Cell::new(None) };
 }
 
 /// A Device-global lock for all snatchable data.
@@ -87,22 +137,7 @@ impl SnatchLock {
     /// Request read access to snatchable resources.
     #[track_caller]
     pub fn read(&self) -> SnatchGuard {
-        if cfg!(debug_assertions) {
-            let caller = Location::caller();
-            let backtrace = Backtrace::capture();
-            if let Some((prev, bt)) = READ_LOCK_LOCATION.take() {
-                let current = thread::current();
-                let name = current.name().unwrap_or("<unnamed>");
-                panic!(
-                    "thread '{name}' attempted to acquire a snatch read lock recursively.\n
-                    - {prev}\n{bt}\n
-                    - {caller}\n{backtrace}"
-                );
-            } else {
-                READ_LOCK_LOCATION.set(Some((caller, backtrace)));
-            }
-        }
-
+        LockTrace::enter("read");
         SnatchGuard(self.lock.read())
     }
 
@@ -111,14 +146,21 @@ impl SnatchLock {
     /// This should only be called when a resource needs to be snatched. This has
     /// a high risk of causing lock contention if called concurrently with other
     /// wgpu work.
+    #[track_caller]
     pub fn write(&self) -> ExclusiveSnatchGuard {
+        LockTrace::enter("write");
         ExclusiveSnatchGuard(self.lock.write())
     }
 }
 
 impl Drop for SnatchGuard<'_> {
     fn drop(&mut self) {
-        #[cfg(debug_assertions)]
-        READ_LOCK_LOCATION.take();
+        LockTrace::exit();
+    }
+}
+
+impl Drop for ExclusiveSnatchGuard<'_> {
+    fn drop(&mut self) {
+        LockTrace::exit();
     }
 }
