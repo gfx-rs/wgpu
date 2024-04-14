@@ -48,7 +48,6 @@
     unused_qualifications
 )]
 
-pub mod any_surface;
 pub mod binding_model;
 pub mod command;
 mod conv;
