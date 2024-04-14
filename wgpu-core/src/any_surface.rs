@@ -8,7 +8,7 @@ use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 
 struct AnySurfaceVtable {
-    // We oppurtunistically store the backend here, since we now it will be used
+    // We opportunistically store the backend here, since we now it will be used
     // with backend selection and it can be stored in static memory.
     backend: Backend,
     // Drop glue which knows how to drop the stored data.
