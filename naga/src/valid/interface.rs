@@ -77,6 +77,8 @@ pub enum VaryingError {
         location: u32,
         attribute: &'static str,
     },
+    #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
+    InvalidMultiDimensionalSubgroupBuiltIn,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -112,8 +114,6 @@ pub enum EntryPointError {
         "Invalid locations {location_mask:?} are set while dual source blending. Only location 0 may be set."
     )]
     InvalidLocationsWhileDualSourceBlending { location_mask: BitSet },
-    #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
-    InvalidMultiDimensionalSubgroupBuiltIn,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -142,6 +142,7 @@ struct VaryingContext<'a> {
 impl VaryingContext<'_> {
     fn validate_impl(
         &mut self,
+        ep: &crate::EntryPoint,
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<(), VaryingError> {
@@ -177,6 +178,14 @@ impl VaryingContext<'_> {
                 };
                 if !self.capabilities.contains(required) {
                     return Err(VaryingError::UnsupportedCapability(required));
+                }
+
+                if matches!(
+                    built_in,
+                    crate::BuiltIn::SubgroupId | crate::BuiltIn::SubgroupInvocationId
+                ) && ep.workgroup_size[1..].iter().any(|&s| s > 1)
+                {
+                    return Err(VaryingError::InvalidMultiDimensionalSubgroupBuiltIn);
                 }
 
                 let (visible, type_good) = match built_in {
@@ -371,13 +380,14 @@ impl VaryingContext<'_> {
 
     fn validate(
         &mut self,
+        ep: &crate::EntryPoint,
         ty: Handle<crate::Type>,
         binding: Option<&crate::Binding>,
     ) -> Result<(), WithSpan<VaryingError>> {
         let span_context = self.types.get_span_context(ty);
         match binding {
             Some(binding) => self
-                .validate_impl(ty, binding)
+                .validate_impl(ep, ty, binding)
                 .map_err(|e| e.with_span_context(span_context)),
             None => {
                 match self.types[ty].inner {
@@ -394,7 +404,7 @@ impl VaryingContext<'_> {
                                     }
                                 }
                                 Some(ref binding) => self
-                                    .validate_impl(member.ty, binding)
+                                    .validate_impl(ep, member.ty, binding)
                                     .map_err(|e| e.with_span_context(span_context))?,
                             }
                         }
@@ -615,17 +625,6 @@ impl super::Validator {
         let mut argument_built_ins = crate::FastHashSet::default();
         // TODO: add span info to function arguments
         for (index, fa) in ep.function.arguments.iter().enumerate() {
-            if ep.workgroup_size[1..].iter().any(|&s| s > 1)
-                && matches!(
-                    fa.binding,
-                    Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
-                        | Some(crate::Binding::BuiltIn(
-                            crate::BuiltIn::SubgroupInvocationId
-                        ))
-                )
-            {
-                return Err(EntryPointError::InvalidMultiDimensionalSubgroupBuiltIn.with_span());
-            }
             let mut ctx = VaryingContext {
                 stage: ep.stage,
                 output: false,
@@ -637,7 +636,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
                 flags: self.flags,
             };
-            ctx.validate(fa.ty, fa.binding.as_ref())
+            ctx.validate(ep, fa.ty, fa.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
         }
 
@@ -655,7 +654,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
                 flags: self.flags,
             };
-            ctx.validate(fr.ty, fr.binding.as_ref())
+            ctx.validate(ep, fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
             if ctx.second_blend_source {
                 // Only the first location may be used when dual source blending
