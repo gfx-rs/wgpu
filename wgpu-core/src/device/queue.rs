@@ -258,7 +258,7 @@ impl<A: HalApi> PendingWrites<A> {
     #[must_use]
     fn post_submit(
         &mut self,
-        command_allocator: &mut CommandAllocator<A>,
+        command_allocator: &CommandAllocator<A>,
         device: &A::Device,
         queue: &A::Queue,
     ) -> Option<EncoderInFlight<A>> {
@@ -1530,7 +1530,7 @@ impl Global {
 
             profiling::scope!("cleanup");
             if let Some(pending_execution) = pending_writes.post_submit(
-                device.command_allocator.lock().as_mut().unwrap(),
+                &device.command_allocator,
                 device.raw(),
                 queue.raw.as_ref().unwrap(),
             ) {
