@@ -2,6 +2,8 @@ use crate::hal_api::HalApi;
 use crate::resource_log;
 use hal::Device as _;
 
+use parking_lot::Mutex;
+
 /// A pool of free [`wgpu_hal::CommandEncoder`]s, owned by a `Device`.
 ///
 /// Each encoder in this list is in the "closed" state.
@@ -12,13 +14,13 @@ use hal::Device as _;
 /// [ce]: wgpu_hal::CommandEncoder
 /// [cb]: wgpu_hal::Api::CommandBuffer
 pub(crate) struct CommandAllocator<A: HalApi> {
-    free_encoders: Vec<A::CommandEncoder>,
+    free_encoders: Mutex<Vec<A::CommandEncoder>>,
 }
 
 impl<A: HalApi> CommandAllocator<A> {
     pub(crate) fn new() -> Self {
         Self {
-            free_encoders: Vec::new(),
+            free_encoders: Mutex::new(Vec::new()),
         }
     }
 
@@ -27,11 +29,12 @@ impl<A: HalApi> CommandAllocator<A> {
     /// If we have free encoders in the pool, take one of those. Otherwise,
     /// create a new one on `device`.
     pub(crate) fn acquire_encoder(
-        &mut self,
+        &self,
         device: &A::Device,
         queue: &A::Queue,
     ) -> Result<A::CommandEncoder, hal::DeviceError> {
-        match self.free_encoders.pop() {
+        let mut free_encoders = self.free_encoders.lock();
+        match free_encoders.pop() {
             Some(encoder) => Ok(encoder),
             None => unsafe {
                 let hal_desc = hal::CommandEncoderDescriptor { label: None, queue };
@@ -41,19 +44,18 @@ impl<A: HalApi> CommandAllocator<A> {
     }
 
     /// Add `encoder` back to the free pool.
-    pub(crate) fn release_encoder(&mut self, encoder: A::CommandEncoder) {
-        self.free_encoders.push(encoder);
+    pub(crate) fn release_encoder(&self, encoder: A::CommandEncoder) {
+        let mut free_encoders = self.free_encoders.lock();
+        free_encoders.push(encoder);
     }
 
     /// Free the pool of command encoders.
     ///
     /// This is only called when the `Device` is dropped.
-    pub(crate) fn dispose(self, device: &A::Device) {
-        resource_log!(
-            "CommandAllocator::dispose encoders {}",
-            self.free_encoders.len()
-        );
-        for cmd_encoder in self.free_encoders {
+    pub(crate) fn dispose(&self, device: &A::Device) {
+        let mut free_encoders = self.free_encoders.lock();
+        resource_log!("CommandAllocator::dispose encoders {}", free_encoders.len());
+        for cmd_encoder in free_encoders.drain(..) {
             unsafe {
                 device.destroy_command_encoder(cmd_encoder);
             }
