@@ -3709,20 +3709,20 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let predicate_id = self.next()?;
 
                     let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
-                    let _exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
                         .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
-                        .ok_or(Error::InvalidExecutionScope(exec_scope_id))?;
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
 
                     let predicate = if self
                         .lookup_constant
                         .lookup(predicate_id)
                         .ok()
-                        .filter(|predicate_const| {
-                            matches!(
-                                ctx.gctx().global_expressions
-                                    [ctx.gctx().constants[predicate_const.handle].init],
-                                crate::Expression::Literal(crate::Literal::Bool(true))
-                            )
+                        .filter(|predicate_const| match predicate_const.inner {
+                            Constant::Constant(constant) => matches!(
+                                ctx.gctx().global_expressions[ctx.gctx().constants[constant].init],
+                                crate::Expression::Literal(crate::Literal::Bool(true)),
+                            ),
+                            Constant::Override(_) => false,
                         })
                         .is_some()
                     {
@@ -3812,9 +3812,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let argument_handle = get_expr_handle!(argument_id, argument_lookup);
 
                     let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
-                    let _exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
                         .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
-                        .ok_or(Error::InvalidExecutionScope(exec_scope_id))?;
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
 
                     let op_id = match inst.op {
                         spirv::Op::GroupNonUniformAll => crate::SubgroupOperation::All,
@@ -3891,9 +3891,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let argument_handle = get_expr_handle!(argument_id, argument_lookup);
 
                     let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
-                    let _exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
                         .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
-                        .ok_or(Error::InvalidExecutionScope(exec_scope_id))?;
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
 
                     let mode = if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
                         crate::GatherMode::BroadcastFirst
