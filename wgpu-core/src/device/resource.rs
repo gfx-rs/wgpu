@@ -7,8 +7,8 @@ use crate::{
         bgl,
         life::{LifetimeTracker, WaitIdleError},
         queue::PendingWrites,
-        AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
-        MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
+        AttachmentData, DeviceLostInvocation, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
     hal_label,
@@ -97,7 +97,7 @@ pub struct Device<A: HalApi> {
     pub(crate) zero_buffer: Option<A::Buffer>,
     pub(crate) info: ResourceInfo<Device<A>>,
 
-    pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
+    pub(crate) command_allocator: Mutex<Option<command::CommandAllocator<A>>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
@@ -223,9 +223,7 @@ impl<A: HalApi> Device<A> {
         let fence =
             unsafe { raw_device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
 
-        let mut com_alloc = CommandAllocator {
-            free_encoders: Vec::new(),
-        };
+        let mut com_alloc = command::CommandAllocator::new();
         let pending_encoder = com_alloc
             .acquire_encoder(&raw_device, raw_queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;

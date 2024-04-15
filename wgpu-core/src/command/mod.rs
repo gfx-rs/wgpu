@@ -1,3 +1,4 @@
+mod allocator;
 mod bind;
 mod bundle;
 mod clear;
@@ -15,6 +16,7 @@ pub(crate) use self::clear::clear_texture;
 pub use self::{
     bundle::*, clear::ClearError, compute::*, draw::*, query::*, render::*, transfer::*,
 };
+pub(crate) use allocator::CommandAllocator;
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
