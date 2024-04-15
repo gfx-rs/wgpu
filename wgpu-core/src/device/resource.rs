@@ -223,8 +223,8 @@ impl<A: HalApi> Device<A> {
         let fence =
             unsafe { raw_device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
 
-        let com_alloc = command::CommandAllocator::new();
-        let pending_encoder = com_alloc
+        let command_allocator = command::CommandAllocator::new();
+        let pending_encoder = command_allocator
             .acquire_encoder(&raw_device, raw_queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
         let mut pending_writes = queue::PendingWrites::<A>::new(pending_encoder);
@@ -269,7 +269,7 @@ impl<A: HalApi> Device<A> {
             queue_to_drop: OnceCell::new(),
             zero_buffer: Some(zero_buffer),
             info: ResourceInfo::new("<device>", None),
-            command_allocator: com_alloc,
+            command_allocator,
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new() },
