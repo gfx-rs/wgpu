@@ -469,14 +469,18 @@ pub enum CreateSurfaceError {
     #[error("The backend {0} was not enabled on the instance.")]
     BackendNotEnabled(Backend),
     #[error("Failed to create surface for any enabled backend.")]
-    InstanceError(HashMap<Backend, hal::InstanceError>),
+    FailedToCreateSurfaceForAnyBackend(HashMap<Backend, hal::InstanceError>),
 }
 
 impl Global {
     /// Creates a new surface targeting the given display/window handles.
     ///
     /// Internally attempts to create hal surfaces for all enabled backends.
-    /// TODO DO NOT MERGE: DESCRIBE BONKERS ERROR HANDLING
+    ///
+    /// Fails only if creation for surfaces for all enabled backends fails in which case
+    /// the error for each enabled backend is listed.
+    /// Vice versa, if creation for any backend succeeds, success is returned.
+    /// Surface creation errors are logged to the debug log in any case.
     ///
     /// id_in:
     /// - If `Some`, the id to assign to the surface. A new one will be generated otherwise.
@@ -572,7 +576,9 @@ impl Global {
             let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
             Ok(id)
         } else {
-            Err(CreateSurfaceError::InstanceError(errors))
+            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
+                errors,
+            ))
         }
     }
 
