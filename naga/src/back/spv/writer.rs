@@ -1938,7 +1938,7 @@ impl Writer {
                     source_code: debug_info.source_code,
                     source_file_id,
                 });
-                self.debugs.push(Instruction::source(
+                self.debugs.append(&mut Instruction::source_auto_continued(
                     spirv::SourceLanguage::Unknown,
                     0,
                     &debug_info_inner,

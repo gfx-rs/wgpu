@@ -150,6 +150,16 @@ struct ActiveSubmission<A: HalApi> {
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer<A>>>,
 
+    /// Command buffers used by this submission, and the encoder that owns them.
+    ///
+    /// [`wgpu_hal::Queue::submit`] requires the submitted command buffers to
+    /// remain alive until the submission has completed execution. Command
+    /// encoders double as allocation pools for command buffers, so holding them
+    /// here and cleaning them up in [`LifetimeTracker::triage_submissions`]
+    /// satisfies that requirement.
+    ///
+    /// Once this submission has completed, the command buffers are reset and
+    /// the command encoder is recycled.
     encoders: Vec<EncoderInFlight<A>>,
 
     /// List of queue "on_submitted_work_done" closures to be called once this

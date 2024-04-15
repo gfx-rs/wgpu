@@ -902,11 +902,15 @@ fn convert_wgsl() {
         let inputs = [
             ("debug-symbol-simple", Targets::SPIRV),
             ("debug-symbol-terrain", Targets::SPIRV),
+            ("debug-symbol-large-source", Targets::SPIRV),
         ];
         for &(name, targets) in inputs.iter() {
             // WGSL shaders lives in root dir as a privileged.
             let input = Input::new(None, name, "wgsl");
             let source = input.read_source();
+
+            // crlf will make the large split output different on different platform
+            let source = source.replace('\r', "");
             match naga::front::wgsl::parse_str(&source) {
                 Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source)),
                 Err(e) => panic!(
@@ -968,6 +972,7 @@ fn convert_spv_all() {
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
     convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
+    convert_spv("spec-constants", true, Targets::IR);
     convert_spv(
         "subgroup-operations-s",
         false,

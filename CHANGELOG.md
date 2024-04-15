@@ -185,6 +185,7 @@ Bottom level categories:
 #### DX12
 
 - Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Shader Model 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, and 6.7 detection. By @atlv24 in [#5498](https://github.com/gfx-rs/wgpu/pull/5498)
 
 ## v0.19.3 (2024-03-01)
 

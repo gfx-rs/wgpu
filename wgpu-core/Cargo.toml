@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.19.0"
+version = "0.19.3"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -117,17 +117,17 @@ thiserror = "1"
 
 [dependencies.naga]
 path = "../naga"
-version = "0.19.0"
+version = "0.19.2"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.19.0"
+version = "0.19.2"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.19.0"
+version = "0.19.3"
 default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]

@@ -120,10 +120,10 @@ pub enum Error {
     ControlFlowGraphCycle(crate::front::spv::BlockId),
     #[error("recursive function call %{0}")]
     FunctionCallCycle(spirv::Word),
-    #[error("invalid array size {0:?}")]
-    InvalidArraySize(Handle<crate::Constant>),
-    #[error("invalid execution scope %{0}")]
-    InvalidExecutionScope(spirv::Word),
+    #[error("invalid array size %{0}")]
+    InvalidArraySize(spirv::Word),
+    #[error("invalid barrier scope %{0}")]
+    InvalidBarrierScope(spirv::Word),
     #[error("invalid barrier memory semantics %{0}")]
     InvalidBarrierMemorySemantics(spirv::Word),
     #[error(
@@ -132,6 +132,8 @@ pub enum Error {
          come from a binding)"
     )]
     NonBindingArrayOfImageOrSamplers,
+    #[error("naga only supports specialization constant IDs up to 65535 but was given {0}")]
+    SpecIdTooHigh(u32),
 }
 
 impl Error {

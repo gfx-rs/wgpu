@@ -379,7 +379,7 @@ impl<A: HalApi> Device<A> {
 
     /// Check this device for completed commands.
     ///
-    /// The `maintain` argument tells how the maintence function should behave, either
+    /// The `maintain` argument tells how the maintenance function should behave, either
     /// blocking or just polling the current state of the gpu.
     ///
     /// Return a pair `(closures, queue_empty)`, where:
