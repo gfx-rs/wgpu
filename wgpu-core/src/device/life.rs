@@ -23,7 +23,6 @@ use std::sync::Arc;
 use thiserror::Error;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
-#[derive(Default)]
 pub(crate) struct ResourceMaps<A: HalApi> {
     pub buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
     pub staging_buffers: FastHashMap<TrackerIndex, Arc<StagingBuffer<A>>>,
@@ -150,6 +149,16 @@ struct ActiveSubmission<A: HalApi> {
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer<A>>>,
 
+    /// Command buffers used by this submission, and the encoder that owns them.
+    ///
+    /// [`wgpu_hal::Queue::submit`] requires the submitted command buffers to
+    /// remain alive until the submission has completed execution. Command
+    /// encoders double as allocation pools for command buffers, so holding them
+    /// here and cleaning them up in [`LifetimeTracker::triage_submissions`]
+    /// satisfies that requirement.
+    ///
+    /// Once this submission has completed, the command buffers are reset and
+    /// the command encoder is recycled.
     encoders: Vec<EncoderInFlight<A>>,
 
     /// List of queue "on_submitted_work_done" closures to be called once this
@@ -351,7 +360,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub fn triage_submissions(
         &mut self,
         last_done: SubmissionIndex,
-        command_allocator: &mut super::CommandAllocator<A>,
+        command_allocator: &crate::command::CommandAllocator<A>,
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         profiling::scope!("triage_submissions");
 

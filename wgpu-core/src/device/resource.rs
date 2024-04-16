@@ -7,8 +7,8 @@ use crate::{
         bgl,
         life::{LifetimeTracker, WaitIdleError},
         queue::PendingWrites,
-        AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
-        MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
+        AttachmentData, DeviceLostInvocation, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
     hal_label,
@@ -97,7 +97,7 @@ pub struct Device<A: HalApi> {
     pub(crate) zero_buffer: Option<A::Buffer>,
     pub(crate) info: ResourceInfo<Device<A>>,
 
-    pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
+    pub(crate) command_allocator: command::CommandAllocator<A>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
@@ -165,7 +165,7 @@ impl<A: HalApi> Drop for Device<A> {
         let raw = self.raw.take().unwrap();
         let pending_writes = self.pending_writes.lock().take().unwrap();
         pending_writes.dispose(&raw);
-        self.command_allocator.lock().take().unwrap().dispose(&raw);
+        self.command_allocator.dispose(&raw);
         unsafe {
             raw.destroy_buffer(self.zero_buffer.take().unwrap());
             raw.destroy_fence(self.fence.write().take().unwrap());
@@ -223,10 +223,8 @@ impl<A: HalApi> Device<A> {
         let fence =
             unsafe { raw_device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
 
-        let mut com_alloc = CommandAllocator {
-            free_encoders: Vec::new(),
-        };
-        let pending_encoder = com_alloc
+        let command_allocator = command::CommandAllocator::new();
+        let pending_encoder = command_allocator
             .acquire_encoder(&raw_device, raw_queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
         let mut pending_writes = queue::PendingWrites::<A>::new(pending_encoder);
@@ -271,7 +269,7 @@ impl<A: HalApi> Device<A> {
             queue_to_drop: OnceCell::new(),
             zero_buffer: Some(zero_buffer),
             info: ResourceInfo::new("<device>", None),
-            command_allocator: Mutex::new(Some(com_alloc)),
+            command_allocator,
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new() },
@@ -425,10 +423,8 @@ impl<A: HalApi> Device<A> {
         };
 
         let mut life_tracker = self.lock_life();
-        let submission_closures = life_tracker.triage_submissions(
-            last_done_index,
-            self.command_allocator.lock().as_mut().unwrap(),
-        );
+        let submission_closures =
+            life_tracker.triage_submissions(last_done_index, &self.command_allocator);
 
         {
             // Normally, `temp_suspected` exists only to save heap
@@ -3485,10 +3481,9 @@ impl<A: HalApi> Device<A> {
                     .map_err(DeviceError::from)?
             };
             drop(guard);
-            let closures = self.lock_life().triage_submissions(
-                submission_index,
-                self.command_allocator.lock().as_mut().unwrap(),
-            );
+            let closures = self
+                .lock_life()
+                .triage_submissions(submission_index, &self.command_allocator);
             assert!(
                 closures.is_empty(),
                 "wait_for_submit is not expected to work with closures"
@@ -3616,10 +3611,7 @@ impl<A: HalApi> Device<A> {
             log::error!("failed to wait for the device: {error}");
         }
         let mut life_tracker = self.lock_life();
-        let _ = life_tracker.triage_submissions(
-            current_index,
-            self.command_allocator.lock().as_mut().unwrap(),
-        );
+        let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
         if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
             // It's important to not hold the lock while calling the closure.
             drop(life_tracker);

@@ -3418,7 +3418,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         let scalar_bits = ctx
                             .resolve_type(arg, &self.module.types)
                             .scalar_width()
-                            .unwrap();
+                            .unwrap()
+                            * 8;
 
                         write!(self.out, "bitfieldExtract(")?;
                         self.write_expr(arg, ctx)?;
@@ -3437,7 +3438,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         let scalar_bits = ctx
                             .resolve_type(arg, &self.module.types)
                             .scalar_width()
-                            .unwrap();
+                            .unwrap()
+                            * 8;
 
                         write!(self.out, "bitfieldInsert(")?;
                         self.write_expr(arg, ctx)?;
