@@ -171,6 +171,9 @@ Bottom level categories:
 - Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
 - Fix crash when holding multiple devices on wayland/surfaceless. By @ashdnazg in [#5351](https://github.com/gfx-rs/wgpu/pull/5351).
 - Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- OpenGL will now be preferred over OpenGL ES on EGL, making it consistent with WGL. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
+- Fix `first_instance` getting ignored in draw indexed when `ARB_shader_draw_parameters` feature is present and `base_vertex` is 0. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
+- Fill out `driver` and `driver_info`, with the OpenGL flavor and version, similar to Vulkan. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
 
 #### Vulkan
 
