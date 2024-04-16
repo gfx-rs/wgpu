@@ -11,12 +11,11 @@ groupshared int workgroup_atomic_arr[2];
 groupshared Struct workgroup_struct;
 
 [numthreads(2, 1, 1)]
-void cs_main(uint3 id : SV_GroupThreadID, uint3 __local_invocation_id : SV_GroupThreadID)
+void cs_main(uint3 id : SV_GroupThreadID, uint __local_invocation_index : SV_GroupIndex)
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
-        workgroup_atomic_scalar = (uint)0;
-        workgroup_atomic_arr = (int[2])0;
-        workgroup_struct = (Struct)0;
+    workgroup_atomic_arr[__local_invocation_index] = (int)0;
+    if (__local_invocation_index < 1u) {
+            workgroup_atomic_scalar = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
     storage_atomic_scalar.Store(0, asuint(1u));

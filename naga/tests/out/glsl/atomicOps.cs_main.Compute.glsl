@@ -23,10 +23,9 @@ shared Struct workgroup_struct;
 
 
 void main() {
-    if (gl_LocalInvocationID == uvec3(0u)) {
-        workgroup_atomic_scalar = 0u;
-        workgroup_atomic_arr = int[2](0, 0);
-        workgroup_struct = Struct(0u, int[2](0, 0));
+    workgroup_atomic_arr[gl_LocalInvocationIndex] = 0;
+    if (gl_LocalInvocationIndex < 1u) {
+            workgroup_atomic_scalar = 0u;
     }
     memoryBarrierShared();
     barrier();

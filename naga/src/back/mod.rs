@@ -24,6 +24,14 @@ pub mod wgsl;
 ))]
 pub mod pipeline_constants;
 
+#[cfg(any(
+    feature = "hlsl-out",
+    feature = "msl-out",
+    feature = "spv-out",
+    feature = "glsl-out"
+))]
+pub(crate) mod zero_init;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
@@ -86,12 +94,14 @@ pub enum FunctionType {
 
 impl FunctionType {
     /// Returns true if the function is an entry point for a compute shader.
-    pub fn is_compute_entry_point(&self, module: &crate::Module) -> bool {
+    pub fn compute_entry_point_workgroup_size(&self, module: &crate::Module) -> Option<[u32; 3]> {
         match *self {
             FunctionType::EntryPoint(index) => {
-                module.entry_points[index as usize].stage == crate::ShaderStage::Compute
+                let entry_point = &module.entry_points[index as usize];
+                (entry_point.stage == crate::ShaderStage::Compute)
+                    .then_some(entry_point.workgroup_size)
             }
-            FunctionType::Function(_) => false,
+            FunctionType::Function(_) => None,
         }
     }
 }

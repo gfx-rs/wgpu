@@ -8,15 +8,19 @@ use super::{
 };
 use crate::{
     arena::{Handle, UniqueArena},
-    back::spv::BindingInfo,
+    back::{spv::BindingInfo, zero_init::zero_init},
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
 use spirv::Word;
-use std::collections::hash_map::Entry;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    num::NonZeroU32,
+};
 
 struct FunctionInterface<'a> {
     varying_ids: &'a mut Vec<Word>,
+    workgroup_size: [u32; 3],
     stage: crate::ShaderStage,
 }
 
@@ -262,6 +266,24 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
+    pub(super) fn get_uint_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+        let lookup_type = LookupType::Local(LocalType::Value {
+            vector_size: None,
+            scalar: crate::Scalar::U32,
+            pointer_space: Some(class),
+        });
+        if let Some(&id) = self.lookup_type.get(&lookup_type) {
+            id
+        } else {
+            let id = self.id_gen.next();
+            let ty_id = self.get_uint_type_id();
+            let instruction = Instruction::type_pointer(id, class, ty_id);
+            instruction.to_words(&mut self.logical_layout.declarations);
+            self.lookup_type.insert(lookup_type, id);
+            id
+        }
+    }
+
     pub(super) fn get_float_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let lookup_type = LookupType::Local(LocalType::Value {
             vector_size: None,
@@ -338,7 +360,7 @@ impl Writer {
             results: Vec::new(),
         };
 
-        let mut local_invocation_id = None;
+        let mut local_invocation_index = None;
 
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
         for argument in ir_function.arguments.iter() {
@@ -371,8 +393,8 @@ impl Writer {
                         .body
                         .push(Instruction::load(argument_type_id, id, varying_id, None));
 
-                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
-                        local_invocation_id = Some(id);
+                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex) {
+                        local_invocation_index = Some(id);
                     }
 
                     id
@@ -401,7 +423,7 @@ impl Writer {
                         constituent_ids.push(id);
 
                         if binding == &crate::Binding::BuiltIn(crate::BuiltIn::GlobalInvocationId) {
-                            local_invocation_id = Some(id);
+                            local_invocation_index = Some(id);
                         }
                     }
                     prelude.body.push(Instruction::composite_construct(
@@ -690,7 +712,7 @@ impl Writer {
                     next_id,
                     ir_module,
                     info,
-                    local_invocation_id,
+                    local_invocation_index,
                     interface,
                     context.function,
                 ),
@@ -752,6 +774,7 @@ impl Writer {
             Some(FunctionInterface {
                 varying_ids: &mut interface_ids,
                 stage: entry_point.stage,
+                workgroup_size: entry_point.workgroup_size,
             }),
             debug_info,
         )?;
@@ -1325,41 +1348,32 @@ impl Writer {
         entry_id: Word,
         ir_module: &crate::Module,
         info: &FunctionInfo,
-        local_invocation_id: Option<Word>,
+        local_invocation_index: Option<Word>,
         interface: &mut FunctionInterface,
         function: &mut Function,
     ) -> Option<Word> {
-        let body = ir_module
-            .global_variables
-            .iter()
-            .filter(|&(handle, var)| {
-                !info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            })
-            .map(|(handle, var)| {
-                // It's safe to use `var_id` here, not `access_id`, because only
-                // variables in the `Uniform` and `StorageBuffer` address spaces
-                // get wrapped, and we're initializing `WorkGroup` variables.
-                let var_id = self.global_variables[handle.index()].var_id;
-                let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
-                let init_word = self.get_constant_null(var_type_id);
-                Instruction::store(var_id, init_word, None)
-            })
-            .collect::<Vec<_>>();
+        let variables = ir_module.global_variables.iter().filter(|&(handle, var)| {
+            !info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+        });
 
-        if body.is_empty() {
+        let variables = zero_init(
+            ir_module,
+            variables,
+            interface.workgroup_size.into_iter().product(),
+        );
+        if variables.is_empty() {
             return None;
         }
-
-        let uint3_type_id = self.get_uint3_type_id();
-
         let mut pre_if_block = Block::new(entry_id);
 
-        let local_invocation_id = if let Some(local_invocation_id) = local_invocation_id {
-            local_invocation_id
+        let uint_type_id = self.get_uint_type_id();
+
+        let local_invocation_index = if let Some(local_invocation_index) = local_invocation_index {
+            local_invocation_index
         } else {
             let varying_id = self.id_gen.next();
             let class = spirv::StorageClass::Input;
-            let pointer_type_id = self.get_uint3_pointer_type_id(class);
+            let pointer_type_id = self.get_uint_pointer_type_id(class);
 
             Instruction::variable(pointer_type_id, varying_id, class, None)
                 .to_words(&mut self.logical_layout.declarations);
@@ -1367,64 +1381,248 @@ impl Writer {
             self.decorate(
                 varying_id,
                 spirv::Decoration::BuiltIn,
-                &[spirv::BuiltIn::LocalInvocationId as u32],
+                &[spirv::BuiltIn::LocalInvocationIndex as u32],
             );
 
             interface.varying_ids.push(varying_id);
             let id = self.id_gen.next();
             pre_if_block
                 .body
-                .push(Instruction::load(uint3_type_id, id, varying_id, None));
+                .push(Instruction::load(uint_type_id, id, varying_id, None));
 
             id
         };
+        let barrier_block_id = self.id_gen.next();
 
-        let zero_id = self.get_constant_null(uint3_type_id);
-        let bool3_type_id = self.get_bool3_type_id();
+        let block_id = self.id_gen.next();
+        function.consume(pre_if_block, Instruction::branch(block_id));
 
-        let eq_id = self.id_gen.next();
-        pre_if_block.body.push(Instruction::binary(
-            spirv::Op::IEqual,
-            bool3_type_id,
-            eq_id,
-            local_invocation_id,
-            zero_id,
-        ));
-
-        let condition_id = self.id_gen.next();
-        let bool_type_id = self.get_bool_type_id();
-        pre_if_block.body.push(Instruction::relational(
-            spirv::Op::All,
-            bool_type_id,
-            condition_id,
-            eq_id,
-        ));
-
-        let merge_id = self.id_gen.next();
-        pre_if_block.body.push(Instruction::selection_merge(
-            merge_id,
-            spirv::SelectionControl::NONE,
-        ));
-
-        let accept_id = self.id_gen.next();
-        function.consume(
-            pre_if_block,
-            Instruction::branch_conditional(condition_id, accept_id, merge_id),
+        let remainder = None;
+        let mut additions = HashMap::<u32, u32>::new();
+        self.handle_first_zero_init(
+            &mut additions,
+            &variables,
+            remainder,
+            block_id,
+            barrier_block_id,
+            local_invocation_index,
+            ir_module,
+            function,
         );
 
-        let accept_block = Block {
-            label_id: accept_id,
-            body,
-        };
-        function.consume(accept_block, Instruction::branch(merge_id));
-
-        let mut post_if_block = Block::new(merge_id);
-
-        self.write_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
+        let mut barrier_block = Block::new(barrier_block_id);
+        self.write_barrier(crate::Barrier::WORK_GROUP, &mut barrier_block);
 
         let next_id = self.id_gen.next();
-        function.consume(post_if_block, Instruction::branch(next_id));
+        function.consume(barrier_block, Instruction::branch(next_id));
         Some(next_id)
+    }
+
+    fn handle_first_zero_init(
+        &mut self,
+        additions: &mut HashMap<u32, Word>,
+        variables: &[(
+            Handle<crate::GlobalVariable>,
+            crate::back::zero_init::ZeroInitKind,
+        )],
+        current_remainder: Option<u32>,
+        block_id: Word,
+        exit_block: Word,
+        local_invocation_index: Word,
+        ir_module: &crate::Module,
+        function: &mut Function,
+    ) {
+        let block = Block::new(block_id);
+        let Some(((handle, kind), remainder)) = variables.split_first() else {
+            function.consume(block, Instruction::branch(exit_block));
+            return;
+        };
+
+        match kind {
+            crate::back::zero_init::ZeroInitKind::LocalPlusIndex {
+                index,
+                if_less_than,
+            } => {
+                self.reduce_remainder_then(
+                    current_remainder,
+                    *if_less_than,
+                    block,
+                    local_invocation_index,
+                    function,
+                    additions,
+                    ir_module,
+                    remainder,
+                    exit_block,
+                    |this,
+                     block: &mut Block,
+                     additions: &mut HashMap<u32, Word>,
+                     ir_module: &crate::Module| {
+                        this.zero_init_array_member(
+                            block,
+                            handle,
+                            *index,
+                            additions,
+                            local_invocation_index,
+                            ir_module,
+                        )
+                    },
+                );
+            }
+            crate::back::zero_init::ZeroInitKind::NotArray => {
+                self.reduce_remainder_then(
+                    current_remainder,
+                    Some(1),
+                    block,
+                    local_invocation_index,
+                    function,
+                    additions,
+                    ir_module,
+                    remainder,
+                    exit_block,
+                    |this,
+                     block: &mut Block,
+                     _: &mut HashMap<u32, Word>,
+                     ir_module: &crate::Module| {
+                        // It's safe to use `var_id` here, not `access_id`, because only
+                        // variables in the `Uniform` and `StorageBuffer` address spaces
+                        // get wrapped, and we're initializing `WorkGroup` variables.
+                        let var_id = this.global_variables[handle.index()].var_id;
+                        let var_type_id = this.get_type_id(LookupType::Handle(
+                            ir_module.global_variables[*handle].ty,
+                        ));
+                        let init_word = this.get_constant_null(var_type_id);
+                        block.body.push(Instruction::store(var_id, init_word, None))
+                    },
+                );
+            }
+        }
+    }
+
+    fn reduce_remainder_then(
+        &mut self,
+        current_remainder: Option<u32>,
+        target_remainder: Option<u32>,
+        mut consuming: Block,
+        local_invocation_index: u32,
+        function: &mut Function,
+        additions: &mut HashMap<u32, u32>,
+        ir_module: &crate::Module,
+        remainder: &[(
+            Handle<crate::GlobalVariable>,
+            crate::back::zero_init::ZeroInitKind,
+        )],
+        exit_block: u32,
+        f: impl FnOnce(&mut Self, &mut Block, &mut HashMap<u32, Word>, &crate::Module),
+    ) {
+        if current_remainder != target_remainder {
+            if let Some(target_remainder) = target_remainder {
+                let less_than_remainder = self.id_gen.next();
+                let constant_id = self.get_constant_scalar(crate::Literal::U32(target_remainder));
+                let bool_type_id = self.get_bool_type_id();
+                consuming.body.push(Instruction::binary(
+                    spirv::Op::ULessThan,
+                    bool_type_id,
+                    less_than_remainder,
+                    local_invocation_index,
+                    constant_id,
+                ));
+
+                let merge_id = self.id_gen.next();
+                consuming.body.push(Instruction::selection_merge(
+                    merge_id,
+                    spirv::SelectionControl::NONE,
+                ));
+                let accept_id = self.id_gen.next();
+                function.consume(
+                    consuming,
+                    Instruction::branch_conditional(less_than_remainder, accept_id, merge_id),
+                );
+                let mut accept_block = Block::new(accept_id);
+                f(&mut *self, &mut accept_block, additions, ir_module);
+
+                let next_id = self.id_gen.next();
+                function.consume(accept_block, Instruction::branch(next_id));
+                self.handle_first_zero_init(
+                    additions,
+                    remainder,
+                    Some(target_remainder),
+                    next_id,
+                    merge_id,
+                    local_invocation_index,
+                    ir_module,
+                    function,
+                );
+                let block = Block::new(merge_id);
+                function.consume(block, Instruction::branch(exit_block));
+                return;
+            } else {
+                panic!(
+                    "Went from having a remainder to not wanting one. Would otherwise fail to zero some items"
+                );
+            }
+        } else {
+            let next_id = self.id_gen.next();
+            f(&mut *self, &mut consuming, additions, ir_module);
+            function.consume(consuming, Instruction::branch(next_id));
+
+            self.handle_first_zero_init(
+                additions,
+                remainder,
+                current_remainder,
+                next_id,
+                exit_block,
+                local_invocation_index,
+                ir_module,
+                function,
+            );
+        }
+    }
+
+    fn zero_init_array_member(
+        &mut self,
+        block: &mut Block,
+        handle: &Handle<crate::GlobalVariable>,
+        index: Option<NonZeroU32>,
+        additions: &mut HashMap<u32, Word>,
+        local_invocation_index: Word,
+        ir_module: &crate::Module,
+    ) {
+        let uint_type_id = self.get_uint_type_id();
+        let index_id = if let Some(index) = index {
+            *additions.entry(index.get()).or_insert_with(|| {
+                let constant_id = self.get_constant_scalar(crate::Literal::U32(index.get()));
+                let index_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IAdd,
+                    uint_type_id,
+                    index_id,
+                    local_invocation_index,
+                    constant_id,
+                ));
+                index_id
+            })
+        } else {
+            local_invocation_index
+        };
+        let var_id = self.global_variables[handle.index()].var_id;
+        let handle = ir_module.global_variables[*handle].ty;
+        let crate::TypeInner::Array { base, .. } = ir_module.types[handle].inner else {
+            unreachable!("We know that the type is an array")
+        };
+        let result_type_id = self.get_type_id(LookupType::Handle(base));
+        let pointer_type = self.id_gen.next();
+        let instruction =
+            Instruction::type_pointer(pointer_type, spirv::StorageClass::Workgroup, result_type_id);
+        instruction.to_words(&mut self.logical_layout.declarations);
+        let pointer_id = self.id_gen.next();
+        block.body.push(Instruction::access_chain(
+            pointer_type,
+            pointer_id,
+            var_id,
+            &[index_id],
+        ));
+        let null = self.get_constant_null(result_type_id);
+        block.body.push(Instruction::store(pointer_id, null, None));
     }
 
     /// Generate an `OpVariable` for one value in an [`EntryPoint`]'s IO interface.

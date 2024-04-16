@@ -53,11 +53,12 @@ use crate::{
 use features::FeaturesManager;
 use std::{
     cmp::Ordering,
-    fmt,
-    fmt::{Error as FmtError, Write},
+    fmt::{self, Error as FmtError, Write},
     mem,
 };
 use thiserror::Error;
+
+use super::zero_init;
 
 /// Contains the features related code and the features querying method
 mod features;
@@ -1685,10 +1686,10 @@ impl<'a, W: Write> Writer<'a, W> {
         // Close the parentheses and open braces to start the function body
         writeln!(self.out, ") {{")?;
 
-        if self.options.zero_initialize_workgroup_memory
-            && ctx.ty.is_compute_entry_point(self.module)
-        {
-            self.write_workgroup_variables_initialization(&ctx)?;
+        if self.options.zero_initialize_workgroup_memory {
+            if let Some(workgroup_size) = ctx.ty.compute_entry_point_workgroup_size(self.module) {
+                self.write_workgroup_variables_initialization(&ctx, workgroup_size)?;
+            }
         }
 
         // Compose the function arguments from globals, in case of an entry point.
@@ -1780,31 +1781,80 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_workgroup_variables_initialization(
         &mut self,
         ctx: &back::FunctionCtx,
+        workgroup_size: [u32; 3],
     ) -> BackendResult {
-        let mut vars = self
+        let vars = self
             .module
             .global_variables
             .iter()
             .filter(|&(handle, var)| {
                 !ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            })
-            .peekable();
-
-        if vars.peek().is_some() {
-            let level = back::Level(1);
-
-            writeln!(self.out, "{level}if (gl_LocalInvocationID == uvec3(0u)) {{")?;
-
-            for (handle, var) in vars {
-                let name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, "{}{} = ", level.next(), name)?;
-                self.write_zero_init_value(var.ty)?;
-                writeln!(self.out, ";")?;
-            }
-
-            writeln!(self.out, "{level}}}")?;
-            self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+            });
+        let zero_init_res =
+            zero_init::zero_init(&self.module, vars, workgroup_size.into_iter().product());
+        if zero_init_res.is_empty() {
+            return Ok(());
         }
+
+        let mut level = back::Level(1);
+        let mut remainder = None;
+
+        for (handle, init) in zero_init_res {
+            match init {
+                zero_init::ZeroInitKind::LocalPlusIndex {
+                    index,
+                    if_less_than,
+                } => {
+                    if if_less_than != remainder {
+                        let Some(if_less_than) = if_less_than else {
+                            panic!("Got decrementing index")
+                        };
+                        remainder = Some(if_less_than);
+                        writeln!(
+                            self.out,
+                            "{level}if (gl_LocalInvocationIndex < {if_less_than}u) {{"
+                        )?;
+                        level = level.next();
+                    }
+                    let var = &self.module.global_variables[handle];
+                    let base_type = match &self.module.types[var.ty].inner {
+                        TypeInner::Array { base, .. } => base,
+                        _ => unreachable!(),
+                    };
+                    let name = &self.names[&NameKey::GlobalVariable(handle)];
+                    if let Some(index) = index {
+                        write!(
+                            self.out,
+                            "{}{}[gl_LocalInvocationIndex + {index}u] = ",
+                            level, name
+                        )?;
+                    } else {
+                        write!(self.out, "{}{}[gl_LocalInvocationIndex] = ", level, name)?;
+                    }
+                    self.write_zero_init_value(*base_type)?;
+                    writeln!(self.out, ";")?;
+                }
+                zero_init::ZeroInitKind::NotArray => {
+                    if remainder != Some(1) {
+                        writeln!(self.out, "{level}if (gl_LocalInvocationIndex < 1u) {{")?;
+                        level = level.next();
+                        remainder = Some(1);
+                    }
+                    let name = &self.names[&NameKey::GlobalVariable(handle)];
+                    write!(self.out, "{}{} = ", level.next(), name)?;
+                    let var = &self.module.global_variables[handle];
+                    self.write_zero_init_value(var.ty)?;
+                    writeln!(self.out, ";")?;
+                }
+            }
+        }
+        // Close all opened brackets
+        for level in (1..level.0).rev() {
+            writeln!(self.out, "{}}}", back::Level(level))?;
+        }
+        level = back::Level(1);
+
+        self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
         Ok(())
     }

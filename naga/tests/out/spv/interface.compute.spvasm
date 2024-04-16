@@ -42,9 +42,7 @@ OpDecorate %27 BuiltIn NumWorkgroups
 %25 = OpVariable  %18  Input
 %27 = OpVariable  %18  Input
 %30 = OpTypeFunction %2
-%32 = OpConstantNull  %9
-%33 = OpConstantNull  %11
-%34 = OpTypeVector %8 3
+%37 = OpConstantNull  %9
 %39 = OpConstant  %6  2
 %40 = OpConstant  %6  264
 %42 = OpTypePointer Workgroup %6
@@ -58,14 +56,19 @@ OpDecorate %27 BuiltIn NumWorkgroups
 %28 = OpLoad  %11  %27
 OpBranch %31
 %31 = OpLabel
-%35 = OpIEqual  %34  %21 %33
-%36 = OpAll  %8  %35
-OpSelectionMerge %37 None
-OpBranchConditional %36 %38 %37
+OpBranch %33
+%33 = OpLabel
+%34 = OpULessThan  %8  %24 %10
+OpSelectionMerge %35 None
+OpBranchConditional %34 %36 %35
+%36 = OpLabel
+OpStore %14 %37
+OpBranch %38
 %38 = OpLabel
-OpStore %14 %32
-OpBranch %37
-%37 = OpLabel
+OpBranch %35
+%35 = OpLabel
+OpBranch %32
+%32 = OpLabel
 OpControlBarrier %39 %39 %40
 OpBranch %41
 %41 = OpLabel

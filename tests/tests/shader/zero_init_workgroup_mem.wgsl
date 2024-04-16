@@ -7,6 +7,8 @@ struct WStruct {
 
 var<workgroup> w_mem: WStruct;
 
+var<workgroup> w_mem_array: array<u32, array_size>;
+
 @group(0) @binding(0)
 var<storage, read_write> output: array<u32>;
 
@@ -15,6 +17,7 @@ fn read(@builtin(workgroup_id) wgid: vec3<u32>, @builtin(num_workgroups) num_wor
     var is_zero = true;
     for(var i = 0u; i < array_size; i++) {
         is_zero &= w_mem.arr[i] == 0u;
+        is_zero &= w_mem_array[i] == 0u;
     }
     is_zero &= atomicLoad(&w_mem.atom) == 0u;
 
@@ -26,6 +29,7 @@ fn read(@builtin(workgroup_id) wgid: vec3<u32>, @builtin(num_workgroups) num_wor
 fn write() {
     for(var i = 0u; i < array_size; i++) {
         w_mem.arr[i] = i;
+        w_mem_array[i] = i;
     }
     atomicStore(&w_mem.atom, 3u);
 }
