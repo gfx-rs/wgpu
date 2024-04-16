@@ -23,7 +23,6 @@ use std::sync::Arc;
 use thiserror::Error;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
-#[derive(Default)]
 pub(crate) struct ResourceMaps<A: HalApi> {
     pub buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
     pub staging_buffers: FastHashMap<TrackerIndex, Arc<StagingBuffer<A>>>,
