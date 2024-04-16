@@ -468,7 +468,7 @@ pub enum RequestAdapterError {
 pub enum CreateSurfaceError {
     #[error("The backend {0} was not enabled on the instance.")]
     BackendNotEnabled(Backend),
-    #[error("Failed to create surface for any enabled backend.")]
+    #[error("Failed to create surface for any enabled backend: {0:?}")]
     FailedToCreateSurfaceForAnyBackend(HashMap<Backend, hal::InstanceError>),
 }
 
