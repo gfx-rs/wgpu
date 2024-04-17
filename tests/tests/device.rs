@@ -615,3 +615,125 @@ static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfigurat
             "Device lost callback should have been called."
         );
     });
+
+#[gpu_test]
+static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        // This test addresses a bug found in multiple backends where `wgpu_core` and `wgpu_hal`
+        // backends made different assumptions about the element order of vectors of bind group
+        // layout entries and bind group resource bindings.
+        //
+        // Said bug was exposed originally by:
+        //
+        // 1. Shader-declared bindings having a different order than resource bindings provided to
+        //    `Device::create_bind_group`.
+        // 2. Having more of one type of resource in the bind group than another.
+        //
+        // …such that internals would accidentally attempt to use an out-of-bounds index (of one
+        // resource type) in the wrong list of a different resource type. Let's reproduce that
+        // here.
+
+        let trivial_shaders_with_some_reversed_bindings = "\
+@group(0) @binding(3) var myTexture2: texture_2d<f32>;
+@group(0) @binding(2) var myTexture1: texture_2d<f32>;
+@group(0) @binding(1) var mySampler: sampler;
+
+@fragment
+fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4f {
+  return textureSample(myTexture1, mySampler, pos.xy) + textureSample(myTexture2, mySampler, pos.xy);
+}
+
+@vertex
+fn vs_main() -> @builtin(position) vec4<f32> {
+  return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+";
+
+        let trivial_shaders_with_some_reversed_bindings =
+            ctx.device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: None,
+                    source: wgpu::ShaderSource::Wgsl(
+                        trivial_shaders_with_some_reversed_bindings.into(),
+                    ),
+                });
+
+        let my_texture = ctx.device.create_texture(&wgt::TextureDescriptor {
+            label: None,
+            size: wgt::Extent3d {
+                width: 1024,
+                height: 512,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgt::TextureDimension::D2,
+            format: wgt::TextureFormat::Rgba8Unorm,
+            usage: wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let my_texture_view = my_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: None,
+            format: None,
+            dimension: None,
+            aspect: wgt::TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
+
+        let my_sampler = ctx
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor::default());
+
+        let render_pipeline = ctx
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                fragment: Some(wgpu::FragmentState {
+                    module: &trivial_shaders_with_some_reversed_bindings,
+                    entry_point: "fs_main",
+                    targets: &[Some(wgt::ColorTargetState {
+                        format: wgt::TextureFormat::Bgra8Unorm,
+                        blend: None,
+                        write_mask: wgt::ColorWrites::ALL,
+                    })],
+                }),
+                layout: None,
+
+                // Other fields below aren't interesting for this text.
+                label: None,
+                vertex: wgpu::VertexState {
+                    module: &trivial_shaders_with_some_reversed_bindings,
+                    entry_point: "vs_main",
+                    buffers: &[],
+                },
+                primitive: wgt::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgt::MultisampleState::default(),
+                multiview: None,
+            });
+
+        // fail(&ctx.device, || {
+        // }, "");
+        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &render_pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&my_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&my_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&my_texture_view),
+                },
+            ],
+        });
+    });
