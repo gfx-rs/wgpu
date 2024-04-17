@@ -4,7 +4,7 @@ use crate::{
     api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
-        ClearError, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
+        ClearError, CommandAllocator, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
     device::{life::ResourceMaps, DeviceError, WaitIdleError},
@@ -152,13 +152,18 @@ pub enum TempResource<A: HalApi> {
     Texture(Arc<Texture<A>>),
 }
 
-/// A queue execution for a particular command encoder.
+/// A series of [`CommandBuffers`] that have been submitted to a
+/// queue, and the [`wgpu_hal::CommandEncoder`] that built them.
 pub(crate) struct EncoderInFlight<A: HalApi> {
     raw: A::CommandEncoder,
     cmd_buffers: Vec<A::CommandBuffer>,
 }
 
 impl<A: HalApi> EncoderInFlight<A> {
+    /// Free all of our command buffers.
+    ///
+    /// Return the command encoder, fully reset and ready to be
+    /// reused.
     pub(crate) unsafe fn land(mut self) -> A::CommandEncoder {
         unsafe { self.raw.reset_all(self.cmd_buffers.into_iter()) };
         self.raw
@@ -253,7 +258,7 @@ impl<A: HalApi> PendingWrites<A> {
     #[must_use]
     fn post_submit(
         &mut self,
-        command_allocator: &mut super::CommandAllocator<A>,
+        command_allocator: &CommandAllocator<A>,
         device: &A::Device,
         queue: &A::Queue,
     ) -> Option<EncoderInFlight<A>> {
@@ -1525,7 +1530,7 @@ impl Global {
 
             profiling::scope!("cleanup");
             if let Some(pending_execution) = pending_writes.post_submit(
-                device.command_allocator.lock().as_mut().unwrap(),
+                &device.command_allocator,
                 device.raw(),
                 queue.raw.as_ref().unwrap(),
             ) {

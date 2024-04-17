@@ -279,8 +279,9 @@ impl super::TypeInner {
         self.scalar().map(|scalar| scalar.kind)
     }
 
+    /// Returns the scalar width in bytes
     pub fn scalar_width(&self) -> Option<u8> {
-        self.scalar().map(|scalar| scalar.width * 8)
+        self.scalar().map(|scalar| scalar.width)
     }
 
     pub const fn pointer_space(&self) -> Option<crate::AddressSpace> {

@@ -1945,7 +1945,7 @@ impl<W: Write> Writer<W> {
                     //
                     // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
 
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap();
+                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
 
                     write!(self.out, "{NAMESPACE}::extract_bits(")?;
                     self.put_expression(arg, context, true)?;
@@ -1961,7 +1961,7 @@ impl<W: Write> Writer<W> {
                     //
                     // insertBits(e, newBits, min(offset, w), min(count, w - min(offset, w))))
 
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap();
+                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
 
                     write!(self.out, "{NAMESPACE}::insert_bits(")?;
                     self.put_expression(arg, context, true)?;

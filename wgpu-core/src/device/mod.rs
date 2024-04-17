@@ -4,7 +4,6 @@ use crate::{
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
     resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
-    resource_log,
     snatch::SnatchGuard,
     Label, DOWNLEVEL_ERROR_MESSAGE,
 };
@@ -375,42 +374,6 @@ fn map_buffer<A: HalApi>(
     }
 
     Ok(mapping.ptr)
-}
-
-pub(crate) struct CommandAllocator<A: HalApi> {
-    free_encoders: Vec<A::CommandEncoder>,
-}
-
-impl<A: HalApi> CommandAllocator<A> {
-    fn acquire_encoder(
-        &mut self,
-        device: &A::Device,
-        queue: &A::Queue,
-    ) -> Result<A::CommandEncoder, hal::DeviceError> {
-        match self.free_encoders.pop() {
-            Some(encoder) => Ok(encoder),
-            None => unsafe {
-                let hal_desc = hal::CommandEncoderDescriptor { label: None, queue };
-                device.create_command_encoder(&hal_desc)
-            },
-        }
-    }
-
-    fn release_encoder(&mut self, encoder: A::CommandEncoder) {
-        self.free_encoders.push(encoder);
-    }
-
-    fn dispose(self, device: &A::Device) {
-        resource_log!(
-            "CommandAllocator::dispose encoders {}",
-            self.free_encoders.len()
-        );
-        for cmd_encoder in self.free_encoders {
-            unsafe {
-                device.destroy_command_encoder(cmd_encoder);
-            }
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]
