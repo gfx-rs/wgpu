@@ -556,11 +556,7 @@ struct Parsed {
     input_text: Option<String>,
 }
 
-fn parse_input(
-    input_path: &Path,
-    input: Vec<u8>,
-    params: &Parameters,
-) -> anyhow::Result<Parsed> {
+fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow::Result<Parsed> {
     let input_kind = match params.input_kind {
         Some(kind) => kind,
         None => input_path
