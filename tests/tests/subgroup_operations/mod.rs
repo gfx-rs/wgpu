@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, num::NonZeroU64};
+use std::{borrow::Cow, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
@@ -62,7 +62,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             layout: Some(&pipeline_layout),
             module: &cs_module,
             entry_point: "main",
-            constants: &HashMap::default(),
+            compilation_options: Default::default(),
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
