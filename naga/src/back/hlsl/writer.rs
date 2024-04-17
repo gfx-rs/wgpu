@@ -77,6 +77,19 @@ enum Io {
     Output,
 }
 
+const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
+    let &Some(crate::Binding::BuiltIn(builtin)) = binding else {
+        return false;
+    };
+    matches!(
+        builtin,
+        crate::BuiltIn::SubgroupSize
+            | crate::BuiltIn::SubgroupInvocationId
+            | crate::BuiltIn::NumSubgroups
+            | crate::BuiltIn::SubgroupId
+    )
+}
+
 impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub fn new(out: W, options: &'a Options) -> Self {
         Self {
@@ -159,6 +172,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if axis == Axis::Width && (ctrl == Ctrl::Coarse || ctrl == Ctrl::Fine) {
                     self.need_bake_expressions.insert(expr);
                 }
+            }
+        }
+        for statement in func.body.iter() {
+            match *statement {
+                crate::Statement::SubgroupCollectiveOperation {
+                    op: _,
+                    collective_op: crate::CollectiveOperation::InclusiveScan,
+                    argument,
+                    result: _,
+                } => {
+                    self.need_bake_expressions.insert(argument);
+                }
+                _ => {}
             }
         }
     }
@@ -401,31 +427,32 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     // if they are struct, so that the `stage` argument here could be omitted.
     fn write_semantic(
         &mut self,
-        binding: &crate::Binding,
+        binding: &Option<crate::Binding>,
         stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         match *binding {
-            crate::Binding::BuiltIn(builtin) => {
+            Some(crate::Binding::BuiltIn(builtin)) if !is_subgroup_builtin_binding(binding) => {
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {builtin_str}")?;
             }
-            crate::Binding::Location {
+            Some(crate::Binding::Location {
                 second_blend_source: true,
                 ..
-            } => {
+            }) => {
                 write!(self.out, " : SV_Target1")?;
             }
-            crate::Binding::Location {
+            Some(crate::Binding::Location {
                 location,
                 second_blend_source: false,
                 ..
-            } => {
+            }) => {
                 if stage == Some((crate::ShaderStage::Fragment, Io::Output)) {
                     write!(self.out, " : SV_Target{location}")?;
                 } else {
                     write!(self.out, " : {LOCATION_SEMANTIC}{location}")?;
                 }
             }
+            _ => {}
         }
 
         Ok(())
@@ -446,16 +473,29 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         write!(self.out, "struct {struct_name}")?;
         writeln!(self.out, " {{")?;
         for m in members.iter() {
+            if is_subgroup_builtin_binding(&m.binding) {
+                continue;
+            }
             write!(self.out, "{}", back::INDENT)?;
             if let Some(ref binding) = m.binding {
                 self.write_modifier(binding)?;
             }
             self.write_type(module, m.ty)?;
             write!(self.out, " {}", &m.name)?;
-            if let Some(ref binding) = m.binding {
-                self.write_semantic(binding, Some(shader_stage))?;
-            }
+            self.write_semantic(&m.binding, Some(shader_stage))?;
             writeln!(self.out, ";")?;
+        }
+        if members.iter().any(|arg| {
+            matches!(
+                arg.binding,
+                Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
+            )
+        }) {
+            writeln!(
+                self.out,
+                "{}uint __local_invocation_index : SV_GroupIndex;",
+                back::INDENT
+            )?;
         }
         writeln!(self.out, "}};")?;
         writeln!(self.out)?;
@@ -557,8 +597,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     }
 
     /// Writes special interface structures for an entry point. The special structures have
-    /// all the fields flattened into them and sorted by binding. They are only needed for
-    /// VS outputs and FS inputs, so that these interfaces match.
+    /// all the fields flattened into them and sorted by binding. They are needed to emulate
+    /// subgroup built-ins and to make the interfaces between VS outputs and FS inputs match.
     fn write_ep_interface(
         &mut self,
         module: &Module,
@@ -567,7 +607,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         ep_name: &str,
     ) -> Result<EntryPointInterface, Error> {
         Ok(EntryPointInterface {
-            input: if !func.arguments.is_empty() && stage == ShaderStage::Fragment {
+            input: if !func.arguments.is_empty()
+                && (stage == ShaderStage::Fragment
+                    || func
+                        .arguments
+                        .iter()
+                        .any(|arg| is_subgroup_builtin_binding(&arg.binding)))
+            {
                 Some(self.write_ep_input_struct(module, func, stage, ep_name)?)
             } else {
                 None
@@ -581,6 +627,38 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         })
     }
 
+    fn write_ep_argument_initialization(
+        &mut self,
+        ep: &crate::EntryPoint,
+        ep_input: &EntryPointBinding,
+        fake_member: &EpStructMember,
+    ) -> BackendResult {
+        match fake_member.binding {
+            Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupSize)) => {
+                write!(self.out, "WaveGetLaneCount()")?
+            }
+            Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupInvocationId)) => {
+                write!(self.out, "WaveGetLaneIndex()")?
+            }
+            Some(crate::Binding::BuiltIn(crate::BuiltIn::NumSubgroups)) => write!(
+                self.out,
+                "({}u + WaveGetLaneCount() - 1u) / WaveGetLaneCount()",
+                ep.workgroup_size[0] * ep.workgroup_size[1] * ep.workgroup_size[2]
+            )?,
+            Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId)) => {
+                write!(
+                    self.out,
+                    "{}.__local_invocation_index / WaveGetLaneCount()",
+                    ep_input.arg_name
+                )?;
+            }
+            _ => {
+                write!(self.out, "{}.{}", ep_input.arg_name, fake_member.name)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Write an entry point preface that initializes the arguments as specified in IR.
     fn write_ep_arguments_initialization(
         &mut self,
@@ -588,6 +666,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         func: &crate::Function,
         ep_index: u16,
     ) -> BackendResult {
+        let ep = &module.entry_points[ep_index as usize];
         let ep_input = match self.entry_point_io[ep_index as usize].input.take() {
             Some(ep_input) => ep_input,
             None => return Ok(()),
@@ -601,8 +680,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             match module.types[arg.ty].inner {
                 TypeInner::Array { base, size, .. } => {
                     self.write_array_size(module, base, size)?;
-                    let fake_member = fake_iter.next().unwrap();
-                    writeln!(self.out, " = {}.{};", ep_input.arg_name, fake_member.name)?;
+                    write!(self.out, " = ")?;
+                    self.write_ep_argument_initialization(
+                        ep,
+                        &ep_input,
+                        fake_iter.next().unwrap(),
+                    )?;
+                    writeln!(self.out, ";")?;
                 }
                 TypeInner::Struct { ref members, .. } => {
                     write!(self.out, " = {{ ")?;
@@ -610,14 +694,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if index != 0 {
                             write!(self.out, ", ")?;
                         }
-                        let fake_member = fake_iter.next().unwrap();
-                        write!(self.out, "{}.{}", ep_input.arg_name, fake_member.name)?;
+                        self.write_ep_argument_initialization(
+                            ep,
+                            &ep_input,
+                            fake_iter.next().unwrap(),
+                        )?;
                     }
                     writeln!(self.out, " }};")?;
                 }
                 _ => {
-                    let fake_member = fake_iter.next().unwrap();
-                    writeln!(self.out, " = {}.{};", ep_input.arg_name, fake_member.name)?;
+                    write!(self.out, " = ")?;
+                    self.write_ep_argument_initialization(
+                        ep,
+                        &ep_input,
+                        fake_iter.next().unwrap(),
+                    )?;
+                    writeln!(self.out, ";")?;
                 }
             }
         }
@@ -932,9 +1024,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
 
-            if let Some(ref binding) = member.binding {
-                self.write_semantic(binding, shader_stage)?;
-            };
+            self.write_semantic(&member.binding, shader_stage)?;
             writeln!(self.out, ";")?;
         }
 
@@ -1147,7 +1237,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             back::FunctionType::EntryPoint(ep_index) => {
                 if let Some(ref ep_input) = self.entry_point_io[ep_index as usize].input {
-                    write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name,)?;
+                    write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name)?;
                 } else {
                     let stage = module.entry_points[ep_index as usize].stage;
                     for (index, arg) in func.arguments.iter().enumerate() {
@@ -1164,17 +1254,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_array_size(module, base, size)?;
                         }
 
-                        if let Some(ref binding) = arg.binding {
-                            self.write_semantic(binding, Some((stage, Io::Input)))?;
-                        }
+                        self.write_semantic(&arg.binding, Some((stage, Io::Input)))?;
                     }
-
-                    if need_workgroup_variables_initialization {
-                        if !func.arguments.is_empty() {
-                            write!(self.out, ", ")?;
-                        }
-                        write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
+                }
+                if need_workgroup_variables_initialization {
+                    if self.entry_point_io[ep_index as usize].input.is_some()
+                        || !func.arguments.is_empty()
+                    {
+                        write!(self.out, ", ")?;
                     }
+                    write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
                 }
             }
         }
@@ -1184,11 +1273,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write semantic if it present
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
             let stage = module.entry_points[index as usize].stage;
-            if let Some(crate::FunctionResult {
-                binding: Some(ref binding),
-                ..
-            }) = func.result
-            {
+            if let Some(crate::FunctionResult { ref binding, .. }) = func.result {
                 self.write_semantic(binding, Some((stage, Io::Output)))?;
             }
         }
@@ -1988,6 +2073,129 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, "{level}}}")?
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::SubgroupBallot { result, predicate } => {
+                write!(self.out, "{level}")?;
+                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                write!(self.out, "const uint4 {name} = ")?;
+                self.named_expressions.insert(result, name);
+
+                write!(self.out, "WaveActiveBallot(")?;
+                match predicate {
+                    Some(predicate) => self.write_expr(module, predicate, func_ctx)?,
+                    None => write!(self.out, "true")?,
+                }
+                writeln!(self.out, ");")?;
+            }
+            Statement::SubgroupCollectiveOperation {
+                op,
+                collective_op,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                write!(self.out, "const ")?;
+                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                match func_ctx.info[result].ty {
+                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    proc::TypeResolution::Value(ref value) => {
+                        self.write_value_type(module, value)?
+                    }
+                };
+                write!(self.out, " {name} = ")?;
+                self.named_expressions.insert(result, name);
+
+                match (collective_op, op) {
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                        write!(self.out, "WaveActiveAllTrue(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                        write!(self.out, "WaveActiveAnyTrue(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                        write!(self.out, "WaveActiveSum(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                        write!(self.out, "WaveActiveProduct(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                        write!(self.out, "WaveActiveMax(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                        write!(self.out, "WaveActiveMin(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                        write!(self.out, "WaveActiveBitAnd(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                        write!(self.out, "WaveActiveBitOr(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                        write!(self.out, "WaveActiveBitXor(")?
+                    }
+                    (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Add) => {
+                        write!(self.out, "WavePrefixSum(")?
+                    }
+                    (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Mul) => {
+                        write!(self.out, "WavePrefixProduct(")?
+                    }
+                    (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Add) => {
+                        self.write_expr(module, argument, func_ctx)?;
+                        write!(self.out, " + WavePrefixSum(")?;
+                    }
+                    (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Mul) => {
+                        self.write_expr(module, argument, func_ctx)?;
+                        write!(self.out, " * WavePrefixProduct(")?;
+                    }
+                    _ => unimplemented!(),
+                }
+                self.write_expr(module, argument, func_ctx)?;
+                writeln!(self.out, ");")?;
+            }
+            Statement::SubgroupGather {
+                mode,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                write!(self.out, "const ")?;
+                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                match func_ctx.info[result].ty {
+                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    proc::TypeResolution::Value(ref value) => {
+                        self.write_value_type(module, value)?
+                    }
+                };
+                write!(self.out, " {name} = ")?;
+                self.named_expressions.insert(result, name);
+
+                if matches!(mode, crate::GatherMode::BroadcastFirst) {
+                    write!(self.out, "WaveReadLaneFirst(")?;
+                    self.write_expr(module, argument, func_ctx)?;
+                } else {
+                    write!(self.out, "WaveReadLaneAt(")?;
+                    self.write_expr(module, argument, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => unreachable!(),
+                        crate::GatherMode::Broadcast(index) | crate::GatherMode::Shuffle(index) => {
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                        crate::GatherMode::ShuffleDown(index) => {
+                            write!(self.out, "WaveGetLaneIndex() + ")?;
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                        crate::GatherMode::ShuffleUp(index) => {
+                            write!(self.out, "WaveGetLaneIndex() - ")?;
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                        crate::GatherMode::ShuffleXor(index) => {
+                            write!(self.out, "WaveGetLaneIndex() ^ ")?;
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                    }
+                }
+                writeln!(self.out, ");")?;
+            }
         }
 
         Ok(())
@@ -3134,7 +3342,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. }
-            | Expression::RayQueryProceedResult => {}
+            | Expression::RayQueryProceedResult
+            | Expression::SubgroupBallotResult
+            | Expression::SubgroupOperationResult { .. } => {}
         }
 
         if !closing_bracket.is_empty() {
@@ -3200,6 +3410,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         if barrier.contains(crate::Barrier::WORK_GROUP) {
             writeln!(self.out, "{level}GroupMemoryBarrierWithGroupSync();")?;
+        }
+        if barrier.contains(crate::Barrier::SUB_GROUP) {
+            // Does not exist in DirectX
         }
         Ok(())
     }

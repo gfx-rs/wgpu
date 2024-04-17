@@ -1279,7 +1279,9 @@ impl<'w> BlockContext<'w> {
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
-            | crate::Expression::RayQueryProceedResult => self.cached[expr_handle],
+            | crate::Expression::RayQueryProceedResult
+            | crate::Expression::SubgroupBallotResult
+            | crate::Expression::SubgroupOperationResult { .. } => self.cached[expr_handle],
             crate::Expression::As {
                 expr,
                 kind,
@@ -2489,6 +2491,27 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
+                }
+                crate::Statement::SubgroupBallot {
+                    result,
+                    ref predicate,
+                } => {
+                    self.write_subgroup_ballot(predicate, result, &mut block)?;
+                }
+                crate::Statement::SubgroupCollectiveOperation {
+                    ref op,
+                    ref collective_op,
+                    argument,
+                    result,
+                } => {
+                    self.write_subgroup_operation(op, collective_op, argument, result, &mut block)?;
+                }
+                crate::Statement::SubgroupGather {
+                    ref mode,
+                    argument,
+                    result,
+                } => {
+                    self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
             }
         }

@@ -1,0 +1,27 @@
+(
+	god_mode: true,
+	spv: (
+		version: (1, 3),
+	),
+	msl: (
+	    lang_version: (2, 4),
+		per_entry_point_map: {},
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+		zero_initialize_workgroup_memory: true,
+	),
+	glsl: (
+		version: Desktop(430),
+		writer_flags: (""),
+		binding_map: { },
+		zero_initialize_workgroup_memory: true,
+	),
+	hlsl: (
+		shader_model: V6_0,
+		binding_map: {},
+		fake_missing_bindings: true,
+		special_constants_binding: None,
+		zero_initialize_workgroup_memory: true,
+	),
+)
