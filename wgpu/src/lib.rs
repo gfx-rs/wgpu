@@ -366,9 +366,19 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// serves a similar role.
 pub struct Surface<'window> {
     context: Arc<C>,
-    _surface: Option<Box<dyn WindowHandle + 'window>>,
+
+    /// Optionally, keep the source of the handle used for the surface alive.
+    ///
+    /// This is useful for platforms where the surface is created from a window and the surface
+    /// would become invalid when the window is dropped.
+    _handle_source: Option<Box<dyn WindowHandle + 'window>>,
+
+    /// Wgpu-core surface id.
     id: ObjectId,
-    data: Box<Data>,
+
+    /// Additional surface data returned by [`DynContext::instance_create_surface`].
+    surface_data: Box<Data>,
+
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
     // It is required to set the attributes of the `SurfaceTexture` in the
     // `Surface::get_current_texture` method.
@@ -385,15 +395,15 @@ impl<'window> fmt::Debug for Surface<'window> {
         f.debug_struct("Surface")
             .field("context", &self.context)
             .field(
-                "_surface",
-                &if self._surface.is_some() {
+                "_handle_source",
+                &if self._handle_source.is_some() {
                     "Some"
                 } else {
                     "None"
                 },
             )
             .field("id", &self.id)
-            .field("data", &self.data)
+            .field("data", &self.surface_data)
             .field("config", &self.config)
             .finish()
     }
@@ -405,7 +415,8 @@ static_assertions::assert_impl_all!(Surface<'_>: Send, Sync);
 impl Drop for Surface<'_> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.surface_drop(&self.id, self.data.as_ref())
+            self.context
+                .surface_drop(&self.id, self.surface_data.as_ref())
         }
     }
 }
@@ -1967,6 +1978,8 @@ impl Instance {
 
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
+    /// Internally, this creates surfaces for all backends that are enabled for this instance.
+    ///
     /// See [`SurfaceTarget`] for what targets are supported.
     /// See [`Instance::create_surface_unsafe`] for surface creation with unsafe target variants.
     ///
@@ -1977,7 +1990,7 @@ impl Instance {
         target: impl Into<SurfaceTarget<'window>>,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
         // Handle origin (i.e. window) to optionally take ownership of to make the surface outlast the window.
-        let handle_origin;
+        let handle_source;
 
         let target = target.into();
         let mut surface = match target {
@@ -1987,14 +2000,14 @@ impl Instance {
                         inner: CreateSurfaceErrorKind::RawHandle(e),
                     })?,
                 );
-                handle_origin = Some(window);
+                handle_source = Some(window);
 
                 surface
             }?,
 
             #[cfg(any(webgpu, webgl))]
             SurfaceTarget::Canvas(canvas) => {
-                handle_origin = None;
+                handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
                 let obj = std::ptr::NonNull::from(value).cast();
@@ -2013,7 +2026,7 @@ impl Instance {
 
             #[cfg(any(webgpu, webgl))]
             SurfaceTarget::OffscreenCanvas(canvas) => {
-                handle_origin = None;
+                handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
                 let obj = std::ptr::NonNull::from(value).cast();
@@ -2032,12 +2045,14 @@ impl Instance {
             }
         };
 
-        surface._surface = handle_origin;
+        surface._handle_source = handle_source;
 
         Ok(surface)
     }
 
     /// Creates a new surface targeting a given window/canvas/surface/etc. using an unsafe target.
+    ///
+    /// Internally, this creates surfaces for all backends that are enabled for this instance.
     ///
     /// See [`SurfaceTargetUnsafe`] for what targets are supported.
     /// See [`Instance::create_surface`] for surface creation with safe target variants.
@@ -2053,9 +2068,9 @@ impl Instance {
 
         Ok(Surface {
             context: Arc::clone(&self.context),
-            _surface: None,
+            _handle_source: None,
             id,
-            data,
+            surface_data: data,
             config: Mutex::new(None),
         })
     }
@@ -2229,7 +2244,7 @@ impl Adapter {
             &self.id,
             self.data.as_ref(),
             &surface.id,
-            surface.data.as_ref(),
+            surface.surface_data.as_ref(),
         )
     }
 
@@ -4833,7 +4848,7 @@ impl Surface<'_> {
         DynContext::surface_get_capabilities(
             &*self.context,
             &self.id,
-            self.data.as_ref(),
+            self.surface_data.as_ref(),
             &adapter.id,
             adapter.data.as_ref(),
         )
@@ -4872,7 +4887,7 @@ impl Surface<'_> {
         DynContext::surface_configure(
             &*self.context,
             &self.id,
-            self.data.as_ref(),
+            self.surface_data.as_ref(),
             &device.id,
             device.data.as_ref(),
             config,
@@ -4891,8 +4906,11 @@ impl Surface<'_> {
     /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
     pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
-        let (texture_id, texture_data, status, detail) =
-            DynContext::surface_get_current_texture(&*self.context, &self.id, self.data.as_ref());
+        let (texture_id, texture_data, status, detail) = DynContext::surface_get_current_texture(
+            &*self.context,
+            &self.id,
+            self.surface_data.as_ref(),
+        );
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
@@ -4955,7 +4973,7 @@ impl Surface<'_> {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.surface_as_hal::<A, F, R>(
-                    self.data.downcast_ref().unwrap(),
+                    self.surface_data.downcast_ref().unwrap(),
                     hal_surface_callback,
                 )
             })

@@ -241,7 +241,7 @@ impl<A: HalApi> Hub<A> {
             if let Element::Occupied(ref surface, _epoch) = *element {
                 if let Some(ref mut present) = surface.presentation.lock().take() {
                     if let Some(device) = present.device.downcast_ref::<A>() {
-                        let suf = A::get_surface(surface);
+                        let suf = A::surface_as_hal(surface);
                         unsafe {
                             suf.unwrap().unconfigure(device.raw());
                             //TODO: we could destroy the surface here
