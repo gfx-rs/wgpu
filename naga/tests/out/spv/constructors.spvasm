@@ -67,17 +67,18 @@ OpDecorate %17 ArrayStride 4
 %56 = OpConstantComposite  %14  %55 %55
 %57 = OpConstantComposite  %9  %21 %21
 %58 = OpConstantComposite  %8  %57 %57
-%59 = OpConstantComposite  %14  %55 %55
-%60 = OpConstantComposite  %7  %21 %21 %21
-%61 = OpConstantComposite  %20  %60 %60
-%62 = OpConstantNull  %20
-%64 = OpTypePointer Function %6
-%65 = OpConstantNull  %6
+%59 = OpConstantFalse  %13
+%60 = OpConstantComposite  %14  %55 %55
+%61 = OpConstantComposite  %7  %21 %21 %21
+%62 = OpConstantComposite  %20  %61 %61
+%63 = OpConstantNull  %20
+%65 = OpTypePointer Function %6
+%66 = OpConstantNull  %6
 %44 = OpFunction  %2  None %45
 %43 = OpLabel
-%63 = OpVariable  %64  Function %65
-OpBranch %66
-%66 = OpLabel
-OpStore %63 %47
+%64 = OpVariable  %65  Function %66
+OpBranch %67
+%67 = OpLabel
+OpStore %64 %47
 OpReturn
 OpFunctionEnd

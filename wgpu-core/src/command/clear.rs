@@ -12,6 +12,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Resource, Texture, TextureClearMode},
+    snatch::SnatchGuard,
     track::{TextureSelector, TextureTracker},
 };
 
@@ -39,6 +40,11 @@ pub enum ClearError {
     UnalignedFillSize(BufferAddress),
     #[error("Buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
+    #[error("Clear starts at offset {start_offset} with size of {requested_size}, but these added together exceed `u64::MAX`")]
+    OffsetPlusSizeExceeds64BitBounds {
+        start_offset: BufferAddress,
+        requested_size: BufferAddress,
+    },
     #[error("Clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
@@ -98,6 +104,11 @@ impl Global {
             let dst_buffer = buffer_guard
                 .get(dst)
                 .map_err(|_| ClearError::InvalidBuffer(dst))?;
+
+            if dst_buffer.device.as_info().id() != cmd_buf.device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             cmd_buf_data
                 .trackers
                 .buffers
@@ -117,25 +128,27 @@ impl Global {
         if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(ClearError::UnalignedBufferOffset(offset));
         }
-        if let Some(size) = size {
-            if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-                return Err(ClearError::UnalignedFillSize(size));
-            }
-            let destination_end_offset = offset + size;
-            if destination_end_offset > dst_buffer.size {
-                return Err(ClearError::BufferOverrun {
+
+        let size = size.unwrap_or(dst_buffer.size.saturating_sub(offset));
+        if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(ClearError::UnalignedFillSize(size));
+        }
+        let end_offset =
+            offset
+                .checked_add(size)
+                .ok_or(ClearError::OffsetPlusSizeExceeds64BitBounds {
                     start_offset: offset,
-                    end_offset: destination_end_offset,
-                    buffer_size: dst_buffer.size,
-                });
-            }
+                    requested_size: size,
+                })?;
+        if end_offset > dst_buffer.size {
+            return Err(ClearError::BufferOverrun {
+                start_offset: offset,
+                end_offset,
+                buffer_size: dst_buffer.size,
+            });
         }
 
-        let end = match size {
-            Some(size) => offset + size,
-            None => dst_buffer.size,
-        };
-        if offset == end {
+        if offset == end_offset {
             log::trace!("Ignoring fill_buffer of size 0");
             return Ok(());
         }
@@ -144,7 +157,7 @@ impl Global {
         cmd_buf_data.buffer_memory_init_actions.extend(
             dst_buffer.initialization_status.read().create_action(
                 &dst_buffer,
-                offset..end,
+                offset..end_offset,
                 MemoryInitKind::ImplicitlyInitialized,
             ),
         );
@@ -154,7 +167,7 @@ impl Global {
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
-            cmd_buf_raw.clear_buffer(dst_raw, offset..end);
+            cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
         }
         Ok(())
     }
@@ -191,6 +204,10 @@ impl Global {
             .textures
             .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
+
+        if dst_texture.device.as_info().id() != cmd_buf.device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         // Check if subresource aspects are valid.
         let clear_aspects =
@@ -232,6 +249,7 @@ impl Global {
         }
         let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
+        let snatch_guard = device.snatchable_lock.read();
         clear_texture(
             &dst_texture,
             TextureInitRange {
@@ -242,6 +260,7 @@ impl Global {
             &mut tracker.textures,
             &device.alignments,
             device.zero_buffer.as_ref().unwrap(),
+            &snatch_guard,
         )
     }
 }
@@ -253,10 +272,10 @@ pub(crate) fn clear_texture<A: HalApi>(
     texture_tracker: &mut TextureTracker<A>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
-    let snatch_guard = dst_texture.device.snatchable_lock.read();
     let dst_raw = dst_texture
-        .raw(&snatch_guard)
+        .raw(snatch_guard)
         .ok_or_else(|| ClearError::InvalidTexture(dst_texture.as_info().id()))?;
 
     // Issue the right barrier.
@@ -366,7 +385,7 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
         assert!(
             max_rows_per_copy > 0,
             "Zero buffer size is too small to fill a single row \
-                 of a texture with format {:?} and desc {:?}",
+            of a texture with format {:?} and desc {:?}",
             texture_desc.format,
             texture_desc.size
         );

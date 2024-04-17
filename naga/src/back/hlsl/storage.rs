@@ -32,6 +32,16 @@ The [`temp_access_chain`] field is a member of [`Writer`] solely to
 allow re-use of the `Vec`'s dynamic allocation. Its value is no longer
 needed once HLSL for the access has been generated.
 
+Note about DXC and Load/Store functions:
+
+DXC's HLSL has a generic [`Load` and `Store`] function for [`ByteAddressBuffer`] and
+[`RWByteAddressBuffer`]. This is not available in FXC's HLSL, so we use
+it only for types that are only available in DXC. Notably 64 and 16 bit types.
+
+FXC's HLSL has functions Load, Load2, Load3, and Load4 and Store, Store2, Store3, Store4.
+This loads/stores a vector of length 1, 2, 3, or 4. We use that for 32bit types, bitcasting to the
+correct type if necessary.
+
 [`Storage`]: crate::AddressSpace::Storage
 [`ByteAddressBuffer`]: https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-byteaddressbuffer
 [`RWByteAddressBuffer`]: https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-rwbyteaddressbuffer
@@ -42,6 +52,7 @@ needed once HLSL for the access has been generated.
 [`Writer::temp_access_chain`]: super::Writer::temp_access_chain
 [`temp_access_chain`]: super::Writer::temp_access_chain
 [`Writer`]: super::Writer
+[`Load` and `Store`]: https://github.com/microsoft/DirectXShaderCompiler/wiki/ByteAddressBuffer-Load-Store-Additions
 */
 
 use super::{super::FunctionCtx, BackendResult, Error};
@@ -161,20 +172,39 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                let cast = scalar.kind.to_hlsl_cast();
-                write!(self.out, "{cast}({var_name}.Load(")?;
+                // See note about DXC and Load/Store in the module's documentation.
+                if scalar.width == 4 {
+                    let cast = scalar.kind.to_hlsl_cast();
+                    write!(self.out, "{cast}({var_name}.Load(")?;
+                } else {
+                    let ty = scalar.to_hlsl_str()?;
+                    write!(self.out, "{var_name}.Load<{ty}>(")?;
+                };
                 self.write_storage_address(module, &chain, func_ctx)?;
-                write!(self.out, "))")?;
+                write!(self.out, ")")?;
+                if scalar.width == 4 {
+                    write!(self.out, ")")?;
+                }
                 self.temp_access_chain = chain;
             }
             crate::TypeInner::Vector { size, scalar } => {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                let cast = scalar.kind.to_hlsl_cast();
-                write!(self.out, "{}({}.Load{}(", cast, var_name, size as u8)?;
+                let size = size as u8;
+                // See note about DXC and Load/Store in the module's documentation.
+                if scalar.width == 4 {
+                    let cast = scalar.kind.to_hlsl_cast();
+                    write!(self.out, "{cast}({var_name}.Load{size}(")?;
+                } else {
+                    let ty = scalar.to_hlsl_str()?;
+                    write!(self.out, "{var_name}.Load<{ty}{size}>(")?;
+                };
                 self.write_storage_address(module, &chain, func_ctx)?;
-                write!(self.out, "))")?;
+                write!(self.out, ")")?;
+                if scalar.width == 4 {
+                    write!(self.out, ")")?;
+                }
                 self.temp_access_chain = chain;
             }
             crate::TypeInner::Matrix {
@@ -288,26 +318,44 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             }
         };
         match *ty_resolution.inner_with(&module.types) {
-            crate::TypeInner::Scalar(_) => {
+            crate::TypeInner::Scalar(scalar) => {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                write!(self.out, "{level}{var_name}.Store(")?;
-                self.write_storage_address(module, &chain, func_ctx)?;
-                write!(self.out, ", asuint(")?;
-                self.write_store_value(module, &value, func_ctx)?;
-                writeln!(self.out, "));")?;
+                // See note about DXC and Load/Store in the module's documentation.
+                if scalar.width == 4 {
+                    write!(self.out, "{level}{var_name}.Store(")?;
+                    self.write_storage_address(module, &chain, func_ctx)?;
+                    write!(self.out, ", asuint(")?;
+                    self.write_store_value(module, &value, func_ctx)?;
+                    writeln!(self.out, "));")?;
+                } else {
+                    write!(self.out, "{level}{var_name}.Store(")?;
+                    self.write_storage_address(module, &chain, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_store_value(module, &value, func_ctx)?;
+                    writeln!(self.out, ");")?;
+                }
                 self.temp_access_chain = chain;
             }
-            crate::TypeInner::Vector { size, .. } => {
+            crate::TypeInner::Vector { size, scalar } => {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                write!(self.out, "{}{}.Store{}(", level, var_name, size as u8)?;
-                self.write_storage_address(module, &chain, func_ctx)?;
-                write!(self.out, ", asuint(")?;
-                self.write_store_value(module, &value, func_ctx)?;
-                writeln!(self.out, "));")?;
+                // See note about DXC and Load/Store in the module's documentation.
+                if scalar.width == 4 {
+                    write!(self.out, "{}{}.Store{}(", level, var_name, size as u8)?;
+                    self.write_storage_address(module, &chain, func_ctx)?;
+                    write!(self.out, ", asuint(")?;
+                    self.write_store_value(module, &value, func_ctx)?;
+                    writeln!(self.out, "));")?;
+                } else {
+                    write!(self.out, "{}{}.Store(", level, var_name)?;
+                    self.write_storage_address(module, &chain, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_store_value(module, &value, func_ctx)?;
+                    writeln!(self.out, ");")?;
+                }
                 self.temp_access_chain = chain;
             }
             crate::TypeInner::Matrix {

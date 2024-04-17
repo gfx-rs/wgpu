@@ -10,6 +10,7 @@ use bit_set::BitSet;
 const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum GlobalVariableError {
     #[error("Usage isn't compatible with address space {0:?}")]
     InvalidUsage(crate::AddressSpace),
@@ -30,6 +31,8 @@ pub enum GlobalVariableError {
         Handle<crate::Type>,
         #[source] Disalignment,
     ),
+    #[error("Initializer must be an override-expression")]
+    InitializerExprType,
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
     #[error("Initializer can't be used with address space {0:?}")]
@@ -39,6 +42,7 @@ pub enum GlobalVariableError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum VaryingError {
     #[error("The type {0:?} does not match the varying")]
     InvalidType(Handle<crate::Type>),
@@ -73,9 +77,12 @@ pub enum VaryingError {
         location: u32,
         attribute: &'static str,
     },
+    #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
+    InvalidMultiDimensionalSubgroupBuiltIn,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum EntryPointError {
     #[error("Multiple conflicting entry points")]
     Conflict,
@@ -135,6 +142,7 @@ struct VaryingContext<'a> {
 impl VaryingContext<'_> {
     fn validate_impl(
         &mut self,
+        ep: &crate::EntryPoint,
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<(), VaryingError> {
@@ -162,10 +170,22 @@ impl VaryingContext<'_> {
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
+                    Bi::NumSubgroups
+                    | Bi::SubgroupId
+                    | Bi::SubgroupSize
+                    | Bi::SubgroupInvocationId => Capabilities::SUBGROUP,
                     _ => Capabilities::empty(),
                 };
                 if !self.capabilities.contains(required) {
                     return Err(VaryingError::UnsupportedCapability(required));
+                }
+
+                if matches!(
+                    built_in,
+                    crate::BuiltIn::SubgroupId | crate::BuiltIn::SubgroupInvocationId
+                ) && ep.workgroup_size[1..].iter().any(|&s| s > 1)
+                {
+                    return Err(VaryingError::InvalidMultiDimensionalSubgroupBuiltIn);
                 }
 
                 let (visible, type_good) = match built_in {
@@ -248,6 +268,17 @@ impl VaryingContext<'_> {
                                 size: Vs::Tri,
                                 scalar: crate::Scalar::U32,
                             },
+                    ),
+                    Bi::NumSubgroups | Bi::SubgroupId => (
+                        self.stage == St::Compute && !self.output,
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
+                    ),
+                    Bi::SubgroupSize | Bi::SubgroupInvocationId => (
+                        match self.stage {
+                            St::Compute | St::Fragment => !self.output,
+                            St::Vertex => false,
+                        },
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                 };
 
@@ -349,13 +380,14 @@ impl VaryingContext<'_> {
 
     fn validate(
         &mut self,
+        ep: &crate::EntryPoint,
         ty: Handle<crate::Type>,
         binding: Option<&crate::Binding>,
     ) -> Result<(), WithSpan<VaryingError>> {
         let span_context = self.types.get_span_context(ty);
         match binding {
             Some(binding) => self
-                .validate_impl(ty, binding)
+                .validate_impl(ep, ty, binding)
                 .map_err(|e| e.with_span_context(span_context)),
             None => {
                 match self.types[ty].inner {
@@ -372,7 +404,7 @@ impl VaryingContext<'_> {
                                     }
                                 }
                                 Some(ref binding) => self
-                                    .validate_impl(member.ty, binding)
+                                    .validate_impl(ep, member.ty, binding)
                                     .map_err(|e| e.with_span_context(span_context))?,
                             }
                         }
@@ -395,6 +427,7 @@ impl super::Validator {
         var: &crate::GlobalVariable,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<(), GlobalVariableError> {
         use super::TypeFlags;
 
@@ -523,6 +556,10 @@ impl super::Validator {
                 }
             }
 
+            if !global_expr_kind.is_const_or_override(init) {
+                return Err(GlobalVariableError::InitializerExprType);
+            }
+
             let decl_ty = &gctx.types[var.ty].inner;
             let init_ty = mod_info[init].inner_with(gctx.types);
             if !decl_ty.equivalent(init_ty, gctx.types) {
@@ -538,6 +575,7 @@ impl super::Validator {
         ep: &crate::EntryPoint,
         module: &crate::Module,
         mod_info: &ModuleInfo,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;
@@ -566,7 +604,7 @@ impl super::Validator {
         }
 
         let mut info = self
-            .validate_function(&ep.function, module, mod_info, true)
+            .validate_function(&ep.function, module, mod_info, true, global_expr_kind)
             .map_err(WithSpan::into_other)?;
 
         {
@@ -598,7 +636,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
                 flags: self.flags,
             };
-            ctx.validate(fa.ty, fa.binding.as_ref())
+            ctx.validate(ep, fa.ty, fa.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
         }
 
@@ -616,7 +654,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
                 flags: self.flags,
             };
-            ctx.validate(fr.ty, fr.binding.as_ref())
+            ctx.validate(ep, fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
             if ctx.second_blend_source {
                 // Only the first location may be used when dual source blending

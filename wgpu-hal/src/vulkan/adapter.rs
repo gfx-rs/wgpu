@@ -20,27 +20,90 @@ fn indexing_features() -> wgt::Features {
         | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY
 }
 
-/// Aggregate of the `vk::PhysicalDevice*Features` structs used by `gfx`.
+/// Features supported by a [`vk::PhysicalDevice`] and its extensions.
+///
+/// This is used in two phases:
+///
+/// - When enumerating adapters, this represents the features offered by the
+///   adapter. [`Instance::expose_adapter`] calls `vkGetPhysicalDeviceFeatures2`
+///   (or `vkGetPhysicalDeviceFeatures` if that is not available) to collect
+///   this information about the `VkPhysicalDevice` represented by the
+///   `wgpu_hal::ExposedAdapter`.
+///
+/// - When opening a device, this represents the features we would like to
+///   enable. At `wgpu_hal::Device` construction time,
+///   [`PhysicalDeviceFeatures::from_extensions_and_requested_features`]
+///   constructs an value of this type indicating which Vulkan features to
+///   enable, based on the `wgpu_types::Features` requested.
 #[derive(Debug, Default)]
 pub struct PhysicalDeviceFeatures {
+    /// Basic Vulkan 1.0 features.
     core: vk::PhysicalDeviceFeatures,
+
+    /// Features provided by `VK_EXT_descriptor_indexing`, promoted to Vulkan 1.2.
     pub(super) descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
+
+    /// Features provided by `VK_KHR_imageless_framebuffer`, promoted to Vulkan 1.2.
     imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
+
+    /// Features provided by `VK_KHR_timeline_semaphore`, promoted to Vulkan 1.2
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
+
+    /// Features provided by `VK_EXT_image_robustness`, promoted to Vulkan 1.3
     image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
+
+    /// Features provided by `VK_EXT_robustness2`.
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
+
+    /// Features provided by `VK_KHR_multiview`, promoted to Vulkan 1.1.
     multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
+
+    /// Features provided by `VK_KHR_sampler_ycbcr_conversion`, promoted to Vulkan 1.1.
     sampler_ycbcr_conversion: Option<vk::PhysicalDeviceSamplerYcbcrConversionFeatures>,
+
+    /// Features provided by `VK_EXT_texture_compression_astc_hdr`, promoted to Vulkan 1.3.
     astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT>,
+
+    /// Features provided by `VK_KHR_shader_float16_int8` (promoted to Vulkan
+    /// 1.2) and `VK_KHR_16bit_storage` (promoted to Vulkan 1.1). We use these
+    /// features together, or not at all.
     shader_float16: Option<(
         vk::PhysicalDeviceShaderFloat16Int8Features,
         vk::PhysicalDevice16BitStorageFeatures,
     )>,
+
+    /// Features provided by `VK_KHR_acceleration_structure`.
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
+
+    /// Features provided by `VK_KHR_buffer_device_address`, promoted to Vulkan 1.2.
+    ///
+    /// We only use this feature for
+    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`], which requires
+    /// `VK_KHR_acceleration_structure`, which depends on
+    /// `VK_KHR_buffer_device_address`, so [`Instance::expose_adapter`] only
+    /// bothers to check if `VK_KHR_acceleration_structure` is available,
+    /// leaving this `None`.
+    ///
+    /// However, we do populate this when creating a device if
+    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
     buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
+
+    /// Features provided by `VK_KHR_ray_query`,
+    ///
+    /// Vulkan requires that the feature be present if the `VK_KHR_ray_query`
+    /// extension is present, so [`Instance::expose_adapter`] doesn't bother retrieving
+    /// this from `vkGetPhysicalDeviceFeatures2`.
+    ///
+    /// However, we do populate this when creating a device if ray tracing is requested.
     ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
+
+    /// Features provided by `VK_KHR_zero_initialize_workgroup_memory`, promoted
+    /// to Vulkan 1.3.
     zero_initialize_workgroup_memory:
         Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
+
+    /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
+    subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -88,12 +151,38 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.ray_query {
             info = info.push_next(feature);
         }
+        if let Some(ref mut feature) = self.subgroup_size_control {
+            info = info.push_next(feature);
+        }
         info
     }
 
-    /// Create a `PhysicalDeviceFeatures` that will be used to create a logical device.
+    /// Create a `PhysicalDeviceFeatures` that can be used to create a logical
+    /// device.
     ///
-    /// `requested_features` should be the same as what was used to generate `enabled_extensions`.
+    /// Return a `PhysicalDeviceFeatures` value capturing all the Vulkan
+    /// features needed for the given [`Features`], [`DownlevelFlags`], and
+    /// [`PrivateCapabilities`]. You can use the returned value's
+    /// [`add_to_device_create_builder`] method to configure a
+    /// [`DeviceCreateInfoBuilder`] to build a logical device providing those
+    /// features.
+    ///
+    /// To ensure that the returned value is able to select all the Vulkan
+    /// features needed to express `requested_features`, `downlevel_flags`, and
+    /// `private_caps`:
+    ///
+    /// - The given `enabled_extensions` set must include all the extensions
+    ///   selected by [`Adapter::required_device_extensions`] when passed
+    ///   `features`.
+    ///
+    /// - The given `device_api_version` must be the Vulkan API version of the
+    ///   physical device we will use to create the logical device.
+    ///
+    /// [`Features`]: wgt::Features
+    /// [`DownlevelFlags`]: wgt::DownlevelFlags
+    /// [`PrivateCapabilities`]: super::PrivateCapabilities
+    /// [`DeviceCreateInfoBuilder`]: vk::DeviceCreateInfoBuilder
+    /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
         device_api_version: u32,
         enabled_extensions: &[&'static CStr],
@@ -189,7 +278,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_clip_distance(requested_features.contains(wgt::Features::SHADER_CLIP_DISTANCE))
                 //.shader_cull_distance(requested_features.contains(wgt::Features::SHADER_CULL_DISTANCE))
                 .shader_float64(requested_features.contains(wgt::Features::SHADER_F64))
-                //.shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
+                .shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
                 .shader_int16(requested_features.contains(wgt::Features::SHADER_I16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
@@ -351,14 +440,30 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            subgroup_size_control: if device_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&vk::ExtSubgroupSizeControlFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceSubgroupSizeControlFeatures::builder()
+                        .subgroup_size_control(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
+    /// Compute the wgpu [`Features`] and [`DownlevelFlags`] supported by a physical device.
+    ///
+    /// Given `self`, together with the instance and physical device it was
+    /// built from, and a `caps` also built from those, determine which wgpu
+    /// features and downlevel flags the device can support.
     fn to_wgpu(
         &self,
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
-        caps: &PhysicalDeviceCapabilities,
+        caps: &PhysicalDeviceProperties,
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use crate::auxil::db;
         use wgt::{DownlevelFlags as Df, Features as F};
@@ -369,6 +474,7 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
+            | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
@@ -468,7 +574,7 @@ impl PhysicalDeviceFeatures {
         //if self.core.shader_clip_distance != 0 {
         //if self.core.shader_cull_distance != 0 {
         features.set(F::SHADER_F64, self.core.shader_float64 != 0);
-        //if self.core.shader_int64 != 0 {
+        features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
 
         //if caps.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
@@ -547,6 +653,34 @@ impl PhysicalDeviceFeatures {
                     && bit16.storage_buffer16_bit_access != 0
                     && bit16.uniform_and_storage_buffer16_bit_access != 0,
             );
+        }
+
+        if let Some(ref subgroup) = caps.subgroup {
+            if (caps.device_api_version >= vk::API_VERSION_1_3
+                || caps.supports_extension(vk::ExtSubgroupSizeControlFn::name()))
+                && subgroup.supported_operations.contains(
+                    vk::SubgroupFeatureFlags::BASIC
+                        | vk::SubgroupFeatureFlags::VOTE
+                        | vk::SubgroupFeatureFlags::ARITHMETIC
+                        | vk::SubgroupFeatureFlags::BALLOT
+                        | vk::SubgroupFeatureFlags::SHUFFLE
+                        | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE,
+                )
+            {
+                features.set(
+                    F::SUBGROUP,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT),
+                );
+                features.set(
+                    F::SUBGROUP_VERTEX,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::VERTEX),
+                );
+                features.insert(F::SUBGROUP_BARRIER);
+            }
         }
 
         let supports_depth_format = |format| {
@@ -638,15 +772,59 @@ impl PhysicalDeviceFeatures {
     }
 }
 
-/// Information gathered about a physical device capabilities.
+/// Vulkan "properties" structures gathered about a physical device.
+///
+/// This structure holds the properties of a [`vk::PhysicalDevice`]:
+/// - the standard Vulkan device properties
+/// - the `VkExtensionProperties` structs for all available extensions, and
+/// - the per-extension properties structures for the available extensions that
+///   `wgpu` cares about.
+///
+/// Generally, if you get it from any of these functions, it's stored
+/// here:
+/// - `vkEnumerateDeviceExtensionProperties`
+/// - `vkGetPhysicalDeviceProperties`
+/// - `vkGetPhysicalDeviceProperties2`
+///
+/// This also includes a copy of the device API version, since we can
+/// use that as a shortcut for searching for an extension, if the
+/// extension has been promoted to core in the current version.
+///
+/// This does not include device features; for those, see
+/// [`PhysicalDeviceFeatures`].
 #[derive(Default, Debug)]
-pub struct PhysicalDeviceCapabilities {
+pub struct PhysicalDeviceProperties {
+    /// Extensions supported by the `vk::PhysicalDevice`,
+    /// as returned by `vkEnumerateDeviceExtensionProperties`.
     supported_extensions: Vec<vk::ExtensionProperties>,
+
+    /// Properties of the `vk::PhysicalDevice`, as returned by
+    /// `vkGetPhysicalDeviceProperties`.
     properties: vk::PhysicalDeviceProperties,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_maintenance3` extension, promoted to Vulkan 1.1.
     maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_descriptor_indexing` extension, promoted to Vulkan 1.2.
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_acceleration_structure` extension.
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_driver_properties` extension, promoted to Vulkan 1.2.
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
+
+    /// Additional `vk::PhysicalDevice` properties from Vulkan 1.1.
+    subgroup: Option<vk::PhysicalDeviceSubgroupProperties>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_subgroup_size_control` extension, promoted to Vulkan 1.3.
+    subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlProperties>,
+
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -656,10 +834,10 @@ pub struct PhysicalDeviceCapabilities {
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
-unsafe impl Send for PhysicalDeviceCapabilities {}
-unsafe impl Sync for PhysicalDeviceCapabilities {}
+unsafe impl Send for PhysicalDeviceProperties {}
+unsafe impl Sync for PhysicalDeviceProperties {}
 
-impl PhysicalDeviceCapabilities {
+impl PhysicalDeviceProperties {
     pub fn properties(&self) -> vk::PhysicalDeviceProperties {
         self.properties
     }
@@ -762,6 +940,11 @@ impl PhysicalDeviceCapabilities {
             if self.supports_extension(vk::ExtImageRobustnessFn::name()) {
                 extensions.push(vk::ExtImageRobustnessFn::name());
             }
+
+            // Require `VK_EXT_subgroup_size_control` if the associated feature was requested
+            if requested_features.contains(wgt::Features::SUBGROUP) {
+                extensions.push(vk::ExtSubgroupSizeControlFn::name());
+            }
         }
 
         // Optional `VK_KHR_swapchain_mutable_format`
@@ -827,6 +1010,11 @@ impl PhysicalDeviceCapabilities {
                 u64::MAX
             };
 
+        // TODO: programmatically determine this, if possible. It's unclear whether we can
+        // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
+        // We could increase the limit when we aren't on a tiled GPU.
+        let max_color_attachment_bytes_per_sample = 32;
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -856,12 +1044,24 @@ impl PhysicalDeviceCapabilities {
                 .min(crate::MAX_VERTEX_BUFFERS as u32),
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
+            min_subgroup_size: self
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.min_subgroup_size)
+                .unwrap_or(0),
+            max_subgroup_size: self
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.max_subgroup_size)
+                .unwrap_or(0),
             max_push_constant_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
             max_inter_stage_shader_components: limits
                 .max_vertex_output_components
                 .min(limits.max_fragment_input_components),
+            max_color_attachments: limits
+                .max_color_attachments
+                .min(crate::MAX_COLOR_ATTACHMENTS as u32),
+            max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
             max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
             max_compute_workgroup_size_x: max_compute_workgroup_sizes[0],
@@ -889,9 +1089,9 @@ impl super::InstanceShared {
     fn inspect(
         &self,
         phd: vk::PhysicalDevice,
-    ) -> (PhysicalDeviceCapabilities, PhysicalDeviceFeatures) {
+    ) -> (PhysicalDeviceProperties, PhysicalDeviceFeatures) {
         let capabilities = {
-            let mut capabilities = PhysicalDeviceCapabilities::default();
+            let mut capabilities = PhysicalDeviceProperties::default();
             capabilities.supported_extensions =
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
             capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
@@ -907,15 +1107,19 @@ impl super::InstanceShared {
                 let supports_driver_properties = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
+                let supports_subgroup_size_control = capabilities.device_api_version
+                    >= vk::API_VERSION_1_3
+                    || capabilities.supports_extension(vk::ExtSubgroupSizeControlFn::name());
 
                 let supports_acceleration_structure =
                     capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
                 if supports_maintenance3 {
-                    capabilities.maintenance_3 =
-                        Some(vk::PhysicalDeviceMaintenance3Properties::default());
-                    builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
+                    let next = capabilities
+                        .maintenance_3
+                        .insert(vk::PhysicalDeviceMaintenance3Properties::default());
+                    builder = builder.push_next(next);
                 }
 
                 if supports_descriptor_indexing {
@@ -936,6 +1140,20 @@ impl super::InstanceShared {
                     let next = capabilities
                         .driver
                         .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
+                    builder = builder.push_next(next);
+                }
+
+                if capabilities.device_api_version >= vk::API_VERSION_1_1 {
+                    let next = capabilities
+                        .subgroup
+                        .insert(vk::PhysicalDeviceSubgroupProperties::default());
+                    builder = builder.push_next(next);
+                }
+
+                if supports_subgroup_size_control {
+                    let next = capabilities
+                        .subgroup_size_control
+                        .insert(vk::PhysicalDeviceSubgroupSizeControlProperties::default());
                     builder = builder.push_next(next);
                 }
 
@@ -991,7 +1209,8 @@ impl super::InstanceShared {
                 builder = builder.push_next(next);
             }
 
-            // `VK_KHR_imageless_framebuffer` is promoted to 1.2, but has no changes, so we can keep using the extension unconditionally.
+            // `VK_KHR_imageless_framebuffer` is promoted to 1.2, but has no
+            // changes, so we can keep using the extension unconditionally.
             if capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 let next = features
                     .imageless_framebuffer
@@ -999,7 +1218,8 @@ impl super::InstanceShared {
                 builder = builder.push_next(next);
             }
 
-            // `VK_KHR_timeline_semaphore` is promoted to 1.2, but has no changes, so we can keep using the extension unconditionally.
+            // `VK_KHR_timeline_semaphore` is promoted to 1.2, but has no
+            // changes, so we can keep using the extension unconditionally.
             if capabilities.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
                 let next = features
                     .timeline_semaphore
@@ -1049,6 +1269,16 @@ impl super::InstanceShared {
                 let next = features
                     .zero_initialize_workgroup_memory
                     .insert(vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::default());
+                builder = builder.push_next(next);
+            }
+
+            // `VK_EXT_subgroup_size_control` is promoted to 1.3
+            if capabilities.device_api_version >= vk::API_VERSION_1_3
+                || capabilities.supports_extension(vk::ExtSubgroupSizeControlFn::name())
+            {
+                let next = features
+                    .subgroup_size_control
+                    .insert(vk::PhysicalDeviceSubgroupSizeControlFeatures::default());
                 builder = builder.push_next(next);
             }
 
@@ -1244,6 +1474,9 @@ impl super::Instance {
                 }),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(vk::KhrImageFormatListFn::name()),
+            subgroup_size_control: phd_features
+                .subgroup_size_control
+                .map_or(false, |ext| ext.subgroup_size_control == vk::TRUE),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1285,7 +1518,7 @@ impl super::Adapter {
         self.raw
     }
 
-    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceCapabilities {
+    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceProperties {
         &self.phd_capabilities
     }
 
@@ -1310,7 +1543,20 @@ impl super::Adapter {
         supported_extensions
     }
 
-    /// `features` must be the same features used to create `enabled_extensions`.
+    /// Create a `PhysicalDeviceFeatures` for opening a logical device with
+    /// `features` from this adapter.
+    ///
+    /// The given `enabled_extensions` set must include all the extensions
+    /// selected by [`required_device_extensions`] when passed `features`.
+    /// Otherwise, the `PhysicalDeviceFeatures` value may not be able to select
+    /// all the Vulkan features needed to represent `features` and this
+    /// adapter's characteristics.
+    ///
+    /// Typically, you'd simply call `required_device_extensions`, and then pass
+    /// its return value and the feature set you gave it directly to this
+    /// function. But it's fine to add more extensions to the list.
+    ///
+    /// [`required_device_extensions`]: Self::required_device_extensions
     pub fn physical_device_features(
         &self,
         enabled_extensions: &[&'static CStr],
@@ -1430,6 +1676,15 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Geometry);
             }
 
+            if features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX) {
+                capabilities.push(spv::Capability::GroupNonUniform);
+                capabilities.push(spv::Capability::GroupNonUniformVote);
+                capabilities.push(spv::Capability::GroupNonUniformArithmetic);
+                capabilities.push(spv::Capability::GroupNonUniformBallot);
+                capabilities.push(spv::Capability::GroupNonUniformShuffle);
+                capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
+            }
+
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
@@ -1442,6 +1697,10 @@ impl super::Adapter {
 
             if features.contains(wgt::Features::RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
+            }
+
+            if features.contains(wgt::Features::SHADER_INT64) {
+                capabilities.push(spv::Capability::Int64);
             }
 
             let mut flags = spv::WriterFlags::empty();
@@ -1461,7 +1720,13 @@ impl super::Adapter {
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
             spv::Options {
-                lang_version: (1, 0),
+                lang_version: if features
+                    .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX)
+                {
+                    (1, 3)
+                } else {
+                    (1, 0)
+                },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {
@@ -1593,7 +1858,9 @@ impl super::Adapter {
     }
 }
 
-impl crate::Adapter<super::Api> for super::Adapter {
+impl crate::Adapter for super::Adapter {
+    type A = super::Api;
+
     unsafe fn open(
         &self,
         features: wgt::Features,

@@ -4,12 +4,12 @@ use hal::CommandEncoder as _;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    device::DeviceError,
+    device::{DeviceError, MissingFeatures},
     global::Global,
     hal_api::HalApi,
     id::{self, Id},
     init_tracker::MemoryInitKind,
-    resource::QuerySet,
+    resource::{QuerySet, Resource},
     storage::Storage,
     Epoch, FastHashMap, Index,
 };
@@ -108,6 +108,8 @@ pub enum QueryError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+    #[error(transparent)]
+    MissingFeature(#[from] MissingFeatures),
     #[error("Error encountered while trying to use queries")]
     Use(#[from] QueryUseError),
     #[error("Error encountered while trying to resolve a query")]
@@ -355,6 +357,11 @@ impl Global {
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+
+        cmd_buf
+            .device
+            .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -422,11 +429,20 @@ impl Global {
             .add_single(&*query_set_guard, query_set_id)
             .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
 
+        if query_set.device.as_info().id() != cmd_buf.device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
             let dst_buffer = buffer_guard
                 .get(destination)
                 .map_err(|_| QueryError::InvalidBuffer(destination))?;
+
+            if dst_buffer.device.as_info().id() != cmd_buf.device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             tracker
                 .buffers
                 .set_single(dst_buffer, hal::BufferUses::COPY_DST)

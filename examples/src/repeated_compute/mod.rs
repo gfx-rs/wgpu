@@ -245,6 +245,7 @@ impl WgpuContext {
             layout: Some(&pipeline_layout),
             module: &shader,
             entry_point: "main",
+            compilation_options: Default::default(),
         });
 
         WgpuContext {

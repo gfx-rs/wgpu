@@ -13,7 +13,7 @@ use crate::auxil::dxgi::result::HResult;
 
 pub(super) fn compile_fxc(
     device: &super::Device,
-    source: &String,
+    source: &str,
     source_name: &str,
     raw_ep: &std::ffi::CString,
     stage_bit: wgt::ShaderStages,
@@ -211,7 +211,7 @@ mod dxc {
                 Err(crate::PipelineError::Linkage(
                     stage_bit,
                     format!(
-                        "DXC compile error: {:?}",
+                        "DXC compile error: {}",
                         get_error_string_from_dxc_result(&dxc_container.library, &e.0)
                             .unwrap_or_default()
                     ),

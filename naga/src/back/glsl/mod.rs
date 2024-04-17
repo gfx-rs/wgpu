@@ -178,7 +178,7 @@ impl Version {
     /// Note: `location=` for vertex inputs and fragment outputs is supported
     /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Desktop(410) || *self >= Version::new_gles(310)
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(310)
     }
 
     fn supports_early_depth_test(&self) -> bool {
@@ -282,7 +282,7 @@ impl Default for Options {
 }
 
 /// A subset of options meant to be changed per pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
@@ -497,6 +497,8 @@ pub enum Error {
     ImageMultipleSamplers,
     #[error("{0}")]
     Custom(String),
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 /// Binary operation with a different logic on the GLSL side.
@@ -565,6 +567,10 @@ impl<'a, W: Write> Writer<'a, W> {
         pipeline_options: &'a PipelineOptions,
         policies: proc::BoundsCheckPolicies,
     ) -> Result<Self, Error> {
+        if !module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
+
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -645,16 +651,6 @@ impl<'a, W: Write> Writer<'a, W> {
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
         self.features.write(self.options, &mut self.out)?;
-
-        // Write the additional extensions
-        if self
-            .options
-            .writer_flags
-            .contains(WriterFlags::TEXTURE_SHADOW_LOD)
-        {
-            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shadow_lod.txt
-            writeln!(self.out, "#extension GL_EXT_texture_shadow_lod : require")?;
-        }
 
         // glsl es requires a precision to be specified for floats and ints
         // TODO: Should this be user configurable?
@@ -1300,7 +1296,14 @@ impl<'a, W: Write> Writer<'a, W> {
 
             let inner = expr_info.ty.inner_with(&self.module.types);
 
-            if let Expression::Math { fun, arg, arg1, .. } = *expr {
+            if let Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+                ..
+            } = *expr
+            {
                 match fun {
                     crate::MathFunction::Dot => {
                         // if the expression is a Dot product with integer arguments,
@@ -1314,6 +1317,14 @@ impl<'a, W: Write> Writer<'a, W> {
                                 _ => {}
                             }
                         }
+                    }
+                    crate::MathFunction::ExtractBits => {
+                        // Only argument 1 is re-used.
+                        self.need_bake_expressions.insert(arg1.unwrap());
+                    }
+                    crate::MathFunction::InsertBits => {
+                        // Only argument 2 is re-used.
+                        self.need_bake_expressions.insert(arg2.unwrap());
                     }
                     crate::MathFunction::CountLeadingZeros => {
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
@@ -2379,6 +2390,125 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::SubgroupBallot { result, predicate } => {
+                write!(self.out, "{level}")?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {res_name} = ")?;
+                self.named_expressions.insert(result, res_name);
+
+                write!(self.out, "subgroupBallot(")?;
+                match predicate {
+                    Some(predicate) => self.write_expr(predicate, ctx)?,
+                    None => write!(self.out, "true")?,
+                }
+                writeln!(self.out, ");")?;
+            }
+            Statement::SubgroupCollectiveOperation {
+                op,
+                collective_op,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {res_name} = ")?;
+                self.named_expressions.insert(result, res_name);
+
+                match (collective_op, op) {
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                        write!(self.out, "subgroupAll(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                        write!(self.out, "subgroupAny(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                        write!(self.out, "subgroupAdd(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                        write!(self.out, "subgroupMul(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                        write!(self.out, "subgroupMax(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                        write!(self.out, "subgroupMin(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                        write!(self.out, "subgroupAnd(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                        write!(self.out, "subgroupOr(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                        write!(self.out, "subgroupXor(")?
+                    }
+                    (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Add) => {
+                        write!(self.out, "subgroupExclusiveAdd(")?
+                    }
+                    (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Mul) => {
+                        write!(self.out, "subgroupExclusiveMul(")?
+                    }
+                    (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Add) => {
+                        write!(self.out, "subgroupInclusiveAdd(")?
+                    }
+                    (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Mul) => {
+                        write!(self.out, "subgroupInclusiveMul(")?
+                    }
+                    _ => unimplemented!(),
+                }
+                self.write_expr(argument, ctx)?;
+                writeln!(self.out, ");")?;
+            }
+            Statement::SubgroupGather {
+                mode,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {res_name} = ")?;
+                self.named_expressions.insert(result, res_name);
+
+                match mode {
+                    crate::GatherMode::BroadcastFirst => {
+                        write!(self.out, "subgroupBroadcastFirst(")?;
+                    }
+                    crate::GatherMode::Broadcast(_) => {
+                        write!(self.out, "subgroupBroadcast(")?;
+                    }
+                    crate::GatherMode::Shuffle(_) => {
+                        write!(self.out, "subgroupShuffle(")?;
+                    }
+                    crate::GatherMode::ShuffleDown(_) => {
+                        write!(self.out, "subgroupShuffleDown(")?;
+                    }
+                    crate::GatherMode::ShuffleUp(_) => {
+                        write!(self.out, "subgroupShuffleUp(")?;
+                    }
+                    crate::GatherMode::ShuffleXor(_) => {
+                        write!(self.out, "subgroupShuffleXor(")?;
+                    }
+                }
+                self.write_expr(argument, ctx)?;
+                match mode {
+                    crate::GatherMode::BroadcastFirst => {}
+                    crate::GatherMode::Broadcast(index)
+                    | crate::GatherMode::Shuffle(index)
+                    | crate::GatherMode::ShuffleDown(index)
+                    | crate::GatherMode::ShuffleUp(index)
+                    | crate::GatherMode::ShuffleXor(index) => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(index, ctx)?;
+                    }
+                }
+                writeln!(self.out, ");")?;
+            }
         }
 
         Ok(())
@@ -2397,7 +2527,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_const_expr(&mut self, expr: Handle<crate::Expression>) -> BackendResult {
         self.write_possibly_const_expr(
             expr,
-            &self.module.const_expressions,
+            &self.module.global_expressions,
             |expr| &self.info[expr],
             |writer, expr| writer.write_const_expr(expr),
         )
@@ -2449,6 +2579,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
                     crate::Literal::I64(_) => {
+                        return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
+                    }
+                    crate::Literal::U64(_) => {
                         return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
                     }
                     crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
@@ -2528,6 +2661,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     |writer, expr| writer.write_expr(expr, ctx),
                 )?;
             }
+            Expression::Override(_) => return Err(Error::Override),
             // `Access` is applied to arrays, vectors and matrices and is written as indexing
             Expression::Access { base, index } => {
                 self.write_expr(base, ctx)?;
@@ -2620,51 +2754,49 @@ impl<'a, W: Write> Writer<'a, W> {
                 level,
                 depth_ref,
             } => {
-                let dim = match *ctx.resolve_type(image, &self.module.types) {
-                    TypeInner::Image { dim, .. } => dim,
+                let (dim, class, arrayed) = match *ctx.resolve_type(image, &self.module.types) {
+                    TypeInner::Image {
+                        dim,
+                        class,
+                        arrayed,
+                        ..
+                    } => (dim, class, arrayed),
                     _ => unreachable!(),
                 };
-
-                if dim == crate::ImageDimension::Cube
-                    && array_index.is_some()
-                    && depth_ref.is_some()
-                {
-                    match level {
-                        crate::SampleLevel::Zero
-                        | crate::SampleLevel::Exact(_)
-                        | crate::SampleLevel::Gradient { .. }
-                        | crate::SampleLevel::Bias(_) => {
-                            return Err(Error::Custom(String::from(
-                                "gsamplerCubeArrayShadow isn't supported in textureGrad, \
-                                 textureLod or texture with bias",
-                            )))
-                        }
-                        crate::SampleLevel::Auto => {}
+                let mut err = None;
+                if dim == crate::ImageDimension::Cube {
+                    if offset.is_some() {
+                        err = Some("gsamplerCube[Array][Shadow] doesn't support texture sampling with offsets");
+                    }
+                    if arrayed
+                        && matches!(class, crate::ImageClass::Depth { .. })
+                        && matches!(level, crate::SampleLevel::Gradient { .. })
+                    {
+                        err = Some("samplerCubeArrayShadow don't support textureGrad");
                     }
                 }
+                if gather.is_some() && level != crate::SampleLevel::Zero {
+                    err = Some("textureGather doesn't support LOD parameters");
+                }
+                if let Some(err) = err {
+                    return Err(Error::Custom(String::from(err)));
+                }
 
-                // textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL.
-                // To emulate this, we will have to use textureGrad with a constant gradient of 0.
-                let workaround_lod_array_shadow_as_grad = (array_index.is_some()
-                    || dim == crate::ImageDimension::Cube)
-                    && depth_ref.is_some()
-                    && gather.is_none()
-                    && !self
-                        .options
-                        .writer_flags
-                        .contains(WriterFlags::TEXTURE_SHADOW_LOD);
+                // `textureLod[Offset]` on `sampler2DArrayShadow` and `samplerCubeShadow` does not exist in GLSL,
+                // unless `GL_EXT_texture_shadow_lod` is present.
+                // But if the target LOD is zero, we can emulate that by using `textureGrad[Offset]` with a constant gradient of 0.
+                let workaround_lod_with_grad = ((dim == crate::ImageDimension::Cube && !arrayed)
+                    || (dim == crate::ImageDimension::D2 && arrayed))
+                    && level == crate::SampleLevel::Zero
+                    && matches!(class, crate::ImageClass::Depth { .. })
+                    && !self.features.contains(Features::TEXTURE_SHADOW_LOD);
 
-                //Write the function to be used depending on the sample level
+                // Write the function to be used depending on the sample level
                 let fun_name = match level {
                     crate::SampleLevel::Zero if gather.is_some() => "textureGather",
+                    crate::SampleLevel::Zero if workaround_lod_with_grad => "textureGrad",
                     crate::SampleLevel::Auto | crate::SampleLevel::Bias(_) => "texture",
-                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => {
-                        if workaround_lod_array_shadow_as_grad {
-                            "textureGrad"
-                        } else {
-                            "textureLod"
-                        }
-                    }
+                    crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => "textureLod",
                     crate::SampleLevel::Gradient { .. } => "textureGrad",
                 };
                 let offset_name = match offset {
@@ -2727,7 +2859,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::SampleLevel::Auto => (),
                     // Zero needs level set to 0
                     crate::SampleLevel::Zero => {
-                        if workaround_lod_array_shadow_as_grad {
+                        if workaround_lod_with_grad {
                             let vec_dim = match dim {
                                 crate::ImageDimension::Cube => 3,
                                 _ => 2,
@@ -2739,13 +2871,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     // Exact and bias require another argument
                     crate::SampleLevel::Exact(expr) => {
-                        if workaround_lod_array_shadow_as_grad {
-                            log::warn!("Unable to `textureLod` a shadow array, ignoring the LOD");
-                            write!(self.out, ", vec2(0,0), vec2(0,0)")?;
-                        } else {
-                            write!(self.out, ", ")?;
-                            self.write_expr(expr, ctx)?;
-                        }
+                        write!(self.out, ", ")?;
+                        self.write_expr(expr, ctx)?;
                     }
                     crate::SampleLevel::Bias(_) => {
                         // This needs to be done after the offset writing
@@ -3155,7 +3282,29 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Abs => "abs",
                     Mf::Min => "min",
                     Mf::Max => "max",
-                    Mf::Clamp => "clamp",
+                    Mf::Clamp => {
+                        let scalar_kind = ctx
+                            .resolve_type(arg, &self.module.types)
+                            .scalar_kind()
+                            .unwrap();
+                        match scalar_kind {
+                            crate::ScalarKind::Float => "clamp",
+                            // Clamp is undefined if min > max. In practice this means it can use a median-of-three
+                            // instruction to determine the value. This is fine according to the WGSL spec for float
+                            // clamp, but integer clamp _must_ use min-max. As such we write out min/max.
+                            _ => {
+                                write!(self.out, "min(max(")?;
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, ", ")?;
+                                self.write_expr(arg1.unwrap(), ctx)?;
+                                write!(self.out, "), ")?;
+                                self.write_expr(arg2.unwrap(), ctx)?;
+                                write!(self.out, ")")?;
+
+                                return Ok(());
+                            }
+                        }
+                    }
                     Mf::Saturate => {
                         write!(self.out, "clamp(")?;
 
@@ -3370,8 +3519,61 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     Mf::CountOneBits => "bitCount",
                     Mf::ReverseBits => "bitfieldReverse",
-                    Mf::ExtractBits => "bitfieldExtract",
-                    Mf::InsertBits => "bitfieldInsert",
+                    Mf::ExtractBits => {
+                        // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
+                        // to first sanitize the offset and count first. If we don't do this, AMD and Intel chips
+                        // will return out-of-spec values if the extracted range is not within the bit width.
+                        //
+                        // This encodes the exact formula specified by the wgsl spec, without temporary values:
+                        // https://gpuweb.github.io/gpuweb/wgsl/#extractBits-unsigned-builtin
+                        //
+                        // w = sizeof(x) * 8
+                        // o = min(offset, w)
+                        // c = min(count, w - o)
+                        //
+                        // bitfieldExtract(x, o, c)
+                        //
+                        // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
+                        let scalar_bits = ctx
+                            .resolve_type(arg, &self.module.types)
+                            .scalar_width()
+                            .unwrap()
+                            * 8;
+
+                        write!(self.out, "bitfieldExtract(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, ", int(min(")?;
+                        self.write_expr(arg1.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u)), int(min(",)?;
+                        self.write_expr(arg2.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u - min(")?;
+                        self.write_expr(arg1.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u))))")?;
+
+                        return Ok(());
+                    }
+                    Mf::InsertBits => {
+                        // InsertBits has the same considerations as ExtractBits above
+                        let scalar_bits = ctx
+                            .resolve_type(arg, &self.module.types)
+                            .scalar_width()
+                            .unwrap()
+                            * 8;
+
+                        write!(self.out, "bitfieldInsert(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(arg1.unwrap(), ctx)?;
+                        write!(self.out, ", int(min(")?;
+                        self.write_expr(arg2.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u)), int(min(",)?;
+                        self.write_expr(arg3.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u - min(")?;
+                        self.write_expr(arg2.unwrap(), ctx)?;
+                        write!(self.out, ", {scalar_bits}u))))")?;
+
+                        return Ok(());
+                    }
                     Mf::FindLsb => "findLSB",
                     Mf::FindMsb => "findMSB",
                     // data packing
@@ -3575,7 +3777,9 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
             | Expression::RayQueryProceedResult
-            | Expression::WorkGroupUniformLoadResult { .. } => unreachable!(),
+            | Expression::WorkGroupUniformLoadResult { .. }
+            | Expression::SubgroupOperationResult { .. }
+            | Expression::SubgroupBallotResult => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;
@@ -4144,6 +4348,9 @@ impl<'a, W: Write> Writer<'a, W> {
         if flags.contains(crate::Barrier::WORK_GROUP) {
             writeln!(self.out, "{level}memoryBarrierShared();")?;
         }
+        if flags.contains(crate::Barrier::SUB_GROUP) {
+            writeln!(self.out, "{level}subgroupMemoryBarrier();")?;
+        }
         writeln!(self.out, "{level}barrier();")?;
         Ok(())
     }
@@ -4413,6 +4620,11 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         Bi::WorkGroupId => "gl_WorkGroupID",
         Bi::WorkGroupSize => "gl_WorkGroupSize",
         Bi::NumWorkGroups => "gl_NumWorkGroups",
+        // subgroup
+        Bi::NumSubgroups => "gl_NumSubgroups",
+        Bi::SubgroupId => "gl_SubgroupID",
+        Bi::SubgroupSize => "gl_SubgroupSize",
+        Bi::SubgroupInvocationId => "gl_SubgroupInvocationID",
     }
 }
 

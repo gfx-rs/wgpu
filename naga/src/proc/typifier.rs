@@ -185,6 +185,7 @@ pub enum ResolveError {
 
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
+    pub overrides: &'a Arena<crate::Override>,
     pub types: &'a UniqueArena<crate::Type>,
     pub special_types: &'a crate::SpecialTypes,
     pub global_vars: &'a Arena<crate::GlobalVariable>,
@@ -202,6 +203,7 @@ impl<'a> ResolveContext<'a> {
     ) -> Self {
         Self {
             constants: &module.constants,
+            overrides: &module.overrides,
             types: &module.types,
             special_types: &module.special_types,
             global_vars: &module.global_variables,
@@ -407,6 +409,7 @@ impl<'a> ResolveContext<'a> {
             },
             crate::Expression::Literal(lit) => TypeResolution::Value(lit.ty_inner()),
             crate::Expression::Constant(h) => TypeResolution::Handle(self.constants[h].ty),
+            crate::Expression::Override(h) => TypeResolution::Handle(self.overrides[h].ty),
             crate::Expression::ZeroValue(ty) => TypeResolution::Handle(ty),
             crate::Expression::Compose { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::FunctionArgument(index) => {
@@ -595,6 +598,7 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::ShiftRight => past(left)?.clone(),
             },
             crate::Expression::AtomicResult { ty, .. } => TypeResolution::Handle(ty),
+            crate::Expression::SubgroupOperationResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::WorkGroupUniformLoadResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::Select { accept, .. } => past(accept)?.clone(),
             crate::Expression::Derivative { expr, .. } => past(expr)?.clone(),
@@ -882,6 +886,10 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::SubgroupBallotResult => TypeResolution::Value(Ti::Vector {
+                scalar: crate::Scalar::U32,
+                size: crate::VectorSize::Quad,
+            }),
         })
     }
 }

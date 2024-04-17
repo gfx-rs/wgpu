@@ -220,9 +220,17 @@ impl super::Device {
             multiview: context.multiview,
         };
 
-        let shader = &stage.module.naga;
-        let entry_point_index = shader
-            .module
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &stage.module.naga.module,
+            &stage.module.naga.info,
+            stage.constants,
+        )
+        .map_err(|e| {
+            let msg = format!("{e}");
+            crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+        })?;
+
+        let entry_point_index = module
             .entry_points
             .iter()
             .position(|ep| ep.name.as_str() == stage.entry_point)
@@ -247,11 +255,23 @@ impl super::Device {
         };
 
         let mut output = String::new();
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != context.layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            // We use a conditional here, as cloning the naga_options could be expensive
+            // That is, we want to avoid doing that unless we cannot avoid it
+            temp_options = context.layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
+        } else {
+            &context.layout.naga_options
+        };
         let mut writer = glsl::Writer::new(
             &mut output,
-            &shader.module,
-            &shader.info,
-            &context.layout.naga_options,
+            &module,
+            &info,
+            naga_options,
             &pipeline_options,
             policies,
         )
@@ -269,8 +289,8 @@ impl super::Device {
 
         context.consume_reflection(
             gl,
-            &shader.module,
-            shader.info.get_entry_point(entry_point_index),
+            &module,
+            info.get_entry_point(entry_point_index),
             reflection_info,
             naga_stage,
             program,
@@ -297,6 +317,7 @@ impl super::Device {
                 naga_stage: naga_stage.to_owned(),
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
+                zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
             });
         }
         let mut guard = self
@@ -483,7 +504,9 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+impl crate::Device for super::Device {
+    type A = super::Api;
+
     unsafe fn exit(self, queue: super::Queue) {
         let gl = &self.shared.context.lock();
         unsafe { gl.delete_vertex_array(self.main_vao) };
@@ -1123,8 +1146,10 @@ impl crate::Device<super::Api> for super::Device {
                 !0;
                 bg_layout
                     .entries
-                    .last()
-                    .map_or(0, |b| b.binding as usize + 1)
+                    .iter()
+                    .map(|b| b.binding)
+                    .max()
+                    .map_or(0, |idx| idx as usize + 1)
             ]
             .into_boxed_slice();
 
@@ -1177,7 +1202,16 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::BindGroup, crate::DeviceError> {
         let mut contents = Vec::new();
 
-        for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+            let layout = desc
+                .layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (entry, layout)
+        });
+        for (entry, layout) in layout_and_entry_iter {
             let binding = match layout.ty {
                 wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];
@@ -1194,13 +1228,16 @@ impl crate::Device<super::Api> for super::Device {
                     let sampler = desc.samplers[entry.resource_index as usize];
                     super::RawBinding::Sampler(sampler.raw)
                 }
-                wgt::BindingType::Texture { .. } => {
+                wgt::BindingType::Texture { view_dimension, .. } => {
                     let view = desc.textures[entry.resource_index as usize].view;
                     if view.array_layers.start != 0 {
                         log::error!("Unable to create a sampled texture binding for non-zero array layer.\n{}",
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
+
+                    super::Texture::log_failing_target_heuristics(view_dimension, target);
+
                     super::RawBinding::Texture {
                         raw,
                         target,

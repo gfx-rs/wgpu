@@ -87,6 +87,17 @@ struct Parameters {
     #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
     #[serde(default)]
     glsl_multiview: Option<std::num::NonZeroU32>,
+    #[cfg(all(
+        feature = "deserialize",
+        any(
+            feature = "hlsl-out",
+            feature = "msl-out",
+            feature = "spv-out",
+            feature = "glsl-out"
+        )
+    ))]
+    #[serde(default)]
+    pipeline_constants: naga::back::PipelineConstants,
 }
 
 /// Information about a shader input file.
@@ -258,10 +269,18 @@ fn check_targets(
     let params = input.read_parameters();
     let name = &input.file_name;
 
-    let capabilities = if params.god_mode {
-        naga::valid::Capabilities::all()
+    let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
+        (
+            naga::valid::Capabilities::all(),
+            naga::valid::ShaderStages::all(),
+            naga::valid::SubgroupOperationSet::all(),
+        )
     } else {
-        naga::valid::Capabilities::default()
+        (
+            naga::valid::Capabilities::default(),
+            naga::valid::ShaderStages::empty(),
+            naga::valid::SubgroupOperationSet::empty(),
+        )
     };
 
     #[cfg(feature = "serialize")]
@@ -274,6 +293,8 @@ fn check_targets(
     }
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .subgroup_stages(subgroup_stages)
+        .subgroup_operations(subgroup_operations)
         .validate(module)
         .unwrap_or_else(|err| {
             panic!(
@@ -297,6 +318,8 @@ fn check_targets(
         }
 
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+            .subgroup_stages(subgroup_stages)
+            .subgroup_operations(subgroup_operations)
             .validate(module)
             .unwrap_or_else(|err| {
                 panic!(
@@ -331,6 +354,7 @@ fn check_targets(
                 debug_info,
                 &params.spv,
                 params.bounds_check_policies,
+                &params.pipeline_constants,
             );
         }
     }
@@ -344,6 +368,7 @@ fn check_targets(
                 &params.msl,
                 &params.msl_pipeline,
                 params.bounds_check_policies,
+                &params.pipeline_constants,
             );
         }
     }
@@ -363,6 +388,7 @@ fn check_targets(
                     &params.glsl,
                     params.bounds_check_policies,
                     params.glsl_multiview,
+                    &params.pipeline_constants,
                 );
             }
         }
@@ -377,7 +403,13 @@ fn check_targets(
     #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
     {
         if targets.contains(Targets::HLSL) {
-            write_output_hlsl(input, module, &info, &params.hlsl);
+            write_output_hlsl(
+                input,
+                module,
+                &info,
+                &params.hlsl,
+                &params.pipeline_constants,
+            );
         }
     }
     #[cfg(all(feature = "deserialize", feature = "wgsl-out"))]
@@ -396,6 +428,7 @@ fn write_output_spv(
     debug_info: Option<naga::back::spv::DebugInfo>,
     params: &SpirvOutParameters,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
@@ -423,6 +456,10 @@ fn write_output_spv(
         debug_info,
     };
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     if params.separate_entry_points {
         for ep in module.entry_points.iter() {
             let pipeline_options = spv::PipelineOptions {
@@ -431,15 +468,15 @@ fn write_output_spv(
             };
             write_output_spv_inner(
                 input,
-                module,
-                info,
+                &module,
+                &info,
                 &options,
                 Some(&pipeline_options),
                 &format!("{}.spvasm", ep.name),
             );
         }
     } else {
-        write_output_spv_inner(input, module, info, &options, None, "spvasm");
+        write_output_spv_inner(input, &module, &info, &options, None, "spvasm");
     }
 }
 
@@ -477,14 +514,19 @@ fn write_output_msl(
     options: &naga::back::msl::Options,
     pipeline_options: &naga::back::msl::PipelineOptions,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::msl;
 
     println!("generating MSL");
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
-    let (string, tr_info) = msl::write_string(module, info, &options, pipeline_options)
+    let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
@@ -507,6 +549,7 @@ fn write_output_glsl(
     options: &naga::back::glsl::Options,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     multiview: Option<std::num::NonZeroU32>,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::glsl;
 
@@ -519,10 +562,13 @@ fn write_output_glsl(
     };
 
     let mut buffer = String::new();
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
-        module,
-        info,
+        &module,
+        &info,
         options,
         &pipeline_options,
         bounds_check_policies,
@@ -540,15 +586,20 @@ fn write_output_hlsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
     options: &naga::back::hlsl::Options,
+    pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::hlsl;
     use std::fmt::Write as _;
 
     println!("generating HLSL");
 
+    let (module, info) =
+        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+            .expect("override evaluation failed");
+
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
-    let reflection_info = writer.write(module, info).expect("HLSL write failed");
+    let reflection_info = writer.write(&module, &info).expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer);
 
@@ -736,6 +787,11 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("cubeArrayShadow", Targets::GLSL),
+        ("sample-cube-array-depth-lod", Targets::GLSL),
+        (
+            "use-gl-ext-over-grad-workaround-if-instructed",
+            Targets::GLSL,
+        ),
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -802,6 +858,31 @@ fn convert_wgsl() {
             "abstract-types-operators",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        (
+            "int64",
+            Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
+        ),
+        (
+            "subgroup-operations",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "overrides",
+            Targets::IR
+                | Targets::ANALYSIS
+                | Targets::SPIRV
+                | Targets::METAL
+                | Targets::HLSL
+                | Targets::GLSL,
+        ),
+        (
+            "overrides-atomicCompareExchangeWeak",
+            Targets::IR | Targets::SPIRV,
+        ),
+        (
+            "overrides-ray-query",
+            Targets::IR | Targets::SPIRV | Targets::METAL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -821,11 +902,15 @@ fn convert_wgsl() {
         let inputs = [
             ("debug-symbol-simple", Targets::SPIRV),
             ("debug-symbol-terrain", Targets::SPIRV),
+            ("debug-symbol-large-source", Targets::SPIRV),
         ];
         for &(name, targets) in inputs.iter() {
             // WGSL shaders lives in root dir as a privileged.
             let input = Input::new(None, name, "wgsl");
             let source = input.read_source();
+
+            // crlf will make the large split output different on different platform
+            let source = source.replace('\r', "");
             match naga::front::wgsl::parse_str(&source) {
                 Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source)),
                 Err(e) => panic!(
@@ -879,6 +964,18 @@ fn convert_spv_all() {
     convert_spv(
         "do-while",
         true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv(
+        "unnamed-gl-per-vertex",
+        true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
+    convert_spv("spec-constants", true, Targets::IR);
+    convert_spv(
+        "subgroup-operations-s",
+        false,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
 }

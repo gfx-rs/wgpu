@@ -93,7 +93,7 @@ var<uniform> global_7: StandardMaterial_emissive;
 var StandardMaterial_emissive_texture: texture_2d<f32>;
 @group(3) @binding(14) 
 var StandardMaterial_emissive_texture_sampler: sampler;
-var<private> gl_FrontFacing: bool;
+var<private> gl_FrontFacing_1: bool;
 
 fn pow5_(x: f32) -> f32 {
     var x_1: f32;
@@ -746,7 +746,7 @@ fn main_1() {
     let _e78 = T;
     let _e80 = v_WorldTangent_1;
     B = (cross(_e77, _e78) * _e80.w);
-    let _e85 = gl_FrontFacing;
+    let _e85 = gl_FrontFacing_1;
     if _e85 {
         let _e86 = N_2;
         local = _e86;
@@ -756,7 +756,7 @@ fn main_1() {
     }
     let _e90 = local;
     N_2 = _e90;
-    let _e91 = gl_FrontFacing;
+    let _e91 = gl_FrontFacing_1;
     if _e91 {
         let _e92 = T;
         local_1 = _e92;
@@ -766,7 +766,7 @@ fn main_1() {
     }
     let _e96 = local_1;
     T = _e96;
-    let _e97 = gl_FrontFacing;
+    let _e97 = gl_FrontFacing_1;
     if _e97 {
         let _e98 = B;
         local_2 = _e98;
@@ -921,12 +921,12 @@ fn main_1() {
 }
 
 @fragment 
-fn main(@location(0) v_WorldPosition: vec3<f32>, @location(1) v_WorldNormal: vec3<f32>, @location(2) v_Uv: vec2<f32>, @location(3) v_WorldTangent: vec4<f32>, @builtin(front_facing) param: bool) -> FragmentOutput {
+fn main(@location(0) v_WorldPosition: vec3<f32>, @location(1) v_WorldNormal: vec3<f32>, @location(2) v_Uv: vec2<f32>, @location(3) v_WorldTangent: vec4<f32>, @builtin(front_facing) gl_FrontFacing: bool) -> FragmentOutput {
     v_WorldPosition_1 = v_WorldPosition;
     v_WorldNormal_1 = v_WorldNormal;
     v_Uv_1 = v_Uv;
     v_WorldTangent_1 = v_WorldTangent;
-    gl_FrontFacing = param;
+    gl_FrontFacing_1 = gl_FrontFacing;
     main_1();
     let _e69 = o_Target;
     return FragmentOutput(_e69);

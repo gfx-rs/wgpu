@@ -93,6 +93,13 @@ impl super::CommandBuffer {
     }
 }
 
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        use crate::CommandEncoder;
+        unsafe { self.discard_encoding() }
+    }
+}
+
 impl super::CommandEncoder {
     fn rebind_stencil_func(&mut self) {
         fn make(s: &super::StencilSide, face: u32) -> C {
@@ -243,7 +250,9 @@ impl super::CommandEncoder {
     }
 }
 
-impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
+impl crate::CommandEncoder for super::CommandEncoder {
+    type A = super::Api;
+
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         self.state = State::default();
         self.cmd_buffer.label = label.map(str::to_string);

@@ -69,7 +69,13 @@ impl super::Device {
     ) -> Result<CompiledShader, crate::PipelineError> {
         let stage_bit = map_naga_stage(naga_stage);
 
-        let module = &stage.module.naga.module;
+        let (module, module_info) = naga::back::pipeline_constants::process_overrides(
+            &stage.module.naga.module,
+            &stage.module.naga.info,
+            stage.constants,
+        )
+        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
+
         let ep_resources = &layout.per_stage_map[naga_stage];
 
         let bounds_check_policy = if stage.module.runtime_checks {
@@ -88,6 +94,8 @@ impl super::Device {
                 metal::MTLLanguageVersion::V2_2 => (2, 2),
                 metal::MTLLanguageVersion::V2_3 => (2, 3),
                 metal::MTLLanguageVersion::V2_4 => (2, 4),
+                metal::MTLLanguageVersion::V3_0 => (3, 0),
+                metal::MTLLanguageVersion::V3_1 => (3, 1),
             },
             inline_samplers: Default::default(),
             spirv_cross_compatibility: false,
@@ -104,7 +112,7 @@ impl super::Device {
                 // TODO: support bounds checks on binding arrays
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
-            zero_initialize_workgroup_memory: true,
+            zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
@@ -114,13 +122,9 @@ impl super::Device {
             },
         };
 
-        let (source, info) = naga::back::msl::write_string(
-            module,
-            &stage.module.naga.info,
-            &options,
-            &pipeline_options,
-        )
-        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
+        let (source, info) =
+            naga::back::msl::write_string(&module, &module_info, &options, &pipeline_options)
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
 
         log::debug!(
             "Naga generated shader for entry point '{}' and stage {:?}\n{}",
@@ -168,7 +172,7 @@ impl super::Device {
         })?;
 
         // collect sizes indices, immutable buffers, and work group memory sizes
-        let ep_info = &stage.module.naga.info.get_entry_point(ep_index);
+        let ep_info = &module_info.get_entry_point(ep_index);
         let mut wg_memory_sizes = Vec::new();
         let mut sized_bindings = Vec::new();
         let mut immutable_buffer_mask = 0;
@@ -273,7 +277,9 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+impl crate::Device for super::Device {
+    type A = super::Api;
+
     unsafe fn exit(self, _queue: super::Queue) {}
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
@@ -706,7 +712,16 @@ impl crate::Device<super::Api> for super::Device {
         for (&stage, counter) in super::NAGA_STAGES.iter().zip(bg.counters.iter_mut()) {
             let stage_bit = map_naga_stage(stage);
             let mut dynamic_offsets_count = 0u32;
-            for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+            let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+                let layout = desc
+                    .layout
+                    .entries
+                    .iter()
+                    .find(|layout_entry| layout_entry.binding == entry.binding)
+                    .expect("internal error: no layout entry found with binding slot");
+                (entry, layout)
+            });
+            for (entry, layout) in layout_and_entry_iter {
                 let size = layout.count.map_or(1, |c| c.get());
                 if let wgt::BindingType::Buffer {
                     has_dynamic_offset: true,

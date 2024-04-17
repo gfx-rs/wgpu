@@ -62,6 +62,7 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone, Copy, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum Disalignment {
     #[error("The array stride {stride} is not a multiple of the required alignment {alignment}")]
     ArrayStride { stride: u32, alignment: Alignment },
@@ -86,6 +87,7 @@ pub enum Disalignment {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum TypeError {
     #[error("Capability {0:?} is required")]
     MissingCapability(Capabilities),
@@ -106,6 +108,12 @@ pub enum TypeError {
     MatrixElementNotFloat,
     #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
+    #[error("{} of dimensionality {dim:?} and class {class:?} are not supported", if *.arrayed {"Arrayed images"} else {"Images"})]
+    UnsupportedImageType {
+        dim: crate::ImageDimension,
+        arrayed: bool,
+        class: crate::ImageClass,
+    },
     #[error("Array stride {stride} does not match the expected {expected}")]
     InvalidArrayStride { stride: u32, expected: u32 },
     #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
@@ -141,9 +149,6 @@ pub enum WidthError {
         name: &'static str,
         flag: &'static str,
     },
-
-    #[error("64-bit integers are not yet supported")]
-    Unsupported64Bit,
 
     #[error("Abstract types may only appear in constant expressions")]
     Abstract,
@@ -246,11 +251,31 @@ impl super::Validator {
                     scalar.width == 4
                 }
             }
-            crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+            crate::ScalarKind::Sint => {
                 if scalar.width == 8 {
-                    return Err(WidthError::Unsupported64Bit);
+                    if !self.capabilities.contains(Capabilities::SHADER_INT64) {
+                        return Err(WidthError::MissingCapability {
+                            name: "i64",
+                            flag: "SHADER_INT64",
+                        });
+                    }
+                    true
+                } else {
+                    scalar.width == 4
                 }
-                scalar.width == 4
+            }
+            crate::ScalarKind::Uint => {
+                if scalar.width == 8 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT64) {
+                        return Err(WidthError::MissingCapability {
+                            name: "u64",
+                            flag: "SHADER_INT64",
+                        });
+                    }
+                    true
+                } else {
+                    scalar.width == 4
+                }
             }
             crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
                 return Err(WidthError::Abstract);
@@ -487,7 +512,6 @@ impl super::Validator {
                 ti.uniform_layout = Ok(Alignment::MIN_UNIFORM);
 
                 let mut min_offset = 0;
-
                 let mut prev_struct_data: Option<(u32, u32)> = None;
 
                 for (i, member) in members.iter().enumerate() {
@@ -615,8 +639,15 @@ impl super::Validator {
             Ti::Image {
                 dim,
                 arrayed,
-                class: _,
+                class,
             } => {
+                if arrayed && matches!(dim, crate::ImageDimension::D3) {
+                    return Err(TypeError::UnsupportedImageType {
+                        dim,
+                        arrayed,
+                        class,
+                    });
+                }
                 if arrayed && matches!(dim, crate::ImageDimension::Cube) {
                     self.require_type_capability(Capabilities::CUBE_ARRAY_TEXTURES)?;
                 }
@@ -651,6 +682,7 @@ impl super::Validator {
                     // Currently Naga only supports binding arrays of structs for non-handle types.
                     match gctx.types[base].inner {
                         crate::TypeInner::Struct { .. } => {}
+                        crate::TypeInner::Array { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
                 }

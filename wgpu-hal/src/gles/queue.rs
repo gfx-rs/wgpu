@@ -40,10 +40,14 @@ fn get_z_offset(target: u32, base: &crate::TextureCopyBase) -> u32 {
 impl super::Queue {
     /// Performs a manual shader clear, used as a workaround for a clearing bug on mesa
     unsafe fn perform_shader_clear(&self, gl: &glow::Context, draw_buffer: u32, color: [f32; 4]) {
-        unsafe { gl.use_program(Some(self.shader_clear_program)) };
+        let shader_clear = self
+            .shader_clear_program
+            .as_ref()
+            .expect("shader_clear_program should always be set if the workaround is enabled");
+        unsafe { gl.use_program(Some(shader_clear.program)) };
         unsafe {
             gl.uniform_4_f32(
-                Some(&self.shader_clear_program_color_uniform_location),
+                Some(&shader_clear.color_uniform_location),
                 color[0],
                 color[1],
                 color[2],
@@ -209,12 +213,27 @@ impl super::Queue {
                 instance_count,
                 ref first_instance_location,
             } => {
-                match base_vertex {
-                    0 => {
-                        unsafe {
-                            gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
-                        };
+                let supports_full_instancing = self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
 
+                if supports_full_instancing {
+                    unsafe {
+                        gl.draw_elements_instanced_base_vertex_base_instance(
+                            topology,
+                            index_count as i32,
+                            index_type,
+                            index_offset as i32,
+                            instance_count as i32,
+                            base_vertex,
+                            first_instance,
+                        )
+                    }
+                } else {
+                    unsafe { gl.uniform_1_u32(first_instance_location.as_ref(), first_instance) };
+
+                    if base_vertex == 0 {
                         unsafe {
                             // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
                             // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
@@ -227,41 +246,17 @@ impl super::Queue {
                                 instance_count as i32,
                             )
                         }
-                    }
-                    _ => {
-                        let supports_full_instancing = self
-                            .shared
-                            .private_caps
-                            .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
-
-                        if supports_full_instancing {
-                            unsafe {
-                                gl.draw_elements_instanced_base_vertex_base_instance(
-                                    topology,
-                                    index_count as i32,
-                                    index_type,
-                                    index_offset as i32,
-                                    instance_count as i32,
-                                    base_vertex,
-                                    first_instance,
-                                )
-                            }
-                        } else {
-                            unsafe {
-                                gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
-                            };
-
-                            // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
-                            unsafe {
-                                gl.draw_elements_instanced_base_vertex(
-                                    topology,
-                                    index_count as _,
-                                    index_type,
-                                    index_offset as i32,
-                                    instance_count as i32,
-                                    base_vertex,
-                                )
-                            }
+                    } else {
+                        // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
+                        unsafe {
+                            gl.draw_elements_instanced_base_vertex(
+                                topology,
+                                index_count as _,
+                                index_type,
+                                index_offset as i32,
+                                instance_count as i32,
+                                base_vertex,
+                            )
                         }
                     }
                 }
@@ -1744,7 +1739,9 @@ impl super::Queue {
     }
 }
 
-impl crate::Queue<super::Api> for super::Queue {
+impl crate::Queue for super::Queue {
+    type A = super::Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&super::CommandBuffer],

@@ -80,7 +80,9 @@ impl Instance {
     }
 }
 
-impl crate::Instance<Api> for Instance {
+impl crate::Instance for Instance {
+    type A = Api;
+
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
@@ -248,6 +250,7 @@ struct PrivateCapabilities {
     max_texture_layers: u64,
     max_fragment_input_components: u64,
     max_color_render_targets: u8,
+    max_color_attachment_bytes_per_sample: u8,
     max_varying_components: u32,
     max_threads_per_group: u32,
     max_total_threadgroup_memory: u32,
@@ -266,6 +269,7 @@ struct PrivateCapabilities {
     supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
     timestamp_query_support: TimestampQuerySupport,
+    supports_simd_scoped_operations: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -364,7 +368,9 @@ impl std::borrow::Borrow<Texture> for SurfaceTexture {
 unsafe impl Send for SurfaceTexture {}
 unsafe impl Sync for SurfaceTexture {}
 
-impl crate::Queue<Api> for Queue {
+impl crate::Queue for Queue {
+    type A = Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],

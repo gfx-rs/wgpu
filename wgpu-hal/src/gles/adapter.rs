@@ -4,6 +4,7 @@ use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
+use crate::gles::ShaderClearProgram;
 
 // https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
 
@@ -103,7 +104,7 @@ impl super::Adapter {
         }
     }
 
-    fn make_info(vendor_orig: String, renderer_orig: String) -> wgt::AdapterInfo {
+    fn make_info(vendor_orig: String, renderer_orig: String, version: String) -> wgt::AdapterInfo {
         let vendor = vendor_orig.to_lowercase();
         let renderer = renderer_orig.to_lowercase();
 
@@ -178,13 +179,33 @@ impl super::Adapter {
             0
         };
 
+        let driver;
+        let driver_info;
+        if version.starts_with("WebGL ") || version.starts_with("OpenGL ") {
+            let es_sig = " ES";
+            match version.find(es_sig) {
+                Some(pos) => {
+                    driver = version[..pos + es_sig.len()].to_owned();
+                    driver_info = version[pos + es_sig.len() + 1..].to_owned();
+                }
+                None => {
+                    let pos = version.find(' ').unwrap();
+                    driver = version[..pos].to_owned();
+                    driver_info = version[pos + 1..].to_owned();
+                }
+            }
+        } else {
+            driver = "OpenGL".to_owned();
+            driver_info = version;
+        }
+
         wgt::AdapterInfo {
             name: renderer_orig,
             vendor: vendor_id,
             device: 0,
             device_type: inferred_device_type,
-            driver: String::new(),
-            driver_info: String::new(),
+            driver,
+            driver_info,
             backend: wgt::Backend::Gl,
         }
     }
@@ -435,7 +456,8 @@ impl super::Adapter {
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::PUSH_CONSTANTS;
+            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::DEPTH32FLOAT_STENCIL8;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
             extensions.contains("GL_EXT_texture_border_clamp")
@@ -472,6 +494,7 @@ impl super::Adapter {
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
+            features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES, true);
         }
         let gl_bcn_exts = [
@@ -652,6 +675,15 @@ impl super::Adapter {
             0
         };
 
+        let max_color_attachments = unsafe {
+            gl.get_parameter_i32(glow::MAX_COLOR_ATTACHMENTS)
+                .min(gl.get_parameter_i32(glow::MAX_DRAW_BUFFERS))
+                .min(crate::MAX_COLOR_ATTACHMENTS as i32) as u32
+        };
+
+        // TODO: programmatically determine this.
+        let max_color_attachment_bytes_per_sample = 32;
+
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
@@ -716,12 +748,26 @@ impl super::Adapter {
             } else {
                 !0
             },
+            min_subgroup_size: 0,
+            max_subgroup_size: 0,
             max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
-            max_inter_stage_shader_components: unsafe {
-                gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS)
-            } as u32,
+            max_inter_stage_shader_components: {
+                // MAX_VARYING_COMPONENTS may return 0, because it is deprecated since OpenGL 3.2 core,
+                // and an OpenGL Context with the core profile and with forward-compatibility=true,
+                // will make deprecated constants unavailable.
+                let max_varying_components =
+                    unsafe { gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS) } as u32;
+                if max_varying_components == 0 {
+                    // default value for max_inter_stage_shader_components
+                    60
+                } else {
+                    max_varying_components
+                }
+            },
+            max_color_attachments,
+            max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: if supports_work_group_params {
                 (unsafe { gl.get_parameter_i32(glow::MAX_COMPUTE_SHARED_MEMORY_SIZE) } as u32)
             } else {
@@ -779,6 +825,7 @@ impl super::Adapter {
         }
 
         let downlevel_defaults = wgt::DownlevelLimits {};
+        let max_samples = unsafe { gl.get_parameter_i32(glow::MAX_SAMPLES) };
 
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
@@ -797,9 +844,10 @@ impl super::Adapter {
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
                     es: es_ver.is_some(),
+                    max_msaa_samples: max_samples,
                 }),
             },
-            info: Self::make_info(vendor, renderer),
+            info: Self::make_info(vendor, renderer, version),
             features,
             capabilities: crate::Capabilities {
                 limits,
@@ -825,7 +873,14 @@ impl super::Adapter {
         let source = if es {
             format!("#version 300 es\nprecision lowp float;\n{source}")
         } else {
-            format!("#version 130\n{source}")
+            let version = gl.version();
+            if version.major == 3 && version.minor == 0 {
+                // OpenGL 3.0 only supports this format
+                format!("#version 130\n{source}")
+            } else {
+                // OpenGL 3.1+ support this format
+                format!("#version 140\n{source}")
+            }
         };
         let shader = unsafe { gl.create_shader(shader_type) }.expect("Could not create shader");
         unsafe { gl.shader_source(shader, &source) };
@@ -846,7 +901,7 @@ impl super::Adapter {
     unsafe fn create_shader_clear_program(
         gl: &glow::Context,
         es: bool,
-    ) -> Option<(glow::Program, glow::UniformLocation)> {
+    ) -> Option<ShaderClearProgram> {
         let program = unsafe { gl.create_program() }.expect("Could not create shader program");
         let vertex = unsafe {
             Self::compile_shader(
@@ -882,11 +937,16 @@ impl super::Adapter {
         unsafe { gl.delete_shader(vertex) };
         unsafe { gl.delete_shader(fragment) };
 
-        Some((program, color_uniform_location))
+        Some(ShaderClearProgram {
+            program,
+            color_uniform_location,
+        })
     }
 }
 
-impl crate::Adapter<super::Api> for super::Adapter {
+impl crate::Adapter for super::Adapter {
+    type A = super::Api;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -908,9 +968,18 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // Compile the shader program we use for doing manual clears to work around Mesa fastclear
         // bug.
 
-        let (shader_clear_program, shader_clear_program_color_uniform_location) = unsafe {
-            Self::create_shader_clear_program(gl, self.shared.es)
-                .ok_or(crate::DeviceError::ResourceCreationFailed)?
+        let shader_clear_program = if self
+            .shared
+            .workarounds
+            .contains(super::Workarounds::MESA_I915_SRGB_SHADER_CLEAR)
+        {
+            Some(unsafe {
+                Self::create_shader_clear_program(gl, self.shared.es)
+                    .ok_or(crate::DeviceError::ResourceCreationFailed)?
+            })
+        } else {
+            // If we don't need the workaround, don't waste time and resources compiling the clear program
+            None
         };
 
         Ok(crate::OpenDevice {
@@ -928,7 +997,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 copy_fbo: unsafe { gl.create_framebuffer() }
                     .map_err(|_| crate::DeviceError::OutOfMemory)?,
                 shader_clear_program,
-                shader_clear_program_color_uniform_location,
                 zero_buffer,
                 temp_query_results: Mutex::new(Vec::new()),
                 draw_buffer_count: AtomicU8::new(1),
@@ -945,12 +1013,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use wgt::TextureFormat as Tf;
 
         let sample_count = {
-            let max_samples = unsafe {
-                self.shared
-                    .context
-                    .lock()
-                    .get_parameter_i32(glow::MAX_SAMPLES)
-            };
+            let max_samples = self.shared.max_msaa_samples;
             if max_samples >= 16 {
                 Tfc::MULTISAMPLE_X2
                     | Tfc::MULTISAMPLE_X4

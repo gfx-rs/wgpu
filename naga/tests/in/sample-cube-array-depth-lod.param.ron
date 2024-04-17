@@ -1,0 +1,11 @@
+(
+	glsl: (
+        writer_flags: ("TEXTURE_SHADOW_LOD"),
+        version: Embedded(
+			version: 320,
+			is_webgl: false
+		),
+		binding_map: {},
+		zero_initialize_workgroup_memory: true,
+	),
+)

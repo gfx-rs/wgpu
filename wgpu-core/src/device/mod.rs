@@ -3,9 +3,9 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
-    resource::{Buffer, BufferAccessResult},
-    resource::{BufferAccessError, BufferMapOperation},
-    resource_log, Label, DOWNLEVEL_ERROR_MESSAGE,
+    resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
+    snatch::SnatchGuard,
+    Label, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -317,10 +317,10 @@ fn map_buffer<A: HalApi>(
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
+    snatch_guard: &SnatchGuard,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
-    let snatch_guard = buffer.device.snatchable_lock.read();
     let raw_buffer = buffer
-        .raw(&snatch_guard)
+        .raw(snatch_guard)
         .ok_or(BufferAccessError::Destroyed)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
@@ -374,42 +374,6 @@ fn map_buffer<A: HalApi>(
     }
 
     Ok(mapping.ptr)
-}
-
-pub(crate) struct CommandAllocator<A: HalApi> {
-    free_encoders: Vec<A::CommandEncoder>,
-}
-
-impl<A: HalApi> CommandAllocator<A> {
-    fn acquire_encoder(
-        &mut self,
-        device: &A::Device,
-        queue: &A::Queue,
-    ) -> Result<A::CommandEncoder, hal::DeviceError> {
-        match self.free_encoders.pop() {
-            Some(encoder) => Ok(encoder),
-            None => unsafe {
-                let hal_desc = hal::CommandEncoderDescriptor { label: None, queue };
-                device.create_command_encoder(&hal_desc)
-            },
-        }
-    }
-
-    fn release_encoder(&mut self, encoder: A::CommandEncoder) {
-        self.free_encoders.push(encoder);
-    }
-
-    fn dispose(self, device: &A::Device) {
-        resource_log!(
-            "CommandAllocator::dispose encoders {}",
-            self.free_encoders.len()
-        );
-        for cmd_encoder in self.free_encoders {
-            unsafe {
-                device.destroy_command_encoder(cmd_encoder);
-            }
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]

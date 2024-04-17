@@ -218,21 +218,39 @@ impl super::Device {
         use naga::back::hlsl;
 
         let stage_bit = crate::auxil::map_naga_stage(naga_stage);
-        let module = &stage.module.naga.module;
+
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &stage.module.naga.module,
+            &stage.module.naga.info,
+            stage.constants,
+        )
+        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
+
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            temp_options = layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
+        } else {
+            &layout.naga_options
+        };
+
         //TODO: reuse the writer
         let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
+        let mut writer = hlsl::Writer::new(&mut source, naga_options);
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
-                .write(module, &stage.module.naga.info)
+                .write(&module, &info)
                 .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?
         };
 
         let full_stage = format!(
             "{}_{}\0",
             naga_stage.to_hlsl_str(),
-            layout.naga_options.shader_model.to_str()
+            naga_options.shader_model.to_str()
         );
 
         let ep_index = module
@@ -323,7 +341,9 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+impl crate::Device for super::Device {
+    type A = super::Api;
+
     unsafe fn exit(mut self, _queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         self.mem_allocator = None;
@@ -663,11 +683,7 @@ impl crate::Device<super::Api> for super::Device {
             end_of_pass_timer_query: None,
         })
     }
-    unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
-        if let Some(list) = encoder.list {
-            list.close();
-        }
-    }
+    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -1064,12 +1080,7 @@ impl crate::Device<super::Api> for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: match self.dxc_container {
-                    // DXC
-                    Some(_) => hlsl::ShaderModel::V6_0,
-                    // FXC doesn't support SM 6.0
-                    None => hlsl::ShaderModel::V5_1,
-                },
+                shader_model: self.private_caps.shader_model,
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
@@ -1102,7 +1113,16 @@ impl crate::Device<super::Api> for super::Device {
         }
         let mut dynamic_buffers = Vec::new();
 
-        for (layout, entry) in desc.layout.entries.iter().zip(desc.entries.iter()) {
+        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+            let layout = desc
+                .layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (layout, entry)
+        });
+        for (layout, entry) in layout_and_entry_iter {
             match layout.ty {
                 wgt::BindingType::Buffer {
                     has_dynamic_offset: true,

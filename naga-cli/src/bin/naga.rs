@@ -62,6 +62,10 @@ struct Args {
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
 
+    /// the metal version to use, for example, 1.0, 1.1, 1.2, etc.
+    #[argh(option)]
+    metal_version: Option<MslVersionArg>,
+
     /// if the selected frontends/backends support coordinate space conversions,
     /// disable them
     #[argh(switch)]
@@ -100,6 +104,10 @@ struct Args {
     /// show version
     #[argh(switch)]
     version: bool,
+
+    /// override value, of the form "foo=N,bar=M", repeatable
+    #[argh(option, long = "override")]
+    overrides: Vec<Overrides>,
 
     /// the input and output files.
     ///
@@ -150,6 +158,13 @@ impl FromStr for ShaderModelArg {
             "50" => ShaderModel::V5_0,
             "51" => ShaderModel::V5_1,
             "60" => ShaderModel::V6_0,
+            "61" => ShaderModel::V6_1,
+            "62" => ShaderModel::V6_2,
+            "63" => ShaderModel::V6_3,
+            "64" => ShaderModel::V6_4,
+            "65" => ShaderModel::V6_5,
+            "66" => ShaderModel::V6_6,
+            "67" => ShaderModel::V6_7,
             _ => return Err(format!("Invalid value for --shader-model: {s}")),
         }))
     }
@@ -174,12 +189,58 @@ impl FromStr for GlslProfileArg {
     }
 }
 
+/// Newtype so we can implement [`FromStr`] for a Metal Language Version.
+#[derive(Clone, Debug)]
+struct MslVersionArg((u8, u8));
+
+impl FromStr for MslVersionArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut iter = s.split('.');
+
+        let check_value = |iter: &mut core::str::Split<_>| {
+            iter.next()
+                .ok_or_else(|| format!("Invalid value for --metal-version: {s}"))?
+                .parse::<u8>()
+                .map_err(|err| format!("Invalid value for --metal-version: '{s}': {err}"))
+        };
+
+        let major = check_value(&mut iter)?;
+        let minor = check_value(&mut iter)?;
+
+        Ok(Self((major, minor)))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Overrides {
+    pairs: Vec<(String, f64)>,
+}
+
+impl FromStr for Overrides {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut pairs = vec![];
+        for pair in s.split(',') {
+            let Some((name, value)) = pair.split_once('=') else {
+                return Err(format!("value needs a `=`: {pair:?}"));
+            };
+            let value = f64::from_str(value.trim()).map_err(|err| format!("{err}: {value:?}"))?;
+            pairs.push((name.trim().to_string(), value));
+        }
+        Ok(Overrides { pairs })
+    }
+}
+
 #[derive(Default)]
 struct Parameters<'a> {
     validation_flags: naga::valid::ValidationFlags,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     entry_point: Option<String>,
     keep_coordinate_space: bool,
+    overrides: naga::back::PipelineConstants,
     spv_in: naga::front::spv::Options,
     spv_out: naga::back::spv::Options<'a>,
     dot: naga::back::dot::Options,
@@ -273,7 +334,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
-
+    params.overrides = args
+        .overrides
+        .iter()
+        .flat_map(|o| &o.pairs)
+        .cloned()
+        .collect();
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
@@ -286,6 +352,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(ref model) = args.shader_model {
         params.hlsl.shader_model = model.0;
+    }
+    if let Some(ref version) = args.metal_version {
+        params.msl.lang_version = version.0;
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
 
@@ -355,6 +424,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate the IR before compaction.
     let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
+        .subgroup_stages(naga::valid::ShaderStages::all())
+        .subgroup_operations(naga::valid::SubgroupOperationSet::all())
         .validate(&module)
     {
         Ok(info) => Some(info),
@@ -535,17 +606,18 @@ fn write_output(
             let mut options = params.msl.clone();
             options.bounds_check_policies = params.bounds_check_policies;
 
+            let info = info.as_ref().ok_or(CliError(
+                "Generating metal output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let pipeline_options = msl::PipelineOptions::default();
-            let (msl, _) = msl::write_string(
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating metal output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
-                &options,
-                &pipeline_options,
-            )
-            .unwrap_pretty();
+            let (msl, _) =
+                msl::write_string(&module, &info, &options, &pipeline_options).unwrap_pretty();
             fs::write(output_path, msl)?;
         }
         "spv" => {
@@ -568,16 +640,17 @@ fn write_output(
                 None => None,
             };
 
-            let spv = spv::write_vec(
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating SPIR-V output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
-                &params.spv_out,
-                pipeline_options,
-            )
-            .unwrap_pretty();
+            let info = info.as_ref().ok_or(CliError(
+                "Generating SPIR-V output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
+            let spv =
+                spv::write_vec(&module, &info, &params.spv_out, pipeline_options).unwrap_pretty();
             let bytes = spv
                 .iter()
                 .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -604,14 +677,20 @@ fn write_output(
                 multiview: None,
             };
 
+            let info = info.as_ref().ok_or(CliError(
+                "Generating glsl output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
                 &mut buffer,
-                module,
-                info.as_ref().ok_or(CliError(
-                    "Generating glsl output requires validation to \
-                     succeed, and it failed in a previous step",
-                ))?,
+                &module,
+                &info,
                 &params.glsl,
                 &pipeline_options,
                 params.bounds_check_policies,
@@ -628,17 +707,19 @@ fn write_output(
         }
         "hlsl" => {
             use naga::back::hlsl;
+
+            let info = info.as_ref().ok_or(CliError(
+                "Generating hlsl output requires validation to \
+                 succeed, and it failed in a previous step",
+            ))?;
+
+            let (module, info) =
+                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
+                    .unwrap_pretty();
+
             let mut buffer = String::new();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-            writer
-                .write(
-                    module,
-                    info.as_ref().ok_or(CliError(
-                        "Generating hlsl output requires validation to \
-                         succeed, and it failed in a previous step",
-                    ))?,
-                )
-                .unwrap_pretty();
+            writer.write(&module, &info).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {
@@ -681,6 +762,8 @@ fn bulk_validate(args: Args, params: &Parameters) -> Result<(), Box<dyn std::err
 
         let mut validator =
             naga::valid::Validator::new(params.validation_flags, naga::valid::Capabilities::all());
+        validator.subgroup_stages(naga::valid::ShaderStages::all());
+        validator.subgroup_operations(naga::valid::SubgroupOperationSet::all());
 
         if let Err(error) = validator.validate(&module) {
             invalid.push(input_path.clone());

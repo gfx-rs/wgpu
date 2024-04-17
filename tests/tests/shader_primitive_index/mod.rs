@@ -120,6 +120,9 @@ async fn pulling_common(
             label: None,
             layout: None,
             vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: 8,
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -129,15 +132,14 @@ async fn pulling_common(
                         shader_location: 0,
                     }],
                 }],
-                entry_point: "vs_main",
-                module: &shader,
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
-                entry_point: "fs_main",
                 module: &shader,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
