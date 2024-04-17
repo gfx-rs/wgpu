@@ -72,6 +72,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                 | Ex::GlobalVariable(_)
                 | Ex::LocalVariable(_)
                 | Ex::CallResult(_)
+                | Ex::SubgroupBallotResult
                 | Ex::RayQueryProceedResult => {}
 
                 Ex::Constant(handle) => {
@@ -192,6 +193,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                 Ex::AtomicResult { ty, comparison: _ } => self.types_used.insert(ty),
                 Ex::WorkGroupUniformLoadResult { ty } => self.types_used.insert(ty),
                 Ex::ArrayLength(expr) => self.expressions_used.insert(expr),
+                Ex::SubgroupOperationResult { ty } => self.types_used.insert(ty),
                 Ex::RayQueryGetIntersection {
                     query,
                     committed: _,
@@ -223,6 +225,7 @@ impl ModuleMap {
             | Ex::GlobalVariable(_)
             | Ex::LocalVariable(_)
             | Ex::CallResult(_)
+            | Ex::SubgroupBallotResult
             | Ex::RayQueryProceedResult => {}
 
             // All overrides are retained, so their handles never change.
@@ -353,6 +356,7 @@ impl ModuleMap {
                 comparison: _,
             } => self.types.adjust(ty),
             Ex::WorkGroupUniformLoadResult { ref mut ty } => self.types.adjust(ty),
+            Ex::SubgroupOperationResult { ref mut ty } => self.types.adjust(ty),
             Ex::ArrayLength(ref mut expr) => adjust(expr),
             Ex::RayQueryGetIntersection {
                 ref mut query,

@@ -196,12 +196,31 @@ pub struct SubmissionIndex(ObjectId, Arc<crate::Data>);
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
-/// The main purpose of this struct is to resolve mapped ranges (convert sizes
-/// to end points), and to ensure that the sub-ranges don't intersect.
+/// The mapped portion of a buffer, if any, and its outstanding views.
+///
+/// This ensures that views fall within the mapped range and don't overlap, and
+/// also takes care of turning `Option<BufferSize>` sizes into actual buffer
+/// offsets.
 #[derive(Debug)]
 struct MapContext {
+    /// The overall size of the buffer.
+    ///
+    /// This is just a convenient copy of [`Buffer::size`].
     total_size: BufferAddress,
+
+    /// The range of the buffer that is mapped.
+    ///
+    /// This is `0..0` if the buffer is not mapped. This becomes non-empty when
+    /// the buffer is mapped at creation time, and when you call `map_async` on
+    /// some [`BufferSlice`] (so technically, it indicates the portion that is
+    /// *or has been requested to be* mapped.)
+    ///
+    /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
     initial_range: Range<BufferAddress>,
+
+    /// The ranges covered by all outstanding [`BufferView`]s and
+    /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
+    /// within `initial_range`.
     sub_ranges: Vec<Range<BufferAddress>>,
 }
 
@@ -214,6 +233,7 @@ impl MapContext {
         }
     }
 
+    /// Record that the buffer is no longer mapped.
     fn reset(&mut self) {
         self.initial_range = 0..0;
 
@@ -223,12 +243,22 @@ impl MapContext {
         );
     }
 
+    /// Record that the `size` bytes of the buffer at `offset` are now viewed.
+    ///
+    /// Return the byte offset within the buffer of the end of the viewed range.
+    ///
+    /// # Panics
+    ///
+    /// This panics if the given range overlaps with any existing range.
     fn add(&mut self, offset: BufferAddress, size: Option<BufferSize>) -> BufferAddress {
         let end = match size {
             Some(s) => offset + s.get(),
             None => self.initial_range.end,
         };
         assert!(self.initial_range.start <= offset && end <= self.initial_range.end);
+        // This check is essential for avoiding undefined behavior: it is the
+        // only thing that ensures that `&mut` references to the buffer's
+        // contents don't alias anything else.
         for sub in self.sub_ranges.iter() {
             assert!(
                 end <= sub.start || offset >= sub.end,
@@ -239,6 +269,14 @@ impl MapContext {
         end
     }
 
+    /// Record that the `size` bytes of the buffer at `offset` are no longer viewed.
+    ///
+    /// # Panics
+    ///
+    /// This panics if the given range does not exactly match one previously
+    /// passed to [`add`].
+    ///
+    /// [`add]`: MapContext::add
     fn remove(&mut self, offset: BufferAddress, size: Option<BufferSize>) {
         let end = match size {
             Some(s) => offset + s.get(),
@@ -260,6 +298,112 @@ impl MapContext {
 /// [`DeviceExt::create_buffer_init`](util::DeviceExt::create_buffer_init).
 ///
 /// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
+///
+/// # Mapping buffers
+///
+/// If a `Buffer` is created with the appropriate [`usage`], it can be *mapped*:
+/// you can make its contents accessible to the CPU as an ordinary `&[u8]` or
+/// `&mut [u8]` slice of bytes. Buffers created with the
+/// [`mapped_at_creation`][mac] flag set are also mapped initially.
+///
+/// Depending on the hardware, the buffer could be memory shared between CPU and
+/// GPU, so that the CPU has direct access to the same bytes the GPU will
+/// consult; or it may be ordinary CPU memory, whose contents the system must
+/// copy to/from the GPU as needed. This crate's API is designed to work the
+/// same way in either case: at any given time, a buffer is either mapped and
+/// available to the CPU, or unmapped and ready for use by the GPU, but never
+/// both. This makes it impossible for either side to observe changes by the
+/// other immediately, and any necessary transfers can be carried out when the
+/// buffer transitions from one state to the other.
+///
+/// There are two ways to map a buffer:
+///
+/// - If [`BufferDescriptor::mapped_at_creation`] is `true`, then the entire
+///   buffer is mapped when it is created. This is the easiest way to initialize
+///   a new buffer. You can set `mapped_at_creation` on any kind of buffer,
+///   regardless of its [`usage`] flags.
+///
+/// - If the buffer's [`usage`] includes the [`MAP_READ`] or [`MAP_WRITE`]
+///   flags, then you can call `buffer.slice(range).map_async(mode, callback)`
+///   to map the portion of `buffer` given by `range`. This waits for the GPU to
+///   finish using the buffer, and invokes `callback` as soon as the buffer is
+///   safe for the CPU to access.
+///
+/// Once a buffer is mapped:
+///
+/// - You can call `buffer.slice(range).get_mapped_range()` to obtain a
+///   [`BufferView`], which dereferences to a `&[u8]` that you can use to read
+///   the buffer's contents.
+///
+/// - Or, you can call `buffer.slice(range).get_mapped_range_mut()` to obtain a
+///   [`BufferViewMut`], which dereferences to a `&mut [u8]` that you can use to
+///   read and write the buffer's contents.
+///
+/// The given `range` must fall within the mapped portion of the buffer. If you
+/// attempt to access overlapping ranges, even for shared access only, these
+/// methods panic.
+///
+/// For example:
+///
+/// ```no_run
+/// # let buffer: wgpu::Buffer = todo!();
+/// let slice = buffer.slice(10..20);
+/// slice.map_async(wgpu::MapMode::Read, |result| {
+///     match result {
+///         Ok(()) => {
+///             let view = slice.get_mapped_range();
+///             // read data from `view`, which dereferences to `&[u8]`
+///         }
+///         Err(e) => {
+///             // handle mapping error
+///         }
+///     }
+/// });
+/// ```
+///
+/// This example calls `Buffer::slice` to obtain a [`BufferSlice`] referring to
+/// the second ten bytes of `buffer`. (To obtain access to the entire buffer,
+/// you could call `buffer.slice(..)`.) The code then calls `map_async` to wait
+/// for the buffer to be available, and finally calls `get_mapped_range` on the
+/// slice to actually get at the bytes.
+///
+/// If using `map_async` directly is awkward, you may find it more convenient to
+/// use [`Queue::write_buffer`] and [`util::DownloadBuffer::read_buffer`].
+/// However, those each have their own tradeoffs; the asynchronous nature of GPU
+/// execution makes it hard to avoid friction altogether.
+///
+/// While a buffer is mapped, you must not submit any commands to the GPU that
+/// access it. You may record command buffers that use the buffer, but you must
+/// not submit such command buffers.
+///
+/// When you are done using the buffer on the CPU, you must call
+/// [`Buffer::unmap`] to make it available for use by the GPU again. All
+/// [`BufferView`] and [`BufferViewMut`] views referring to the buffer must be
+/// dropped before you unmap it; otherwise, [`Buffer::unmap`] will panic.
+///
+/// ## Mapping buffers on the web
+///
+/// When compiled to WebAssembly and running in a browser content process,
+/// `wgpu` implements its API in terms of the browser's WebGPU implementation.
+/// In this context, `wgpu` is further isolated from the GPU:
+///
+/// - Depending on the browser's WebGPU implementation, mapping and unmapping
+///   buffers probably entails copies between WebAssembly linear memory and the
+///   graphics driver's buffers.
+///
+/// - All modern web browsers isolate web content in its own sandboxed process,
+///   which can only interact with the GPU via interprocess communication (IPC).
+///   Although most browsers' IPC systems use shared memory for large data
+///   transfers, there will still probably need to be copies into and out of the
+///   shared memory buffers.
+///
+/// All of these copies contribute to the cost of buffer mapping in this
+/// configuration.
+///
+/// [`usage`]: BufferDescriptor::usage
+/// [mac]: BufferDescriptor::mapped_at_creation
+/// [`MAP_READ`]: BufferUsages::MAP_READ
+/// [`MAP_WRITE`]: BufferUsages::MAP_WRITE
 #[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
@@ -273,14 +417,38 @@ pub struct Buffer {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
-/// Slice into a [`Buffer`].
+/// A slice of a [`Buffer`], to be mapped, used for vertex or index data, or the like.
 ///
-/// It can be created with [`Buffer::slice`]. To use the whole buffer, call with unbounded slice:
+/// You can create a `BufferSlice` by calling [`Buffer::slice`]:
 ///
-/// `buffer.slice(..)`
+/// ```no_run
+/// # let buffer: wgpu::Buffer = todo!();
+/// let slice = buffer.slice(10..20);
+/// ```
 ///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// an offset and size are specified as arguments to each call working with the [`Buffer`], instead.
+/// This returns a slice referring to the second ten bytes of `buffer`. To get a
+/// slice of the entire `Buffer`:
+///
+/// ```no_run
+/// # let buffer: wgpu::Buffer = todo!();
+/// let whole_buffer_slice = buffer.slice(..);
+/// ```
+///
+/// A [`BufferSlice`] is nothing more than a reference to the `Buffer` and a
+/// starting and ending position. To access the slice's contents on the CPU, you
+/// must first [map] the buffer, and then call [`BufferSlice::get_mapped_range`]
+/// or [`BufferSlice::get_mapped_range_mut`] to obtain a view of the slice's
+/// contents, which dereferences to a `&[u8]` or `&mut [u8]`.
+///
+/// You can also pass buffer slices to methods like
+/// [`RenderPass::set_vertex_buffer`] and [`RenderPass::set_index_buffer`] to
+/// indicate which data a draw call should consume.
+///
+/// The `BufferSlice` type is unique to the Rust API of `wgpu`. In the WebGPU
+/// specification, an offset and size are specified as arguments to each call
+/// working with the [`Buffer`], instead.
+///
+/// [map]: Buffer#mapping-buffers
 #[derive(Copy, Clone, Debug)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
@@ -366,9 +534,19 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// serves a similar role.
 pub struct Surface<'window> {
     context: Arc<C>,
-    _surface: Option<Box<dyn WindowHandle + 'window>>,
+
+    /// Optionally, keep the source of the handle used for the surface alive.
+    ///
+    /// This is useful for platforms where the surface is created from a window and the surface
+    /// would become invalid when the window is dropped.
+    _handle_source: Option<Box<dyn WindowHandle + 'window>>,
+
+    /// Wgpu-core surface id.
     id: ObjectId,
-    data: Box<Data>,
+
+    /// Additional surface data returned by [`DynContext::instance_create_surface`].
+    surface_data: Box<Data>,
+
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
     // It is required to set the attributes of the `SurfaceTexture` in the
     // `Surface::get_current_texture` method.
@@ -385,15 +563,15 @@ impl<'window> fmt::Debug for Surface<'window> {
         f.debug_struct("Surface")
             .field("context", &self.context)
             .field(
-                "_surface",
-                &if self._surface.is_some() {
+                "_handle_source",
+                &if self._handle_source.is_some() {
                     "Some"
                 } else {
                     "None"
                 },
             )
             .field("id", &self.id)
-            .field("data", &self.data)
+            .field("data", &self.surface_data)
             .field("config", &self.config)
             .finish()
     }
@@ -405,7 +583,8 @@ static_assertions::assert_impl_all!(Surface<'_>: Send, Sync);
 impl Drop for Surface<'_> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.surface_drop(&self.id, self.data.as_ref())
+            self.context
+                .surface_drop(&self.id, self.surface_data.as_ref())
         }
     }
 }
@@ -1468,14 +1647,10 @@ pub struct VertexState<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// in the shader.
     pub entry_point: &'a str,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
+    /// Advanced options for when this pipeline is compiled
     ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a HashMap<String, f64>,
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
@@ -1495,14 +1670,10 @@ pub struct FragmentState<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// in the shader.
     pub entry_point: &'a str,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
+    /// Advanced options for when this pipeline is compiled
     ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a HashMap<String, f64>,
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
@@ -1575,6 +1746,41 @@ pub struct ComputePassDescriptor<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePassDescriptor<'_>: Send, Sync);
 
+#[derive(Clone, Debug)]
+/// Advanced options for use when a pipeline is compiled
+///
+/// This implements `Default`, and for most users can be set to `Default::default()`
+pub struct PipelineCompilationOptions<'a> {
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: &'a HashMap<String, f64>,
+    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
+    ///
+    /// This is required by the WebGPU spec, but may have overhead which can be avoided
+    /// for cross-platform applications
+    pub zero_initialize_workgroup_memory: bool,
+}
+
+impl<'a> Default for PipelineCompilationOptions<'a> {
+    fn default() -> Self {
+        // HashMap doesn't have a const constructor, due to the use of RandomState
+        // This does introduce some synchronisation costs, but these should be minor,
+        // and might be cheaper than the alternative of getting new random state
+        static DEFAULT_CONSTANTS: std::sync::OnceLock<HashMap<String, f64>> =
+            std::sync::OnceLock::new();
+        let constants = DEFAULT_CONSTANTS.get_or_init(Default::default);
+        Self {
+            constants,
+            zero_initialize_workgroup_memory: true,
+        }
+    }
+}
+
 /// Describes a compute pipeline.
 ///
 /// For use with [`Device::create_compute_pipeline`].
@@ -1592,14 +1798,10 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// and no return value in the shader.
     pub entry_point: &'a str,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
+    /// Advanced options for when this pipeline is compiled
     ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a HashMap<String, f64>,
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
@@ -1967,6 +2169,8 @@ impl Instance {
 
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
+    /// Internally, this creates surfaces for all backends that are enabled for this instance.
+    ///
     /// See [`SurfaceTarget`] for what targets are supported.
     /// See [`Instance::create_surface_unsafe`] for surface creation with unsafe target variants.
     ///
@@ -1977,7 +2181,7 @@ impl Instance {
         target: impl Into<SurfaceTarget<'window>>,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
         // Handle origin (i.e. window) to optionally take ownership of to make the surface outlast the window.
-        let handle_origin;
+        let handle_source;
 
         let target = target.into();
         let mut surface = match target {
@@ -1987,14 +2191,14 @@ impl Instance {
                         inner: CreateSurfaceErrorKind::RawHandle(e),
                     })?,
                 );
-                handle_origin = Some(window);
+                handle_source = Some(window);
 
                 surface
             }?,
 
             #[cfg(any(webgpu, webgl))]
             SurfaceTarget::Canvas(canvas) => {
-                handle_origin = None;
+                handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
                 let obj = std::ptr::NonNull::from(value).cast();
@@ -2013,7 +2217,7 @@ impl Instance {
 
             #[cfg(any(webgpu, webgl))]
             SurfaceTarget::OffscreenCanvas(canvas) => {
-                handle_origin = None;
+                handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
                 let obj = std::ptr::NonNull::from(value).cast();
@@ -2032,12 +2236,14 @@ impl Instance {
             }
         };
 
-        surface._surface = handle_origin;
+        surface._handle_source = handle_source;
 
         Ok(surface)
     }
 
     /// Creates a new surface targeting a given window/canvas/surface/etc. using an unsafe target.
+    ///
+    /// Internally, this creates surfaces for all backends that are enabled for this instance.
     ///
     /// See [`SurfaceTargetUnsafe`] for what targets are supported.
     /// See [`Instance::create_surface`] for surface creation with safe target variants.
@@ -2053,9 +2259,9 @@ impl Instance {
 
         Ok(Surface {
             context: Arc::clone(&self.context),
-            _surface: None,
+            _handle_source: None,
             id,
-            data,
+            surface_data: data,
             config: Mutex::new(None),
         })
     }
@@ -2229,7 +2435,7 @@ impl Adapter {
             &self.id,
             self.data.as_ref(),
             &surface.id,
-            surface.data.as_ref(),
+            surface.surface_data.as_ref(),
         )
     }
 
@@ -2917,6 +3123,18 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 }
 
 /// Read only view into a mapped buffer.
+///
+/// To get a `BufferView`, first [map] the buffer, and then
+/// call `buffer.slice(range).get_mapped_range()`.
+///
+/// `BufferView` dereferences to `&[u8]`, so you can use all the usual Rust
+/// slice methods to access the buffer's contents. It also implements
+/// `AsRef<[u8]>`, if that's more convenient.
+///
+/// If you try to create overlapping views of a buffer, mutable or
+/// otherwise, `get_mapped_range` will panic.
+///
+/// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
@@ -2925,8 +3143,20 @@ pub struct BufferView<'a> {
 
 /// Write only view into mapped buffer.
 ///
+/// To get a `BufferViewMut`, first [map] the buffer, and then
+/// call `buffer.slice(range).get_mapped_range_mut()`.
+///
+/// `BufferViewMut` dereferences to `&mut [u8]`, so you can use all the usual
+/// Rust slice methods to access the buffer's contents. It also implements
+/// `AsMut<[u8]>`, if that's more convenient.
+///
 /// It is possible to read the buffer using this view, but doing so is not
 /// recommended, as it is likely to be slow.
+///
+/// If you try to create overlapping views of a buffer, mutable or
+/// otherwise, `get_mapped_range_mut` will panic.
+///
+/// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
@@ -4833,7 +5063,7 @@ impl Surface<'_> {
         DynContext::surface_get_capabilities(
             &*self.context,
             &self.id,
-            self.data.as_ref(),
+            self.surface_data.as_ref(),
             &adapter.id,
             adapter.data.as_ref(),
         )
@@ -4872,7 +5102,7 @@ impl Surface<'_> {
         DynContext::surface_configure(
             &*self.context,
             &self.id,
-            self.data.as_ref(),
+            self.surface_data.as_ref(),
             &device.id,
             device.data.as_ref(),
             config,
@@ -4891,8 +5121,11 @@ impl Surface<'_> {
     /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
     pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
-        let (texture_id, texture_data, status, detail) =
-            DynContext::surface_get_current_texture(&*self.context, &self.id, self.data.as_ref());
+        let (texture_id, texture_data, status, detail) = DynContext::surface_get_current_texture(
+            &*self.context,
+            &self.id,
+            self.surface_data.as_ref(),
+        );
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
@@ -4955,7 +5188,7 @@ impl Surface<'_> {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.surface_as_hal::<A, F, R>(
-                    self.data.downcast_ref().unwrap(),
+                    self.surface_data.downcast_ref().unwrap(),
                     hal_surface_callback,
                 )
             })

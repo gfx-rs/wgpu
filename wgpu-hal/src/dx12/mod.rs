@@ -195,6 +195,7 @@ struct PrivateCapabilities {
     heap_create_not_zeroed: bool,
     casting_fully_typed_format_supported: bool,
     suballocation_supported: bool,
+    shader_model: naga::back::hlsl::ShaderModel,
 }
 
 #[derive(Default)]

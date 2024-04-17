@@ -602,6 +602,7 @@ struct ProgramStage {
     naga_stage: naga::ShaderStage,
     shader_id: ShaderId,
     entry_point: String,
+    zero_initialize_workgroup_memory: bool,
 }
 
 #[derive(PartialEq, Eq, Hash)]

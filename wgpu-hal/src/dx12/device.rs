@@ -226,9 +226,20 @@ impl super::Device {
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
 
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            temp_options = layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
+        } else {
+            &layout.naga_options
+        };
+
         //TODO: reuse the writer
         let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
+        let mut writer = hlsl::Writer::new(&mut source, naga_options);
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
@@ -239,7 +250,7 @@ impl super::Device {
         let full_stage = format!(
             "{}_{}\0",
             naga_stage.to_hlsl_str(),
-            layout.naga_options.shader_model.to_str()
+            naga_options.shader_model.to_str()
         );
 
         let ep_index = module
@@ -1069,12 +1080,7 @@ impl crate::Device for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: match self.dxc_container {
-                    // DXC
-                    Some(_) => hlsl::ShaderModel::V6_0,
-                    // FXC doesn't support SM 6.0
-                    None => hlsl::ShaderModel::V5_1,
-                },
+                shader_model: self.private_caps.shader_model,
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,

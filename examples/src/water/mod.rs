@@ -512,7 +512,7 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &water_module,
                 entry_point: "vs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 // Layout of our vertices. This should match the structs
                 // which are uploaded to the GPU. This should also be
                 // ensured by tagging on either a `#[repr(C)]` onto a
@@ -528,7 +528,7 @@ impl crate::framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &water_module,
                 entry_point: "fs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 // Describes how the colour will be interpolated
                 // and assigned to the output attachment.
                 targets: &[Some(wgpu::ColorTargetState {
@@ -583,7 +583,7 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &terrain_module,
                 entry_point: "vs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -593,7 +593,7 @@ impl crate::framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &terrain_module,
                 entry_point: "fs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
@@ -834,18 +834,8 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         // To be fixed in <https://github.com/gfx-rs/wgpu/issues/5231>.
         .expect_fail(wgpu_test::FailureCase {
             backends: Some(wgpu::Backends::VULKAN),
-            reasons: vec![
-                wgpu_test::FailureReason::validation_error().with_message(concat!(
-                    "vkCmdEndRenderPass: ",
-                    "Hazard WRITE_AFTER_READ in subpass 0 for attachment 1 depth aspect ",
-                    "during store with storeOp VK_ATTACHMENT_STORE_OP_STORE. ",
-                    "Access info (",
-                    "usage: SYNC_LATE_FRAGMENT_TESTS_DEPTH_STENCIL_ATTACHMENT_WRITE, ",
-                    "prior_usage: SYNC_FRAGMENT_SHADER_SHADER_SAMPLED_READ, ",
-                    "read_barriers: VkPipelineStageFlags2(0), ",
-                    "command: vkCmdDraw"
-                )),
-            ],
+            reasons: vec![wgpu_test::FailureReason::validation_error()
+                .with_message(concat!("Hazard WRITE_AFTER_"))],
             behavior: wgpu_test::FailureBehavior::AssertFailure,
             ..Default::default()
         }),

@@ -158,6 +158,13 @@ impl FromStr for ShaderModelArg {
             "50" => ShaderModel::V5_0,
             "51" => ShaderModel::V5_1,
             "60" => ShaderModel::V6_0,
+            "61" => ShaderModel::V6_1,
+            "62" => ShaderModel::V6_2,
+            "63" => ShaderModel::V6_3,
+            "64" => ShaderModel::V6_4,
+            "65" => ShaderModel::V6_5,
+            "66" => ShaderModel::V6_6,
+            "67" => ShaderModel::V6_7,
             _ => return Err(format!("Invalid value for --shader-model: {s}")),
         }))
     }
@@ -417,6 +424,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate the IR before compaction.
     let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
+        .subgroup_stages(naga::valid::ShaderStages::all())
+        .subgroup_operations(naga::valid::SubgroupOperationSet::all())
         .validate(&module)
     {
         Ok(info) => Some(info),
@@ -753,6 +762,8 @@ fn bulk_validate(args: Args, params: &Parameters) -> Result<(), Box<dyn std::err
 
         let mut validator =
             naga::valid::Validator::new(params.validation_flags, naga::valid::Capabilities::all());
+        validator.subgroup_stages(naga::valid::ShaderStages::all());
+        validator.subgroup_operations(naga::valid::SubgroupOperationSet::all());
 
         if let Err(error) = validator.validate(&module) {
             invalid.push(input_path.clone());

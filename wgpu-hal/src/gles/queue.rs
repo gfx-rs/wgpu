@@ -213,12 +213,27 @@ impl super::Queue {
                 instance_count,
                 ref first_instance_location,
             } => {
-                match base_vertex {
-                    0 => {
-                        unsafe {
-                            gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
-                        };
+                let supports_full_instancing = self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
 
+                if supports_full_instancing {
+                    unsafe {
+                        gl.draw_elements_instanced_base_vertex_base_instance(
+                            topology,
+                            index_count as i32,
+                            index_type,
+                            index_offset as i32,
+                            instance_count as i32,
+                            base_vertex,
+                            first_instance,
+                        )
+                    }
+                } else {
+                    unsafe { gl.uniform_1_u32(first_instance_location.as_ref(), first_instance) };
+
+                    if base_vertex == 0 {
                         unsafe {
                             // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
                             // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
@@ -231,41 +246,17 @@ impl super::Queue {
                                 instance_count as i32,
                             )
                         }
-                    }
-                    _ => {
-                        let supports_full_instancing = self
-                            .shared
-                            .private_caps
-                            .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
-
-                        if supports_full_instancing {
-                            unsafe {
-                                gl.draw_elements_instanced_base_vertex_base_instance(
-                                    topology,
-                                    index_count as i32,
-                                    index_type,
-                                    index_offset as i32,
-                                    instance_count as i32,
-                                    base_vertex,
-                                    first_instance,
-                                )
-                            }
-                        } else {
-                            unsafe {
-                                gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
-                            };
-
-                            // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
-                            unsafe {
-                                gl.draw_elements_instanced_base_vertex(
-                                    topology,
-                                    index_count as _,
-                                    index_type,
-                                    index_offset as i32,
-                                    instance_count as i32,
-                                    base_vertex,
-                                )
-                            }
+                    } else {
+                        // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
+                        unsafe {
+                            gl.draw_elements_instanced_base_vertex(
+                                topology,
+                                index_count as _,
+                                index_type,
+                                index_offset as i32,
+                                instance_count as i32,
+                                base_vertex,
+                            )
                         }
                     }
                 }

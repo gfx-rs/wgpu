@@ -607,6 +607,11 @@ impl Global {
             let src_buffer = buffer_guard
                 .get(source)
                 .map_err(|_| TransferError::InvalidBuffer(source))?;
+
+            if src_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             cmd_buf_data
                 .trackers
                 .buffers
@@ -628,6 +633,11 @@ impl Global {
             let dst_buffer = buffer_guard
                 .get(destination)
                 .map_err(|_| TransferError::InvalidBuffer(destination))?;
+
+            if dst_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             cmd_buf_data
                 .trackers
                 .buffers
@@ -777,6 +787,10 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
+        if dst_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
             destination,
             &dst_texture.desc,
@@ -807,6 +821,11 @@ impl Global {
             let src_buffer = buffer_guard
                 .get(source.buffer)
                 .map_err(|_| TransferError::InvalidBuffer(source.buffer))?;
+
+            if src_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             tracker
                 .buffers
                 .set_single(src_buffer, hal::BufferUses::COPY_SRC)
@@ -938,6 +957,10 @@ impl Global {
             .get(source.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
+        if src_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
 
@@ -989,6 +1012,11 @@ impl Global {
             let dst_buffer = buffer_guard
                 .get(destination.buffer)
                 .map_err(|_| TransferError::InvalidBuffer(destination.buffer))?;
+
+            if dst_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             tracker
                 .buffers
                 .set_single(dst_buffer, hal::BufferUses::COPY_DST)
@@ -1116,6 +1144,13 @@ impl Global {
             .textures
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
+
+        if src_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+        if dst_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         // src and dst texture format must be copy-compatible
         // https://gpuweb.github.io/gpuweb/#copy-compatible

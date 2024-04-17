@@ -554,7 +554,7 @@ impl crate::Context for ContextWgpuCore {
                 raw_window_handle,
             } => unsafe {
                 self.0
-                    .instance_create_surface(raw_display_handle, raw_window_handle, None)?
+                    .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
             #[cfg(metal)]
@@ -578,7 +578,7 @@ impl crate::Context for ContextWgpuCore {
                 self.0
                     .instance_create_surface_from_swap_chain_panel(swap_chain_panel, None)
             },
-        };
+        }?;
 
         Ok((
             id,
@@ -631,7 +631,7 @@ impl crate::Context for ContextWgpuCore {
             id: queue_id,
             error_sink,
         };
-        ready(Ok((device_id, device, device_id.transmute(), queue)))
+        ready(Ok((device_id, device, device_id.into_queue_id(), queue)))
     }
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
@@ -1143,7 +1143,11 @@ impl crate::Context for ContextWgpuCore {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.id.into(),
                     entry_point: Some(Borrowed(desc.vertex.entry_point)),
-                    constants: Borrowed(desc.vertex.constants),
+                    constants: Borrowed(desc.vertex.compilation_options.constants),
+                    zero_initialize_workgroup_memory: desc
+                        .vertex
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1154,7 +1158,10 @@ impl crate::Context for ContextWgpuCore {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: frag.module.id.into(),
                     entry_point: Some(Borrowed(frag.entry_point)),
-                    constants: Borrowed(frag.constants),
+                    constants: Borrowed(frag.compilation_options.constants),
+                    zero_initialize_workgroup_memory: frag
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1203,7 +1210,10 @@ impl crate::Context for ContextWgpuCore {
             stage: pipe::ProgrammableStageDescriptor {
                 module: desc.module.id.into(),
                 entry_point: Some(Borrowed(desc.entry_point)),
-                constants: Borrowed(desc.constants),
+                constants: Borrowed(desc.compilation_options.constants),
+                zero_initialize_workgroup_memory: desc
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
             },
         };
 
@@ -1839,8 +1849,7 @@ impl crate::Context for ContextWgpuCore {
         if let Err(cause) = wgc::gfx_select!(
             encoder => self.0.command_encoder_run_compute_pass(*encoder, pass_data)
         ) {
-            let name =
-                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
+            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
@@ -1923,8 +1932,7 @@ impl crate::Context for ContextWgpuCore {
         if let Err(cause) =
             wgc::gfx_select!(encoder => self.0.command_encoder_run_render_pass(*encoder, pass_data))
         {
-            let name =
-                wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.transmute()));
+            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,

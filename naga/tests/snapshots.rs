@@ -269,10 +269,18 @@ fn check_targets(
     let params = input.read_parameters();
     let name = &input.file_name;
 
-    let capabilities = if params.god_mode {
-        naga::valid::Capabilities::all()
+    let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
+        (
+            naga::valid::Capabilities::all(),
+            naga::valid::ShaderStages::all(),
+            naga::valid::SubgroupOperationSet::all(),
+        )
     } else {
-        naga::valid::Capabilities::default()
+        (
+            naga::valid::Capabilities::default(),
+            naga::valid::ShaderStages::empty(),
+            naga::valid::SubgroupOperationSet::empty(),
+        )
     };
 
     #[cfg(feature = "serialize")]
@@ -285,6 +293,8 @@ fn check_targets(
     }
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .subgroup_stages(subgroup_stages)
+        .subgroup_operations(subgroup_operations)
         .validate(module)
         .unwrap_or_else(|err| {
             panic!(
@@ -308,6 +318,8 @@ fn check_targets(
         }
 
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+            .subgroup_stages(subgroup_stages)
+            .subgroup_operations(subgroup_operations)
             .validate(module)
             .unwrap_or_else(|err| {
                 panic!(
@@ -851,6 +863,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
         ),
         (
+            "subgroup-operations",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
             "overrides",
             Targets::IR
                 | Targets::ANALYSIS
@@ -886,11 +902,15 @@ fn convert_wgsl() {
         let inputs = [
             ("debug-symbol-simple", Targets::SPIRV),
             ("debug-symbol-terrain", Targets::SPIRV),
+            ("debug-symbol-large-source", Targets::SPIRV),
         ];
         for &(name, targets) in inputs.iter() {
             // WGSL shaders lives in root dir as a privileged.
             let input = Input::new(None, name, "wgsl");
             let source = input.read_source();
+
+            // crlf will make the large split output different on different platform
+            let source = source.replace('\r', "");
             match naga::front::wgsl::parse_str(&source) {
                 Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source)),
                 Err(e) => panic!(
@@ -952,6 +972,12 @@ fn convert_spv_all() {
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
     convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
+    convert_spv("spec-constants", true, Targets::IR);
+    convert_spv(
+        "subgroup-operations-s",
+        false,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
 }
 
 #[cfg(feature = "glsl-in")]

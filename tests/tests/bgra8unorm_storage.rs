@@ -96,7 +96,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             label: None,
             layout: Some(&pl),
             entry_point: "main",
-            constants: &Default::default(),
+            compilation_options: Default::default(),
             module: &module,
         });
 
