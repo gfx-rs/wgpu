@@ -2789,6 +2789,7 @@ impl<A: HalApi> Device<A> {
                 module: shader_module.raw(),
                 entry_point: final_entry_point_name.as_ref(),
                 constants: desc.stage.constants.as_ref(),
+                zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
         };
 
@@ -3204,6 +3205,7 @@ impl<A: HalApi> Device<A> {
                 module: vertex_shader_module.raw(),
                 entry_point: &vertex_entry_point_name,
                 constants: stage_desc.constants.as_ref(),
+                zero_initialize_workgroup_memory: stage_desc.zero_initialize_workgroup_memory,
             }
         };
 
@@ -3264,6 +3266,9 @@ impl<A: HalApi> Device<A> {
                     module: shader_module.raw(),
                     entry_point: &fragment_entry_point_name,
                     constants: fragment_state.stage.constants.as_ref(),
+                    zero_initialize_workgroup_memory: fragment_state
+                        .stage
+                        .zero_initialize_workgroup_memory,
                 })
             }
             None => None,

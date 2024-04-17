@@ -1143,7 +1143,11 @@ impl crate::Context for ContextWgpuCore {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.id.into(),
                     entry_point: Some(Borrowed(desc.vertex.entry_point)),
-                    constants: Borrowed(desc.vertex.constants),
+                    constants: Borrowed(desc.vertex.compilation_options.constants),
+                    zero_initialize_workgroup_memory: desc
+                        .vertex
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1154,7 +1158,10 @@ impl crate::Context for ContextWgpuCore {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: frag.module.id.into(),
                     entry_point: Some(Borrowed(frag.entry_point)),
-                    constants: Borrowed(frag.constants),
+                    constants: Borrowed(frag.compilation_options.constants),
+                    zero_initialize_workgroup_memory: frag
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1203,7 +1210,10 @@ impl crate::Context for ContextWgpuCore {
             stage: pipe::ProgrammableStageDescriptor {
                 module: desc.module.id.into(),
                 entry_point: Some(Borrowed(desc.entry_point)),
-                constants: Borrowed(desc.constants),
+                constants: Borrowed(desc.compilation_options.constants),
+                zero_initialize_workgroup_memory: desc
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
             },
         };
 

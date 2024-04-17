@@ -118,6 +118,7 @@ Bottom level categories:
   - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
 
 - Added support for pipeline-overridable constants. By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
+- Support disabling zero-initialization of workgroup local memory in compute shaders. By @DJMcNab in [#5508](https://github.com/gfx-rs/wgpu/pull/5508)
 
 #### GLES
 

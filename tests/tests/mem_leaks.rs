@@ -97,7 +97,7 @@ async fn draw_test_with_reports(
                 buffers: &[],
                 module: &shader,
                 entry_point: "vs_main_builtin",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -105,7 +105,7 @@ async fn draw_test_with_reports(
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,

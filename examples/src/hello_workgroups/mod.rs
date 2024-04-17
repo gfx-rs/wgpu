@@ -110,7 +110,7 @@ async fn run() {
         layout: Some(&pipeline_layout),
         module: &shader,
         entry_point: "main",
-        constants: &Default::default(),
+        compilation_options: Default::default(),
     });
 
     //----------------------------------------------------------
