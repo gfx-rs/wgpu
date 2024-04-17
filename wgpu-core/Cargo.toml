@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.19.3"
+version = "0.19.4"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"

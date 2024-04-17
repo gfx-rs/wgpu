@@ -39,40 +39,18 @@ Bottom level categories:
 
 ## Unreleased
 
-### New features
+## v0.19.4 (2024-04-17)
 
-- Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
-    - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
-        - `abs`
-        - `acos`
-        - `acosh`
-        - `asin`
-        - `asinh`
-        - `atan`
-        - `atanh`
-        - `cos`
-        - `cosh`
-        - `round`
-        - `saturate`
-        - `sin`
-        - `sinh`
-        - `sqrt`
-        - `step`
-        - `tan`
-        - `tanh`
 ### Bug Fixes
 
-#### GLES
+#### General
 
-- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Don't depend on bind group and bind group layout entry order in backends. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Properly clean up all write_buffer/texture temporary resources. By @robtfm in [#5413](https://github.com/gfx-rs/wgpu/pull/5413).
+- Fix deadlock in certain situations when mapping buffers using `wgpu-profiler`. By @cwfitzgerald in [#5517](https://github.com/gfx-rs/wgpu/pull/5517)
 
-#### Metal
-
-- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
-
-#### DX12
-
-- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+#### WebGPU
+- Correctly pass through timestamp queries to WebGPU. By @cwfitzgerald in [#5527](https://github.com/gfx-rs/wgpu/pull/5527).
 
 ## v0.19.3 (2024-03-01)
 
