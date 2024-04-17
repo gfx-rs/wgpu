@@ -353,7 +353,7 @@ impl fmt::Display for CliError {
 }
 impl std::error::Error for CliError {}
 
-fn run() -> Result<(), anyhow::Error> {
+fn run() -> anyhow::Result<()> {
     env_logger::init();
 
     // Parse commandline arguments
@@ -560,7 +560,7 @@ fn parse_input(
     input_path: &Path,
     input: Vec<u8>,
     params: &Parameters,
-) -> Result<Parsed, anyhow::Error> {
+) -> anyhow::Result<Parsed> {
     let input_kind = match params.input_kind {
         Some(kind) => kind,
         None => input_path
@@ -599,7 +599,7 @@ fn parse_input(
                     let file_stem = input_path
                         .file_stem()
                         .context("Unable to determine file stem from input filename.")?;
-                    // filename.shader_stage -> shader_stage.
+                    // filename.shader_stage -> shader_stage
                     let inner_ext = Path::new(file_stem)
                         .extension()
                         .context("Unable to determine inner extension from input filename.")?
@@ -641,7 +641,7 @@ fn write_output(
     info: &Option<naga::valid::ModuleInfo>,
     params: &Parameters,
     output_path: &str,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     match Path::new(&output_path)
         .extension()
         .ok_or(CliError("Output filename has no extension"))?
