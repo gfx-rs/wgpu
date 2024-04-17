@@ -154,6 +154,7 @@ Bottom level categories:
 - Failing to set the device lost closure will call the closure before returning. By @bradwerth in [#5358](https://github.com/gfx-rs/wgpu/pull/5358).
 - Use memory pooling for UsageScopes to avoid frequent large allocations. by @robtfm in [#5414](https://github.com/gfx-rs/wgpu/pull/5414)
 - Fix deadlocks caused by recursive read-write lock acquisitions [#5426](https://github.com/gfx-rs/wgpu/pull/5426).
+- Remove exposed C symbols (`extern "C"` + [no_mangle]) from RenderPass & ComputePass recording. By @wumpf in [#5409](https://github.com/gfx-rs/wgpu/pull/5409).
 - Fix surfaces being only compatible with first backend enabled on an instance, causing failures when manually specifying an adapter. By @Wumpf in [#5535](https://github.com/gfx-rs/wgpu/pull/5535).
 
 #### Naga

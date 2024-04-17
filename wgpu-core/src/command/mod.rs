@@ -9,7 +9,6 @@ mod query;
 mod render;
 mod transfer;
 
-use std::slice;
 use std::sync::Arc;
 
 pub(crate) use self::clear::clear_texture;
@@ -757,16 +756,15 @@ impl BindGroupStateChange {
         }
     }
 
-    unsafe fn set_and_check_redundant(
+    fn set_and_check_redundant(
         &mut self,
         bind_group_id: id::BindGroupId,
         index: u32,
         dynamic_offsets: &mut Vec<u32>,
-        offsets: *const wgt::DynamicOffset,
-        offset_length: usize,
+        offsets: &[wgt::DynamicOffset],
     ) -> bool {
         // For now never deduplicate bind groups with dynamic offsets.
-        if offset_length == 0 {
+        if offsets.is_empty() {
             // If this get returns None, that means we're well over the limit,
             // so let the call through to get a proper error
             if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
@@ -782,8 +780,7 @@ impl BindGroupStateChange {
             if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
                 current_bind_group.reset();
             }
-            dynamic_offsets
-                .extend_from_slice(unsafe { slice::from_raw_parts(offsets, offset_length) });
+            dynamic_offsets.extend_from_slice(offsets);
         }
         false
     }
