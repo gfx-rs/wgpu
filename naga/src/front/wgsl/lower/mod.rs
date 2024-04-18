@@ -2054,6 +2054,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 } else if let Some(fun) = Texture::map(function.name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?
+                } else if let Some(fun) = crate::AtomicFunction::map(function.name) {
+                    return Ok(Some(self.atomic_helper(span, fun, arguments, ctx)?));
                 } else {
                     match function.name {
                         "select" => {
@@ -2098,15 +2100,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             rctx.block
                                 .push(crate::Statement::Store { pointer, value }, span);
                             return Ok(None);
-                        }
-                        "atomicAdd" | "atomicSub" | "atomicAnd" | "atomicOr" | "atomicXor"
-                        | "atomicMax" | "atomicMin" | "atomicExchange" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                to_atomic(function.name),
-                                arguments,
-                                ctx,
-                            )?))
                         }
                         "atomicCompareExchangeWeak" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
@@ -2823,16 +2816,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     }
 }
 
-fn to_atomic(name: &str) -> crate::AtomicFunction {
-    match name {
-        "atomicAdd" => crate::AtomicFunction::Add,
-        "atomicSub" => crate::AtomicFunction::Subtract,
-        "atomicAnd" => crate::AtomicFunction::And,
-        "atomicOr" => crate::AtomicFunction::InclusiveOr,
-        "atomicXor" => crate::AtomicFunction::ExclusiveOr,
-        "atomicMin" => crate::AtomicFunction::Min,
-        "atomicMax" => crate::AtomicFunction::Max,
-        "atomicExchange" => crate::AtomicFunction::Exchange { compare: None },
-        _ => unreachable!(),
+impl crate::AtomicFunction {
+    pub fn map(word: &str) -> Option<Self> {
+        Some(match word {
+            "atomicAdd" => crate::AtomicFunction::Add,
+            "atomicSub" => crate::AtomicFunction::Subtract,
+            "atomicAnd" => crate::AtomicFunction::And,
+            "atomicOr" => crate::AtomicFunction::InclusiveOr,
+            "atomicXor" => crate::AtomicFunction::ExclusiveOr,
+            "atomicMin" => crate::AtomicFunction::Min,
+            "atomicMax" => crate::AtomicFunction::Max,
+            "atomicExchange" => crate::AtomicFunction::Exchange { compare: None },
+            _ => return None,
+        })
     }
 }
