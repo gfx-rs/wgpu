@@ -507,6 +507,8 @@ impl crate::Instance for Instance {
                 .supported_extensions()
                 .contains("GL_ARB_framebuffer_sRGB");
 
+        // In contrast to OpenGL ES, OpenGL requires explicitly enabling sRGB conversions,
+        // as otherwise the user has to do the sRGB conversion.
         if srgb_capable {
             unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
         }

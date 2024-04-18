@@ -101,6 +101,9 @@ pub struct PhysicalDeviceFeatures {
     /// to Vulkan 1.3.
     zero_initialize_workgroup_memory:
         Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
+
+    /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
+    subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -146,6 +149,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.ray_query {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.subgroup_size_control {
             info = info.push_next(feature);
         }
         info
@@ -434,6 +440,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            subgroup_size_control: if device_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&vk::ExtSubgroupSizeControlFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceSubgroupSizeControlFeatures::builder()
+                        .subgroup_size_control(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -638,6 +655,34 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        if let Some(ref subgroup) = caps.subgroup {
+            if (caps.device_api_version >= vk::API_VERSION_1_3
+                || caps.supports_extension(vk::ExtSubgroupSizeControlFn::name()))
+                && subgroup.supported_operations.contains(
+                    vk::SubgroupFeatureFlags::BASIC
+                        | vk::SubgroupFeatureFlags::VOTE
+                        | vk::SubgroupFeatureFlags::ARITHMETIC
+                        | vk::SubgroupFeatureFlags::BALLOT
+                        | vk::SubgroupFeatureFlags::SHUFFLE
+                        | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE,
+                )
+            {
+                features.set(
+                    F::SUBGROUP,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT),
+                );
+                features.set(
+                    F::SUBGROUP_VERTEX,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::VERTEX),
+                );
+                features.insert(F::SUBGROUP_BARRIER);
+            }
+        }
+
         let supports_depth_format = |format| {
             supports_format(
                 instance,
@@ -773,6 +818,13 @@ pub struct PhysicalDeviceProperties {
     /// `VK_KHR_driver_properties` extension, promoted to Vulkan 1.2.
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
 
+    /// Additional `vk::PhysicalDevice` properties from Vulkan 1.1.
+    subgroup: Option<vk::PhysicalDeviceSubgroupProperties>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_subgroup_size_control` extension, promoted to Vulkan 1.3.
+    subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlProperties>,
+
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -888,6 +940,11 @@ impl PhysicalDeviceProperties {
             if self.supports_extension(vk::ExtImageRobustnessFn::name()) {
                 extensions.push(vk::ExtImageRobustnessFn::name());
             }
+
+            // Require `VK_EXT_subgroup_size_control` if the associated feature was requested
+            if requested_features.contains(wgt::Features::SUBGROUP) {
+                extensions.push(vk::ExtSubgroupSizeControlFn::name());
+            }
         }
 
         // Optional `VK_KHR_swapchain_mutable_format`
@@ -987,6 +1044,14 @@ impl PhysicalDeviceProperties {
                 .min(crate::MAX_VERTEX_BUFFERS as u32),
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
+            min_subgroup_size: self
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.min_subgroup_size)
+                .unwrap_or(0),
+            max_subgroup_size: self
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.max_subgroup_size)
+                .unwrap_or(0),
             max_push_constant_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
@@ -1042,6 +1107,9 @@ impl super::InstanceShared {
                 let supports_driver_properties = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
+                let supports_subgroup_size_control = capabilities.device_api_version
+                    >= vk::API_VERSION_1_3
+                    || capabilities.supports_extension(vk::ExtSubgroupSizeControlFn::name());
 
                 let supports_acceleration_structure =
                     capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
@@ -1072,6 +1140,20 @@ impl super::InstanceShared {
                     let next = capabilities
                         .driver
                         .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
+                    builder = builder.push_next(next);
+                }
+
+                if capabilities.device_api_version >= vk::API_VERSION_1_1 {
+                    let next = capabilities
+                        .subgroup
+                        .insert(vk::PhysicalDeviceSubgroupProperties::default());
+                    builder = builder.push_next(next);
+                }
+
+                if supports_subgroup_size_control {
+                    let next = capabilities
+                        .subgroup_size_control
+                        .insert(vk::PhysicalDeviceSubgroupSizeControlProperties::default());
                     builder = builder.push_next(next);
                 }
 
@@ -1187,6 +1269,16 @@ impl super::InstanceShared {
                 let next = features
                     .zero_initialize_workgroup_memory
                     .insert(vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::default());
+                builder = builder.push_next(next);
+            }
+
+            // `VK_EXT_subgroup_size_control` is promoted to 1.3
+            if capabilities.device_api_version >= vk::API_VERSION_1_3
+                || capabilities.supports_extension(vk::ExtSubgroupSizeControlFn::name())
+            {
+                let next = features
+                    .subgroup_size_control
+                    .insert(vk::PhysicalDeviceSubgroupSizeControlFeatures::default());
                 builder = builder.push_next(next);
             }
 
@@ -1382,6 +1474,9 @@ impl super::Instance {
                 }),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(vk::KhrImageFormatListFn::name()),
+            subgroup_size_control: phd_features
+                .subgroup_size_control
+                .map_or(false, |ext| ext.subgroup_size_control == vk::TRUE),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1581,6 +1676,15 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Geometry);
             }
 
+            if features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX) {
+                capabilities.push(spv::Capability::GroupNonUniform);
+                capabilities.push(spv::Capability::GroupNonUniformVote);
+                capabilities.push(spv::Capability::GroupNonUniformArithmetic);
+                capabilities.push(spv::Capability::GroupNonUniformBallot);
+                capabilities.push(spv::Capability::GroupNonUniformShuffle);
+                capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
+            }
+
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
@@ -1616,7 +1720,13 @@ impl super::Adapter {
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
             spv::Options {
-                lang_version: (1, 0),
+                lang_version: if features
+                    .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX)
+                {
+                    (1, 3)
+                } else {
+                    (1, 0)
+                },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {

@@ -54,7 +54,7 @@ log = "0.4"
 num-traits = "0.2"
 spirv = { version = "0.3", optional = true }
 thiserror = "1.0.57"
-serde = { version = "1.0.196", features = ["derive"], optional = true }
+serde = { version = "1.0.198", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }

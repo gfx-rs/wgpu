@@ -420,6 +420,8 @@ impl super::Validator {
             }
             crate::Expression::AtomicResult { .. }
             | crate::Expression::RayQueryProceedResult
+            | crate::Expression::SubgroupBallotResult
+            | crate::Expression::SubgroupOperationResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. } => (),
             crate::Expression::ArrayLength(array) => {
                 handle.check_dep(array)?;
@@ -563,6 +565,38 @@ impl super::Validator {
                     }
                     crate::RayQueryFunction::Terminate => {}
                 }
+                Ok(())
+            }
+            crate::Statement::SubgroupBallot { result, predicate } => {
+                validate_expr_opt(predicate)?;
+                validate_expr(result)?;
+                Ok(())
+            }
+            crate::Statement::SubgroupCollectiveOperation {
+                op: _,
+                collective_op: _,
+                argument,
+                result,
+            } => {
+                validate_expr(argument)?;
+                validate_expr(result)?;
+                Ok(())
+            }
+            crate::Statement::SubgroupGather {
+                mode,
+                argument,
+                result,
+            } => {
+                validate_expr(argument)?;
+                match mode {
+                    crate::GatherMode::BroadcastFirst => {}
+                    crate::GatherMode::Broadcast(index)
+                    | crate::GatherMode::Shuffle(index)
+                    | crate::GatherMode::ShuffleDown(index)
+                    | crate::GatherMode::ShuffleUp(index)
+                    | crate::GatherMode::ShuffleXor(index) => validate_expr(index)?,
+                }
+                validate_expr(result)?;
                 Ok(())
             }
             crate::Statement::Break

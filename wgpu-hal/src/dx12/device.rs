@@ -226,9 +226,20 @@ impl super::Device {
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
 
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            temp_options = layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
+        } else {
+            &layout.naga_options
+        };
+
         //TODO: reuse the writer
         let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
+        let mut writer = hlsl::Writer::new(&mut source, naga_options);
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
@@ -239,7 +250,7 @@ impl super::Device {
         let full_stage = format!(
             "{}_{}\0",
             naga_stage.to_hlsl_str(),
-            layout.naga_options.shader_model.to_str()
+            naga_options.shader_model.to_str()
         );
 
         let ep_index = module

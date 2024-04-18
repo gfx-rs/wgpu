@@ -269,6 +269,7 @@ struct PrivateCapabilities {
     supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
     timestamp_query_support: TimestampQuerySupport,
+    supports_simd_scoped_operations: bool,
 }
 
 #[derive(Clone, Debug)]

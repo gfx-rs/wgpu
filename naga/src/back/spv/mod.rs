@@ -13,6 +13,7 @@ mod layout;
 mod ray;
 mod recyclable;
 mod selection;
+mod subgroup;
 mod writer;
 
 pub use spirv::Capability;

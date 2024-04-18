@@ -58,6 +58,8 @@ pub enum Error {
     UnknownBinaryOperator(spirv::Op),
     #[error("unknown relational function {0:?}")]
     UnknownRelationalFunction(spirv::Op),
+    #[error("unsupported group operation %{0}")]
+    UnsupportedGroupOperation(spirv::Word),
     #[error("invalid parameter {0:?}")]
     InvalidParameter(spirv::Op),
     #[error("invalid operand count {1} for {0:?}")]
