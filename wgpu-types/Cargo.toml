@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "0.19.0"
+version = "0.19.2"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU types"
@@ -46,4 +46,4 @@ web-sys = { version = "0.3.69", features = [
 
 [dev-dependencies]
 serde = { version = "1", features = ["serde_derive"] }
-serde_json = "1.0.113"
+serde_json = "1.0.116"

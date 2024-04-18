@@ -118,6 +118,8 @@ Bottom level categories:
   - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
 
 - Added support for pipeline-overridable constants. By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
+- Add `SUBGROUP, SUBGROUP_VERTEX, SUBGROUP_BARRIER` features. By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
+- Support disabling zero-initialization of workgroup local memory in compute shaders. By @DJMcNab in [#5508](https://github.com/gfx-rs/wgpu/pull/5508)
 
 #### GLES
 
@@ -148,10 +150,11 @@ Bottom level categories:
 - Fix registry leaks with de-duplicated resources. By @nical in [#5244](https://github.com/gfx-rs/wgpu/pull/5244)
 - Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
 - Fix linking when targeting android. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
-- fix resource leak for buffers/textures dropped while having pending writes. By @robtfm in [#5413](https://github.com/gfx-rs/wgpu/pull/5413)
 - Failing to set the device lost closure will call the closure before returning. By @bradwerth in [#5358](https://github.com/gfx-rs/wgpu/pull/5358).
 - Use memory pooling for UsageScopes to avoid frequent large allocations. by @robtfm in [#5414](https://github.com/gfx-rs/wgpu/pull/5414)
 - Fix deadlocks caused by recursive read-write lock acquisitions [#5426](https://github.com/gfx-rs/wgpu/pull/5426).
+- Remove exposed C symbols (`extern "C"` + [no_mangle]) from RenderPass & ComputePass recording. By @wumpf in [#5409](https://github.com/gfx-rs/wgpu/pull/5409).
+- Fix surfaces being only compatible with first backend enabled on an instance, causing failures when manually specifying an adapter. By @Wumpf in [#5535](https://github.com/gfx-rs/wgpu/pull/5535).
 
 #### Naga
 - In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
@@ -170,7 +173,9 @@ Bottom level categories:
 - Fixes for being able to use an OpenGL 4.1 core context provided by macOS with wgpu. By @bes in [#5331](https://github.com/gfx-rs/wgpu/pull/5331).
 - Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
 - Fix crash when holding multiple devices on wayland/surfaceless. By @ashdnazg in [#5351](https://github.com/gfx-rs/wgpu/pull/5351).
-- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- OpenGL will now be preferred over OpenGL ES on EGL, making it consistent with WGL. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
+- Fix `first_instance` getting ignored in draw indexed when `ARB_shader_draw_parameters` feature is present and `base_vertex` is 0. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
+- Fill out `driver` and `driver_info`, with the OpenGL flavor and version, similar to Vulkan. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
 
 #### Vulkan
 
@@ -178,12 +183,24 @@ Bottom level categories:
 
 #### Metal
 
-- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
 - Metal 3.0 and 3.1 detection. By @atlv24 in [#5497](https://github.com/gfx-rs/wgpu/pull/5497)
 
 #### DX12
 
-- Don't depend on bind group and bind group layout entry order in HAL. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Shader Model 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, and 6.7 detection. By @atlv24 in [#5498](https://github.com/gfx-rs/wgpu/pull/5498)
+
+## v0.19.4 (2024-04-17)
+
+### Bug Fixes
+
+#### General
+
+- Don't depend on bind group and bind group layout entry order in backends. This caused incorrect severely incorrect command execution and, in some cases, crashes. By @ErichDonGubler in [#5421](https://github.com/gfx-rs/wgpu/pull/5421).
+- Properly clean up all write_buffer/texture temporary resources. By @robtfm in [#5413](https://github.com/gfx-rs/wgpu/pull/5413).
+- Fix deadlock in certain situations when mapping buffers using `wgpu-profiler`. By @cwfitzgerald in [#5517](https://github.com/gfx-rs/wgpu/pull/5517)
+
+#### WebGPU
+- Correctly pass through timestamp queries to WebGPU. By @cwfitzgerald in [#5527](https://github.com/gfx-rs/wgpu/pull/5527).
 
 ## v0.19.3 (2024-03-01)
 

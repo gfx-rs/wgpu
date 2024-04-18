@@ -92,7 +92,7 @@ const {
   ArrayBuffer,
   ArrayBufferPrototypeGetByteLength,
   ArrayIsArray,
-  ArrayPrototypeFilter,
+  ArrayPrototypeFindLast,
   ArrayPrototypeMap,
   ArrayPrototypePop,
   ArrayPrototypePush,
@@ -103,12 +103,9 @@ const {
   ObjectHasOwn,
   ObjectPrototypeIsPrototypeOf,
   Promise,
-  PromisePrototypeCatch,
-  PromisePrototypeThen,
   PromiseReject,
   PromiseResolve,
   SafeArrayIterator,
-  SafePromiseAll,
   SafeSet,
   SafeWeakRef,
   SetPrototypeHas,
@@ -908,7 +905,7 @@ function GPUObjectBaseMixin(name, type) {
 /**
  * @typedef ErrorScope
  * @property {string} filter
- * @property {Promise<void>[]} operations
+ * @property {GPUError[]} errors
  */
 
 /**
@@ -964,114 +961,47 @@ class InnerGPUDevice {
     ArrayPrototypePush(this.resources, new SafeWeakRef(resource));
   }
 
-  /** @param {{ type: string, value: string | null } | undefined} err */
-  pushError(err) {
-    this.pushErrorPromise(PromiseResolve(err));
-  }
-
-  /** @param {Promise<{ type: string, value: string | null } | undefined>} promise */
-  pushErrorPromise(promise) {
-    const operation = PromisePrototypeThen(promise, (err) => {
-      if (err) {
-        switch (err.type) {
-          case "lost":
-            this.isLost = true;
-            this.resolveLost(
-              createGPUDeviceLostInfo(undefined, "device was lost"),
-            );
-            break;
-          case "validation":
-            return PromiseReject(
-              new GPUValidationError(err.value ?? "validation error"),
-            );
-          case "out-of-memory":
-            return PromiseReject(new GPUOutOfMemoryError());
-          case "internal":
-            return PromiseReject(new GPUInternalError());
-        }
-      }
-    });
-
-    const validationStack = ArrayPrototypeFilter(
-      this.errorScopeStack,
-      ({ filter }) => filter == "validation",
-    );
-    const validationScope = validationStack[validationStack.length - 1];
-    const validationFilteredPromise = PromisePrototypeCatch(
-      operation,
-      (err) => {
-        if (ObjectPrototypeIsPrototypeOf(GPUValidationErrorPrototype, err)) {
-          return PromiseReject(err);
-        }
-        return PromiseResolve();
-      },
-    );
-    if (validationScope) {
-      ArrayPrototypePush(
-        validationScope.operations,
-        validationFilteredPromise,
-      );
-    } else {
-      PromisePrototypeCatch(validationFilteredPromise, (err) => {
-        this.device.dispatchEvent(
-          new GPUUncapturedErrorEvent("uncapturederror", {
-            error: err,
-          }),
-        );
-      });
+  // Ref: https://gpuweb.github.io/gpuweb/#abstract-opdef-dispatch-error
+  /** @param {{ type: string, value: string | null } | undefined} error */
+  pushError(error) {
+    if (!error) {
+      return;
     }
-    // prevent uncaptured promise rejections
-    PromisePrototypeCatch(validationFilteredPromise, (_err) => {});
 
-    const oomStack = ArrayPrototypeFilter(
-      this.errorScopeStack,
-      ({ filter }) => filter == "out-of-memory",
-    );
-    const oomScope = oomStack[oomStack.length - 1];
-    const oomFilteredPromise = PromisePrototypeCatch(operation, (err) => {
-      if (ObjectPrototypeIsPrototypeOf(GPUOutOfMemoryErrorPrototype, err)) {
-        return PromiseReject(err);
-      }
-      return PromiseResolve();
-    });
-    if (oomScope) {
-      ArrayPrototypePush(oomScope.operations, oomFilteredPromise);
-    } else {
-      PromisePrototypeCatch(oomFilteredPromise, (err) => {
-        this.device.dispatchEvent(
-          new GPUUncapturedErrorEvent("uncapturederror", {
-            error: err,
-          }),
+    let constructedError;
+    switch (error.type) {
+      case "lost":
+        this.isLost = true;
+        this.resolveLost(
+          createGPUDeviceLostInfo(undefined, "device was lost"),
         );
-      });
+        return;
+      case "validation":
+        constructedError = new GPUValidationError(error.value ?? "validation error");
+        break;
+      case "out-of-memory":
+        constructedError = new GPUOutOfMemoryError();
+        break;
+      case "internal":
+        constructedError = new GPUInternalError();
+        break;
     }
-    // prevent uncaptured promise rejections
-    PromisePrototypeCatch(oomFilteredPromise, (_err) => {});
 
-    const internalStack = ArrayPrototypeFilter(
-      this.errorScopeStack,
-      ({ filter }) => filter == "internal",
-    );
-    const internalScope = internalStack[internalStack.length - 1];
-    const internalFilteredPromise = PromisePrototypeCatch(operation, (err) => {
-      if (ObjectPrototypeIsPrototypeOf(GPUInternalErrorPrototype, err)) {
-        return PromiseReject(err);
-      }
-      return PromiseResolve();
-    });
-    if (internalScope) {
-      ArrayPrototypePush(internalScope.operations, internalFilteredPromise);
-    } else {
-      PromisePrototypeCatch(internalFilteredPromise, (err) => {
-        this.device.dispatchEvent(
-          new GPUUncapturedErrorEvent("uncapturederror", {
-            error: err,
-          }),
-        );
-      });
+    if (this.isLost) {
+      return;
     }
-    // prevent uncaptured promise rejections
-    PromisePrototypeCatch(internalFilteredPromise, (_err) => {});
+
+    const scope = ArrayPrototypeFindLast(
+      this.errorScopeStack,
+      ({ filter }) => filter === error.type,
+    );
+    if (scope) {
+      scope.errors.push(constructedError);
+    } else {
+      this.device.dispatchEvent(new GPUUncapturedErrorEvent("uncapturederror", {
+        error: constructedError,
+      }));
+    }
   }
 }
 
@@ -1856,7 +1786,7 @@ class GPUDevice extends EventTarget {
     webidl.requiredArguments(arguments.length, 1, prefix);
     filter = webidl.converters.GPUErrorFilter(filter, prefix, "Argument 1");
     const device = assertDevice(this, prefix, "this");
-    ArrayPrototypePush(device.errorScopeStack, { filter, operations: [] });
+    ArrayPrototypePush(device.errorScopeStack, { filter, errors: [] });
   }
 
   /**
@@ -1877,12 +1807,7 @@ class GPUDevice extends EventTarget {
         "OperationError",
       );
     }
-    const operations = SafePromiseAll(scope.operations);
-    return PromisePrototypeThen(
-      operations,
-      () => PromiseResolve(null),
-      (err) => PromiseResolve(err),
-    );
+    return PromiseResolve(scope.errors[0] ?? null);
   }
 
   [SymbolFor("Deno.privateCustomInspect")](inspect, inspectOptions) {
@@ -2284,19 +2209,15 @@ class GPUBuffer {
 
     this[_mapMode] = mode;
     this[_state] = "pending";
-    const promise = PromisePrototypeThen(
-      op_webgpu_buffer_get_map_async(
-        bufferRid,
-        device.rid,
-        mode,
-        offset,
-        rangeSize,
-      ),
-      ({ err }) => err,
+    const { err } = await op_webgpu_buffer_get_map_async(
+      bufferRid,
+      device.rid,
+      mode,
+      offset,
+      rangeSize,
     );
-    device.pushErrorPromise(promise);
-    const err = await promise;
     if (err) {
+      device.pushError(err);
       throw new DOMException("validation error occurred", "OperationError");
     }
     this[_state] = "mapped";

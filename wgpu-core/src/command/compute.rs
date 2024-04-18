@@ -36,6 +36,7 @@ use serde::Serialize;
 
 use thiserror::Error;
 
+use std::sync::Arc;
 use std::{fmt, mem, str};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -336,7 +337,8 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
+        let cmd_buf: Arc<CommandBuffer<A>> =
+            CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
         let device = &cmd_buf.device;
         if !device.is_valid() {
             return Err(ComputePassErrorInner::InvalidDevice(
@@ -842,33 +844,24 @@ impl Global {
     }
 }
 
-pub mod compute_ffi {
+pub mod compute_commands {
     use super::{ComputeCommand, ComputePass};
-    use crate::{id, RawString};
-    use std::{convert::TryInto, ffi, slice};
+    use crate::id;
+    use std::convert::TryInto;
     use wgt::{BufferAddress, DynamicOffset};
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `offset_length` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
+    pub fn wgpu_compute_pass_set_bind_group(
         pass: &mut ComputePass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: *const DynamicOffset,
-        offset_length: usize,
+        offsets: &[DynamicOffset],
     ) {
-        let redundant = unsafe {
-            pass.current_bind_groups.set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut pass.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            )
-        };
+        let redundant = pass.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut pass.base.dynamic_offsets,
+            offsets,
+        );
 
         if redundant {
             return;
@@ -876,13 +869,12 @@ pub mod compute_ffi {
 
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index,
-            num_dynamic_offsets: offset_length,
+            num_dynamic_offsets: offsets.len(),
             bind_group_id,
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_set_pipeline(
+    pub fn wgpu_compute_pass_set_pipeline(
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
@@ -895,47 +887,34 @@ pub mod compute_ffi {
             .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `size_bytes` bytes.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_set_push_constant(
-        pass: &mut ComputePass,
-        offset: u32,
-        size_bytes: u32,
-        data: *const u8,
-    ) {
+    pub fn wgpu_compute_pass_set_push_constant(pass: &mut ComputePass, offset: u32, data: &[u8]) {
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant offset must be aligned to 4 bytes."
         );
         assert_eq!(
-            size_bytes & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
+            data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
         );
 
         pass.base.push_constant_data.extend(
-            data_slice
-                .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
+            data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
         pass.base.commands.push(ComputeCommand::SetPushConstant {
             offset,
-            size_bytes,
+            size_bytes: data.len() as u32,
             values_offset: value_offset,
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_dispatch_workgroups(
+    pub fn wgpu_compute_pass_dispatch_workgroups(
         pass: &mut ComputePass,
         groups_x: u32,
         groups_y: u32,
@@ -946,8 +925,7 @@ pub mod compute_ffi {
             .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_dispatch_workgroups_indirect(
+    pub fn wgpu_compute_pass_dispatch_workgroups_indirect(
         pass: &mut ComputePass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -957,17 +935,8 @@ pub mod compute_ffi {
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_push_debug_group(
-        pass: &mut ComputePass,
-        label: RawString,
-        color: u32,
-    ) {
-        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
+    pub fn wgpu_compute_pass_push_debug_group(pass: &mut ComputePass, label: &str, color: u32) {
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::PushDebugGroup {
@@ -976,22 +945,12 @@ pub mod compute_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
+    pub fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_insert_debug_marker(
-        pass: &mut ComputePass,
-        label: RawString,
-        color: u32,
-    ) {
-        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
+    pub fn wgpu_compute_pass_insert_debug_marker(pass: &mut ComputePass, label: &str, color: u32) {
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::InsertDebugMarker {
@@ -1000,8 +959,7 @@ pub mod compute_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_write_timestamp(
+    pub fn wgpu_compute_pass_write_timestamp(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -1012,8 +970,7 @@ pub mod compute_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
+    pub fn wgpu_compute_pass_begin_pipeline_statistics_query(
         pass: &mut ComputePass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -1026,8 +983,7 @@ pub mod compute_ffi {
             });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
+    pub fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
         pass.base
             .commands
             .push(ComputeCommand::EndPipelineStatisticsQuery);

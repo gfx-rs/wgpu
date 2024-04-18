@@ -8,6 +8,8 @@ skip-tree = [
 ]
 skip = [
 	{ name = "hlsl-snapshots", version = "0.1.0" },
+	# Strum uses an old version
+	{ name = "heck", version = "0.4.0" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
@@ -20,6 +22,7 @@ allow = [
 	"BSD-3-Clause",
 	"CC0-1.0",
 	"ISC",
+	"MPL-2.0",
 	"MIT",
 	"MIT-0",
 	"Unicode-DFS-2016",

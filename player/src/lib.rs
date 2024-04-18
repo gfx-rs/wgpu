@@ -336,7 +336,7 @@ impl GlobalPlay for wgc::global::Global {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
                 if queued {
-                    self.queue_write_buffer::<A>(device.transmute(), id, range.start, &bin)
+                    self.queue_write_buffer::<A>(device.into_queue_id(), id, range.start, &bin)
                         .unwrap();
                 } else {
                     self.device_wait_for_buffer::<A>(device, id).unwrap();
@@ -351,23 +351,27 @@ impl GlobalPlay for wgc::global::Global {
                 size,
             } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
-                self.queue_write_texture::<A>(device.transmute(), &to, &bin, &layout, &size)
+                self.queue_write_texture::<A>(device.into_queue_id(), &to, &bin, &layout, &size)
                     .unwrap();
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                self.queue_submit::<A>(device.transmute(), &[]).unwrap();
+                self.queue_submit::<A>(device.into_queue_id(), &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    Some(comb_manager.process(device.backend()).transmute()),
+                    Some(
+                        comb_manager
+                            .process(device.backend())
+                            .into_command_encoder_id(),
+                    ),
                 );
                 if let Some(e) = error {
                     panic!("{e}");
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
-                self.queue_submit::<A>(device.transmute(), &[cmdbuf])
+                self.queue_submit::<A>(device.into_queue_id(), &[cmdbuf])
                     .unwrap();
             }
         }

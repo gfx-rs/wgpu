@@ -1,3 +1,4 @@
+mod allocator;
 mod bind;
 mod bundle;
 mod clear;
@@ -9,7 +10,6 @@ mod query;
 mod render;
 mod transfer;
 
-use std::slice;
 use std::sync::Arc;
 
 pub(crate) use self::clear::clear_texture;
@@ -17,6 +17,7 @@ pub use self::{
     bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*, query::*,
     render::*, transfer::*,
 };
+pub(crate) use allocator::CommandAllocator;
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
@@ -40,23 +41,115 @@ use crate::device::trace::Command as TraceCommand;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
+/// The current state of a [`CommandBuffer`].
 #[derive(Debug)]
 pub(crate) enum CommandEncoderStatus {
+    /// Ready to record commands. An encoder's initial state.
+    ///
+    /// Command building methods like [`command_encoder_clear_buffer`] and
+    /// [`command_encoder_run_compute_pass`] require the encoder to be in this
+    /// state.
+    ///
+    /// [`command_encoder_clear_buffer`]: Global::command_encoder_clear_buffer
+    /// [`command_encoder_run_compute_pass`]: Global::command_encoder_run_compute_pass
     Recording,
+
+    /// Command recording is complete, and the buffer is ready for submission.
+    ///
+    /// [`Global::command_encoder_finish`] transitions a
+    /// `CommandBuffer` from the `Recording` state into this state.
+    ///
+    /// [`Global::queue_submit`] drops command buffers unless they are
+    /// in this state.
     Finished,
+
+    /// An error occurred while recording a compute or render pass.
+    ///
+    /// When a `CommandEncoder` is left in this state, we have also
+    /// returned an error result from the function that encountered
+    /// the problem. Future attempts to use the encoder (that is,
+    /// calls to [`CommandBuffer::get_encoder`]) will also return
+    /// errors.
+    ///
+    /// Calling [`Global::command_encoder_finish`] in this state
+    /// discards the command buffer under construction.
     Error,
 }
 
+/// A raw [`CommandEncoder`][rce], and the raw [`CommandBuffer`][rcb]s built from it.
+///
+/// Each wgpu-core [`CommandBuffer`] owns an instance of this type, which is
+/// where the commands are actually stored.
+///
+/// This holds a `Vec` of raw [`CommandBuffer`][rcb]s, not just one. We are not
+/// always able to record commands in the order in which they must ultimately be
+/// submitted to the queue, but raw command buffers don't permit inserting new
+/// commands into the middle of a recorded stream. However, hal queue submission
+/// accepts a series of command buffers at once, so we can simply break the
+/// stream up into multiple buffers, and then reorder the buffers. See
+/// [`CommandEncoder::close_and_swap`] for a specific example of this.
+///
+/// Note that a [`CommandEncoderId`] actually refers to a [`CommandBuffer`].
+/// Methods that take a command encoder id actually look up the command buffer,
+/// and then use its encoder.
+///
+/// [rce]: wgpu_hal::Api::CommandEncoder
+/// [rcb]: wgpu_hal::Api::CommandBuffer
 pub(crate) struct CommandEncoder<A: HalApi> {
+    /// The underlying `wgpu_hal` [`CommandEncoder`].
+    ///
+    /// Successfully executed command buffers' encoders are saved in a
+    /// [`wgpu_hal::device::CommandAllocator`] for recycling.
+    ///
+    /// [`CommandEncoder`]: wgpu_hal::Api::CommandEncoder
     raw: A::CommandEncoder,
+
+    /// All the raw command buffers for our owning [`CommandBuffer`], in
+    /// submission order.
+    ///
+    /// These command buffers were all constructed with `raw`. The
+    /// [`wgpu_hal::CommandEncoder`] trait forbids these from outliving `raw`,
+    /// and requires that we provide all of these when we call
+    /// [`raw.reset_all()`][CE::ra], so the encoder and its buffers travel
+    /// together.
+    ///
+    /// [CE::ra]: wgpu_hal::CommandEncoder::reset_all
     list: Vec<A::CommandBuffer>,
+
+    /// True if `raw` is in the "recording" state.
+    ///
+    /// See the documentation for [`wgpu_hal::CommandEncoder`] for
+    /// details on the states `raw` can be in.
     is_open: bool,
+
     label: Option<String>,
 }
 
 //TODO: handle errors better
 impl<A: HalApi> CommandEncoder<A> {
-    /// Closes the live encoder
+    /// Finish the current command buffer, if any, and place it
+    /// at the second-to-last position in our list.
+    ///
+    /// If we have opened this command encoder, finish its current
+    /// command buffer, and insert it just before the last element in
+    /// [`self.list`][l]. If this command buffer is closed, do nothing.
+    ///
+    /// On return, the underlying hal encoder is closed.
+    ///
+    /// What is this for?
+    ///
+    /// The `wgpu_hal` contract requires that each render or compute pass's
+    /// commands be preceded by calls to [`transition_buffers`] and
+    /// [`transition_textures`], to put the resources the pass operates on in
+    /// the appropriate state. Unfortunately, we don't know which transitions
+    /// are needed until we're done recording the pass itself. Rather than
+    /// iterating over the pass twice, we note the necessary transitions as we
+    /// record its commands, finish the raw command buffer for the actual pass,
+    /// record a new raw command buffer for the transitions, and jam that buffer
+    /// in just before the pass's. This is the function that jams in the
+    /// transitions' command buffer.
+    ///
+    /// [l]: CommandEncoder::list
     fn close_and_swap(&mut self) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
@@ -67,6 +160,16 @@ impl<A: HalApi> CommandEncoder<A> {
         Ok(())
     }
 
+    /// Finish the current command buffer, if any, and add it to the
+    /// end of [`self.list`][l].
+    ///
+    /// If we have opened this command encoder, finish its current
+    /// command buffer, and push it onto the end of [`self.list`][l].
+    /// If this command buffer is closed, do nothing.
+    ///
+    /// On return, the underlying hal encoder is closed.
+    ///
+    /// [l]: CommandEncoder::list
     fn close(&mut self) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
@@ -77,6 +180,9 @@ impl<A: HalApi> CommandEncoder<A> {
         Ok(())
     }
 
+    /// Discard the command buffer under construction, if any.
+    ///
+    /// The underlying hal encoder is closed, if it was recording.
     pub(crate) fn discard(&mut self) {
         if self.is_open {
             self.is_open = false;
@@ -84,6 +190,9 @@ impl<A: HalApi> CommandEncoder<A> {
         }
     }
 
+    /// Begin recording a new command buffer, if we haven't already.
+    ///
+    /// The underlying hal encoder is put in the "recording" state.
     pub(crate) fn open(&mut self) -> Result<&mut A::CommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
@@ -94,6 +203,10 @@ impl<A: HalApi> CommandEncoder<A> {
         Ok(&mut self.raw)
     }
 
+    /// Begin recording a new command buffer for a render pass, with
+    /// its own label.
+    ///
+    /// The underlying hal encoder is put in the "recording" state.
     fn open_pass(&mut self, label: Option<&str>) -> Result<(), DeviceError> {
         self.is_open = true;
         unsafe { self.raw.begin_encoding(label)? };
@@ -102,7 +215,7 @@ impl<A: HalApi> CommandEncoder<A> {
     }
 }
 
-pub struct BakedCommands<A: HalApi> {
+pub(crate) struct BakedCommands<A: HalApi> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: Tracker<A>,
@@ -113,12 +226,27 @@ pub struct BakedCommands<A: HalApi> {
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
+/// The mutable state of a [`CommandBuffer`].
 pub struct CommandBufferMutable<A: HalApi> {
+    /// The [`wgpu_hal::Api::CommandBuffer`]s we've built so far, and the encoder
+    /// they belong to.
     pub(crate) encoder: CommandEncoder<A>,
+
+    /// The current state of this command buffer's encoder.
     status: CommandEncoderStatus,
+
+    /// All the resources that the commands recorded so far have referred to.
     pub(crate) trackers: Tracker<A>,
+
+    /// The regions of buffers and textures these commands will read and write.
+    ///
+    /// This is used to determine which portions of which
+    /// buffers/textures we actually need to initialize. If we're
+    /// definitely going to write to something before we read from it,
+    /// we don't need to clear its contents.
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
+
     pub(crate) pending_query_resets: QueryResetMap<A>,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
@@ -135,11 +263,36 @@ impl<A: HalApi> CommandBufferMutable<A> {
     }
 }
 
+/// A buffer of commands to be submitted to the GPU for execution.
+///
+/// Whereas the WebGPU API uses two separate types for command buffers and
+/// encoders, this type is a fusion of the two:
+///
+/// - During command recording, this holds a [`CommandEncoder`] accepting this
+///   buffer's commands. In this state, the [`CommandBuffer`] type behaves like
+///   a WebGPU `GPUCommandEncoder`.
+///
+/// - Once command recording is finished by calling
+///   [`Global::command_encoder_finish`], no further recording is allowed. The
+///   internal [`CommandEncoder`] is retained solely as a storage pool for the
+///   raw command buffers. In this state, the value behaves like a WebGPU
+///   `GPUCommandBuffer`.
+///
+/// - Once a command buffer is submitted to the queue, it is removed from the id
+///   registry, and its contents are taken to construct a [`BakedCommands`],
+///   whose contents eventually become the property of the submission queue.
 pub struct CommandBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     limits: wgt::Limits,
     support_clear_texture: bool,
     pub(crate) info: ResourceInfo<CommandBuffer<A>>,
+
+    /// The mutable state of this command buffer.
+    ///
+    /// This `Option` is populated when the command buffer is first created.
+    /// When this is submitted, dropped, or destroyed, its contents are
+    /// extracted into a [`BakedCommands`] by
+    /// [`CommandBuffer::extract_baked_commands`].
     pub(crate) data: Mutex<Option<CommandBufferMutable<A>>>,
 }
 
@@ -250,12 +403,18 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
+    /// Return the [`CommandBuffer`] for `id`, for recording new commands.
+    ///
+    /// In `wgpu_core`, the [`CommandBuffer`] type serves both as encoder and
+    /// buffer, which is why this function takes an [`id::CommandEncoderId`] but
+    /// returns a [`CommandBuffer`]. The returned command buffer must be in the
+    /// "recording" state. Otherwise, an error is returned.
     fn get_encoder(
         hub: &Hub<A>,
         id: id::CommandEncoderId,
     ) -> Result<Arc<Self>, CommandEncoderError> {
         let storage = hub.command_buffers.read();
-        match storage.get(id.transmute()) {
+        match storage.get(id.into_command_buffer_id()) {
             Ok(cmd_buf) => match cmd_buf.data.lock().as_ref().unwrap().status {
                 CommandEncoderStatus::Recording => Ok(cmd_buf.clone()),
                 CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
@@ -288,11 +447,9 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn from_arc_into_baked(self: Arc<Self>) -> BakedCommands<A> {
-        if let Some(mut command_buffer) = Arc::into_inner(self) {
-            command_buffer.extract_baked_commands()
-        } else {
-            panic!("CommandBuffer cannot be destroyed because is still in use");
-        }
+        let mut command_buffer = Arc::into_inner(self)
+            .expect("CommandBuffer cannot be destroyed because is still in use");
+        command_buffer.extract_baked_commands()
     }
 }
 
@@ -420,7 +577,7 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let error = match hub.command_buffers.get(encoder_id.transmute()) {
+        let error = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => {
                 let mut cmd_buf_data = cmd_buf.data.lock();
                 let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -446,7 +603,7 @@ impl Global {
             Err(_) => Some(CommandEncoderError::Invalid),
         };
 
-        (encoder_id.transmute(), error)
+        (encoder_id.into_command_buffer_id(), error)
     }
 
     pub fn command_encoder_push_debug_group<A: HalApi>(
@@ -601,16 +758,15 @@ impl BindGroupStateChange {
         }
     }
 
-    unsafe fn set_and_check_redundant(
+    fn set_and_check_redundant(
         &mut self,
         bind_group_id: id::BindGroupId,
         index: u32,
         dynamic_offsets: &mut Vec<u32>,
-        offsets: *const wgt::DynamicOffset,
-        offset_length: usize,
+        offsets: &[wgt::DynamicOffset],
     ) -> bool {
         // For now never deduplicate bind groups with dynamic offsets.
-        if offset_length == 0 {
+        if offsets.is_empty() {
             // If this get returns None, that means we're well over the limit,
             // so let the call through to get a proper error
             if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
@@ -626,8 +782,7 @@ impl BindGroupStateChange {
             if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
                 current_bind_group.reset();
             }
-            dynamic_offsets
-                .extend_from_slice(unsafe { slice::from_raw_parts(offsets, offset_length) });
+            dynamic_offsets.extend_from_slice(offsets);
         }
         false
     }
@@ -702,7 +857,7 @@ impl PrettyError for PassErrorScope {
         // This error is not in the error chain, only notes are needed
         match *self {
             Self::Pass(id) => {
-                fmt.command_buffer_label(&id.transmute());
+                fmt.command_buffer_label(&id.into_command_buffer_id());
             }
             Self::SetBindGroup(id) => {
                 fmt.bind_group_label(&id);
