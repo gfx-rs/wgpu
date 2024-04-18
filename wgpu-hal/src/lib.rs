@@ -617,6 +617,10 @@ pub trait Queue: WasmNotSendSync {
 ///   live `CommandBuffers` built from it. All the `CommandBuffer`s
 ///   are destroyed, and their resources are freed.
 ///
+/// You may want to implement the [core::ops::Drop] trait to discard
+/// the current commands before the encoder is dropped (e.g. using
+/// [CommandEncoder::discard_encoding]).
+///
 /// # Safety
 ///
 /// - The `CommandEncoder` must be in the states described above to
@@ -651,6 +655,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// is the only safe thing to do with the encoder.
     ///
     /// This puts this `CommandEncoder` in the "closed" state.
+    ///
+    /// Implementations of this function must be idempotent, i.e.
+    /// if the function has just been called, calling it again should
+    /// not do anything.
     ///
     /// # Safety
     ///
