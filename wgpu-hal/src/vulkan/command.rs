@@ -45,6 +45,13 @@ impl super::DeviceShared {
     }
 }
 
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        use crate::CommandEncoder;
+        unsafe { self.discard_encoding() }
+    }
+}
+
 impl super::CommandEncoder {
     fn write_pass_end_timestamp_if_requested(&mut self) {
         if let Some((query_set, index)) = self.end_of_pass_timer_query.take() {
