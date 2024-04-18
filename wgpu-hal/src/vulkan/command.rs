@@ -104,8 +104,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn discard_encoding(&mut self) {
-        self.discarded.push(self.active);
-        self.active = vk::CommandBuffer::null();
+        if self.active != vk::CommandBuffer::null() {
+            self.discarded.push(self.active);
+            self.active = vk::CommandBuffer::null();
+        }
     }
 
     unsafe fn reset_all<I>(&mut self, cmd_bufs: I)
