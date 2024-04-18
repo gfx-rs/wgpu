@@ -2984,12 +2984,7 @@ impl<W: Write> Writer<W> {
                     let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                     self.start_baking_expression(result, &context.expression, &res_name)?;
                     self.named_expressions.insert(result, res_name);
-                    if let crate::AtomicFunction::Exchange { compare: Some(_) } = *fun {
-                        return Err(Error::FeatureNotImplemented(
-                            "atomic CompareExchange".to_string(),
-                        ));
-                    }
-                    let fun_str = fun.to_msl();
+                    let fun_str = fun.to_msl()?;
                     self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
                     // done
                     writeln!(self.out, ";")?;

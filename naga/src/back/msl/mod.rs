@@ -540,17 +540,19 @@ fn test_error_size() {
 }
 
 impl crate::AtomicFunction {
-    const fn to_msl(self) -> &'static str {
+    fn to_msl(self) -> Result<&'static str, Error> {
         match self {
-            Self::Add => "fetch_add",
-            Self::Subtract => "fetch_sub",
-            Self::And => "fetch_and",
-            Self::InclusiveOr => "fetch_or",
-            Self::ExclusiveOr => "fetch_xor",
-            Self::Min => "fetch_min",
-            Self::Max => "fetch_max",
-            Self::Exchange { compare: None } => "exchange",
-            Self::Exchange { compare: Some(_) } => "", //TODO
+            Self::Add => Ok("fetch_add"),
+            Self::Subtract => Ok("fetch_sub"),
+            Self::And => Ok("fetch_and"),
+            Self::InclusiveOr => Ok("fetch_or"),
+            Self::ExclusiveOr => Ok("fetch_xor"),
+            Self::Min => Ok("fetch_min"),
+            Self::Max => Ok("fetch_max"),
+            Self::Exchange { compare: None } => Ok("exchange"),
+            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
+                "atomic CompareExchange".to_string(),
+            )),
         }
     }
 }
