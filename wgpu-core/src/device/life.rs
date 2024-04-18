@@ -127,7 +127,38 @@ impl<A: HalApi> ResourceMaps<A> {
     }
 }
 
-/// Resources used by a queue submission, and work to be done once it completes.
+/// A command submitted to the GPU for execution.
+///
+/// ## Keeping resources alive while the GPU is using them
+///
+/// [`wgpu_hal`] requires that, when a command is submitted to a queue, all the
+/// resources it uses must remain alive until it has finished executing.
+///
+/// The natural way to satisfy this would be for `ActiveSubmission` to hold
+/// strong references to all the resources used by its commands. However, that
+/// would entail dropping those strong references every time a queue submission
+/// finishes, adjusting the reference counts of all the resources it used. This
+/// is usually needless work: it's rare for the active submission queue to be
+/// the final reference to an object. Usually the user is still holding on to
+/// it.
+///
+/// To avoid this, an `ActiveSubmisson` does not initially hold any strong
+/// references to its commands' resources. Instead, each resource tracks the
+/// most recent submission index at which it has been used in
+/// [`ResourceInfo::submission_index`]. When the user drops a resource, if the
+/// submission in which it was last used is still present in the device's queue,
+/// we add the resource to [`ActiveSubmission::last_resources`]. Finally, when
+/// this `ActiveSubmission` is dequeued and dropped in
+/// [`LifetimeTracker::triage_submissions`], we drop `last_resources` along with
+/// it. Thus, unless a resource is dropped by the user, it doesn't need to be
+/// touched at all when processing completed work.
+///
+/// However, it's not clear that this is effective. See [#5560].
+///
+/// [`wgpu_hal`]: hal
+/// [`CommandBuffer`]: crate::command::CommandBuffer
+/// [`PendingWrites`]: crate::device::queue::PendingWrites
+/// [#5560]: https://github.com/gfx-rs/wgpu/issues/5560
 struct ActiveSubmission<A: HalApi> {
     /// The index of the submission we track.
     ///
