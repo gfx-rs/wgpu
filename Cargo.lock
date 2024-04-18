@@ -2161,6 +2161,7 @@ dependencies = [
 name = "naga-cli"
 version = "0.19.0"
 dependencies = [
+ "anyhow",
  "argh",
  "bincode",
  "codespan-reporting",
