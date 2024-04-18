@@ -142,7 +142,7 @@ impl<A: HalApi> ResourceMaps<A> {
 /// the final reference to an object. Usually the user is still holding on to
 /// it.
 ///
-/// To avoid this, an `ActiveSubmisson` does not initially hold any strong
+/// To avoid this, an `ActiveSubmission` does not initially hold any strong
 /// references to its commands' resources. Instead, each resource tracks the
 /// most recent submission index at which it has been used in
 /// [`ResourceInfo::submission_index`]. When the user drops a resource, if the
