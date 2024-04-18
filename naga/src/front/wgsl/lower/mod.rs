@@ -2085,6 +2085,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(Some(
                         self.subgroup_gather_helper(span, mode, arguments, ctx)?,
                     ));
+                } else if let Some(fun) = crate::AtomicFunction::map(function.name) {
+                    return Ok(Some(self.atomic_helper(span, fun, arguments, ctx)?));
                 } else {
                     match function.name {
                         "select" => {
@@ -2129,70 +2131,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             rctx.block
                                 .push(crate::Statement::Store { pointer, value }, span);
                             return Ok(None);
-                        }
-                        "atomicAdd" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Add,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicSub" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Subtract,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicAnd" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::And,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicOr" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::InclusiveOr,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicXor" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::ExclusiveOr,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicMin" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Min,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicMax" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Max,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicExchange" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Exchange { compare: None },
-                                arguments,
-                                ctx,
-                            )?))
                         }
                         "atomicCompareExchangeWeak" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
@@ -3004,5 +2942,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Err(Error::InvalidRayQueryPointer(span))
             }
         }
+    }
+}
+
+impl crate::AtomicFunction {
+    pub fn map(word: &str) -> Option<Self> {
+        Some(match word {
+            "atomicAdd" => crate::AtomicFunction::Add,
+            "atomicSub" => crate::AtomicFunction::Subtract,
+            "atomicAnd" => crate::AtomicFunction::And,
+            "atomicOr" => crate::AtomicFunction::InclusiveOr,
+            "atomicXor" => crate::AtomicFunction::ExclusiveOr,
+            "atomicMin" => crate::AtomicFunction::Min,
+            "atomicMax" => crate::AtomicFunction::Max,
+            "atomicExchange" => crate::AtomicFunction::Exchange { compare: None },
+            _ => return None,
+        })
     }
 }
