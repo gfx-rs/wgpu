@@ -165,8 +165,8 @@ impl<T: Resource> Registry<T> {
         storage.insert_error(id, label);
     }
     pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
-        self.identity.free(id);
         let value = self.storage.write().remove(id);
+        self.identity.free(id);
         //Returning None is legal if it's an error ID
         value
     }
