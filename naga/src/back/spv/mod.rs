@@ -456,7 +456,7 @@ impl recyclable::Recyclable for CachedExpressions {
 
 #[derive(Eq, Hash, PartialEq)]
 enum CachedConstant {
-    Literal(crate::Literal),
+    Literal(crate::proc::HashableLiteral),
     Composite {
         ty: LookupType,
         constituent_ids: Vec<Word>,
