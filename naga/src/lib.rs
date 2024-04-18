@@ -431,6 +431,11 @@ pub enum BuiltIn {
     WorkGroupId,
     WorkGroupSize,
     NumWorkGroups,
+    // subgroup
+    NumSubgroups,
+    SubgroupId,
+    SubgroupSize,
+    SubgroupInvocationId,
 }
 
 /// Number of bytes per scalar.
@@ -1277,6 +1282,51 @@ pub enum SwizzleComponent {
     W = 3,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum GatherMode {
+    /// All gather from the active lane with the smallest index
+    BroadcastFirst,
+    /// All gather from the same lane at the index given by the expression
+    Broadcast(Handle<Expression>),
+    /// Each gathers from a different lane at the index given by the expression
+    Shuffle(Handle<Expression>),
+    /// Each gathers from their lane plus the shift given by the expression
+    ShuffleDown(Handle<Expression>),
+    /// Each gathers from their lane minus the shift given by the expression
+    ShuffleUp(Handle<Expression>),
+    /// Each gathers from their lane xored with the given by the expression
+    ShuffleXor(Handle<Expression>),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum SubgroupOperation {
+    All = 0,
+    Any = 1,
+    Add = 2,
+    Mul = 3,
+    Min = 4,
+    Max = 5,
+    And = 6,
+    Or = 7,
+    Xor = 8,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum CollectiveOperation {
+    Reduce = 0,
+    InclusiveScan = 1,
+    ExclusiveScan = 2,
+}
+
 bitflags::bitflags! {
     /// Memory barrier flags.
     #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1285,9 +1335,11 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct Barrier: u32 {
         /// Barrier affects all `AddressSpace::Storage` accesses.
-        const STORAGE = 0x1;
+        const STORAGE = 1 << 0;
         /// Barrier affects all `AddressSpace::WorkGroup` accesses.
-        const WORK_GROUP = 0x2;
+        const WORK_GROUP = 1 << 1;
+        /// Barrier synchronizes execution across all invocations within a subgroup that exectue this instruction.
+        const SUB_GROUP = 1 << 2;
     }
 }
 
@@ -1588,6 +1640,15 @@ pub enum Expression {
         query: Handle<Expression>,
         committed: bool,
     },
+    /// Result of a [`SubgroupBallot`] statement.
+    ///
+    /// [`SubgroupBallot`]: Statement::SubgroupBallot
+    SubgroupBallotResult,
+    /// Result of a [`SubgroupCollectiveOperation`] or [`SubgroupGather`] statement.
+    ///
+    /// [`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
+    /// [`SubgroupGather`]: Statement::SubgroupGather
+    SubgroupOperationResult { ty: Handle<Type> },
 }
 
 pub use block::Block;
@@ -1871,6 +1932,39 @@ pub enum Statement {
 
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
+    },
+    /// Calculate a bitmask using a boolean from each active thread in the subgroup
+    SubgroupBallot {
+        /// The [`SubgroupBallotResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupBallotResult`]: Expression::SubgroupBallotResult
+        result: Handle<Expression>,
+        /// The value from this thread to store in the ballot
+        predicate: Option<Handle<Expression>>,
+    },
+    /// Gather a value from another active thread in the subgroup
+    SubgroupGather {
+        /// Specifies which thread to gather from
+        mode: GatherMode,
+        /// The value to broadcast over
+        argument: Handle<Expression>,
+        /// The [`SubgroupOperationResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
+        result: Handle<Expression>,
+    },
+    /// Compute a collective operation across all active threads in the subgroup
+    SubgroupCollectiveOperation {
+        /// What operation to compute
+        op: SubgroupOperation,
+        /// How to combine the results
+        collective_op: CollectiveOperation,
+        /// The value to compute over
+        argument: Handle<Expression>,
+        /// The [`SubgroupOperationResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
+        result: Handle<Expression>,
     },
 }
 

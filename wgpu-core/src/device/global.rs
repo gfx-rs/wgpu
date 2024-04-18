@@ -1351,9 +1351,6 @@ impl Global {
             };
             let encoder = match device
                 .command_allocator
-                .lock()
-                .as_mut()
-                .unwrap()
                 .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
             {
                 Ok(raw) => raw,
@@ -1972,7 +1969,7 @@ impl Global {
                 };
 
                 let caps = unsafe {
-                    let suf = A::get_surface(surface);
+                    let suf = A::surface_as_hal(surface);
                     let adapter = &device.adapter;
                     match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
                         Some(caps) => caps,
@@ -2058,7 +2055,7 @@ impl Global {
                 // https://github.com/gfx-rs/wgpu/issues/4105
 
                 match unsafe {
-                    A::get_surface(surface)
+                    A::surface_as_hal(surface)
                         .unwrap()
                         .configure(device.raw(), &hal_config)
                 } {

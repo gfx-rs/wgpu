@@ -890,6 +890,30 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_INT64 = 1 << 55;
+        /// Allows compute and fragment shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP = 1 << 56;
+        /// Allows vertex shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_VERTEX = 1 << 57;
+        /// Allows shaders to use the subgroup barrier
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_BARRIER = 1 << 58;
     }
 }
 
@@ -1136,6 +1160,11 @@ pub struct Limits {
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
     /// Defaults to 65535. Higher is "better".
     pub max_compute_workgroups_per_dimension: u32,
+
+    /// Minimal number of invocations in a subgroup. Higher is "better".
+    pub min_subgroup_size: u32,
+    /// Maximal number of invocations in a subgroup. Lower is "better".
+    pub max_subgroup_size: u32,
     /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
     /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
     ///
@@ -1146,7 +1175,6 @@ pub struct Limits {
     /// - OpenGL doesn't natively support push constants, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
     pub max_push_constant_size: u32,
-
     /// Maximum number of live non-sampler bindings.
     ///
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
@@ -1187,6 +1215,8 @@ impl Default for Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
+            min_subgroup_size: 0,
+            max_subgroup_size: 0,
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
         }
@@ -1218,6 +1248,8 @@ impl Limits {
     ///     max_vertex_buffers: 8,
     ///     max_vertex_attributes: 16,
     ///     max_vertex_buffer_array_stride: 2048,
+    ///     min_subgroup_size: 0,
+    ///     max_subgroup_size: 0,
     ///     max_push_constant_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
@@ -1254,6 +1286,8 @@ impl Limits {
             max_vertex_buffers: 8,
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
+            min_subgroup_size: 0,
+            max_subgroup_size: 0,
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
@@ -1296,6 +1330,8 @@ impl Limits {
     ///     max_vertex_buffers: 8,
     ///     max_vertex_attributes: 16,
     ///     max_vertex_buffer_array_stride: 255, // +
+    ///     min_subgroup_size: 0,
+    ///     max_subgroup_size: 0,
     ///     max_push_constant_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
@@ -1326,6 +1362,8 @@ impl Limits {
             max_compute_workgroup_size_y: 0,
             max_compute_workgroup_size_z: 0,
             max_compute_workgroups_per_dimension: 0,
+            min_subgroup_size: 0,
+            max_subgroup_size: 0,
 
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
             max_inter_stage_shader_components: 31,
@@ -1418,6 +1456,10 @@ impl Limits {
         compare!(max_vertex_buffers, Less);
         compare!(max_vertex_attributes, Less);
         compare!(max_vertex_buffer_array_stride, Less);
+        if self.min_subgroup_size > 0 && self.max_subgroup_size > 0 {
+            compare!(min_subgroup_size, Greater);
+            compare!(max_subgroup_size, Less);
+        }
         compare!(max_push_constant_size, Less);
         compare!(min_uniform_buffer_offset_alignment, Greater);
         compare!(min_storage_buffer_offset_alignment, Greater);

@@ -116,7 +116,7 @@ version = "0.19.2"
 # backend: Vulkan
 ash = { version = "0.37.3", optional = true }
 gpu-alloc = { version = "0.6", optional = true }
-gpu-descriptor = { version = "0.2", optional = true }
+gpu-descriptor = { version = "0.3", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
 
 khronos-egl = { version = "6", features = ["dynamic"], optional = true }

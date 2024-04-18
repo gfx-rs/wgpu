@@ -436,6 +436,11 @@ impl ResolvedBinding {
                     Bi::WorkGroupId => "threadgroup_position_in_grid",
                     Bi::WorkGroupSize => "dispatch_threads_per_threadgroup",
                     Bi::NumWorkGroups => "threadgroups_per_grid",
+                    // subgroup
+                    Bi::NumSubgroups => "simdgroups_per_threadgroup",
+                    Bi::SubgroupId => "simdgroup_index_in_threadgroup",
+                    Bi::SubgroupSize => "threads_per_simdgroup",
+                    Bi::SubgroupInvocationId => "thread_index_in_simdgroup",
                     Bi::CullDistance | Bi::ViewIndex => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }

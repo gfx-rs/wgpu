@@ -1023,7 +1023,9 @@ impl Global {
         profiling::scope!("Surface::as_hal");
 
         let surface = self.surfaces.get(id).ok();
-        let hal_surface = surface.as_ref().and_then(|surface| A::get_surface(surface));
+        let hal_surface = surface
+            .as_ref()
+            .and_then(|surface| A::surface_as_hal(surface));
 
         hal_surface_callback(hal_surface)
     }
