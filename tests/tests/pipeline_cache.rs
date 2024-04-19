@@ -1,4 +1,4 @@
-use std::num::NonZeroU64;
+use std::{fmt::Write, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
@@ -34,10 +34,11 @@ fn shader() -> String {
         {}
         }}
         "#,
-        (0..ARRAY_SIZE)
+        (0..ARRAY_SIZE).fold(String::new(), |mut s, v| {
             // "Safety": There will only be a single workgroup, and a single thread in that workgroup
-            .map(|v| format!("    output[{v}] = {v}u;\n"))
-            .collect::<String>()
+            writeln!(s, "    output[{v}] = {v}u;").expect("String");
+            s
+        })
     )
 }
 
@@ -177,13 +178,13 @@ async fn validate_pipeline(
             timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(0, bind_group, &[]);
 
         // -- Dispatch 0 --
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, ARRAY_SIZE * 4);
+    encoder.copy_buffer_to_buffer(gpu_buffer, 0, cpu_buffer, 0, ARRAY_SIZE * 4);
     ctx.queue.submit([encoder.finish()]);
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
     ctx.async_poll(wgpu::Maintain::wait())
