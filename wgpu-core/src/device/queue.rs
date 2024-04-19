@@ -152,8 +152,11 @@ pub enum TempResource<A: HalApi> {
     Texture(Arc<Texture<A>>),
 }
 
-/// A series of [`CommandBuffers`] that have been submitted to a
+/// A series of raw [`CommandBuffer`]s that have been submitted to a
 /// queue, and the [`wgpu_hal::CommandEncoder`] that built them.
+///
+/// [`CommandBuffer`]: hal::Api::CommandBuffer
+/// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
 pub(crate) struct EncoderInFlight<A: HalApi> {
     raw: A::CommandEncoder,
     cmd_buffers: Vec<A::CommandBuffer>,
@@ -197,6 +200,8 @@ pub(crate) struct PendingWrites<A: HalApi> {
     /// True if `command_encoder` is in the "recording" state, as
     /// described in the docs for the [`wgpu_hal::CommandEncoder`]
     /// trait.
+    ///
+    /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     pub is_recording: bool,
 
     pub temp_resources: Vec<TempResource<A>>,

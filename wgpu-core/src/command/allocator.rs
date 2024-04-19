@@ -11,8 +11,9 @@ use parking_lot::Mutex;
 /// Since a raw [`CommandEncoder`][ce] is itself a pool for allocating
 /// raw [`CommandBuffer`][cb]s, this is a pool of pools.
 ///
-/// [ce]: wgpu_hal::CommandEncoder
-/// [cb]: wgpu_hal::Api::CommandBuffer
+/// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
+/// [ce]: hal::CommandEncoder
+/// [cb]: hal::Api::CommandBuffer
 pub(crate) struct CommandAllocator<A: HalApi> {
     free_encoders: Mutex<Vec<A::CommandEncoder>>,
 }
@@ -28,6 +29,8 @@ impl<A: HalApi> CommandAllocator<A> {
     ///
     /// If we have free encoders in the pool, take one of those. Otherwise,
     /// create a new one on `device`.
+    ///
+    /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     pub(crate) fn acquire_encoder(
         &self,
         device: &A::Device,

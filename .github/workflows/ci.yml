@@ -78,6 +78,7 @@ jobs:
     # runtime is normally 2-8 minutes
     #
     # currently high due to documentation time problems on mac.
+    # https://github.com/rust-lang/rust/issues/114891
     timeout-minutes: 30
 
     strategy:
@@ -229,6 +230,14 @@ jobs:
 
           # build docs
           cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
+      - name: check private item docs
+        if: matrix.kind == 'native'
+        shell: bash
+        run: |
+          set -e
+
+          # wgpu_core package
+          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps --package wgpu-core --document-private-items 
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.
