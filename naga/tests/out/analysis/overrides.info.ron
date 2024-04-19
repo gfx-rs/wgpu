@@ -16,6 +16,7 @@
             sampling_set: [],
             global_uses: [
                 ("READ"),
+                ("WRITE"),
             ],
             expressions: [
                 (
@@ -137,6 +138,27 @@
                         base: 2,
                         space: Function,
                     )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(12),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Private,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
                 ),
             ],
             sampling: [],

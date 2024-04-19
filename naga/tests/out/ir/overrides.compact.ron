@@ -73,6 +73,13 @@
             ty: 2,
             init: Some(10),
         ),
+        (
+            name: Some("store_override"),
+            space: Private,
+            binding: None,
+            ty: 2,
+            init: None,
+        ),
     ],
     global_expressions: [
         Literal(Bool(true)),
@@ -147,6 +154,8 @@
                         right: 9,
                     ),
                     LocalVariable(3),
+                    GlobalVariable(2),
+                    Override(3),
                 ],
                 named_expressions: {
                     5: "a",
@@ -175,6 +184,10 @@
                     Store(
                         pointer: 11,
                         value: 10,
+                    ),
+                    Store(
+                        pointer: 12,
+                        value: 13,
                     ),
                     Return(
                         value: None,

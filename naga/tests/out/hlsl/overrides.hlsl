@@ -7,6 +7,7 @@ static const float height = 4.6;
 static const float inferred_f32_ = 2.718;
 
 static float gain_x_10_ = 11.0;
+static float store_override = (float)0;
 
 [numthreads(1, 1, 1)]
 void main()
@@ -18,5 +19,6 @@ void main()
     x = true;
     float _expr9 = gain_x_10_;
     gain_x_100_ = (_expr9 * 10.0);
+    store_override = gain;
     return;
 }

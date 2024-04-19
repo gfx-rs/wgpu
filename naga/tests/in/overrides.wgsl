@@ -14,6 +14,7 @@
 override inferred_f32 = 2.718;
 
 var<private> gain_x_10: f32 = gain * 10.;
+var<private> store_override: f32;
 
 @compute @workgroup_size(1)
 fn main() {
@@ -22,4 +23,6 @@ fn main() {
     var x = a;
 
     var gain_x_100 = gain_x_10 * 10.;
+
+    store_override = gain;
 }
