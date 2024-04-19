@@ -73,7 +73,7 @@ index format changes.
 
 [Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
 [Grbef]: crate::global::Global::render_bundle_encoder_finish
-[wrpeb]: crate::command::render_ffi::wgpu_render_pass_execute_bundles
+[wrpeb]: crate::command::render::render_commands::wgpu_render_pass_execute_bundles
 !*/
 
 #![allow(clippy::reversed_empty_ranges)]
@@ -113,7 +113,7 @@ use hal::CommandEncoder as _;
 
 use super::ArcRenderCommand;
 
-/// https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw
+/// <https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw>
 fn validate_draw<A: HalApi>(
     vertex: &[Option<VertexState<A>>],
     step: &[VertexStep],

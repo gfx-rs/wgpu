@@ -99,9 +99,6 @@ impl<T: Resource> FutureId<'_, T> {
     /// Assign an existing resource to a new ID.
     ///
     /// Registers it with the registry.
-    ///
-    /// This _will_ leak the ID, and it will not be recycled again.
-    /// See https://github.com/gfx-rs/wgpu/issues/4912.
     pub fn assign_existing(self, value: &Arc<T>) -> Id<T::Marker> {
         let mut data = self.data.write();
         debug_assert!(!data.contains(self.id));

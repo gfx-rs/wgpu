@@ -26,9 +26,11 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
         }
     }
 
-    /// Get a resource from the pool with the given entry map, or create a new one if it doesn't exist using the given constructor.
+    /// Get a resource from the pool with the given entry map, or create a new
+    /// one if it doesn't exist using the given constructor.
     ///
-    /// Behaves such that only one resource will be created for each unique entry map at any one time.
+    /// Behaves such that only one resource will be created for each unique
+    /// entry map at any one time.
     pub fn get_or_init<F, E>(&self, key: K, constructor: F) -> Result<Arc<V>, E>
     where
         F: FnOnce(K) -> Result<Arc<V>, E>,
@@ -96,6 +98,8 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
     /// Remove the given entry map from the pool.
     ///
     /// Must *only* be called in the Drop impl of [`BindGroupLayout`].
+    ///
+    /// [`BindGroupLayout`]: crate::binding_model::BindGroupLayout
     pub fn remove(&self, key: &K) {
         let hashed_key = PreHashedKey::from_key(key);
 

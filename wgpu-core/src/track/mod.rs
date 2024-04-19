@@ -136,7 +136,8 @@ impl TrackerIndex {
 /// of a certain type. This index is separate from the resource ID for various reasons:
 /// - There can be multiple resource IDs pointing the the same resource.
 /// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
-/// - The plan is to remove IDs in the long run (https://github.com/gfx-rs/wgpu/issues/5121).
+/// - The plan is to remove IDs in the long run
+///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).
 /// In order to produce these tracker indices, there is a shared TrackerIndexAllocator
 /// per resource type. Indices have the same lifetime as the internal resource they
 /// are associated to (alloc happens when creating the resource and free is called when
@@ -639,8 +640,8 @@ impl<A: HalApi> Tracker<A> {
     ///
     /// If a transition is needed to get the resources into the needed
     /// state, those transitions are stored within the tracker. A
-    /// subsequent call to [`BufferTracker::drain`] or
-    /// [`TextureTracker::drain`] is needed to get those transitions.
+    /// subsequent call to [`BufferTracker::drain_transitions`] or
+    /// [`TextureTracker::drain_transitions`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate
