@@ -1997,19 +1997,11 @@ impl crate::context::Context for ContextWebGpu {
         create_identified(device_data.0.create_compute_pipeline(&mapped_desc))
     }
 
-    fn device_create_pipeline_cache(
+    unsafe fn device_create_pipeline_cache(
         &self,
         _: &Self::DeviceId,
         _: &Self::DeviceData,
         _: &crate::PipelineCacheDescriptor<'_>,
-    ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
-        (Unused, ())
-    }
-    unsafe fn device_create_pipeline_cache_init(
-        &self,
-        _: &Self::DeviceId,
-        _: &Self::DeviceData,
-        _: &crate::PipelineCacheInitDescriptor<'_>,
     ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
         (Unused, ())
     }
