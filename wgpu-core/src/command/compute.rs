@@ -1,7 +1,5 @@
 use crate::{
-    binding_model::{
-        BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
-    },
+    binding_model::{BindError, LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     command::{
         bind::Binder,
         compute_command::{ArcComputeCommand, ComputeCommand},
@@ -19,7 +17,6 @@ use crate::{
     init_tracker::MemoryInitKind,
     resource::{self, Resource},
     snatch::SnatchGuard,
-    storage::Storage,
     track::{Tracker, TrackerIndex, UsageConflict, UsageScope},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
@@ -250,22 +247,19 @@ impl<'a, A: HalApi> State<'a, A> {
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut Tracker<A>,
-        bind_group_guard: &Storage<BindGroup<A>>,
         indirect_buffer: Option<TrackerIndex>,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), UsageConflict> {
-        for id in self.binder.list_active() {
-            unsafe { self.scope.merge_bind_group(&bind_group_guard[id].used)? };
+        for bind_group in self.binder.list_active() {
+            unsafe { self.scope.merge_bind_group(&bind_group.used)? };
             // Note: stateless trackers are not merged: the lifetime reference
             // is held to the bind group itself.
         }
 
-        for id in self.binder.list_active() {
+        for bind_group in self.binder.list_active() {
             unsafe {
-                base_trackers.set_and_remove_from_usage_scope_sparse(
-                    &mut self.scope,
-                    &bind_group_guard[id].used,
-                )
+                base_trackers
+                    .set_and_remove_from_usage_scope_sparse(&mut self.scope, &bind_group.used)
             }
         }
 
@@ -381,7 +375,6 @@ impl Global {
         *status = CommandEncoderStatus::Error;
         let raw = encoder.open().map_pass_err(pass_scope)?;
 
-        let bind_group_guard = hub.bind_groups.read();
         let query_set_guard = hub.query_sets.read();
 
         let mut state = State {
@@ -646,13 +639,7 @@ impl Global {
                     state.is_ready().map_pass_err(scope)?;
 
                     state
-                        .flush_states(
-                            raw,
-                            &mut intermediate_trackers,
-                            &*bind_group_guard,
-                            None,
-                            &snatch_guard,
-                        )
+                        .flush_states(raw, &mut intermediate_trackers, None, &snatch_guard)
                         .map_pass_err(scope)?;
 
                     let groups_size_limit = cmd_buf.limits.max_compute_workgroups_per_dimension;
@@ -725,7 +712,6 @@ impl Global {
                         .flush_states(
                             raw,
                             &mut intermediate_trackers,
-                            &*bind_group_guard,
                             Some(buffer.as_info().tracker_index()),
                             &snatch_guard,
                         )
