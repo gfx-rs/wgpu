@@ -1296,41 +1296,6 @@ impl crate::Context for ContextWgpuCore {
         (id, ())
     }
 
-    fn device_create_pipeline_cache(
-        &self,
-        device: &Self::DeviceId,
-        // TODO: Will be used for error handling
-        device_data: &Self::DeviceData,
-        desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
-        use wgc::pipeline as pipe;
-
-        let descriptor = pipe::PipelineCacheDescriptor {
-            label: desc.label.map(Borrowed),
-            data: None,
-            // if data is `None`, fallback won't be used
-            fallback: false,
-        };
-        // Safety: data is None, so no safety concerns
-        let (id, error) = unsafe {
-            wgc::gfx_select!(device => self.0.device_create_pipeline_cache(
-                *device,
-                &descriptor,
-                None
-            ))
-        };
-        if let Some(cause) = error {
-            self.handle_error(
-                &device_data.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Device::device_create_pipeline_cache_init",
-            );
-        }
-        (id, ())
-    }
-
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,

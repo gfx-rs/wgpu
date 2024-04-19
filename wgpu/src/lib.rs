@@ -3231,13 +3231,13 @@ impl Device {
     /// # Safety
     ///
     /// The `data` field of `desc` must have previously been returned from a call
-    /// to [`PipelineCache::get_data`][^saving]. It's recommended to only `data` for the same
-    /// [`util::pipeline_cache_key`], but this isn't a safety requirement.
-    /// This is also compatible across wgpu versions, as any data format change will
+    /// to [`PipelineCache::get_data`][^saving]. This `data` will only be used if it came
+    /// from an adapter with the same [`util::pipeline_cache_key`].
+    /// This *is* compatible across wgpu versions, as any data format change will
     /// be accounted for.
     ///
-    /// Note that this means it is *not* supported to bring caches from previous
-    /// direct uses of backend APIs into this method.
+    /// It is *not* supported to bring caches from previous direct uses of backend APIs
+    /// into this method.
     ///
     /// # Errors
     ///
@@ -3271,34 +3271,6 @@ impl Device {
                 desc,
             )
         };
-        PipelineCache {
-            context: Arc::clone(&self.context),
-            id,
-            data,
-        }
-    }
-
-    /// Create a pipeline cache without initial data
-    ///
-    /// This can be passed to [`Device::create_compute_pipeline`]
-    /// and [`Device::create_render_pipeline`] to initialise its cache data
-    ///
-    /// # Errors
-    ///
-    /// Errors if:
-    ///  * the [`PIPELINE_CACHE`](wgt::Features::PIPELINE_CACHE) feature is not enabled
-    ///  * this device is invalid; or
-    ///  * the device is out of memory
-    ///
-    /// If the error handler didn't panic,and an error value is used in
-    /// subsequent calls, default (driver-provided) caching will be used.
-    pub fn create_pipeline_cache(&self, desc: &PipelineCacheDescriptor<'_>) -> PipelineCache {
-        let (id, data) = DynContext::device_create_pipeline_cache(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            desc,
-        );
         PipelineCache {
             context: Arc::clone(&self.context),
             id,

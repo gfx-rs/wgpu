@@ -1965,7 +1965,6 @@ impl crate::Device for super::Device {
         desc: &crate::PipelineCacheDescriptor<'_>,
     ) -> Result<PipelineCache, crate::PipelineCacheError> {
         let mut info = vk::PipelineCacheCreateInfo::builder();
-        // TODO: Add additional validation to the data, as described in https://medium.com/@zeuxcg/creating-a-robust-pipeline-cache-with-vulkan-961d09416cda
         if let Some(data) = desc.data {
             info = info.initial_data(data)
         }
