@@ -508,6 +508,7 @@ impl crate::Expression {
         match *self {
             Self::Literal(_)
             | Self::Constant(_)
+            | Self::Override(_)
             | Self::ZeroValue(_)
             | Self::FunctionArgument(_)
             | Self::GlobalVariable(_)
