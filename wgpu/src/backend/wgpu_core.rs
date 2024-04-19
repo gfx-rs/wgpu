@@ -2323,7 +2323,10 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::ComputePipelineData,
     ) {
         let encoder = pass_data.pass.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_set_pipeline(&mut pass_data.pass, *pipeline));
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.compute_pass_set_pipeline(&mut pass_data.pass, *pipeline))
+        {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::set_pipeline");
+        }
     }
 
     fn compute_pass_set_bind_group(
@@ -2336,7 +2339,10 @@ impl crate::Context for ContextWgpuCore {
         offsets: &[wgt::DynamicOffset],
     ) {
         let encoder = pass_data.pass.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets));
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.compute_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets))
+        {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::set_bind_group");
+        }
     }
 
     fn compute_pass_set_push_constants(
@@ -2388,7 +2394,10 @@ impl crate::Context for ContextWgpuCore {
         query_index: u32,
     ) {
         let encoder = pass_data.pass.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index));
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.compute_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index))
+        {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::write_timestamp");
+        }
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -2400,7 +2409,14 @@ impl crate::Context for ContextWgpuCore {
         query_index: u32,
     ) {
         let encoder = pass_data.pass.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_begin_pipeline_statistics_query(&mut pass_data.pass, *query_set, query_index));
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.compute_pass_begin_pipeline_statistics_query(&mut pass_data.pass, *query_set, query_index))
+        {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::begin_pipeline_statistics_query",
+            );
+        }
     }
 
     fn compute_pass_end_pipeline_statistics_query(
@@ -2433,7 +2449,14 @@ impl crate::Context for ContextWgpuCore {
         indirect_offset: wgt::BufferAddress,
     ) {
         let encoder = pass_data.pass.parent_id();
-        wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups_indirect(&mut pass_data.pass, *indirect_buffer, indirect_offset));
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.compute_pass_dispatch_workgroups_indirect(&mut pass_data.pass, *indirect_buffer, indirect_offset))
+        {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::dispatch_workgroups_indirect",
+            );
+        }
     }
 
     fn render_bundle_encoder_set_pipeline(
