@@ -4,7 +4,7 @@ use crate::{
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineCacheInitDescriptor, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
+    PipelineCacheDescriptor, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
     RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, ShaderSource, StoreOp, SurfaceStatus, SurfaceTargetUnsafe,
     TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
@@ -1265,18 +1265,18 @@ impl crate::Context for ContextWgpuCore {
         (id, ())
     }
 
-    unsafe fn device_create_pipeline_cache_init(
+    unsafe fn device_create_pipeline_cache(
         &self,
         device: &Self::DeviceId,
         // TODO: Will be used for error handling
         device_data: &Self::DeviceData,
-        desc: &PipelineCacheInitDescriptor<'_>,
+        desc: &PipelineCacheDescriptor<'_>,
     ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
         use wgc::pipeline as pipe;
 
         let descriptor = pipe::PipelineCacheDescriptor {
             label: desc.label.map(Borrowed),
-            data: Some(desc.data.into()),
+            data: desc.data.map(Borrowed),
             fallback: desc.fallback,
         };
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_pipeline_cache(

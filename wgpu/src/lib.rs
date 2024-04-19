@@ -1185,10 +1185,9 @@ static_assertions::assert_impl_all!(PipelineCache: Send, Sync);
 
 impl PipelineCache {
     /// Get the data associated with this pipeline cache.
-    ///
-    /// The data format may be `wgpu` specific, and should therefore only be
-    /// passed to a call to [`Device::create_pipeline_cache_init`] for a
-    /// compatible device.
+    /// The data format is an implementation detail of `wgpu`.
+    /// The only defined operation on this data setting it as the `data` field
+    /// on [`PipelineCacheDescriptor`], then to [`Device::create_pipeline_cache`].
     ///
     /// This function is unique to the Rust API of `wgpu`.
     pub fn get_data(&self) -> Option<Vec<u8>> {
@@ -2037,39 +2036,28 @@ pub struct ComputePipelineDescriptor<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
 
-/// Describes a pipeline cache which reuses data from a previous run.
+/// Describes a pipeline cache, which allows reusing compilation work
+/// between program runs.
 ///
-/// For use with [`Device::create_pipeline_cache_init`].
-///
-/// This type is unique to the Rust API of `wgpu`.
-#[derive(Clone, Debug)]
-pub struct PipelineCacheInitDescriptor<'a> {
-    /// Debug label of the pipeline cache. This might show up in some logs from `wgpu`
-    pub label: Label<'a>,
-    /// The data used to initialise the cache initialise the cache using
-    ///
-    /// # Safety
-    /// This data must have been provided from a previous call to
-    /// [`PipelineCache::get_data`]
-    pub data: &'a [u8],
-    /// Whether to create a cache without data when the provided data
-    /// is invalid.
-    ///
-    /// Recommended to set to true
-    pub fallback: bool,
-}
-#[cfg(send_sync)]
-static_assertions::assert_impl_all!(PipelineCacheInitDescriptor<'_>: Send, Sync);
-
-/// Describes a pipeline cache when
-///
-/// For use with [`Device::create_pipeline_cache`].
+/// For use with [`Device::create_pipeline_cache`]
 ///
 /// This type is unique to the Rust API of `wgpu`.
 #[derive(Clone, Debug)]
 pub struct PipelineCacheDescriptor<'a> {
     /// Debug label of the pipeline cache. This might show up in some logs from `wgpu`
     pub label: Label<'a>,
+    /// The data used to initialise the cache initialise
+    ///
+    /// # Safety
+    ///
+    /// This data must have been provided from a previous call to
+    /// [`PipelineCache::get_data`], if not `None`
+    pub data: Option<&'a [u8]>,
+    /// Whether to create a cache without data when the provided data
+    /// is invalid.
+    ///
+    /// Recommended to set to true
+    pub fallback: bool,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineCacheDescriptor<'_>: Send, Sync);
@@ -3230,7 +3218,7 @@ impl Device {
     ///
     /// # Safety
     ///
-    /// The `data` field of `desc` must have previously been returned from a call
+    /// If the `data` field of `desc` is set, it must have previously been returned from a call
     /// to [`PipelineCache::get_data`][^saving]. This `data` will only be used if it came
     /// from an adapter with the same [`util::pipeline_cache_key`].
     /// This *is* compatible across wgpu versions, as any data format change will
@@ -3259,12 +3247,12 @@ impl Device {
     /// version of wgpu; or was created for an incompatible adapter, or there was a GPU driver
     /// update. In some cases, the data might not be used and a real value is returned,
     /// this is left to the discretion of GPU drivers.
-    pub unsafe fn create_pipeline_cache_init(
+    pub unsafe fn create_pipeline_cache(
         &self,
-        desc: &PipelineCacheInitDescriptor<'_>,
+        desc: &PipelineCacheDescriptor<'_>,
     ) -> PipelineCache {
         let (id, data) = unsafe {
-            DynContext::device_create_pipeline_cache_init(
+            DynContext::device_create_pipeline_cache(
                 &*self.context,
                 &self.id,
                 self.data.as_ref(),

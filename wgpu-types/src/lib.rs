@@ -918,7 +918,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
-        const PIPELINE_CACHE = 1 << 56;
+        const PIPELINE_CACHE = 1 << 59;
     }
 }
 

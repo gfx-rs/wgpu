@@ -236,11 +236,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData);
-    unsafe fn device_create_pipeline_cache_init(
+    unsafe fn device_create_pipeline_cache(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &PipelineCacheInitDescriptor<'_>,
+        desc: &PipelineCacheDescriptor<'_>,
     ) -> (Self::PipelineCacheId, Self::PipelineCacheData);
     fn device_create_buffer(
         &self,
@@ -1291,11 +1291,11 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
-    unsafe fn device_create_pipeline_cache_init(
+    unsafe fn device_create_pipeline_cache(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        desc: &PipelineCacheInitDescriptor<'_>,
+        desc: &PipelineCacheDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
     fn device_create_buffer(
         &self,
@@ -2330,16 +2330,16 @@ where
         (compute_pipeline.into(), Box::new(data) as _)
     }
 
-    unsafe fn device_create_pipeline_cache_init(
+    unsafe fn device_create_pipeline_cache(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        desc: &PipelineCacheInitDescriptor<'_>,
+        desc: &PipelineCacheDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (pipeline_cache, data) =
-            unsafe { Context::device_create_pipeline_cache_init(self, &device, device_data, desc) };
+            unsafe { Context::device_create_pipeline_cache(self, &device, device_data, desc) };
         (pipeline_cache.into(), Box::new(data) as _)
     }
 
