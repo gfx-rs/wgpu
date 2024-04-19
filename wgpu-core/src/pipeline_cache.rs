@@ -160,7 +160,7 @@ struct PipelineCacheHeader {
     /// We assume that your cache storage system will be relatively robust, and so
     /// do not validate this hash
     ///
-    /// Therefore, this will always have a value of [`RESERVED_FOR_HASH`]
+    /// Therefore, this will always have a value of [`HASH_SPACE_VALUE`]
     hash_space: u64,
 }
 
