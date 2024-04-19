@@ -80,7 +80,6 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                     })],
                 }),
                 multiview: None,
-                cache: None,
             });
 
         let single_pipeline = ctx
@@ -112,7 +111,6 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                     })],
                 }),
                 multiview: None,
-                cache: None,
             });
 
         let view = ctx

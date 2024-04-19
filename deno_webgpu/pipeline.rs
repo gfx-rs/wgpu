@@ -114,8 +114,8 @@ pub fn op_webgpu_create_compute_pipeline(
             entry_point: compute.entry_point.map(Cow::from),
             constants: Cow::Owned(compute.constants),
             zero_initialize_workgroup_memory: true,
+            cache: None,
         },
-        cache: None,
     };
     let implicit_pipelines = match layout {
         GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,
@@ -363,6 +363,7 @@ pub fn op_webgpu_create_render_pipeline(
                 constants: Cow::Owned(fragment.constants),
                 // Required to be true for WebGPU
                 zero_initialize_workgroup_memory: true,
+                cache: None,
             },
             targets: Cow::Owned(fragment.targets),
         })
@@ -388,6 +389,7 @@ pub fn op_webgpu_create_render_pipeline(
                 constants: Cow::Owned(args.vertex.constants),
                 // Required to be true for WebGPU
                 zero_initialize_workgroup_memory: true,
+                cache: None,
             },
             buffers: Cow::Owned(vertex_buffers),
         },
@@ -396,7 +398,6 @@ pub fn op_webgpu_create_render_pipeline(
         multisample: args.multisample,
         fragment,
         multiview: None,
-        cache: None,
     };
 
     let implicit_pipelines = match args.layout {

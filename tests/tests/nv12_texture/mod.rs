@@ -41,7 +41,6 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-                cache: None,
             });
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {

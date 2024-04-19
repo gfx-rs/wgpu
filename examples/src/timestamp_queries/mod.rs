@@ -366,7 +366,6 @@ fn render_pass(
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
-        cache: None,
     });
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("rendertarget"),

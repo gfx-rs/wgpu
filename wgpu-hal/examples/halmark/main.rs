@@ -254,6 +254,7 @@ impl<A: hal::Api> Example<A> {
                 entry_point: "vs_main",
                 constants: &constants,
                 zero_initialize_workgroup_memory: true,
+                cache: None,
             },
             vertex_buffers: &[],
             fragment_stage: Some(hal::ProgrammableStage {
@@ -261,6 +262,7 @@ impl<A: hal::Api> Example<A> {
                 entry_point: "fs_main",
                 constants: &constants,
                 zero_initialize_workgroup_memory: true,
+                cache: None,
             }),
             primitive: wgt::PrimitiveState {
                 topology: wgt::PrimitiveTopology::TriangleStrip,
@@ -274,7 +276,6 @@ impl<A: hal::Api> Example<A> {
                 write_mask: wgt::ColorWrites::default(),
             })],
             multiview: None,
-            cache: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 

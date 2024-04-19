@@ -2823,7 +2823,7 @@ impl<A: HalApi> Device<A> {
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
         let cache = 'cache: {
-            let Some(cache) = desc.cache else {
+            let Some(cache) = desc.stage.cache else {
                 break 'cache None;
             };
             let Ok(cache) = hub.pipeline_caches.get(cache) else {
@@ -2844,8 +2844,8 @@ impl<A: HalApi> Device<A> {
                 entry_point: final_entry_point_name.as_ref(),
                 constants: desc.stage.constants.as_ref(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+                cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
             },
-            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
 
         let raw = unsafe {
@@ -3219,6 +3219,7 @@ impl<A: HalApi> Device<A> {
 
         let vertex_shader_module;
         let vertex_entry_point_name;
+        let vertex_cache;
         let vertex_stage = {
             let stage_desc = &desc.vertex.stage;
             let stage = wgt::ShaderStages::VERTEX;
@@ -3256,16 +3257,31 @@ impl<A: HalApi> Device<A> {
                 validated_stages |= stage;
             }
 
+            vertex_cache = if let Some(cache) = stage_desc.cache {
+                if let Ok(cache) = hub.pipeline_caches.get(cache) {
+                    if cache.device.as_info().id() != self.as_info().id() {
+                        return Err(DeviceError::WrongDevice.into());
+                    }
+                    Some(cache)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             hal::ProgrammableStage {
                 module: vertex_shader_module.raw(),
                 entry_point: &vertex_entry_point_name,
                 constants: stage_desc.constants.as_ref(),
                 zero_initialize_workgroup_memory: stage_desc.zero_initialize_workgroup_memory,
+                cache: vertex_cache.as_ref().and_then(|it| it.raw.as_ref()),
             }
         };
 
         let mut fragment_shader_module = None;
         let fragment_entry_point_name;
+        let fragment_cache;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
                 let stage = wgt::ShaderStages::FRAGMENT;
@@ -3317,6 +3333,19 @@ impl<A: HalApi> Device<A> {
                         })?;
                 }
 
+                fragment_cache = if let Some(cache) = fragment_state.stage.cache {
+                    if let Ok(cache) = hub.pipeline_caches.get(cache) {
+                        if cache.device.as_info().id() != self.as_info().id() {
+                            return Err(DeviceError::WrongDevice.into());
+                        }
+                        Some(cache)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
                     entry_point: &fragment_entry_point_name,
@@ -3324,6 +3353,7 @@ impl<A: HalApi> Device<A> {
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
+                    cache: fragment_cache.as_ref().and_then(|it| it.raw.as_ref()),
                 })
             }
             None => None,
@@ -3410,19 +3440,6 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        let cache = if let Some(cache) = desc.cache {
-            if let Ok(cache) = hub.pipeline_caches.get(cache) {
-                if cache.device.as_info().id() != self.as_info().id() {
-                    return Err(DeviceError::WrongDevice.into());
-                }
-                Some(cache)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
@@ -3437,7 +3454,6 @@ impl<A: HalApi> Device<A> {
             fragment_stage,
             color_targets,
             multiview: desc.multiview,
-            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
         let raw = unsafe {
             self.raw

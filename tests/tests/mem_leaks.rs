@@ -113,7 +113,6 @@ async fn draw_test_with_reports(
                 })],
             }),
             multiview: None,
-            cache: None,
         });
 
     let global_report = ctx.instance.generate_report().unwrap();

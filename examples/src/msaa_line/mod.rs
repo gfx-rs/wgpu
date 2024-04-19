@@ -78,7 +78,6 @@ impl Example {
                 ..Default::default()
             },
             multiview: None,
-            cache: None,
         });
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {

@@ -621,11 +621,11 @@ pub trait Device: WasmNotSendSync {
     unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
-    ) -> Result<A::PipelineCache, PipelineCacheError>;
+    ) -> Result<<Self::A as Api>::PipelineCache, PipelineCacheError>;
     fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
         None
     }
-    unsafe fn destroy_pipeline_cache(&self, cache: A::PipelineCache);
+    unsafe fn destroy_pipeline_cache(&self, cache: <Self::A as Api>::PipelineCache);
 
     unsafe fn create_query_set(
         &self,
@@ -668,7 +668,10 @@ pub trait Device: WasmNotSendSync {
     unsafe fn stop_capture(&self);
 
     #[allow(unused_variables)]
-    unsafe fn pipeline_cache_get_data(&self, cache: &A::PipelineCache) -> Option<Vec<u8>> {
+    unsafe fn pipeline_cache_get_data(
+        &self,
+        cache: &<Self::A as Api>::PipelineCache,
+    ) -> Option<Vec<u8>> {
         None
     }
 
@@ -1634,6 +1637,8 @@ pub struct ProgrammableStage<'a, A: Api> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a A::PipelineCache>,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1644,6 +1649,7 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+            cache: self.cache,
         }
     }
 }
@@ -1656,7 +1662,6 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     pub layout: &'a A::PipelineLayout,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStage<'a, A>,
-    pub cache: Option<&'a A::PipelineCache>,
 }
 
 pub struct PipelineCacheDescriptor<'a> {
@@ -1698,7 +1703,6 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
-    pub cache: Option<&'a A::PipelineCache>,
 }
 
 #[derive(Debug, Clone)]

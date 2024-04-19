@@ -166,6 +166,8 @@ pub struct ProgrammableStageDescriptor<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<PipelineCacheId>,
 }
 
 /// Number of implicit bind groups derived at pipeline creation.
@@ -193,8 +195,6 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<PipelineLayoutId>,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<PipelineCacheId>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -380,8 +380,6 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<PipelineCacheId>,
 }
 
 #[derive(Clone, Debug)]

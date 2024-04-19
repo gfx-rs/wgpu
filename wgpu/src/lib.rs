@@ -1933,8 +1933,6 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
@@ -1994,6 +1992,8 @@ pub struct PipelineCompilationOptions<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 
 impl<'a> Default for PipelineCompilationOptions<'a> {
@@ -2007,6 +2007,7 @@ impl<'a> Default for PipelineCompilationOptions<'a> {
         Self {
             constants,
             zero_initialize_workgroup_memory: true,
+            cache: None,
         }
     }
 }
@@ -2028,8 +2029,6 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The name of the entry point in the compiled shader. There must be a function with this name
     /// and no return value in the shader.
     pub entry_point: &'a str,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<&'a PipelineCache>,
     /// Advanced options for when this pipeline is compiled
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
@@ -3215,12 +3214,6 @@ impl Device {
             self.data.as_ref(),
             Box::new(callback),
         )
-    }
-
-    /// Test-only function to make this device invalid.
-    #[doc(hidden)]
-    pub fn make_invalid(&self) {
-        DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
     }
 
     /// Test-only function to make this device invalid.
