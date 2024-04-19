@@ -1268,7 +1268,6 @@ impl crate::Context for ContextWgpuCore {
     unsafe fn device_create_pipeline_cache(
         &self,
         device: &Self::DeviceId,
-        // TODO: Will be used for error handling
         device_data: &Self::DeviceData,
         desc: &PipelineCacheDescriptor<'_>,
     ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {

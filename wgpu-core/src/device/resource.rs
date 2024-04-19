@@ -3257,17 +3257,18 @@ impl<A: HalApi> Device<A> {
                 validated_stages |= stage;
             }
 
-            vertex_cache = if let Some(cache) = stage_desc.cache {
-                if let Ok(cache) = hub.pipeline_caches.get(cache) {
-                    if cache.device.as_info().id() != self.as_info().id() {
-                        return Err(DeviceError::WrongDevice.into());
-                    }
-                    Some(cache)
-                } else {
-                    None
+            vertex_cache = 'cache: {
+                let Some(cache) = stage_desc.cache else {
+                    break 'cache None;
+                };
+                let Ok(cache) = hub.pipeline_caches.get(cache) else {
+                    break 'cache None;
+                };
+
+                if cache.device.as_info().id() != self.as_info().id() {
+                    return Err(DeviceError::WrongDevice.into());
                 }
-            } else {
-                None
+                Some(cache)
             };
 
             hal::ProgrammableStage {
@@ -3333,17 +3334,18 @@ impl<A: HalApi> Device<A> {
                         })?;
                 }
 
-                fragment_cache = if let Some(cache) = fragment_state.stage.cache {
-                    if let Ok(cache) = hub.pipeline_caches.get(cache) {
-                        if cache.device.as_info().id() != self.as_info().id() {
-                            return Err(DeviceError::WrongDevice.into());
-                        }
-                        Some(cache)
-                    } else {
-                        None
+                fragment_cache = 'cache: {
+                    let Some(cache) = fragment_state.stage.cache else {
+                        break 'cache None;
+                    };
+                    let Ok(cache) = hub.pipeline_caches.get(cache) else {
+                        break 'cache None;
+                    };
+
+                    if cache.device.as_info().id() != self.as_info().id() {
+                        return Err(DeviceError::WrongDevice.into());
                     }
-                } else {
-                    None
+                    Some(cache)
                 };
 
                 Some(hal::ProgrammableStage {

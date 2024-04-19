@@ -23,6 +23,7 @@ mod nv12_texture;
 mod occlusion_query;
 mod partially_bounded_arrays;
 mod pipeline;
+mod pipeline_cache;
 mod poll;
 mod push_constants;
 mod query_set;
