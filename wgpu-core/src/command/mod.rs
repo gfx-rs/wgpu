@@ -91,15 +91,17 @@ pub(crate) enum CommandEncoderStatus {
 /// Methods that take a command encoder id actually look up the command buffer,
 /// and then use its encoder.
 ///
-/// [rce]: wgpu_hal::Api::CommandEncoder
-/// [rcb]: wgpu_hal::Api::CommandBuffer
+/// [rce]: hal::Api::CommandEncoder
+/// [rcb]: hal::Api::CommandBuffer
+/// [`CommandEncoderId`]: crate::id::CommandEncoderId
 pub(crate) struct CommandEncoder<A: HalApi> {
     /// The underlying `wgpu_hal` [`CommandEncoder`].
     ///
     /// Successfully executed command buffers' encoders are saved in a
-    /// [`wgpu_hal::device::CommandAllocator`] for recycling.
+    /// [`CommandAllocator`] for recycling.
     ///
-    /// [`CommandEncoder`]: wgpu_hal::Api::CommandEncoder
+    /// [`CommandEncoder`]: hal::Api::CommandEncoder
+    /// [`CommandAllocator`]: crate::command::CommandAllocator
     raw: A::CommandEncoder,
 
     /// All the raw command buffers for our owning [`CommandBuffer`], in
@@ -111,13 +113,16 @@ pub(crate) struct CommandEncoder<A: HalApi> {
     /// [`raw.reset_all()`][CE::ra], so the encoder and its buffers travel
     /// together.
     ///
-    /// [CE::ra]: wgpu_hal::CommandEncoder::reset_all
+    /// [CE::ra]: hal::CommandEncoder::reset_all
+    /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     list: Vec<A::CommandBuffer>,
 
     /// True if `raw` is in the "recording" state.
     ///
     /// See the documentation for [`wgpu_hal::CommandEncoder`] for
     /// details on the states `raw` can be in.
+    ///
+    /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     is_open: bool,
 
     label: Option<String>,
@@ -148,6 +153,8 @@ impl<A: HalApi> CommandEncoder<A> {
     /// transitions' command buffer.
     ///
     /// [l]: CommandEncoder::list
+    /// [`transition_buffers`]: hal::CommandEncoder::transition_buffers
+    /// [`transition_textures`]: hal::CommandEncoder::transition_textures
     fn close_and_swap(&mut self) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
@@ -228,6 +235,8 @@ pub(crate) struct DestroyedTextureError(pub id::TextureId);
 pub struct CommandBufferMutable<A: HalApi> {
     /// The [`wgpu_hal::Api::CommandBuffer`]s we've built so far, and the encoder
     /// they belong to.
+    ///
+    /// [`wgpu_hal::Api::CommandBuffer`]: hal::Api::CommandBuffer
     pub(crate) encoder: CommandEncoder<A>,
 
     /// The current state of this command buffer's encoder.
