@@ -187,7 +187,6 @@ impl ComputeCommand {
 }
 
 /// Equivalent to `ComputeCommand` but the Ids resolved into resource Arcs.
-#[doc(hidden)]
 #[derive(Clone, Debug)]
 pub enum ArcComputeCommand<A: HalApi> {
     SetBindGroup {
