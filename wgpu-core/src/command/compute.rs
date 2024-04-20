@@ -457,8 +457,10 @@ impl Global {
         // be inserted before texture reads.
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
+        // TODO: We should be draining the commands here, avoiding extra copies in the process.
+        //       (A command encoder can't be executed twice!)
         for command in base.commands {
-            match command.clone() {
+            match command {
                 ArcComputeCommand::SetBindGroup {
                     index,
                     num_dynamic_offsets,
@@ -467,9 +469,9 @@ impl Global {
                     let scope = PassErrorScope::SetBindGroup(bind_group.as_info().id());
 
                     let max_bind_groups = cmd_buf.limits.max_bind_groups;
-                    if index >= max_bind_groups {
+                    if index >= &max_bind_groups {
                         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
-                            index,
+                            index: *index,
                             max: max_bind_groups,
                         })
                         .map_pass_err(scope);
@@ -482,9 +484,9 @@ impl Global {
                     );
                     dynamic_offset_count += num_dynamic_offsets;
 
-                    let bind_group = tracker.bind_groups.insert_single(bind_group);
+                    let bind_group = tracker.bind_groups.insert_single(bind_group.clone());
                     bind_group
-                        .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
+                        .validate_dynamic_bindings(*index, &temp_offsets, &cmd_buf.limits)
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(
@@ -506,7 +508,7 @@ impl Global {
                     let entries =
                         state
                             .binder
-                            .assign_group(index as usize, bind_group, &temp_offsets);
+                            .assign_group(*index as usize, bind_group, &temp_offsets);
                     if !entries.is_empty() && pipeline_layout.is_some() {
                         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
@@ -604,7 +606,7 @@ impl Global {
                     let values_end_offset =
                         (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
                     let data_slice =
-                        &base.push_constant_data[(values_offset as usize)..values_end_offset];
+                        &base.push_constant_data[(*values_offset as usize)..values_end_offset];
 
                     let pipeline_layout = state
                         .binder
@@ -619,7 +621,7 @@ impl Global {
                     pipeline_layout
                         .validate_push_constant_ranges(
                             wgt::ShaderStages::COMPUTE,
-                            offset,
+                            *offset,
                             end_offset_bytes,
                         )
                         .map_pass_err(scope)?;
@@ -628,7 +630,7 @@ impl Global {
                         raw.set_push_constants(
                             pipeline_layout.raw(),
                             wgt::ShaderStages::COMPUTE,
-                            offset,
+                            *offset,
                             data_slice,
                         );
                     }
@@ -658,7 +660,7 @@ impl Global {
                     {
                         return Err(ComputePassErrorInner::Dispatch(
                             DispatchError::InvalidGroupSize {
-                                current: groups,
+                                current: *groups,
                                 limit: groups_size_limit,
                             },
                         ))
@@ -666,7 +668,7 @@ impl Global {
                     }
 
                     unsafe {
-                        raw.dispatch(groups);
+                        raw.dispatch(*groups);
                     }
                 }
                 ArcComputeCommand::DispatchIndirect { buffer, offset } => {
@@ -693,7 +695,7 @@ impl Global {
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
                     if end_offset > buffer.size {
                         return Err(ComputePassErrorInner::IndirectBufferOverrun {
-                            offset,
+                            offset: *offset,
                             end_offset,
                             buffer_size: buffer.size,
                         })
@@ -711,7 +713,7 @@ impl Global {
                     buffer_memory_init_actions.extend(
                         buffer.initialization_status.read().create_action(
                             &buffer,
-                            offset..(offset + stride),
+                            *offset..(*offset + stride),
                             MemoryInitKind::NeedsInitializedMemory,
                         ),
                     );
@@ -726,7 +728,7 @@ impl Global {
                         )
                         .map_pass_err(scope)?;
                     unsafe {
-                        raw.dispatch_indirect(buf_raw, offset);
+                        raw.dispatch_indirect(buf_raw, *offset);
                     }
                 }
                 ArcComputeCommand::PushDebugGroup { color: _, len } => {
@@ -775,10 +777,10 @@ impl Global {
                         .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                         .map_pass_err(scope)?;
 
-                    let query_set = tracker.query_sets.insert_single(query_set);
+                    let query_set = tracker.query_sets.insert_single(query_set.clone());
 
                     query_set
-                        .validate_and_write_timestamp(raw, query_set_id, query_index, None)
+                        .validate_and_write_timestamp(raw, query_set_id, *query_index, None)
                         .map_pass_err(scope)?;
                 }
                 ArcComputeCommand::BeginPipelineStatisticsQuery {
@@ -788,13 +790,13 @@ impl Global {
                     let query_set_id = query_set.as_info().id();
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                    let query_set = tracker.query_sets.insert_single(query_set);
+                    let query_set = tracker.query_sets.insert_single(query_set.clone());
 
                     query_set
                         .validate_and_begin_pipeline_statistics_query(
                             raw,
                             query_set_id,
-                            query_index,
+                            *query_index,
                             None,
                             &mut active_query,
                         )
