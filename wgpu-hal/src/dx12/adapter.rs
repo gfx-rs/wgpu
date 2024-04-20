@@ -115,23 +115,6 @@ impl super::Adapter {
             )
         });
 
-        let mut shader_model_support: d3d12_ty::D3D12_FEATURE_DATA_SHADER_MODEL =
-            d3d12_ty::D3D12_FEATURE_DATA_SHADER_MODEL {
-                HighestShaderModel: d3d12_ty::D3D_SHADER_MODEL_6_0,
-            };
-        assert_eq!(0, unsafe {
-            device.CheckFeatureSupport(
-                d3d12_ty::D3D12_FEATURE_SHADER_MODEL,
-                &mut shader_model_support as *mut _ as *mut _,
-                mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_SHADER_MODEL>() as _,
-            )
-        });
-
-        // If we don't have dxc, we reduce the max to 5.1
-        if dxc_container.is_none() {
-            shader_model_support.HighestShaderModel = d3d12_ty::D3D_SHADER_MODEL_5_1;
-        }
-
         let mut workarounds = super::Workarounds::default();
 
         let info = wgt::AdapterInfo {
@@ -326,7 +309,7 @@ impl super::Adapter {
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_5_1,
+            shader_model >= naga::back::hlsl::ShaderModel::V5_1,
         );
 
         let bgra8unorm_storage_supported = {
@@ -357,16 +340,16 @@ impl super::Adapter {
             )
         };
 
-        // we must be using DXC because uint64_t was added with Shader Model 6
-        // and FXC only supports up to 5.1
         features.set(
             wgt::Features::SHADER_INT64,
-            dxc_container.is_some() && hr == 0 && features1.Int64ShaderOps != 0,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_0
+                && hr == 0
+                && features1.Int64ShaderOps != 0,
         );
 
         features.set(
             wgt::Features::SUBGROUP,
-            shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_6_0
+            shader_model >= naga::back::hlsl::ShaderModel::V6_0
                 && hr == 0
                 && features1.WaveOps != 0,
         );
