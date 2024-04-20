@@ -1227,6 +1227,14 @@ impl super::Queue {
                                 vat.offset,
                             )
                         },
+                        super::VertexAttribKind::Double => unsafe {
+                            gl.vertex_attrib_format_f64(
+                                vat.location,
+                                vat.format_desc.element_count,
+                                vat.format_desc.element_format,
+                                vat.offset,
+                            )
+                        },
                     }
 
                     //Note: there is apparently a bug on AMD 3500U:
@@ -1246,6 +1254,15 @@ impl super::Queue {
                         },
                         super::VertexAttribKind::Integer => unsafe {
                             gl.vertex_attrib_pointer_i32(
+                                vat.location,
+                                vat.format_desc.element_count,
+                                vat.format_desc.element_format,
+                                buffer_desc.stride as i32,
+                                vat.offset as i32,
+                            )
+                        },
+                        super::VertexAttribKind::Double => unsafe {
+                            gl.vertex_attrib_pointer_f64(
                                 vat.location,
                                 vat.format_desc.element_count,
                                 vat.format_desc.element_format,

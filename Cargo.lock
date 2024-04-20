@@ -1558,9 +1558,8 @@ checksum = "151665d9be52f9bb40fc7966565d39666f2d1e69233571b71b87791c7e0528b3"
 
 [[package]]
 name = "glow"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd348e04c43b32574f2de31c8bb397d96c9fcfa1371bd4ca6d8bdc464ab121b1"
+version = "0.13.0"
+source = "git+https://github.com/grovesNL/glow.git#e4a9a702111c425abdf9febef3ec2f2ce4822c26"
 dependencies = [
  "js-sys",
  "slotmap",

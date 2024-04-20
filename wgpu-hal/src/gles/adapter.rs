@@ -574,9 +574,15 @@ impl super::Adapter {
                 || extensions.contains("GL_EXT_color_buffer_float")
                 || extensions.contains("OES_texture_float_linear"),
         );
-
-        if es_ver.is_none() {
-            features |= wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT;
+        features.set(
+            wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT,
+            full_ver.is_some(),
+        );
+        if let Some(full_ver) = full_ver {
+            features.set(
+                wgt::Features::VERTEX_ATTRIBUTE_64BIT | wgt::Features::SHADER_F64,
+                full_ver >= (4, 1),
+            );
         }
 
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
