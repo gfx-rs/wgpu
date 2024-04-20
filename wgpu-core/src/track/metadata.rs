@@ -98,8 +98,7 @@ impl<T: Resource> ResourceMetadata<T> {
     pub(super) unsafe fn insert(&mut self, index: usize, resource: Arc<T>) -> &Arc<T> {
         self.owned.set(index, true);
         let resource_dst = unsafe { self.resources.get_unchecked_mut(index) };
-        *resource_dst = Some(resource);
-        resource_dst.as_ref().unwrap()
+        resource_dst.insert(resource)
     }
 
     /// Get the resource with the given index.
