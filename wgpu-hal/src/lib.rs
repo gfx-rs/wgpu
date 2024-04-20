@@ -3,14 +3,14 @@
  * This crate defines a set of traits abstracting over modern graphics APIs,
  * with implementations ("backends") for Vulkan, Metal, Direct3D, and GL.
  *
- * `wgpu_hal` is a spiritual successor to
+ * `wgpu-hal` is a spiritual successor to
  * [gfx-hal](https://github.com/gfx-rs/gfx), but with reduced scope, and
  * oriented towards WebGPU implementation goals. It has no overhead for
  * validation or tracking, and the API translation overhead is kept to the bare
  * minimum by the design of WebGPU. This API can be used for resource-demanding
  * applications and engines.
  *
- * The `wgpu_hal` crate's main design choices:
+ * The `wgpu-hal` crate's main design choices:
  *
  * - Our traits are meant to be *portable*: proper use
  *   should get equivalent results regardless of the backend.
@@ -19,7 +19,7 @@
  *   validation, if any, and incorrect use will often cause undefined behavior.
  *   This allows us to minimize the overhead we impose over the underlying
  *   graphics system. If you need safety, the [`wgpu-core`] crate provides a
- *   safe API for driving `wgpu_hal`, implementing all necessary validation,
+ *   safe API for driving `wgpu-hal`, implementing all necessary validation,
  *   resource state tracking, and so on. (Note that `wgpu-core` is designed for
  *   use via FFI; the [`wgpu`] crate provides more idiomatic Rust bindings for
  *   `wgpu-core`.) Or, you can do your own validation.
@@ -27,7 +27,7 @@
  * - In the same vein, returned errors *only cover cases the user can't
  *   anticipate*, like running out of memory or losing the device. Any errors
  *   that the user could reasonably anticipate are their responsibility to
- *   avoid. For example, `wgpu_hal` returns no error for mapping a buffer that's
+ *   avoid. For example, `wgpu-hal` returns no error for mapping a buffer that's
  *   not mappable: as the buffer creator, the user should already know if they
  *   can map it.
  *
@@ -43,7 +43,7 @@
  * - We map buffer contents *persistently*. This means that the buffer
  *   can remain mapped on the CPU while the GPU reads or writes to it.
  *   You must explicitly indicate when data might need to be
- *   transferred between CPU and GPU, if `wgpu_hal` indicates that the
+ *   transferred between CPU and GPU, if `wgpu-hal` indicates that the
  *   mapping is not coherent (that is, automatically synchronized
  *   between the two devices).
  *
@@ -62,7 +62,7 @@
  *   function documentation. For this reason, we recommend that iterators don't
  *   do any mutating work.
  *
- * Unfortunately, `wgpu_hal`'s safety requirements are not fully documented.
+ * Unfortunately, `wgpu-hal`'s safety requirements are not fully documented.
  * Ideally, all trait methods would have doc comments setting out the
  * requirements users must meet to ensure correct and portable behavior. If you
  * are aware of a specific requirement that a backend imposes that is not
@@ -76,7 +76,7 @@
  *
  * ## Primary backends
  *
- * The `wgpu_hal` crate has full-featured backends implemented on the following
+ * The `wgpu-hal` crate has full-featured backends implemented on the following
  * platform graphics APIs:
  *
  * - Vulkan, available on Linux, Android, and Windows, using the [`ash`] crate's
@@ -93,7 +93,7 @@
  *
  * ## Secondary backends
  *
- * The `wgpu_hal` crate has a partial implementation based on the following
+ * The `wgpu-hal` crate has a partial implementation based on the following
  * platform graphics API:
  *
  * - The GL backend is available anywhere OpenGL, OpenGL ES, or WebGL are
