@@ -110,6 +110,46 @@
  *
  * [tdc]: wgt::DownlevelCapabilities
  *
+ * ## Traits
+ *
+ * The `wgpu-hal` crate defines a handful of traits that together
+ * represent a cross-platform abstraction for modern GPU APIs.
+ *
+ * - The [`Api`] trait represents a `wgpu-hal` backend. It has no methods of its
+ *   own, only a collection of associated types.
+ *
+ * - [`Api::Instance`] implements the [`Instance`] trait. [`Instance::init`]
+ *   creates an instance value, which you can use to enumerate the adapters
+ *   available on the system. For example, [`vulkan::Api::Instance::init`][Ii]
+ *   returns an instance that can enumerate the Vulkan physical devices on your
+ *   system.
+ *
+ * - [`Api::Adapter`] implements the [`Adapter`] trait, representing a
+ *   particular device from a particular backend. For example, a Vulkan instance
+ *   might have a Lavapipe software adapter and a GPU-based adapter.
+ *
+ * - [`Api::Device`] implements the [`Device`] trait, representing an active
+ *   link to a device. You get a device value by calling [`Adapter::open`], and
+ *   then use it to create buffers, textures, shader modules, and so on.
+ *
+ * - [`Api::Queue`] implements the [`Queue`] trait, which you use to submit
+ *   command buffers to a given device.
+ *
+ * - [`Api::CommandEncoder`] implements the [`CommandEncoder`] trait, which you
+ *   use to build buffers of commands to submit to a queue. This has all the
+ *   methods for drawing and running compute shaders, which is presumably what
+ *   you're here for.
+ *
+ * - [`Api::Surface`] implements the [`Surface`] trait, which represents a
+ *   swapchain for presenting images on the screen, via interaction with the
+ *   system's window manager.
+ *
+ * The [`Api`] trait has various other associated types like [`Api::Buffer`] and
+ * [`Api::Texture`] that represent resources the rest of the interface can
+ * operate on, but these generally do not have their own traits.
+ *
+ * [Ii]: Instance::init
+ *
  * ## Debugging
  *
  * Most of the information on the wiki [Debugging wgpu Applications][wiki-debug]
