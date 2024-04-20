@@ -527,8 +527,7 @@ impl super::Adapter {
         let has_etc = if cfg!(any(webgl, Emscripten)) {
             extensions.contains("WEBGL_compressed_texture_etc")
         } else {
-            // This is a required part of GLES3, but not part of Desktop GL at all.
-            es_ver.is_some()
+            es_ver.is_some() || extensions.contains("GL_ARB_ES3_compatibility")
         };
         features.set(wgt::Features::TEXTURE_COMPRESSION_ETC2, has_etc);
 
