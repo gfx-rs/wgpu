@@ -68,7 +68,6 @@ impl<A: HalApi> fmt::Debug for ComputePass<A> {
 }
 
 /// Describes the writing of timestamp values in a compute pass.
-#[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ComputePassTimestampWrites {
