@@ -128,6 +128,7 @@ Bottom level categories:
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
 - Cache the sample count to keep `get_texture_format_features` cheap. By @Dinnerbone in [#5346](https://github.com/gfx-rs/wgpu/pull/5346)
 - Mark `DEPTH32FLOAT_STENCIL8` as supported in GLES. By @Dinnerbone in [#5370](https://github.com/gfx-rs/wgpu/pull/5370)
+- Desktop GL now also supports `TEXTURE_COMPRESSION_ETC2`. By @Valaphee in [#5568](https://github.com/gfx-rs/wgpu/pull/5568)
 
 #### Naga
 
