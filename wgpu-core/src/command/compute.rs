@@ -271,6 +271,14 @@ impl Global {
         ComputePass::new(parent_id, desc)
     }
 
+    pub fn command_encoder_create_compute_pass_dyn<A: HalApi>(
+        &self,
+        parent_id: id::CommandEncoderId,
+        desc: &ComputePassDescriptor,
+    ) -> Box<dyn super::DynComputePass> {
+        Box::new(ComputePass::<A>::new(parent_id, desc))
+    }
+
     pub fn command_encoder_run_compute_pass<A: HalApi>(
         &self,
         pass: &ComputePass<A>,

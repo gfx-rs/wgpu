@@ -115,6 +115,10 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
 
+        // TODO:
+        // write_timestamp
+        // begin_pipeline_statistics_query
+
         // Now drop all resources we set. Then do a device poll to make sure the resources are really not dropped too early, no matter what.
         drop(pipeline);
         drop(bind_group);

@@ -302,17 +302,6 @@ macro_rules! gfx_select {
             other => panic!("Unexpected backend {:?}", other),
         }
     };
-
-    ($id:expr => $method:ident $params:tt) => {
-        match $id.backend() {
-            wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($method::<$crate::api::Vulkan> $params),
-            wgt::Backend::Metal => $crate::gfx_if_metal!($method::<$crate::api::Metal> $params),
-            wgt::Backend::Dx12 => $crate::gfx_if_dx12!($method::<$crate::api::Dx12> $params),
-            wgt::Backend::Gl => $crate::gfx_if_gles!($method::<$crate::api::Gles> $params),
-            wgt::Backend::Empty => $crate::gfx_if_empty!($method::<$crate::api::Empty> $params),
-            other => panic!("Unexpected backend {:?}", other),
-        }
-    };
 }
 
 #[cfg(feature = "api_log_info")]

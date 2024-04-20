@@ -5,6 +5,7 @@ mod clear;
 mod compute;
 mod compute_command;
 mod draw;
+mod dyn_compute_pass;
 mod memory_init;
 mod query;
 mod render;
@@ -14,8 +15,8 @@ use std::sync::Arc;
 
 pub(crate) use self::clear::clear_texture;
 pub use self::{
-    bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*, query::*,
-    render::*, transfer::*,
+    bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*,
+    dyn_compute_pass::DynComputePass, query::*, render::*, transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
 
