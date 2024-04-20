@@ -10,7 +10,6 @@ use crate::{
 
 use super::{ComputePassError, ComputePassErrorInner, PassErrorScope};
 
-#[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ComputeCommand {
@@ -22,7 +21,7 @@ pub enum ComputeCommand {
 
     SetPipeline(id::ComputePipelineId),
 
-    /// Set a range of push constants to values stored in [`BasePass::push_constant_data`].
+    /// Set a range of push constants to values stored in `push_constant_data`.
     SetPushConstant {
         /// The byte offset within the push constant storage to write to. This
         /// must be a multiple of four.
@@ -31,7 +30,7 @@ pub enum ComputeCommand {
         /// The number of bytes to write. This must be a multiple of four.
         size_bytes: u32,
 
-        /// Index in [`BasePass::push_constant_data`] of the start of the data
+        /// Index in `push_constant_data` of the start of the data
         /// to be written.
         ///
         /// Note: this is not a byte offset like `offset`. Rather, it is the
@@ -197,7 +196,7 @@ pub enum ArcComputeCommand<A: HalApi> {
 
     SetPipeline(Arc<ComputePipeline<A>>),
 
-    /// Set a range of push constants to values stored in [`BasePass::push_constant_data`].
+    /// Set a range of push constants to values stored in `push_constant_data`.
     SetPushConstant {
         /// The byte offset within the push constant storage to write to. This
         /// must be a multiple of four.
@@ -206,7 +205,7 @@ pub enum ArcComputeCommand<A: HalApi> {
         /// The number of bytes to write. This must be a multiple of four.
         size_bytes: u32,
 
-        /// Index in [`BasePass::push_constant_data`] of the start of the data
+        /// Index in `push_constant_data` of the start of the data
         /// to be written.
         ///
         /// Note: this is not a byte offset like `offset`. Rather, it is the
