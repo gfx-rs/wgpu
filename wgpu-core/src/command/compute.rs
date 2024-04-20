@@ -712,7 +712,7 @@ impl Global {
 
                     buffer_memory_init_actions.extend(
                         buffer.initialization_status.read().create_action(
-                            &buffer,
+                            buffer,
                             *offset..(*offset + stride),
                             MemoryInitKind::NeedsInitializedMemory,
                         ),
