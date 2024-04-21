@@ -657,8 +657,8 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// This `CommandEncoder` must be in the "recording" state.
     ///
     /// Callers must not assume that implementations of this
-    /// function is idempotent. Calling it multiple times in a
-    /// row might not necessarily be safe.
+    /// function are idempotent, so should not call it
+    /// multiple times in a row.
     unsafe fn discard_encoding(&mut self);
 
     /// Return a fresh [`CommandBuffer`] holding the recorded commands.
