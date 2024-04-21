@@ -70,6 +70,8 @@ pub trait DynComputePass: std::fmt::Debug + WasmNotSendSync {
         context: &global::Global,
     ) -> Result<(), ComputePassError>;
     fn end(&mut self, context: &global::Global) -> Result<(), ComputePassError>;
+
+    fn label(&self) -> Option<&str>;
 }
 
 impl<A: HalApi> DynComputePass for ComputePass<A> {
@@ -168,5 +170,9 @@ impl<A: HalApi> DynComputePass for ComputePass<A> {
 
     fn end(&mut self, context: &global::Global) -> Result<(), ComputePassError> {
         context.compute_pass_end(self)
+    }
+
+    fn label(&self) -> Option<&str> {
+        self.label()
     }
 }

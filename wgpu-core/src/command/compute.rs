@@ -65,6 +65,10 @@ impl<A: HalApi> ComputePass<A> {
         self.parent_id
     }
 
+    pub fn label(&self) -> Option<&str> {
+        self.base.as_ref().and_then(|base| base.label.as_deref())
+    }
+
     fn base_mut<'a>(
         &'a mut self,
         scope: PassErrorScope,

@@ -2365,7 +2365,13 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::ComputePipelineData,
     ) {
         if let Err(cause) = pass_data.pass.set_pipeline(&self.0, *pipeline) {
-            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::set_pipeline");
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                LABEL,
+                pass_data.pass.label(),
+                "ComputePass::set_pipeline",
+            );
         }
     }
 
@@ -2382,7 +2388,13 @@ impl crate::Context for ContextWgpuCore {
             .pass
             .set_bind_group(&self.0, index, *bind_group, offsets)
         {
-            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::set_bind_group");
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                LABEL,
+                pass_data.pass.label(),
+                "ComputePass::set_bind_group",
+            );
         }
     }
 
@@ -2394,9 +2406,11 @@ impl crate::Context for ContextWgpuCore {
         data: &[u8],
     ) {
         if let Err(cause) = pass_data.pass.set_push_constant(&self.0, offset, data) {
-            self.handle_error_nolabel(
+            self.handle_error(
                 &pass_data.error_sink,
                 cause,
+                LABEL,
+                pass_data.pass.label(),
                 "ComputePass::set_push_constant",
             );
         }
@@ -2409,9 +2423,11 @@ impl crate::Context for ContextWgpuCore {
         label: &str,
     ) {
         if let Err(cause) = pass_data.pass.insert_debug_marker(&self.0, label, 0) {
-            self.handle_error_nolabel(
+            self.handle_error(
                 &pass_data.error_sink,
                 cause,
+                LABEL,
+                pass_data.pass.label(),
                 "ComputePass::insert_debug_marker",
             );
         }
@@ -2424,9 +2440,11 @@ impl crate::Context for ContextWgpuCore {
         group_label: &str,
     ) {
         if let Err(cause) = pass_data.pass.push_debug_group(&self.0, group_label, 0) {
-            self.handle_error_nolabel(
+            self.handle_error(
                 &pass_data.error_sink,
                 cause,
+                LABEL,
+                pass_data.pass.label(),
                 "ComputePass::push_debug_group",
             );
         }
@@ -2438,7 +2456,13 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
     ) {
         if let Err(cause) = pass_data.pass.pop_debug_group(&self.0) {
-            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::pop_debug_group");
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                LABEL,
+                pass_data.pass.label(),
+                "ComputePass::pop_debug_group",
+            );
         }
     }
 
@@ -2454,7 +2478,13 @@ impl crate::Context for ContextWgpuCore {
             .pass
             .write_timestamp(&self.0, *query_set, query_index)
         {
-            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::write_timestamp");
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                LABEL,
+                pass_data.pass.label(),
+                "ComputePass::write_timestamp",
+            );
         }
     }
 
@@ -2471,9 +2501,11 @@ impl crate::Context for ContextWgpuCore {
                 .pass
                 .begin_pipeline_statistics_query(&self.0, *query_set, query_index)
         {
-            self.handle_error_nolabel(
+            self.handle_error(
                 &pass_data.error_sink,
                 cause,
+                LABEL,
+                pass_data.pass.label(),
                 "ComputePass::begin_pipeline_statistics_query",
             );
         }
@@ -2485,9 +2517,11 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
     ) {
         if let Err(cause) = pass_data.pass.end_pipeline_statistics_query(&self.0) {
-            self.handle_error_nolabel(
+            self.handle_error(
                 &pass_data.error_sink,
                 cause,
+                LABEL,
+                pass_data.pass.label(),
                 "ComputePass::end_pipeline_statistics_query",
             );
         }
@@ -2502,9 +2536,11 @@ impl crate::Context for ContextWgpuCore {
         z: u32,
     ) {
         if let Err(cause) = pass_data.pass.dispatch_workgroups(&self.0, x, y, z) {
-            self.handle_error_nolabel(
+            self.handle_error(
                 &pass_data.error_sink,
                 cause,
+                LABEL,
+                pass_data.pass.label(),
                 "ComputePass::dispatch_workgroups",
             );
         }
@@ -2523,9 +2559,11 @@ impl crate::Context for ContextWgpuCore {
                 .pass
                 .dispatch_workgroups_indirect(&self.0, *indirect_buffer, indirect_offset)
         {
-            self.handle_error_nolabel(
+            self.handle_error(
                 &pass_data.error_sink,
                 cause,
+                LABEL,
+                pass_data.pass.label(),
                 "ComputePass::dispatch_workgroups_indirect",
             );
         }
@@ -2537,7 +2575,13 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
     ) {
         if let Err(cause) = pass_data.pass.end(&self.0) {
-            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::end");
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                LABEL,
+                pass_data.pass.label(),
+                "ComputePass::end",
+            );
         }
     }
 
