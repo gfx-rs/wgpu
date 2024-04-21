@@ -1520,6 +1520,10 @@ impl Global {
                     continue;
                 }
                 unsafe {
+                    cmd_buf_raw.transition_buffers(iter::once(hal::BufferBarrier::<A> {
+                        buffer: tlas.instance_buffer.read().as_ref().unwrap(),
+                        usage: hal::BufferUses::MAP_READ..hal::BufferUses::COPY_DST,
+                    }));
                     let temp = hal::BufferCopy {
                         src_offset: range.start as u64,
                         dst_offset: 0,
