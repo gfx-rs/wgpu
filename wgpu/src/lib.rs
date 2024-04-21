@@ -1286,10 +1286,10 @@ pub struct RenderPass<'a> {
 /// Corresponds to [WebGPU `GPUComputePassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#compute-pass-encoder).
 #[derive(Debug)]
-pub struct ComputePass<'a> {
+pub struct ComputePass {
     id: ObjectId,
     data: Box<Data>,
-    parent: &'a mut CommandEncoder,
+    context: Arc<C>,
 }
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
@@ -3876,7 +3876,7 @@ impl CommandEncoder {
     /// Begins recording of a compute pass.
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
-    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass<'_> {
+    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
@@ -3887,7 +3887,7 @@ impl CommandEncoder {
         ComputePass {
             id,
             data,
-            parent: self,
+            context: self.context.clone(),
         }
     }
 
@@ -4728,7 +4728,7 @@ impl<'a> Drop for RenderPass<'a> {
     }
 }
 
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
     ///
@@ -4742,7 +4742,7 @@ impl<'a> ComputePass<'a> {
         offsets: &[DynamicOffset],
     ) {
         DynContext::compute_pass_set_bind_group(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             index,
@@ -4755,7 +4755,7 @@ impl<'a> ComputePass<'a> {
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &pipeline.id,
@@ -4766,7 +4766,7 @@ impl<'a> ComputePass<'a> {
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
         DynContext::compute_pass_insert_debug_marker(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             label,
@@ -4776,7 +4776,7 @@ impl<'a> ComputePass<'a> {
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
         DynContext::compute_pass_push_debug_group(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             label,
@@ -4785,11 +4785,7 @@ impl<'a> ComputePass<'a> {
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        DynContext::compute_pass_pop_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-        );
+        DynContext::compute_pass_pop_debug_group(&*self.context, &mut self.id, self.data.as_mut());
     }
 
     /// Dispatches compute work operations.
@@ -4797,7 +4793,7 @@ impl<'a> ComputePass<'a> {
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
         DynContext::compute_pass_dispatch_workgroups(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             x,
@@ -4815,7 +4811,7 @@ impl<'a> ComputePass<'a> {
         indirect_offset: BufferAddress,
     ) {
         DynContext::compute_pass_dispatch_workgroups_indirect(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &indirect_buffer.id,
@@ -4826,7 +4822,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Set push constant data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -4837,7 +4833,7 @@ impl<'a> ComputePass<'a> {
     /// call will write `data` to bytes `4..12` of push constant storage.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         DynContext::compute_pass_set_push_constants(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             offset,
@@ -4847,7 +4843,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
     /// Must be multiplied by [`Queue::get_timestamp_period`] to get
@@ -4856,7 +4852,7 @@ impl<'a> ComputePass<'a> {
     /// for a string of operations to complete.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_write_timestamp(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &query_set.id,
@@ -4867,12 +4863,12 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &query_set.id,
@@ -4885,18 +4881,17 @@ impl<'a> ComputePass<'a> {
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
         );
     }
 }
 
-impl<'a> Drop for ComputePass<'a> {
+impl Drop for ComputePass {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.parent
-                .context
+            self.context
                 .compute_pass_end(&mut self.id, self.data.as_mut());
         }
     }
