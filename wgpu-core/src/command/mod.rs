@@ -847,8 +847,12 @@ pub enum PassErrorScope {
         indirect: bool,
         pipeline: Option<id::ComputePipelineId>,
     },
+    #[error("In a push_debug_group command")]
+    PushDebugGroup,
     #[error("In a pop_debug_group command")]
     PopDebugGroup,
+    #[error("In a insert_debug_marker command")]
+    InsertDebugMarker,
 }
 
 impl PrettyError for PassErrorScope {

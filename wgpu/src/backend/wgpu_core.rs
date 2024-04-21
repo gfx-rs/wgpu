@@ -2393,7 +2393,13 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        pass_data.pass.set_push_constant(&self.0, offset, data);
+        if let Err(cause) = pass_data.pass.set_push_constant(&self.0, offset, data) {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::set_push_constant",
+            );
+        }
     }
 
     fn compute_pass_insert_debug_marker(
@@ -2402,7 +2408,13 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         label: &str,
     ) {
-        pass_data.pass.insert_debug_marker(&self.0, label, 0);
+        if let Err(cause) = pass_data.pass.insert_debug_marker(&self.0, label, 0) {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::insert_debug_marker",
+            );
+        }
     }
 
     fn compute_pass_push_debug_group(
@@ -2411,7 +2423,13 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
     ) {
-        pass_data.pass.push_debug_group(&self.0, group_label, 0);
+        if let Err(cause) = pass_data.pass.push_debug_group(&self.0, group_label, 0) {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::push_debug_group",
+            );
+        }
     }
 
     fn compute_pass_pop_debug_group(
@@ -2419,7 +2437,9 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        pass_data.pass.pop_debug_group(&self.0);
+        if let Err(cause) = pass_data.pass.pop_debug_group(&self.0) {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::pop_debug_group");
+        }
     }
 
     fn compute_pass_write_timestamp(
@@ -2464,7 +2484,13 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        pass_data.pass.end_pipeline_statistics_query(&self.0);
+        if let Err(cause) = pass_data.pass.end_pipeline_statistics_query(&self.0) {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::end_pipeline_statistics_query",
+            );
+        }
     }
 
     fn compute_pass_dispatch_workgroups(
@@ -2475,7 +2501,13 @@ impl crate::Context for ContextWgpuCore {
         y: u32,
         z: u32,
     ) {
-        pass_data.pass.dispatch_workgroups(&self.0, x, y, z);
+        if let Err(cause) = pass_data.pass.dispatch_workgroups(&self.0, x, y, z) {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::dispatch_workgroups",
+            );
+        }
     }
 
     fn compute_pass_dispatch_workgroups_indirect(

@@ -101,7 +101,7 @@ impl GlobalPlay for wgc::global::Global {
                 } => {
                     self.compute_pass_end_with_unresolved_commands::<A>(
                         encoder,
-                        base.as_ref(),
+                        base,
                         timestamp_writes.as_ref(),
                     )
                     .unwrap();
