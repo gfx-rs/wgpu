@@ -61,10 +61,12 @@ impl<A: HalApi> ComputePass<A> {
         }
     }
 
+    #[inline]
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
     }
 
+    #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.as_ref().and_then(|base| base.label.as_deref())
     }

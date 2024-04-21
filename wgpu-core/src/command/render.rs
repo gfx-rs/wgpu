@@ -247,8 +247,14 @@ impl RenderPass {
         }
     }
 
+    #[inline]
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
+    }
+
+    #[inline]
+    pub fn label(&self) -> Option<&str> {
+        self.base.label.as_deref()
     }
 
     #[cfg(feature = "trace")]

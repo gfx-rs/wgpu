@@ -3115,7 +3115,13 @@ impl crate::Context for ContextWgpuCore {
     ) {
         let encoder = pass_data.pass.parent_id();
         if let Err(cause) = wgc::gfx_select!(encoder => self.0.render_pass_end(&pass_data.pass)) {
-            self.handle_error_nolabel(&pass_data.error_sink, cause, "RenderPass::end");
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                LABEL,
+                pass_data.pass.label(),
+                "RenderPass::end",
+            );
         }
     }
 }
