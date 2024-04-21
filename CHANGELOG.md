@@ -137,10 +137,6 @@ Bottom level categories:
 - Implement the `device_set_device_lost_callback` method for `ContextWebGpu`. By @suti in [#5438](https://github.com/gfx-rs/wgpu/pull/5438)
 - Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434)
 
-#### Vulkan
-
-- Make `CommandEncoder::discard_encoding` do nothing if called multiple times, and implement `Drop` for `CommandEncoder` to call `discard_encoding`. By @villuna
-
 ### Bug Fixes
 
 #### General
@@ -184,6 +180,7 @@ Bottom level categories:
 #### Vulkan
 
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
+- Add safety check to `wgpu_hal::vulkan::CommandEncoder` to make sure `discard_encoding` is not called in the closed state. By @villuna in [#5557](https://github.com/gfx-rs/wgpu/pull/5557)
 
 #### Metal
 

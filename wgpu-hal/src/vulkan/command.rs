@@ -111,10 +111,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn discard_encoding(&mut self) {
-        if self.active != vk::CommandBuffer::null() {
-            self.discarded.push(self.active);
-            self.active = vk::CommandBuffer::null();
-        }
+        // Safe use requires this is not called in the close state, so the buffer
+        // shouldn't be null. Assert this to make sure we're not pushing null
+        // buffers to the discard pile.
+        assert_ne!(self.active, vk::CommandBuffer::null());
+
+        self.discarded.push(self.active);
+        self.active = vk::CommandBuffer::null();
     }
 
     unsafe fn reset_all<I>(&mut self, cmd_bufs: I)
