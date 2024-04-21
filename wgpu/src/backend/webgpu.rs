@@ -2559,16 +2559,6 @@ impl crate::context::Context for ContextWebGpu {
         )
     }
 
-    fn command_encoder_end_compute_pass(
-        &self,
-        _encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
-        _pass: &mut Self::ComputePassId,
-        pass_data: &mut Self::ComputePassData,
-    ) {
-        pass_data.0.end();
-    }
-
     fn command_encoder_begin_render_pass(
         &self,
         _encoder: &Self::CommandEncoderId,
@@ -2665,16 +2655,6 @@ impl crate::context::Context for ContextWebGpu {
         }
 
         create_identified(encoder_data.0.begin_render_pass(&mapped_desc))
-    }
-
-    fn command_encoder_end_render_pass(
-        &self,
-        _encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
-        _pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-    ) {
-        pass_data.0.end();
     }
 
     fn command_encoder_finish(
@@ -3129,6 +3109,14 @@ impl crate::context::Context for ContextWebGpu {
             &indirect_buffer_data.0.buffer,
             indirect_offset as f64,
         );
+    }
+
+    fn compute_pass_end(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+    ) {
+        pass_data.0.end();
     }
 
     fn render_bundle_encoder_set_pipeline(
@@ -3709,6 +3697,14 @@ impl crate::context::Context for ContextWebGpu {
             .map(|(_, bundle_data)| &bundle_data.0)
             .collect::<js_sys::Array>();
         pass_data.0.execute_bundles(&mapped);
+    }
+
+    fn render_pass_end(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    ) {
+        pass_data.0.end();
     }
 }
 

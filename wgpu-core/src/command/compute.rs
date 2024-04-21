@@ -279,11 +279,11 @@ impl Global {
         Box::new(ComputePass::<A>::new(parent_id, desc))
     }
 
-    pub fn command_encoder_run_compute_pass<A: HalApi>(
+    pub fn compute_pass_end<A: HalApi>(
         &self,
         pass: &ComputePass<A>,
     ) -> Result<(), ComputePassError> {
-        self.command_encoder_run_compute_pass_impl(
+        self.compute_pass_end_impl(
             pass.parent_id,
             pass.base.as_ref(),
             pass.timestamp_writes.as_ref(),
@@ -291,7 +291,7 @@ impl Global {
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_compute_pass_with_unresolved_commands<A: HalApi>(
+    pub fn compute_pass_end_with_unresolved_commands<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
@@ -300,7 +300,7 @@ impl Global {
         let resolved_commands =
             ComputeCommand::resolve_compute_command_ids(A::hub(self), base.commands)?;
 
-        self.command_encoder_run_compute_pass_impl::<A>(
+        self.compute_pass_end_impl::<A>(
             encoder_id,
             BasePassRef {
                 label: base.label,
@@ -313,7 +313,7 @@ impl Global {
         )
     }
 
-    fn command_encoder_run_compute_pass_impl<A: HalApi>(
+    fn compute_pass_end_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ArcComputeCommand<A>>,

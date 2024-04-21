@@ -99,7 +99,7 @@ impl GlobalPlay for wgc::global::Global {
                     base,
                     timestamp_writes,
                 } => {
-                    self.command_encoder_run_compute_pass_with_unresolved_commands::<A>(
+                    self.compute_pass_end_with_unresolved_commands::<A>(
                         encoder,
                         base.as_ref(),
                         timestamp_writes.as_ref(),
@@ -113,7 +113,7 @@ impl GlobalPlay for wgc::global::Global {
                     timestamp_writes,
                     occlusion_query_set_id,
                 } => {
-                    self.command_encoder_run_render_pass_impl::<A>(
+                    self.render_pass_end_impl::<A>(
                         encoder,
                         base.as_ref(),
                         &target_colors,

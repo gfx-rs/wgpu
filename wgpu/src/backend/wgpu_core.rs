@@ -485,6 +485,12 @@ pub struct ComputePass {
 }
 
 #[derive(Debug)]
+pub struct RenderPass {
+    pass: wgc::command::RenderPass,
+    error_sink: ErrorSink,
+}
+
+#[derive(Debug)]
 pub struct CommandEncoder {
     error_sink: ErrorSink,
     open: bool,
@@ -526,7 +532,7 @@ impl crate::Context for ContextWgpuCore {
     type ComputePassId = Unused;
     type ComputePassData = ComputePass;
     type RenderPassId = Unused;
-    type RenderPassData = wgc::command::RenderPass;
+    type RenderPassData = RenderPass;
     type CommandBufferId = wgc::id::CommandBufferId;
     type CommandBufferData = ();
     type RenderBundleEncoderId = Unused;
@@ -1916,29 +1922,10 @@ impl crate::Context for ContextWgpuCore {
         )
     }
 
-    fn command_encoder_end_compute_pass(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        _pass: &mut Self::ComputePassId,
-        pass_data: &mut Self::ComputePassData,
-    ) {
-        if let Err(cause) = pass_data.pass.run(&self.0) {
-            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
-            self.handle_error(
-                &encoder_data.error_sink,
-                cause,
-                "encoder",
-                Some(&name),
-                "a ComputePass",
-            );
-        }
-    }
-
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
+        encoder_data: &Self::CommandEncoderData,
         desc: &crate::RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
@@ -1982,40 +1969,22 @@ impl crate::Context for ContextWgpuCore {
 
         (
             Unused,
-            wgc::command::RenderPass::new(
-                *encoder,
-                &wgc::command::RenderPassDescriptor {
-                    label: desc.label.map(Borrowed),
-                    color_attachments: Borrowed(&colors),
-                    depth_stencil_attachment: depth_stencil.as_ref(),
-                    timestamp_writes: timestamp_writes.as_ref(),
-                    occlusion_query_set: desc
-                        .occlusion_query_set
-                        .map(|query_set| query_set.id.into()),
-                },
-            ),
+            RenderPass {
+                pass: wgc::command::RenderPass::new(
+                    *encoder,
+                    &wgc::command::RenderPassDescriptor {
+                        label: desc.label.map(Borrowed),
+                        color_attachments: Borrowed(&colors),
+                        depth_stencil_attachment: depth_stencil.as_ref(),
+                        timestamp_writes: timestamp_writes.as_ref(),
+                        occlusion_query_set: desc
+                            .occlusion_query_set
+                            .map(|query_set| query_set.id.into()),
+                    },
+                ),
+                error_sink: encoder_data.error_sink.clone(),
+            },
         )
-    }
-
-    fn command_encoder_end_render_pass(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        _pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-    ) {
-        if let Err(cause) =
-            wgc::gfx_select!(encoder => self.0.command_encoder_run_render_pass(*encoder, pass_data))
-        {
-            let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
-            self.handle_error(
-                &encoder_data.error_sink,
-                cause,
-                "encoder",
-                Some(&name),
-                "a RenderPass",
-            );
-        }
     }
 
     fn command_encoder_finish(
@@ -2530,6 +2499,16 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
+    fn compute_pass_end(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+    ) {
+        if let Err(cause) = pass_data.pass.end(&self.0) {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::end");
+        }
+    }
+
     fn render_bundle_encoder_set_pipeline(
         &self,
         _encoder: &mut Self::RenderBundleEncoderId,
@@ -2722,7 +2701,7 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::RenderPipelineId,
         _pipeline_data: &Self::RenderPipelineData,
     ) {
-        wgpu_render_pass_set_pipeline(pass_data, *pipeline)
+        wgpu_render_pass_set_pipeline(&mut pass_data.pass, *pipeline)
     }
 
     fn render_pass_set_bind_group(
@@ -2734,7 +2713,7 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        wgpu_render_pass_set_bind_group(pass_data, index, *bind_group, offsets)
+        wgpu_render_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets)
     }
 
     fn render_pass_set_index_buffer(
@@ -2747,7 +2726,9 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        pass_data.set_index_buffer(*buffer, index_format, offset, size)
+        pass_data
+            .pass
+            .set_index_buffer(*buffer, index_format, offset, size)
     }
 
     fn render_pass_set_vertex_buffer(
@@ -2760,7 +2741,7 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        wgpu_render_pass_set_vertex_buffer(pass_data, slot, *buffer, offset, size)
+        wgpu_render_pass_set_vertex_buffer(&mut pass_data.pass, slot, *buffer, offset, size)
     }
 
     fn render_pass_set_push_constants(
@@ -2771,7 +2752,7 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        wgpu_render_pass_set_push_constants(pass_data, stages, offset, data)
+        wgpu_render_pass_set_push_constants(&mut pass_data.pass, stages, offset, data)
     }
 
     fn render_pass_draw(
@@ -2782,7 +2763,7 @@ impl crate::Context for ContextWgpuCore {
         instances: Range<u32>,
     ) {
         wgpu_render_pass_draw(
-            pass_data,
+            &mut pass_data.pass,
             vertices.end - vertices.start,
             instances.end - instances.start,
             vertices.start,
@@ -2799,7 +2780,7 @@ impl crate::Context for ContextWgpuCore {
         instances: Range<u32>,
     ) {
         wgpu_render_pass_draw_indexed(
-            pass_data,
+            &mut pass_data.pass,
             indices.end - indices.start,
             instances.end - instances.start,
             indices.start,
@@ -2816,7 +2797,7 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_render_pass_draw_indirect(pass_data, *indirect_buffer, indirect_offset)
+        wgpu_render_pass_draw_indirect(&mut pass_data.pass, *indirect_buffer, indirect_offset)
     }
 
     fn render_pass_draw_indexed_indirect(
@@ -2827,7 +2808,11 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_render_pass_draw_indexed_indirect(pass_data, *indirect_buffer, indirect_offset)
+        wgpu_render_pass_draw_indexed_indirect(
+            &mut pass_data.pass,
+            *indirect_buffer,
+            indirect_offset,
+        )
     }
 
     fn render_pass_multi_draw_indirect(
@@ -2839,7 +2824,12 @@ impl crate::Context for ContextWgpuCore {
         indirect_offset: wgt::BufferAddress,
         count: u32,
     ) {
-        wgpu_render_pass_multi_draw_indirect(pass_data, *indirect_buffer, indirect_offset, count)
+        wgpu_render_pass_multi_draw_indirect(
+            &mut pass_data.pass,
+            *indirect_buffer,
+            indirect_offset,
+            count,
+        )
     }
 
     fn render_pass_multi_draw_indexed_indirect(
@@ -2852,7 +2842,7 @@ impl crate::Context for ContextWgpuCore {
         count: u32,
     ) {
         wgpu_render_pass_multi_draw_indexed_indirect(
-            pass_data,
+            &mut pass_data.pass,
             *indirect_buffer,
             indirect_offset,
             count,
@@ -2872,7 +2862,7 @@ impl crate::Context for ContextWgpuCore {
         max_count: u32,
     ) {
         wgpu_render_pass_multi_draw_indirect_count(
-            pass_data,
+            &mut pass_data.pass,
             *indirect_buffer,
             indirect_offset,
             *count_buffer,
@@ -2894,7 +2884,7 @@ impl crate::Context for ContextWgpuCore {
         max_count: u32,
     ) {
         wgpu_render_pass_multi_draw_indexed_indirect_count(
-            pass_data,
+            &mut pass_data.pass,
             *indirect_buffer,
             indirect_offset,
             *count_buffer,
@@ -2909,7 +2899,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         color: wgt::Color,
     ) {
-        wgpu_render_pass_set_blend_constant(pass_data, &color)
+        wgpu_render_pass_set_blend_constant(&mut pass_data.pass, &color)
     }
 
     fn render_pass_set_scissor_rect(
@@ -2921,7 +2911,7 @@ impl crate::Context for ContextWgpuCore {
         width: u32,
         height: u32,
     ) {
-        wgpu_render_pass_set_scissor_rect(pass_data, x, y, width, height)
+        wgpu_render_pass_set_scissor_rect(&mut pass_data.pass, x, y, width, height)
     }
 
     fn render_pass_set_viewport(
@@ -2935,7 +2925,15 @@ impl crate::Context for ContextWgpuCore {
         min_depth: f32,
         max_depth: f32,
     ) {
-        wgpu_render_pass_set_viewport(pass_data, x, y, width, height, min_depth, max_depth)
+        wgpu_render_pass_set_viewport(
+            &mut pass_data.pass,
+            x,
+            y,
+            width,
+            height,
+            min_depth,
+            max_depth,
+        )
     }
 
     fn render_pass_set_stencil_reference(
@@ -2944,7 +2942,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         reference: u32,
     ) {
-        wgpu_render_pass_set_stencil_reference(pass_data, reference)
+        wgpu_render_pass_set_stencil_reference(&mut pass_data.pass, reference)
     }
 
     fn render_pass_insert_debug_marker(
@@ -2953,7 +2951,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         label: &str,
     ) {
-        wgpu_render_pass_insert_debug_marker(pass_data, label, 0);
+        wgpu_render_pass_insert_debug_marker(&mut pass_data.pass, label, 0);
     }
 
     fn render_pass_push_debug_group(
@@ -2962,7 +2960,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         group_label: &str,
     ) {
-        wgpu_render_pass_push_debug_group(pass_data, group_label, 0);
+        wgpu_render_pass_push_debug_group(&mut pass_data.pass, group_label, 0);
     }
 
     fn render_pass_pop_debug_group(
@@ -2970,7 +2968,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        wgpu_render_pass_pop_debug_group(pass_data);
+        wgpu_render_pass_pop_debug_group(&mut pass_data.pass);
     }
 
     fn render_pass_write_timestamp(
@@ -2981,7 +2979,7 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_render_pass_write_timestamp(pass_data, *query_set, query_index)
+        wgpu_render_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index)
     }
 
     fn render_pass_begin_occlusion_query(
@@ -2990,7 +2988,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         query_index: u32,
     ) {
-        wgpu_render_pass_begin_occlusion_query(pass_data, query_index)
+        wgpu_render_pass_begin_occlusion_query(&mut pass_data.pass, query_index)
     }
 
     fn render_pass_end_occlusion_query(
@@ -2998,7 +2996,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        wgpu_render_pass_end_occlusion_query(pass_data)
+        wgpu_render_pass_end_occlusion_query(&mut pass_data.pass)
     }
 
     fn render_pass_begin_pipeline_statistics_query(
@@ -3009,7 +3007,11 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_render_pass_begin_pipeline_statistics_query(pass_data, *query_set, query_index)
+        wgpu_render_pass_begin_pipeline_statistics_query(
+            &mut pass_data.pass,
+            *query_set,
+            query_index,
+        )
     }
 
     fn render_pass_end_pipeline_statistics_query(
@@ -3017,7 +3019,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        wgpu_render_pass_end_pipeline_statistics_query(pass_data)
+        wgpu_render_pass_end_pipeline_statistics_query(&mut pass_data.pass)
     }
 
     fn render_pass_execute_bundles(
@@ -3027,7 +3029,18 @@ impl crate::Context for ContextWgpuCore {
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
-        wgpu_render_pass_execute_bundles(pass_data, &temp_render_bundles)
+        wgpu_render_pass_execute_bundles(&mut pass_data.pass, &temp_render_bundles)
+    }
+
+    fn render_pass_end(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    ) {
+        let encoder = pass_data.pass.parent_id();
+        if let Err(cause) = wgc::gfx_select!(encoder => self.0.render_pass_end(&pass_data.pass)) {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "RenderPass::end");
+        }
     }
 }
 

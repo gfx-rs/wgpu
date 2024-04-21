@@ -48,11 +48,11 @@ pub(crate) enum CommandEncoderStatus {
     /// Ready to record commands. An encoder's initial state.
     ///
     /// Command building methods like [`command_encoder_clear_buffer`] and
-    /// [`command_encoder_run_compute_pass`] require the encoder to be in this
+    /// [`compute_pass_end`] require the encoder to be in this
     /// state.
     ///
     /// [`command_encoder_clear_buffer`]: Global::command_encoder_clear_buffer
-    /// [`command_encoder_run_compute_pass`]: Global::command_encoder_run_compute_pass
+    /// [`compute_pass_end`]: Global::compute_pass_end
     Recording,
 
     /// Command recording is complete, and the buffer is ready for submission.

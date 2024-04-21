@@ -9,7 +9,7 @@ use super::{ComputePass, ComputePassError};
 // Practically speaking this allows us merge gfx_select with type erasure:
 // The alternative would be to introduce ComputePassId which then first needs to be looked up and then dispatch via gfx_select.
 pub trait DynComputePass: std::fmt::Debug + WasmNotSendSync {
-    fn run(&mut self, context: &global::Global) -> Result<(), ComputePassError>;
+    fn end(&mut self, context: &global::Global) -> Result<(), ComputePassError>;
     fn set_bind_group(
         &mut self,
         context: &global::Global,
@@ -55,8 +55,8 @@ pub trait DynComputePass: std::fmt::Debug + WasmNotSendSync {
 }
 
 impl<A: HalApi> DynComputePass for ComputePass<A> {
-    fn run(&mut self, context: &global::Global) -> Result<(), ComputePassError> {
-        context.command_encoder_run_compute_pass(self)
+    fn end(&mut self, context: &global::Global) -> Result<(), ComputePassError> {
+        context.compute_pass_end(self)
     }
 
     fn set_bind_group(

@@ -888,7 +888,7 @@ unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 impl<A: HalApi> RenderBundle<A> {
     /// Actually encode the contents into a native command buffer.
     ///
-    /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
+    /// This is partially duplicating the logic of `render_pass_end`.
     /// However the point of this function is to be lighter, since we already had
     /// a chance to go through the commands in `render_bundle_encoder_finish`.
     ///

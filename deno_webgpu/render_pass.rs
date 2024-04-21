@@ -186,21 +186,16 @@ pub fn op_webgpu_render_pass_execute_bundles(
 #[serde]
 pub fn op_webgpu_render_pass_end(
     state: &mut OpState,
-    #[smi] command_encoder_rid: ResourceId,
     #[smi] render_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
-    let command_encoder_resource =
-        state
-            .resource_table
-            .get::<super::command_encoder::WebGpuCommandEncoder>(command_encoder_rid)?;
-    let command_encoder = command_encoder_resource.1;
     let render_pass_resource = state
         .resource_table
         .take::<WebGpuRenderPass>(render_pass_rid)?;
     let render_pass = &render_pass_resource.0.borrow();
+    let command_encoder = render_pass.parent_id();
     let instance = state.borrow::<super::Instance>();
 
-    gfx_ok!(command_encoder => instance.command_encoder_run_render_pass(command_encoder, render_pass))
+    gfx_ok!(command_encoder => instance.render_pass_end(render_pass))
 }
 
 #[op2]

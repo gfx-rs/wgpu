@@ -95,7 +95,7 @@ pub fn op_webgpu_compute_pass_end(
         .resource_table
         .take::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource.0.borrow_mut().run(state.borrow())?;
+    compute_pass_resource.0.borrow_mut().end(state.borrow())?;
 
     Ok(WebGpuResult::empty())
 }
