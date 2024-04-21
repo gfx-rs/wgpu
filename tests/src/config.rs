@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, panic::Location, pin::Pin, sync::Arc};
 
 use crate::{TestParameters, TestingContext};
 
@@ -26,14 +26,17 @@ cfg_if::cfg_if! {
 #[derive(Clone)]
 pub struct GpuTestConfiguration {
     pub(crate) name: String,
+    pub(crate) location: &'static Location<'static>,
     pub(crate) params: TestParameters,
     pub(crate) test: Option<RunTestAsync>,
 }
 
 impl GpuTestConfiguration {
+    #[track_caller]
     pub fn new() -> Self {
         Self {
             name: String::new(),
+            location: Location::caller(),
             params: TestParameters::default(),
             test: None,
         }
