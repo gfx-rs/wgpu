@@ -122,13 +122,13 @@ void arithmetic()
         float2 rem4_1 = fmod((2.0).xx, (1.0).xx);
         float2 rem5_1 = fmod((2.0).xx, (1.0).xx);
     }
-    float3x3 add = ((float3x3)0 + (float3x3)0);
-    float3x3 sub = ((float3x3)0 - (float3x3)0);
-    float3x3 mul_scalar0_ = mul(1.0, (float3x3)0);
-    float3x3 mul_scalar1_ = mul((float3x3)0, 2.0);
-    float3 mul_vector0_ = mul((1.0).xxxx, (float4x3)0);
-    float4 mul_vector1_ = mul((float4x3)0, (2.0).xxx);
-    float3x3 mul_ = mul((float3x4)0, (float4x3)0);
+    float3x3 add = (((float3x3)0) + ((float3x3)0));
+    float3x3 sub = (((float3x3)0) - ((float3x3)0));
+    float3x3 mul_scalar0_ = mul(1.0, ((float3x3)0));
+    float3x3 mul_scalar1_ = mul(((float3x3)0), 2.0);
+    float3 mul_vector0_ = mul((1.0).xxxx, ((float4x3)0));
+    float4 mul_vector1_ = mul(((float4x3)0), (2.0).xxx);
+    float3x3 mul_ = mul(((float3x4)0), ((float4x3)0));
 }
 
 void bit()
@@ -202,7 +202,7 @@ void comparison()
 void assignment()
 {
     int a_1 = (int)0;
-    int3 vec0_ = (int3)0;
+    int3 vec0_ = ((int3)0);
 
     a_1 = 1;
     int _expr5 = a_1;

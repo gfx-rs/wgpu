@@ -21,14 +21,14 @@ ret_Constructarray4_int_ Constructarray4_int_(int arg0, int arg1, int arg2, int 
 static const float3 const2_ = float3(0.0, 1.0, 2.0);
 static const float2x2 const3_ = float2x2(float2(0.0, 1.0), float2(2.0, 3.0));
 static const float2x2 const4_[1] = Constructarray1_float2x2_(float2x2(float2(0.0, 1.0), float2(2.0, 3.0)));
-static const bool cz0_ = (bool)0;
-static const int cz1_ = (int)0;
-static const uint cz2_ = (uint)0;
-static const float cz3_ = (float)0;
-static const uint2 cz4_ = (uint2)0;
-static const float2x2 cz5_ = (float2x2)0;
-static const Foo cz6_[3] = (Foo[3])0;
-static const Foo cz7_ = (Foo)0;
+static const bool cz0_ = ((bool)0);
+static const int cz1_ = ((int)0);
+static const uint cz2_ = ((uint)0);
+static const float cz3_ = ((float)0);
+static const uint2 cz4_ = ((uint2)0);
+static const float2x2 cz5_ = ((float2x2)0);
+static const Foo cz6_[3] = ((Foo[3])0);
+static const Foo cz7_ = ((Foo)0);
 static const int cp3_[4] = Constructarray4_int_(0, 1, 2, 3);
 
 Foo ConstructFoo(float4 arg0, int arg1) {

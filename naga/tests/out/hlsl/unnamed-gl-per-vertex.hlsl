@@ -15,7 +15,7 @@ type_4 Constructtype_4(float4 arg0, float arg1, float arg2[1], float arg3[1]) {
     return ret;
 }
 
-static type_4 global = Constructtype_4(float4(0.0, 0.0, 0.0, 1.0), 1.0, (float[1])0, (float[1])0);
+static type_4 global = Constructtype_4(float4(0.0, 0.0, 0.0, 1.0), 1.0, ((float[1])0), ((float[1])0));
 static int global_1 = (int)0;
 
 void function()
