@@ -9,16 +9,21 @@
 //!   checks to ensure that each thread acquires locks only in a
 //!   specific order, to prevent deadlocks.
 //!
+//! - The [`observing`] module defines lock types that record
+//!   `wgpu-core`'s lock acquisition activity to disk, for later
+//!   analysis by the `lock-analyzer` binary.
+//!
 //! - The [`vanilla`] module defines lock types that are
 //!   uninstrumented, no-overhead wrappers around the standard lock
 //!   types.
-//!
-//! (We plan to add more wrappers in the future.)
 //!
 //! If the `wgpu_validate_locks` config is set (for example, with
 //! `RUSTFLAGS='--cfg wgpu_validate_locks'`), `wgpu-core` uses the
 //! [`ranked`] module's locks. We hope to make this the default for
 //! debug builds soon.
+//!
+//! If the `observe_locks` feature is enabled, `wgpu-core` uses the
+//! [`observing`] module's locks.
 //!
 //! Otherwise, `wgpu-core` uses the [`vanilla`] module's locks.
 //!
@@ -31,11 +36,19 @@ pub mod rank;
 #[cfg_attr(not(wgpu_validate_locks), allow(dead_code))]
 mod ranked;
 
-#[cfg_attr(wgpu_validate_locks, allow(dead_code))]
+#[cfg(feature = "observe_locks")]
+mod observing;
+
+#[cfg_attr(any(wgpu_validate_locks, feature = "observe_locks"), allow(dead_code))]
 mod vanilla;
 
 #[cfg(wgpu_validate_locks)]
-pub use ranked::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use ranked as chosen;
 
-#[cfg(not(wgpu_validate_locks))]
-pub use vanilla::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+#[cfg(feature = "observe_locks")]
+use observing as chosen;
+
+#[cfg(not(any(wgpu_validate_locks, feature = "observe_locks")))]
+use vanilla as chosen;
+
+pub use chosen::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
