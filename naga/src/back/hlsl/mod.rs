@@ -290,7 +290,7 @@ impl Wrapped {
 /// A fragment entry point to be considered when generating HLSL for the output interface of vertex
 /// entry points.
 ///
-/// This is provided as an optional paramter to [`Writer::write`].
+/// This is provided as an optional parameter to [`Writer::write`].
 ///
 /// If this is provided, vertex outputs will be removed if they are not inputs of this fragment
 /// entry point. This is necessary for generating correct HLSL when some of the vertex shader

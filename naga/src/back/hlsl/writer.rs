@@ -28,8 +28,8 @@ pub(crate) const INSERT_BITS_FUNCTION: &str = "naga_insertBits";
 struct EpStructMember {
     name: String,
     ty: Handle<crate::Type>,
-    // TODO: log error if binding is none?
     // technically, this should always be `Some`
+    // (we `debug_assert!` this in `write_interface_struct`)
     binding: Option<crate::Binding>,
     index: u32,
 }
@@ -489,6 +489,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         write!(self.out, "struct {struct_name}")?;
         writeln!(self.out, " {{")?;
         for m in members.iter() {
+            // Sanity check that each IO member is a built-in or is assigned a
+            // location. Also see note about nesting in `write_ep_input_struct`.
+            debug_assert!(m.binding.is_some());
+
             if is_subgroup_builtin_binding(&m.binding) {
                 continue;
             }
@@ -548,10 +552,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         let mut fake_members = Vec::new();
         for arg in func.arguments.iter() {
+            // NOTE: We don't need to handle nesting structs. All members must
+            // be either built-ins or assigned a location. I.E. `binding` is
+            // `Some`. This is checked in `VaryingContext::validate`. See:
+            // https://gpuweb.github.io/gpuweb/wgsl/#input-output-locations
             match module.types[arg.ty].inner {
                 TypeInner::Struct { ref members, .. } => {
-                    // TODO: what about nested structs? Is that possible? Maybe try an unwrap on
-                    // the binding?
                     for member in members.iter() {
                         let name = self.namer.call_or(&member.name, "member");
                         let index = fake_members.len() as u32;
@@ -608,19 +614,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let fs_input_locs = if let (Some(frag_ep), ShaderStage::Vertex) = (frag_ep, stage) {
             let mut fs_input_locs = Vec::new();
             for arg in frag_ep.func.arguments.iter() {
-                let mut push_if_location = |binding: &Option<crate::Binding>| {
-                    match *binding {
-                        Some(crate::Binding::Location { location, .. }) => {
-                            fs_input_locs.push(location)
-                        }
-                        Some(crate::Binding::BuiltIn(_)) => {}
-                        // Log error?
-                        None => {}
-                    }
+                let mut push_if_location = |binding: &Option<crate::Binding>| match *binding {
+                    Some(crate::Binding::Location { location, .. }) => fs_input_locs.push(location),
+                    Some(crate::Binding::BuiltIn(_)) | None => {}
                 };
+
+                // NOTE: We don't need to handle struct nesting. See note in
+                // `write_ep_input_struct`.
                 match frag_ep.module.types[arg.ty].inner {
                     TypeInner::Struct { ref members, .. } => {
-                        // TODO: nesting?
                         for member in members.iter() {
                             push_if_location(&member.binding);
                         }
@@ -643,9 +645,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             continue;
                         }
                     }
-                    Some(crate::Binding::BuiltIn(_)) => {}
-                    // Log error?
-                    None => {}
+                    Some(crate::Binding::BuiltIn(_)) | None => {}
                 }
             }
 

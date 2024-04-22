@@ -260,6 +260,11 @@ impl Input {
     }
 }
 
+#[cfg(feature = "hlsl-out")]
+type FragmentEntryPoint<'a> = naga::back::hlsl::FragmentEntryPoint<'a>;
+#[cfg(not(feature = "hlsl-out"))]
+type FragmentEntryPoint<'a> = ();
+
 #[allow(unused_variables)]
 fn check_targets(
     input: &Input,
@@ -267,7 +272,7 @@ fn check_targets(
     targets: Targets,
     source_code: Option<&str>,
     // For testing hlsl generation when fragment shader doesn't consume all vertex outputs.
-    frag_ep: Option<naga::back::hlsl::FragmentEntryPoint>,
+    frag_ep: Option<FragmentEntryPoint>,
 ) {
     if frag_ep.is_some() && !targets.contains(Targets::HLSL) {
         panic!("Providing FragmentEntryPoint only makes sense when testing hlsl-out");
@@ -952,7 +957,7 @@ fn convert_wgsl() {
     }
 }
 
-#[cfg(feature = "wgsl-in")]
+#[cfg(all(feature = "wgsl-in", feature = "hlsl-out"))]
 #[test]
 fn unconsumed_vertex_outputs_hlsl_out() {
     let load_and_parse = |name| {
