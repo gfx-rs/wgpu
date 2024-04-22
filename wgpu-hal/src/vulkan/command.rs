@@ -104,7 +104,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn discard_encoding(&mut self) {
-        // Safe use requires this is not called in the close state, so the buffer
+        // Safe use requires this is not called in the "closed" state, so the buffer
         // shouldn't be null. Assert this to make sure we're not pushing null
         // buffers to the discard pile.
         assert_ne!(self.active, vk::CommandBuffer::null());
