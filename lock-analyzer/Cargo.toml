@@ -1,0 +1,18 @@
+[package]
+name = "lock-analyzer"
+edition.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[dependencies]
+ron.workspace = true
+anyhow.workspace = true
+
+[dependencies.serde]
+workspace = true
+features = ["serde_derive"]
