@@ -645,7 +645,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// This `CommandEncoder` must be in the "closed" state.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
 
-    /// Discard the command list under construction, if any.
+    /// Discard the command list under construction.
     ///
     /// If an error has occurred while recording commands, this
     /// is the only safe thing to do with the encoder.
@@ -655,6 +655,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// # Safety
     ///
     /// This `CommandEncoder` must be in the "recording" state.
+    ///
+    /// Callers must not assume that implementations of this
+    /// function are idempotent, and thus should not call it
+    /// multiple times in a row.
     unsafe fn discard_encoding(&mut self);
 
     /// Return a fresh [`CommandBuffer`] holding the recorded commands.
