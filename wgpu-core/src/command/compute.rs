@@ -325,7 +325,6 @@ impl Global {
         )
     }
 
-    #[doc(hidden)]
     fn command_encoder_run_compute_pass_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
