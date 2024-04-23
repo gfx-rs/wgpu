@@ -63,7 +63,7 @@ macro_rules! define_lock_ranks {
         }
 
         impl LockRankSet {
-            pub fn name(self) -> &'static str {
+            pub fn member_name(self) -> &'static str {
                 match self {
                     $(
                         LockRankSet:: $name => $member,
