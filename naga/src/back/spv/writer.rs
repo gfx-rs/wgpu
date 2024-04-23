@@ -971,8 +971,10 @@ impl Writer {
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
         let id = if let Some(local) = make_local(&ty.inner) {
-            // If it's a type that needs SPIR-V capabilities, request them now,
-            // so write_type_declaration_local can stay infallible.
+            // If it's a type that needs SPIR-V capabilities, request them now.
+            // This needs to happen regardless of the LocalType lookup succeeding,
+            // because some types which map to the same LocalType have different
+            // capability requirements. See https://github.com/gfx-rs/wgpu/issues/5569
             self.request_type_capabilities(&ty.inner)?;
 
             // This type can be represented as a `LocalType`, so check if we've
