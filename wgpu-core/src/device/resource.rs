@@ -13,6 +13,7 @@ use crate::{
     hal_api::HalApi,
     hal_label,
     hub::Hub,
+    id,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
@@ -1944,6 +1945,7 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         storage: &'a Storage<Buffer<A>>,
         limits: &wgt::Limits,
+        device_id: id::Id<id::markers::Device>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
@@ -1962,6 +1964,7 @@ impl<A: HalApi> Device<A> {
                 })
             }
         };
+
         let (pub_usage, internal_use, range_limit) = match binding_ty {
             wgt::BufferBindingType::Uniform => (
                 wgt::BufferUsages::UNIFORM,
@@ -1993,6 +1996,10 @@ impl<A: HalApi> Device<A> {
             .buffers
             .add_single(storage, bb.buffer_id, internal_use)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
+
+        if buffer.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         check_buffer_usage(bb.buffer_id, buffer.usage, pub_usage)?;
         let raw_buffer = buffer
@@ -2170,6 +2177,7 @@ impl<A: HalApi> Device<A> {
                         &mut used,
                         &*buffer_guard,
                         &self.limits,
+                        self.as_info().id(),
                         &snatch_guard,
                     )?;
 
@@ -2193,6 +2201,7 @@ impl<A: HalApi> Device<A> {
                             &mut used,
                             &*buffer_guard,
                             &self.limits,
+                            self.as_info().id(),
                             &snatch_guard,
                         )?;
                         hal_buffers.push(bb);
