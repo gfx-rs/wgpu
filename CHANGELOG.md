@@ -58,36 +58,35 @@ By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
 By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 
 
-#### Subgroup wgsl features (native only)
-
-Add `SUBGROUP, SUBGROUP_VERTEX, SUBGROUP_BARRIER` features.
-
-TODO: description with example
-
-By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
-
-
 #### Wgsl const evaluation for many more built-ins
 
 Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
 
 `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `cos`, `cosh`, `round`, `saturate`, `sin`, `sinh`, `sqrt`, `step`, `tan`, `tanh`, `ceil`, `countLeadingZeros`, `countOneBits`, `countTrailingZeros`, `degrees`, `exp`, `exp2`, `floor`, `fract`, `fma`, `inverseSqrt`, `log`, `log2`, `max`, `min`, `radians`, `reverseBits`, `sign`, `trunc`
 
-By @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879) & [#5098](https://github.com/gfx-rs/wgpu/pull/5098)
+By @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879), [#5098](https://github.com/gfx-rs/wgpu/pull/5098)
+
+#### Subgroup wgsl features (native only)
+
+Add `SUBGROUP, SUBGROUP_VERTEX, SUBGROUP_BARRIER` features.
+
+TODO: description with example
+TODO: group more native shader features here?
+
+By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
+
 
 ### New features
 
 #### General
 
 - Implemented the `Unorm10_10_10_2` VertexFormat by @McMackety in [#5477](https://github.com/gfx-rs/wgpu/pull/5477)
-- Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 - `wgpu-types`'s `trace` and `replay` features have been replaced by the `serde` feature. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
-- Added `InstanceFlags::GPU_BASED_VALIDATION`, which enables GPU-based validation for shaders. This is currently only supported on the DX12 and Vulkan backends; other platforms ignore this flag, for now.
+- Added `InstanceFlags::GPU_BASED_VALIDATION`, which enables GPU-based validation for shaders. This is currently only supported on the DX12 and Vulkan backends; other platforms ignore this flag, for now. By @ErichDonGubler in [#5146](https://github.com/gfx-rs/wgpu/pull/5146), [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
   - When set, this flag implies `InstanceFlags::VALIDATION`.
   - This has been added to the set of flags set by `InstanceFlags::advanced_debugging`. Since the overhead is potentially very large, the flag is not enabled by default in debug builds when using `InstanceFlags::from_build_config`.
   - As with other instance flags, this flag can be changed in calls to `InstanceFlags::with_env` with the new `WGPU_GPU_BASED_VALIDATION` environment variable.
-  By @ErichDonGubler in [#5146](https://github.com/gfx-rs/wgpu/pull/5146), [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
 - Signed and unsigned 64 bit integer support in shaders. By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 - `wgpu::Instance` can now report which `wgpu::Backends` are available based on the build configuration. By @wumpf [#5167](https://github.com/gfx-rs/wgpu/pull/5167)
   ```diff
@@ -100,7 +99,6 @@ By @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879) & [#5098
   - Added `wgpu::CommandEncoder::as_hal_mut`
   - Added `wgpu::TextureView::as_hal`
   - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
-- Support disabling zero-initialization of workgroup local memory in compute shaders. By @DJMcNab in [#5508](https://github.com/gfx-rs/wgpu/pull/5508)
 
 #### Naga
 
@@ -108,17 +106,36 @@ By @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879) & [#5098
 - Support `arrayLength` for runtime-sized arrays inside binding arrays (for WGSL input and SPIR-V output). By @kvark in [#5428](https://github.com/gfx-rs/wgpu/pull/5428)
 - Added `--shader-stage` and `--input-kind` options to naga-cli for specifying vertex/fragment/compute shaders, and frontend. by @ratmice in [#5411](https://github.com/gfx-rs/wgpu/pull/5411)
 
-#### GLES
+#### WebGPU
+
+- Implement the `device_set_device_lost_callback` method for `ContextWebGpu`. By @suti in [#5438](https://github.com/gfx-rs/wgpu/pull/5438)
+- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434)
+
+#### GLES / OpenGL
 
 - Log an error when GLES texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
 - Cache the sample count to keep `get_texture_format_features` cheap. By @Dinnerbone in [#5346](https://github.com/gfx-rs/wgpu/pull/5346)
 - Mark `DEPTH32FLOAT_STENCIL8` as supported in GLES. By @Dinnerbone in [#5370](https://github.com/gfx-rs/wgpu/pull/5370)
 - Desktop GL now also supports `TEXTURE_COMPRESSION_ETC2`. By @Valaphee in [#5568](https://github.com/gfx-rs/wgpu/pull/5568)
+- Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
+- OpenGL will now be preferred over OpenGL ES on EGL, making it consistent with WGL. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
+- Fill out `driver` and `driver_info`, with the OpenGL flavor and version, similar to Vulkan. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
 
-#### WebGPU
+#### Metal
 
-- Implement the `device_set_device_lost_callback` method for `ContextWebGpu`. By @suti in [#5438](https://github.com/gfx-rs/wgpu/pull/5438)
-- Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434)
+- Metal 3.0 and 3.1 detection. By @atlv24 in [#5497](https://github.com/gfx-rs/wgpu/pull/5497)
+
+#### DX12
+
+- Shader Model 6.1-6.7 detection. By @atlv24 in [#5498](https://github.com/gfx-rs/wgpu/pull/5498)
+
+### Other performance improvements
+
+- Simplify and speed up the allocation of internal IDs. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
+- Use memory pooling for UsageScopes to avoid frequent large allocations. by @robtfm in [#5414](https://github.com/gfx-rs/wgpu/pull/5414)
+- Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
+- Support disabling zero-initialization of workgroup local memory in compute shaders. By @DJMcNab in [#5508](https://github.com/gfx-rs/wgpu/pull/5508)
+- In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 
 ### Documentation
 
@@ -134,52 +151,38 @@ By @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879) & [#5098
 - Fix panic when creating a surface while no backend is available. By @wumpf [#5166](https://github.com/gfx-rs/wgpu/pull/5166)
 - Correctly compute minimum buffer size for array-typed `storage` and `uniform` vars. By @jimblandy [#5222](https://github.com/gfx-rs/wgpu/pull/5222)
 - Fix timeout when presenting a surface where no work has been done. By @waywardmonkeys in [#5200](https://github.com/gfx-rs/wgpu/pull/5200)
-- Simplify and speed up the allocation of internal IDs. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
-- Fix behavior of `extractBits` and `insertBits` when `offset + count` overflows the bit width. By @cwfitzgerald in [#5305](https://github.com/gfx-rs/wgpu/pull/5305)
 - Fix registry leaks with de-duplicated resources. By @nical in [#5244](https://github.com/gfx-rs/wgpu/pull/5244)
-- Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
 - Fix linking when targeting android. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
 - Failing to set the device lost closure will call the closure before returning. By @bradwerth in [#5358](https://github.com/gfx-rs/wgpu/pull/5358).
-- Use memory pooling for UsageScopes to avoid frequent large allocations. by @robtfm in [#5414](https://github.com/gfx-rs/wgpu/pull/5414)
 - Fix deadlocks caused by recursive read-write lock acquisitions [#5426](https://github.com/gfx-rs/wgpu/pull/5426).
 - Remove exposed C symbols (`extern "C"` + [no_mangle]) from RenderPass & ComputePass recording. By @wumpf in [#5409](https://github.com/gfx-rs/wgpu/pull/5409).
 - Fix surfaces being only compatible with first backend enabled on an instance, causing failures when manually specifying an adapter. By @Wumpf in [#5535](https://github.com/gfx-rs/wgpu/pull/5535).
 
 #### Naga
-- In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
-- GLSL 410 does not support layout(binding = ...), enable only for GLSL 420. By @bes in [#5357](https://github.com/gfx-rs/wgpu/pull/5357)
+
 - In spv-out, check for acceleration and ray-query types when enabling ray-query extension to prevent validation error. By @Vecvec in [#5463](https://github.com/gfx-rs/wgpu/pull/5463)
 - Add a limit for curly brace nesting in WGSL parsing, plus a note about stack size requirements. By @ErichDonGubler in [#5447](https://github.com/gfx-rs/wgpu/pull/5447).
 - In hlsl-out, parenthesize output for `Expression::ZeroValue` (e.g. `(float4)0` -> `((float)0)`). This allows subsequent member access to parse correctly. By @Imberflur in [#5587](https://github.com/gfx-rs/wgpu/pull/5587).
+- Fix behavior of `extractBits` and `insertBits` when `offset + count` overflows the bit width. By @cwfitzgerald in [#5305](https://github.com/gfx-rs/wgpu/pull/5305)
+- Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
 
+#### GLES / OpenGL
 
-#### Tests
-
-- Fix intermittent crashes on Linux in the `multithreaded_compute` test. By @jimblandy in [#5129](https://github.com/gfx-rs/wgpu/pull/5129).
-- Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @rodolphito in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
-- Add test that verifies that we can drop the queue before using the device to create a command encoder. By @Davidster in [#5211](https://github.com/gfx-rs/wgpu/pull/5211)
-
-#### GLES
-
+- GLSL 410 does not support layout(binding = ...), enable only for GLSL 420. By @bes in [#5357](https://github.com/gfx-rs/wgpu/pull/5357)
 - Fixes for being able to use an OpenGL 4.1 core context provided by macOS with wgpu. By @bes in [#5331](https://github.com/gfx-rs/wgpu/pull/5331).
-- Don't create a program for shader-clearing if that workaround isn't required. By @Dinnerbone in [#5348](https://github.com/gfx-rs/wgpu/pull/5348).
 - Fix crash when holding multiple devices on wayland/surfaceless. By @ashdnazg in [#5351](https://github.com/gfx-rs/wgpu/pull/5351).
-- OpenGL will now be preferred over OpenGL ES on EGL, making it consistent with WGL. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
 - Fix `first_instance` getting ignored in draw indexed when `ARB_shader_draw_parameters` feature is present and `base_vertex` is 0. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
-- Fill out `driver` and `driver_info`, with the OpenGL flavor and version, similar to Vulkan. By @valaphee in [#5482](https://github.com/gfx-rs/wgpu/pull/5482)
 
 #### Vulkan
 
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
 - Add safety check to `wgpu_hal::vulkan::CommandEncoder` to make sure `discard_encoding` is not called in the closed state. By @villuna in [#5557](https://github.com/gfx-rs/wgpu/pull/5557)
 
-#### Metal
+#### Tests
 
-- Metal 3.0 and 3.1 detection. By @atlv24 in [#5497](https://github.com/gfx-rs/wgpu/pull/5497)
-
-#### DX12
-
-- Shader Model 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, and 6.7 detection. By @atlv24 in [#5498](https://github.com/gfx-rs/wgpu/pull/5498)
+- Fix intermittent crashes on Linux in the `multithreaded_compute` test. By @jimblandy in [#5129](https://github.com/gfx-rs/wgpu/pull/5129).
+- Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @rodolphito in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
+- Add test that verifies that we can drop the queue before using the device to create a command encoder. By @Davidster in [#5211](https://github.com/gfx-rs/wgpu/pull/5211)
 
 ## v0.19.4 (2024-04-17)
 
