@@ -2079,10 +2079,32 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn create_texture_binding(
-        view: &TextureView<A>,
-        internal_use: hal::TextureUses,
-        pub_usage: wgt::TextureUsages,
+    fn create_sampler_binding<'a>(
+        used: &BindGroupStates<A>,
+        storage: &'a Storage<Sampler<A>>,
+        id: id::Id<id::markers::Sampler>,
+        device_id: id::Id<id::markers::Device>,
+    ) -> Result<&'a Sampler<A>, binding_model::CreateBindGroupError> {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        let sampler = used
+            .samplers
+            .add_single(storage, id)
+            .ok_or(Error::InvalidSampler(id))?;
+
+        if sampler.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
+        Ok(sampler)
+    }
+
+    pub(crate) fn create_texture_binding<'a>(
+        self: &Arc<Self>,
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        storage: &'a Storage<TextureView<A>>,
+        id: id::Id<id::markers::TextureView>,
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
     ) -> Result<(), binding_model::CreateBindGroupError> {
@@ -2208,25 +2230,20 @@ impl<A: HalApi> Device<A> {
                     }
                     (res_index, num_bindings)
                 }
-                Br::Sampler(id) => {
-                    match decl.ty {
+                Br::Sampler(id) => match decl.ty {
                         wgt::BindingType::Sampler(ty) => {
-                            let sampler = used
-                                .samplers
-                                .add_single(&*sampler_guard, id)
-                                .ok_or(Error::InvalidSampler(id))?;
+                            let sampler = Self::create_sampler_binding(
+                            &used,
+                            &sampler_guard,
+                            id,
+                            self.as_info().id(),
+                        )?;
 
-                            if sampler.device.as_info().id() != self.as_info().id() {
-                                return Err(DeviceError::WrongDevice.into());
-                            }
-
-                            // Allowed sampler values for filtering and comparison
                             let (allowed_filtering, allowed_comparison) = match ty {
                                 wgt::SamplerBindingType::Filtering => (None, false),
                                 wgt::SamplerBindingType::NonFiltering => (Some(false), false),
                                 wgt::SamplerBindingType::Comparison => (None, true),
                             };
-
                             if let Some(allowed_filtering) = allowed_filtering {
                                 if allowed_filtering != sampler.filtering {
                                     return Err(Error::WrongSamplerFiltering {
@@ -2236,7 +2253,6 @@ impl<A: HalApi> Device<A> {
                                     });
                                 }
                             }
-
                             if allowed_comparison != sampler.comparison {
                                 return Err(Error::WrongSamplerComparison {
                                     binding,
@@ -2256,21 +2272,20 @@ impl<A: HalApi> Device<A> {
                                 expected: "Sampler",
                             })
                         }
-                    }
-                }
+                    },
                 Br::SamplerArray(ref bindings_array) => {
                     let num_bindings = bindings_array.len();
                     Self::check_array_binding(self.features, decl.count, num_bindings)?;
 
                     let res_index = hal_samplers.len();
                     for &id in bindings_array.iter() {
-                        let sampler = used
-                            .samplers
-                            .add_single(&*sampler_guard, id)
-                            .ok_or(Error::InvalidSampler(id))?;
-                        if sampler.device.as_info().id() != self.as_info().id() {
-                            return Err(DeviceError::WrongDevice.into());
-                        }
+                        let sampler = Self::create_sampler_binding(
+                            &used,
+                            &sampler_guard,
+                            id,
+                            self.as_info().id(),
+                        )?;
+
                         hal_samplers.push(sampler.raw());
                     }
 
