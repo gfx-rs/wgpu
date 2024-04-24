@@ -45,7 +45,7 @@ macro_rules! define_lock_ranks {
     {
         $(
             $( #[ $attr:meta ] )*
-            rank $name:ident $member:literal followed by { $( $follower:ident ),* $(,)? };
+            rank $name:ident $member:literal followed by { $( $follower:ident ),* $(,)? }
         )*
     } => {
         // An enum that assigns a unique number to each rank.
@@ -94,50 +94,50 @@ define_lock_ranks! {
         TEXTURE_BIND_GROUP_STATE_TEXTURES,
         BUFFER_MAP_STATE,
         STATELESS_BIND_GROUP_STATE_RESOURCES,
-    };
-    rank STAGING_BUFFER_RAW "StagingBuffer::raw" followed by { };
+    }
+    rank STAGING_BUFFER_RAW "StagingBuffer::raw" followed by { }
     rank COMMAND_ALLOCATOR_FREE_ENCODERS "CommandAllocator::free_encoders" followed by {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-    };
-    rank DEVICE_TRACKERS "Device::trackers" followed by { };
+    }
+    rank DEVICE_TRACKERS "Device::trackers" followed by { }
     rank DEVICE_LIFE_TRACKER "Device::life_tracker" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         // Uncomment this to see an interesting cycle.
         // DEVICE_TEMP_SUSPECTED,
-    };
+    }
     rank DEVICE_TEMP_SUSPECTED "Device::temp_suspected" followed by {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         COMMAND_BUFFER_DATA,
         DEVICE_TRACKERS,
-    };
+    }
     rank DEVICE_PENDING_WRITES "Device::pending_writes" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         DEVICE_LIFE_TRACKER,
-    };
-    rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { };
+    }
+    rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
     #[allow(dead_code)]
-    rank DEVICE_TRACE "Device::trace" followed by { };
-    rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { };
-    rank BUFFER_SYNC_MAPPED_WRITES "Buffer::sync_mapped_writes" followed by { };
-    rank BUFFER_MAP_STATE "Buffer::map_state" followed by { DEVICE_PENDING_WRITES };
-    rank BUFFER_BIND_GROUPS "Buffer::bind_groups" followed by { };
-    rank TEXTURE_VIEWS "Texture::views" followed by { };
-    rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { };
-    rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { };
-    rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { };
-    rank BUFFER_BIND_GROUP_STATE_BUFFERS "BufferBindGroupState::buffers" followed by { };
-    rank STATELESS_BIND_GROUP_STATE_RESOURCES "StatelessBindGroupState::resources" followed by { };
-    rank TEXTURE_BIND_GROUP_STATE_TEXTURES "TextureBindGroupState::textures" followed by { };
-    rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { };
-    rank SURFACE_PRESENTATION "Surface::presentation" followed by { };
+    rank DEVICE_TRACE "Device::trace" followed by { }
+    rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
+    rank BUFFER_SYNC_MAPPED_WRITES "Buffer::sync_mapped_writes" followed by { }
+    rank BUFFER_MAP_STATE "Buffer::map_state" followed by { DEVICE_PENDING_WRITES }
+    rank BUFFER_BIND_GROUPS "Buffer::bind_groups" followed by { }
+    rank TEXTURE_VIEWS "Texture::views" followed by { }
+    rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
+    rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
+    rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
+    rank BUFFER_BIND_GROUP_STATE_BUFFERS "BufferBindGroupState::buffers" followed by { }
+    rank STATELESS_BIND_GROUP_STATE_RESOURCES "StatelessBindGroupState::resources" followed by { }
+    rank TEXTURE_BIND_GROUP_STATE_TEXTURES "TextureBindGroupState::textures" followed by { }
+    rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
+    rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
 
     #[cfg(test)]
-    rank PAWN "pawn" followed by { ROOK, BISHOP };
+    rank PAWN "pawn" followed by { ROOK, BISHOP }
     #[cfg(test)]
-    rank ROOK "rook" followed by { KNIGHT };
+    rank ROOK "rook" followed by { KNIGHT }
     #[cfg(test)]
-    rank KNIGHT "knight" followed by { };
+    rank KNIGHT "knight" followed by { }
     #[cfg(test)]
-    rank BISHOP "bishop" followed by { };
+    rank BISHOP "bishop" followed by { }
 }
