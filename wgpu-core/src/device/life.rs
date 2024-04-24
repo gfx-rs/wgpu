@@ -545,13 +545,17 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.bind_groups,
             |maps| &mut maps.bind_groups,
         );
+        let mut used_buffers = vec![];
+        let mut used_textures = vec![];
         removed_resource.drain(..).for_each(|bind_group| {
             for v in bind_group.used.buffers.drain_resources() {
+                used_buffers.push(v.clone());
                 self.suspected_resources
                     .buffers
                     .insert(v.as_info().tracker_index(), v);
             }
             for v in bind_group.used.textures.drain_resources() {
+                used_textures.push(v.clone());
                 self.suspected_resources
                     .textures
                     .insert(v.as_info().tracker_index(), v);
@@ -572,6 +576,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                 bind_group.layout.clone(),
             );
         });
+        for b in used_buffers {
+            b.bind_groups.lock().retain(|weak| weak.strong_count() > 0);
+        }
+        for t in used_textures {
+            t.bind_groups.lock().retain(|weak| weak.strong_count() > 0);
+        }
         self
     }
 
