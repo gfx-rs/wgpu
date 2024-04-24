@@ -70,6 +70,11 @@ pub(super) struct WrappedMath {
     pub(super) components: Option<u32>,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedZeroValue {
+    pub(super) ty: Handle<crate::Type>,
+}
+
 /// HLSL backend requires its own `ImageQuery` enum.
 ///
 /// It is used inside `WrappedImageQuery` and should be unique per ImageQuery function.
@@ -359,7 +364,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     }
 
     /// Helper function that write wrapped function for `Expression::Compose` for structures.
-    pub(super) fn write_wrapped_constructor_function(
+    fn write_wrapped_constructor_function(
         &mut self,
         module: &crate::Module,
         constructor: WrappedConstructor,
@@ -862,6 +867,25 @@ impl<'a, W: Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    // TODO: we could merge this with iteration in write_wrapped_compose_functions...
+    //
+    /// Helper function that writes zero value wrapped functions
+    pub(super) fn write_wrapped_zero_value_functions(
+        &mut self,
+        module: &crate::Module,
+        expressions: &crate::Arena<crate::Expression>,
+    ) -> BackendResult {
+        for (handle, _) in expressions.iter() {
+            if let crate::Expression::ZeroValue(ty) = expressions[handle] {
+                let zero_value = WrappedZeroValue { ty };
+                if self.wrapped.zero_values.insert(zero_value) {
+                    self.write_wrapped_zero_value_function(module, zero_value)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_math_functions(
         &mut self,
         module: &crate::Module,
@@ -1006,6 +1030,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     ) -> BackendResult {
         self.write_wrapped_math_functions(module, func_ctx)?;
         self.write_wrapped_compose_functions(module, func_ctx.expressions)?;
+        self.write_wrapped_zero_value_functions(module, func_ctx.expressions)?;
 
         for (handle, _) in func_ctx.expressions.iter() {
             match func_ctx.expressions[handle] {
@@ -1280,6 +1305,73 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_zero_value_function_name(
+        &mut self,
+        module: &crate::Module,
+        zero_value: WrappedZeroValue,
+    ) -> BackendResult {
+        let name = crate::TypeInner::hlsl_type_id(zero_value.ty, module.to_ctx(), &self.names)?;
+        write!(self.out, "ZeroValue{name}")?;
+        Ok(())
+    }
+
+    /// Helper function that write wrapped function for `Expression::ZeroValue`
+    ///
+    /// This is necessary since we might have a member access after the zero value expression, e.g.
+    /// `.y` (in practice this can come up when consuming SPIRV that's been produced by glslc).
+    ///
+    /// So we can't just write `(float4)0` since `(float4)0.y` won't parse correctly.
+    ///
+    /// Parenthesizing the expression like `((float4)0).y` would work... except DXC can't handle
+    /// cases like:
+    ///
+    /// ```ignore
+    /// tests\out\hlsl\access.hlsl:183:41: error: cannot compile this l-value expression yet
+    ///     t_1.am = (__mat4x2[2])((float4x2[2])0);
+    ///                                         ^
+    /// ```
+    fn write_wrapped_zero_value_function(
+        &mut self,
+        module: &crate::Module,
+        zero_value: WrappedZeroValue,
+    ) -> BackendResult {
+        use crate::back::INDENT;
+
+        const RETURN_VARIABLE_NAME: &str = "ret";
+
+        // Write function return type and name
+        if let crate::TypeInner::Array { base, size, .. } = module.types[zero_value.ty].inner {
+            write!(self.out, "typedef ")?;
+            self.write_type(module, zero_value.ty)?;
+            write!(self.out, " ret_")?;
+            self.write_wrapped_zero_value_function_name(module, zero_value)?;
+            self.write_array_size(module, base, size)?;
+            writeln!(self.out, ";")?;
+
+            write!(self.out, "ret_")?;
+            self.write_wrapped_zero_value_function_name(module, zero_value)?;
+        } else {
+            self.write_type(module, zero_value.ty)?;
+        }
+        write!(self.out, " ")?;
+        self.write_wrapped_zero_value_function_name(module, zero_value)?;
+
+        // Write function parameters (none) and start function body
+        writeln!(self.out, "() {{")?;
+
+        // Write `ZeroValue` function.
+        write!(self.out, "{INDENT}return ")?;
+        self.write_default_init(module, zero_value.ty)?;
+        writeln!(self.out, ";")?;
+
+        // End of function body
+        writeln!(self.out, "}}")?;
+        // Write extra new line
+        writeln!(self.out)?;
 
         Ok(())
     }
