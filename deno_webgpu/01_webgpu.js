@@ -1289,11 +1289,6 @@ class GPUDevice extends EventTarget {
       const resource = entry.resource;
       if (ObjectPrototypeIsPrototypeOf(GPUSamplerPrototype, resource)) {
         const rid = assertResource(resource, prefix, context);
-        assertDeviceMatch(device, resource, {
-          prefix,
-          resourceContext: context,
-          selfContext: "this",
-        });
         return {
           binding: entry.binding,
           kind: "GPUSampler",
@@ -1304,11 +1299,6 @@ class GPUDevice extends EventTarget {
       ) {
         const rid = assertResource(resource, prefix, context);
         assertResource(resource[_texture], prefix, context);
-        assertDeviceMatch(device, resource[_texture], {
-          prefix,
-          resourceContext: context,
-          selfContext: "this",
-        });
         return {
           binding: entry.binding,
           kind: "GPUTextureView",
@@ -1318,11 +1308,6 @@ class GPUDevice extends EventTarget {
         // deno-lint-ignore prefer-primordials
         const rid = assertResource(resource.buffer, prefix, context);
         // deno-lint-ignore prefer-primordials
-        assertDeviceMatch(device, resource.buffer, {
-          prefix,
-          resourceContext: context,
-          selfContext: "this",
-        });
         return {
           binding: entry.binding,
           kind: "GPUBufferBinding",
