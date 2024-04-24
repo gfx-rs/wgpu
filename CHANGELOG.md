@@ -41,13 +41,26 @@ Bottom level categories:
 
 ### Major Changes
 
-TODO: MORE
-
 #### Pipeline overridable constants
 
 Wgpu supports now [pipeline-overridable constants](https://www.w3.org/TR/webgpu/#dom-gpuprogrammablestage-constants)
 
-TODO: description with example
+This allows you to define constants in wgsl like this:
+```rust
+override some_factor: f32 = 42.1337; // Specifies a default of 42.1337 if it's not set.
+```
+And then set them at runtime like so on your pipeline consuming this shader:
+```rust
+// ...
+fragment: Some(wgpu::FragmentState {
+    compilation_options: wgpu::PipelineCompilationOptions {
+        constants: &[("some_factor".to_owned(), 0.1234)].into(), // Sets `some_factor` to 0.1234.
+        ..Default::default()
+    },
+    // ...
+}),
+// ...
+```
 
 By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
 
