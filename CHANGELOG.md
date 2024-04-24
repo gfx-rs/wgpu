@@ -41,58 +41,37 @@ Bottom level categories:
 
 ### Major Changes
 
-### Documentation
+TODO: MORE
 
-- Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
-- Document precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386)
-- Give short example of WGSL `push_constant` syntax. By @waywardmonkeys in [#5393](https://github.com/gfx-rs/wgpu/pull/5393)
+#### Pipeline overridable constants
+
+Wgpu supports now [pipeline-overridable constants](https://www.w3.org/TR/webgpu/#dom-gpuprogrammablestage-constants)
+
+TODO: description with example
+
+By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
+
+#### Changed feature requirements for timestamps
+
+`wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU).
+
+By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
+
+
+#### Subgroup wgsl features (native only)
+
+Add `SUBGROUP, SUBGROUP_VERTEX, SUBGROUP_BARRIER` features.
+
+TODO: description with example
+
+By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
+
 
 ### New features
 
-- Added `--shader-stage` and `--input-kind` options to naga-cli for specifying vertex/fragment/compute shaders, and frontend. by @ratmice in [#5411](https://github.com/gfx-rs/wgpu/pull/5411)
-
 #### General
 
-- Implemented the `Unorm10_10_10_2` VertexFormat.
-- Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
-  - [#4879](https://github.com/gfx-rs/wgpu/pull/4879) by @ErichDonGubler:
-    - `abs`
-    - `acos`
-    - `acosh`
-    - `asin`
-    - `asinh`
-    - `atan`
-    - `atanh`
-    - `cos`
-    - `cosh`
-    - `round`
-    - `saturate`
-    - `sin`
-    - `sinh`
-    - `sqrt`
-    - `step`
-    - `tan`
-    - `tanh`
-  - [#5098](https://github.com/gfx-rs/wgpu/pull/5098) by @ErichDonGubler:
-    - `ceil`
-    - `countLeadingZeros`
-    - `countOneBits`
-    - `countTrailingZeros`
-    - `degrees`
-    - `exp`
-    - `exp2`
-    - `floor`
-    - `fract`
-    - `fma`
-    - `inverseSqrt`
-    - `log`
-    - `log2`
-    - `max`
-    - `min`
-    - `radians`
-    - `reverseBits`
-    - `sign`
-    - `trunc`
+- Implemented the `Unorm10_10_10_2` VertexFormat by @McMackety in [#5477](https://github.com/gfx-rs/wgpu/pull/5477)
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 - `wgpu-types`'s `trace` and `replay` features have been replaced by the `serde` feature. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
 - `wgpu-core`'s `serial-pass` feature has been removed. Use `serde` instead. By @KirmesBude in [#5149](https://github.com/gfx-rs/wgpu/pull/5149)
@@ -100,28 +79,31 @@ Bottom level categories:
   - When set, this flag implies `InstanceFlags::VALIDATION`.
   - This has been added to the set of flags set by `InstanceFlags::advanced_debugging`. Since the overhead is potentially very large, the flag is not enabled by default in debug builds when using `InstanceFlags::from_build_config`.
   - As with other instance flags, this flag can be changed in calls to `InstanceFlags::with_env` with the new `WGPU_GPU_BASED_VALIDATION` environment variable.
-
   By @ErichDonGubler in [#5146](https://github.com/gfx-rs/wgpu/pull/5146), [#5046](https://github.com/gfx-rs/wgpu/pull/5046).
 - Signed and unsigned 64 bit integer support in shaders. By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 - `wgpu::Instance` can now report which `wgpu::Backends` are available based on the build configuration. By @wumpf [#5167](https://github.com/gfx-rs/wgpu/pull/5167)
-
   ```diff
   -wgpu::Instance::any_backend_feature_enabled()
   +!wgpu::Instance::enabled_backend_features().is_empty()
   ```
-
-- `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU). By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 - `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
-
 - More as_hal methods and improvements by @JMS55 in [#5452](https://github.com/gfx-rs/wgpu/pull/5452)
   - Added `wgpu::CommandEncoder::as_hal_mut`
   - Added `wgpu::TextureView::as_hal`
   - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
-
-- Added support for pipeline-overridable constants. By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
-- Add `SUBGROUP, SUBGROUP_VERTEX, SUBGROUP_BARRIER` features. By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
 - Support disabling zero-initialization of workgroup local memory in compute shaders. By @DJMcNab in [#5508](https://github.com/gfx-rs/wgpu/pull/5508)
+
+#### Wgsl
+- Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
+  - `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `cos`, `cosh`, `round`, `saturate`, `sin`, `sinh`, `sqrt`, `step`, `tan`, `tanh` by @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879) 
+  - `ceil`, `countLeadingZeros`, `countOneBits`, `countTrailingZeros`, `degrees`, `exp`, `exp2`, `floor`, `fract`, `fma`, `inverseSqrt`, `log`, `log2`, `max`, `min`, `radians`, `reverseBits`, `sign`, `trunc` by @ErichDonGubler in [#5098](https://github.com/gfx-rs/wgpu/pull/5098)
+
+#### Naga
+
+- Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
+- Support `arrayLength` for runtime-sized arrays inside binding arrays (for WGSL input and SPIR-V output). By @kvark in [#5428](https://github.com/gfx-rs/wgpu/pull/5428)
+- Added `--shader-stage` and `--input-kind` options to naga-cli for specifying vertex/fragment/compute shaders, and frontend. by @ratmice in [#5411](https://github.com/gfx-rs/wgpu/pull/5411)
 
 #### GLES
 
@@ -130,15 +112,16 @@ Bottom level categories:
 - Mark `DEPTH32FLOAT_STENCIL8` as supported in GLES. By @Dinnerbone in [#5370](https://github.com/gfx-rs/wgpu/pull/5370)
 - Desktop GL now also supports `TEXTURE_COMPRESSION_ETC2`. By @Valaphee in [#5568](https://github.com/gfx-rs/wgpu/pull/5568)
 
-#### Naga
-
-- Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
-- Support `arrayLength` for runtime-sized arrays inside binding arrays (for WGSL input and SPIR-V output). By @kvark in [#5428](https://github.com/gfx-rs/wgpu/pull/5428)
-
 #### WebGPU
 
 - Implement the `device_set_device_lost_callback` method for `ContextWebGpu`. By @suti in [#5438](https://github.com/gfx-rs/wgpu/pull/5438)
 - Add support for storage texture access modes `ReadOnly` and `ReadWrite`. By @JolifantoBambla in [#5434](https://github.com/gfx-rs/wgpu/pull/5434)
+
+### Documentation
+
+- Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
+- Document precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386)
+- Give short example of WGSL `push_constant` syntax. By @waywardmonkeys in [#5393](https://github.com/gfx-rs/wgpu/pull/5393)
 
 ### Bug Fixes
 
