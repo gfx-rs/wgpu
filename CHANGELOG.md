@@ -164,6 +164,8 @@ Bottom level categories:
 - GLSL 410 does not support layout(binding = ...), enable only for GLSL 420. By @bes in [#5357](https://github.com/gfx-rs/wgpu/pull/5357)
 - In spv-out, check for acceleration and ray-query types when enabling ray-query extension to prevent validation error. By @Vecvec in [#5463](https://github.com/gfx-rs/wgpu/pull/5463)
 - Add a limit for curly brace nesting in WGSL parsing, plus a note about stack size requirements. By @ErichDonGubler in [#5447](https://github.com/gfx-rs/wgpu/pull/5447).
+- In hlsl-out, parenthesize output for `Expression::ZeroValue` (e.g. `(float4)0` -> `((float)0)`). This allows subsequent member access to parse correctly. By @Imberflur in [#5587](https://github.com/gfx-rs/wgpu/pull/5587).
+
 
 #### Tests
 

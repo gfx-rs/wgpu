@@ -20,9 +20,14 @@ gl_PerVertex Constructgl_PerVertex(float4 arg0, float arg1, float arg2[1], float
     return ret;
 }
 
+typedef float ret_ZeroValuearray1_float_[1];
+ret_ZeroValuearray1_float_ ZeroValuearray1_float_() {
+    return (float[1])0;
+}
+
 static float2 v_uv = (float2)0;
 static float2 a_uv_1 = (float2)0;
-static gl_PerVertex unnamed = Constructgl_PerVertex(float4(0.0, 0.0, 0.0, 1.0), 1.0, (float[1])0, (float[1])0);
+static gl_PerVertex unnamed = Constructgl_PerVertex(float4(0.0, 0.0, 0.0, 1.0), 1.0, ZeroValuearray1_float_(), ZeroValuearray1_float_());
 static float2 a_pos_1 = (float2)0;
 
 struct VertexOutput_main {
