@@ -66,7 +66,8 @@ By @teoxoy & @jimblandy in [#5500](https://github.com/gfx-rs/wgpu/pull/5500)
 
 #### Changed feature requirements for timestamps
 
-`wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU (due to a spec change `write_timestamp` is no longer supported on WebGPU).
+Due to a specification change `write_timestamp` is no longer supported on WebGPU.
+`wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU.
 
 By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
 
@@ -79,15 +80,30 @@ Many numeric built-ins have had a constant evaluation implementation added for t
 
 By @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879), [#5098](https://github.com/gfx-rs/wgpu/pull/5098)
 
-#### Subgroup wgsl features (native only)
+#### New **native-only** wgsl features
 
-Add `SUBGROUP, SUBGROUP_VERTEX, SUBGROUP_BARRIER` features.
+##### Subgroup operations
 
-TODO: description with example
-TODO: group more native shader features here?
+The following subgroup operations are available in wgsl now:
+
+`subgroupBallot`, `subgroupAll`, `subgroupAny`, `subgroupAdd`, `subgroupMul`, `subgroupMin`, `subgroupMax`, `subgroupAnd`, `subgroupOr`, `subgroupXor`, `subgroupExclusiveAdd`, `subgroupExclusiveMul`, `subgroupInclusiveAdd`, `subgroupInclusiveMul`, `subgroupBroadcastFirst`, `subgroupBroadcast`, `subgroupShuffle`, `subgroupShuffleDown`, `subgroupShuffleUp`, `subgroupShuffleXor`
+
+
+Availability is governed by the following feature flags:
+* `wgpu::Features::SUBGROUP` for all operations except `subgroupBarrier` in fragment & compute, supported on Vulkan, DX12 and Metal.
+* `wgpu::Features::SUBGROUP_VERTEX`, for all operations except `subgroupBarrier` general operations in  vertex shaders, supported on Vulkan
+* `wgpu::Features::SUBGROUP_BARRIER`, for support of the `subgroupBarrier` operation, supported on Vulkan & Metal
+
+Note that there currently [some differences](https://github.com/gfx-rs/wgpu/issues/5555) between wgpu's native-only implementation and the [open WebGPU proposal](https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md).
 
 By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
 
+##### Signed and unsigned 64 bit integer support in shaders.
+
+`wgpu::Features::SHADER_INT64` enables 64 bit integer signed and unsigned integer variables in wgsl (`i64` and `u64` respectively).
+Supported on Vulkan, DX12 (requires DXC) and Metal (with MSL 2.3+ support).
+
+By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 
 ### New features
 
@@ -100,7 +116,6 @@ By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
   - When set, this flag implies `InstanceFlags::VALIDATION`.
   - This has been added to the set of flags set by `InstanceFlags::advanced_debugging`. Since the overhead is potentially very large, the flag is not enabled by default in debug builds when using `InstanceFlags::from_build_config`.
   - As with other instance flags, this flag can be changed in calls to `InstanceFlags::with_env` with the new `WGPU_GPU_BASED_VALIDATION` environment variable.
-- Signed and unsigned 64 bit integer support in shaders. By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 - `wgpu::Instance` can now report which `wgpu::Backends` are available based on the build configuration. By @wumpf [#5167](https://github.com/gfx-rs/wgpu/pull/5167)
   ```diff
   -wgpu::Instance::any_backend_feature_enabled()
