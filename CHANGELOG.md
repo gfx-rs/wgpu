@@ -67,6 +67,14 @@ TODO: description with example
 By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
 
 
+#### Wgsl const evaluation for many more built-ins
+
+Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
+
+`abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `cos`, `cosh`, `round`, `saturate`, `sin`, `sinh`, `sqrt`, `step`, `tan`, `tanh`, `ceil`, `countLeadingZeros`, `countOneBits`, `countTrailingZeros`, `degrees`, `exp`, `exp2`, `floor`, `fract`, `fma`, `inverseSqrt`, `log`, `log2`, `max`, `min`, `radians`, `reverseBits`, `sign`, `trunc`
+
+By @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879) & [#5098](https://github.com/gfx-rs/wgpu/pull/5098)
+
 ### New features
 
 #### General
@@ -93,11 +101,6 @@ By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
   - Added `wgpu::TextureView::as_hal`
   - `wgpu::Texture::as_hal` now returns a user-defined type to match the other as_hal functions
 - Support disabling zero-initialization of workgroup local memory in compute shaders. By @DJMcNab in [#5508](https://github.com/gfx-rs/wgpu/pull/5508)
-
-#### Wgsl
-- Many numeric built-ins have had a constant evaluation implementation added for them, which allows them to be used in a `const` context:
-  - `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `cos`, `cosh`, `round`, `saturate`, `sin`, `sinh`, `sqrt`, `step`, `tan`, `tanh` by @ErichDonGubler in [#4879](https://github.com/gfx-rs/wgpu/pull/4879) 
-  - `ceil`, `countLeadingZeros`, `countOneBits`, `countTrailingZeros`, `degrees`, `exp`, `exp2`, `floor`, `fract`, `fma`, `inverseSqrt`, `log`, `log2`, `max`, `min`, `radians`, `reverseBits`, `sign`, `trunc` by @ErichDonGubler in [#5098](https://github.com/gfx-rs/wgpu/pull/5098)
 
 #### Naga
 
