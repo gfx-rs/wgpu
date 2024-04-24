@@ -267,6 +267,7 @@ pub enum Error {
 
 #[derive(Default)]
 struct Wrapped {
+    zero_values: crate::FastHashSet<help::WrappedZeroValue>,
     array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
     image_queries: crate::FastHashSet<help::WrappedImageQuery>,
     constructors: crate::FastHashSet<help::WrappedConstructor>,

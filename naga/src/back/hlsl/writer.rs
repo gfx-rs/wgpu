@@ -1,5 +1,8 @@
 use super::{
-    help::{WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess},
+    help::{
+        WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess,
+        WrappedZeroValue,
+    },
     storage::StoreValue,
     BackendResult, Error, Options,
 };
@@ -264,6 +267,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.write_special_functions(module)?;
 
         self.write_wrapped_compose_functions(module, &module.global_expressions)?;
+        self.write_wrapped_zero_value_functions(module, &module.global_expressions)?;
 
         // Write all named constants
         let mut constants = module
@@ -2252,9 +2256,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             Expression::ZeroValue(ty) => {
-                write!(self.out, "(")?;
-                self.write_default_init(module, ty)?;
-                write!(self.out, ")")?;
+                self.write_wrapped_zero_value_function_name(module, WrappedZeroValue { ty })?;
+                write!(self.out, "()")?;
             }
             Expression::Compose { ty, ref components } => {
                 match module.types[ty].inner {
@@ -3398,7 +3401,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     }
 
     /// Helper function that write default zero initialization
-    fn write_default_init(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
+    pub(super) fn write_default_init(
+        &mut self,
+        module: &Module,
+        ty: Handle<crate::Type>,
+    ) -> BackendResult {
         write!(self.out, "(")?;
         self.write_type(module, ty)?;
         if let TypeInner::Array { base, size, .. } = module.types[ty].inner {
