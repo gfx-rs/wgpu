@@ -578,12 +578,15 @@ impl<A: HalApi> LifetimeTracker<A> {
     fn triage_suspected_texture_views(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let resource_map = &mut self.suspected_resources.texture_views;
-        Self::triage_resources(
+        let removed_views = Self::triage_resources(
             resource_map,
             self.active.as_mut_slice(),
             &mut trackers.views,
             |maps| &mut maps.texture_views,
         );
+        for v in removed_views {
+            v.parent.views.lock().retain(|weak| weak.strong_count() > 0);
+        }
         self
     }
 
