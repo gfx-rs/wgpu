@@ -584,8 +584,10 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.views,
             |maps| &mut maps.texture_views,
         );
-        for v in removed_views {
-            v.parent.views.lock().retain(|weak| weak.strong_count() > 0);
+        for view in removed_views {
+            let parent = view.parent.clone();
+            drop(view);
+            parent.views.lock().retain(|weak| weak.strong_count() > 0);
         }
         self
     }
