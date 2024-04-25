@@ -639,6 +639,26 @@ pub trait Queue: WasmNotSendSync {
 
     /// Submits the command buffers for execution on GPU.
     ///
+    /// If two calls to `submit` on a single `Queue` occur in a particular order
+    /// (that is, they happen on the same thread, or on two threads that have
+    /// synchronized to establish an ordering), then the first submission's
+    /// commands all complete execution before any of the second submission's
+    /// commands begin. All results produced by one submission are visible to
+    /// the next.
+    ///
+    /// Within a submission, command buffers execute in the order in which they
+    /// appear in `command_buffers`. All results produced by one buffer are
+    /// visible to the next.
+    ///
+    /// If two calls to `submit` on a single `Queue` from different threads are
+    /// not synchronized to occur in a particular order, they must pass distinct
+    /// [`Fence`]s. As explained in the [`Fence`] documentation, waiting for
+    /// operations to complete is only trustworthy when operations finish in
+    /// order of increasing fence value, but submissions from different threads
+    /// cannot determine how to order the fence values if the submissions
+    /// themselves are unordered. If each thread uses a separate [`Fence`], this
+    /// problem does not arise.
+    ///
     /// Valid usage:
     ///
     /// - All of the [`CommandBuffer`][cb]s were created from
@@ -652,6 +672,7 @@ pub trait Queue: WasmNotSendSync {
     /// - All of the [`SurfaceTexture`][st]s that the command buffers
     ///   write to appear in the `surface_textures` argument.
     ///
+    /// [`Fence`]: crate::Api::Fence
     /// [cb]: Api::CommandBuffer
     /// [ce]: Api::CommandEncoder
     /// [st]: Api::SurfaceTexture
