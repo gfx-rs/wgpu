@@ -13,6 +13,7 @@ use crate::{
     hal_api::HalApi,
     hal_label,
     hub::Hub,
+    id,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
@@ -1949,6 +1950,7 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         storage: &'a Storage<Buffer<A>>,
         limits: &wgt::Limits,
+        device_id: id::Id<id::markers::Device>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
@@ -1967,6 +1969,7 @@ impl<A: HalApi> Device<A> {
                 })
             }
         };
+
         let (pub_usage, internal_use, range_limit) = match binding_ty {
             wgt::BufferBindingType::Uniform => (
                 wgt::BufferUsages::UNIFORM,
@@ -1998,6 +2001,10 @@ impl<A: HalApi> Device<A> {
             .buffers
             .add_single(storage, bb.buffer_id, internal_use)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
+
+        if buffer.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         check_buffer_usage(bb.buffer_id, buffer.usage, pub_usage)?;
         let raw_buffer = buffer
@@ -2077,13 +2084,53 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn create_texture_binding(
-        view: &TextureView<A>,
-        internal_use: hal::TextureUses,
-        pub_usage: wgt::TextureUsages,
+    fn create_sampler_binding<'a>(
+        used: &BindGroupStates<A>,
+        storage: &'a Storage<Sampler<A>>,
+        id: id::Id<id::markers::Sampler>,
+        device_id: id::Id<id::markers::Device>,
+    ) -> Result<&'a Sampler<A>, binding_model::CreateBindGroupError> {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        let sampler = used
+            .samplers
+            .add_single(storage, id)
+            .ok_or(Error::InvalidSampler(id))?;
+
+        if sampler.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
+        Ok(sampler)
+    }
+
+    pub(crate) fn create_texture_binding<'a>(
+        self: &Arc<Self>,
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        storage: &'a Storage<TextureView<A>>,
+        id: id::Id<id::markers::TextureView>,
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
-    ) -> Result<(), binding_model::CreateBindGroupError> {
+        snatch_guard: &'a SnatchGuard<'a>,
+    ) -> Result<hal::TextureBinding<'a, A>, binding_model::CreateBindGroupError> {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        let view = used
+            .views
+            .add_single(storage, id)
+            .ok_or(Error::InvalidTextureView(id))?;
+
+        if view.device.as_info().id() != self.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
+        let (pub_usage, internal_use) = self.texture_use_parameters(
+            binding,
+            decl,
+            view,
+            "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
+        )?;
         let texture = &view.parent;
         let texture_id = texture.as_info().id();
         // Careful here: the texture may no longer have its own ref count,
@@ -2113,7 +2160,12 @@ impl<A: HalApi> Device<A> {
             kind: MemoryInitKind::NeedsInitializedMemory,
         });
 
-        Ok(())
+        Ok(hal::TextureBinding {
+            view: view
+                .raw(snatch_guard)
+                .ok_or(Error::InvalidTextureView(id))?,
+            usage: internal_use,
+        })
     }
 
     // This function expects the provided bind group layout to be resolved
@@ -2175,6 +2227,7 @@ impl<A: HalApi> Device<A> {
                         &mut used,
                         &*buffer_guard,
                         &self.limits,
+                        self.as_info().id(),
                         &snatch_guard,
                     )?;
 
@@ -2198,105 +2251,86 @@ impl<A: HalApi> Device<A> {
                             &mut used,
                             &*buffer_guard,
                             &self.limits,
+                            self.as_info().id(),
                             &snatch_guard,
                         )?;
                         hal_buffers.push(bb);
                     }
                     (res_index, num_bindings)
                 }
-                Br::Sampler(id) => {
-                    match decl.ty {
-                        wgt::BindingType::Sampler(ty) => {
-                            let sampler = used
-                                .samplers
-                                .add_single(&*sampler_guard, id)
-                                .ok_or(Error::InvalidSampler(id))?;
+                Br::Sampler(id) => match decl.ty {
+                    wgt::BindingType::Sampler(ty) => {
+                        let sampler = Self::create_sampler_binding(
+                            &used,
+                            &sampler_guard,
+                            id,
+                            self.as_info().id(),
+                        )?;
 
-                            if sampler.device.as_info().id() != self.as_info().id() {
-                                return Err(DeviceError::WrongDevice.into());
-                            }
-
-                            // Allowed sampler values for filtering and comparison
-                            let (allowed_filtering, allowed_comparison) = match ty {
-                                wgt::SamplerBindingType::Filtering => (None, false),
-                                wgt::SamplerBindingType::NonFiltering => (Some(false), false),
-                                wgt::SamplerBindingType::Comparison => (None, true),
-                            };
-
-                            if let Some(allowed_filtering) = allowed_filtering {
-                                if allowed_filtering != sampler.filtering {
-                                    return Err(Error::WrongSamplerFiltering {
-                                        binding,
-                                        layout_flt: allowed_filtering,
-                                        sampler_flt: sampler.filtering,
-                                    });
-                                }
-                            }
-
-                            if allowed_comparison != sampler.comparison {
-                                return Err(Error::WrongSamplerComparison {
+                        let (allowed_filtering, allowed_comparison) = match ty {
+                            wgt::SamplerBindingType::Filtering => (None, false),
+                            wgt::SamplerBindingType::NonFiltering => (Some(false), false),
+                            wgt::SamplerBindingType::Comparison => (None, true),
+                        };
+                        if let Some(allowed_filtering) = allowed_filtering {
+                            if allowed_filtering != sampler.filtering {
+                                return Err(Error::WrongSamplerFiltering {
                                     binding,
-                                    layout_cmp: allowed_comparison,
-                                    sampler_cmp: sampler.comparison,
+                                    layout_flt: allowed_filtering,
+                                    sampler_flt: sampler.filtering,
                                 });
                             }
-
-                            let res_index = hal_samplers.len();
-                            hal_samplers.push(sampler.raw());
-                            (res_index, 1)
                         }
-                        _ => {
-                            return Err(Error::WrongBindingType {
+                        if allowed_comparison != sampler.comparison {
+                            return Err(Error::WrongSamplerComparison {
                                 binding,
-                                actual: decl.ty,
-                                expected: "Sampler",
-                            })
+                                layout_cmp: allowed_comparison,
+                                sampler_cmp: sampler.comparison,
+                            });
                         }
+
+                        let res_index = hal_samplers.len();
+                        hal_samplers.push(sampler.raw());
+                        (res_index, 1)
                     }
-                }
+                    _ => {
+                        return Err(Error::WrongBindingType {
+                            binding,
+                            actual: decl.ty,
+                            expected: "Sampler",
+                        })
+                    }
+                },
                 Br::SamplerArray(ref bindings_array) => {
                     let num_bindings = bindings_array.len();
                     Self::check_array_binding(self.features, decl.count, num_bindings)?;
 
                     let res_index = hal_samplers.len();
                     for &id in bindings_array.iter() {
-                        let sampler = used
-                            .samplers
-                            .add_single(&*sampler_guard, id)
-                            .ok_or(Error::InvalidSampler(id))?;
-                        if sampler.device.as_info().id() != self.as_info().id() {
-                            return Err(DeviceError::WrongDevice.into());
-                        }
+                        let sampler = Self::create_sampler_binding(
+                            &used,
+                            &sampler_guard,
+                            id,
+                            self.as_info().id(),
+                        )?;
+
                         hal_samplers.push(sampler.raw());
                     }
 
                     (res_index, num_bindings)
                 }
                 Br::TextureView(id) => {
-                    let view = used
-                        .views
-                        .add_single(&*texture_view_guard, id)
-                        .ok_or(Error::InvalidTextureView(id))?;
-                    let (pub_usage, internal_use) = self.texture_use_parameters(
+                    let tb = self.create_texture_binding(
                         binding,
                         decl,
-                        view,
-                        "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
-                    )?;
-                    Self::create_texture_binding(
-                        view,
-                        internal_use,
-                        pub_usage,
+                        &texture_view_guard,
+                        id,
                         &mut used,
                         &mut used_texture_ranges,
+                        &snatch_guard,
                     )?;
                     let res_index = hal_textures.len();
-                    hal_textures.push(hal::TextureBinding {
-                        view: view
-                            .raw(&snatch_guard)
-                            .ok_or(Error::InvalidTextureView(id))?,
-                        usage: internal_use,
-                    });
+                    hal_textures.push(tb);
                     (res_index, 1)
                 }
                 Br::TextureViewArray(ref bindings_array) => {
@@ -2305,26 +2339,17 @@ impl<A: HalApi> Device<A> {
 
                     let res_index = hal_textures.len();
                     for &id in bindings_array.iter() {
-                        let view = used
-                            .views
-                            .add_single(&*texture_view_guard, id)
-                            .ok_or(Error::InvalidTextureView(id))?;
-                        let (pub_usage, internal_use) =
-                            self.texture_use_parameters(binding, decl, view,
-                                                         "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray")?;
-                        Self::create_texture_binding(
-                            view,
-                            internal_use,
-                            pub_usage,
+                        let tb = self.create_texture_binding(
+                            binding,
+                            decl,
+                            &texture_view_guard,
+                            id,
                             &mut used,
                             &mut used_texture_ranges,
+                            &snatch_guard,
                         )?;
-                        hal_textures.push(hal::TextureBinding {
-                            view: view
-                                .raw(&snatch_guard)
-                                .ok_or(Error::InvalidTextureView(id))?,
-                            usage: internal_use,
-                        });
+
+                        hal_textures.push(tb);
                     }
 
                     (res_index, num_bindings)
