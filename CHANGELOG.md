@@ -185,7 +185,6 @@ By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/
 - Fix deadlocks caused by recursive read-write lock acquisitions [#5426](https://github.com/gfx-rs/wgpu/pull/5426).
 - Remove exposed C symbols (`extern "C"` + [no_mangle]) from RenderPass & ComputePass recording. By @wumpf in [#5409](https://github.com/gfx-rs/wgpu/pull/5409).
 - Fix surfaces being only compatible with first backend enabled on an instance, causing failures when manually specifying an adapter. By @Wumpf in [#5535](https://github.com/gfx-rs/wgpu/pull/5535).
-- Fix inconsistent `max_compute_workgroup_storage_size` `Limits` default values. By @atlv24 in [#5601](https://github.com/gfx-rs/wgpu/pull/5601).
 
 #### Naga
 
