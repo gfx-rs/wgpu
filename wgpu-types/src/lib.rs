@@ -1143,7 +1143,7 @@ pub struct Limits {
     /// pipeline output data, across all color attachments.
     pub max_color_attachment_bytes_per_sample: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
-    /// 16384 because of [Apple2]. Higher is "better".
+    /// 16384. Higher is "better".
     pub max_compute_workgroup_storage_size: u32,
     /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
     /// Defaults to 256. Higher is "better".
