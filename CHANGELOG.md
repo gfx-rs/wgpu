@@ -103,7 +103,7 @@ By @exrook and @lichtso in [#5301](https://github.com/gfx-rs/wgpu/pull/5301)
 `wgpu::Features::SHADER_INT64` enables 64 bit integer signed and unsigned integer variables in wgsl (`i64` and `u64` respectively).
 Supported on Vulkan, DX12 (requires DXC) and Metal (with MSL 2.3+ support).
 
-By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
+By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154)
 
 ### New features
 
@@ -209,7 +209,7 @@ By @rodolphito and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/
 #### Tests
 
 - Fix intermittent crashes on Linux in the `multithreaded_compute` test. By @jimblandy in [#5129](https://github.com/gfx-rs/wgpu/pull/5129).
-- Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @rodolphito in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
+- Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @atlv24 in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
 - Add test that verifies that we can drop the queue before using the device to create a command encoder. By @Davidster in [#5211](https://github.com/gfx-rs/wgpu/pull/5211)
 
 ## v0.19.4 (2024-04-17)
