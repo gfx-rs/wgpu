@@ -163,7 +163,6 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Use memory pooling for UsageScopes to avoid frequent large allocations. by @robtfm in [#5414](https://github.com/gfx-rs/wgpu/pull/5414)
 - Eager release of GPU resources comes from device.trackers. By @bradwerth in [#5075](https://github.com/gfx-rs/wgpu/pull/5075)
 - Support disabling zero-initialization of workgroup local memory in compute shaders. By @DJMcNab in [#5508](https://github.com/gfx-rs/wgpu/pull/5508)
-- In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 
 ### Documentation
 
@@ -188,9 +187,10 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 
 #### Naga
 
+- In spv-in, remove unnecessary "gl_PerVertex" name check so unused builtins will always be skipped. Prevents validation errors caused by capability requirements of these builtins [#4915](https://github.com/gfx-rs/wgpu/issues/4915). By @Imberflur in [#5227](https://github.com/gfx-rs/wgpu/pull/5227).
 - In spv-out, check for acceleration and ray-query types when enabling ray-query extension to prevent validation error. By @Vecvec in [#5463](https://github.com/gfx-rs/wgpu/pull/5463)
 - Add a limit for curly brace nesting in WGSL parsing, plus a note about stack size requirements. By @ErichDonGubler in [#5447](https://github.com/gfx-rs/wgpu/pull/5447).
-- In hlsl-out, parenthesize output for `Expression::ZeroValue` (e.g. `(float4)0` -> `((float)0)`). This allows subsequent member access to parse correctly. By @Imberflur in [#5587](https://github.com/gfx-rs/wgpu/pull/5587).
+- In hlsl-out, fix accesses on zero value expressions by generating helper functions for `Expression::ZeroValue`. By @Imberflur in [#5587](https://github.com/gfx-rs/wgpu/pull/5587).
 - Fix behavior of `extractBits` and `insertBits` when `offset + count` overflows the bit width. By @cwfitzgerald in [#5305](https://github.com/gfx-rs/wgpu/pull/5305)
 - Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
 
