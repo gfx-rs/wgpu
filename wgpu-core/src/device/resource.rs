@@ -273,7 +273,7 @@ impl<A: HalApi> Device<A> {
             command_allocator,
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
-            snatchable_lock: unsafe { SnatchLock::new() },
+            snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, Tracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
