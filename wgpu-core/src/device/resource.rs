@@ -18,7 +18,7 @@ use crate::{
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance::Adapter,
-    lock::{rank, Mutex, MutexGuard},
+    lock::{rank, Mutex, MutexGuard, RwLock},
     pipeline,
     pool::ResourcePool,
     registry::Registry,
@@ -42,7 +42,6 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
 use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -272,8 +271,8 @@ impl<A: HalApi> Device<A> {
             info: ResourceInfo::new("<device>", None),
             command_allocator,
             active_submission_index: AtomicU64::new(0),
-            fence: RwLock::new(Some(fence)),
-            snatchable_lock: unsafe { SnatchLock::new() },
+            fence: RwLock::new(rank::DEVICE_FENCE, Some(fence)),
+            snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, Tracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
@@ -656,7 +655,10 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
-            initialization_status: RwLock::new(BufferInitTracker::new(aligned_size)),
+            initialization_status: RwLock::new(
+                rank::BUFFER_INITIALIZATION_STATUS,
+                BufferInitTracker::new(aligned_size),
+            ),
             sync_mapped_writes: Mutex::new(rank::BUFFER_SYNC_MAPPED_WRITES, None),
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             info: ResourceInfo::new(
@@ -683,10 +685,10 @@ impl<A: HalApi> Device<A> {
             desc: desc.map_label(|_| ()),
             hal_usage,
             format_features,
-            initialization_status: RwLock::new(TextureInitTracker::new(
-                desc.mip_level_count,
-                desc.array_layer_count(),
-            )),
+            initialization_status: RwLock::new(
+                rank::TEXTURE_INITIALIZATION_STATUS,
+                TextureInitTracker::new(desc.mip_level_count, desc.array_layer_count()),
+            ),
             full_range: TextureSelector {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
@@ -695,7 +697,7 @@ impl<A: HalApi> Device<A> {
                 desc.label.borrow_or_default(),
                 Some(self.tracker_indices.textures.clone()),
             ),
-            clear_mode: RwLock::new(clear_mode),
+            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
         }
@@ -713,7 +715,10 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
-            initialization_status: RwLock::new(BufferInitTracker::new(0)),
+            initialization_status: RwLock::new(
+                rank::BUFFER_INITIALIZATION_STATUS,
+                BufferInitTracker::new(0),
+            ),
             sync_mapped_writes: Mutex::new(rank::BUFFER_SYNC_MAPPED_WRITES, None),
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             info: ResourceInfo::new(

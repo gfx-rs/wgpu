@@ -1,12 +1,14 @@
 #![allow(unused)]
 
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     backtrace::Backtrace,
     cell::{Cell, RefCell, UnsafeCell},
     panic::{self, Location},
     thread,
 };
+
+use crate::lock::rank;
 
 /// A guard that provides read access to snatchable data.
 pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
@@ -128,9 +130,9 @@ impl SnatchLock {
     /// right SnatchLock (the one associated to the same device). This method is unsafe
     /// to force force sers to think twice about creating a SnatchLock. The only place this
     /// method should be called is when creating the device.
-    pub unsafe fn new() -> Self {
+    pub unsafe fn new(rank: rank::LockRank) -> Self {
         SnatchLock {
-            lock: RwLock::new(()),
+            lock: RwLock::new(rank, ()),
         }
     }
 

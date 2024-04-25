@@ -105,12 +105,11 @@ use crate::{
     binding_model, command, conv,
     hal_api::HalApi,
     id,
-    lock::{rank, Mutex},
+    lock::{rank, Mutex, RwLock},
     pipeline, resource,
     snatch::SnatchGuard,
 };
 
-use parking_lot::RwLock;
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
@@ -489,11 +488,26 @@ impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new() -> Self {
         Self {
-            buffers: RwLock::new(BufferUsageScope::default()),
-            textures: RwLock::new(TextureUsageScope::default()),
-            bind_groups: RwLock::new(StatelessTracker::new()),
-            render_pipelines: RwLock::new(StatelessTracker::new()),
-            query_sets: RwLock::new(StatelessTracker::new()),
+            buffers: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_BUFFERS,
+                BufferUsageScope::default(),
+            ),
+            textures: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_TEXTURES,
+                TextureUsageScope::default(),
+            ),
+            bind_groups: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_BIND_GROUPS,
+                StatelessTracker::new(),
+            ),
+            render_pipelines: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_RENDER_PIPELINES,
+                StatelessTracker::new(),
+            ),
+            query_sets: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_QUERY_SETS,
+                StatelessTracker::new(),
+            ),
         }
     }
 
