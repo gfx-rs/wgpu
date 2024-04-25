@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
 use crate::{
     id::Id,
     identity::IdentityManager,
+    lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard},
     resource::Resource,
     storage::{Element, InvalidId, Storage},
 };
@@ -48,7 +48,7 @@ impl<T: Resource> Registry<T> {
     pub(crate) fn new(backend: Backend) -> Self {
         Self {
             identity: Arc::new(IdentityManager::new()),
-            storage: RwLock::new(Storage::new()),
+            storage: RwLock::new(rank::REGISTRY_STORAGE, Storage::new()),
             backend,
         }
     }
