@@ -1143,7 +1143,9 @@ pub struct Limits {
     /// pipeline output data, across all color attachments.
     pub max_color_attachment_bytes_per_sample: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
-    /// 16352. Higher is "better".
+    /// 16352 because of [Apple2]. Higher is "better".
+    ///
+    /// [Apple2]: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
     pub max_compute_workgroup_storage_size: u32,
     /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
     /// Defaults to 256. Higher is "better".
@@ -1184,6 +1186,12 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
+        Self::defaults()
+    }
+}
+
+impl Limits {
+    const fn defaults() -> Self {
         Self {
             max_texture_dimension_1d: 8192,
             max_texture_dimension_2d: 8192,
@@ -1198,10 +1206,10 @@ impl Default for Limits {
             max_storage_buffers_per_shader_stage: 8,
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 64 << 10,
-            max_storage_buffer_binding_size: 128 << 20,
+            max_uniform_buffer_binding_size: 64 << 10, // (64 KiB)
+            max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
             max_vertex_buffers: 8,
-            max_buffer_size: 256 << 20,
+            max_buffer_size: 256 << 20, // (256 MiB)
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
             min_uniform_buffer_offset_alignment: 256,
@@ -1209,7 +1217,7 @@ impl Default for Limits {
             max_inter_stage_shader_components: 60,
             max_color_attachments: 8,
             max_color_attachment_bytes_per_sample: 32,
-            max_compute_workgroup_storage_size: 16384,
+            max_compute_workgroup_storage_size: 16352,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
             max_compute_workgroup_size_y: 256,
@@ -1221,9 +1229,7 @@ impl Default for Limits {
             max_non_sampler_bindings: 1_000_000,
         }
     }
-}
 
-impl Limits {
     /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
     ///
     /// Those limits are as follows (different from default are marked with *):
@@ -1271,37 +1277,9 @@ impl Limits {
             max_texture_dimension_1d: 2048,
             max_texture_dimension_2d: 2048,
             max_texture_dimension_3d: 256,
-            max_texture_array_layers: 256,
-            max_bind_groups: 4,
-            max_bindings_per_bind_group: 1000,
-            max_dynamic_uniform_buffers_per_pipeline_layout: 8,
-            max_dynamic_storage_buffers_per_pipeline_layout: 4,
-            max_sampled_textures_per_shader_stage: 16,
-            max_samplers_per_shader_stage: 16,
             max_storage_buffers_per_shader_stage: 4,
-            max_storage_textures_per_shader_stage: 4,
-            max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 16 << 10,
-            max_storage_buffer_binding_size: 128 << 20,
-            max_vertex_buffers: 8,
-            max_vertex_attributes: 16,
-            max_vertex_buffer_array_stride: 2048,
-            min_subgroup_size: 0,
-            max_subgroup_size: 0,
-            max_push_constant_size: 0,
-            min_uniform_buffer_offset_alignment: 256,
-            min_storage_buffer_offset_alignment: 256,
-            max_inter_stage_shader_components: 60,
-            max_color_attachments: 8,
-            max_color_attachment_bytes_per_sample: 32,
-            max_compute_workgroup_storage_size: 16352,
-            max_compute_invocations_per_workgroup: 256,
-            max_compute_workgroup_size_x: 256,
-            max_compute_workgroup_size_y: 256,
-            max_compute_workgroup_size_z: 64,
-            max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 256 << 20,
-            max_non_sampler_bindings: 1_000_000,
+            max_uniform_buffer_binding_size: 16 << 10, // (16 KiB)
+            ..Self::defaults()
         }
     }
 
