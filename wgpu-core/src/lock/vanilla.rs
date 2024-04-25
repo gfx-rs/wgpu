@@ -21,12 +21,10 @@ pub struct Mutex<T>(parking_lot::Mutex<T>);
 pub struct MutexGuard<'a, T>(parking_lot::MutexGuard<'a, T>);
 
 impl<T> Mutex<T> {
-    #[inline]
     pub fn new(_rank: super::rank::LockRank, value: T) -> Mutex<T> {
         Mutex(parking_lot::Mutex::new(value))
     }
 
-    #[inline]
     pub fn lock(&self) -> MutexGuard<T> {
         MutexGuard(self.0.lock())
     }

@@ -104,7 +104,6 @@ impl LockState {
 }
 
 impl<T> Mutex<T> {
-    #[inline]
     pub fn new(rank: LockRank, value: T) -> Mutex<T> {
         Mutex {
             inner: parking_lot::Mutex::new(value),
@@ -112,7 +111,6 @@ impl<T> Mutex<T> {
         }
     }
 
-    #[inline]
     #[track_caller]
     pub fn lock(&self) -> MutexGuard<T> {
         let state = LOCK_STATE.get();
