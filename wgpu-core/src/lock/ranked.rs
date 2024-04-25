@@ -103,6 +103,57 @@ impl LockState {
     };
 }
 
+/// Check and record the acquisition of a lock with `new_rank`.
+///
+/// Check that acquiring a lock with `new_rank` is permitted at this point, and
+/// update the per-thread state accordingly.
+///
+/// Return the `LockState` that must be restored when this thread is released.
+fn acquire(new_rank: LockRank) -> LockState {
+    let state = LOCK_STATE.get();
+    let location = Location::caller();
+    // Initially, it's fine to acquire any lock. So we only
+    // need to check when `last_acquired` is `Some`.
+    if let Some((ref last_rank, ref last_location)) = state.last_acquired {
+        assert!(
+            last_rank.followers.contains(new_rank.bit),
+            "Attempt to acquire nested mutexes in wrong order:\n\
+             last locked {:<35} at {}\n\
+             now locking {:<35} at {}\n\
+             Locking {} after locking {} is not permitted.",
+            last_rank.bit.name(),
+            last_location,
+            new_rank.bit.name(),
+            location,
+            new_rank.bit.name(),
+            last_rank.bit.name(),
+        );
+    }
+    LOCK_STATE.set(LockState {
+        last_acquired: Some((new_rank, location)),
+        depth: state.depth + 1,
+    });
+    state
+}
+
+/// Record the release of a lock whose saved state was `saved`.
+///
+/// Check that locks are being acquired in stacking order, and update the
+/// per-thread state accordingly.
+fn release(saved: LockState) {
+    let prior = LOCK_STATE.replace(saved);
+
+    // Although Rust allows mutex guards to be dropped in any
+    // order, this analysis requires that locks be acquired and
+    // released in stack order: the next lock to be released must be
+    // the most recently acquired lock still held.
+    assert_eq!(
+        prior.depth,
+        saved.depth + 1,
+        "Lock not released in stacking order"
+    );
+}
+
 impl<T> Mutex<T> {
     pub fn new(rank: LockRank, value: T) -> Mutex<T> {
         Mutex {
@@ -113,49 +164,17 @@ impl<T> Mutex<T> {
 
     #[track_caller]
     pub fn lock(&self) -> MutexGuard<T> {
-        let state = LOCK_STATE.get();
-        let location = Location::caller();
-        // Initially, it's fine to acquire any lock. So we only
-        // need to check when `last_acquired` is `Some`.
-        if let Some((ref last_rank, ref last_location)) = state.last_acquired {
-            assert!(
-                last_rank.followers.contains(self.rank.bit),
-                "Attempt to acquire nested mutexes in wrong order:\n\
-                 last locked {:<35} at {}\n\
-                 now locking {:<35} at {}\n\
-                 Locking {} after locking {} is not permitted.",
-                last_rank.bit.name(),
-                last_location,
-                self.rank.bit.name(),
-                location,
-                self.rank.bit.name(),
-                last_rank.bit.name(),
-            );
-        }
-        LOCK_STATE.set(LockState {
-            last_acquired: Some((self.rank, location)),
-            depth: state.depth + 1,
-        });
+        let saved = acquire(self.rank);
         MutexGuard {
             inner: self.inner.lock(),
-            saved: state,
+            saved,
         }
     }
 }
 
 impl<'a, T> Drop for MutexGuard<'a, T> {
     fn drop(&mut self) {
-        let prior = LOCK_STATE.replace(self.saved);
-
-        // Although Rust allows mutex guards to be dropped in any
-        // order, this analysis requires that locks be acquired and
-        // released in stack order: the next lock to be released must be
-        // the most recently acquired lock still held.
-        assert_eq!(
-            prior.depth,
-            self.saved.depth + 1,
-            "Lock not released in stacking order"
-        );
+        release(self.saved);
     }
 }
 
