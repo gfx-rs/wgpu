@@ -1,8 +1,8 @@
 //! Lock types that enforce well-ranked lock acquisition order.
 //!
-//! This module's [`Mutex`] type is instrumented to check that `wgpu-core`
-//! acquires locks according to their rank, to prevent deadlocks. To use it,
-//! put `--cfg wgpu_validate_locks` in `RUSTFLAGS`.
+//! This module's [`Mutex`] and [`RwLock` types are instrumented to check that
+//! `wgpu-core` acquires locks according to their rank, to prevent deadlocks. To
+//! use it, put `--cfg wgpu_validate_locks` in `RUSTFLAGS`.
 //!
 //! The [`LockRank`] constants in the [`lock::rank`] module describe edges in a
 //! directed graph of lock acquisitions: each lock's rank says, if this is the most
@@ -82,6 +82,10 @@ pub struct Mutex<T> {
 pub struct MutexGuard<'a, T> {
     inner: parking_lot::MutexGuard<'a, T>,
     saved: LockState,
+}
+
+thread_local! {
+    static LOCK_STATE: Cell<LockState> = const { Cell::new(LockState::INITIAL) };
 }
 
 /// Per-thread state for the deadlock checker.
@@ -178,10 +182,6 @@ impl<'a, T> Drop for MutexGuard<'a, T> {
     }
 }
 
-thread_local! {
-    static LOCK_STATE: Cell<LockState> = const { Cell::new(LockState::INITIAL) };
-}
-
 impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
     type Target = T;
 
@@ -199,6 +199,110 @@ impl<'a, T> std::ops::DerefMut for MutexGuard<'a, T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for Mutex<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
+    }
+}
+
+/// An `RwLock` instrumented for deadlock prevention.
+///
+/// This is just a wrapper around a [`parking_lot::RwLock`], along with
+/// its rank in the `wgpu_core` lock ordering.
+///
+/// For details, see [the module documentation][mod].
+///
+/// [mod]: crate::lock::ranked
+pub struct RwLock<T> {
+    inner: parking_lot::RwLock<T>,
+    rank: LockRank,
+}
+
+/// A read guard produced by locking [`RwLock`] for reading.
+///
+/// This is just a wrapper around a [`parking_lot::RwLockReadGuard`], along with
+/// the state needed to track lock acquisition.
+///
+/// For details, see [the module documentation][mod].
+///
+/// [mod]: crate::lock::ranked
+pub struct RwLockReadGuard<'a, T> {
+    inner: parking_lot::RwLockReadGuard<'a, T>,
+    saved: LockState,
+}
+
+/// A write guard produced by locking [`RwLock`] for writing.
+///
+/// This is just a wrapper around a [`parking_lot::RwLockWriteGuard`], along
+/// with the state needed to track lock acquisition.
+///
+/// For details, see [the module documentation][mod].
+///
+/// [mod]: crate::lock::ranked
+pub struct RwLockWriteGuard<'a, T> {
+    inner: parking_lot::RwLockWriteGuard<'a, T>,
+    saved: LockState,
+}
+
+impl<T> RwLock<T> {
+    pub fn new(rank: LockRank, value: T) -> RwLock<T> {
+        RwLock {
+            inner: parking_lot::RwLock::new(value),
+            rank,
+        }
+    }
+
+    pub fn read(&self) -> RwLockReadGuard<T> {
+        let saved = acquire(self.rank);
+        RwLockReadGuard {
+            inner: self.inner.read(),
+            saved,
+        }
+    }
+
+    pub fn write(&self) -> RwLockWriteGuard<T> {
+        let saved = acquire(self.rank);
+        RwLockWriteGuard {
+            inner: self.inner.write(),
+            saved,
+        }
+    }
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for RwLock<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl<'a, T> Drop for RwLockReadGuard<'a, T> {
+    fn drop(&mut self) {
+        release(self.saved);
+    }
+}
+
+impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
+    fn drop(&mut self) {
+        release(self.saved);
+    }
+}
+
+impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
+    }
+}
+
+impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
+    }
+}
+
+impl<'a, T> std::ops::DerefMut for RwLockWriteGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.deref_mut()
     }
 }
 
