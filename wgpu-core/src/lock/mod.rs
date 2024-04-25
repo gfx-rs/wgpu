@@ -35,7 +35,7 @@ mod ranked;
 mod vanilla;
 
 #[cfg(wgpu_validate_locks)]
-pub use ranked::{Mutex, MutexGuard};
+pub use ranked::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 #[cfg(not(wgpu_validate_locks))]
-pub use vanilla::{Mutex, MutexGuard};
+pub use vanilla::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
