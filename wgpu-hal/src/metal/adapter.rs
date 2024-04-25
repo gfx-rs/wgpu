@@ -817,6 +817,10 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Metal3)
                     || device.supports_family(MTLGPUFamily::Mac2)
                     || device.supports_family(MTLGPUFamily::Apple7)),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5
+            int64: family_check
+                && (device.supports_family(MTLGPUFamily::Apple3)
+                    || device.supports_family(MTLGPUFamily::Metal3)),
         }
     }
 
@@ -890,7 +894,7 @@ impl super::PrivateCapabilities {
         }
         features.set(
             F::SHADER_INT64,
-            self.msl_version >= MTLLanguageVersion::V2_3,
+            self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
         );
 
         features.set(
