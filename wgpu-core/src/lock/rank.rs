@@ -55,9 +55,9 @@ macro_rules! define_lock_ranks {
         bitflags::bitflags! {
             #[derive(Debug, Copy, Clone, Eq, PartialEq)]
             /// A bitflags type representing a set of lock ranks.
-            pub struct LockRankSet: u32 {
+            pub struct LockRankSet: u64 {
                 $(
-                    const $name = 1 << (LockRankNumber:: $name as u32);
+                    const $name = 1 << (LockRankNumber:: $name as u64);
                 )*
             }
         }
@@ -143,6 +143,11 @@ define_lock_ranks! {
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
+    rank RENDER_BUNDLE_SCOPE_BUFFERS "RenderBundleScope::buffers" followed by { }
+    rank RENDER_BUNDLE_SCOPE_TEXTURES "RenderBundleScope::textures" followed by { }
+    rank RENDER_BUNDLE_SCOPE_BIND_GROUPS "RenderBundleScope::bind_groups" followed by { }
+    rank RENDER_BUNDLE_SCOPE_RENDER_PIPELINES "RenderBundleScope::render_pipelines" followed by { }
+    rank RENDER_BUNDLE_SCOPE_QUERY_SETS "RenderBundleScope::query_sets" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
     rank STAGING_BUFFER_RAW "StagingBuffer::raw" followed by { }
