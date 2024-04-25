@@ -133,8 +133,10 @@ define_lock_ranks! {
 
     rank BUFFER_BIND_GROUPS "Buffer::bind_groups" followed by { }
     rank BUFFER_BIND_GROUP_STATE_BUFFERS "BufferBindGroupState::buffers" followed by { }
+    rank BUFFER_INITIALIZATION_STATUS "Buffer::initialization_status" followed by { }
     rank BUFFER_SYNC_MAPPED_WRITES "Buffer::sync_mapped_writes" followed by { }
     rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
+    rank DEVICE_FENCE "Device::fence" followed by { }
     #[allow(dead_code)]
     rank DEVICE_TRACE "Device::trace" followed by { }
     rank DEVICE_TRACKERS "Device::trackers" followed by { }
@@ -147,6 +149,8 @@ define_lock_ranks! {
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_BIND_GROUP_STATE_TEXTURES "TextureBindGroupState::textures" followed by { }
+    rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
+    rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
 
     #[cfg(test)]
