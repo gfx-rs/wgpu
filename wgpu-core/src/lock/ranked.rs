@@ -113,9 +113,8 @@ impl LockState {
 /// update the per-thread state accordingly.
 ///
 /// Return the `LockState` that must be restored when this thread is released.
-fn acquire(new_rank: LockRank) -> LockState {
+fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> LockState {
     let state = LOCK_STATE.get();
-    let location = Location::caller();
     // Initially, it's fine to acquire any lock. So we only
     // need to check when `last_acquired` is `Some`.
     if let Some((ref last_rank, ref last_location)) = state.last_acquired {
@@ -168,7 +167,7 @@ impl<T> Mutex<T> {
 
     #[track_caller]
     pub fn lock(&self) -> MutexGuard<T> {
-        let saved = acquire(self.rank);
+        let saved = acquire(self.rank, Location::caller());
         MutexGuard {
             inner: self.inner.lock(),
             saved,
@@ -249,16 +248,18 @@ impl<T> RwLock<T> {
         }
     }
 
+    #[track_caller]
     pub fn read(&self) -> RwLockReadGuard<T> {
-        let saved = acquire(self.rank);
+        let saved = acquire(self.rank, Location::caller());
         RwLockReadGuard {
             inner: self.inner.read(),
             saved,
         }
     }
 
+    #[track_caller]
     pub fn write(&self) -> RwLockWriteGuard<T> {
-        let saved = acquire(self.rank);
+        let saved = acquire(self.rank, Location::caller());
         RwLockWriteGuard {
             inner: self.inner.write(),
             saved,
