@@ -248,7 +248,7 @@ impl LocalImageType {
 /// this, by converting everything possible to a `LocalType` before inspecting
 /// it.
 ///
-/// ## `Localtype` equality and SPIR-V `OpType` uniqueness
+/// ## `LocalType` equality and SPIR-V `OpType` uniqueness
 ///
 /// The definition of `Eq` on `LocalType` is carefully chosen to help us follow
 /// certain SPIR-V rules. SPIR-V §2.8 requires some classes of `OpType...`
