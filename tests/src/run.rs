@@ -42,7 +42,8 @@ pub async fn execute_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (instance, adapter, _surface_guard) = initialize_adapter(adapter_index).await;
+    let (instance, adapter, _surface_guard) =
+        initialize_adapter(adapter_index, config.params.force_fxc).await;
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();

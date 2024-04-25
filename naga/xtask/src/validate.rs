@@ -208,7 +208,10 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
         buf
     };
     let expected_header_prefix = "; Version: ";
-    let Some(version) = second_line.strip_prefix(expected_header_prefix) else {
+    let Some(version) = second_line
+        .strip_prefix(expected_header_prefix)
+        .map(str::trim)
+    else {
         bail!("no {expected_header_prefix:?} header found in {path:?}");
     };
     let file = open_file(path)?;
@@ -222,7 +225,18 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
     let child = spirv_as_cmd
         .spawn()
         .with_context(|| format!("failed to spawn {spirv_as_cmd:?}"))?;
-    EasyCommand::new(spirv_val, |cmd| cmd.stdin(child.stdout.unwrap())).success()
+    let error_message = || {
+        format!(
+            "Failed to validate {path:?}.
+Note: Labels and line numbers will not match the input file.
+      Use this command to view the corresponding spvasm:
+      '{spirv_as} --target-env spv{version} {} -o - | spirv-dis'\n",
+            path.display(),
+        )
+    };
+    EasyCommand::new(spirv_val, |cmd| cmd.stdin(child.stdout.unwrap()))
+        .success()
+        .with_context(error_message)
 }
 
 fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {

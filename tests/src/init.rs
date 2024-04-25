@@ -11,7 +11,7 @@ pub fn init_logger() {
 }
 
 /// Initialize a wgpu instance with the options from the environment.
-pub fn initialize_instance() -> Instance {
+pub fn initialize_instance(force_fxc: bool) -> Instance {
     // We ignore `WGPU_BACKEND` for now, merely using test filtering to only run a single backend's tests.
     //
     // We can potentially work support back into the test runner in the future, but as the adapters are matched up
@@ -27,7 +27,13 @@ pub fn initialize_instance() -> Instance {
     } else {
         Backends::all()
     };
-    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    // Some tests need to be able to force demote to FXC, to specifically test workarounds for FXC
+    // behavior.
+    let dx12_shader_compiler = if force_fxc {
+        wgpu::Dx12Compiler::Fxc
+    } else {
+        wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default()
+    };
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
     Instance::new(wgpu::InstanceDescriptor {
         backends,
@@ -38,8 +44,11 @@ pub fn initialize_instance() -> Instance {
 }
 
 /// Initialize a wgpu adapter, taking the `n`th adapter from the instance.
-pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Option<SurfaceGuard>) {
-    let instance = initialize_instance();
+pub async fn initialize_adapter(
+    adapter_index: usize,
+    force_fxc: bool,
+) -> (Instance, Adapter, Option<SurfaceGuard>) {
+    let instance = initialize_instance(force_fxc);
     #[allow(unused_variables)]
     let surface: Option<wgpu::Surface>;
     let surface_guard: Option<SurfaceGuard>;
