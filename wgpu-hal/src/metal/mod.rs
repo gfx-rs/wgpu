@@ -270,6 +270,7 @@ struct PrivateCapabilities {
     has_unified_memory: Option<bool>,
     timestamp_query_support: TimestampQuerySupport,
     supports_simd_scoped_operations: bool,
+    int64: bool,
 }
 
 #[derive(Clone, Debug)]
