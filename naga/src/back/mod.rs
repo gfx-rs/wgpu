@@ -19,6 +19,9 @@ pub mod wgsl;
 #[cfg(any(hlsl_out, msl_out, spv_out, glsl_out))]
 pub mod pipeline_constants;
 
+#[cfg(any(feature = "hlsl-out", feature = "glsl-out"))]
+mod continue_forward;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.

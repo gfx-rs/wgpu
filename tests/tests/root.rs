@@ -3,6 +3,8 @@ mod regression {
     mod issue_3457;
     mod issue_4024;
     mod issue_4122;
+    mod issue_4485;
+    mod issue_4514;
     mod issue_5553;
 }
 

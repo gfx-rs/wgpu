@@ -296,6 +296,11 @@ This release fixes the validation errors whenever a surface is used with the vul
 
 -  Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
 
+#### Naga
+
+- Work around shader consumers that have bugs handling `switch` statements with a single body for all cases. These are now written as `do {} while(false);` loops in hlsl-out and glsl-out. By @Imberflur in [#5654](https://github.com/gfx-rs/wgpu/pull/5654)
+- In hlsl-out, defer `continue` statements in switches by setting a flag and breaking from the switch. This allows such constructs to work with FXC which does not support `continue` within a switch. By @Imberflur in [#5654](https://github.com/gfx-rs/wgpu/pull/5654)
+
 ## v0.20.0 (2024-04-28)
 
 ### Major Changes
