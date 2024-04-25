@@ -1143,9 +1143,7 @@ pub struct Limits {
     /// pipeline output data, across all color attachments.
     pub max_color_attachment_bytes_per_sample: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
-    /// 16352 because of [Apple2]. Higher is "better".
-    ///
-    /// [Apple2]: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
+    /// 16384 because of [Apple2]. Higher is "better".
     pub max_compute_workgroup_storage_size: u32,
     /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
     /// Defaults to 256. Higher is "better".
@@ -1191,6 +1189,8 @@ impl Default for Limits {
 }
 
 impl Limits {
+    // Rust doesn't allow const in trait implementations, so we break this out
+    // to allow reusing these defaults in const contexts like `downlevel_defaults`
     const fn defaults() -> Self {
         Self {
             max_texture_dimension_1d: 8192,
@@ -1217,7 +1217,7 @@ impl Limits {
             max_inter_stage_shader_components: 60,
             max_color_attachments: 8,
             max_color_attachment_bytes_per_sample: 32,
-            max_compute_workgroup_storage_size: 16352,
+            max_compute_workgroup_storage_size: 16384,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
             max_compute_workgroup_size_y: 256,
@@ -1262,7 +1262,7 @@ impl Limits {
     ///     max_inter_stage_shader_components: 60,
     ///     max_color_attachments: 8,
     ///     max_color_attachment_bytes_per_sample: 32,
-    ///     max_compute_workgroup_storage_size: 16352,
+    ///     max_compute_workgroup_storage_size: 16352, // *
     ///     max_compute_invocations_per_workgroup: 256,
     ///     max_compute_workgroup_size_x: 256,
     ///     max_compute_workgroup_size_y: 256,
@@ -1279,6 +1279,8 @@ impl Limits {
             max_texture_dimension_3d: 256,
             max_storage_buffers_per_shader_stage: 4,
             max_uniform_buffer_binding_size: 16 << 10, // (16 KiB)
+            // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
+            max_compute_workgroup_storage_size: 16352,
             ..Self::defaults()
         }
     }
