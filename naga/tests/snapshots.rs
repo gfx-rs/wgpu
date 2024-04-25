@@ -973,6 +973,7 @@ fn convert_spv_all() {
     );
     convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
     convert_spv("spec-constants", true, Targets::IR);
+    convert_spv("spec-constants-issue-5598", true, Targets::GLSL);
     convert_spv(
         "subgroup-operations-s",
         false,

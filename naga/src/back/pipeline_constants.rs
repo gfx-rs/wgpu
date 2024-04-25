@@ -129,8 +129,10 @@ pub fn process_overrides<'a>(
                 Expression::Constant(c_h)
             }
             Expression::Constant(c_h) => {
-                adjusted_constant_initializers.insert(c_h);
-                module.constants[c_h].init = adjusted_global_expressions[c_h.index()];
+                if adjusted_constant_initializers.insert(c_h) {
+                    let init = &mut module.constants[c_h].init;
+                    *init = adjusted_global_expressions[init.index()];
+                }
                 expr
             }
             expr => expr,

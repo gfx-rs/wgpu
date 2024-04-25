@@ -1,0 +1,96 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 68
+; Schema: 0
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint Fragment %1 "fragment" %gl_FragCoord %3
+               OpEntryPoint Vertex %4 "vertex" %gl_VertexIndex %gl_Position
+               OpExecutionMode %1 OriginUpperLeft
+               OpDecorate %gl_FragCoord BuiltIn FragCoord
+               OpDecorate %10 SpecId 100
+               OpDecorate %3 Location 0
+               OpDecorate %_arr_v4float_uint_6 ArrayStride 16
+               OpDecorate %gl_VertexIndex BuiltIn VertexIndex
+               OpDecorate %gl_Position BuiltIn Position
+               OpDecorate %gl_Position Invariant
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+%_ptr_Input_v4float = OpTypePointer Input %v4float
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+       %void = OpTypeVoid
+         %17 = OpTypeFunction %void
+%gl_FragCoord = OpVariable %_ptr_Input_v4float Input
+       %bool = OpTypeBool
+       %uint = OpTypeInt 32 0
+         %10 = OpSpecConstant %uint 2
+     %uint_1 = OpConstant %uint 1
+    %v2float = OpTypeVector %float 2
+%_ptr_Output_float = OpTypePointer Output %float
+          %3 = OpVariable %_ptr_Output_v4float Output
+     %uint_0 = OpConstant %uint 0
+%_ptr_Input_uint = OpTypePointer Input %uint
+     %uint_6 = OpConstant %uint 6
+%_arr_v4float_uint_6 = OpTypeArray %v4float %uint_6
+%_ptr_Function__arr_v4float_uint_6 = OpTypePointer Function %_arr_v4float_uint_6
+%gl_VertexIndex = OpVariable %_ptr_Input_uint Input
+   %float_n1 = OpConstant %float -1
+    %float_0 = OpConstant %float 0
+    %float_1 = OpConstant %float 1
+         %32 = OpConstantComposite %v4float %float_n1 %float_n1 %float_0 %float_1
+         %33 = OpConstantComposite %v4float %float_1 %float_n1 %float_0 %float_1
+         %34 = OpConstantComposite %v4float %float_1 %float_1 %float_0 %float_1
+         %35 = OpConstantComposite %v4float %float_n1 %float_1 %float_0 %float_1
+         %36 = OpConstantComposite %_arr_v4float_uint_6 %32 %33 %34 %34 %35 %32
+%_ptr_Function_v4float = OpTypePointer Function %v4float
+%gl_Position = OpVariable %_ptr_Output_v4float Output
+ %float_0_25 = OpConstant %float 0.25
+  %float_0_5 = OpConstant %float 0.5
+          %1 = OpFunction %void None %17
+         %38 = OpLabel
+         %39 = OpLoad %v4float %gl_FragCoord
+         %40 = OpCompositeExtract %float %39 0
+         %41 = OpCompositeExtract %float %39 1
+         %42 = OpIEqual %bool %10 %uint_1
+               OpSelectionMerge %43 None
+               OpBranchConditional %42 %44 %45
+         %44 = OpLabel
+         %46 = OpFMul %float %40 %float_0_5
+         %47 = OpFMul %float %41 %float_0_5
+         %48 = OpCompositeConstruct %v2float %46 %47
+               OpBranch %43
+         %45 = OpLabel
+         %49 = OpFMul %float %40 %float_0_25
+         %50 = OpFMul %float %41 %float_0_25
+         %51 = OpCompositeConstruct %v2float %49 %50
+               OpBranch %43
+         %43 = OpLabel
+         %52 = OpPhi %v2float %48 %44 %51 %45
+         %53 = OpCompositeExtract %float %52 0
+         %54 = OpAccessChain %_ptr_Output_float %3 %uint_0
+               OpStore %54 %53
+         %55 = OpCompositeExtract %float %52 1
+         %56 = OpAccessChain %_ptr_Output_float %3 %uint_1
+               OpStore %56 %55
+               OpReturn
+               OpFunctionEnd
+          %4 = OpFunction %void None %17
+         %57 = OpLabel
+         %58 = OpVariable %_ptr_Function__arr_v4float_uint_6 Function
+         %59 = OpLoad %uint %gl_VertexIndex
+               OpStore %58 %36
+         %60 = OpULessThan %bool %59 %uint_6
+               OpSelectionMerge %61 None
+               OpBranchConditional %60 %62 %63
+         %62 = OpLabel
+         %64 = OpInBoundsAccessChain %_ptr_Function_v4float %58 %59
+         %65 = OpLoad %v4float %64
+               OpStore %gl_Position %65
+               OpBranch %61
+         %63 = OpLabel
+               OpBranch %61
+         %61 = OpLabel
+               OpReturn
+               OpFunctionEnd
