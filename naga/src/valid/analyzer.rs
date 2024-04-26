@@ -835,7 +835,7 @@ impl FunctionInfo {
                         let req = self.expressions[expr.index()].uniformity.requirements;
                         if self
                             .flags
-                            .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
+                            .contains(ValidationFlags::CONTROL_FLOW_UNIFORMITY)
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
