@@ -133,6 +133,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Allow user to select which MSL version to use via `--metal-version` with Naga CLI. By @pcleavelin in [#5392](https://github.com/gfx-rs/wgpu/pull/5392)
 - Support `arrayLength` for runtime-sized arrays inside binding arrays (for WGSL input and SPIR-V output). By @kvark in [#5428](https://github.com/gfx-rs/wgpu/pull/5428)
 - Added `--shader-stage` and `--input-kind` options to naga-cli for specifying vertex/fragment/compute shaders, and frontend. by @ratmice in [#5411](https://github.com/gfx-rs/wgpu/pull/5411)
+- Added a `create_validator` function to wgpu_core `Device` to create naga `Validator`s. By @atlv24 [#5606](https://github.com/gfx-rs/wgpu/pull/5606)
 
 #### WebGPU
 
@@ -169,6 +170,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
 - Document precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386)
 - Give short example of WGSL `push_constant` syntax. By @waywardmonkeys in [#5393](https://github.com/gfx-rs/wgpu/pull/5393)
+- Fix incorrect documentation of `Limits::max_compute_workgroup_storage_size` default value. By @atlv24 in [#5601](https://github.com/gfx-rs/wgpu/pull/5601)
 
 ### Bug Fixes
 
@@ -193,6 +195,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - In hlsl-out, fix accesses on zero value expressions by generating helper functions for `Expression::ZeroValue`. By @Imberflur in [#5587](https://github.com/gfx-rs/wgpu/pull/5587).
 - Fix behavior of `extractBits` and `insertBits` when `offset + count` overflows the bit width. By @cwfitzgerald in [#5305](https://github.com/gfx-rs/wgpu/pull/5305)
 - Fix behavior of integer `clamp` when `min` argument > `max` argument. By @cwfitzgerald in [#5300](https://github.com/gfx-rs/wgpu/pull/5300).
+- Fix `TypeInner::scalar_width` to be consistent with the rest of the codebase and return values in bytes not bits. By @atlv24 in [#5532](https://github.com/gfx-rs/wgpu/pull/5532).
 
 #### GLES / OpenGL
 
@@ -205,6 +208,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
 - Add safety check to `wgpu_hal::vulkan::CommandEncoder` to make sure `discard_encoding` is not called in the closed state. By @villuna in [#5557](https://github.com/gfx-rs/wgpu/pull/5557)
+- Fix SPIR-V type capability requests to not depend on `LocalType` caching. By @atlv24 in [#5590](https://github.com/gfx-rs/wgpu/pull/5590)
 
 #### Tests
 
