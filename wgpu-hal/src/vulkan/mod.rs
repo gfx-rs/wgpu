@@ -611,24 +611,25 @@ pub enum Fence {
 impl Fence {
     /// Return the highest [`FenceValue`] among the signalled fences in `active`.
     ///
-    /// As an optimization, assume that the returned value should be at least
-    /// `max_value`, and don't bother checking fences whose values are less than
-    /// that.
+    /// As an optimization, assume that we already know that the fence has
+    /// reached `last_completed`, and don't bother checking fences whose values
+    /// are less than that: those fences remain in the `active` array only
+    /// because we haven't called `maintain` yet to clean them up.
     ///
     /// [`FenceValue`]: crate::FenceValue
     fn check_active(
         device: &ash::Device,
-        mut max_value: crate::FenceValue,
+        mut last_completed: crate::FenceValue,
         active: &[(crate::FenceValue, vk::Fence)],
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         for &(value, raw) in active.iter() {
             unsafe {
-                if value > max_value && device.get_fence_status(raw)? {
-                    max_value = value;
+                if value > last_completed && device.get_fence_status(raw)? {
+                    last_completed = value;
                 }
             }
         }
-        Ok(max_value)
+        Ok(last_completed)
     }
 
     /// Return the highest signalled [`FenceValue`] for `self`.
