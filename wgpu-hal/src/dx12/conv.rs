@@ -224,7 +224,7 @@ pub fn map_polygon_mode(mode: wgt::PolygonMode) -> d3d12_ty::D3D12_FILL_MODE {
 }
 
 /// D3D12 doesn't support passing factors ending in `_COLOR` for alpha blending
-/// (see https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_render_target_blend_desc).
+/// (see <https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_render_target_blend_desc>).
 /// Therefore this function takes an additional `is_alpha` argument
 /// which if set will return an equivalent `_ALPHA` factor.
 fn map_blend_factor(factor: wgt::BlendFactor, is_alpha: bool) -> d3d12_ty::D3D12_BLEND {
