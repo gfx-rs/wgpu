@@ -440,7 +440,7 @@ impl Texture {
         }
     }
 
-    /// see https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice
+    /// see <https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice>
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
         mip_level + (array_layer + plane * self.array_layer_count()) * self.mip_level_count
     }
