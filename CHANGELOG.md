@@ -123,6 +123,8 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
   ```
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 - `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
+- Breaking change: [`wgpu_core::pipeline::ShaderError`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ShaderError.html) has been moved to `naga`. By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
+- Add a `get_compilation_info` method to `wgpu` to get shader compilation errors. By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 - More as_hal methods and improvements by @JMS55 in [#5452](https://github.com/gfx-rs/wgpu/pull/5452)
   - Added `wgpu::CommandEncoder::as_hal_mut`
   - Added `wgpu::TextureView::as_hal`

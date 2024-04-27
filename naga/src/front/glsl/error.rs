@@ -1,4 +1,5 @@
 use super::token::TokenValue;
+use crate::SourceLocation;
 use crate::{proc::ConstantEvaluatorError, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
@@ -137,6 +138,14 @@ pub struct Error {
     pub meta: Span,
 }
 
+impl Error {
+    /// Returns a [`SourceLocation`] for the error message.
+    pub fn location(&self, source: &str) -> Option<SourceLocation> {
+        Some(self.meta.location(source))
+    }
+}
+
+// TODO: Rename to ParseErrors?
 /// A collection of errors returned during shader parsing.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]

@@ -13,6 +13,7 @@ use thiserror::Error;
 #[derive(Clone, Debug)]
 pub struct ParseError {
     message: String,
+    // TODO: Document that the first span should be the primary span, and the other ones should be complementary.
     labels: Vec<(Span, Cow<'static, str>)>,
     notes: Vec<String>,
 }
