@@ -35,6 +35,8 @@ fn indexing_features() -> wgt::Features {
 ///   [`PhysicalDeviceFeatures::from_extensions_and_requested_features`]
 ///   constructs an value of this type indicating which Vulkan features to
 ///   enable, based on the `wgpu_types::Features` requested.
+///
+/// [`Instance::expose_adapter`]: super::Instance::expose_adapter
 #[derive(Debug, Default)]
 pub struct PhysicalDeviceFeatures {
     /// Basic Vulkan 1.0 features.
@@ -86,6 +88,9 @@ pub struct PhysicalDeviceFeatures {
     ///
     /// However, we do populate this when creating a device if
     /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
+    ///
+    /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
+    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
     buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
 
     /// Features provided by `VK_KHR_ray_query`,
@@ -95,6 +100,8 @@ pub struct PhysicalDeviceFeatures {
     /// this from `vkGetPhysicalDeviceFeatures2`.
     ///
     /// However, we do populate this when creating a device if ray tracing is requested.
+    ///
+    /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
     ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
 
     /// Features provided by `VK_KHR_zero_initialize_workgroup_memory`, promoted
@@ -181,6 +188,7 @@ impl PhysicalDeviceFeatures {
     /// [`Features`]: wgt::Features
     /// [`DownlevelFlags`]: wgt::DownlevelFlags
     /// [`PrivateCapabilities`]: super::PrivateCapabilities
+    /// [`add_to_device_create_builder`]: PhysicalDeviceFeatures::add_to_device_create_builder
     /// [`DeviceCreateInfoBuilder`]: vk::DeviceCreateInfoBuilder
     /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
@@ -459,6 +467,9 @@ impl PhysicalDeviceFeatures {
     /// Given `self`, together with the instance and physical device it was
     /// built from, and a `caps` also built from those, determine which wgpu
     /// features and downlevel flags the device can support.
+    ///
+    /// [`Features`]: wgt::Features
+    /// [`DownlevelFlags`]: wgt::DownlevelFlags
     fn to_wgpu(
         &self,
         instance: &ash::Instance,
