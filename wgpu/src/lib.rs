@@ -867,7 +867,7 @@ pub enum CompilationMessageType {
 pub struct SourceLocation {
     /// 1-based line number.
     pub line_number: u32,
-    /// 1-based column of the start of this span, also counted in bytes.
+    /// 1-based column in code units (in bytes) of the start of the span.
     /// Remember to convert accordingly when displaying to the user.
     pub line_position: u32,
     /// 0-based Offset in code units (in bytes) of the start of the span.
