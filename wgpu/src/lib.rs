@@ -833,7 +833,7 @@ pub struct CompilationInfo {
 /// A single message from the shader compilation process.
 ///
 /// Roughly corresponds to [`GPUCompilationMessage`](https://www.w3.org/TR/webgpu/#gpucompilationmessage),
-/// except that the location uses UTF-8 for positions, and Unicode code points for column numbers.
+/// except that the location uses UTF-8 for all positions.
 #[derive(Debug, Clone)]
 pub struct CompilationMessage {
     /// The text of the message.
@@ -860,14 +860,15 @@ pub enum CompilationMessageType {
 /// Roughly corresponds to the positional members of [`GPUCompilationMessage`][gcm] from
 /// the WebGPU specification, except
 /// - `offset` and `length` are in bytes (UTF-8 code units), instead of UTF-16 code units.
-/// - `line_position` counts entire Unicode code points, instead of UTF-16 code units.
+/// - `line_position` is in bytes (UTF-8 code units), and is usually not directly intended for humans.
 ///
 /// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SourceLocation {
     /// 1-based line number.
     pub line_number: u32,
-    /// 1-based column of the start of this span, counted in Unicode code points.
+    /// 1-based column of the start of this span, also counted in bytes.
+    /// Remember to convert accordingly when displaying to the user.
     pub line_position: u32,
     /// 0-based Offset in code units (in bytes) of the start of the span.
     pub offset: u32,

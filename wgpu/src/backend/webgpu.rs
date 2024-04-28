@@ -167,8 +167,8 @@ impl crate::CompilationMessage {
                 let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
 
                 let prefix = &source[..offset as usize];
-                let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0);
-                let line_position = source[line_start..offset as usize].chars().count() as u32 + 1;
+                let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
+                let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
 
                 Some(crate::SourceLocation {
                     offset,

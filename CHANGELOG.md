@@ -190,7 +190,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 
 - Improved `wgpu_hal` documentation. By @jimblandy in [#5516](https://github.com/gfx-rs/wgpu/pull/5516), [#5524](https://github.com/gfx-rs/wgpu/pull/5524), [#5562](https://github.com/gfx-rs/wgpu/pull/5562), [#5563](https://github.com/gfx-rs/wgpu/pull/5563), [#5566](https://github.com/gfx-rs/wgpu/pull/5566), [#5617](https://github.com/gfx-rs/wgpu/pull/5617), [#5618](https://github.com/gfx-rs/wgpu/pull/5618)
 - Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
-- Document precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386)
+- Document and tweak precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386) and [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 - Give short example of WGSL `push_constant` syntax. By @waywardmonkeys in [#5393](https://github.com/gfx-rs/wgpu/pull/5393)
 - Fix incorrect documentation of `Limits::max_compute_workgroup_storage_size` default value. By @atlv24 in [#5601](https://github.com/gfx-rs/wgpu/pull/5601)
 
