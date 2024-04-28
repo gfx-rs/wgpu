@@ -2,7 +2,8 @@
 multiple-versions = "deny"
 skip-tree = [
 	{ name = "windows-sys", version = "0.45" },
-	{ name = "winit", version = "0.27.5" },
+	{ name = "winit", version = "0.27" },
+	{ name = "winit", version = "0.29" },
 	{ name = "rustc_version", version = "0.2.3" },
 	{ name = "sourcemap", version = "7.1.1" },
 ]

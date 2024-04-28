@@ -39,6 +39,8 @@ Bottom level categories:
 
 ## Unreleased
 
+## v0.20.0 (2024-04-28)
+
 ### Major Changes
 
 #### Pipeline overridable constants
