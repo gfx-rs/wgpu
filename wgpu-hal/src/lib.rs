@@ -406,6 +406,24 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type TextureView: fmt::Debug + WasmNotSendSync;
     type Sampler: fmt::Debug + WasmNotSendSync;
     type QuerySet: fmt::Debug + WasmNotSendSync;
+
+    /// A value you can block on to wait for something to finish.
+    ///
+    /// A `Fence` holds a monotonically increasing [`FenceValue`]. You can call
+    /// [`Device::wait`] to block until a fence reaches or passes a value you
+    /// choose. [`Queue::submit`] can take a `Fence` and a [`FenceValue`] to
+    /// store in it when the submitted work is complete.
+    ///
+    /// Attempting to set a fence to a value less than its current value has no
+    /// effect.
+    ///
+    /// Waiting on a fence returns as soon as the fence reaches *or passes* the
+    /// requested value. This implies that, in order to reliably determine when
+    /// an operation has completed, operations must finish in order of
+    /// increasing fence values: if a higher-valued operation were to finish
+    /// before a lower-valued operation, then waiting for the fence to reach the
+    /// lower value could return before the lower-valued operation has actually
+    /// finished.
     type Fence: fmt::Debug + WasmNotSendSync;
 
     type BindGroupLayout: fmt::Debug + WasmNotSendSync;
@@ -605,7 +623,25 @@ pub trait Device: WasmNotSendSync {
         &self,
         fence: &<Self::A as Api>::Fence,
     ) -> Result<FenceValue, DeviceError>;
-    /// Calling wait with a lower value than the current fence value will immediately return.
+
+    /// Wait for `fence` to reach `value`.
+    ///
+    /// Operations like [`Queue::submit`] can accept a [`Fence`] and a
+    /// [`FenceValue`] to store in it, so you can use this `wait` function
+    /// to wait for a given queue submission to finish execution.
+    ///
+    /// The `value` argument must be a value that some actual operation you have
+    /// already presented to the device is going to store in `fence`. You cannot
+    /// wait for values yet to be submitted. (This restriction accommodates
+    /// implementations like the `vulkan` backend's [`FencePool`] that must
+    /// allocate a distinct synchronization object for each fence value one is
+    /// able to wait for.)
+    ///
+    /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
+    /// returns immediately.
+    ///
+    /// [`Fence`]: Api::Fence
+    /// [`FencePool`]: vulkan/enum.Fence.html#variant.FencePool
     unsafe fn wait(
         &self,
         fence: &<Self::A as Api>::Fence,
@@ -637,7 +673,30 @@ pub trait Device: WasmNotSendSync {
 pub trait Queue: WasmNotSendSync {
     type A: Api;
 
-    /// Submits the command buffers for execution on GPU.
+    /// Submit `command_buffers` for execution on GPU.
+    ///
+    /// If `signal_fence` is `Some(fence, value)`, update `fence` to `value`
+    /// when the operation is complete. See [`Fence`] for details.
+    ///
+    /// If two calls to `submit` on a single `Queue` occur in a particular order
+    /// (that is, they happen on the same thread, or on two threads that have
+    /// synchronized to establish an ordering), then the first submission's
+    /// commands all complete execution before any of the second submission's
+    /// commands begin. All results produced by one submission are visible to
+    /// the next.
+    ///
+    /// Within a submission, command buffers execute in the order in which they
+    /// appear in `command_buffers`. All results produced by one buffer are
+    /// visible to the next.
+    ///
+    /// If two calls to `submit` on a single `Queue` from different threads are
+    /// not synchronized to occur in a particular order, they must pass distinct
+    /// [`Fence`]s. As explained in the [`Fence`] documentation, waiting for
+    /// operations to complete is only trustworthy when operations finish in
+    /// order of increasing fence value, but submissions from different threads
+    /// cannot determine how to order the fence values if the submissions
+    /// themselves are unordered. If each thread uses a separate [`Fence`], this
+    /// problem does not arise.
     ///
     /// Valid usage:
     ///
@@ -652,6 +711,7 @@ pub trait Queue: WasmNotSendSync {
     /// - All of the [`SurfaceTexture`][st]s that the command buffers
     ///   write to appear in the `surface_textures` argument.
     ///
+    /// [`Fence`]: Api::Fence
     /// [cb]: Api::CommandBuffer
     /// [ce]: Api::CommandEncoder
     /// [st]: Api::SurfaceTexture
