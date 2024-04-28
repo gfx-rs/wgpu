@@ -1918,13 +1918,25 @@ impl crate::Context for ContextWgpuCore {
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
+        let (pass, err) = gfx_select!(encoder => self.0.command_encoder_create_compute_pass_dyn(*encoder, &wgc::command::ComputePassDescriptor {
+            label: desc.label.map(Borrowed),
+            timestamp_writes: timestamp_writes.as_ref(),
+        }));
+
+        if let Some(cause) = err {
+            self.handle_error(
+                &encoder_data.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "CommandEncoder::begin_compute_pass",
+            );
+        }
+
         (
             Unused,
             Self::ComputePassData {
-                pass: gfx_select!(encoder => self.0.command_encoder_create_compute_pass_dyn(*encoder, &wgc::command::ComputePassDescriptor {
-                    label: desc.label.map(Borrowed),
-                    timestamp_writes: timestamp_writes.as_ref(),
-                })),
+                pass,
                 error_sink: encoder_data.error_sink.clone(),
             },
         )

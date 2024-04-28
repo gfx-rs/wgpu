@@ -1341,7 +1341,7 @@ impl Global {
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
         let label = hal_label(base.label, self.instance.flags);
 
-        let pass_scope = PassErrorScope::Pass(encoder_id);
+        let pass_scope = PassErrorScope::PassEncoder(encoder_id);
 
         let hub = A::hub(self);
 

@@ -25,7 +25,6 @@ use self::memory_init::CommandBufferTextureMemoryActions;
 use crate::device::{Device, DeviceError};
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::hub::Hub;
-use crate::id::CommandBufferId;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
@@ -571,7 +570,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
-    ) -> (CommandBufferId, Option<CommandEncoderError>) {
+    ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         profiling::scope!("CommandEncoder::finish");
 
         let hub = A::hub(self);
@@ -805,7 +804,12 @@ pub enum PassErrorScope {
     #[error("In a bundle parameter")]
     Bundle,
     #[error("In a pass parameter")]
-    Pass(id::CommandEncoderId),
+    // TODO: To be removed in favor of `Pass`.
+    // ComputePass is already operating on command buffer instead,
+    // same should apply to RenderPass in the future.
+    PassEncoder(id::CommandEncoderId),
+    #[error("In a pass parameter")]
+    Pass(Option<id::CommandBufferId>),
     #[error("In a set_bind_group command")]
     SetBindGroup(id::BindGroupId),
     #[error("In a set_pipeline command")]
@@ -859,8 +863,11 @@ impl PrettyError for PassErrorScope {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         // This error is not in the error chain, only notes are needed
         match *self {
-            Self::Pass(id) => {
+            Self::PassEncoder(id) => {
                 fmt.command_buffer_label(&id.into_command_buffer_id());
+            }
+            Self::Pass(Some(id)) => {
+                fmt.command_buffer_label(&id);
             }
             Self::SetBindGroup(id) => {
                 fmt.bind_group_label(&id);
