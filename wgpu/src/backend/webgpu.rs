@@ -1633,7 +1633,7 @@ impl crate::context::Context for ContextWebGpu {
             }
         };
 
-        #[cfg(any(feature = "spirv", feature = "glsl", feature = "naga-ir"))]
+        #[cfg(naga)]
         fn validate_transformed_shader_module(
             module: &naga::Module,
             source: &str,
