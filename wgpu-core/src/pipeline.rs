@@ -109,7 +109,7 @@ impl<A: HalApi> ShaderModule<A> {
 }
 
 //Note: `Clone` would require `WithSpan: Clone`.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateShaderModuleError {
     #[cfg(feature = "wgsl")]

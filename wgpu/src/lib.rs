@@ -876,8 +876,8 @@ pub struct SourceLocation {
 }
 
 #[cfg(all(feature = "wgsl", wgpu_core))]
-impl From<&naga::error::ShaderError<naga::front::wgsl::ParseError>> for CompilationInfo {
-    fn from(value: &naga::error::ShaderError<naga::front::wgsl::ParseError>) -> Self {
+impl From<naga::error::ShaderError<naga::front::wgsl::ParseError>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::wgsl::ParseError>) -> Self {
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
@@ -888,12 +888,12 @@ impl From<&naga::error::ShaderError<naga::front::wgsl::ParseError>> for Compilat
     }
 }
 #[cfg(feature = "glsl")]
-impl From<&naga::error::ShaderError<naga::front::glsl::ParseErrors>> for CompilationInfo {
-    fn from(value: &naga::error::ShaderError<naga::front::glsl::ParseErrors>) -> Self {
+impl From<naga::error::ShaderError<naga::front::glsl::ParseErrors>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::glsl::ParseErrors>) -> Self {
         let messages = value
             .inner
             .errors
-            .iter()
+            .into_iter()
             .map(|err| CompilationMessage {
                 message: err.to_string(),
                 message_type: CompilationMessageType::Error,
@@ -905,8 +905,8 @@ impl From<&naga::error::ShaderError<naga::front::glsl::ParseErrors>> for Compila
 }
 
 #[cfg(feature = "spirv")]
-impl From<&naga::error::ShaderError<naga::front::spv::Error>> for CompilationInfo {
-    fn from(value: &naga::error::ShaderError<naga::front::spv::Error>) -> Self {
+impl From<naga::error::ShaderError<naga::front::spv::Error>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::spv::Error>) -> Self {
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
@@ -918,12 +918,10 @@ impl From<&naga::error::ShaderError<naga::front::spv::Error>> for CompilationInf
 }
 
 #[cfg(any(wgpu_core, naga))]
-impl From<&naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>>
+impl From<naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>>
     for CompilationInfo
 {
-    fn from(
-        value: &naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>,
-    ) -> Self {
+    fn from(value: naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>) -> Self {
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),

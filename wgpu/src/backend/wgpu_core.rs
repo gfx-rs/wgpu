@@ -901,15 +901,14 @@ impl crate::Context for ContextWgpuCore {
         );
         let compilation_info = match error {
             Some(cause) => {
-                let v = CompilationInfo::from(&cause);
                 self.handle_error(
                     &device_data.error_sink,
-                    cause,
+                    cause.clone(),
                     LABEL,
                     desc.label,
                     "Device::create_shader_module",
                 );
-                v
+                CompilationInfo::from(cause)
             }
             None => CompilationInfo { messages: vec![] },
         };
@@ -934,15 +933,14 @@ impl crate::Context for ContextWgpuCore {
         );
         let compilation_info = match error {
             Some(cause) => {
-                let v = CompilationInfo::from(&cause);
                 self.handle_error(
                     &device_data.error_sink,
-                    cause,
+                    cause.clone(),
                     LABEL,
                     desc.label,
                     "Device::create_shader_module_spirv",
                 );
-                v
+                CompilationInfo::from(cause)
             }
             None => CompilationInfo { messages: vec![] },
         };
@@ -3023,9 +3021,9 @@ fn default_error_handler(err: crate::Error) {
     panic!("wgpu error: {err}\n");
 }
 
-impl From<&CreateShaderModuleError> for CompilationInfo {
-    fn from(value: &CreateShaderModuleError) -> Self {
-        match &value {
+impl From<CreateShaderModuleError> for CompilationInfo {
+    fn from(value: CreateShaderModuleError) -> Self {
+        match value {
             #[cfg(feature = "wgsl")]
             CreateShaderModuleError::Parsing(v) => v.into(),
             #[cfg(feature = "glsl")]
