@@ -1556,7 +1556,7 @@ impl crate::context::Context for ContextWebGpu {
                 spv_parser
                     .parse()
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(&naga::error::ShaderError {
+                        CompilationInfo::from(naga::error::ShaderError {
                             source: String::new(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -1590,7 +1590,7 @@ impl crate::context::Context for ContextWebGpu {
                 parser
                     .parse(&options, shader)
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(&naga::error::ShaderError {
+                        CompilationInfo::from(naga::error::ShaderError {
                             source: shader.to_string(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -1643,7 +1643,7 @@ impl crate::context::Context for ContextWebGpu {
             let mut validator =
                 valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all());
             let module_info = validator.validate(module).map_err(|err| {
-                crate::CompilationInfo::from(&naga::error::ShaderError {
+                CompilationInfo::from(naga::error::ShaderError {
                     source: source.to_string(),
                     label: desc.label.map(|s| s.to_string()),
                     inner: Box::new(err),
