@@ -136,7 +136,7 @@ impl<E> fmt::Display for WithSpan<E>
 where
     E: fmt::Display,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
@@ -304,7 +304,7 @@ impl<E> WithSpan<E> {
         use term::termcolor::NoColor;
 
         let files = files::SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
         let mut writer = NoColor::new(Vec::new());
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
         String::from_utf8(writer.into_inner()).unwrap()

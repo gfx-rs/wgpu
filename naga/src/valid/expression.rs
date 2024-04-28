@@ -194,7 +194,7 @@ impl super::Validator {
         use crate::Expression as E;
 
         if !global_expr_kind.is_const_or_override(handle) {
-            return Err(super::ConstExpressionError::NonConstOrOverride);
+            return Err(ConstExpressionError::NonConstOrOverride);
         }
 
         match gctx.global_expressions[handle] {
@@ -211,10 +211,10 @@ impl super::Validator {
             }
             E::Splat { value, .. } => match *mod_info[value].inner_with(gctx.types) {
                 crate::TypeInner::Scalar { .. } => {}
-                _ => return Err(super::ConstExpressionError::InvalidSplatType(value)),
+                _ => return Err(ConstExpressionError::InvalidSplatType(value)),
             },
             _ if global_expr_kind.is_const(handle) || !self.allow_overrides => {
-                return Err(super::ConstExpressionError::NonFullyEvaluatedConst)
+                return Err(ConstExpressionError::NonFullyEvaluatedConst)
             }
             // the constant evaluator will report errors about override-expressions
             _ => {}
