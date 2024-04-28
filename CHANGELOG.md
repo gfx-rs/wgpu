@@ -80,12 +80,13 @@ This allows you to get more structured information about compilation errors, war
 ...
 let lighting_shader = ctx.device.create_shader_module(include_wgsl!("lighting.wgsl"));
 let compilation_info = lighting_shader.get_compilation_info().await;
-for message in compilation_info.messages.iter() {
-    let line_number_to_highlight = message
-        .location
-        .map(|location| location.line_number)
-        .unwrap_or(1);
-    println!("Compile error at line {line_number_to_highlight}");
+for message in compilation_info
+    .messages
+    .iter()
+    .filter(|m| m.message_type == wgpu::CompilationMessageType::Error)
+{
+    let line = message.location.map(|l| l.line_number).unwrap_or(1);
+    println!("Compile error at line {line}");
 }
 ```
 
