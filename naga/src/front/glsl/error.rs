@@ -145,15 +145,14 @@ impl Error {
     }
 }
 
-// TODO: Rename to ParseErrors?
 /// A collection of errors returned during shader parsing.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct ParseError {
+pub struct ParseErrors {
     pub errors: Vec<Error>,
 }
 
-impl ParseError {
+impl ParseErrors {
     pub fn emit_to_writer(&self, writer: &mut impl WriteColor, source: &str) {
         self.emit_to_writer_with_path(writer, source, "glsl");
     }
@@ -181,19 +180,19 @@ impl ParseError {
     }
 }
 
-impl std::fmt::Display for ParseError {
+impl std::fmt::Display for ParseErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.errors.iter().try_for_each(|e| write!(f, "{e:?}"))
     }
 }
 
-impl std::error::Error for ParseError {
+impl std::error::Error for ParseErrors {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None
     }
 }
 
-impl From<Vec<Error>> for ParseError {
+impl From<Vec<Error>> for ParseErrors {
     fn from(errors: Vec<Error>) -> Self {
         Self { errors }
     }

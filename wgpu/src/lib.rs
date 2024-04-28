@@ -888,8 +888,8 @@ impl From<&naga::error::ShaderError<naga::front::wgsl::ParseError>> for Compilat
     }
 }
 #[cfg(feature = "glsl")]
-impl From<&naga::error::ShaderError<naga::front::glsl::ParseError>> for CompilationInfo {
-    fn from(value: &naga::error::ShaderError<naga::front::glsl::ParseError>) -> Self {
+impl From<&naga::error::ShaderError<naga::front::glsl::ParseErrors>> for CompilationInfo {
+    fn from(value: &naga::error::ShaderError<naga::front::glsl::ParseErrors>) -> Self {
         let messages = value
             .inner
             .errors

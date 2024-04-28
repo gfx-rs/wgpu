@@ -117,7 +117,7 @@ pub enum CreateShaderModuleError {
     Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
     #[cfg(feature = "glsl")]
     #[error(transparent)]
-    ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseError>),
+    ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseErrors>),
     #[cfg(feature = "spirv")]
     #[error(transparent)]
     ParsingSpirV(#[from] ShaderError<naga::front::spv::Error>),

@@ -17,7 +17,7 @@ impl fmt::Display for ShaderError<crate::front::wgsl::ParseError> {
     }
 }
 #[cfg(feature = "glsl-in")]
-impl fmt::Display for ShaderError<crate::front::glsl::ParseError> {
+impl fmt::Display for ShaderError<crate::front::glsl::ParseErrors> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = self.label.as_deref().unwrap_or_default();
         let string = self.inner.emit_to_string(&self.source);
