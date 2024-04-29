@@ -845,6 +845,7 @@ fn main() {
                             }
                         }
                         ex.render();
+                        window.request_redraw();
                     }
                     _ => {
                         example.as_mut().unwrap().update(event);
