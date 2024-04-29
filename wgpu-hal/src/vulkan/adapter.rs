@@ -952,8 +952,8 @@ impl PhysicalDeviceProperties {
                 extensions.push(vk::ExtImageRobustnessFn::name());
             }
 
-            // Require `VK_EXT_subgroup_size_control` if the associated feature was requested
-            if requested_features.contains(wgt::Features::SUBGROUP) {
+            // Require `VK_EXT_subgroup_size_control` if it is available
+            if self.supports_extension(vk::ExtSubgroupSizeControlFn::name()) {
                 extensions.push(vk::ExtSubgroupSizeControlFn::name());
             }
         }
