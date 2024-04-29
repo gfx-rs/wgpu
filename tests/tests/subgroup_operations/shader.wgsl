@@ -111,6 +111,7 @@ fn main(
     add_result_to_mask(&passed, 25u, subgroup_invocation_id == 0u || subgroupShuffleUp(subgroup_invocation_id, 1u) == subgroup_invocation_id - 1u);
     add_result_to_mask(&passed, 26u, subgroupShuffleXor(subgroup_invocation_id, subgroup_size - 1u) == (subgroup_invocation_id ^ (subgroup_size - 1u)));
 
+    // Mac/Apple will fail this test.
     var passed_27 = false;
     if subgroup_invocation_id % 2u == 0u {
         passed_27 |= subgroupAdd(1u) == (subgroup_size / 2u);
@@ -119,6 +120,7 @@ fn main(
     }
     add_result_to_mask(&passed, 27u, passed_27);
 
+    // Mac/Apple will fail this test.
     var passed_28 = false;
     switch subgroup_invocation_id % 3u {
         case 0u: {
@@ -134,6 +136,7 @@ fn main(
     }
     add_result_to_mask(&passed, 28u, passed_28);
 
+    // Mac/Apple will sometimes fail this test. MacOS 14.3 passes it, so the bug in the metal compiler seems to be fixed.
     expected = 0u;
     for (var i = subgroup_size; i >= 0u; i -= 1u) {
         expected = subgroupAdd(1u);
