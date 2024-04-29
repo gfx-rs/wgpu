@@ -39,6 +39,39 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### Querying shader compilation errors
+
+Wgpu now supports querying [shader compilation info](https://www.w3.org/TR/webgpu/#dom-gpushadermodule-getcompilationinfo).
+
+This allows you to get more structured information about compilation errors, warnings and info:
+```rust
+...
+let lighting_shader = ctx.device.create_shader_module(include_wgsl!("lighting.wgsl"));
+let compilation_info = lighting_shader.get_compilation_info().await;
+for message in compilation_info
+    .messages
+    .iter()
+    .filter(|m| m.message_type == wgpu::CompilationMessageType::Error)
+{
+    let line = message.location.map(|l| l.line_number).unwrap_or(1);
+    println!("Compile error at line {line}");
+}
+```
+
+By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
+
+
+
+### New features
+
+#### General
+
+#### Naga
+
+### Bug Fixes
+
 ## v0.20.0 (2024-04-28)
 
 ### Major Changes
@@ -72,27 +105,6 @@ Due to a specification change `write_timestamp` is no longer supported on WebGPU
 `wgpu::CommandEncoder::write_timestamp` requires now the new `wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS` feature which is available on all native backends but not on WebGPU.
 
 By @wumpf in [#5188](https://github.com/gfx-rs/wgpu/pull/5188)
-
-#### Querying shader compilation errors
-
-Wgpu now supports querying [shader compilation info](https://www.w3.org/TR/webgpu/#dom-gpushadermodule-getcompilationinfo).
-
-This allows you to get more structured information about compilation errors, warnings and info:
-```rust
-...
-let lighting_shader = ctx.device.create_shader_module(include_wgsl!("lighting.wgsl"));
-let compilation_info = lighting_shader.get_compilation_info().await;
-for message in compilation_info
-    .messages
-    .iter()
-    .filter(|m| m.message_type == wgpu::CompilationMessageType::Error)
-{
-    let line = message.location.map(|l| l.line_number).unwrap_or(1);
-    println!("Compile error at line {line}");
-}
-```
-
-By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 
 #### Wgsl const evaluation for many more built-ins
