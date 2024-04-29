@@ -2468,10 +2468,6 @@ pub mod render_commands {
     use std::{convert::TryInto, num::NonZeroU32};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `offset_length` elements.
     pub fn wgpu_render_pass_set_bind_group(
         pass: &mut RenderPass,
         index: u32,
@@ -2571,10 +2567,6 @@ pub mod render_commands {
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `size_bytes` bytes.
     pub fn wgpu_render_pass_set_push_constants(
         pass: &mut RenderPass,
         stages: wgt::ShaderStages,
