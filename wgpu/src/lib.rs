@@ -812,6 +812,139 @@ impl Drop for ShaderModule {
     }
 }
 
+impl ShaderModule {
+    /// Get the compilation info for the shader module.
+    pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
+        self.context
+            .shader_get_compilation_info(&self.id, self.data.as_ref())
+    }
+}
+
+/// Compilation information for a shader module.
+///
+/// Corresponds to [WebGPU `GPUCompilationInfo`](https://gpuweb.github.io/gpuweb/#gpucompilationinfo).
+/// The source locations use bytes, and index a UTF-8 encoded string.
+#[derive(Debug, Clone)]
+pub struct CompilationInfo {
+    /// The messages from the shader compilation process.
+    pub messages: Vec<CompilationMessage>,
+}
+
+/// A single message from the shader compilation process.
+///
+/// Roughly corresponds to [`GPUCompilationMessage`](https://www.w3.org/TR/webgpu/#gpucompilationmessage),
+/// except that the location uses UTF-8 for all positions.
+#[derive(Debug, Clone)]
+pub struct CompilationMessage {
+    /// The text of the message.
+    pub message: String,
+    /// The type of the message.
+    pub message_type: CompilationMessageType,
+    /// Where in the source code the message points at.
+    pub location: Option<SourceLocation>,
+}
+
+/// The type of a compilation message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompilationMessageType {
+    /// An error message.
+    Error,
+    /// A warning message.
+    Warning,
+    /// An informational message.
+    Info,
+}
+
+/// A human-readable representation for a span, tailored for text source.
+///
+/// Roughly corresponds to the positional members of [`GPUCompilationMessage`][gcm] from
+/// the WebGPU specification, except
+/// - `offset` and `length` are in bytes (UTF-8 code units), instead of UTF-16 code units.
+/// - `line_position` is in bytes (UTF-8 code units), and is usually not directly intended for humans.
+///
+/// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct SourceLocation {
+    /// 1-based line number.
+    pub line_number: u32,
+    /// 1-based column in code units (in bytes) of the start of the span.
+    /// Remember to convert accordingly when displaying to the user.
+    pub line_position: u32,
+    /// 0-based Offset in code units (in bytes) of the start of the span.
+    pub offset: u32,
+    /// Length in code units (in bytes) of the span.
+    pub length: u32,
+}
+
+#[cfg(all(feature = "wgsl", wgpu_core))]
+impl From<naga::error::ShaderError<naga::front::wgsl::ParseError>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::wgsl::ParseError>) -> Self {
+        CompilationInfo {
+            messages: vec![CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: value.inner.location(&value.source).map(Into::into),
+            }],
+        }
+    }
+}
+#[cfg(feature = "glsl")]
+impl From<naga::error::ShaderError<naga::front::glsl::ParseErrors>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::glsl::ParseErrors>) -> Self {
+        let messages = value
+            .inner
+            .errors
+            .into_iter()
+            .map(|err| CompilationMessage {
+                message: err.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: err.location(&value.source).map(Into::into),
+            })
+            .collect();
+        CompilationInfo { messages }
+    }
+}
+
+#[cfg(feature = "spirv")]
+impl From<naga::error::ShaderError<naga::front::spv::Error>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::spv::Error>) -> Self {
+        CompilationInfo {
+            messages: vec![CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: None,
+            }],
+        }
+    }
+}
+
+#[cfg(any(wgpu_core, naga))]
+impl From<naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>>
+    for CompilationInfo
+{
+    fn from(value: naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>) -> Self {
+        CompilationInfo {
+            messages: vec![CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: value.inner.location(&value.source).map(Into::into),
+            }],
+        }
+    }
+}
+
+#[cfg(any(wgpu_core, naga))]
+impl From<naga::SourceLocation> for SourceLocation {
+    fn from(value: naga::SourceLocation) -> Self {
+        SourceLocation {
+            length: value.length,
+            offset: value.offset,
+            line_number: value.line_number,
+            line_position: value.line_position,
+        }
+    }
+}
+
 /// Source of a shader module.
 ///
 /// The source will be parsed and validated.

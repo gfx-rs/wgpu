@@ -20,7 +20,7 @@ use crate::{
     },
     instance::Adapter,
     lock::{rank, Mutex, MutexGuard, RwLock},
-    pipeline,
+    pipeline::{self},
     pool::ResourcePool,
     registry::Registry,
     resource::{
@@ -1430,7 +1430,7 @@ impl<A: HalApi> Device<A> {
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::front::wgsl::parse_str");
                 let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
-                    pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
+                    pipeline::CreateShaderModuleError::Parsing(naga::error::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
@@ -1443,7 +1443,7 @@ impl<A: HalApi> Device<A> {
                 let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
                 profiling::scope!("naga::front::spv::Frontend");
                 let module = parser.parse().map_err(|inner| {
-                    pipeline::CreateShaderModuleError::ParsingSpirV(pipeline::ShaderError {
+                    pipeline::CreateShaderModuleError::ParsingSpirV(naga::error::ShaderError {
                         source: String::new(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
@@ -1456,7 +1456,7 @@ impl<A: HalApi> Device<A> {
                 let mut parser = naga::front::glsl::Frontend::default();
                 profiling::scope!("naga::front::glsl::Frontend.parse");
                 let module = parser.parse(&options, &code).map_err(|inner| {
-                    pipeline::CreateShaderModuleError::ParsingGlsl(pipeline::ShaderError {
+                    pipeline::CreateShaderModuleError::ParsingGlsl(naga::error::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
@@ -1499,7 +1499,7 @@ impl<A: HalApi> Device<A> {
             .create_validator(naga::valid::ValidationFlags::all())
             .validate(&module)
             .map_err(|inner| {
-                pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {
+                pipeline::CreateShaderModuleError::Validation(naga::error::ShaderError {
                     source,
                     label: desc.label.as_ref().map(|l| l.to_string()),
                     inner: Box::new(inner),

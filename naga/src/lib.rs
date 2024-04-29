@@ -274,6 +274,7 @@ pub mod back;
 mod block;
 #[cfg(feature = "compact")]
 pub mod compact;
+pub mod error;
 pub mod front;
 pub mod keywords;
 pub mod proc;
