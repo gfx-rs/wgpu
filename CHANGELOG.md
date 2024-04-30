@@ -43,7 +43,8 @@ Bottom level categories:
 
 #### General
 
-- Clean up weak references to texture views and bind groups. By @xiaopengli89 [#5595](https://github.com/gfx-rs/wgpu/pull/5595).
+- Clean up weak references to texture views and bind groups. By @xiaopengli89 in [#5595](https://github.com/gfx-rs/wgpu/pull/5595).
+- Fix segfault on exit is queue & device are dropped before surface. By @sagudev in [#5640](https://github.com/gfx-rs/wgpu/pull/5640).
 
 #### Vulkan
 
