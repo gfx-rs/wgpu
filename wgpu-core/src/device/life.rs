@@ -468,6 +468,20 @@ impl<A: HalApi> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
+    /// Remove abandoned resources from `resources_map` and return them.
+    ///
+    /// Consult `trackers` to see which resources in `resources_map` are
+    /// abandoned (that is, referenced only by `resources_map` and `trackers`
+    /// itself) and remove them from `resources_map`.
+    ///
+    /// If the abandoned resources are in use by a command submission still in
+    /// flight, as listed in `active`, add them to that submission's
+    /// `ActiveSubmission::last_resources` map.
+    ///
+    /// Use `get_resource_map` to find the appropriate member of
+    /// `ActiveSubmission::last_resources` to hold resources of type `R`.
+    ///
+    /// Return a vector of all the abandoned resources that were removed.
     fn triage_resources<R>(
         resources_map: &mut FastHashMap<TrackerIndex, Arc<R>>,
         active: &mut [ActiveSubmission<A>],
@@ -584,6 +598,12 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.views,
             |maps| &mut maps.texture_views,
         );
+        // You might be tempted to add the view's parent texture to
+        // suspected_resources here, but don't. Texture views get dropped all
+        // the time, and once a texture is added to
+        // `LifetimeTracker::suspected_resources` it remains there until it's
+        // actually dropped, which for long-lived textures could be at the end
+        // of execution.
         self
     }
 
@@ -782,7 +802,8 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub(crate) fn triage_suspected(&mut self, trackers: &Mutex<Tracker<A>>) {
         profiling::scope!("triage_suspected");
 
-        //NOTE: the order is important to release resources that depends between each other!
+        // NOTE: The order in which resource types are processed here is
+        // crucial. See "Entrained resources" in this function's doc comment.
         self.triage_suspected_render_bundles(trackers);
         self.triage_suspected_compute_pipelines(trackers);
         self.triage_suspected_render_pipelines(trackers);
