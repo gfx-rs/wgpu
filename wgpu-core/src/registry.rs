@@ -101,9 +101,11 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
         self.read().get_owned(id)
     }
+    #[track_caller]
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
         self.storage.read()
     }
+    #[track_caller]
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
