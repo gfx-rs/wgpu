@@ -545,17 +545,13 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.bind_groups,
             |maps| &mut maps.bind_groups,
         );
-        let mut used_buffers = vec![];
-        let mut used_textures = vec![];
         removed_resource.drain(..).for_each(|bind_group| {
             for v in bind_group.used.buffers.drain_resources() {
-                used_buffers.push(v.clone());
                 self.suspected_resources
                     .buffers
                     .insert(v.as_info().tracker_index(), v);
             }
             for v in bind_group.used.textures.drain_resources() {
-                used_textures.push(v.clone());
                 self.suspected_resources
                     .textures
                     .insert(v.as_info().tracker_index(), v);
@@ -576,29 +572,18 @@ impl<A: HalApi> LifetimeTracker<A> {
                 bind_group.layout.clone(),
             );
         });
-        for b in used_buffers {
-            b.bind_groups.lock().retain(|weak| weak.strong_count() > 0);
-        }
-        for t in used_textures {
-            t.bind_groups.lock().retain(|weak| weak.strong_count() > 0);
-        }
         self
     }
 
     fn triage_suspected_texture_views(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let resource_map = &mut self.suspected_resources.texture_views;
-        let removed_views = Self::triage_resources(
+        Self::triage_resources(
             resource_map,
             self.active.as_mut_slice(),
             &mut trackers.views,
             |maps| &mut maps.texture_views,
         );
-        for view in removed_views {
-            let parent = view.parent.clone();
-            drop(view);
-            parent.views.lock().retain(|weak| weak.strong_count() > 0);
-        }
         self
     }
 
@@ -611,6 +596,18 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.textures,
             |maps| &mut maps.textures,
         );
+
+        // We may have been suspected because a texture view or bind group
+        // referring to us was dropped. Remove stale weak references, so that
+        // the backlink table doesn't grow without bound.
+        for texture in self.suspected_resources.textures.values() {
+            texture.views.lock().retain(|view| view.strong_count() > 0);
+            texture
+                .bind_groups
+                .lock()
+                .retain(|bg| bg.strong_count() > 0);
+        }
+
         self
     }
 
@@ -635,6 +632,13 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.buffers,
             |maps| &mut maps.buffers,
         );
+
+        // We may have been suspected because a bind group referring to us was
+        // dropped. Remove stale weak references, so that the backlink table
+        // doesn't grow without bound.
+        for buffer in self.suspected_resources.buffers.values() {
+            buffer.bind_groups.lock().retain(|bg| bg.strong_count() > 0);
+        }
 
         self
     }
