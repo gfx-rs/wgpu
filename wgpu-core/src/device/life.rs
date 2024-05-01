@@ -517,13 +517,13 @@ impl<A: HalApi> LifetimeTracker<A> {
     fn triage_suspected_render_bundles(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let suspected_render_bundles = &mut self.suspected_resources.render_bundles;
-        let mut removed_resources = Self::triage_resources(
+        let removed_resources = Self::triage_resources(
             suspected_render_bundles,
             self.active.as_mut_slice(),
             &mut trackers.bundles,
             |maps| &mut maps.render_bundles,
         );
-        removed_resources.drain(..).for_each(|bundle| {
+        for bundle in removed_resources {
             for v in bundle.used.buffers.write().drain_resources() {
                 self.suspected_resources
                     .buffers
@@ -549,20 +549,20 @@ impl<A: HalApi> LifetimeTracker<A> {
                     .query_sets
                     .insert(v.as_info().tracker_index(), v);
             }
-        });
+        }
         self
     }
 
     fn triage_suspected_bind_groups(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let suspected_bind_groups = &mut self.suspected_resources.bind_groups;
-        let mut removed_resources = Self::triage_resources(
+        let removed_resources = Self::triage_resources(
             suspected_bind_groups,
             self.active.as_mut_slice(),
             &mut trackers.bind_groups,
             |maps| &mut maps.bind_groups,
         );
-        removed_resources.drain(..).for_each(|bind_group| {
+        for bind_group in removed_resources {
             for v in bind_group.used.buffers.drain_resources() {
                 self.suspected_resources
                     .buffers
@@ -588,7 +588,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 bind_group.layout.as_info().tracker_index(),
                 bind_group.layout.clone(),
             );
-        });
+        }
         self
     }
 
@@ -693,36 +693,36 @@ impl<A: HalApi> LifetimeTracker<A> {
     fn triage_suspected_compute_pipelines(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let suspected_compute_pipelines = &mut self.suspected_resources.compute_pipelines;
-        let mut removed_resources = Self::triage_resources(
+        let removed_resources = Self::triage_resources(
             suspected_compute_pipelines,
             self.active.as_mut_slice(),
             &mut trackers.compute_pipelines,
             |maps| &mut maps.compute_pipelines,
         );
-        removed_resources.drain(..).for_each(|compute_pipeline| {
+        for compute_pipeline in removed_resources {
             self.suspected_resources.pipeline_layouts.insert(
                 compute_pipeline.layout.as_info().tracker_index(),
                 compute_pipeline.layout.clone(),
             );
-        });
+        }
         self
     }
 
     fn triage_suspected_render_pipelines(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let suspected_render_pipelines = &mut self.suspected_resources.render_pipelines;
-        let mut removed_resources = Self::triage_resources(
+        let removed_resources = Self::triage_resources(
             suspected_render_pipelines,
             self.active.as_mut_slice(),
             &mut trackers.render_pipelines,
             |maps| &mut maps.render_pipelines,
         );
-        removed_resources.drain(..).for_each(|render_pipeline| {
+        for render_pipeline in removed_resources {
             self.suspected_resources.pipeline_layouts.insert(
                 render_pipeline.layout.as_info().tracker_index(),
                 render_pipeline.layout.clone(),
             );
-        });
+        }
         self
     }
 
