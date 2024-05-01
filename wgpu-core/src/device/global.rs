@@ -2091,7 +2091,7 @@ impl Global {
     }
 
     #[cfg(feature = "replay")]
-    /// Only triangle suspected resource IDs. This helps us to avoid ID collisions
+    /// Only triage suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.
     pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), InvalidDevice> {
         let hub = A::hub(self);
