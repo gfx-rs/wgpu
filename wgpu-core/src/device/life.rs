@@ -493,20 +493,23 @@ impl<A: HalApi> LifetimeTracker<A> {
     {
         let mut removed_resources = Vec::new();
         resources_map.retain(|&index, resource| {
+            if !trackers.remove_abandoned(index) {
+                return true;
+            }
+
+            // If this resource is used by commands in flight, save
+            // it in that submission's `last_resources` list.
             let submit_index = resource.as_info().submission_index();
-            let non_referenced_resources = active
+            let last_resources = active
                 .iter_mut()
                 .find(|a| a.index == submit_index)
                 .map(|a| &mut a.last_resources);
-
-            let is_removed = trackers.remove_abandoned(index);
-            if is_removed {
-                removed_resources.push(resource.clone());
-                if let Some(resources) = non_referenced_resources {
-                    get_resource_map(resources).insert(index, resource.clone());
-                }
+            if let Some(last_resources) = last_resources {
+                get_resource_map(last_resources).insert(index, resource.clone());
             }
-            !is_removed
+
+            removed_resources.push(resource.clone());
+            false
         });
         removed_resources
     }
