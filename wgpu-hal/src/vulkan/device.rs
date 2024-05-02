@@ -573,7 +573,7 @@ impl super::Device {
                 .collect();
             raw_view_formats.push(original_format);
 
-            wgt_view_formats = config.view_formats.clone();
+            wgt_view_formats.clone_from(&config.view_formats);
             wgt_view_formats.push(config.format);
         }
 
@@ -1015,7 +1015,7 @@ impl crate::Device for super::Device {
         let mut wgt_view_formats = vec![];
         if !desc.view_formats.is_empty() {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
-            wgt_view_formats = desc.view_formats.clone();
+            wgt_view_formats.clone_from(&desc.view_formats);
             wgt_view_formats.push(desc.format);
 
             if self.shared.private_caps.image_format_list {
