@@ -58,7 +58,7 @@ impl EntryMap {
         assert!(self.sorted);
     }
 
-    /// Create a new [`BindGroupLayoutEntryMap`] from a slice of [`wgt::BindGroupLayoutEntry`]s.
+    /// Create a new [`EntryMap`] from a slice of [`wgt::BindGroupLayoutEntry`]s.
     ///
     /// Errors if there are duplicate bindings or if any binding index is greater than
     /// the device's limits.

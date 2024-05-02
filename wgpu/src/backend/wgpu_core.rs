@@ -1,7 +1,8 @@
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
+    CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
@@ -23,9 +24,10 @@ use std::{
     sync::Arc,
 };
 use wgc::{
-    command::{bundle_ffi::*, compute_ffi::*, render_ffi::*},
+    command::{bundle_ffi::*, compute_commands::*, render_commands::*},
     device::DeviceLostClosure,
     id::{CommandEncoderId, TextureViewId},
+    pipeline::CreateShaderModuleError,
 };
 use wgt::WasmNotSendSync;
 
@@ -442,6 +444,11 @@ pub struct Buffer {
 }
 
 #[derive(Debug)]
+pub struct ShaderModule {
+    compilation_info: CompilationInfo,
+}
+
+#[derive(Debug)]
 pub struct Texture {
     id: wgc::id::TextureId,
     error_sink: ErrorSink,
@@ -493,7 +500,7 @@ impl crate::Context for ContextWgpuCore {
     type QueueId = wgc::id::QueueId;
     type QueueData = Queue;
     type ShaderModuleId = wgc::id::ShaderModuleId;
-    type ShaderModuleData = ();
+    type ShaderModuleData = ShaderModule;
     type BindGroupLayoutId = wgc::id::BindGroupLayoutId;
     type BindGroupLayoutData = ();
     type BindGroupId = wgc::id::BindGroupId;
@@ -554,6 +561,7 @@ impl crate::Context for ContextWgpuCore {
     >;
 
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
+    type CompilationInfoFuture = Ready<CompilationInfo>;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::global::Global::new("wgpu", instance_desc))
@@ -569,7 +577,7 @@ impl crate::Context for ContextWgpuCore {
                 raw_window_handle,
             } => unsafe {
                 self.0
-                    .instance_create_surface(raw_display_handle, raw_window_handle, None)?
+                    .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
             #[cfg(metal)]
@@ -593,7 +601,7 @@ impl crate::Context for ContextWgpuCore {
                 self.0
                     .instance_create_surface_from_swap_chain_panel(swap_chain_panel, None)
             },
-        };
+        }?;
 
         Ok((
             id,
@@ -906,16 +914,21 @@ impl crate::Context for ContextWgpuCore {
         let (id, error) = wgc::gfx_select!(
             device => self.0.device_create_shader_module(*device, &descriptor, source, None)
         );
-        if let Some(cause) = error {
-            self.handle_error(
-                &device_data.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Device::create_shader_module",
-            );
-        }
-        (id, ())
+        let compilation_info = match error {
+            Some(cause) => {
+                self.handle_error(
+                    &device_data.error_sink,
+                    cause.clone(),
+                    LABEL,
+                    desc.label,
+                    "Device::create_shader_module",
+                );
+                CompilationInfo::from(cause)
+            }
+            None => CompilationInfo { messages: vec![] },
+        };
+
+        (id, ShaderModule { compilation_info })
     }
 
     unsafe fn device_create_shader_module_spirv(
@@ -933,16 +946,20 @@ impl crate::Context for ContextWgpuCore {
         let (id, error) = wgc::gfx_select!(
             device => self.0.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), None)
         );
-        if let Some(cause) = error {
-            self.handle_error(
-                &device_data.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Device::create_shader_module_spirv",
-            );
-        }
-        (id, ())
+        let compilation_info = match error {
+            Some(cause) => {
+                self.handle_error(
+                    &device_data.error_sink,
+                    cause.clone(),
+                    LABEL,
+                    desc.label,
+                    "Device::create_shader_module_spirv",
+                );
+                CompilationInfo::from(cause)
+            }
+            None => CompilationInfo { messages: vec![] },
+        };
+        (id, ShaderModule { compilation_info })
     }
 
     fn device_create_bind_group_layout(
@@ -1161,7 +1178,11 @@ impl crate::Context for ContextWgpuCore {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.id.into(),
                     entry_point: Some(Borrowed(desc.vertex.entry_point)),
-                    constants: Borrowed(desc.vertex.constants),
+                    constants: Borrowed(desc.vertex.compilation_options.constants),
+                    zero_initialize_workgroup_memory: desc
+                        .vertex
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1172,7 +1193,10 @@ impl crate::Context for ContextWgpuCore {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: frag.module.id.into(),
                     entry_point: Some(Borrowed(frag.entry_point)),
-                    constants: Borrowed(frag.constants),
+                    constants: Borrowed(frag.compilation_options.constants),
+                    zero_initialize_workgroup_memory: frag
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1221,7 +1245,10 @@ impl crate::Context for ContextWgpuCore {
             stage: pipe::ProgrammableStageDescriptor {
                 module: desc.module.id.into(),
                 entry_point: Some(Borrowed(desc.entry_point)),
-                constants: Borrowed(desc.constants),
+                constants: Borrowed(desc.compilation_options.constants),
+                zero_initialize_workgroup_memory: desc
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
             },
         };
 
@@ -1552,6 +1579,14 @@ impl crate::Context for ContextWgpuCore {
                 self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::buffer_unmap")
             }
         }
+    }
+
+    fn shader_get_compilation_info(
+        &self,
+        _shader: &Self::ShaderModuleId,
+        shader_data: &Self::ShaderModuleData,
+    ) -> Self::CompilationInfoFuture {
+        ready(shader_data.compilation_info.clone())
     }
 
     fn texture_create_view(
@@ -2331,15 +2366,7 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        unsafe {
-            wgpu_compute_pass_set_bind_group(
-                pass_data,
-                index,
-                *bind_group,
-                offsets.as_ptr(),
-                offsets.len(),
-            )
-        }
+        wgpu_compute_pass_set_bind_group(pass_data, index, *bind_group, offsets);
     }
 
     fn compute_pass_set_push_constants(
@@ -2349,14 +2376,7 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        unsafe {
-            wgpu_compute_pass_set_push_constant(
-                pass_data,
-                offset,
-                data.len().try_into().unwrap(),
-                data.as_ptr(),
-            )
-        }
+        wgpu_compute_pass_set_push_constant(pass_data, offset, data);
     }
 
     fn compute_pass_insert_debug_marker(
@@ -2365,10 +2385,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(label).unwrap();
-            wgpu_compute_pass_insert_debug_marker(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_compute_pass_insert_debug_marker(pass_data, label, 0);
     }
 
     fn compute_pass_push_debug_group(
@@ -2377,10 +2394,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(group_label).unwrap();
-            wgpu_compute_pass_push_debug_group(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_compute_pass_push_debug_group(pass_data, group_label, 0);
     }
 
     fn compute_pass_pop_debug_group(
@@ -2647,15 +2661,7 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        unsafe {
-            wgpu_render_pass_set_bind_group(
-                pass_data,
-                index,
-                *bind_group,
-                offsets.as_ptr(),
-                offsets.len(),
-            )
-        }
+        wgpu_render_pass_set_bind_group(pass_data, index, *bind_group, offsets)
     }
 
     fn render_pass_set_index_buffer(
@@ -2692,15 +2698,7 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        unsafe {
-            wgpu_render_pass_set_push_constants(
-                pass_data,
-                stages,
-                offset,
-                data.len().try_into().unwrap(),
-                data.as_ptr(),
-            )
-        }
+        wgpu_render_pass_set_push_constants(pass_data, stages, offset, data)
     }
 
     fn render_pass_draw(
@@ -2882,10 +2880,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(label).unwrap();
-            wgpu_render_pass_insert_debug_marker(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_render_pass_insert_debug_marker(pass_data, label, 0);
     }
 
     fn render_pass_push_debug_group(
@@ -2894,10 +2889,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         group_label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(group_label).unwrap();
-            wgpu_render_pass_push_debug_group(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_render_pass_push_debug_group(pass_data, group_label, 0);
     }
 
     fn render_pass_pop_debug_group(
@@ -2962,13 +2954,7 @@ impl crate::Context for ContextWgpuCore {
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
-        unsafe {
-            wgpu_render_pass_execute_bundles(
-                pass_data,
-                temp_render_bundles.as_ptr(),
-                temp_render_bundles.len(),
-            )
-        }
+        wgpu_render_pass_execute_bundles(pass_data, &temp_render_bundles)
     }
 
     fn device_create_blas(
@@ -3256,6 +3242,35 @@ impl fmt::Debug for ErrorSinkRaw {
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
     panic!("wgpu error: {err}\n");
+}
+
+impl From<CreateShaderModuleError> for CompilationInfo {
+    fn from(value: CreateShaderModuleError) -> Self {
+        match value {
+            #[cfg(feature = "wgsl")]
+            CreateShaderModuleError::Parsing(v) => v.into(),
+            #[cfg(feature = "glsl")]
+            CreateShaderModuleError::ParsingGlsl(v) => v.into(),
+            #[cfg(feature = "spirv")]
+            CreateShaderModuleError::ParsingSpirV(v) => v.into(),
+            CreateShaderModuleError::Validation(v) => v.into(),
+            // Device errors are reported through the error sink, and are not compilation errors.
+            // Same goes for native shader module generation errors.
+            CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
+                CompilationInfo {
+                    messages: Vec::new(),
+                }
+            }
+            // Everything else is an error message without location information.
+            _ => CompilationInfo {
+                messages: vec![CompilationMessage {
+                    message: value.to_string(),
+                    message_type: CompilationMessageType::Error,
+                    location: None,
+                }],
+            },
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -35,6 +35,11 @@ pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>>
         "local_invocation_index" => crate::BuiltIn::LocalInvocationIndex,
         "workgroup_id" => crate::BuiltIn::WorkGroupId,
         "num_workgroups" => crate::BuiltIn::NumWorkGroups,
+        // subgroup
+        "num_subgroups" => crate::BuiltIn::NumSubgroups,
+        "subgroup_id" => crate::BuiltIn::SubgroupId,
+        "subgroup_size" => crate::BuiltIn::SubgroupSize,
+        "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
         _ => return Err(Error::UnknownBuiltin(span)),
     })
 }
@@ -259,4 +264,27 @@ pub fn map_conservative_depth(
         "unchanged" => Ok(Cd::Unchanged),
         _ => Err(Error::UnknownConservativeDepth(span)),
     }
+}
+
+pub fn map_subgroup_operation(
+    word: &str,
+) -> Option<(crate::SubgroupOperation, crate::CollectiveOperation)> {
+    use crate::CollectiveOperation as co;
+    use crate::SubgroupOperation as sg;
+    Some(match word {
+        "subgroupAll" => (sg::All, co::Reduce),
+        "subgroupAny" => (sg::Any, co::Reduce),
+        "subgroupAdd" => (sg::Add, co::Reduce),
+        "subgroupMul" => (sg::Mul, co::Reduce),
+        "subgroupMin" => (sg::Min, co::Reduce),
+        "subgroupMax" => (sg::Max, co::Reduce),
+        "subgroupAnd" => (sg::And, co::Reduce),
+        "subgroupOr" => (sg::Or, co::Reduce),
+        "subgroupXor" => (sg::Xor, co::Reduce),
+        "subgroupExclusiveAdd" => (sg::Add, co::ExclusiveScan),
+        "subgroupExclusiveMul" => (sg::Mul, co::ExclusiveScan),
+        "subgroupInclusiveAdd" => (sg::Add, co::InclusiveScan),
+        "subgroupInclusiveMul" => (sg::Mul, co::InclusiveScan),
+        _ => return None,
+    })
 }

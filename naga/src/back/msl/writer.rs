@@ -1131,21 +1131,10 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_atomic_fetch(
-        &mut self,
-        pointer: Handle<crate::Expression>,
-        key: &str,
-        value: Handle<crate::Expression>,
-        context: &ExpressionContext,
-    ) -> BackendResult {
-        self.put_atomic_operation(pointer, "fetch_", key, value, context)
-    }
-
     fn put_atomic_operation(
         &mut self,
         pointer: Handle<crate::Expression>,
-        key1: &str,
-        key2: &str,
+        key: &str,
         value: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
@@ -1163,7 +1152,7 @@ impl<W: Write> Writer<W> {
 
         write!(
             self.out,
-            "{NAMESPACE}::atomic_{key1}{key2}_explicit({ATOMIC_REFERENCE}"
+            "{NAMESPACE}::atomic_{key}_explicit({ATOMIC_REFERENCE}"
         )?;
         self.put_access_chain(pointer, policy, context)?;
         write!(self.out, ", ")?;
@@ -1945,7 +1934,7 @@ impl<W: Write> Writer<W> {
                     //
                     // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
 
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap();
+                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
 
                     write!(self.out, "{NAMESPACE}::extract_bits(")?;
                     self.put_expression(arg, context, true)?;
@@ -1961,7 +1950,7 @@ impl<W: Write> Writer<W> {
                     //
                     // insertBits(e, newBits, min(offset, w), min(count, w - min(offset, w))))
 
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap();
+                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
 
                     write!(self.out, "{NAMESPACE}::insert_bits(")?;
                     self.put_expression(arg, context, true)?;
@@ -2042,6 +2031,8 @@ impl<W: Write> Writer<W> {
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
+            | crate::Expression::SubgroupBallotResult
+            | crate::Expression::SubgroupOperationResult { .. }
             | crate::Expression::RayQueryProceedResult => {
                 unreachable!()
             }
@@ -2995,43 +2986,8 @@ impl<W: Write> Writer<W> {
                     let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                     self.start_baking_expression(result, &context.expression, &res_name)?;
                     self.named_expressions.insert(result, res_name);
-                    match *fun {
-                        crate::AtomicFunction::Add => {
-                            self.put_atomic_fetch(pointer, "add", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Subtract => {
-                            self.put_atomic_fetch(pointer, "sub", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::And => {
-                            self.put_atomic_fetch(pointer, "and", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::InclusiveOr => {
-                            self.put_atomic_fetch(pointer, "or", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::ExclusiveOr => {
-                            self.put_atomic_fetch(pointer, "xor", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Min => {
-                            self.put_atomic_fetch(pointer, "min", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Max => {
-                            self.put_atomic_fetch(pointer, "max", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Exchange { compare: None } => {
-                            self.put_atomic_operation(
-                                pointer,
-                                "exchange",
-                                "",
-                                value,
-                                &context.expression,
-                            )?;
-                        }
-                        crate::AtomicFunction::Exchange { .. } => {
-                            return Err(Error::FeatureNotImplemented(
-                                "atomic CompareExchange".to_string(),
-                            ));
-                        }
-                    }
+                    let fun_str = fun.to_msl()?;
+                    self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
                     // done
                     writeln!(self.out, ";")?;
                 }
@@ -3144,6 +3100,121 @@ impl<W: Write> Writer<W> {
                             writeln!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.abort();")?;
                         }
                     }
+                }
+                crate::Statement::SubgroupBallot { result, predicate } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    write!(self.out, "uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    if let Some(predicate) = predicate {
+                        self.put_expression(predicate, &context.expression, true)?;
+                    } else {
+                        write!(self.out, "true")?;
+                    }
+                    writeln!(self.out, "), 0, 0, 0);")?;
+                }
+                crate::Statement::SubgroupCollectiveOperation {
+                    op,
+                    collective_op,
+                    argument,
+                    result,
+                } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    match (collective_op, op) {
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                            write!(self.out, "{NAMESPACE}::simd_all(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                            write!(self.out, "{NAMESPACE}::simd_any(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                            write!(self.out, "{NAMESPACE}::simd_sum(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                            write!(self.out, "{NAMESPACE}::simd_product(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                            write!(self.out, "{NAMESPACE}::simd_max(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                            write!(self.out, "{NAMESPACE}::simd_min(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                            write!(self.out, "{NAMESPACE}::simd_and(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                            write!(self.out, "{NAMESPACE}::simd_or(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                            write!(self.out, "{NAMESPACE}::simd_xor(")?
+                        }
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_exclusive_sum(")?,
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_exclusive_product(")?,
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_inclusive_sum(")?,
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_inclusive_product(")?,
+                        _ => unimplemented!(),
+                    }
+                    self.put_expression(argument, &context.expression, true)?;
+                    writeln!(self.out, ");")?;
+                }
+                crate::Statement::SubgroupGather {
+                    mode,
+                    argument,
+                    result,
+                } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {
+                            write!(self.out, "{NAMESPACE}::simd_broadcast_first(")?;
+                        }
+                        crate::GatherMode::Broadcast(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_broadcast(")?;
+                        }
+                        crate::GatherMode::Shuffle(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle(")?;
+                        }
+                        crate::GatherMode::ShuffleDown(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_down(")?;
+                        }
+                        crate::GatherMode::ShuffleUp(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_up(")?;
+                        }
+                        crate::GatherMode::ShuffleXor(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_xor(")?;
+                        }
+                    }
+                    self.put_expression(argument, &context.expression, true)?;
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            write!(self.out, ", ")?;
+                            self.put_expression(index, &context.expression, true)?;
+                        }
+                    }
+                    writeln!(self.out, ");")?;
                 }
             }
         }
@@ -4492,6 +4563,12 @@ impl<W: Write> Writer<W> {
                 "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
             )?;
         }
+        if flags.contains(crate::Barrier::SUB_GROUP) {
+            writeln!(
+                self.out,
+                "{level}{NAMESPACE}::simdgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
+            )?;
+        }
         Ok(())
     }
 }
@@ -4762,8 +4839,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
-        // last observed macOS value: 19152 (CI)
-        if !(9000..=20000).contains(&stack_size) {
+        // last observed macOS value: 22256 (CI)
+        if !(15000..=25000).contains(&stack_size) {
             panic!("`put_block` stack size {stack_size} has changed!");
         }
     }

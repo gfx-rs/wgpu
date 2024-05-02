@@ -179,13 +179,13 @@ impl WgpuContext {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 targets: &[Some(swapchain_format.into())],
             }),
             primitive: wgpu::PrimitiveState::default(),

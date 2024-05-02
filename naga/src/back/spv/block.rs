@@ -1073,7 +1073,7 @@ impl<'w> BlockContext<'w> {
                         //
                         // bitfieldExtract(x, o, c)
 
-                        let bit_width = arg_ty.scalar_width().unwrap();
+                        let bit_width = arg_ty.scalar_width().unwrap() * 8;
                         let width_constant = self
                             .writer
                             .get_constant_scalar(crate::Literal::U32(bit_width as u32));
@@ -1129,7 +1129,7 @@ impl<'w> BlockContext<'w> {
                     Mf::InsertBits => {
                         // The behavior of InsertBits has the same undefined behavior as ExtractBits.
 
-                        let bit_width = arg_ty.scalar_width().unwrap();
+                        let bit_width = arg_ty.scalar_width().unwrap() * 8;
                         let width_constant = self
                             .writer
                             .get_constant_scalar(crate::Literal::U32(bit_width as u32));
@@ -1185,7 +1185,7 @@ impl<'w> BlockContext<'w> {
                     }
                     Mf::FindLsb => MathOp::Ext(spirv::GLOp::FindILsb),
                     Mf::FindMsb => {
-                        if arg_ty.scalar_width() == Some(32) {
+                        if arg_ty.scalar_width() == Some(4) {
                             let thing = match arg_scalar_kind {
                                 Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
                                 Some(crate::ScalarKind::Sint) => spirv::GLOp::FindSMsb,
@@ -1279,7 +1279,9 @@ impl<'w> BlockContext<'w> {
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
-            | crate::Expression::RayQueryProceedResult => self.cached[expr_handle],
+            | crate::Expression::RayQueryProceedResult
+            | crate::Expression::SubgroupBallotResult
+            | crate::Expression::SubgroupOperationResult { .. } => self.cached[expr_handle],
             crate::Expression::As {
                 expr,
                 kind,
@@ -2489,6 +2491,27 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
+                }
+                crate::Statement::SubgroupBallot {
+                    result,
+                    ref predicate,
+                } => {
+                    self.write_subgroup_ballot(predicate, result, &mut block)?;
+                }
+                crate::Statement::SubgroupCollectiveOperation {
+                    ref op,
+                    ref collective_op,
+                    argument,
+                    result,
+                } => {
+                    self.write_subgroup_operation(op, collective_op, argument, result, &mut block)?;
+                }
+                crate::Statement::SubgroupGather {
+                    ref mode,
+                    argument,
+                    result,
+                } => {
+                    self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
             }
         }

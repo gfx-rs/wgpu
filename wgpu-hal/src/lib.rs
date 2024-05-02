@@ -3,14 +3,14 @@
  * This crate defines a set of traits abstracting over modern graphics APIs,
  * with implementations ("backends") for Vulkan, Metal, Direct3D, and GL.
  *
- * `wgpu_hal` is a spiritual successor to
+ * `wgpu-hal` is a spiritual successor to
  * [gfx-hal](https://github.com/gfx-rs/gfx), but with reduced scope, and
  * oriented towards WebGPU implementation goals. It has no overhead for
  * validation or tracking, and the API translation overhead is kept to the bare
  * minimum by the design of WebGPU. This API can be used for resource-demanding
  * applications and engines.
  *
- * The `wgpu_hal` crate's main design choices:
+ * The `wgpu-hal` crate's main design choices:
  *
  * - Our traits are meant to be *portable*: proper use
  *   should get equivalent results regardless of the backend.
@@ -19,7 +19,7 @@
  *   validation, if any, and incorrect use will often cause undefined behavior.
  *   This allows us to minimize the overhead we impose over the underlying
  *   graphics system. If you need safety, the [`wgpu-core`] crate provides a
- *   safe API for driving `wgpu_hal`, implementing all necessary validation,
+ *   safe API for driving `wgpu-hal`, implementing all necessary validation,
  *   resource state tracking, and so on. (Note that `wgpu-core` is designed for
  *   use via FFI; the [`wgpu`] crate provides more idiomatic Rust bindings for
  *   `wgpu-core`.) Or, you can do your own validation.
@@ -27,7 +27,7 @@
  * - In the same vein, returned errors *only cover cases the user can't
  *   anticipate*, like running out of memory or losing the device. Any errors
  *   that the user could reasonably anticipate are their responsibility to
- *   avoid. For example, `wgpu_hal` returns no error for mapping a buffer that's
+ *   avoid. For example, `wgpu-hal` returns no error for mapping a buffer that's
  *   not mappable: as the buffer creator, the user should already know if they
  *   can map it.
  *
@@ -43,7 +43,7 @@
  * - We map buffer contents *persistently*. This means that the buffer
  *   can remain mapped on the CPU while the GPU reads or writes to it.
  *   You must explicitly indicate when data might need to be
- *   transferred between CPU and GPU, if `wgpu_hal` indicates that the
+ *   transferred between CPU and GPU, if `wgpu-hal` indicates that the
  *   mapping is not coherent (that is, automatically synchronized
  *   between the two devices).
  *
@@ -62,7 +62,7 @@
  *   function documentation. For this reason, we recommend that iterators don't
  *   do any mutating work.
  *
- * Unfortunately, `wgpu_hal`'s safety requirements are not fully documented.
+ * Unfortunately, `wgpu-hal`'s safety requirements are not fully documented.
  * Ideally, all trait methods would have doc comments setting out the
  * requirements users must meet to ensure correct and portable behavior. If you
  * are aware of a specific requirement that a backend imposes that is not
@@ -76,7 +76,7 @@
  *
  * ## Primary backends
  *
- * The `wgpu_hal` crate has full-featured backends implemented on the following
+ * The `wgpu-hal` crate has full-featured backends implemented on the following
  * platform graphics APIs:
  *
  * - Vulkan, available on Linux, Android, and Windows, using the [`ash`] crate's
@@ -93,7 +93,7 @@
  *
  * ## Secondary backends
  *
- * The `wgpu_hal` crate has a partial implementation based on the following
+ * The `wgpu-hal` crate has a partial implementation based on the following
  * platform graphics API:
  *
  * - The GL backend is available anywhere OpenGL, OpenGL ES, or WebGL are
@@ -109,6 +109,92 @@
  * secondary backends, so the latter may impose more overhead.
  *
  * [tdc]: wgt::DownlevelCapabilities
+ *
+ * ## Traits
+ *
+ * The `wgpu-hal` crate defines a handful of traits that together
+ * represent a cross-platform abstraction for modern GPU APIs.
+ *
+ * - The [`Api`] trait represents a `wgpu-hal` backend. It has no methods of its
+ *   own, only a collection of associated types.
+ *
+ * - [`Api::Instance`] implements the [`Instance`] trait. [`Instance::init`]
+ *   creates an instance value, which you can use to enumerate the adapters
+ *   available on the system. For example, [`vulkan::Api::Instance::init`][Ii]
+ *   returns an instance that can enumerate the Vulkan physical devices on your
+ *   system.
+ *
+ * - [`Api::Adapter`] implements the [`Adapter`] trait, representing a
+ *   particular device from a particular backend. For example, a Vulkan instance
+ *   might have a Lavapipe software adapter and a GPU-based adapter.
+ *
+ * - [`Api::Device`] implements the [`Device`] trait, representing an active
+ *   link to a device. You get a device value by calling [`Adapter::open`], and
+ *   then use it to create buffers, textures, shader modules, and so on.
+ *
+ * - [`Api::Queue`] implements the [`Queue`] trait, which you use to submit
+ *   command buffers to a given device.
+ *
+ * - [`Api::CommandEncoder`] implements the [`CommandEncoder`] trait, which you
+ *   use to build buffers of commands to submit to a queue. This has all the
+ *   methods for drawing and running compute shaders, which is presumably what
+ *   you're here for.
+ *
+ * - [`Api::Surface`] implements the [`Surface`] trait, which represents a
+ *   swapchain for presenting images on the screen, via interaction with the
+ *   system's window manager.
+ *
+ * The [`Api`] trait has various other associated types like [`Api::Buffer`] and
+ * [`Api::Texture`] that represent resources the rest of the interface can
+ * operate on, but these generally do not have their own traits.
+ *
+ * [Ii]: Instance::init
+ *
+ * ## Validation is the calling code's responsibility, not `wgpu-hal`'s
+ *
+ * As much as possible, `wgpu-hal` traits place the burden of validation,
+ * resource tracking, and state tracking on the caller, not on the trait
+ * implementations themselves. Anything which can reasonably be handled in
+ * backend-independent code should be. A `wgpu_hal` backend's sole obligation is
+ * to provide portable behavior, and report conditions that the calling code
+ * can't reasonably anticipate, like device loss or running out of memory.
+ *
+ * The `wgpu` crate collection is intended for use in security-sensitive
+ * applications, like web browsers, where the API is available to untrusted
+ * code. This means that `wgpu-core`'s validation is not simply a service to
+ * developers, to be provided opportunistically when the performance costs are
+ * acceptable and the necessary data is ready at hand. Rather, `wgpu-core`'s
+ * validation must be exhaustive, to ensure that even malicious content cannot
+ * provoke and exploit undefined behavior in the platform's graphics API.
+ *
+ * Because graphics APIs' requirements are complex, the only practical way for
+ * `wgpu` to provide exhaustive validation is to comprehensively track the
+ * lifetime and state of all the resources in the system. Implementing this
+ * separately for each backend is infeasible; effort would be better spent
+ * making the cross-platform validation in `wgpu-core` legible and trustworthy.
+ * Fortunately, the requirements are largely similar across the various
+ * platforms, so cross-platform validation is practical.
+ *
+ * Some backends have specific requirements that aren't practical to foist off
+ * on the `wgpu-hal` user. For example, properly managing macOS Objective-C or
+ * Microsoft COM reference counts is best handled by using appropriate pointer
+ * types within the backend.
+ *
+ * A desire for "defense in depth" may suggest performing additional validation
+ * in `wgpu-hal` when the opportunity arises, but this must be done with
+ * caution. Even experienced contributors infer the expectations their changes
+ * must meet by considering not just requirements made explicit in types, tests,
+ * assertions, and comments, but also those implicit in the surrounding code.
+ * When one sees validation or state-tracking code in `wgpu-hal`, it is tempting
+ * to conclude, "Oh, `wgpu-hal` checks for this, so `wgpu-core` needn't worry
+ * about it - that would be redundant!" The responsibility for exhaustive
+ * validation always rests with `wgpu-core`, regardless of what may or may not
+ * be checked in `wgpu-hal`.
+ *
+ * To this end, any "defense in depth" validation that does appear in `wgpu-hal`
+ * for requirements that `wgpu-core` should have enforced should report failure
+ * via the `unreachable!` macro, because problems detected at this stage always
+ * indicate a bug in `wgpu-core`.
  *
  * ## Debugging
  *
@@ -303,6 +389,15 @@ pub trait Api: Clone + fmt::Debug + Sized {
 
     type Queue: Queue<A = Self>;
     type CommandEncoder: CommandEncoder<A = Self>;
+
+    /// This API's command buffer type.
+    ///
+    /// The only thing you can do with `CommandBuffer`s is build them
+    /// with a [`CommandEncoder`] and then pass them to
+    /// [`Queue::submit`] for execution, or destroy them by passing
+    /// them to [`CommandEncoder::reset_all`].
+    ///
+    /// [`CommandEncoder`]: Api::CommandEncoder
     type CommandBuffer: WasmNotSendSync + fmt::Debug;
 
     type Buffer: fmt::Debug + WasmNotSendSync + 'static;
@@ -311,6 +406,24 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type TextureView: fmt::Debug + WasmNotSendSync;
     type Sampler: fmt::Debug + WasmNotSendSync;
     type QuerySet: fmt::Debug + WasmNotSendSync;
+
+    /// A value you can block on to wait for something to finish.
+    ///
+    /// A `Fence` holds a monotonically increasing [`FenceValue`]. You can call
+    /// [`Device::wait`] to block until a fence reaches or passes a value you
+    /// choose. [`Queue::submit`] can take a `Fence` and a [`FenceValue`] to
+    /// store in it when the submitted work is complete.
+    ///
+    /// Attempting to set a fence to a value less than its current value has no
+    /// effect.
+    ///
+    /// Waiting on a fence returns as soon as the fence reaches *or passes* the
+    /// requested value. This implies that, in order to reliably determine when
+    /// an operation has completed, operations must finish in order of
+    /// increasing fence values: if a higher-valued operation were to finish
+    /// before a lower-valued operation, then waiting for the fence to reach the
+    /// lower value could return before the lower-valued operation has actually
+    /// finished.
     type Fence: fmt::Debug + WasmNotSendSync;
 
     type BindGroupLayout: fmt::Debug + WasmNotSendSync;
@@ -510,7 +623,25 @@ pub trait Device: WasmNotSendSync {
         &self,
         fence: &<Self::A as Api>::Fence,
     ) -> Result<FenceValue, DeviceError>;
-    /// Calling wait with a lower value than the current fence value will immediately return.
+
+    /// Wait for `fence` to reach `value`.
+    ///
+    /// Operations like [`Queue::submit`] can accept a [`Fence`] and a
+    /// [`FenceValue`] to store in it, so you can use this `wait` function
+    /// to wait for a given queue submission to finish execution.
+    ///
+    /// The `value` argument must be a value that some actual operation you have
+    /// already presented to the device is going to store in `fence`. You cannot
+    /// wait for values yet to be submitted. (This restriction accommodates
+    /// implementations like the `vulkan` backend's [`FencePool`] that must
+    /// allocate a distinct synchronization object for each fence value one is
+    /// able to wait for.)
+    ///
+    /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
+    /// returns immediately.
+    ///
+    /// [`Fence`]: Api::Fence
+    /// [`FencePool`]: vulkan/enum.Fence.html#variant.FencePool
     unsafe fn wait(
         &self,
         fence: &<Self::A as Api>::Fence,
@@ -542,14 +673,48 @@ pub trait Device: WasmNotSendSync {
 pub trait Queue: WasmNotSendSync {
     type A: Api;
 
-    /// Submits the command buffers for execution on GPU.
+    /// Submit `command_buffers` for execution on GPU.
+    ///
+    /// If `signal_fence` is `Some(fence, value)`, update `fence` to `value`
+    /// when the operation is complete. See [`Fence`] for details.
+    ///
+    /// If two calls to `submit` on a single `Queue` occur in a particular order
+    /// (that is, they happen on the same thread, or on two threads that have
+    /// synchronized to establish an ordering), then the first submission's
+    /// commands all complete execution before any of the second submission's
+    /// commands begin. All results produced by one submission are visible to
+    /// the next.
+    ///
+    /// Within a submission, command buffers execute in the order in which they
+    /// appear in `command_buffers`. All results produced by one buffer are
+    /// visible to the next.
+    ///
+    /// If two calls to `submit` on a single `Queue` from different threads are
+    /// not synchronized to occur in a particular order, they must pass distinct
+    /// [`Fence`]s. As explained in the [`Fence`] documentation, waiting for
+    /// operations to complete is only trustworthy when operations finish in
+    /// order of increasing fence value, but submissions from different threads
+    /// cannot determine how to order the fence values if the submissions
+    /// themselves are unordered. If each thread uses a separate [`Fence`], this
+    /// problem does not arise.
     ///
     /// Valid usage:
-    /// - all of the command buffers were created from command pools
-    ///   that are associated with this queue.
-    /// - all of the command buffers had `CommandBuffer::finish()` called.
-    /// - all surface textures that the command buffers write to must be
-    ///   passed to the surface_textures argument.
+    ///
+    /// - All of the [`CommandBuffer`][cb]s were created from
+    ///   [`CommandEncoder`][ce]s that are associated with this queue.
+    ///
+    /// - All of those [`CommandBuffer`][cb]s must remain alive until
+    ///   the submitted commands have finished execution. (Since
+    ///   command buffers must not outlive their encoders, this
+    ///   implies that the encoders must remain alive as well.)
+    ///
+    /// - All of the [`SurfaceTexture`][st]s that the command buffers
+    ///   write to appear in the `surface_textures` argument.
+    ///
+    /// [`Fence`]: Api::Fence
+    /// [cb]: Api::CommandBuffer
+    /// [ce]: Api::CommandEncoder
+    /// [st]: Api::SurfaceTexture
     unsafe fn submit(
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
@@ -564,7 +729,12 @@ pub trait Queue: WasmNotSendSync {
     unsafe fn get_timestamp_period(&self) -> f32;
 }
 
-/// Encoder and allocation pool for `CommandBuffer`.
+/// Encoder and allocation pool for `CommandBuffer`s.
+///
+/// A `CommandEncoder` not only constructs `CommandBuffer`s but also
+/// acts as the allocation pool that owns the buffers' underlying
+/// storage. Thus, `CommandBuffer`s must not outlive the
+/// `CommandEncoder` that created them.
 ///
 /// The life cycle of a `CommandBuffer` is as follows:
 ///
@@ -577,14 +747,17 @@ pub trait Queue: WasmNotSendSync {
 ///
 /// - Call methods like `copy_buffer_to_buffer`, `begin_render_pass`,
 ///   etc. on a "recording" `CommandEncoder` to add commands to the
-///   list.
+///   list. (If an error occurs, you must call `discard_encoding`; see
+///   below.)
 ///
 /// - Call `end_encoding` on a recording `CommandEncoder` to close the
 ///   encoder and construct a fresh `CommandBuffer` consisting of the
 ///   list of commands recorded up to that point.
 ///
 /// - Call `discard_encoding` on a recording `CommandEncoder` to drop
-///   the commands recorded thus far and close the encoder.
+///   the commands recorded thus far and close the encoder. This is
+///   the only safe thing to do on a `CommandEncoder` if an error has
+///   occurred while recording commands.
 ///
 /// - Call `reset_all` on a closed `CommandEncoder`, passing all the
 ///   live `CommandBuffers` built from it. All the `CommandBuffer`s
@@ -602,6 +775,10 @@ pub trait Queue: WasmNotSendSync {
 ///   built it.
 ///
 /// - A `CommandEncoder` must not outlive its `Device`.
+///
+/// It is the user's responsibility to meet this requirements. This
+/// allows `CommandEncoder` implementations to keep their state
+/// tracking to a minimum.
 pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     type A: Api;
 
@@ -614,13 +791,20 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// This `CommandEncoder` must be in the "closed" state.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
 
-    /// Discard the command list under construction, if any.
+    /// Discard the command list under construction.
+    ///
+    /// If an error has occurred while recording commands, this
+    /// is the only safe thing to do with the encoder.
     ///
     /// This puts this `CommandEncoder` in the "closed" state.
     ///
     /// # Safety
     ///
     /// This `CommandEncoder` must be in the "recording" state.
+    ///
+    /// Callers must not assume that implementations of this
+    /// function are idempotent, and thus should not call it
+    /// multiple times in a row.
     unsafe fn discard_encoding(&mut self);
 
     /// Return a fresh [`CommandBuffer`] holding the recorded commands.
@@ -1425,6 +1609,11 @@ pub struct ProgrammableStage<'a, A: Api> {
     pub entry_point: &'a str,
     /// Pipeline constants
     pub constants: &'a naga::back::PipelineConstants,
+    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
+    ///
+    /// This is required by the WebGPU spec, but may have overhead which can be avoided
+    /// for cross-platform applications
+    pub zero_initialize_workgroup_memory: bool,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1434,6 +1623,7 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
             module: self.module,
             entry_point: self.entry_point,
             constants: self.constants,
+            zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
         }
     }
 }

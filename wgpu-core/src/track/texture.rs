@@ -24,6 +24,7 @@ use super::{
 };
 use crate::{
     hal_api::HalApi,
+    lock::{rank, Mutex},
     resource::{Resource, Texture, TextureInner},
     snatch::SnatchGuard,
     track::{
@@ -36,7 +37,6 @@ use hal::TextureUses;
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
 
-use parking_lot::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
@@ -164,7 +164,7 @@ pub(crate) struct TextureBindGroupState<A: HalApi> {
 impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            textures: Mutex::new(Vec::new()),
+            textures: Mutex::new(rank::TEXTURE_BIND_GROUP_STATE_TEXTURES, Vec::new()),
         }
     }
 

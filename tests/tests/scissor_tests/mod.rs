@@ -44,7 +44,7 @@ async fn scissor_test_impl(
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 buffers: &[],
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -53,7 +53,7 @@ async fn scissor_test_impl(
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,

@@ -13,6 +13,7 @@ mod layout;
 mod ray;
 mod recyclable;
 mod selection;
+mod subgroup;
 mod writer;
 
 pub use spirv::Capability;
@@ -247,7 +248,7 @@ impl LocalImageType {
 /// this, by converting everything possible to a `LocalType` before inspecting
 /// it.
 ///
-/// ## `Localtype` equality and SPIR-V `OpType` uniqueness
+/// ## `LocalType` equality and SPIR-V `OpType` uniqueness
 ///
 /// The definition of `Eq` on `LocalType` is carefully chosen to help us follow
 /// certain SPIR-V rules. SPIR-V §2.8 requires some classes of `OpType...`
@@ -456,7 +457,7 @@ impl recyclable::Recyclable for CachedExpressions {
 
 #[derive(Eq, Hash, PartialEq)]
 enum CachedConstant {
-    Literal(crate::Literal),
+    Literal(crate::proc::HashableLiteral),
     Composite {
         ty: LookupType,
         constituent_ids: Vec<Word>,

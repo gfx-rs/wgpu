@@ -115,18 +115,6 @@ impl super::Adapter {
             )
         });
 
-        let mut shader_model_support: d3d12_ty::D3D12_FEATURE_DATA_SHADER_MODEL =
-            d3d12_ty::D3D12_FEATURE_DATA_SHADER_MODEL {
-                HighestShaderModel: d3d12_ty::D3D_SHADER_MODEL_6_0,
-            };
-        assert_eq!(0, unsafe {
-            device.CheckFeatureSupport(
-                d3d12_ty::D3D12_FEATURE_SHADER_MODEL,
-                &mut shader_model_support as *mut _ as *mut _,
-                mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_SHADER_MODEL>() as _,
-            )
-        });
-
         let mut workarounds = super::Workarounds::default();
 
         let info = wgt::AdapterInfo {
@@ -321,7 +309,7 @@ impl super::Adapter {
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_5_1,
+            shader_model >= naga::back::hlsl::ShaderModel::V5_1,
         );
 
         let bgra8unorm_storage_supported = {
@@ -343,21 +331,28 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
-        // we must be using DXC because uint64_t was added with Shader Model 6
-        // and FXC only supports up to 5.1
-        let int64_shader_ops_supported = dxc_container.is_some() && {
-            let mut features1: d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1 =
-                unsafe { mem::zeroed() };
-            let hr = unsafe {
-                device.CheckFeatureSupport(
-                    d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS1,
-                    &mut features1 as *mut _ as *mut _,
-                    mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1>() as _,
-                )
-            };
-            hr == 0 && features1.Int64ShaderOps != 0
+        let mut features1: d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1 = unsafe { mem::zeroed() };
+        let hr = unsafe {
+            device.CheckFeatureSupport(
+                d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS1,
+                &mut features1 as *mut _ as *mut _,
+                mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1>() as _,
+            )
         };
-        features.set(wgt::Features::SHADER_INT64, int64_shader_ops_supported);
+
+        features.set(
+            wgt::Features::SHADER_INT64,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_0
+                && hr == 0
+                && features1.Int64ShaderOps != 0,
+        );
+
+        features.set(
+            wgt::Features::SUBGROUP,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_0
+                && hr == 0
+                && features1.WaveOps != 0,
+        );
 
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
@@ -425,6 +420,8 @@ impl super::Adapter {
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: d3d12_ty::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: d3d12_ty::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
+                    min_subgroup_size: 4, // Not using `features1.WaveLaneCountMin` as it is unreliable
+                    max_subgroup_size: 128,
                     // The push constants are part of the root signature which
                     // has a limit of 64 DWORDS (256 bytes), but other resources
                     // also share the root signature:

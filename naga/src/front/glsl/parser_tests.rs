@@ -1,7 +1,7 @@
 use super::{
     ast::Profile,
     error::ExpectedToken,
-    error::{Error, ErrorKind, ParseError},
+    error::{Error, ErrorKind, ParseErrors},
     token::TokenValue,
     Frontend, Options, Span,
 };
@@ -21,7 +21,7 @@ fn version() {
             )
             .err()
             .unwrap(),
-        ParseError {
+        ParseErrors {
             errors: vec![Error {
                 kind: ErrorKind::InvalidVersion(99000),
                 meta: Span::new(9, 14)
@@ -37,7 +37,7 @@ fn version() {
             )
             .err()
             .unwrap(),
-        ParseError {
+        ParseErrors {
             errors: vec![Error {
                 kind: ErrorKind::InvalidVersion(449),
                 meta: Span::new(9, 12)
@@ -53,7 +53,7 @@ fn version() {
             )
             .err()
             .unwrap(),
-        ParseError {
+        ParseErrors {
             errors: vec![Error {
                 kind: ErrorKind::InvalidProfile("smart".into()),
                 meta: Span::new(13, 18),
@@ -69,7 +69,7 @@ fn version() {
             )
             .err()
             .unwrap(),
-        ParseError {
+        ParseErrors {
             errors: vec![
                 Error {
                     kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedHash,),
@@ -455,7 +455,7 @@ fn functions() {
             )
             .err()
             .unwrap(),
-        ParseError {
+        ParseErrors {
             errors: vec![Error {
                 kind: ErrorKind::SemanticError("Function already defined".into()),
                 meta: Span::new(134, 152),
@@ -634,7 +634,7 @@ fn implicit_conversions() {
             )
             .err()
             .unwrap(),
-        ParseError {
+        ParseErrors {
             errors: vec![Error {
                 kind: ErrorKind::SemanticError("Unknown function \'test\'".into()),
                 meta: Span::new(156, 165),
@@ -658,7 +658,7 @@ fn implicit_conversions() {
             )
             .err()
             .unwrap(),
-        ParseError {
+        ParseErrors {
             errors: vec![Error {
                 kind: ErrorKind::SemanticError("Ambiguous best function for \'test\'".into()),
                 meta: Span::new(158, 165),

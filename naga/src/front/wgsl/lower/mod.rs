@@ -874,6 +874,29 @@ impl Texture {
     }
 }
 
+enum SubgroupGather {
+    BroadcastFirst,
+    Broadcast,
+    Shuffle,
+    ShuffleDown,
+    ShuffleUp,
+    ShuffleXor,
+}
+
+impl SubgroupGather {
+    pub fn map(word: &str) -> Option<Self> {
+        Some(match word {
+            "subgroupBroadcastFirst" => Self::BroadcastFirst,
+            "subgroupBroadcast" => Self::Broadcast,
+            "subgroupShuffle" => Self::Shuffle,
+            "subgroupShuffleDown" => Self::ShuffleDown,
+            "subgroupShuffleUp" => Self::ShuffleUp,
+            "subgroupShuffleXor" => Self::ShuffleXor,
+            _ => return None,
+        })
+    }
+}
+
 pub struct Lowerer<'source, 'temp> {
     index: &'temp Index<'source>,
     layouter: Layouter,
@@ -2054,6 +2077,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 } else if let Some(fun) = Texture::map(function.name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?
+                } else if let Some((op, cop)) = conv::map_subgroup_operation(function.name) {
+                    return Ok(Some(
+                        self.subgroup_operation_helper(span, op, cop, arguments, ctx)?,
+                    ));
+                } else if let Some(mode) = SubgroupGather::map(function.name) {
+                    return Ok(Some(
+                        self.subgroup_gather_helper(span, mode, arguments, ctx)?,
+                    ));
+                } else if let Some(fun) = crate::AtomicFunction::map(function.name) {
+                    return Ok(Some(self.atomic_helper(span, fun, arguments, ctx)?));
                 } else {
                     match function.name {
                         "select" => {
@@ -2098,70 +2131,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             rctx.block
                                 .push(crate::Statement::Store { pointer, value }, span);
                             return Ok(None);
-                        }
-                        "atomicAdd" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Add,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicSub" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Subtract,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicAnd" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::And,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicOr" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::InclusiveOr,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicXor" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::ExclusiveOr,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicMin" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Min,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicMax" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Max,
-                                arguments,
-                                ctx,
-                            )?))
-                        }
-                        "atomicExchange" => {
-                            return Ok(Some(self.atomic_helper(
-                                span,
-                                crate::AtomicFunction::Exchange { compare: None },
-                                arguments,
-                                ctx,
-                            )?))
                         }
                         "atomicCompareExchangeWeak" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
@@ -2219,6 +2188,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
                                 .push(crate::Statement::Barrier(crate::Barrier::WORK_GROUP), span);
+                            return Ok(None);
+                        }
+                        "subgroupBarrier" => {
+                            ctx.prepare_args(arguments, 0, span).finish()?;
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::Barrier(crate::Barrier::SUB_GROUP), span);
                             return Ok(None);
                         }
                         "workgroupUniformLoad" => {
@@ -2428,6 +2405,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             )?;
                             return Ok(Some(handle));
                         }
+                        "subgroupBallot" => {
+                            let mut args = ctx.prepare_args(arguments, 0, span);
+                            let predicate = if arguments.len() == 1 {
+                                Some(self.expression(args.next()?, ctx)?)
+                            } else {
+                                None
+                            };
+                            args.finish()?;
+
+                            let result = ctx
+                                .interrupt_emitter(crate::Expression::SubgroupBallotResult, span)?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::SubgroupBallot { result, predicate }, span);
+                            return Ok(Some(result));
+                        }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }
                 };
@@ -2617,6 +2610,80 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             level,
             depth_ref,
         })
+    }
+
+    fn subgroup_operation_helper(
+        &mut self,
+        span: Span,
+        op: crate::SubgroupOperation,
+        collective_op: crate::CollectiveOperation,
+        arguments: &[Handle<ast::Expression<'source>>],
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+        let mut args = ctx.prepare_args(arguments, 1, span);
+
+        let argument = self.expression(args.next()?, ctx)?;
+        args.finish()?;
+
+        let ty = ctx.register_type(argument)?;
+
+        let result =
+            ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
+        let rctx = ctx.runtime_expression_ctx(span)?;
+        rctx.block.push(
+            crate::Statement::SubgroupCollectiveOperation {
+                op,
+                collective_op,
+                argument,
+                result,
+            },
+            span,
+        );
+        Ok(result)
+    }
+
+    fn subgroup_gather_helper(
+        &mut self,
+        span: Span,
+        mode: SubgroupGather,
+        arguments: &[Handle<ast::Expression<'source>>],
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+        let mut args = ctx.prepare_args(arguments, 2, span);
+
+        let argument = self.expression(args.next()?, ctx)?;
+
+        use SubgroupGather as Sg;
+        let mode = if let Sg::BroadcastFirst = mode {
+            crate::GatherMode::BroadcastFirst
+        } else {
+            let index = self.expression(args.next()?, ctx)?;
+            match mode {
+                Sg::Broadcast => crate::GatherMode::Broadcast(index),
+                Sg::Shuffle => crate::GatherMode::Shuffle(index),
+                Sg::ShuffleDown => crate::GatherMode::ShuffleDown(index),
+                Sg::ShuffleUp => crate::GatherMode::ShuffleUp(index),
+                Sg::ShuffleXor => crate::GatherMode::ShuffleXor(index),
+                Sg::BroadcastFirst => unreachable!(),
+            }
+        };
+
+        args.finish()?;
+
+        let ty = ctx.register_type(argument)?;
+
+        let result =
+            ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
+        let rctx = ctx.runtime_expression_ctx(span)?;
+        rctx.block.push(
+            crate::Statement::SubgroupGather {
+                mode,
+                argument,
+                result,
+            },
+            span,
+        );
+        Ok(result)
     }
 
     fn r#struct(
@@ -2875,5 +2942,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Err(Error::InvalidRayQueryPointer(span))
             }
         }
+    }
+}
+
+impl crate::AtomicFunction {
+    pub fn map(word: &str) -> Option<Self> {
+        Some(match word {
+            "atomicAdd" => crate::AtomicFunction::Add,
+            "atomicSub" => crate::AtomicFunction::Subtract,
+            "atomicAnd" => crate::AtomicFunction::And,
+            "atomicOr" => crate::AtomicFunction::InclusiveOr,
+            "atomicXor" => crate::AtomicFunction::ExclusiveOr,
+            "atomicMin" => crate::AtomicFunction::Min,
+            "atomicMax" => crate::AtomicFunction::Max,
+            "atomicExchange" => crate::AtomicFunction::Exchange { compare: None },
+            _ => return None,
+        })
     }
 }
