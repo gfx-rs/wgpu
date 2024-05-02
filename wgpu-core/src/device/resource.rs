@@ -397,11 +397,12 @@ impl<A: HalApi> Device<A> {
     ///   return it to our callers.)
     pub(crate) fn maintain<'this>(
         &'this self,
-        fence: &A::Fence,
+        fence_guard: crate::lock::RwLockReadGuard<Option<A::Fence>>,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
+        let fence = fence_guard.as_ref().unwrap();
         let last_done_index = if maintain.is_wait() {
             let index_to_wait_for = match maintain {
                 wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
@@ -481,6 +482,7 @@ impl<A: HalApi> Device<A> {
 
         // Don't hold the locks while calling release_gpu_resources.
         drop(life_tracker);
+        drop(fence_guard);
         drop(snatch_guard);
 
         if should_release_gpu_resource {

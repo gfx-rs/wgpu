@@ -14,7 +14,7 @@ use crate::{
     hal_label,
     id::{self, DeviceId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
-    lock::{rank, Mutex},
+    lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, Resource,
         ResourceInfo, ResourceType, StagingBuffer, Texture, TextureInner,
@@ -1162,8 +1162,8 @@ impl Global {
             let snatch_guard = device.snatchable_lock.read();
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
-            let mut fence = device.fence.write();
-            let fence = fence.as_mut().unwrap();
+            let mut fence_guard = device.fence.write();
+            let fence = fence_guard.as_mut().unwrap();
             let submit_index = device
                 .active_submission_index
                 .fetch_add(1, Ordering::Relaxed)
@@ -1459,8 +1459,8 @@ impl Global {
                 }
             }
 
-            let mut pending_writes = device.pending_writes.lock();
-            let pending_writes = pending_writes.as_mut().unwrap();
+            let mut pending_writes_guard = device.pending_writes.lock();
+            let pending_writes = pending_writes_guard.as_mut().unwrap();
 
             {
                 used_surface_textures.set_size(hub.textures.read().len());
@@ -1550,18 +1550,22 @@ impl Global {
                 active_executions,
             );
 
-            // This will schedule destruction of all resources that are no longer needed
-            // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll, snatch_guard) {
-                Ok(closures) => closures,
-                Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
-                Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
-                Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
-            };
-
             // pending_write_resources has been drained, so it's empty, but we
             // want to retain its heap allocation.
             pending_writes.temp_resources = pending_write_resources;
+            drop(pending_writes_guard);
+
+            // This will schedule destruction of all resources that are no longer needed
+            // by the user but used in the command stream, among other things.
+            let fence_guard = RwLockWriteGuard::downgrade(fence_guard);
+            let (closures, _) =
+                match device.maintain(fence_guard, wgt::Maintain::Poll, snatch_guard) {
+                    Ok(closures) => closures,
+                    Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
+                    Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
+                    Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
+                };
+
             device.lock_life().post_submit();
 
             (submit_index, closures)
