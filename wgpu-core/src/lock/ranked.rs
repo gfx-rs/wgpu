@@ -281,6 +281,15 @@ impl<T> RwLock<T> {
     }
 }
 
+impl<'a, T> RwLockWriteGuard<'a, T> {
+    pub fn downgrade(this: Self) -> RwLockReadGuard<'a, T> {
+        RwLockReadGuard {
+            inner: parking_lot::RwLockWriteGuard::downgrade(this.inner),
+            saved: this.saved,
+        }
+    }
+}
+
 impl<T: std::fmt::Debug> std::fmt::Debug for RwLock<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
