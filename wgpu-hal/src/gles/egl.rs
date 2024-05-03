@@ -1130,6 +1130,13 @@ impl Surface {
 
         unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer)) };
+
+        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+            // Disable sRGB conversions for `glBlitFramebuffer` as behavior does diverge between
+            // drivers and formats otherwise and we want to ensure no sRGB conversions happen.
+            unsafe { gl.disable(glow::FRAMEBUFFER_SRGB) };
+        }
+
         // Note the Y-flipping here. GL's presentation is not flipped,
         // but main rendering is. Therefore, we Y-flip the output positions
         // in the shader, and also this blit.
@@ -1147,6 +1154,11 @@ impl Surface {
                 glow::NEAREST,
             )
         };
+
+        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+            unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
+        }
+
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
 
         self.egl
