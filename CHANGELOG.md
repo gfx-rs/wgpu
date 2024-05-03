@@ -51,6 +51,10 @@ Bottom level categories:
 - Fix enablement of subgroup ops extension on Vulkan devices that don't support Vulkan 1.3. By @cwfitzgerald in [#5624](https://github.com/gfx-rs/wgpu/pull/5624).
 
 
+#### GLES / OpenGL
+
+-  Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
+
 ## v0.20.0 (2024-04-28)
 
 ### Major Changes
