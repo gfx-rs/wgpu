@@ -93,7 +93,7 @@ impl<A: HalApi> ResourceMaps<A> {
         destroyed_textures.clear();
     }
 
-    pub(crate) fn extend(&mut self, mut other: Self) {
+    pub(crate) fn extend(&mut self, other: &mut Self) {
         let ResourceMaps {
             buffers,
             staging_buffers,
