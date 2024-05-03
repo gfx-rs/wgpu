@@ -17,7 +17,7 @@ Currently only @kvark and @cwfitzgerald can publish all crates. @grovesNL can al
 Approx 1 Week Before:
 - Determine if `glow` (@groves), `metal-rs` (@kvark and @cwfitzgerald) or any other dependant crates will need a release. If so, coordinate with their maintainers.
 - Go through the changelog:
-  - Re-categorize miscategorized items
+  - Re-categorize miscategorized items.
   - Edit major changes so a user can easily understand what they need to do.
   - Add missing major changes that users need to know about.
   - Copy-edit the changelog for clarity.
@@ -64,13 +64,13 @@ Day of Release:
 - Create a new milestone for the next release, in 12 weeks time.
 
 ## Patch Release Process
-- Enumerate all PRs that haven't been backproted yet. These use the `needs-backport` label. [GH Link](https://github.com/gfx-rs/wgpu/issues?q=label%3A%22PR%3A+needs+back-porting)
+- Enumerate all PRs that haven't been backported yet. These use the `needs-backport` label. [GH Link](https://github.com/gfx-rs/wgpu/issues?q=label%3A%22PR%3A+needs+back-porting)
 - On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. When modifying the commits, use --append to retain their original authorship.
 - Remove the `needs-backport` label from the PRs.
 - Fix the changelogs items and add a new header for the patch release with the release version and date.
 - Once all the PRs are cherry-picked, look at the diff between HEAD and the previous patch release. See what crates changed.
 - Bump all the versions of the crates that changed.
-- Create a PR with all of the version changes and changelog updates into the release branch..
+- Create a PR with all of the version changes and changelog updates into the release branch.
 - Once the PR is CI clean, (force) rebase merge it.
 - Checkout the release branch with the merged PR.
 - Publish all relevant crates (see list above).
