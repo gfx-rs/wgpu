@@ -485,12 +485,14 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
+        // If we have a previously allocated `ResourceMap`, just use that.
         let mut temp_suspected = self
             .temp_suspected
             .lock()
-            .replace(ResourceMaps::new())
-            .unwrap();
+            .take()
+            .unwrap_or_else(|| ResourceMaps::new());
         temp_suspected.clear();
+
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
         {
@@ -551,7 +553,11 @@ impl<A: HalApi> Device<A> {
                 }
             }
         }
-        self.lock_life().suspected_resources.extend(temp_suspected);
+        self.lock_life()
+            .suspected_resources
+            .extend(&mut temp_suspected);
+        // Save this resource map for later reuse.
+        *self.temp_suspected.lock() = Some(temp_suspected);
     }
 
     pub(crate) fn create_buffer(
