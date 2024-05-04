@@ -129,8 +129,10 @@ pub fn process_overrides<'a>(
                 Expression::Constant(c_h)
             }
             Expression::Constant(c_h) => {
-                adjusted_constant_initializers.insert(c_h);
-                module.constants[c_h].init = adjusted_global_expressions[c_h.index()];
+                if adjusted_constant_initializers.insert(c_h) {
+                    let init = &mut module.constants[c_h].init;
+                    *init = adjusted_global_expressions[init.index()];
+                }
                 expr
             }
             expr => expr,
@@ -522,7 +524,9 @@ fn adjust_expr(new_pos: &[Handle<Expression>], expr: &mut Expression) {
             ty: _,
             comparison: _,
         }
-        | Expression::WorkGroupUniformLoadResult { ty: _ } => {}
+        | Expression::WorkGroupUniformLoadResult { ty: _ }
+        | Expression::SubgroupBallotResult
+        | Expression::SubgroupOperationResult { .. } => {}
     }
 }
 
@@ -636,6 +640,41 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
         } => {
             adjust(pointer);
             adjust(result);
+        }
+        Statement::SubgroupBallot {
+            ref mut result,
+            ref mut predicate,
+        } => {
+            if let Some(ref mut predicate) = *predicate {
+                adjust(predicate);
+            }
+            adjust(result);
+        }
+        Statement::SubgroupCollectiveOperation {
+            ref mut argument,
+            ref mut result,
+            ..
+        } => {
+            adjust(argument);
+            adjust(result);
+        }
+        Statement::SubgroupGather {
+            ref mut mode,
+            ref mut argument,
+            ref mut result,
+        } => {
+            match *mode {
+                crate::GatherMode::BroadcastFirst => {}
+                crate::GatherMode::Broadcast(ref mut index)
+                | crate::GatherMode::Shuffle(ref mut index)
+                | crate::GatherMode::ShuffleDown(ref mut index)
+                | crate::GatherMode::ShuffleUp(ref mut index)
+                | crate::GatherMode::ShuffleXor(ref mut index) => {
+                    adjust(index);
+                }
+            }
+            adjust(argument);
+            adjust(result)
         }
         Statement::Call {
             ref mut arguments,

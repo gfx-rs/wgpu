@@ -13,6 +13,7 @@ use crate::{
         TextureViewId,
     },
     init_tracker::{BufferInitTracker, TextureInitTracker},
+    lock::{Mutex, RwLock},
     resource, resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
@@ -21,7 +22,6 @@ use crate::{
 };
 
 use hal::CommandEncoder;
-use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
@@ -1026,7 +1026,9 @@ impl Global {
         profiling::scope!("Surface::as_hal");
 
         let surface = self.surfaces.get(id).ok();
-        let hal_surface = surface.as_ref().and_then(|surface| A::get_surface(surface));
+        let hal_surface = surface
+            .as_ref()
+            .and_then(|surface| A::surface_as_hal(surface));
 
         hal_surface_callback(hal_surface)
     }

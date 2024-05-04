@@ -279,6 +279,94 @@ impl StatementGraph {
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
                 }
+                S::SubgroupBallot { result, predicate } => {
+                    if let Some(predicate) = predicate {
+                        self.dependencies.push((id, predicate, "predicate"));
+                    }
+                    self.emits.push((id, result));
+                    "SubgroupBallot"
+                }
+                S::SubgroupCollectiveOperation {
+                    op,
+                    collective_op,
+                    argument,
+                    result,
+                } => {
+                    self.dependencies.push((id, argument, "arg"));
+                    self.emits.push((id, result));
+                    match (collective_op, op) {
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                            "SubgroupAll"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                            "SubgroupAny"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                            "SubgroupAdd"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                            "SubgroupMul"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                            "SubgroupMax"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                            "SubgroupMin"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                            "SubgroupAnd"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                            "SubgroupOr"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                            "SubgroupXor"
+                        }
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => "SubgroupExclusiveAdd",
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => "SubgroupExclusiveMul",
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => "SubgroupInclusiveAdd",
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => "SubgroupInclusiveMul",
+                        _ => unimplemented!(),
+                    }
+                }
+                S::SubgroupGather {
+                    mode,
+                    argument,
+                    result,
+                } => {
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            self.dependencies.push((id, index, "index"))
+                        }
+                    }
+                    self.dependencies.push((id, argument, "arg"));
+                    self.emits.push((id, result));
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => "SubgroupBroadcastFirst",
+                        crate::GatherMode::Broadcast(_) => "SubgroupBroadcast",
+                        crate::GatherMode::Shuffle(_) => "SubgroupShuffle",
+                        crate::GatherMode::ShuffleDown(_) => "SubgroupShuffleDown",
+                        crate::GatherMode::ShuffleUp(_) => "SubgroupShuffleUp",
+                        crate::GatherMode::ShuffleXor(_) => "SubgroupShuffleXor",
+                    }
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;
@@ -587,6 +675,8 @@ fn write_function_expressions(
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("rayQueryGet{}Intersection", ty).into(), 4)
             }
+            E::SubgroupBallotResult => ("SubgroupBallotResult".into(), 4),
+            E::SubgroupOperationResult { .. } => ("SubgroupOperationResult".into(), 4),
         };
 
         // give uniform expressions an outline

@@ -11,6 +11,7 @@ use crate::{
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     init_tracker::TextureInitTracker,
     instance::{self, Adapter, Surface},
+    lock::{rank, RwLock},
     pipeline, present,
     resource::{self, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation, CreateBufferError, Resource},
@@ -20,7 +21,6 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use hal::Device as _;
-use parking_lot::RwLock;
 
 use wgt::{BufferAddress, TextureFormat};
 
@@ -643,8 +643,10 @@ impl Global {
                 texture.hal_usage |= hal::TextureUses::COPY_DST;
             }
 
-            texture.initialization_status =
-                RwLock::new(TextureInitTracker::new(desc.mip_level_count, 0));
+            texture.initialization_status = RwLock::new(
+                rank::TEXTURE_INITIALIZATION_STATUS,
+                TextureInitTracker::new(desc.mip_level_count, 0),
+            );
 
             let (id, resource) = fid.assign(Arc::new(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
@@ -1351,9 +1353,6 @@ impl Global {
             };
             let encoder = match device
                 .command_allocator
-                .lock()
-                .as_mut()
-                .unwrap()
                 .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
             {
                 Ok(raw) => raw,
@@ -1972,7 +1971,7 @@ impl Global {
                 };
 
                 let caps = unsafe {
-                    let suf = A::get_surface(surface);
+                    let suf = A::surface_as_hal(surface);
                     let adapter = &device.adapter;
                     match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
                         Some(caps) => caps,
@@ -2058,7 +2057,7 @@ impl Global {
                 // https://github.com/gfx-rs/wgpu/issues/4105
 
                 match unsafe {
-                    A::get_surface(surface)
+                    A::surface_as_hal(surface)
                         .unwrap()
                         .configure(device.raw(), &hal_config)
                 } {

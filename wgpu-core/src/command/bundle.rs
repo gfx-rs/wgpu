@@ -73,7 +73,7 @@ index format changes.
 
 [Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
 [Grbef]: crate::global::Global::render_bundle_encoder_finish
-[wrpeb]: crate::command::render_ffi::wgpu_render_pass_execute_bundles
+[wrpeb]: crate::command::render::render_commands::wgpu_render_pass_execute_bundles
 !*/
 
 #![allow(clippy::reversed_empty_ranges)]
@@ -113,7 +113,7 @@ use hal::CommandEncoder as _;
 
 use super::ArcRenderCommand;
 
-/// https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw
+/// <https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw>
 fn validate_draw<A: HalApi>(
     vertex: &[Option<VertexState<A>>],
     step: &[VertexStep],
@@ -1548,15 +1548,14 @@ pub mod bundle_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = unsafe {
-            bundle.current_bind_groups.set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut bundle.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            )
-        };
+        let offsets = unsafe { slice::from_raw_parts(offsets, offset_length) };
+
+        let redundant = bundle.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut bundle.base.dynamic_offsets,
+            offsets,
+        );
 
         if redundant {
             return;

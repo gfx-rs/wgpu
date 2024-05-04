@@ -476,6 +476,8 @@ pub enum ConstantEvaluatorError {
     ImageExpression,
     #[error("Constants don't support ray query expressions")]
     RayQueryExpression,
+    #[error("Constants don't support subgroup expressions")]
+    SubgroupExpression,
     #[error("Cannot access the type")]
     InvalidAccessBase,
     #[error("Cannot access at the index")]
@@ -884,6 +886,12 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::RayQueryProceedResult | Expression::RayQueryGetIntersection { .. } => {
                 Err(ConstantEvaluatorError::RayQueryExpression)
             }
+            Expression::SubgroupBallotResult { .. } => {
+                Err(ConstantEvaluatorError::SubgroupExpression)
+            }
+            Expression::SubgroupOperationResult { .. } => {
+                Err(ConstantEvaluatorError::SubgroupExpression)
+            }
         }
     }
 
@@ -942,10 +950,10 @@ impl<'a> ConstantEvaluator<'a> {
         pattern: [crate::SwizzleComponent; 4],
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         let mut get_dst_ty = |ty| match self.types[ty].inner {
-            crate::TypeInner::Vector { size: _, scalar } => Ok(self.types.insert(
+            TypeInner::Vector { size: _, scalar } => Ok(self.types.insert(
                 Type {
                     name: None,
-                    inner: crate::TypeInner::Vector { size, scalar },
+                    inner: TypeInner::Vector { size, scalar },
                 },
                 span,
             )),
@@ -1236,13 +1244,11 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::ZeroValue(ty) | Expression::Compose { ty, .. } => {
                 match self.types[ty].inner {
                     TypeInner::Array { size, .. } => match size {
-                        crate::ArraySize::Constant(len) => {
+                        ArraySize::Constant(len) => {
                             let expr = Expression::Literal(Literal::U32(len.get()));
                             self.register_evaluated_expr(expr, span)
                         }
-                        crate::ArraySize::Dynamic => {
-                            Err(ConstantEvaluatorError::ArrayLengthDynamic)
-                        }
+                        ArraySize::Dynamic => Err(ConstantEvaluatorError::ArrayLengthDynamic),
                     },
                     _ => Err(ConstantEvaluatorError::InvalidArrayLengthArg),
                 }
@@ -1305,7 +1311,7 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::ZeroValue(ty)
                 if matches!(
                     self.types[ty].inner,
-                    crate::TypeInner::Scalar(crate::Scalar {
+                    TypeInner::Scalar(crate::Scalar {
                         kind: ScalarKind::Uint,
                         ..
                     })
@@ -1620,7 +1626,7 @@ impl<'a> ConstantEvaluator<'a> {
             return self.cast(expr, target, span);
         };
 
-        let crate::TypeInner::Array {
+        let TypeInner::Array {
             base: _,
             size,
             stride: _,

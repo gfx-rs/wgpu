@@ -54,7 +54,7 @@ impl Example {
             vertex: wgpu::VertexState {
                 module: shader,
                 entry_point: "vs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -64,7 +64,7 @@ impl Example {
             fragment: Some(wgpu::FragmentState {
                 module: shader,
                 entry_point: "fs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {

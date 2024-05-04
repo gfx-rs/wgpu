@@ -2,6 +2,7 @@ use super::conv;
 
 use arrayvec::ArrayVec;
 use ash::{extensions::khr, vk};
+use naga::back::spv::ZeroInitializeWorkgroupMemoryMode;
 use parking_lot::Mutex;
 
 use std::{
@@ -737,7 +738,8 @@ impl super::Device {
                 };
                 let needs_temp_options = !runtime_checks
                     || !binding_map.is_empty()
-                    || naga_shader.debug_source.is_some();
+                    || naga_shader.debug_source.is_some()
+                    || !stage.zero_initialize_workgroup_memory;
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -759,6 +761,10 @@ impl super::Device {
                             source_code: &debug.source_code,
                             file_name: debug.file_name.as_ref().as_ref(),
                         })
+                    }
+                    if !stage.zero_initialize_workgroup_memory {
+                        temp_options.zero_initialize_workgroup_memory =
+                            ZeroInitializeWorkgroupMemoryMode::None;
                     }
 
                     &temp_options
@@ -782,8 +788,14 @@ impl super::Device {
             }
         };
 
+        let mut flags = vk::PipelineShaderStageCreateFlags::empty();
+        if self.shared.private_caps.subgroup_size_control {
+            flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE
+        }
+
         let entry_point = CString::new(stage.entry_point).unwrap();
         let create_info = vk::PipelineShaderStageCreateInfo::builder()
+            .flags(flags)
             .stage(conv::map_shader_stage(stage_flags))
             .module(vk_module)
             .name(&entry_point)

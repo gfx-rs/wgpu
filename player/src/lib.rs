@@ -99,7 +99,7 @@ impl GlobalPlay for wgc::global::Global {
                     base,
                     timestamp_writes,
                 } => {
-                    self.command_encoder_run_compute_pass_impl::<A>(
+                    self.command_encoder_run_compute_pass_with_unresolved_commands::<A>(
                         encoder,
                         base.as_ref(),
                         timestamp_writes.as_ref(),

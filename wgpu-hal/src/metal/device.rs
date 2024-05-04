@@ -112,7 +112,7 @@ impl super::Device {
                 // TODO: support bounds checks on binding arrays
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
-            zero_initialize_workgroup_memory: true,
+            zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {

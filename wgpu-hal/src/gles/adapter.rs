@@ -104,7 +104,7 @@ impl super::Adapter {
         }
     }
 
-    fn make_info(vendor_orig: String, renderer_orig: String) -> wgt::AdapterInfo {
+    fn make_info(vendor_orig: String, renderer_orig: String, version: String) -> wgt::AdapterInfo {
         let vendor = vendor_orig.to_lowercase();
         let renderer = renderer_orig.to_lowercase();
 
@@ -179,13 +179,33 @@ impl super::Adapter {
             0
         };
 
+        let driver;
+        let driver_info;
+        if version.starts_with("WebGL ") || version.starts_with("OpenGL ") {
+            let es_sig = " ES";
+            match version.find(es_sig) {
+                Some(pos) => {
+                    driver = version[..pos + es_sig.len()].to_owned();
+                    driver_info = version[pos + es_sig.len() + 1..].to_owned();
+                }
+                None => {
+                    let pos = version.find(' ').unwrap();
+                    driver = version[..pos].to_owned();
+                    driver_info = version[pos + 1..].to_owned();
+                }
+            }
+        } else {
+            driver = "OpenGL".to_owned();
+            driver_info = version;
+        }
+
         wgt::AdapterInfo {
             name: renderer_orig,
             vendor: vendor_id,
             device: 0,
             device_type: inferred_device_type,
-            driver: String::new(),
-            driver_info: String::new(),
+            driver,
+            driver_info,
             backend: wgt::Backend::Gl,
         }
     }
@@ -507,8 +527,7 @@ impl super::Adapter {
         let has_etc = if cfg!(any(webgl, Emscripten)) {
             extensions.contains("WEBGL_compressed_texture_etc")
         } else {
-            // This is a required part of GLES3, but not part of Desktop GL at all.
-            es_ver.is_some()
+            es_ver.is_some() || extensions.contains("GL_ARB_ES3_compatibility")
         };
         features.set(wgt::Features::TEXTURE_COMPRESSION_ETC2, has_etc);
 
@@ -728,6 +747,8 @@ impl super::Adapter {
             } else {
                 !0
             },
+            min_subgroup_size: 0,
+            max_subgroup_size: 0,
             max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
@@ -825,7 +846,7 @@ impl super::Adapter {
                     max_msaa_samples: max_samples,
                 }),
             },
-            info: Self::make_info(vendor, renderer),
+            info: Self::make_info(vendor, renderer, version),
             features,
             capabilities: crate::Capabilities {
                 limits,

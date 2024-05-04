@@ -255,11 +255,23 @@ impl super::Device {
         };
 
         let mut output = String::new();
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != context.layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            // We use a conditional here, as cloning the naga_options could be expensive
+            // That is, we want to avoid doing that unless we cannot avoid it
+            temp_options = context.layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
+        } else {
+            &context.layout.naga_options
+        };
         let mut writer = glsl::Writer::new(
             &mut output,
             &module,
             &info,
-            &context.layout.naga_options,
+            naga_options,
             &pipeline_options,
             policies,
         )
@@ -305,6 +317,7 @@ impl super::Device {
                 naga_stage: naga_stage.to_owned(),
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
+                zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
             });
         }
         let mut guard = self

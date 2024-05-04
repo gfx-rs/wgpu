@@ -9,13 +9,13 @@ use wgt::{
 
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
-    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain,
-    MaintainResult, MapMode, PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
-    RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
-    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
-    TextureViewDescriptor, UncapturedErrorHandler,
+    BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, ComputePassDescriptor,
+    ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer,
+    ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineLayoutDescriptor,
+    QuerySetDescriptor, RenderBundleDescriptor, RenderBundleEncoderDescriptor,
+    RenderPassDescriptor, RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe,
+    Texture, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -99,6 +99,8 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         > + WasmNotSend
         + 'static;
     type PopErrorScopeFuture: Future<Output = Option<Error>> + WasmNotSend + 'static;
+
+    type CompilationInfoFuture: Future<Output = CompilationInfo> + WasmNotSend + 'static;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     unsafe fn instance_create_surface(
@@ -328,6 +330,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
     fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData);
+    fn shader_get_compilation_info(
+        &self,
+        shader: &Self::ShaderModuleId,
+        shader_data: &Self::ShaderModuleData,
+    ) -> Self::CompilationInfoFuture;
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
@@ -1161,6 +1168,11 @@ pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>> + Send>;
 pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>>>;
 
 #[cfg(send_sync)]
+pub type ShaderCompilationInfoFuture = Box<dyn Future<Output = CompilationInfo> + Send>;
+#[cfg(not(send_sync))]
+pub type ShaderCompilationInfoFuture = Box<dyn Future<Output = CompilationInfo>>;
+
+#[cfg(send_sync)]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
@@ -1382,6 +1394,11 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
     fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data);
+    fn shader_get_compilation_info(
+        &self,
+        shader: &ObjectId,
+        shader_data: &crate::Data,
+    ) -> Pin<ShaderCompilationInfoFuture>;
     fn texture_create_view(
         &self,
         texture: &ObjectId,
@@ -2535,6 +2552,17 @@ where
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
         Context::buffer_unmap(self, &buffer, buffer_data)
+    }
+
+    fn shader_get_compilation_info(
+        &self,
+        shader: &ObjectId,
+        shader_data: &crate::Data,
+    ) -> Pin<ShaderCompilationInfoFuture> {
+        let shader = <T::ShaderModuleId>::from(*shader);
+        let shader_data = downcast_ref(shader_data);
+        let future = Context::shader_get_compilation_info(self, &shader, shader_data);
+        Box::pin(future)
     }
 
     fn texture_create_view(

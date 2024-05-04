@@ -1073,6 +1073,73 @@ impl super::Instruction {
         instruction.add_operand(semantics_id);
         instruction
     }
+
+    // Group Instructions
+
+    pub(super) fn group_non_uniform_ballot(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        predicate: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformBallot);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(predicate);
+
+        instruction
+    }
+    pub(super) fn group_non_uniform_broadcast_first(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        value: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformBroadcastFirst);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(value);
+
+        instruction
+    }
+    pub(super) fn group_non_uniform_gather(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        value: Word,
+        index: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(value);
+        instruction.add_operand(index);
+
+        instruction
+    }
+    pub(super) fn group_non_uniform_arithmetic(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        group_op: Option<spirv::GroupOperation>,
+        value: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        if let Some(group_op) = group_op {
+            instruction.add_operand(group_op as u32);
+        }
+        instruction.add_operand(value);
+
+        instruction
+    }
 }
 
 impl From<crate::StorageFormat> for spirv::ImageFormat {

@@ -436,6 +436,11 @@ impl ResolvedBinding {
                     Bi::WorkGroupId => "threadgroup_position_in_grid",
                     Bi::WorkGroupSize => "dispatch_threads_per_threadgroup",
                     Bi::NumWorkGroups => "threadgroups_per_grid",
+                    // subgroup
+                    Bi::NumSubgroups => "simdgroups_per_threadgroup",
+                    Bi::SubgroupId => "simdgroup_index_in_threadgroup",
+                    Bi::SubgroupSize => "threads_per_simdgroup",
+                    Bi::SubgroupInvocationId => "thread_index_in_simdgroup",
                     Bi::CullDistance | Bi::ViewIndex => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
@@ -537,4 +542,22 @@ pub fn write_string(
 fn test_error_size() {
     use std::mem::size_of;
     assert_eq!(size_of::<Error>(), 32);
+}
+
+impl crate::AtomicFunction {
+    fn to_msl(self) -> Result<&'static str, Error> {
+        Ok(match self {
+            Self::Add => "fetch_add",
+            Self::Subtract => "fetch_sub",
+            Self::And => "fetch_and",
+            Self::InclusiveOr => "fetch_or",
+            Self::ExclusiveOr => "fetch_xor",
+            Self::Min => "fetch_min",
+            Self::Max => "fetch_max",
+            Self::Exchange { compare: None } => "exchange",
+            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
+                "atomic CompareExchange".to_string(),
+            ))?,
+        })
+    }
 }

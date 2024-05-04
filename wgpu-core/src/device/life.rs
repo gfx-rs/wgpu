@@ -7,6 +7,7 @@ use crate::{
     },
     hal_api::HalApi,
     id,
+    lock::Mutex,
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
         self, Buffer, DestroyedBuffer, DestroyedTexture, QuerySet, Resource, Sampler,
@@ -24,7 +25,6 @@ use std::sync::Arc;
 use thiserror::Error;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
-#[derive(Default)]
 pub(crate) struct ResourceMaps<A: HalApi> {
     pub buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
     pub staging_buffers: FastHashMap<TrackerIndex, Arc<StagingBuffer<A>>>,
@@ -141,7 +141,37 @@ impl<A: HalApi> ResourceMaps<A> {
     }
 }
 
-/// Resources used by a queue submission, and work to be done once it completes.
+/// A command submitted to the GPU for execution.
+///
+/// ## Keeping resources alive while the GPU is using them
+///
+/// [`wgpu_hal`] requires that, when a command is submitted to a queue, all the
+/// resources it uses must remain alive until it has finished executing.
+///
+/// The natural way to satisfy this would be for `ActiveSubmission` to hold
+/// strong references to all the resources used by its commands. However, that
+/// would entail dropping those strong references every time a queue submission
+/// finishes, adjusting the reference counts of all the resources it used. This
+/// is usually needless work: it's rare for the active submission queue to be
+/// the final reference to an object. Usually the user is still holding on to
+/// it.
+///
+/// To avoid this, an `ActiveSubmission` does not initially hold any strong
+/// references to its commands' resources. Instead, each resource tracks the
+/// most recent submission index at which it has been used in
+/// [`ResourceInfo::submission_index`]. When the user drops a resource, if the
+/// submission in which it was last used is still present in the device's queue,
+/// we add the resource to [`ActiveSubmission::last_resources`]. Finally, when
+/// this `ActiveSubmission` is dequeued and dropped in
+/// [`LifetimeTracker::triage_submissions`], we drop `last_resources` along with
+/// it. Thus, unless a resource is dropped by the user, it doesn't need to be
+/// touched at all when processing completed work.
+///
+/// However, it's not clear that this is effective. See [#5560].
+///
+/// [`wgpu_hal`]: hal
+/// [`ResourceInfo::submission_index`]: crate::resource::ResourceInfo
+/// [#5560]: https://github.com/gfx-rs/wgpu/issues/5560
 struct ActiveSubmission<A: HalApi> {
     /// The index of the submission we track.
     ///
@@ -163,6 +193,18 @@ struct ActiveSubmission<A: HalApi> {
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer<A>>>,
 
+    /// Command buffers used by this submission, and the encoder that owns them.
+    ///
+    /// [`wgpu_hal::Queue::submit`] requires the submitted command buffers to
+    /// remain alive until the submission has completed execution. Command
+    /// encoders double as allocation pools for command buffers, so holding them
+    /// here and cleaning them up in [`LifetimeTracker::triage_submissions`]
+    /// satisfies that requirement.
+    ///
+    /// Once this submission has completed, the command buffers are reset and
+    /// the command encoder is recycled.
+    ///
+    /// [`wgpu_hal::Queue::submit`]: hal::Queue::submit
     encoders: Vec<EncoderInFlight<A>>,
 
     /// List of queue "on_submitted_work_done" closures to be called once this
@@ -353,28 +395,25 @@ impl<A: HalApi> LifetimeTracker<A> {
     ///
     /// Assume that all submissions up through `last_done` have completed.
     ///
-    /// -   Buffers used by those submissions are now ready to map, if
-    ///     requested. Add any buffers in the submission's [`mapped`] list to
-    ///     [`self.ready_to_map`], where [`LifetimeTracker::handle_mapping`] will find
-    ///     them.
+    /// -   Buffers used by those submissions are now ready to map, if requested.
+    ///     Add any buffers in the submission's [`mapped`] list to
+    ///     [`self.ready_to_map`], where [`LifetimeTracker::handle_mapping`]
+    ///     will find them.
     ///
     /// -   Resources whose final use was in those submissions are now ready to
-    ///     free. Add any resources in the submission's [`last_resources`] table
-    ///     to [`self.free_resources`], where [`LifetimeTracker::cleanup`] will find
-    ///     them.
+    ///     free. Dropping the submission's [`last_resources`] table does so.
     ///
     /// Return a list of [`SubmittedWorkDoneClosure`]s to run.
     ///
     /// [`mapped`]: ActiveSubmission::mapped
     /// [`self.ready_to_map`]: LifetimeTracker::ready_to_map
     /// [`last_resources`]: ActiveSubmission::last_resources
-    /// [`self.free_resources`]: LifetimeTracker::free_resources
     /// [`SubmittedWorkDoneClosure`]: crate::device::queue::SubmittedWorkDoneClosure
     #[must_use]
     pub fn triage_submissions(
         &mut self,
         last_done: SubmissionIndex,
-        command_allocator: &mut super::CommandAllocator<A>,
+        command_allocator: &crate::command::CommandAllocator<A>,
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         profiling::scope!("triage_submissions");
 
@@ -751,13 +790,10 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     /// Identify resources to free, according to `trackers` and `self.suspected_resources`.
     ///
-    /// Given `trackers`, the [`Tracker`] belonging to same [`Device`] as
-    /// `self`, and `hub`, the [`Hub`] to which that `Device` belongs:
-    ///
-    /// Remove from `trackers` each resource mentioned in
-    /// [`self.suspected_resources`]. If `trackers` held the final reference to
-    /// that resource, add it to the appropriate free list, to be destroyed by
-    /// the hal:
+    /// Remove from `trackers`, the [`Tracker`] belonging to same [`Device`] as
+    /// `self`, each resource mentioned in [`self.suspected_resources`]. If
+    /// `trackers` held the final reference to that resource, add it to the
+    /// appropriate free list, to be destroyed by the hal:
     ///
     /// -   Add resources used by queue submissions still in flight to the
     ///     [`last_resources`] table of the last such submission's entry in
@@ -859,29 +895,33 @@ impl<A: HalApi> LifetimeTracker<A> {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
                 log::trace!("Buffer ready to map {tracker_index:?} is not tracked anymore");
             } else {
-                let mapping = match std::mem::replace(
+                // This _cannot_ be inlined into the match. If it is, the lock will be held
+                // open through the whole match, resulting in a deadlock when we try to re-lock
+                // the buffer back to active.
+                let mapping = std::mem::replace(
                     &mut *buffer.map_state.lock(),
                     resource::BufferMapState::Idle,
-                ) {
+                );
+                let pending_mapping = match mapping {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     // Mapping cancelled
                     resource::BufferMapState::Idle => continue,
                     // Mapping queued at least twice by map -> unmap -> map
                     // and was already successfully mapped below
-                    active @ resource::BufferMapState::Active { .. } => {
-                        *buffer.map_state.lock() = active;
+                    resource::BufferMapState::Active { .. } => {
+                        *buffer.map_state.lock() = mapping;
                         continue;
                     }
                     _ => panic!("No pending mapping."),
                 };
-                let status = if mapping.range.start != mapping.range.end {
+                let status = if pending_mapping.range.start != pending_mapping.range.end {
                     log::debug!("Buffer {tracker_index:?} map state -> Active");
-                    let host = mapping.op.host;
-                    let size = mapping.range.end - mapping.range.start;
+                    let host = pending_mapping.op.host;
+                    let size = pending_mapping.range.end - pending_mapping.range.start;
                     match super::map_buffer(
                         raw,
                         &buffer,
-                        mapping.range.start,
+                        pending_mapping.range.start,
                         size,
                         host,
                         snatch_guard,
@@ -889,7 +929,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                         Ok(ptr) => {
                             *buffer.map_state.lock() = resource::BufferMapState::Active {
                                 ptr,
-                                range: mapping.range.start..mapping.range.start + size,
+                                range: pending_mapping.range.start
+                                    ..pending_mapping.range.start + size,
                                 host,
                             };
                             Ok(())
@@ -902,12 +943,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                 } else {
                     *buffer.map_state.lock() = resource::BufferMapState::Active {
                         ptr: std::ptr::NonNull::dangling(),
-                        range: mapping.range,
-                        host: mapping.op.host,
+                        range: pending_mapping.range,
+                        host: pending_mapping.op.host,
                     };
                     Ok(())
                 };
-                pending_callbacks.push((mapping.op, status));
+                pending_callbacks.push((pending_mapping.op, status));
             }
         }
         pending_callbacks

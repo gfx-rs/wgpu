@@ -1,8 +1,8 @@
-use parking_lot::Mutex;
 use wgt::Backend;
 
 use crate::{
     id::{Id, Marker},
+    lock::{rank, Mutex},
     Epoch, Index,
 };
 use std::{fmt::Debug, marker::PhantomData};
@@ -16,31 +16,26 @@ enum IdSource {
 
 /// A simple structure to allocate [`Id`] identifiers.
 ///
-/// Calling [`alloc`] returns a fresh, never-before-seen id. Calling [`free`]
+/// Calling [`alloc`] returns a fresh, never-before-seen id. Calling [`release`]
 /// marks an id as dead; it will never be returned again by `alloc`.
 ///
-/// Use `IdentityManager::default` to construct new instances.
+/// `IdentityValues` returns `Id`s whose index values are suitable for use as
+/// indices into a `Vec<T>` that holds those ids' referents:
 ///
-/// `IdentityManager` returns `Id`s whose index values are suitable for use as
-/// indices into a `Storage<T>` that holds those ids' referents:
+/// - Every live id has a distinct index value. Every live id's index
+///   selects a distinct element in the vector.
 ///
-/// - Every live id has a distinct index value. Each live id's index selects a
-///   distinct element in the vector.
-///
-/// - `IdentityManager` prefers low index numbers. If you size your vector to
+/// - `IdentityValues` prefers low index numbers. If you size your vector to
 ///   accommodate the indices produced here, the vector's length will reflect
 ///   the highwater mark of actual occupancy.
 ///
-/// - `IdentityManager` reuses the index values of freed ids before returning
+/// - `IdentityValues` reuses the index values of freed ids before returning
 ///   ids with new index values. Freed vector entries get reused.
-///
-/// See the module-level documentation for an overview of how this
-/// fits together.
 ///
 /// [`Id`]: crate::id::Id
 /// [`Backend`]: wgt::Backend;
-/// [`alloc`]: IdentityManager::alloc
-/// [`free`]: IdentityManager::free
+/// [`alloc`]: IdentityValues::alloc
+/// [`release`]: IdentityValues::release
 #[derive(Debug)]
 pub(super) struct IdentityValues {
     free: Vec<(Index, Epoch)>,
@@ -122,12 +117,15 @@ impl<T: Marker> IdentityManager<T> {
 impl<T: Marker> IdentityManager<T> {
     pub fn new() -> Self {
         Self {
-            values: Mutex::new(IdentityValues {
-                free: Vec::new(),
-                next_index: 0,
-                count: 0,
-                id_source: IdSource::None,
-            }),
+            values: Mutex::new(
+                rank::IDENTITY_MANAGER_VALUES,
+                IdentityValues {
+                    free: Vec::new(),
+                    next_index: 0,
+                    count: 0,
+                    id_source: IdSource::None,
+                },
+            ),
             _phantom: PhantomData,
         }
     }
