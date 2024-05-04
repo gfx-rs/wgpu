@@ -549,25 +549,27 @@ impl Inner {
         let mut khr_context_flags = 0;
         let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
 
-        //TODO: make it so `Device` == EGL Context
         let mut context_attributes = vec![];
-        if !supports_opengl {
+        if supports_opengl {
+            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+            context_attributes.push(3);
+            context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+            context_attributes.push(3);
+            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+                log::warn!("Ignoring specified GLES minor version as OpenGL is used");
+            }
+        } else {
             context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
             context_attributes.push(3); // Request GLES 3.0 or higher
             if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
                 context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
                 context_attributes.push(match force_gles_minor_version {
+                    wgt::Gles3MinorVersion::Automatic => unreachable!(),
                     wgt::Gles3MinorVersion::Version0 => 0,
                     wgt::Gles3MinorVersion::Version1 => 1,
                     wgt::Gles3MinorVersion::Version2 => 2,
-                    _ => unreachable!(),
                 });
             }
-        } else {
-            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
-            context_attributes.push(3);
-            context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-            context_attributes.push(3);
         }
         if flags.contains(wgt::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
