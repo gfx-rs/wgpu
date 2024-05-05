@@ -1075,13 +1075,7 @@ impl super::Queue {
                 {
                     unsafe { self.perform_shader_clear(gl, draw_buffer, *color) };
                 } else {
-                    // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
-                    // on Windows.
-                    unsafe {
-                        gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
-                        gl.clear_color(color[0], color[1], color[2], color[3]);
-                        gl.clear(glow::COLOR_BUFFER_BIT);
-                    }
+                    unsafe { gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color) };
                 }
             }
             C::ClearColorU(draw_buffer, ref color) => {
