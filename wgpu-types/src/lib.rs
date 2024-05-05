@@ -6762,8 +6762,12 @@ pub struct ImageCopyExternalImage {
 pub enum ExternalImageSource {
     /// Copy from a previously-decoded image bitmap.
     ImageBitmap(web_sys::ImageBitmap),
+    /// Copy from an image element.
+    HTMLImageElement(web_sys::HtmlImageElement),
     /// Copy from a current frame of a video element.
     HTMLVideoElement(web_sys::HtmlVideoElement),
+    /// Copy from an image.
+    ImageData(web_sys::ImageData),
     /// Copy from a on-screen canvas.
     HTMLCanvasElement(web_sys::HtmlCanvasElement),
     /// Copy from a off-screen canvas.
@@ -6778,7 +6782,9 @@ impl ExternalImageSource {
     pub fn width(&self) -> u32 {
         match self {
             ExternalImageSource::ImageBitmap(b) => b.width(),
+            ExternalImageSource::HTMLImageElement(i) => i.width(),
             ExternalImageSource::HTMLVideoElement(v) => v.video_width(),
+            ExternalImageSource::ImageData(i) => i.width(),
             ExternalImageSource::HTMLCanvasElement(c) => c.width(),
             ExternalImageSource::OffscreenCanvas(c) => c.width(),
         }
@@ -6788,7 +6794,9 @@ impl ExternalImageSource {
     pub fn height(&self) -> u32 {
         match self {
             ExternalImageSource::ImageBitmap(b) => b.height(),
+            ExternalImageSource::HTMLImageElement(i) => i.height(),
             ExternalImageSource::HTMLVideoElement(v) => v.video_height(),
+            ExternalImageSource::ImageData(i) => i.height(),
             ExternalImageSource::HTMLCanvasElement(c) => c.height(),
             ExternalImageSource::OffscreenCanvas(c) => c.height(),
         }
@@ -6802,7 +6810,9 @@ impl std::ops::Deref for ExternalImageSource {
     fn deref(&self) -> &Self::Target {
         match self {
             Self::ImageBitmap(b) => b,
+            Self::HTMLImageElement(i) => i,
             Self::HTMLVideoElement(v) => v,
+            Self::ImageData(i) => i,
             Self::HTMLCanvasElement(c) => c,
             Self::OffscreenCanvas(c) => c,
         }
