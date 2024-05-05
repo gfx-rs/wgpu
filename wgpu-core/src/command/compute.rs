@@ -305,6 +305,8 @@ impl Global {
     ///
     /// If creation fails, an invalid pass is returned.
     /// Any operation on an invalid pass will return an error.
+    ///
+    /// If successful, puts the encoder into the [`CommandEncoderStatus::Locked`] state.
     pub fn command_encoder_create_compute_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -312,7 +314,7 @@ impl Global {
     ) -> (ComputePass<A>, Option<CommandEncoderError>) {
         let hub = A::hub(self);
 
-        match CommandBuffer::get_encoder(hub, encoder_id) {
+        match CommandBuffer::lock_encoder(hub, encoder_id) {
             Ok(cmd_buf) => (ComputePass::new(Some(cmd_buf), desc), None),
             Err(err) => (ComputePass::new(None, desc), Some(err)),
         }
@@ -339,6 +341,8 @@ impl Global {
         let Some(parent) = pass.parent.as_ref() else {
             return Err(ComputePassErrorInner::InvalidParentEncoder).map_pass_err(scope);
         };
+
+        parent.unlock_encoder().map_pass_err(scope)?;
 
         let base = pass
             .base
