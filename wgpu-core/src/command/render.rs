@@ -1,3 +1,6 @@
+use crate::command::{
+    validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
+};
 use crate::resource::Resource;
 use crate::snatch::SnatchGuard;
 use crate::{
@@ -2258,7 +2261,6 @@ impl Global {
                         query_set
                             .validate_and_write_timestamp(
                                 raw,
-                                query_set_id,
                                 query_index,
                                 Some(&mut cmd_buf_data.pending_query_resets),
                             )
@@ -2278,22 +2280,20 @@ impl Global {
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
 
-                        query_set
-                            .validate_and_begin_occlusion_query(
-                                raw,
-                                query_set_id,
-                                query_index,
-                                Some(&mut cmd_buf_data.pending_query_resets),
-                                &mut active_query,
-                            )
-                            .map_pass_err(scope)?;
+                        validate_and_begin_occlusion_query(
+                            query_set.clone(),
+                            raw,
+                            query_index,
+                            Some(&mut cmd_buf_data.pending_query_resets),
+                            &mut active_query,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     RenderCommand::EndOcclusionQuery => {
                         api_log!("RenderPass::end_occlusion_query");
                         let scope = PassErrorScope::EndOcclusionQuery;
 
-                        end_occlusion_query(raw, &*query_set_guard, &mut active_query)
-                            .map_pass_err(scope)?;
+                        end_occlusion_query(raw, &mut active_query).map_pass_err(scope)?;
                     }
                     RenderCommand::BeginPipelineStatisticsQuery {
                         query_set_id,
@@ -2308,21 +2308,20 @@ impl Global {
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
 
-                        query_set
-                            .validate_and_begin_pipeline_statistics_query(
-                                raw,
-                                query_set_id,
-                                query_index,
-                                Some(&mut cmd_buf_data.pending_query_resets),
-                                &mut active_query,
-                            )
-                            .map_pass_err(scope)?;
+                        validate_and_begin_pipeline_statistics_query(
+                            query_set.clone(),
+                            raw,
+                            query_index,
+                            Some(&mut cmd_buf_data.pending_query_resets),
+                            &mut active_query,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     RenderCommand::EndPipelineStatisticsQuery => {
                         api_log!("RenderPass::end_pipeline_statistics_query");
                         let scope = PassErrorScope::EndPipelineStatisticsQuery;
 
-                        end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
+                        end_pipeline_statistics_query(raw, &mut active_query)
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
