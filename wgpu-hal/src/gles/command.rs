@@ -604,7 +604,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
             depth: 0.0..1.0,
         });
 
-
         if !rendering_to_external_framebuffer {
             // set the draw buffers and states
             self.cmd_buffer
