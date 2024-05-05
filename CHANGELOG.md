@@ -68,6 +68,8 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 #### General
 
+- Add `HTMLImageElement` as external source for copying images. By @Valaphee in [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
+
 #### Naga
 
 ### Bug Fixes
