@@ -747,7 +747,10 @@ fn convert_wgsl() {
             "atomicOps",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
+        (
+            "atomicCompareExchange",
+            Targets::SPIRV | Targets::WGSL | Targets::METAL,
+        ),
         (
             "padding",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,

@@ -1189,8 +1189,8 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
             }
             crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
-                let result_type_name = match context.info[result].ty {
-                    TypeResolution::Handle(ty_handle) => {
+                let result_type_name =
+                    if let TypeResolution::Handle(ty_handle) = context.info[result].ty {
                         let ty_name = TypeContext {
                             handle: ty_handle,
                             gctx: context.module.to_ctx(),
@@ -1200,13 +1200,11 @@ impl<W: Write> Writer<W> {
                             first_time: false,
                         };
                         ty_name
-                    }
-                    _ => {
+                    } else {
                         return Err(Error::FeatureNotImplemented(
                             "atomic CompareExchange".to_string(),
                         ));
-                    }
-                };
+                    };
 
                 write!(
                     self.out,
@@ -3420,11 +3418,11 @@ impl<W: Write> Writer<W> {
         writeln!(
             self.out,
             r#"
-        template<typename R, typename T, typename A> R __make_atomic_cas_result(device A* ptr, T cmp_, T v) {{
-            T cmp = cmp_;
-            bool exchanged = {NAMESPACE}::atomic_compare_exchange_weak_explicit(ptr, &cmp, v, {NAMESPACE}::memory_order_relaxed, {NAMESPACE}::memory_order_relaxed);
-            return R{{cmp, exchanged}};
-        }}
+template<typename R, typename T, typename A> R __make_atomic_cas_result(device A* ptr, T cmp_, T v) {{
+    T cmp = cmp_;
+    bool exchanged = {NAMESPACE}::atomic_compare_exchange_weak_explicit(ptr, &cmp, v, {NAMESPACE}::memory_order_relaxed, {NAMESPACE}::memory_order_relaxed);
+    return R{{cmp, exchanged}};
+}}
         "#
         )?;
 

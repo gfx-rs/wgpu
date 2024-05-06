@@ -4,6 +4,13 @@
 
 using metal::uint;
 
+
+template<typename R, typename T, typename A> R __make_atomic_cas_result(device A* ptr, T cmp_, T v) {
+    T cmp = cmp_;
+    bool exchanged = metal::atomic_compare_exchange_weak_explicit(ptr, &cmp, v, metal::memory_order_relaxed, metal::memory_order_relaxed);
+    return R{cmp, exchanged};
+}
+        
 struct Foo {
     metal::float4 a;
     int b;
