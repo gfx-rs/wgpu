@@ -227,6 +227,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Fix deadlocks caused by recursive read-write lock acquisitions [#5426](https://github.com/gfx-rs/wgpu/pull/5426).
 - Remove exposed C symbols (`extern "C"` + [no_mangle]) from RenderPass & ComputePass recording. By @wumpf in [#5409](https://github.com/gfx-rs/wgpu/pull/5409).
 - Fix surfaces being only compatible with first backend enabled on an instance, causing failures when manually specifying an adapter. By @Wumpf in [#5535](https://github.com/gfx-rs/wgpu/pull/5535).
+- Clean up weak references to texture views and bind groups. By @xiaopengli89 [#5595](https://github.com/gfx-rs/wgpu/pull/5595).
 
 #### Naga
 
