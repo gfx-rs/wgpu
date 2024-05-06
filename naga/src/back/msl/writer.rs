@@ -1134,8 +1134,9 @@ impl<W: Write> Writer<W> {
     fn put_atomic_operation(
         &mut self,
         pointer: Handle<crate::Expression>,
-        key: &str,
+        function_type: crate::AtomicFunction,
         value: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
         // If the pointer we're passing to the atomic operation needs to be conditional
@@ -1150,14 +1151,75 @@ impl<W: Write> Writer<W> {
             write!(self.out, " ? ")?;
         }
 
-        write!(
-            self.out,
-            "{NAMESPACE}::atomic_{key}_explicit({ATOMIC_REFERENCE}"
-        )?;
-        self.put_access_chain(pointer, policy, context)?;
-        write!(self.out, ", ")?;
-        self.put_expression(value, context, true)?;
-        write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
+        fn get_msl_non_weak_exchange_name(
+            fun: crate::AtomicFunction,
+        ) -> Result<&'static str, Error> {
+            Ok(match fun {
+                crate::AtomicFunction::Add => "fetch_add",
+                crate::AtomicFunction::Subtract => "fetch_sub",
+                crate::AtomicFunction::And => "fetch_and",
+                crate::AtomicFunction::InclusiveOr => "fetch_or",
+                crate::AtomicFunction::ExclusiveOr => "fetch_xor",
+                crate::AtomicFunction::Min => "fetch_min",
+                crate::AtomicFunction::Max => "fetch_max",
+                crate::AtomicFunction::Exchange { compare: None } => "exchange",
+                crate::AtomicFunction::Exchange { compare: Some(_) } => {
+                    unreachable!("get_msl_non_weak_exchange_name should not be called with an argument of type crate::AtomicFunction::Exchange{{Some(_)}}")
+                }
+            })
+        }
+
+        match function_type {
+            crate::AtomicFunction::Add
+            | crate::AtomicFunction::Subtract
+            | crate::AtomicFunction::And
+            | crate::AtomicFunction::ExclusiveOr
+            | crate::AtomicFunction::InclusiveOr
+            | crate::AtomicFunction::Min
+            | crate::AtomicFunction::Max
+            | crate::AtomicFunction::Exchange { compare: None } => {
+                let function_type_str = get_msl_non_weak_exchange_name(function_type)?;
+                write!(
+                    self.out,
+                    "{NAMESPACE}::atomic_{function_type_str}_explicit({ATOMIC_REFERENCE}"
+                )?;
+                self.put_access_chain(pointer, policy, context)?;
+                write!(self.out, ", ")?;
+                self.put_expression(value, context, true)?;
+                write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
+            }
+            crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
+                let result_type_name = match context.info[result].ty {
+                    TypeResolution::Handle(ty_handle) => {
+                        let ty_name = TypeContext {
+                            handle: ty_handle,
+                            gctx: context.module.to_ctx(),
+                            names: &self.names,
+                            access: crate::StorageAccess::empty(),
+                            binding: None,
+                            first_time: false,
+                        };
+                        ty_name
+                    }
+                    _ => {
+                        return Err(Error::FeatureNotImplemented(
+                            "atomic CompareExchange".to_string(),
+                        ));
+                    }
+                };
+
+                write!(
+                    self.out,
+                    "__make_atomic_cas_result<{result_type_name}>({ATOMIC_REFERENCE}"
+                )?;
+                self.put_access_chain(pointer, policy, context)?;
+                write!(self.out, ", ")?;
+                self.put_expression(cmp, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(value, context, true)?;
+                write!(self.out, ")")?;
+            }
+        }
 
         // Finish the ternary expression.
         if checked {
@@ -2978,7 +3040,7 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Statement::Atomic {
                     pointer,
-                    ref fun,
+                    fun,
                     value,
                     result,
                 } => {
@@ -2986,8 +3048,7 @@ impl<W: Write> Writer<W> {
                     let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                     self.start_baking_expression(result, &context.expression, &res_name)?;
                     self.named_expressions.insert(result, res_name);
-                    let fun_str = fun.to_msl()?;
-                    self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
+                    self.put_atomic_operation(pointer, fun, value, result, &context.expression)?;
                     // done
                     writeln!(self.out, ";")?;
                 }
@@ -3355,6 +3416,17 @@ impl<W: Write> Writer<W> {
             self.put_default_constructible()?;
         }
         writeln!(self.out)?;
+
+        writeln!(
+            self.out,
+            r#"
+        template<typename R, typename T, typename A> R __make_atomic_cas_result(device A* ptr, T cmp_, T v) {{
+            T cmp = cmp_;
+            bool exchanged = {NAMESPACE}::atomic_compare_exchange_weak_explicit(ptr, &cmp, v, {NAMESPACE}::memory_order_relaxed, {NAMESPACE}::memory_order_relaxed);
+            return R{{cmp, exchanged}};
+        }}
+        "#
+        )?;
 
         {
             let mut indices = vec![];
