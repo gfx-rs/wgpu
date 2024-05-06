@@ -39,6 +39,15 @@ Bottom level categories:
 
 ## Unreleased
 
+## v0.20.1 (2024-04-??)
+
+### Bug Fixes
+
+#### General
+
+- Clean up weak references to texture views and bind groups. By @xiaopengli89 [#5595](https://github.com/gfx-rs/wgpu/pull/5595).
+
+
 ## v0.20.0 (2024-04-28)
 
 ### Major Changes
