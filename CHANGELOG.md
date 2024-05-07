@@ -70,6 +70,8 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 #### Naga
 
+- Added support for metal's `atomic_compare_exchange_weak` by @9291Sam in [#5675](https://github.com/gfx-rs/wgpu/pull/5675)
+
 ### Bug Fixes
 
 #### GLES / OpenGL
