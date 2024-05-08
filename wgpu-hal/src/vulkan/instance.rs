@@ -167,7 +167,7 @@ impl super::Swapchain {
         // We cannot take this by value, as the function returns `self`.
         for semaphore in self.surface_semaphores.drain(..) {
             let arc_removed = Arc::into_inner(semaphore).expect(
-                "Trying to destory a SurfaceSemaphores that is still in use by a SurfaceTexture",
+                "Trying to destroy a SurfaceSemaphores that is still in use by a SurfaceTexture",
             );
             let mutex_removed = arc_removed.into_inner();
 
