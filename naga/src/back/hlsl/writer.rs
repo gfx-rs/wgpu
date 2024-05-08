@@ -162,7 +162,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     crate::MathFunction::CountLeadingZeros => {
                         let inner = info[fun_handle].ty.inner_with(&module.types);
-                        if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                        if let Some(ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }
                     }
@@ -450,7 +450,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 second_blend_source: false,
                 ..
             }) => {
-                if stage == Some((crate::ShaderStage::Fragment, Io::Output)) {
+                if stage == Some((ShaderStage::Fragment, Io::Output)) {
                     write!(self.out, " : SV_Target{location}")?;
                 } else {
                     write!(self.out, " : {LOCATION_SEMANTIC}{location}")?;
@@ -994,7 +994,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     columns,
                     scalar,
                 } if member.binding.is_none() && rows == crate::VectorSize::Bi => {
-                    let vec_ty = crate::TypeInner::Vector { size: rows, scalar };
+                    let vec_ty = TypeInner::Vector { size: rows, scalar };
                     let field_name_key = NameKey::StructMember(handle, index as u32);
 
                     for i in 0..columns as u8 {
@@ -2397,7 +2397,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 left,
                 right,
             } if func_ctx.resolve_type(left, &module.types).scalar_kind()
-                == Some(crate::ScalarKind::Float) =>
+                == Some(ScalarKind::Float) =>
             {
                 write!(self.out, "fmod(")?;
                 self.write_expr(module, left, func_ctx)?;
@@ -2408,7 +2408,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::Binary { op, left, right } => {
                 write!(self.out, "(")?;
                 self.write_expr(module, left, func_ctx)?;
-                write!(self.out, " {} ", crate::back::binary_operation_str(op))?;
+                write!(self.out, " {} ", back::binary_operation_str(op))?;
                 self.write_expr(module, right, func_ctx)?;
                 write!(self.out, ")")?;
             }

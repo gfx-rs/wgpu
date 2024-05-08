@@ -2444,12 +2444,7 @@ impl Global {
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
-            super::CommandBuffer::insert_barriers_from_scope(
-                transit,
-                tracker,
-                &scope,
-                &snatch_guard,
-            );
+            CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, &snatch_guard);
         }
 
         *status = CommandEncoderStatus::Recording;

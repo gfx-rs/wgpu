@@ -533,7 +533,7 @@ pub fn write_string(
     options: &Options,
     pipeline_options: &PipelineOptions,
 ) -> Result<(String, TranslationInfo), Error> {
-    let mut w = writer::Writer::new(String::new());
+    let mut w = Writer::new(String::new());
     let info = w.write(module, info, options, pipeline_options)?;
     Ok((w.finish(), info))
 }

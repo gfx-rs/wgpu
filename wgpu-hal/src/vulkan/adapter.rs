@@ -1326,11 +1326,11 @@ impl super::Instance {
             vendor: phd_capabilities.properties.vendor_id,
             device: phd_capabilities.properties.device_id,
             device_type: match phd_capabilities.properties.device_type {
-                ash::vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
-                ash::vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
-                ash::vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
-                ash::vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
-                ash::vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
+                vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
+                vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
+                vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
+                vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
+                vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
             },
             driver: {
@@ -1372,7 +1372,7 @@ impl super::Instance {
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
-                if driver.driver_id == ash::vk::DriverId::MOLTENVK {
+                if driver.driver_id == vk::DriverId::MOLTENVK {
                     log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
                 } else if self
                     .shared
@@ -1525,7 +1525,7 @@ impl super::Instance {
 }
 
 impl super::Adapter {
-    pub fn raw_physical_device(&self) -> ash::vk::PhysicalDevice {
+    pub fn raw_physical_device(&self) -> vk::PhysicalDevice {
         self.raw
     }
 

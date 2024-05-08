@@ -14,7 +14,7 @@ use crate::{
     },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{Mutex, RwLock},
-    resource, resource_log,
+    resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
     validation::MissingBufferUsageError,
@@ -442,8 +442,8 @@ impl<A: HalApi> Buffer<A> {
             .ok_or(BufferAccessError::Destroyed)?;
         let buffer_id = self.info.id();
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        match mem::replace(&mut *self.map_state.lock(), resource::BufferMapState::Idle) {
-            resource::BufferMapState::Init {
+        match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
+            BufferMapState::Init {
                 ptr,
                 stage_buffer,
                 needs_flush,
@@ -503,13 +503,13 @@ impl<A: HalApi> Buffer<A> {
                 pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
                 pending_writes.dst_buffers.insert(buffer_id, self.clone());
             }
-            resource::BufferMapState::Idle => {
+            BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
             }
-            resource::BufferMapState::Waiting(pending) => {
+            BufferMapState::Waiting(pending) => {
                 return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
             }
-            resource::BufferMapState::Active { ptr, range, host } => {
+            BufferMapState::Active { ptr, range, host } => {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
@@ -551,13 +551,13 @@ impl<A: HalApi> Buffer<A> {
             let raw = match self.raw.snatch(snatch_guard) {
                 Some(raw) => raw,
                 None => {
-                    return Err(resource::DestroyError::AlreadyDestroyed);
+                    return Err(DestroyError::AlreadyDestroyed);
                 }
             };
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
@@ -882,18 +882,18 @@ impl<A: HalApi> Texture<A> {
                     return Ok(());
                 }
                 None => {
-                    return Err(resource::DestroyError::AlreadyDestroyed);
+                    return Err(DestroyError::AlreadyDestroyed);
                 }
             };
 
             let views = {
                 let mut guard = self.views.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {

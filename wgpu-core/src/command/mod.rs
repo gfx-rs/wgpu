@@ -468,7 +468,7 @@ impl<A: HalApi> CommandBuffer<A> {
 impl<A: HalApi> Resource for CommandBuffer<A> {
     const TYPE: ResourceType = "CommandBuffer";
 
-    type Marker = crate::id::markers::CommandBuffer;
+    type Marker = id::markers::CommandBuffer;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info

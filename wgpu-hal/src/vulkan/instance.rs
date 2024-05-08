@@ -34,7 +34,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         // Versions 1.3.240 through 1.3.250 return a spurious error here if
         // the debug range start and end appear in different command buffers.
         let khronos_validation_layer =
-            std::ffi::CStr::from_bytes_with_nul(b"Khronos Validation Layer\0").unwrap();
+            CStr::from_bytes_with_nul(b"Khronos Validation Layer\0").unwrap();
         if let Some(layer_properties) = user_data.validation_layer_properties.as_ref() {
             if layer_properties.layer_description.as_ref() == khronos_validation_layer
                 && layer_properties.layer_spec_version >= vk::make_api_version(0, 1, 3, 240)
@@ -280,7 +280,7 @@ impl super::Instance {
         if cfg!(target_os = "macos") {
             // VK_EXT_metal_surface
             extensions.push(ext::MetalSurface::name());
-            extensions.push(ash::vk::KhrPortabilityEnumerationFn::name());
+            extensions.push(vk::KhrPortabilityEnumerationFn::name());
         }
 
         if flags.contains(wgt::InstanceFlags::DEBUG) {
@@ -780,7 +780,7 @@ impl crate::Instance for super::Instance {
         // Avoid VUID-VkInstanceCreateInfo-flags-06559: Only ask the instance to
         // enumerate incomplete Vulkan implementations (which we need on Mac) if
         // we managed to find the extension that provides the flag.
-        if extensions.contains(&ash::vk::KhrPortabilityEnumerationFn::name()) {
+        if extensions.contains(&vk::KhrPortabilityEnumerationFn::name()) {
             flags |= vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
         }
         let vk_instance = {
