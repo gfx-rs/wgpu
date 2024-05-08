@@ -828,11 +828,11 @@ impl super::Device {
         &self.shared.raw
     }
 
-    pub fn raw_physical_device(&self) -> ash::vk::PhysicalDevice {
+    pub fn raw_physical_device(&self) -> vk::PhysicalDevice {
         self.shared.physical_device
     }
 
-    pub fn raw_queue(&self) -> ash::vk::Queue {
+    pub fn raw_queue(&self) -> vk::Queue {
         self.shared.raw_queue
     }
 
@@ -2087,7 +2087,7 @@ impl crate::Device for super::Device {
         {
             // Renderdoc requires us to give us the pointer that vkInstance _points to_.
             let raw_vk_instance =
-                ash::vk::Handle::as_raw(self.shared.instance.raw.handle()) as *mut *mut _;
+                vk::Handle::as_raw(self.shared.instance.raw.handle()) as *mut *mut _;
             let raw_vk_instance_dispatch_table = unsafe { *raw_vk_instance };
             unsafe {
                 self.render_doc
@@ -2102,7 +2102,7 @@ impl crate::Device for super::Device {
         {
             // Renderdoc requires us to give us the pointer that vkInstance _points to_.
             let raw_vk_instance =
-                ash::vk::Handle::as_raw(self.shared.instance.raw.handle()) as *mut *mut _;
+                vk::Handle::as_raw(self.shared.instance.raw.handle()) as *mut *mut _;
             let raw_vk_instance_dispatch_table = unsafe { *raw_vk_instance };
 
             unsafe {

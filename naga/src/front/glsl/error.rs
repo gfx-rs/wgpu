@@ -160,7 +160,7 @@ impl ParseErrors {
     pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
 
         for err in &self.errors {
             let mut diagnostic = Diagnostic::error().with_message(err.kind.to_string());

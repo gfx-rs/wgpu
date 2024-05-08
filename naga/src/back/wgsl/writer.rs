@@ -1096,7 +1096,7 @@ impl<W: Write> Writer<W> {
             Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
                 let base_ty = func_ctx.resolve_type(base, &module.types);
                 match *base_ty {
-                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                    TypeInner::Pointer { .. } | TypeInner::ValuePointer { .. } => {
                         Indirection::Reference
                     }
                     _ => Indirection::Ordinary,

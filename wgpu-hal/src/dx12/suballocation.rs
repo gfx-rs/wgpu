@@ -111,7 +111,7 @@ mod placed {
                 &raw_desc,
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
-                &d3d12_ty::ID3D12Resource::uuidof(),
+                &ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };
@@ -160,7 +160,7 @@ mod placed {
                 &raw_desc,
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(), // clear value
-                &d3d12_ty::ID3D12Resource::uuidof(),
+                &ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };
@@ -302,7 +302,7 @@ mod committed {
                 &raw_desc,
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
-                &d3d12_ty::ID3D12Resource::uuidof(),
+                &ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };
@@ -340,7 +340,7 @@ mod committed {
                 &raw_desc,
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(), // clear value
-                &d3d12_ty::ID3D12Resource::uuidof(),
+                &ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };

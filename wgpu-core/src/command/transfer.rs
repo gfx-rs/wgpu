@@ -666,13 +666,13 @@ impl Global {
             .downlevel
             .flags
             .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
-            && (src_buffer.usage.contains(wgt::BufferUsages::INDEX)
-                || dst_buffer.usage.contains(wgt::BufferUsages::INDEX))
+            && (src_buffer.usage.contains(BufferUsages::INDEX)
+                || dst_buffer.usage.contains(BufferUsages::INDEX))
         {
-            let forbidden_usages = wgt::BufferUsages::VERTEX
-                | wgt::BufferUsages::UNIFORM
-                | wgt::BufferUsages::INDIRECT
-                | wgt::BufferUsages::STORAGE;
+            let forbidden_usages = BufferUsages::VERTEX
+                | BufferUsages::UNIFORM
+                | BufferUsages::INDIRECT
+                | BufferUsages::STORAGE;
             if src_buffer.usage.intersects(forbidden_usages)
                 || dst_buffer.usage.intersects(forbidden_usages)
             {

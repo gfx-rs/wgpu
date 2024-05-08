@@ -330,7 +330,7 @@ impl<A: HalApi> Adapter<A> {
         }
 
         let caps = &self.raw.capabilities;
-        if wgt::Backends::PRIMARY.contains(wgt::Backends::from(A::VARIANT))
+        if Backends::PRIMARY.contains(Backends::from(A::VARIANT))
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;

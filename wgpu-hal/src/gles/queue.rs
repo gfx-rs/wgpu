@@ -313,7 +313,7 @@ impl super::Queue {
                     let can_use_zero_buffer = self
                         .shared
                         .private_caps
-                        .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                        .contains(PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
                         || dst_target != glow::ELEMENT_ARRAY_BUFFER;
 
                     if can_use_zero_buffer {
@@ -358,7 +358,7 @@ impl super::Queue {
                 let is_index_buffer_only_element_dst = !self
                     .shared
                     .private_caps
-                    .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                    .contains(PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
                     && dst_target == glow::ELEMENT_ARRAY_BUFFER
                     || src_target == glow::ELEMENT_ARRAY_BUFFER;
 
