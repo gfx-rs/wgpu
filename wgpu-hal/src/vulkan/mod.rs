@@ -153,8 +153,8 @@ pub struct Instance {
 /// that uses the image.
 ///
 /// The `present` semaphores are used to signal from each submit that uses the image to the
-/// present operation. We need use one per submit as we don't know, at submit time, which
-/// submission will be the last to use the image.
+/// present operation. We need use one per submit as we don't know at submit time which
+/// submission will be the last to use the image, so we add semaphores to them all.
 #[derive(Debug)]
 struct SwapchainSemaphores {
     acquire: vk::Semaphore,
@@ -174,6 +174,9 @@ impl SwapchainSemaphores {
         })
     }
 
+    /// Gets a semaphore to use for a submit.
+    ///
+    /// If there aren't any available, a new one is created.
     fn get_submit_signal_semaphore(
         &mut self,
         device: &ash::Device,
@@ -193,6 +196,9 @@ impl SwapchainSemaphores {
         Ok(sem)
     }
 
+    /// Gets the semaphores to wait on for the present operation.
+    ///
+    /// This will enable re-using all of the semaphores for the next time this image is used.
     fn get_present_wait_semaphores(&mut self) -> &[vk::Semaphore] {
         let old_index = self.present_index;
         self.present_index = 0;
