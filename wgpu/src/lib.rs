@@ -69,32 +69,27 @@ pub use wgt::{
 /// Re-export of our `wgpu-core` dependency.
 ///
 #[cfg(wgpu_core)]
-#[doc(inline)]
 pub use ::wgc as core;
 
 /// Re-export of our `wgpu-hal` dependency.
 ///
 ///
 #[cfg(wgpu_core)]
-#[doc(inline)]
 pub use ::hal;
 
 /// Re-export of our `naga` dependency.
 ///
 #[cfg(wgpu_core)]
 #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-#[doc(inline)]
 // We re-export wgpu-core's re-export of naga, as we may not have direct access to it.
 pub use ::wgc::naga;
 /// Re-export of our `naga` dependency.
 ///
 #[cfg(all(not(wgpu_core), naga))]
 #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-#[doc(inline)]
 // If that's not available, we re-export our own.
 pub use naga;
 
-#[doc(inline)]
 /// Re-export of our `raw-window-handle` dependency.
 ///
 pub use raw_window_handle as rwh;
@@ -102,7 +97,6 @@ pub use raw_window_handle as rwh;
 /// Re-export of our `web-sys` dependency.
 ///
 #[cfg(any(webgl, webgpu))]
-#[doc(inline)]
 pub use web_sys;
 
 // wasm-only types, we try to keep as many types non-platform
