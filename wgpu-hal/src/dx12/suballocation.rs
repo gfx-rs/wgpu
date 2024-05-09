@@ -215,11 +215,16 @@ mod placed {
                     );
                     Self::Lost
                 }
+
                 gpu_allocator::AllocationError::Internal(e) => {
                     log::error!("DX12 gpu-allocator: Internal Error: {}", e);
                     Self::Lost
                 }
-                gpu_allocator::AllocationError::BarrierLayoutNeedsDevice10 => todo!(),
+                gpu_allocator::AllocationError::BarrierLayoutNeedsDevice10
+                | gpu_allocator::AllocationError::CastableFormatsRequiresEnhancedBarriers
+                | gpu_allocator::AllocationError::CastableFormatsRequiresAtLeastDevice12 => {
+                    unreachable!()
+                }
             }
         }
     }

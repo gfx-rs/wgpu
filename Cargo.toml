@@ -140,7 +140,7 @@ gpu-descriptor = "0.3"
 
 # DX dependencies
 bit-set = "0.5"
-gpu-allocator = { version = "0.25", default_features = false, features = [
+gpu-allocator = { version = "0.26", default_features = false, features = [
     "d3d12",
     "public-winapi",
 ] }
