@@ -705,7 +705,8 @@ impl super::Validator {
             | crate::GatherMode::Shuffle(index)
             | crate::GatherMode::ShuffleDown(index)
             | crate::GatherMode::ShuffleUp(index)
-            | crate::GatherMode::ShuffleXor(index) => {
+            | crate::GatherMode::ShuffleXor(index)
+            | crate::GatherMode::QuadBroadcast(index) => {
                 let index_ty = context.resolve_type_inner(index, &self.valid_expression_set)?;
                 match *index_ty {
                     crate::TypeInner::Scalar(crate::Scalar::U32) => {}
@@ -1616,6 +1617,7 @@ impl super::Validator {
                     }
                     self.validate_subgroup_gather(mode, argument, result, context)?;
                 }
+                S::SubgroupQuadSwap { direction, argument, result } => {}
             }
         }
         Ok(BlockInfo { stages, finished })

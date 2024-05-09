@@ -2635,10 +2635,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             write!(self.out, "WaveGetLaneIndex() ^ ")?;
                             self.write_expr(module, index, func_ctx)?;
                         }
+                        crate::GatherMode::QuadBroadcast(_) => unreachable!()
                     }
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::SubgroupQuadSwap { direction, argument, result } => {}
         }
 
         Ok(())
