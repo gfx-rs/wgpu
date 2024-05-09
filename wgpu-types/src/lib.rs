@@ -918,6 +918,10 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        ///
+        /// Unimplemented Platforms:
+        /// - DX12
+        /// - Metal
         const PIPELINE_CACHE = 1 << 59;
     }
 }
