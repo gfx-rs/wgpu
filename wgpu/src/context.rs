@@ -12,11 +12,11 @@ use crate::{
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, ComputePassDescriptor,
     ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer,
     ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineCacheDescriptor,
-    PipelineCacheInitDescriptor, PipelineLayoutDescriptor, QuerySetDescriptor,
-    RenderBundleDescriptor, RenderBundleEncoderDescriptor, RenderPassDescriptor,
-    RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError, SamplerDescriptor,
-    ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture,
-    TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
+    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
+    RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
+    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
+    TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.

@@ -2,20 +2,17 @@ use std::{fmt::Write, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
-/// We want to test that partial updates to push constants work as expected.
+/// We want to test that using a pipeline cache doesn't cause failure
 ///
-/// As such, we dispatch two compute passes, one which writes the values
-/// before a partial update, and one which writes the values after the partial update.
-///
-/// If the update code is working correctly, the values not written to by the second update
-/// will remain unchanged.
+/// It would be nice if we could also assert that reusing a pipeline cache would make compilation
+/// be faster however, some drivers use a fallback pipeline cache, which makes this inconsistent
+/// (both intra- and inter-run).
 #[gpu_test]
 static PIPELINE_CACHE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::PIPELINE_CACHE)
-            .skip(wgpu_test::FailureCase::adapter("llvmpipe")),
+            .features(wgpu::Features::PIPELINE_CACHE),
     )
     .run_async(pipeline_cache_test);
 
@@ -24,6 +21,13 @@ const ARRAY_SIZE: u64 = 256;
 
 /// Create a shader which should be slow-ish to compile
 fn shader() -> String {
+    let mut body = String::new();
+    for idx in 0..ARRAY_SIZE {
+        // "Safety": There will only be a single workgroup, and a single thread in that workgroup
+        writeln!(body, "    output[{idx}] = {idx}u;")
+            .expect("`u64::fmt` and `String::write_fmt` are infallible");
+    }
+
     format!(
         r#"
         @group(0) @binding(0)
@@ -31,14 +35,9 @@ fn shader() -> String {
     
         @compute @workgroup_size(1)
         fn main() {{
-        {}
+        {body}
         }}
         "#,
-        (0..ARRAY_SIZE).fold(String::new(), |mut s, v| {
-            // "Safety": There will only be a single workgroup, and a single thread in that workgroup
-            writeln!(s, "    output[{v}] = {v}u;").expect("String");
-            s
-        })
     )
 }
 
@@ -99,7 +98,6 @@ async fn pipeline_cache_test(ctx: TestingContext) {
         });
 
     let first_cache_data;
-    let first_pipeline_duration;
     {
         let first_cache = unsafe {
             ctx.device
@@ -109,7 +107,6 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                     fallback: false,
                 })
         };
-        let start = std::time::Instant::now();
         let first_pipeline = ctx
             .device
             .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -122,7 +119,6 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                     ..Default::default()
                 },
             });
-        first_pipeline_duration = start.elapsed();
         validate_pipeline(&ctx, first_pipeline, &bind_group, &gpu_buffer, &cpu_buffer).await;
         first_cache_data = first_cache.get_data();
     }
@@ -136,7 +132,6 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                 fallback: false,
             })
     };
-    let start = std::time::Instant::now();
     let first_pipeline = ctx
         .device
         .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -149,14 +144,12 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                 ..Default::default()
             },
         });
-    let duration = start.elapsed();
     validate_pipeline(&ctx, first_pipeline, &bind_group, &gpu_buffer, &cpu_buffer).await;
-    if false {
-        // Ideally, we could make this assertion. However, that doesn't actually work, because drivers have
-        // their own internal caches. This does work on my machine if I set `MESA_DISABLE_PIPELINE_CACHE=1`
-        // before running the test; but of course that is not a realistic scenario
-        assert!(duration.as_millis() < first_pipeline_duration.as_millis());
-    }
+
+    // Ideally, we could assert here that the second compilation was faster than the first
+    // However, that doesn't actually work, because drivers have their own internal caches.
+    // This does work on my machine if I set `MESA_DISABLE_PIPELINE_CACHE=1`
+    // before running the test; but of course that is not a realistic scenario
 }
 
 async fn validate_pipeline(
@@ -180,7 +173,6 @@ async fn validate_pipeline(
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, bind_group, &[]);
 
-        // -- Dispatch 0 --
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
