@@ -123,13 +123,18 @@ impl FunctionTracer<'_> {
                             | crate::GatherMode::Shuffle(index)
                             | crate::GatherMode::ShuffleDown(index)
                             | crate::GatherMode::ShuffleUp(index)
-                            | crate::GatherMode::ShuffleXor(index) => {
+                            | crate::GatherMode::ShuffleXor(index)
+                            | crate::GatherMode::QuadBroadcast(index) => {
                                 self.expressions_used.insert(index)
                             }
                         }
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result)
                     }
+                    St::SubgroupQuadSwap { direction, argument, result } => {
+                        self.expressions_used.insert(argument);
+                        self.expressions_used.insert(result)
+                    },
 
                     // Trivial statements.
                     St::Break
@@ -312,8 +317,13 @@ impl FunctionMap {
                             | crate::GatherMode::Shuffle(ref mut index)
                             | crate::GatherMode::ShuffleDown(ref mut index)
                             | crate::GatherMode::ShuffleUp(ref mut index)
-                            | crate::GatherMode::ShuffleXor(ref mut index) => adjust(index),
+                            | crate::GatherMode::ShuffleXor(ref mut index)
+                            | crate::GatherMode::QuadBroadcast(ref mut index) => adjust(index),
                         }
+                        adjust(argument);
+                        adjust(result);
+                    }
+                    St::SubgroupQuadSwap { direction: _, ref mut argument, ref mut result } => {
                         adjust(argument);
                         adjust(result);
                     }

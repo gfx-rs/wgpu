@@ -130,10 +130,6 @@ impl<'w> BlockContext<'w> {
         result: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<(), Error> {
-        self.writer.require_any(
-            "GroupNonUniformBallot",
-            &[spirv::Capability::GroupNonUniformBallot],
-        )?;
         match *mode {
             crate::GatherMode::BroadcastFirst | crate::GatherMode::Broadcast(_) => {
                 self.writer.require_any(
@@ -151,6 +147,12 @@ impl<'w> BlockContext<'w> {
                 self.writer.require_any(
                     "GroupNonUniformShuffleRelative",
                     &[spirv::Capability::GroupNonUniformShuffleRelative],
+                )?;
+            }
+            crate::GatherMode::QuadBroadcast(_) => {
+                self.writer.require_any(
+                    "GroupNonUniformQuad",
+                    &[spirv::Capability::GroupNonUniformQuad],
                 )?;
             }
         }
@@ -177,7 +179,8 @@ impl<'w> BlockContext<'w> {
             | crate::GatherMode::Shuffle(index)
             | crate::GatherMode::ShuffleDown(index)
             | crate::GatherMode::ShuffleUp(index)
-            | crate::GatherMode::ShuffleXor(index) => {
+            | crate::GatherMode::ShuffleXor(index)
+            | crate::GatherMode::QuadBroadcast(index) => {
                 let index_id = self.cached[index];
                 let op = match *mode {
                     crate::GatherMode::BroadcastFirst => unreachable!(),
@@ -190,6 +193,7 @@ impl<'w> BlockContext<'w> {
                     crate::GatherMode::ShuffleDown(_) => spirv::Op::GroupNonUniformShuffleDown,
                     crate::GatherMode::ShuffleUp(_) => spirv::Op::GroupNonUniformShuffleUp,
                     crate::GatherMode::ShuffleXor(_) => spirv::Op::GroupNonUniformShuffleXor,
+                    crate::GatherMode::QuadBroadcast(_) => spirv::Op::GroupNonUniformQuadBroadcast,
                 };
                 block.body.push(Instruction::group_non_uniform_gather(
                     op,

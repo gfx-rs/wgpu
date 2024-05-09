@@ -1027,6 +1027,9 @@ impl<W: Write> Writer<W> {
                     crate::GatherMode::ShuffleXor(_) => {
                         write!(self.out, "subgroupShuffleXor(")?;
                     }
+                    crate::GatherMode::QuadBroadcast(_) => {
+                        write!(self.out, "quadBroadcast(")?;
+                    }
                 }
                 self.write_expr(module, argument, func_ctx)?;
                 match mode {
@@ -1035,13 +1038,15 @@ impl<W: Write> Writer<W> {
                     | crate::GatherMode::Shuffle(index)
                     | crate::GatherMode::ShuffleDown(index)
                     | crate::GatherMode::ShuffleUp(index)
-                    | crate::GatherMode::ShuffleXor(index) => {
+                    | crate::GatherMode::ShuffleXor(index)
+                    | crate::GatherMode::QuadBroadcast(index) => {
                         write!(self.out, ", ")?;
                         self.write_expr(module, index, func_ctx)?;
                     }
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::SubgroupQuadSwap { direction, argument, result } => {}
         }
 
         Ok(())
