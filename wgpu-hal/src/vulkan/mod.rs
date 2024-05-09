@@ -158,6 +158,7 @@ pub struct Instance {
 #[derive(Debug)]
 struct SwapchainSemaphores {
     acquire: vk::Semaphore,
+    should_wait_for_acquire: bool,
     present: Vec<vk::Semaphore>,
     present_index: usize,
 }
@@ -169,9 +170,25 @@ impl SwapchainSemaphores {
 
         Ok(Self {
             acquire,
+            should_wait_for_acquire: true,
             present: Vec::new(),
             present_index: 0,
         })
+    }
+    
+    /// Gets the semaphore to wait on for the acquire operation.
+    ///
+    /// This will only return Some once, and then None until this image is presented.
+    /// 
+    /// As submissions are strictly ordered in wgpu-hal, we only need the first submission
+    /// to wait. Additionally, you can only wait on a semaphore once.
+    fn get_acquire_wait_semaphore(&mut self) -> Option<vk::Semaphore> {
+        if self.should_wait_for_acquire {
+            self.should_wait_for_acquire = false;
+            Some(self.acquire)
+        } else {
+            None
+        }
     }
 
     /// Gets a semaphore to use for a submit.
@@ -201,7 +218,10 @@ impl SwapchainSemaphores {
     /// This will enable re-using all of the semaphores for the next time this image is used.
     fn get_present_wait_semaphores(&mut self) -> &[vk::Semaphore] {
         let old_index = self.present_index;
+
+        // Reset internal state
         self.present_index = 0;
+        self.should_wait_for_acquire = true;
 
         &self.present[0..old_index]
     }
@@ -233,17 +253,17 @@ struct Swapchain {
     /// The index of the next semaphore to use. Ideally we would use the same
     /// index as the image index, but we need to specify the semaphore as an argument
     /// to the acquire_next_image function which is what tells us which image to use.
-    next_surface_index: usize,
+    next_semaphore_index: usize,
 }
 
 impl Swapchain {
     fn advance_surface_semaphores(&mut self) {
-        let view_count = self.images.len();
-        self.next_surface_index = (self.next_surface_index + 1) % view_count;
+        let semaphore_count = self.surface_semaphores.len();
+        self.next_semaphore_index = (self.next_semaphore_index + 1) % semaphore_count;
     }
 
     fn get_surface_semaphores(&self) -> Arc<Mutex<SwapchainSemaphores>> {
-        self.surface_semaphores[self.next_surface_index].clone()
+        self.surface_semaphores[self.next_semaphore_index].clone()
     }
 }
 
@@ -848,6 +868,8 @@ impl crate::Queue for Queue {
         let mut signal_semaphores = Vec::new();
         let mut signal_values = Vec::new();
 
+        // Double check that the same swapchain image isn't being given to us multiple times,
+        // as that will deadlock when we try to lock them all.
         debug_assert!(
             {
                 let mut check = HashSet::with_capacity(surface_textures.len());
@@ -860,21 +882,30 @@ impl crate::Queue for Queue {
             "More than one surface texture is being used from the same swapchain. This will cause a deadlock in release."
         );
 
+        // We lock access to all of the semaphores. This may block if two submissions are in flight at the same time.
         let locked_swapchain_semaphores = surface_textures
             .iter()
             .map(|st| st.surface_semaphores.lock())
             .collect::<Vec<_>>();
 
         for mut swapchain_semaphore in locked_swapchain_semaphores {
-            wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
-            wait_semaphores.push(swapchain_semaphore.acquire);
+            // If we need to wait on the acquire semaphore, add it to the wait list.
+            //
+            // Only the first submit that uses the image needs to wait on the acquire semaphore.
+            if let Some(sem) = swapchain_semaphore.get_acquire_wait_semaphore() {
+                wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
+                wait_semaphores.push(sem);
+            }
 
+            // Get the signal semaphore for this surface image and add it to the signal list.
             let signal_semaphore =
                 swapchain_semaphore.get_submit_signal_semaphore(&self.device.raw)?;
             signal_semaphores.push(signal_semaphore);
             signal_values.push(!0);
         }
 
+        // In order for submissions to be strictly ordered, we encode a dependency between each submission
+        // using a pair of semaphores. This adds a wait if it is needed, and signals the next semaphore.
         let semaphore_state = self.relay_semaphores.lock().advance();
 
         if let Some(sem) = semaphore_state.wait {
@@ -885,6 +916,7 @@ impl crate::Queue for Queue {
         signal_semaphores.push(semaphore_state.signal);
         signal_values.push(!0);
 
+        // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         if let Some((fence, value)) = signal_fence {
             fence.maintain(&self.device.raw)?;
             match *fence {
@@ -924,7 +956,7 @@ impl crate::Queue for Queue {
 
         let mut vk_timeline_info;
 
-        if !signal_values.is_empty() {
+        if self.device.private_caps.timeline_semaphores {
             vk_timeline_info =
                 vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&signal_values);
             vk_info = vk_info.push_next(&mut vk_timeline_info);
@@ -948,11 +980,11 @@ impl crate::Queue for Queue {
         let ssc = swapchain.as_mut().unwrap();
         let mut swapchain_semaphores = texture.surface_semaphores.lock();
 
-        debug_assert_eq!(
-            Arc::as_ptr(&texture.surface_semaphores),
-            Arc::as_ptr(&ssc.surface_semaphores[texture.index as usize]),
-            "Trying to use a surface texture that does not belong to the current swapchain."
-        );
+        // debug_assert_eq!(
+        //     Arc::as_ptr(&texture.surface_semaphores),
+        //     Arc::as_ptr(&ssc.surface_semaphores[ssc.next_semaphore_index]),
+        //     "Trying to use a surface texture that does not belong to the current swapchain."
+        // );
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];

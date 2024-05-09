@@ -632,7 +632,7 @@ impl super::Device {
             config: config.clone(),
             view_formats: wgt_view_formats,
             surface_semaphores,
-            next_surface_index: 0,
+            next_semaphore_index: 0,
         })
     }
 
