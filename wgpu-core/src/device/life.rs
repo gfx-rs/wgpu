@@ -93,7 +93,7 @@ impl<A: HalApi> ResourceMaps<A> {
         destroyed_textures.clear();
     }
 
-    pub(crate) fn extend(&mut self, mut other: Self) {
+    pub(crate) fn extend(&mut self, other: &mut Self) {
         let ResourceMaps {
             buffers,
             staging_buffers,
@@ -596,6 +596,18 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.textures,
             |maps| &mut maps.textures,
         );
+
+        // We may have been suspected because a texture view or bind group
+        // referring to us was dropped. Remove stale weak references, so that
+        // the backlink table doesn't grow without bound.
+        for texture in self.suspected_resources.textures.values() {
+            texture.views.lock().retain(|view| view.strong_count() > 0);
+            texture
+                .bind_groups
+                .lock()
+                .retain(|bg| bg.strong_count() > 0);
+        }
+
         self
     }
 
@@ -620,6 +632,13 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut trackers.buffers,
             |maps| &mut maps.buffers,
         );
+
+        // We may have been suspected because a bind group referring to us was
+        // dropped. Remove stale weak references, so that the backlink table
+        // doesn't grow without bound.
+        for buffer in self.suspected_resources.buffers.values() {
+            buffer.bind_groups.lock().retain(|bg| bg.strong_count() > 0);
+        }
 
         self
     }

@@ -131,6 +131,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
   ```
 - Breaking change: [`wgpu_core::pipeline::ProgrammableStageDescriptor`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ProgrammableStageDescriptor.html#structfield.entry_point) is now optional. By @ErichDonGubler in [#5305](https://github.com/gfx-rs/wgpu/pull/5305).
 - `Features::downlevel{_webgl2,}_features` was made const by @MultisampledNight in [#5343](https://github.com/gfx-rs/wgpu/pull/5343)
+- Breaking change: [`wgpu_core::pipeline::ShaderError`](https://docs.rs/wgpu-core/latest/wgpu_core/pipeline/struct.ShaderError.html) has been moved to `naga`. By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 - More as_hal methods and improvements by @JMS55 in [#5452](https://github.com/gfx-rs/wgpu/pull/5452)
   - Added `wgpu::CommandEncoder::as_hal_mut`
   - Added `wgpu::TextureView::as_hal`
@@ -177,7 +178,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 
 - Improved `wgpu_hal` documentation. By @jimblandy in [#5516](https://github.com/gfx-rs/wgpu/pull/5516), [#5524](https://github.com/gfx-rs/wgpu/pull/5524), [#5562](https://github.com/gfx-rs/wgpu/pull/5562), [#5563](https://github.com/gfx-rs/wgpu/pull/5563), [#5566](https://github.com/gfx-rs/wgpu/pull/5566), [#5617](https://github.com/gfx-rs/wgpu/pull/5617), [#5618](https://github.com/gfx-rs/wgpu/pull/5618)
 - Add mention of primitive restart in the description of `PrimitiveState::strip_index_format`. By @cpsdqs in [#5350](https://github.com/gfx-rs/wgpu/pull/5350)
-- Document precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386)
+- Document and tweak precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386) and [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 - Give short example of WGSL `push_constant` syntax. By @waywardmonkeys in [#5393](https://github.com/gfx-rs/wgpu/pull/5393)
 - Fix incorrect documentation of `Limits::max_compute_workgroup_storage_size` default value. By @atlv24 in [#5601](https://github.com/gfx-rs/wgpu/pull/5601)
 
@@ -195,6 +196,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Fix deadlocks caused by recursive read-write lock acquisitions [#5426](https://github.com/gfx-rs/wgpu/pull/5426).
 - Remove exposed C symbols (`extern "C"` + [no_mangle]) from RenderPass & ComputePass recording. By @wumpf in [#5409](https://github.com/gfx-rs/wgpu/pull/5409).
 - Fix surfaces being only compatible with first backend enabled on an instance, causing failures when manually specifying an adapter. By @Wumpf in [#5535](https://github.com/gfx-rs/wgpu/pull/5535).
+- Clean up weak references to texture views and bind groups. By @xiaopengli89 [#5595](https://github.com/gfx-rs/wgpu/pull/5595).
 
 #### Naga
 

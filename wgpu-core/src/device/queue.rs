@@ -7,14 +7,14 @@ use crate::{
         ClearError, CommandAllocator, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
-    device::{life::ResourceMaps, DeviceError, WaitIdleError},
+    device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
     hal_label,
     id::{self, DeviceId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
-    lock::{rank, Mutex},
+    lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, Resource,
         ResourceInfo, ResourceType, StagingBuffer, Texture, TextureInner,
@@ -1162,8 +1162,8 @@ impl Global {
             let snatch_guard = device.snatchable_lock.read();
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
-            let mut fence = device.fence.write();
-            let fence = fence.as_mut().unwrap();
+            let mut fence_guard = device.fence.write();
+            let fence = fence_guard.as_mut().unwrap();
             let submit_index = device
                 .active_submission_index
                 .fetch_add(1, Ordering::Relaxed)
@@ -1183,11 +1183,6 @@ impl Global {
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
-                    let mut temp_suspected = device.temp_suspected.lock();
-                    {
-                        let mut suspected = temp_suspected.replace(ResourceMaps::new()).unwrap();
-                        suspected.clear();
-                    }
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
@@ -1235,41 +1230,23 @@ impl Global {
 
                             // update submission IDs
                             for buffer in cmd_buf_trackers.buffers.used_resources() {
-                                let tracker_index = buffer.info.tracker_index();
-                                let raw_buf = match buffer.raw.get(&snatch_guard) {
-                                    Some(raw) => raw,
-                                    None => {
-                                        return Err(QueueSubmitError::DestroyedBuffer(
-                                            buffer.info.id(),
-                                        ));
-                                    }
-                                };
+                                if buffer.raw.get(&snatch_guard).is_none() {
+                                    return Err(QueueSubmitError::DestroyedBuffer(
+                                        buffer.info.id(),
+                                    ));
+                                }
                                 buffer.info.use_at(submit_index);
-                                if buffer.is_unique() {
-                                    if let BufferMapState::Active { .. } = *buffer.map_state.lock()
-                                    {
-                                        log::warn!("Dropped buffer has a pending mapping.");
-                                        unsafe { device.raw().unmap_buffer(raw_buf) }
-                                            .map_err(DeviceError::from)?;
-                                    }
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .buffers
-                                        .insert(tracker_index, buffer.clone());
-                                } else {
-                                    match *buffer.map_state.lock() {
-                                        BufferMapState::Idle => (),
-                                        _ => {
-                                            return Err(QueueSubmitError::BufferStillMapped(
-                                                buffer.info.id(),
-                                            ))
-                                        }
+
+                                match *buffer.map_state.lock() {
+                                    BufferMapState::Idle => (),
+                                    _ => {
+                                        return Err(QueueSubmitError::BufferStillMapped(
+                                            buffer.info.id(),
+                                        ))
                                     }
                                 }
                             }
                             for texture in cmd_buf_trackers.textures.used_resources() {
-                                let tracker_index = texture.info.tracker_index();
                                 let should_extend = match texture.inner.get(&snatch_guard) {
                                     None => {
                                         return Err(QueueSubmitError::DestroyedTexture(
@@ -1286,13 +1263,6 @@ impl Global {
                                     }
                                 };
                                 texture.info.use_at(submit_index);
-                                if texture.is_unique() {
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .textures
-                                        .insert(tracker_index, texture.clone());
-                                }
                                 if should_extend {
                                     unsafe {
                                         used_surface_textures
@@ -1303,12 +1273,6 @@ impl Global {
                             }
                             for texture_view in cmd_buf_trackers.views.used_resources() {
                                 texture_view.info.use_at(submit_index);
-                                if texture_view.is_unique() {
-                                    temp_suspected.as_mut().unwrap().texture_views.insert(
-                                        texture_view.as_info().tracker_index(),
-                                        texture_view.clone(),
-                                    );
-                                }
                             }
                             {
                                 for bg in cmd_buf_trackers.bind_groups.used_resources() {
@@ -1322,13 +1286,6 @@ impl Global {
                                     for sampler in bg.used.samplers.used_resources() {
                                         sampler.info.use_at(submit_index);
                                     }
-                                    if bg.is_unique() {
-                                        temp_suspected
-                                            .as_mut()
-                                            .unwrap()
-                                            .bind_groups
-                                            .insert(bg.as_info().tracker_index(), bg.clone());
-                                    }
                                 }
                             }
                             // assert!(cmd_buf_trackers.samplers.is_empty());
@@ -1336,32 +1293,14 @@ impl Global {
                                 cmd_buf_trackers.compute_pipelines.used_resources()
                             {
                                 compute_pipeline.info.use_at(submit_index);
-                                if compute_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().compute_pipelines.insert(
-                                        compute_pipeline.as_info().tracker_index(),
-                                        compute_pipeline.clone(),
-                                    );
-                                }
                             }
                             for render_pipeline in
                                 cmd_buf_trackers.render_pipelines.used_resources()
                             {
                                 render_pipeline.info.use_at(submit_index);
-                                if render_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().render_pipelines.insert(
-                                        render_pipeline.as_info().tracker_index(),
-                                        render_pipeline.clone(),
-                                    );
-                                }
                             }
                             for query_set in cmd_buf_trackers.query_sets.used_resources() {
                                 query_set.info.use_at(submit_index);
-                                if query_set.is_unique() {
-                                    temp_suspected.as_mut().unwrap().query_sets.insert(
-                                        query_set.as_info().tracker_index(),
-                                        query_set.clone(),
-                                    );
-                                }
                             }
                             for bundle in cmd_buf_trackers.bundles.used_resources() {
                                 bundle.info.use_at(submit_index);
@@ -1375,13 +1314,6 @@ impl Global {
                                 }
                                 for query_set in bundle.used.query_sets.read().used_resources() {
                                     query_set.info.use_at(submit_index);
-                                }
-                                if bundle.is_unique() {
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .render_bundles
-                                        .insert(bundle.as_info().tracker_index(), bundle.clone());
                                 }
                             }
                         }
@@ -1459,8 +1391,8 @@ impl Global {
                 }
             }
 
-            let mut pending_writes = device.pending_writes.lock();
-            let pending_writes = pending_writes.as_mut().unwrap();
+            let mut pending_writes_guard = device.pending_writes.lock();
+            let pending_writes = pending_writes_guard.as_mut().unwrap();
 
             {
                 used_surface_textures.set_size(hub.textures.read().len());
@@ -1550,18 +1482,22 @@ impl Global {
                 active_executions,
             );
 
-            // This will schedule destruction of all resources that are no longer needed
-            // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll, snatch_guard) {
-                Ok(closures) => closures,
-                Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
-                Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
-                Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
-            };
-
             // pending_write_resources has been drained, so it's empty, but we
             // want to retain its heap allocation.
             pending_writes.temp_resources = pending_write_resources;
+            drop(pending_writes_guard);
+
+            // This will schedule destruction of all resources that are no longer needed
+            // by the user but used in the command stream, among other things.
+            let fence_guard = RwLockWriteGuard::downgrade(fence_guard);
+            let (closures, _) =
+                match device.maintain(fence_guard, wgt::Maintain::Poll, snatch_guard) {
+                    Ok(closures) => closures,
+                    Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
+                    Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
+                    Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
+                };
+
             device.lock_life().post_submit();
 
             (submit_index, closures)

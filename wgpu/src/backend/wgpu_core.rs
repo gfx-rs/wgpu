@@ -1,7 +1,8 @@
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
+    CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
@@ -26,6 +27,7 @@ use wgc::{
     command::{bundle_ffi::*, compute_commands::*, render_commands::*},
     device::DeviceLostClosure,
     id::{CommandEncoderId, TextureViewId},
+    pipeline::CreateShaderModuleError,
 };
 use wgt::WasmNotSendSync;
 
@@ -442,6 +444,11 @@ pub struct Buffer {
 }
 
 #[derive(Debug)]
+pub struct ShaderModule {
+    compilation_info: CompilationInfo,
+}
+
+#[derive(Debug)]
 pub struct Texture {
     id: wgc::id::TextureId,
     error_sink: ErrorSink,
@@ -483,7 +490,7 @@ impl crate::Context for ContextWgpuCore {
     type QueueId = wgc::id::QueueId;
     type QueueData = Queue;
     type ShaderModuleId = wgc::id::ShaderModuleId;
-    type ShaderModuleData = ();
+    type ShaderModuleData = ShaderModule;
     type BindGroupLayoutId = wgc::id::BindGroupLayoutId;
     type BindGroupLayoutData = ();
     type BindGroupId = wgc::id::BindGroupId;
@@ -539,6 +546,7 @@ impl crate::Context for ContextWgpuCore {
     >;
 
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
+    type CompilationInfoFuture = Ready<CompilationInfo>;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::global::Global::new("wgpu", instance_desc))
@@ -891,16 +899,21 @@ impl crate::Context for ContextWgpuCore {
         let (id, error) = wgc::gfx_select!(
             device => self.0.device_create_shader_module(*device, &descriptor, source, None)
         );
-        if let Some(cause) = error {
-            self.handle_error(
-                &device_data.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Device::create_shader_module",
-            );
-        }
-        (id, ())
+        let compilation_info = match error {
+            Some(cause) => {
+                self.handle_error(
+                    &device_data.error_sink,
+                    cause.clone(),
+                    LABEL,
+                    desc.label,
+                    "Device::create_shader_module",
+                );
+                CompilationInfo::from(cause)
+            }
+            None => CompilationInfo { messages: vec![] },
+        };
+
+        (id, ShaderModule { compilation_info })
     }
 
     unsafe fn device_create_shader_module_spirv(
@@ -918,16 +931,20 @@ impl crate::Context for ContextWgpuCore {
         let (id, error) = wgc::gfx_select!(
             device => self.0.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), None)
         );
-        if let Some(cause) = error {
-            self.handle_error(
-                &device_data.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Device::create_shader_module_spirv",
-            );
-        }
-        (id, ())
+        let compilation_info = match error {
+            Some(cause) => {
+                self.handle_error(
+                    &device_data.error_sink,
+                    cause.clone(),
+                    LABEL,
+                    desc.label,
+                    "Device::create_shader_module_spirv",
+                );
+                CompilationInfo::from(cause)
+            }
+            None => CompilationInfo { messages: vec![] },
+        };
+        (id, ShaderModule { compilation_info })
     }
 
     fn device_create_bind_group_layout(
@@ -1544,6 +1561,14 @@ impl crate::Context for ContextWgpuCore {
                 self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::buffer_unmap")
             }
         }
+    }
+
+    fn shader_get_compilation_info(
+        &self,
+        _shader: &Self::ShaderModuleId,
+        shader_data: &Self::ShaderModuleData,
+    ) -> Self::CompilationInfoFuture {
+        ready(shader_data.compilation_info.clone())
     }
 
     fn texture_create_view(
@@ -2994,6 +3019,35 @@ impl fmt::Debug for ErrorSinkRaw {
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
     panic!("wgpu error: {err}\n");
+}
+
+impl From<CreateShaderModuleError> for CompilationInfo {
+    fn from(value: CreateShaderModuleError) -> Self {
+        match value {
+            #[cfg(feature = "wgsl")]
+            CreateShaderModuleError::Parsing(v) => v.into(),
+            #[cfg(feature = "glsl")]
+            CreateShaderModuleError::ParsingGlsl(v) => v.into(),
+            #[cfg(feature = "spirv")]
+            CreateShaderModuleError::ParsingSpirV(v) => v.into(),
+            CreateShaderModuleError::Validation(v) => v.into(),
+            // Device errors are reported through the error sink, and are not compilation errors.
+            // Same goes for native shader module generation errors.
+            CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
+                CompilationInfo {
+                    messages: Vec::new(),
+                }
+            }
+            // Everything else is an error message without location information.
+            _ => CompilationInfo {
+                messages: vec![CompilationMessage {
+                    message: value.to_string(),
+                    message_type: CompilationMessageType::Error,
+                    location: None,
+                }],
+            },
+        }
+    }
 }
 
 #[derive(Debug)]

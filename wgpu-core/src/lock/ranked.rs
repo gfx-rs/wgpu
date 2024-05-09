@@ -81,7 +81,7 @@ pub struct Mutex<T> {
 /// [mod]: crate::lock::ranked
 pub struct MutexGuard<'a, T> {
     inner: parking_lot::MutexGuard<'a, T>,
-    saved: LockState,
+    saved: LockStateGuard,
 }
 
 thread_local! {
@@ -105,6 +105,26 @@ impl LockState {
         last_acquired: None,
         depth: 0,
     };
+}
+
+/// A container that restores a [`LockState`] when dropped.
+///
+/// This type serves two purposes:
+///
+/// - Operations like `RwLockWriteGuard::downgrade` would like to be able to
+///   destructure lock guards and reassemble their pieces into new guards, but
+///   if the guard type itself implements `Drop`, we can't destructure it
+///   without unsafe code or pointless `Option`s whose state is almost always
+///   statically known.
+///
+/// - We can just implement `Drop` for this type once, and then use it in lock
+///   guards, rather than implementing `Drop` separately for each guard type.
+struct LockStateGuard(LockState);
+
+impl Drop for LockStateGuard {
+    fn drop(&mut self) {
+        release(self.0)
+    }
 }
 
 /// Check and record the acquisition of a lock with `new_rank`.
@@ -170,14 +190,8 @@ impl<T> Mutex<T> {
         let saved = acquire(self.rank, Location::caller());
         MutexGuard {
             inner: self.inner.lock(),
-            saved,
+            saved: LockStateGuard(saved),
         }
-    }
-}
-
-impl<'a, T> Drop for MutexGuard<'a, T> {
-    fn drop(&mut self) {
-        release(self.saved);
     }
 }
 
@@ -224,7 +238,7 @@ pub struct RwLock<T> {
 /// [mod]: crate::lock::ranked
 pub struct RwLockReadGuard<'a, T> {
     inner: parking_lot::RwLockReadGuard<'a, T>,
-    saved: LockState,
+    saved: LockStateGuard,
 }
 
 /// A write guard produced by locking [`RwLock`] for writing.
@@ -237,7 +251,7 @@ pub struct RwLockReadGuard<'a, T> {
 /// [mod]: crate::lock::ranked
 pub struct RwLockWriteGuard<'a, T> {
     inner: parking_lot::RwLockWriteGuard<'a, T>,
-    saved: LockState,
+    saved: LockStateGuard,
 }
 
 impl<T> RwLock<T> {
@@ -253,7 +267,7 @@ impl<T> RwLock<T> {
         let saved = acquire(self.rank, Location::caller());
         RwLockReadGuard {
             inner: self.inner.read(),
-            saved,
+            saved: LockStateGuard(saved),
         }
     }
 
@@ -262,7 +276,16 @@ impl<T> RwLock<T> {
         let saved = acquire(self.rank, Location::caller());
         RwLockWriteGuard {
             inner: self.inner.write(),
-            saved,
+            saved: LockStateGuard(saved),
+        }
+    }
+}
+
+impl<'a, T> RwLockWriteGuard<'a, T> {
+    pub fn downgrade(this: Self) -> RwLockReadGuard<'a, T> {
+        RwLockReadGuard {
+            inner: parking_lot::RwLockWriteGuard::downgrade(this.inner),
+            saved: this.saved,
         }
     }
 }
@@ -270,18 +293,6 @@ impl<T> RwLock<T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for RwLock<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
-    }
-}
-
-impl<'a, T> Drop for RwLockReadGuard<'a, T> {
-    fn drop(&mut self) {
-        release(self.saved);
-    }
-}
-
-impl<'a, T> Drop for RwLockWriteGuard<'a, T> {
-    fn drop(&mut self) {
-        release(self.saved);
     }
 }
 

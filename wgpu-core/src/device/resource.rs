@@ -20,7 +20,7 @@ use crate::{
     },
     instance::Adapter,
     lock::{rank, Mutex, MutexGuard, RwLock},
-    pipeline,
+    pipeline::{self},
     pool::ResourcePool,
     registry::Registry,
     resource::{
@@ -127,9 +127,6 @@ pub struct Device<A: HalApi> {
     pub(crate) tracker_indices: TrackerIndexAllocators,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<LifetimeTracker<A>>,
-    /// Temporary storage for resource management functions. Cleared at the end
-    /// of every call (unless an error occurs).
-    pub(crate) temp_suspected: Mutex<Option<ResourceMaps<A>>>,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout<A>>,
     pub(crate) alignments: hal::Alignments,
@@ -142,6 +139,10 @@ pub struct Device<A: HalApi> {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool<A>,
+
+    /// Temporary storage, cleared at the start of every call,
+    /// retained only to save allocations.
+    temp_suspected: Mutex<Option<ResourceMaps<A>>>,
 }
 
 pub(crate) enum DeferredDestroy<A: HalApi> {
@@ -397,11 +398,12 @@ impl<A: HalApi> Device<A> {
     ///   return it to our callers.)
     pub(crate) fn maintain<'this>(
         &'this self,
-        fence: &A::Fence,
+        fence_guard: crate::lock::RwLockReadGuard<Option<A::Fence>>,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
+        let fence = fence_guard.as_ref().unwrap();
         let last_done_index = if maintain.is_wait() {
             let index_to_wait_for = match maintain {
                 wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
@@ -433,23 +435,9 @@ impl<A: HalApi> Device<A> {
         let submission_closures =
             life_tracker.triage_submissions(last_done_index, &self.command_allocator);
 
-        {
-            // Normally, `temp_suspected` exists only to save heap
-            // allocations: it's cleared at the start of the function
-            // call, and cleared by the end. But `Global::queue_submit` is
-            // fallible; if it exits early, it may leave some resources in
-            // `temp_suspected`.
-            let temp_suspected = self
-                .temp_suspected
-                .lock()
-                .replace(ResourceMaps::new())
-                .unwrap();
+        life_tracker.triage_suspected(&self.trackers);
 
-            life_tracker.suspected_resources.extend(temp_suspected);
-
-            life_tracker.triage_suspected(&self.trackers);
-            life_tracker.triage_mapped();
-        }
+        life_tracker.triage_mapped();
 
         let mapping_closures =
             life_tracker.handle_mapping(self.raw(), &self.trackers, &snatch_guard);
@@ -481,6 +469,7 @@ impl<A: HalApi> Device<A> {
 
         // Don't hold the locks while calling release_gpu_resources.
         drop(life_tracker);
+        drop(fence_guard);
         drop(snatch_guard);
 
         if should_release_gpu_resource {
@@ -496,12 +485,14 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
+        // If we have a previously allocated `ResourceMap`, just use that.
         let mut temp_suspected = self
             .temp_suspected
             .lock()
-            .replace(ResourceMaps::new())
-            .unwrap();
+            .take()
+            .unwrap_or_else(|| ResourceMaps::new());
         temp_suspected.clear();
+
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
         {
@@ -562,7 +553,11 @@ impl<A: HalApi> Device<A> {
                 }
             }
         }
-        self.lock_life().suspected_resources.extend(temp_suspected);
+        self.lock_life()
+            .suspected_resources
+            .extend(&mut temp_suspected);
+        // Save this resource map for later reuse.
+        *self.temp_suspected.lock() = Some(temp_suspected);
     }
 
     pub(crate) fn create_buffer(
@@ -1430,7 +1425,7 @@ impl<A: HalApi> Device<A> {
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::front::wgsl::parse_str");
                 let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
-                    pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
+                    pipeline::CreateShaderModuleError::Parsing(naga::error::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
@@ -1443,7 +1438,7 @@ impl<A: HalApi> Device<A> {
                 let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
                 profiling::scope!("naga::front::spv::Frontend");
                 let module = parser.parse().map_err(|inner| {
-                    pipeline::CreateShaderModuleError::ParsingSpirV(pipeline::ShaderError {
+                    pipeline::CreateShaderModuleError::ParsingSpirV(naga::error::ShaderError {
                         source: String::new(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
@@ -1456,7 +1451,7 @@ impl<A: HalApi> Device<A> {
                 let mut parser = naga::front::glsl::Frontend::default();
                 profiling::scope!("naga::front::glsl::Frontend.parse");
                 let module = parser.parse(&options, &code).map_err(|inner| {
-                    pipeline::CreateShaderModuleError::ParsingGlsl(pipeline::ShaderError {
+                    pipeline::CreateShaderModuleError::ParsingGlsl(naga::error::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
                         inner: Box::new(inner),
@@ -1499,7 +1494,7 @@ impl<A: HalApi> Device<A> {
             .create_validator(naga::valid::ValidationFlags::all())
             .validate(&module)
             .map_err(|inner| {
-                pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {
+                pipeline::CreateShaderModuleError::Validation(naga::error::ShaderError {
                     source,
                     label: desc.label.as_ref().map(|l| l.to_string()),
                     inner: Box::new(inner),

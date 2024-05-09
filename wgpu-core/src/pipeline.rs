@@ -10,7 +10,8 @@ use crate::{
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32, sync::Arc};
+use naga::error::ShaderError;
+use std::{borrow::Cow, marker::PhantomData, num::NonZeroU32, sync::Arc};
 use thiserror::Error;
 
 /// Information about buffer bindings, which
@@ -107,79 +108,8 @@ impl<A: HalApi> ShaderModule<A> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ShaderError<E> {
-    pub source: String,
-    pub label: Option<String>,
-    pub inner: Box<E>,
-}
-#[cfg(feature = "wgsl")]
-impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = self.label.as_deref().unwrap_or_default();
-        let string = self.inner.emit_to_string(&self.source);
-        write!(f, "\nShader '{label}' parsing {string}")
-    }
-}
-#[cfg(feature = "glsl")]
-impl fmt::Display for ShaderError<naga::front::glsl::ParseError> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = self.label.as_deref().unwrap_or_default();
-        let string = self.inner.emit_to_string(&self.source);
-        write!(f, "\nShader '{label}' parsing {string}")
-    }
-}
-#[cfg(feature = "spirv")]
-impl fmt::Display for ShaderError<naga::front::spv::Error> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = self.label.as_deref().unwrap_or_default();
-        let string = self.inner.emit_to_string(&self.source);
-        write!(f, "\nShader '{label}' parsing {string}")
-    }
-}
-impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use codespan_reporting::{
-            diagnostic::{Diagnostic, Label},
-            files::SimpleFile,
-            term,
-        };
-
-        let label = self.label.as_deref().unwrap_or_default();
-        let files = SimpleFile::new(label, &self.source);
-        let config = term::Config::default();
-        let mut writer = term::termcolor::NoColor::new(Vec::new());
-
-        let diagnostic = Diagnostic::error().with_labels(
-            self.inner
-                .spans()
-                .map(|&(span, ref desc)| {
-                    Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
-                })
-                .collect(),
-        );
-
-        term::emit(&mut writer, &config, &files, &diagnostic).expect("cannot write error");
-
-        write!(
-            f,
-            "\nShader validation {}",
-            String::from_utf8_lossy(&writer.into_inner())
-        )
-    }
-}
-impl<E> Error for ShaderError<E>
-where
-    ShaderError<E>: fmt::Display,
-    E: Error + 'static,
-{
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.inner)
-    }
-}
-
 //Note: `Clone` would require `WithSpan: Clone`.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateShaderModuleError {
     #[cfg(feature = "wgsl")]
@@ -187,7 +117,7 @@ pub enum CreateShaderModuleError {
     Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
     #[cfg(feature = "glsl")]
     #[error(transparent)]
-    ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseError>),
+    ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseErrors>),
     #[cfg(feature = "spirv")]
     #[error(transparent)]
     ParsingSpirV(#[from] ShaderError<naga::front::spv::Error>),
@@ -207,17 +137,6 @@ pub enum CreateShaderModuleError {
         group: u32,
         limit: u32,
     },
-}
-
-impl CreateShaderModuleError {
-    pub fn location(&self, source: &str) -> Option<naga::SourceLocation> {
-        match *self {
-            #[cfg(feature = "wgsl")]
-            CreateShaderModuleError::Parsing(ref err) => err.inner.location(source),
-            CreateShaderModuleError::Validation(ref err) => err.inner.location(source),
-            _ => None,
-        }
-    }
 }
 
 /// Describes a programmable pipeline stage.

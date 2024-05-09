@@ -5,7 +5,7 @@ use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use termcolor::{NoColor, WriteColor};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
     #[error("invalid header")]
     InvalidHeader,

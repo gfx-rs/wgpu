@@ -2033,7 +2033,6 @@ impl Global {
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
-                let fence = fence.as_ref().unwrap();
                 match device.maintain(fence, wgt::Maintain::Wait, snatch_guard) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
@@ -2146,7 +2145,6 @@ impl Global {
     ) -> Result<DevicePoll, WaitIdleError> {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
-        let fence = fence.as_ref().unwrap();
         let (closures, queue_empty) = device.maintain(fence, maintain, snatch_guard)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
