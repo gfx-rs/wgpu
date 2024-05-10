@@ -1001,7 +1001,7 @@ impl crate::Surface for super::Surface {
 
         // Wait for the previously acquired image used by the semaphore to be available.
         swapchain.device.wait_for_fence(
-            &fence,
+            fence,
             locked_swapchain_semaphores.previously_used_submission_index,
             timeout_ns,
         )?;
