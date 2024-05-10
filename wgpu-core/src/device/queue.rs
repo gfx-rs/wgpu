@@ -1499,7 +1499,7 @@ impl Global {
                     .raw
                     .as_ref()
                     .unwrap()
-                    .submit(&refs, &submit_surface_textures, Some((fence, submit_index)))
+                    .submit(&refs, &submit_surface_textures, (fence, submit_index))
                     .map_err(DeviceError::from)?;
             }
 

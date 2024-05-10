@@ -161,6 +161,7 @@ struct SwapchainSemaphores {
     should_wait_for_acquire: bool,
     present: Vec<vk::Semaphore>,
     present_index: usize,
+    previously_used_submission_index: crate::FenceValue,
 }
 
 impl SwapchainSemaphores {
@@ -173,13 +174,18 @@ impl SwapchainSemaphores {
             should_wait_for_acquire: true,
             present: Vec::new(),
             present_index: 0,
+            previously_used_submission_index: 0,
         })
     }
-    
+
+    fn set_used_fence_value(&mut self, value: crate::FenceValue) {
+        self.previously_used_submission_index = value;
+    }
+
     /// Gets the semaphore to wait on for the acquire operation.
     ///
     /// This will only return Some once, and then None until this image is presented.
-    /// 
+    ///
     /// As submissions are strictly ordered in wgpu-hal, we only need the first submission
     /// to wait. Additionally, you can only wait on a semaphore once.
     fn get_acquire_wait_semaphore(&mut self) -> Option<vk::Semaphore> {
@@ -859,7 +865,7 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         surface_textures: &[&SurfaceTexture],
-        signal_fence: Option<(&mut Fence, crate::FenceValue)>,
+        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
 
@@ -889,6 +895,8 @@ impl crate::Queue for Queue {
             .collect::<Vec<_>>();
 
         for mut swapchain_semaphore in locked_swapchain_semaphores {
+            swapchain_semaphore.set_used_fence_value(signal_value);
+
             // If we need to wait on the acquire semaphore, add it to the wait list.
             //
             // Only the first submit that uses the image needs to wait on the acquire semaphore.
@@ -917,28 +925,26 @@ impl crate::Queue for Queue {
         signal_values.push(!0);
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
-        if let Some((fence, value)) = signal_fence {
-            fence.maintain(&self.device.raw)?;
-            match *fence {
-                Fence::TimelineSemaphore(raw) => {
-                    signal_semaphores.push(raw);
-                    signal_values.push(value);
-                }
-                Fence::FencePool {
-                    ref mut active,
-                    ref mut free,
-                    ..
-                } => {
-                    fence_raw = match free.pop() {
-                        Some(raw) => raw,
-                        None => unsafe {
-                            self.device
-                                .raw
-                                .create_fence(&vk::FenceCreateInfo::default(), None)?
-                        },
-                    };
-                    active.push((value, fence_raw));
-                }
+        signal_fence.maintain(&self.device.raw)?;
+        match *signal_fence {
+            Fence::TimelineSemaphore(raw) => {
+                signal_semaphores.push(raw);
+                signal_values.push(signal_value);
+            }
+            Fence::FencePool {
+                ref mut active,
+                ref mut free,
+                ..
+            } => {
+                fence_raw = match free.pop() {
+                    Some(raw) => raw,
+                    None => unsafe {
+                        self.device
+                            .raw
+                            .create_fence(&vk::FenceCreateInfo::default(), None)?
+                    },
+                };
+                active.push((signal_value, fence_raw));
             }
         }
 

@@ -75,6 +75,7 @@ impl crate::Surface for Context {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        fence: &Resource,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
@@ -114,7 +115,7 @@ impl crate::Queue for Context {
         &self,
         command_buffers: &[&Resource],
         surface_textures: &[&Resource],
-        signal_fence: Option<(&mut Resource, crate::FenceValue)>,
+        signal_fence: (&mut Resource, crate::FenceValue),
     ) -> DeviceResult<()> {
         Ok(())
     }

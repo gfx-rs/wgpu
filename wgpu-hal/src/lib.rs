@@ -493,9 +493,15 @@ pub trait Surface: WasmNotSendSync {
     /// the timeout will be ignored.
     ///
     /// Returns `None` on timing out.
+    ///
+    /// # Safety
+    ///
+    /// - The fence must be the same fence passed to all [`Queue::submit`]s
+    ///   that used textures acquired from this surface.
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        fence: &<Self::A as Api>::Fence,
     ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
     unsafe fn discard_texture(&self, texture: <Self::A as Api>::SurfaceTexture);
 }
@@ -762,7 +768,7 @@ pub trait Queue: WasmNotSendSync {
 
     /// Submit `command_buffers` for execution on GPU.
     ///
-    /// If `signal_fence` is `Some(fence, value)`, update `fence` to `value`
+    /// If `signal_fence` is `(fence, value)`, update `fence` to `value`
     /// when the operation is complete. See [`Fence`] for details.
     ///
     /// If two calls to `submit` on a single `Queue` occur in a particular order
@@ -822,7 +828,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
-        signal_fence: Option<(&mut <Self::A as Api>::Fence, FenceValue)>,
+        signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
     unsafe fn present(
         &self,

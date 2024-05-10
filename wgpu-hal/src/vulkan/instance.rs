@@ -970,6 +970,7 @@ impl crate::Surface for super::Surface {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let mut swapchain = self.swapchain.write();
         let swapchain = swapchain.as_mut().unwrap();
@@ -998,8 +999,16 @@ impl crate::Surface for super::Surface {
             .try_lock()
             .expect("Failed to lock a SwapchainSemaphores.");
 
+        // Wait for the previously acquired image used by the semaphore to be available.
+        swapchain.device.wait_for_fence(
+            &fence,
+            locked_swapchain_semaphores.previously_used_submission_index,
+            timeout_ns,
+        )?;
+
         // will block if no image is available
         let (index, suboptimal) = match unsafe {
+            profiling::scope!("vkAcquireNextImageKHR");
             swapchain.functor.acquire_next_image(
                 swapchain.raw,
                 timeout_ns,
