@@ -45,7 +45,8 @@ workspace = true
 features = ["dx12"]
 
 [target.'cfg(windows)'.dependencies.wgpu-hal]
-workspace = true
+version = "0.20.0"
+path = "../wgpu-hal"
 features = ["windows_rs"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
