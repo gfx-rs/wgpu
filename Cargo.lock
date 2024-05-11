@@ -1079,7 +1079,7 @@ dependencies = [
 
 [[package]]
 name = "deno_webgpu"
-version = "0.110.0"
+version = "0.118.0"
 dependencies = [
  "deno_core",
  "raw-window-handle 0.6.1",

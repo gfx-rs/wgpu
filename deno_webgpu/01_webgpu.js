@@ -121,9 +121,10 @@ const {
 
 import * as webidl from "ext:deno_webidl/00_webidl.js";
 import {
+  defineEventHandler,
   Event,
   EventTarget,
-  defineEventHandler,
+  setEventTargetData,
 } from "ext:deno_web/02_event.js";
 import { DOMException } from "ext:deno_web/01_dom_exception.js";
 import { createFilteredInspectProxy } from "ext:deno_console/01_console.js";
@@ -299,7 +300,6 @@ class GPUValidationError extends GPUError {
     this[_message] = message;
   }
 }
-const GPUValidationErrorPrototype = GPUValidationError.prototype;
 
 class GPUOutOfMemoryError extends GPUError {
   name = "GPUOutOfMemoryError";
@@ -312,7 +312,6 @@ class GPUOutOfMemoryError extends GPUError {
     this[_message] = message;
   }
 }
-const GPUOutOfMemoryErrorPrototype = GPUOutOfMemoryError.prototype;
 
 class GPUInternalError extends GPUError {
   name = "GPUInternalError";
@@ -321,7 +320,6 @@ class GPUInternalError extends GPUError {
     this[webidl.brand] = webidl.brand;
   }
 }
-const GPUInternalErrorPrototype = GPUInternalError.prototype;
 
 class GPUUncapturedErrorEvent extends Event {
   #error;
@@ -333,7 +331,7 @@ class GPUUncapturedErrorEvent extends Event {
     const prefix = "Failed to construct 'GPUUncapturedErrorEvent'";
     webidl.requiredArguments(arguments.length, 2, prefix);
     gpuUncapturedErrorEventInitDict = webidl.converters
-      .gpuUncapturedErrorEventInitDict(
+      .GPUUncapturedErrorEventInit(
         gpuUncapturedErrorEventInitDict,
         prefix,
         "Argument 2",
@@ -348,7 +346,6 @@ class GPUUncapturedErrorEvent extends Event {
   }
 }
 const GPUUncapturedErrorEventPrototype = GPUUncapturedErrorEvent.prototype;
-defineEventHandler(GPUUncapturedErrorEvent.prototype, "uncapturederror");
 
 class GPU {
   [webidl.brand] = webidl.brand;
@@ -420,9 +417,12 @@ function createGPUAdapter(inner) {
   return adapter;
 }
 
+const _invalid = Symbol("[[invalid]]");
 class GPUAdapter {
   /** @type {InnerGPUAdapter} */
   [_adapter];
+  /** @type {bool} */
+  [_invalid];
 
   /** @returns {GPUSupportedFeatures} */
   get features() {
@@ -469,6 +469,12 @@ class GPUAdapter {
       }
     }
 
+    if (this[_invalid]) {
+      throw new TypeError(
+        "The adapter cannot be reused, as it has been invalidated by a device creation",
+      );
+    }
+
     const { rid, queueRid, features, limits } = op_webgpu_request_device(
       this[_adapter].rid,
       descriptor.label,
@@ -476,16 +482,20 @@ class GPUAdapter {
       descriptor.requiredLimits,
     );
 
+    this[_invalid] = true;
+
     const inner = new InnerGPUDevice({
       rid,
       adapter: this,
       features: createGPUSupportedFeatures(features),
       limits: createGPUSupportedLimits(limits),
     });
+    const queue = createGPUQueue(descriptor.label, inner, queueRid);
+    inner.trackResource(queue);
     const device = createGPUDevice(
       descriptor.label,
       inner,
-      createGPUQueue(descriptor.label, inner, queueRid),
+      queue,
     );
     inner.device = device;
     return device;
@@ -496,6 +506,12 @@ class GPUAdapter {
    */
   requestAdapterInfo() {
     webidl.assertBranded(this, GPUAdapterPrototype);
+
+    if (this[_invalid]) {
+      throw new TypeError(
+        "The adapter cannot be reused, as it has been invalidated by a device creation",
+      );
+    }
 
     const {
       vendor,
@@ -977,7 +993,9 @@ class InnerGPUDevice {
         );
         return;
       case "validation":
-        constructedError = new GPUValidationError(error.value ?? "validation error");
+        constructedError = new GPUValidationError(
+          error.value ?? "validation error",
+        );
         break;
       case "out-of-memory":
         constructedError = new GPUOutOfMemoryError();
@@ -996,11 +1014,13 @@ class InnerGPUDevice {
       ({ filter }) => filter === error.type,
     );
     if (scope) {
-      scope.errors.push(constructedError);
+      ArrayPrototypePush(scope.errors, constructedError);
     } else {
-      this.device.dispatchEvent(new GPUUncapturedErrorEvent("uncapturederror", {
-        error: constructedError,
-      }));
+      this.device.dispatchEvent(
+        new GPUUncapturedErrorEvent("uncapturederror", {
+          error: constructedError,
+        }),
+      );
     }
   }
 }
@@ -1017,6 +1037,7 @@ function createGPUDevice(label, inner, queue) {
   device[_label] = label;
   device[_device] = inner;
   device[_queue] = queue;
+  setEventTargetData(device);
   return device;
 }
 
@@ -1132,10 +1153,11 @@ class GPUDevice extends EventTarget {
       "Argument 1",
     );
     const device = assertDevice(this, prefix, "this");
+    // assign normalized size to descriptor due to createGPUTexture needs it
+    descriptor.size = normalizeGPUExtent3D(descriptor.size);
     const { rid, err } = op_webgpu_create_texture({
       deviceRid: device.rid,
       ...descriptor,
-      size: normalizeGPUExtent3D(descriptor.size),
     });
     device.pushError(err);
 
@@ -1307,7 +1329,6 @@ class GPUDevice extends EventTarget {
       } else {
         // deno-lint-ignore prefer-primordials
         const rid = assertResource(resource.buffer, prefix, context);
-        // deno-lint-ignore prefer-primordials
         return {
           binding: entry.binding,
           kind: "GPUBufferBinding",
@@ -1816,6 +1837,7 @@ class GPUDevice extends EventTarget {
 }
 GPUObjectBaseMixin("GPUDevice", GPUDevice);
 const GPUDevicePrototype = GPUDevice.prototype;
+defineEventHandler(GPUDevice.prototype, "uncapturederror");
 
 class GPUPipelineError extends DOMException {
   #reason;
@@ -1860,6 +1882,15 @@ class GPUQueue {
   [_device];
   /** @type {number} */
   [_rid];
+
+  [_cleanup]() {
+    const rid = this[_rid];
+    if (rid !== undefined) {
+      core.close(rid);
+      /** @type {number | undefined} */
+      this[_rid] = undefined;
+    }
+  }
 
   constructor() {
     webidl.illegalConstructor();
@@ -5488,6 +5519,16 @@ webidl.converters["GPUExtent3D"] = (V, opts) => {
   if (typeof V === "object") {
     const method = V[SymbolIterator];
     if (method !== undefined) {
+      // validate length of GPUExtent3D
+      const min = 1;
+      const max = 3;
+      if (V.length < min || V.length > max) {
+        throw webidl.makeException(
+          TypeError,
+          `A sequence of number used as a GPUExtent3D must have between ${min} and ${max} elements.`,
+          opts,
+        );
+      }
       return webidl.converters["sequence<GPUIntegerCoordinate>"](V, opts);
     }
     return webidl.converters["GPUExtent3DDict"](V, opts);
@@ -6823,6 +6864,15 @@ webidl.converters["GPUOrigin3D"] = (V, opts) => {
   if (typeof V === "object") {
     const method = V[SymbolIterator];
     if (method !== undefined) {
+      // validate length of GPUOrigin3D
+      const length = 3;
+      if (V.length > length) {
+        throw webidl.makeException(
+          TypeError,
+          `A sequence of number used as a GPUOrigin3D must have at most ${length} elements.`,
+          opts,
+        );
+      }
       return webidl.converters["sequence<GPUIntegerCoordinate>"](V, opts);
     }
     return webidl.converters["GPUOrigin3DDict"](V, opts);
@@ -6891,6 +6941,15 @@ webidl.converters["GPUOrigin2D"] = (V, opts) => {
   if (typeof V === "object") {
     const method = V[SymbolIterator];
     if (method !== undefined) {
+      // validate length of GPUOrigin2D
+      const length = 2;
+      if (V.length > length) {
+        throw webidl.makeException(
+          TypeError,
+          `A sequence of number used as a GPUOrigin2D must have at most ${length} elements.`,
+          opts,
+        );
+      }
       return webidl.converters["sequence<GPUIntegerCoordinate>"](V, opts);
     }
     return webidl.converters["GPUOrigin2DDict"](V, opts);
@@ -6976,6 +7035,15 @@ webidl.converters["GPUColor"] = (V, opts) => {
   if (typeof V === "object") {
     const method = V[SymbolIterator];
     if (method !== undefined) {
+      // validate length of GPUColor
+      const length = 4;
+      if (V.length !== length) {
+        throw webidl.makeException(
+          TypeError,
+          `A sequence of number used as a GPUColor must have exactly ${length} elements.`,
+          opts,
+        );
+      }
       return webidl.converters["sequence<double>"](V, opts);
     }
     return webidl.converters["GPUColorDict"](V, opts);
