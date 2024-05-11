@@ -76,6 +76,10 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 -  Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
 
+#### WebGPU
+
+- Added support for pipeline-overridable constants to the WebGPU backend by @DouglasDwyer in [#5688](https://github.com/gfx-rs/wgpu/pull/5688)
+
 ## v0.20.0 (2024-04-28)
 
 ### Major Changes
