@@ -51,7 +51,6 @@ codespan-reporting = { version = "0.11.0" }
 rustc-hash = "1.1.0"
 indexmap = { version = "2", features = ["std"] }
 log = "0.4"
-num-traits = "0.2"
 spirv = { version = "0.3", optional = true }
 thiserror = "1.0.59"
 serde = { version = "1.0.200", features = ["derive"], optional = true }
