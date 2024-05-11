@@ -471,14 +471,6 @@ impl<A: HalApi> Resource for CommandBuffer<A> {
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
-
-    fn label(&self) -> String {
-        let str = match self.data.lock().as_ref().unwrap().encoder.label.as_ref() {
-            Some(label) => label.clone(),
-            _ => String::new(),
-        };
-        str
-    }
 }
 
 #[derive(Copy, Clone, Debug)]
