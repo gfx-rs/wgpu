@@ -84,7 +84,8 @@ impl<T: Resource> Drop for ResourceInfo<T> {
 }
 
 impl<T: Resource> ResourceInfo<T> {
-    #[allow(unused_variables)]
+    // Note: Abstractly, this function should take `label: String` to minimize string cloning.
+    // But as actually used, every input is a literal or borrowed `&str`, so this is convenient.
     pub(crate) fn new(
         label: &str,
         tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,

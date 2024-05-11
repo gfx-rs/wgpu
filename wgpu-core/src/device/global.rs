@@ -1363,9 +1363,7 @@ impl Global {
                 &device,
                 #[cfg(feature = "trace")]
                 device.trace.lock().is_some(),
-                desc.label
-                    .to_hal(device.instance_flags)
-                    .map(|s| s.to_string()),
+                desc.label.to_hal(device.instance_flags).map(str::to_owned),
             );
 
             let (id, _) = fid.assign(Arc::new(command_buffer));
