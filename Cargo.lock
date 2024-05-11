@@ -2153,7 +2153,6 @@ dependencies = [
  "hlsl-snapshots",
  "indexmap",
  "log",
- "num-traits",
  "petgraph",
  "pp-rs",
  "ron",
