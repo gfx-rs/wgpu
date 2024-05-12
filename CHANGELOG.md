@@ -70,6 +70,12 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 #### Naga
 
+### Changes
+
+#### General
+
+- Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
+
 ### Bug Fixes
 
 #### GLES / OpenGL

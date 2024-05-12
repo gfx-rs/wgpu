@@ -50,7 +50,7 @@ vulkan-portability = ["wgc?/vulkan"]
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-webgl = ["hal", "wgc/gles"]
+webgl = ["dep:hal", "wgc/gles"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
@@ -69,7 +69,7 @@ glsl = ["naga/glsl-in", "wgc/glsl"]
 wgsl = ["wgc?/wgsl"]
 
 ## Enable accepting naga IR shaders as input.
-naga-ir = ["naga"]
+naga-ir = ["dep:naga"]
 
 #! ### Logging & Tracing
 # --------------------------------------------------------------------
