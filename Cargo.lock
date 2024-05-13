@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "ab_glyph"
-version = "0.2.25"
+version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f90148830dac590fac7ccfe78ec4a8ea404c60f75a24e16407a71f0f40de775"
+checksum = "2e53b0a3d5760cd2ba9b787ae0c6440ad18ee294ff71b05e3381c900a7d16cfd"
 dependencies = [
  "ab_glyph_rasterizer",
  "owned_ttf_parser",
@@ -186,7 +186,7 @@ dependencies = [
  "argh_shared",
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -242,7 +242,7 @@ checksum = "c6fa2087f2753a7da8cc1c0dbfcf89579dd57458e36769de5ac750b4671737ca"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -385,7 +385,7 @@ checksum = "4da9a32f3fed317401fa3c862968128267c3106685286e15d5aaa3d7389c2f60"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -542,7 +542,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -887,7 +887,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
 dependencies = [
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -1034,7 +1034,7 @@ dependencies = [
  "quote",
  "strum",
  "strum_macros",
- "syn 2.0.61",
+ "syn 2.0.63",
  "thiserror",
 ]
 
@@ -1106,7 +1106,7 @@ checksum = "67e77553c4162a157adbf834ebae5b415acbecbeafc7a74b0e886657506a7611"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -1207,7 +1207,7 @@ checksum = "fd31dbbd9743684d339f907a87fe212cb7b51d75b9e8e74181fe363199ee9b47"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -1353,7 +1353,7 @@ checksum = "1a5c6c585bc94aaf2c7b51dd4c2ba22680844aba4c687be581871a6f518c5742"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -1478,7 +1478,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -2292,6 +2292,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndk-sys"
+version = "0.6.0+11769913"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
+dependencies = [
+ "jni-sys",
+]
+
+[[package]]
 name = "nix"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2404,7 +2413,7 @@ dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -2515,9 +2524,9 @@ checksum = "4030760ffd992bef45b0ae3f10ce1aba99e33464c90d14dd7c039884963ddc7a"
 
 [[package]]
 name = "owned_ttf_parser"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4586edfe4c648c71797a74c84bacb32b52b212eff5dfe2bb9f2c599844023e7"
+checksum = "6b41438d2fc63c46c74a2203bf5ccd82c41ba04347b2fcf5754f230b167067d5"
 dependencies = [
  "ttf-parser",
 ]
@@ -2599,7 +2608,7 @@ checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -2738,7 +2747,7 @@ checksum = "07c277e4e643ef00c1233393c673f655e3672cf7eb3ba08a00bdd0ea59139b5f"
 dependencies = [
  "proc-macro-rules-macros",
  "proc-macro2",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -2750,7 +2759,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -3088,7 +3097,7 @@ checksum = "c5e405930b9796f1c00bee880d03fc7e0bb4b9a11afc776885ffe84320da2865"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -3346,7 +3355,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -3362,9 +3371,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.61"
+version = "2.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c993ed8ccba56ae856363b1845da7266a7cb78e1d146c8a32d54b45a8b831fc9"
+checksum = "bf5be731623ca1a1fb7d8be6f261a3be6d3e2337b8a1f97be944d020c8fcb704"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3397,7 +3406,7 @@ checksum = "e2470041c06ec3ac1ab38d0356a6119054dedaea53e12fbefc0de730a1c08524"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -3521,7 +3530,7 @@ checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -3570,9 +3579,9 @@ checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
 
 [[package]]
 name = "ttf-parser"
-version = "0.20.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17f77d76d837a7830fe1d4f12b7b4ba4192c1888001c7164257e4bc6d21d96b4"
+checksum = "2c591d83f69777866b9126b24c6dd9a18351f177e49d625920d19f989fd31cf8"
 
 [[package]]
 name = "unic-char-property"
@@ -3771,7 +3780,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
  "wasm-bindgen-shared",
 ]
 
@@ -3805,7 +3814,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -3838,7 +3847,7 @@ checksum = "b7f89739351a2e03cb94beb799d47fb2cac01759b40ec441f7de39b00cbf7ef0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -4164,7 +4173,7 @@ dependencies = [
  "log",
  "metal",
  "naga",
- "ndk-sys 0.5.0+25.2.9519653",
+ "ndk-sys 0.6.0+11769913",
  "objc",
  "once_cell",
  "parking_lot",
@@ -4201,7 +4210,7 @@ version = "0.20.0"
 dependencies = [
  "heck 0.5.0",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
 
 [[package]]
@@ -4744,5 +4753,5 @@ checksum = "15e934569e47891f7d9411f1a451d947a60e000ab3bd24fbb970f000387d1b3b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.61",
+ "syn 2.0.63",
 ]
