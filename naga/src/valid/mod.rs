@@ -114,6 +114,8 @@ bitflags::bitflags! {
         const SUBGROUP = 0x10000;
         /// Support for subgroup barriers.
         const SUBGROUP_BARRIER = 0x20000;
+        /// Support for 16-bit floating-point types.
+        const FLOAT16 = 0x40000;
     }
 }
 

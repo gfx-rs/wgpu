@@ -25,8 +25,9 @@ dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
 msl-out = []
-serialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
-deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
+f16 = ["half"]
+serialize = ["dep:serde", "bitflags/serde", "indexmap/serde", "half/serde"]
+deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde", "half/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
@@ -59,6 +60,7 @@ pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
 arrayvec.workspace = true
+half = {version = "2.4.1", optional = true}
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = { version = "0.5", features = [] }

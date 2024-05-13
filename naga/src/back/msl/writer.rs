@@ -324,8 +324,12 @@ impl crate::Scalar {
         match self {
             Self {
                 kind: Sk::Float,
-                width: _,
+                width: 4,
             } => "float",
+            Self {
+                kind: Sk::Float,
+                width: 2,
+            } => "half",
             Self {
                 kind: Sk::Sint,
                 width: 4,
@@ -1265,6 +1269,10 @@ impl<W: Write> Writer<W> {
             crate::Expression::Literal(literal) => match literal {
                 crate::Literal::F64(_) => {
                     return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
+                }
+                #[cfg(feature = "half")]
+                crate::Literal::F16(_) => {
+                    return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT16))
                 }
                 crate::Literal::F32(value) => {
                     if value.is_infinite() {

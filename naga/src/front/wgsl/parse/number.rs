@@ -1,6 +1,9 @@
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::lexer::Token;
 
+#[cfg(feature = "half")]
+use half::f16;
+
 /// When using this type assume no Abstract Int/Float for now
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Number {
@@ -16,6 +19,8 @@ pub enum Number {
     I64(i64),
     /// Concrete u64
     U64(u64),
+    /// Concrete f32
+    F16(f16),
     /// Concrete f32
     F32(f32),
     /// Concrete f64

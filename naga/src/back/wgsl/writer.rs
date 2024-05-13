@@ -1211,6 +1211,8 @@ impl<W: Write> Writer<W> {
 
         match expressions[expr] {
             Expression::Literal(literal) => match literal {
+                #[cfg(feature = "half")]
+                crate::Literal::F16(value) => write!(self.out, "{}h", value)?,
                 crate::Literal::F32(value) => write!(self.out, "{}f", value)?,
                 crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                 crate::Literal::I32(value) => {
@@ -1957,6 +1959,10 @@ const fn scalar_kind_str(scalar: crate::Scalar) -> &'static str {
             kind: Sk::Float,
             width: 4,
         } => "f32",
+        Scalar {
+            kind: Sk::Float,
+            width: 2,
+        } => "f16",
         Scalar {
             kind: Sk::Sint,
             width: 4,

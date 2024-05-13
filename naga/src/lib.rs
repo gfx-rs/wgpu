@@ -286,6 +286,8 @@ pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 pub use crate::span::{SourceLocation, Span, SpanContext, WithSpan};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
+#[cfg(feature = "half")]
+use half::f16;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -881,6 +883,8 @@ pub enum Literal {
     F64(f64),
     /// May not be NaN or infinity.
     F32(f32),
+    #[cfg(feature = "half")]
+    F16(f16),
     U32(u32),
     I32(i32),
     U64(u64),

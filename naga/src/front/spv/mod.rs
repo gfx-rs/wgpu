@@ -43,6 +43,9 @@ use crate::{
     FastHashMap, FastHashSet, FastIndexMap,
 };
 
+#[cfg(feature = "half")]
+use half::f16;
+
 use petgraph::graphmap::GraphMap;
 use std::{convert::TryInto, mem, num::NonZeroU32, path::PathBuf};
 

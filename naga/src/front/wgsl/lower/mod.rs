@@ -1656,6 +1656,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let expr: Typed<crate::Expression> = match *expr {
             ast::Expression::Literal(literal) => {
                 let literal = match literal {
+                    ast::Literal::Number(Number::F16(f)) => crate::Literal::F16(f),
                     ast::Literal::Number(Number::F32(f)) => crate::Literal::F32(f),
                     ast::Literal::Number(Number::I32(i)) => crate::Literal::I32(i),
                     ast::Literal::Number(Number::U32(u)) => crate::Literal::U32(u),

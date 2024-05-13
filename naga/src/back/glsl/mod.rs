@@ -2571,6 +2571,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     // decimal part even it's zero which is needed for a valid glsl float constant
                     crate::Literal::F64(value) => write!(self.out, "{:?}LF", value)?,
                     crate::Literal::F32(value) => write!(self.out, "{:?}", value)?,
+                    #[cfg(feature = "half")]
+                    crate::Literal::F16(value) => {
+                        return Err(Error::Custom("GLSL has no 16-bit float type".into()));
+                    }
                     // Unsigned integers need a `u` at the end
                     //
                     // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we

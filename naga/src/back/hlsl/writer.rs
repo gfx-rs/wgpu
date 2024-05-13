@@ -2236,6 +2236,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // decimal part even it's zero
                 crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
+                #[cfg(feature = "half")]
+                crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
                 crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                 crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                 crate::Literal::U64(value) => write!(self.out, "{}uL", value)?,
