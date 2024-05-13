@@ -55,6 +55,7 @@ gles = [
     "dep:khronos-egl",
     "dep:libloading",
     "dep:ndk-sys",
+    "winapi/libloaderapi",
 ]
 dx12 = [
     "naga/hlsl-out",
@@ -68,6 +69,7 @@ dx12 = [
     "winapi/d3d12shader",
     "winapi/d3d12sdklayers",
     "winapi/dxgi1_6",
+    "winapi/errhandlingapi",
 ]
 # TODO: This is a separate feature until Mozilla okays windows-rs, see https://github.com/gfx-rs/wgpu/issues/3207 for the tracking issue.
 windows_rs = ["dep:gpu-allocator"]
@@ -118,7 +120,7 @@ version = "0.20.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
-ash = { version = "0.37.3", optional = true }
+ash = { version = "0.38.0", optional = true }
 gpu-alloc = { version = "0.6", optional = true }
 gpu-descriptor = { version = "0.3", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
@@ -146,7 +148,6 @@ glutin_wgl_sys = { version = "0.5", optional = true }
 
 winapi = { version = "0.3", features = [
     "profileapi",
-    "libloaderapi",
     "windef",
     "winuser",
     "dcomp",

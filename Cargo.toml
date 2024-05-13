@@ -133,7 +133,7 @@ objc = "0.2.5"
 
 # Vulkan dependencies
 android_system_properties = "0.1.1"
-ash = "0.37.3"
+ash = "0.38.0"
 gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
