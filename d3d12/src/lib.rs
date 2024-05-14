@@ -120,6 +120,6 @@ pub struct D3D12Lib {
 #[cfg(feature = "libloading")]
 impl D3D12Lib {
     pub fn new() -> Result<Self, libloading::Error> {
-        unsafe { libloading::Library::new("d3d12.dll").map(|lib| D3D12Lib { lib }) }
+        unsafe { libloading::Library::new("d3d12.dll").map(|lib| Self { lib }) }
     }
 }

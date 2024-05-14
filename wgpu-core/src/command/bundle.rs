@@ -86,7 +86,6 @@ use crate::{
         BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
         PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
-    conv,
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags,
         RenderPassCompatibilityCheckType, RenderPassContext, SHADER_STAGE_COUNT,
@@ -288,7 +287,7 @@ impl RenderBundleEncoder {
                 },
                 sample_count: {
                     let sc = desc.sample_count;
-                    if sc == 0 || sc > 32 || !conv::is_power_of_two_u32(sc) {
+                    if sc == 0 || sc > 32 || !sc.is_power_of_two() {
                         return Err(CreateRenderBundleError::InvalidSampleCount(sc));
                     }
                     sc

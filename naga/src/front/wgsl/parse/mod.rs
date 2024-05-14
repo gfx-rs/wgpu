@@ -225,7 +225,7 @@ pub struct Parser {
 
 impl Parser {
     pub const fn new() -> Self {
-        Parser { rules: vec![] }
+        Self { rules: vec![] }
     }
 
     fn reset(&mut self) {

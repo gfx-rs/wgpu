@@ -81,13 +81,13 @@ impl<T> hash::Hash for Handle<T> {
 
 impl<T> Handle<T> {
     #[cfg(test)]
-    pub const DUMMY: Self = Handle {
+    pub const DUMMY: Self = Self {
         index: unsafe { NonZeroU32::new_unchecked(u32::MAX) },
         marker: PhantomData,
     };
 
     pub(crate) const fn new(index: Index) -> Self {
-        Handle {
+        Self {
             index,
             marker: PhantomData,
         }
@@ -105,12 +105,12 @@ impl<T> Handle<T> {
             .ok()
             .and_then(Index::new)
             .expect("Failed to insert into arena. Handle overflows");
-        Handle::new(handle_index)
+        Self::new(handle_index)
     }
 
     /// Convert a `usize` index into a `Handle<T>`, without range checks.
     const unsafe fn from_usize_unchecked(index: usize) -> Self {
-        Handle::new(Index::new_unchecked((index + 1) as u32))
+        Self::new(Index::new_unchecked((index + 1) as u32))
     }
 }
 
@@ -161,7 +161,7 @@ impl BadRangeError {
 
 impl<T> Clone for Range<T> {
     fn clone(&self) -> Self {
-        Range {
+        Self {
             inner: self.inner.clone(),
             marker: self.marker,
         }
@@ -268,7 +268,7 @@ impl<T: fmt::Debug> fmt::Debug for Arena<T> {
 impl<T> Arena<T> {
     /// Create a new arena with no initial capacity allocated.
     pub const fn new() -> Self {
-        Arena {
+        Self {
             data: vec![],
             span_info: vec![],
         }

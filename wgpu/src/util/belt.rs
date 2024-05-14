@@ -71,7 +71,7 @@ impl StagingBelt {
     /// * bigger is better, within these bounds.
     pub fn new(chunk_size: BufferAddress) -> Self {
         let (sender, receiver) = std::sync::mpsc::channel();
-        StagingBelt {
+        Self {
             chunk_size,
             active_chunks: vec![],
             closed_chunks: vec![],

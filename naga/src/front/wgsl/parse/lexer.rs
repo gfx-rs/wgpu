@@ -208,7 +208,7 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) const fn new(input: &'a str) -> Self {
-        Lexer {
+        Self {
             input,
             source: input,
             last_end_offset: 0,

@@ -27,7 +27,7 @@ pub struct Snatchable<T> {
 
 impl<T> Snatchable<T> {
     pub fn new(val: T) -> Self {
-        Snatchable {
+        Self {
             value: UnsafeCell::new(Some(val)),
         }
     }
@@ -131,7 +131,7 @@ impl SnatchLock {
     /// to force force sers to think twice about creating a SnatchLock. The only place this
     /// method should be called is when creating the device.
     pub unsafe fn new(rank: rank::LockRank) -> Self {
-        SnatchLock {
+        Self {
             lock: RwLock::new(rank, ()),
         }
     }

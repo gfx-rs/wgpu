@@ -291,7 +291,7 @@ pub struct DomExceptionOperationError {
 
 impl DomExceptionOperationError {
     pub fn new(msg: &str) -> Self {
-        DomExceptionOperationError {
+        Self {
             msg: msg.to_string(),
         }
     }

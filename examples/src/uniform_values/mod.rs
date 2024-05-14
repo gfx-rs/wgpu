@@ -96,7 +96,7 @@ struct WgpuContext {
 }
 
 impl WgpuContext {
-    async fn new(window: Arc<Window>) -> WgpuContext {
+    async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::default();
@@ -200,7 +200,7 @@ impl WgpuContext {
         surface.configure(&device, &surface_config);
 
         // (5)
-        WgpuContext {
+        Self {
             window,
             surface,
             surface_config,

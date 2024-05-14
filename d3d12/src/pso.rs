@@ -173,7 +173,7 @@ pub struct PipelineStateSubobject<T> {
 
 impl<T> PipelineStateSubobject<T> {
     pub fn new(subobject_type: Subobject, subobject: T) -> Self {
-        PipelineStateSubobject {
+        Self {
             subobject_align: [],
             subobject_type: subobject_type as _,
             subobject,

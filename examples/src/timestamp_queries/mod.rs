@@ -115,7 +115,7 @@ impl QueryResults {
 
 impl Queries {
     fn new(device: &wgpu::Device, num_queries: u64) -> Self {
-        Queries {
+        Self {
             set: device.create_query_set(&wgpu::QuerySetDescriptor {
                 label: Some("Timestamp query set"),
                 count: num_queries as _,

@@ -329,7 +329,7 @@ impl<A: HalApi> CommandBuffer<A> {
         #[cfg(feature = "trace")] enable_tracing: bool,
         label: Option<String>,
     ) -> Self {
-        CommandBuffer {
+        Self {
             device: device.clone(),
             limits: device.limits.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
