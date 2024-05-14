@@ -1596,7 +1596,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::Expression::Binary { op, left, right } => {
-                let op_str = crate::back::binary_operation_str(op);
+                let op_str = back::binary_operation_str(op);
                 let kind = context
                     .resolve_type(left)
                     .scalar_kind()
@@ -3973,7 +3973,7 @@ impl<W: Write> Writer<W> {
             // mapping.
             let mut flattened_member_names = FastHashMap::default();
             // Varyings' members get their own namespace
-            let mut varyings_namer = crate::proc::Namer::default();
+            let mut varyings_namer = proc::Namer::default();
 
             // List all the Naga `EntryPoint`'s `Function`'s arguments,
             // flattening structs into their members. In Metal, we will pass
@@ -4804,7 +4804,7 @@ fn test_stack_size() {
     );
     let _ = module.functions.append(fun, Default::default());
     // analyse the module
-    let info = crate::valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
+    let info = valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
         .validate(&module)
         .unwrap();
     // process the module

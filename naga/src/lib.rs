@@ -1273,13 +1273,9 @@ pub enum ImageQuery {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum SwizzleComponent {
-    ///
     X = 0,
-    ///
     Y = 1,
-    ///
     Z = 2,
-    ///
     W = 3,
 }
 

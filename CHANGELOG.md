@@ -39,10 +39,48 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### Querying shader compilation errors
+
+Wgpu now supports querying [shader compilation info](https://www.w3.org/TR/webgpu/#dom-gpushadermodule-getcompilationinfo).
+
+This allows you to get more structured information about compilation errors, warnings and info:
+```rust
+...
+let lighting_shader = ctx.device.create_shader_module(include_wgsl!("lighting.wgsl"));
+let compilation_info = lighting_shader.get_compilation_info().await;
+for message in compilation_info
+    .messages
+    .iter()
+    .filter(|m| m.message_type == wgpu::CompilationMessageType::Error)
+{
+    let line = message.location.map(|l| l.line_number).unwrap_or(1);
+    println!("Compile error at line {line}");
+}
+```
+
+By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
+
+### New features
+
+#### General
+
+#### Naga
+
+### Changes
+
+#### General
+
+- Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
+
 ### Bug Fixes
 
 #### Vulkan
 
+-  Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
+-  Fix `ClearColorF`, `ClearColorU` and `ClearColorI` commands being issued before `SetDrawColorBuffers` [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
+-  Replace `glClear` with `glClearBufferF` because `glDrawBuffers` requires that the ith buffer must be `COLOR_ATTACHMENTi` or `NONE` [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
 - Fix enablement of subgroup ops extension on Vulkan devices that don't support Vulkan 1.3. By @cwfitzgerald in [#5624](https://github.com/gfx-rs/wgpu/pull/5624).
 
 ## v0.20.0 (2024-04-28)
@@ -220,6 +258,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
 - Add safety check to `wgpu_hal::vulkan::CommandEncoder` to make sure `discard_encoding` is not called in the closed state. By @villuna in [#5557](https://github.com/gfx-rs/wgpu/pull/5557)
 - Fix SPIR-V type capability requests to not depend on `LocalType` caching. By @atlv24 in [#5590](https://github.com/gfx-rs/wgpu/pull/5590)
+- Upgrade `ash` to `0.38`. By @MarijnS95 in [#5504](https://github.com/gfx-rs/wgpu/pull/5504).
 
 #### Tests
 

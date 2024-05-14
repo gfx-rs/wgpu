@@ -756,7 +756,7 @@ impl<'a> Default for Options<'a> {
             flags,
             binding_map: BindingMap::default(),
             capabilities: None,
-            bounds_check_policies: crate::proc::BoundsCheckPolicies::default(),
+            bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             debug_info: None,
         }

@@ -25,6 +25,10 @@ targets = [
     "wasm32-unknown-unknown",
 ]
 
+[package.metadata.cargo-machete]
+# Cargo machete can't check build.rs dependencies. See https://github.com/bnjbvr/cargo-machete/issues/100
+ignored = ["cfg_aliases"]
+
 [lib]
 
 [features]
@@ -51,7 +55,7 @@ strict_asserts = ["wgt/strict_asserts"]
 serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enable API tracing.
-trace = ["ron", "serde", "naga/serialize"]
+trace = ["dep:ron", "serde", "naga/serialize"]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
@@ -128,12 +132,6 @@ package = "wgpu-hal"
 path = "../wgpu-hal"
 version = "0.20.0"
 default_features = false
-
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.69", features = [
-    "HtmlCanvasElement",
-    "OffscreenCanvas",
-] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
