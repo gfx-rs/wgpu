@@ -970,6 +970,11 @@ impl Writer {
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
+        // If it's a type that needs SPIR-V capabilities, request them now.
+        // This needs to happen regardless of the LocalType lookup succeeding,
+        // because some types which map to the same LocalType have different
+        // capability requirements. See https://github.com/gfx-rs/wgpu/issues/5569
+        self.request_type_capabilities(&ty.inner)?;
         let id = if let Some(local) = make_local(&ty.inner) {
             // This type can be represented as a `LocalType`, so check if we've
             // already written an instruction for it. If not, do so now, with
@@ -984,10 +989,6 @@ impl Writer {
                     e.insert(id);
 
                     self.write_type_declaration_local(id, local);
-
-                    // If it's a type that needs SPIR-V capabilities, request them now,
-                    // so write_type_declaration_local can stay infallible.
-                    self.request_type_capabilities(&ty.inner)?;
 
                     id
                 }

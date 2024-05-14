@@ -256,7 +256,7 @@ pub struct Device {
     // library
     library: Arc<d3d12::D3D12Lib>,
     #[cfg(feature = "renderdoc")]
-    render_doc: crate::auxil::renderdoc::RenderDoc,
+    render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
@@ -331,7 +331,7 @@ struct PassState {
 
 #[test]
 fn test_dirty_mask() {
-    assert_eq!(MAX_ROOT_ELEMENTS, std::mem::size_of::<u64>() * 8);
+    assert_eq!(MAX_ROOT_ELEMENTS, mem::size_of::<u64>() * 8);
 }
 
 impl PassState {
@@ -440,7 +440,7 @@ impl Texture {
         }
     }
 
-    /// see https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice
+    /// see <https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice>
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
         mip_level + (array_layer + plane * self.array_layer_count()) * self.mip_level_count
     }

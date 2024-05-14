@@ -5,7 +5,7 @@ use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use termcolor::{NoColor, WriteColor};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
     #[error("invalid header")]
     InvalidHeader,
@@ -144,7 +144,7 @@ impl Error {
     pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
         let diagnostic = Diagnostic::error().with_message(format!("{self:?}"));
 
         term::emit(writer, &config, &files, &diagnostic).expect("cannot write error");

@@ -345,7 +345,7 @@ impl<'a, W> Writer<'a, W> {
                             }
 
                             // If the type of this global is a struct
-                            if let crate::TypeInner::Struct { ref members, .. } =
+                            if let TypeInner::Struct { ref members, .. } =
                                 self.module.types[global.ty].inner
                             {
                                 // Check the last element of the struct to see if it's type uses
@@ -472,7 +472,7 @@ impl<'a, W> Writer<'a, W> {
                     // layers queries are also implemented as size queries
                     crate::ImageQuery::Size { .. } | crate::ImageQuery::NumLayers => {
                         if let TypeInner::Image {
-                            class: crate::ImageClass::Storage { .. }, ..
+                            class: ImageClass::Storage { .. }, ..
                         } = *info[image].ty.inner_with(&module.types) {
                             features.request(Features::IMAGE_SIZE)
                         }
@@ -558,7 +558,7 @@ impl<'a, W> Writer<'a, W> {
 
     fn varying_required_features(&mut self, binding: Option<&Binding>, ty: Handle<Type>) {
         match self.module.types[ty].inner {
-            crate::TypeInner::Struct { ref members, .. } => {
+            TypeInner::Struct { ref members, .. } => {
                 for member in members {
                     self.varying_required_features(member.binding.as_ref(), member.ty);
                 }

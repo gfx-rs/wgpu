@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.19.3"
+version = "0.20.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -24,6 +24,10 @@ targets = [
     "x86_64-pc-windows-msvc",
     "wasm32-unknown-unknown",
 ]
+
+[package.metadata.cargo-machete]
+# Cargo machete can't check build.rs dependencies. See https://github.com/bnjbvr/cargo-machete/issues/100
+ignored = ["cfg_aliases"]
 
 [lib]
 
@@ -51,7 +55,7 @@ strict_asserts = ["wgt/strict_asserts"]
 serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enable API tracing.
-trace = ["ron", "serde", "naga/serialize"]
+trace = ["dep:ron", "serde", "naga/serialize"]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
@@ -100,7 +104,6 @@ arrayvec = "0.7"
 bit-vec = "0.6"
 bitflags = "2"
 bytemuck = { version = "1.14", optional = true }
-codespan-reporting = "0.11"
 document-features.workspace = true
 indexmap = "2"
 log = "0.4"
@@ -117,24 +120,18 @@ thiserror = "1"
 
 [dependencies.naga]
 path = "../naga"
-version = "0.19.2"
+version = "0.20.0"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.19.2"
+version = "0.20.0"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.19.3"
+version = "0.20.0"
 default_features = false
-
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.69", features = [
-    "HtmlCanvasElement",
-    "OffscreenCanvas",
-] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

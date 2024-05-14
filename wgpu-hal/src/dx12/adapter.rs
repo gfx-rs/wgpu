@@ -415,7 +415,7 @@ impl super::Adapter {
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         d3d12_ty::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
-                    max_storage_buffer_binding_size: crate::auxil::MAX_I32_BINDING_SIZE,
+                    max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
                     max_vertex_buffers: d3d12_ty::D3D12_VS_INPUT_REGISTER_COUNT
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: d3d12_ty::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,

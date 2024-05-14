@@ -2444,12 +2444,7 @@ impl Global {
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
-            super::CommandBuffer::insert_barriers_from_scope(
-                transit,
-                tracker,
-                &scope,
-                &snatch_guard,
-            );
+            CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, &snatch_guard);
         }
 
         *status = CommandEncoderStatus::Recording;
@@ -2468,10 +2463,6 @@ pub mod render_commands {
     use std::{convert::TryInto, num::NonZeroU32};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `offset_length` elements.
     pub fn wgpu_render_pass_set_bind_group(
         pass: &mut RenderPass,
         index: u32,
@@ -2571,10 +2562,6 @@ pub mod render_commands {
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `size_bytes` bytes.
     pub fn wgpu_render_pass_set_push_constants(
         pass: &mut RenderPass,
         stages: wgt::ShaderStages,

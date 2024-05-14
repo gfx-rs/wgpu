@@ -21,7 +21,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     context::{downcast_ref, ObjectId, QueueWriteBuffer, Unused},
-    SurfaceTargetUnsafe, UncapturedErrorHandler,
+    CompilationInfo, SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
 
 fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
@@ -102,6 +102,88 @@ impl crate::Error {
             crate::Error::OutOfMemory { source }
         } else {
             panic!("Unexpected error");
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct WebShaderModule {
+    module: webgpu_sys::GpuShaderModule,
+    compilation_info: WebShaderCompilationInfo,
+}
+
+#[derive(Debug, Clone)]
+enum WebShaderCompilationInfo {
+    /// WGSL shaders get their compilation info from a native WebGPU function.
+    /// We need the source to be able to do UTF16 to UTF8 location remapping.
+    Wgsl { source: String },
+    /// Transformed shaders get their compilation info from the transformer.
+    /// Further compilation errors are reported without a span.
+    Transformed {
+        compilation_info: crate::CompilationInfo,
+    },
+}
+
+fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
+    let mut utf16_i = 0;
+    for (utf8_index, c) in text.char_indices() {
+        if utf16_i >= utf16_offset {
+            return utf8_index as u32;
+        }
+        utf16_i += c.len_utf16() as u32;
+    }
+    if utf16_i >= utf16_offset {
+        text.len() as u32
+    } else {
+        log::error!(
+            "UTF16 offset {} is out of bounds for string {}",
+            utf16_offset,
+            text
+        );
+        u32::MAX
+    }
+}
+
+impl crate::CompilationMessage {
+    fn from_js(
+        js_message: webgpu_sys::GpuCompilationMessage,
+        compilation_info: &WebShaderCompilationInfo,
+    ) -> Self {
+        let message_type = match js_message.type_() {
+            webgpu_sys::GpuCompilationMessageType::Error => crate::CompilationMessageType::Error,
+            webgpu_sys::GpuCompilationMessageType::Warning => {
+                crate::CompilationMessageType::Warning
+            }
+            webgpu_sys::GpuCompilationMessageType::Info => crate::CompilationMessageType::Info,
+            _ => crate::CompilationMessageType::Error,
+        };
+        let utf16_offset = js_message.offset() as u32;
+        let utf16_length = js_message.length() as u32;
+        let span = match compilation_info {
+            WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
+            WebShaderCompilationInfo::Wgsl { source } => {
+                let offset = map_utf16_to_utf8_offset(utf16_offset, source);
+                let length = map_utf16_to_utf8_offset(utf16_length, &source[offset as usize..]);
+                let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
+
+                let prefix = &source[..offset as usize];
+                let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
+                let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
+
+                Some(crate::SourceLocation {
+                    offset,
+                    length,
+                    line_number,
+                    line_position,
+                })
+            }
+            WebShaderCompilationInfo::Transformed { .. } => None,
+        };
+
+        crate::CompilationMessage {
+            message: js_message.message(),
+            message_type,
+            location: span,
         }
     }
 }
@@ -846,6 +928,41 @@ fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
     }
 }
 
+fn future_compilation_info(
+    result: JsFutureResult,
+    base_compilation_info: &WebShaderCompilationInfo,
+) -> crate::CompilationInfo {
+    let base_messages = match base_compilation_info {
+        WebShaderCompilationInfo::Transformed { compilation_info } => {
+            compilation_info.messages.iter().cloned()
+        }
+        _ => [].iter().cloned(),
+    };
+
+    let messages = match result {
+        Ok(js_value) => {
+            let info = webgpu_sys::GpuCompilationInfo::from(js_value);
+            base_messages
+                .chain(info.messages().into_iter().map(|message| {
+                    crate::CompilationMessage::from_js(
+                        webgpu_sys::GpuCompilationMessage::from(message),
+                        base_compilation_info,
+                    )
+                }))
+                .collect()
+        }
+        Err(_v) => base_messages
+            .chain(std::iter::once(crate::CompilationMessage {
+                message: "Getting compilation info failed".to_string(),
+                message_type: crate::CompilationMessageType::Error,
+                location: None,
+            }))
+            .collect(),
+    };
+
+    crate::CompilationInfo { messages }
+}
+
 /// Calls `callback(success_value)` when the promise completes successfully, calls `callback(failure_value)`
 /// when the promise completes unsuccessfully.
 fn register_then_closures<F, T>(promise: &Promise, callback: F, success_value: T, failure_value: T)
@@ -1002,8 +1119,8 @@ impl crate::context::Context for ContextWebGpu {
     type DeviceData = Sendable<webgpu_sys::GpuDevice>;
     type QueueId = Identified<webgpu_sys::GpuQueue>;
     type QueueData = Sendable<webgpu_sys::GpuQueue>;
-    type ShaderModuleId = Identified<webgpu_sys::GpuShaderModule>;
-    type ShaderModuleData = Sendable<webgpu_sys::GpuShaderModule>;
+    type ShaderModuleId = Identified<WebShaderModule>;
+    type ShaderModuleData = Sendable<WebShaderModule>;
     type BindGroupLayoutId = Identified<webgpu_sys::GpuBindGroupLayout>;
     type BindGroupLayoutData = Sendable<webgpu_sys::GpuBindGroupLayout>;
     type BindGroupId = Identified<webgpu_sys::GpuBindGroup>;
@@ -1063,6 +1180,11 @@ impl crate::context::Context for ContextWebGpu {
     >;
     type PopErrorScopeFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
+
+    type CompilationInfoFuture = MakeSendFuture<
+        wasm_bindgen_futures::JsFuture,
+        Box<dyn Fn(JsFutureResult) -> CompilationInfo>,
+    >;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let Some(gpu) = get_browser_gpu_property() else {
@@ -1420,10 +1542,10 @@ impl crate::context::Context for ContextWebGpu {
         desc: crate::ShaderModuleDescriptor<'_>,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
-        let mut descriptor: webgpu_sys::GpuShaderModuleDescriptor = match desc.source {
+        let shader_module_result = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
-                use naga::{back, front, valid};
+                use naga::front;
 
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: false,
@@ -1431,18 +1553,25 @@ impl crate::context::Context for ContextWebGpu {
                     block_ctx_dump_prefix: None,
                 };
                 let spv_parser = front::spv::Frontend::new(spv.iter().cloned(), &options);
-                let spv_module = spv_parser.parse().unwrap();
-
-                let mut validator = valid::Validator::new(
-                    valid::ValidationFlags::all(),
-                    valid::Capabilities::all(),
-                );
-                let spv_module_info = validator.validate(&spv_module).unwrap();
-
-                let writer_flags = naga::back::wgsl::WriterFlags::empty();
-                let wgsl_text =
-                    back::wgsl::write_string(&spv_module, &spv_module_info, writer_flags).unwrap();
-                webgpu_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+                spv_parser
+                    .parse()
+                    .map_err(|inner| {
+                        CompilationInfo::from(naga::error::ShaderError {
+                            source: String::new(),
+                            label: desc.label.map(|s| s.to_string()),
+                            inner: Box::new(inner),
+                        })
+                    })
+                    .and_then(|spv_module| {
+                        validate_transformed_shader_module(&spv_module, "", &desc).map(|v| {
+                            (
+                                v,
+                                WebShaderCompilationInfo::Transformed {
+                                    compilation_info: CompilationInfo { messages: vec![] },
+                                },
+                            )
+                        })
+                    })
             }
             #[cfg(feature = "glsl")]
             crate::ShaderSource::Glsl {
@@ -1450,7 +1579,7 @@ impl crate::context::Context for ContextWebGpu {
                 stage,
                 ref defines,
             } => {
-                use naga::{back, front, valid};
+                use naga::front;
 
                 // Parse the given shader code and store its representation.
                 let options = front::glsl::Options {
@@ -1458,45 +1587,91 @@ impl crate::context::Context for ContextWebGpu {
                     defines: defines.clone(),
                 };
                 let mut parser = front::glsl::Frontend::default();
-                let glsl_module = parser.parse(&options, shader).unwrap();
-
-                let mut validator = valid::Validator::new(
-                    valid::ValidationFlags::all(),
-                    valid::Capabilities::all(),
-                );
-                let glsl_module_info = validator.validate(&glsl_module).unwrap();
-
-                let writer_flags = naga::back::wgsl::WriterFlags::empty();
-                let wgsl_text =
-                    back::wgsl::write_string(&glsl_module, &glsl_module_info, writer_flags)
-                        .unwrap();
-                webgpu_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+                parser
+                    .parse(&options, shader)
+                    .map_err(|inner| {
+                        CompilationInfo::from(naga::error::ShaderError {
+                            source: shader.to_string(),
+                            label: desc.label.map(|s| s.to_string()),
+                            inner: Box::new(inner),
+                        })
+                    })
+                    .and_then(|glsl_module| {
+                        validate_transformed_shader_module(&glsl_module, shader, &desc).map(|v| {
+                            (
+                                v,
+                                WebShaderCompilationInfo::Transformed {
+                                    compilation_info: CompilationInfo { messages: vec![] },
+                                },
+                            )
+                        })
+                    })
             }
             #[cfg(feature = "wgsl")]
-            crate::ShaderSource::Wgsl(ref code) => webgpu_sys::GpuShaderModuleDescriptor::new(code),
+            crate::ShaderSource::Wgsl(ref code) => {
+                let shader_module = webgpu_sys::GpuShaderModuleDescriptor::new(code);
+                Ok((
+                    shader_module,
+                    WebShaderCompilationInfo::Wgsl {
+                        source: code.to_string(),
+                    },
+                ))
+            }
             #[cfg(feature = "naga-ir")]
-            crate::ShaderSource::Naga(module) => {
-                use naga::{back, valid};
-
-                let mut validator = valid::Validator::new(
-                    valid::ValidationFlags::all(),
-                    valid::Capabilities::all(),
-                );
-                let module_info = validator.validate(&module).unwrap();
-
-                let writer_flags = naga::back::wgsl::WriterFlags::empty();
-                let wgsl_text =
-                    back::wgsl::write_string(&module, &module_info, writer_flags).unwrap();
-                webgpu_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            crate::ShaderSource::Naga(ref module) => {
+                validate_transformed_shader_module(module, "", &desc).map(|v| {
+                    (
+                        v,
+                        WebShaderCompilationInfo::Transformed {
+                            compilation_info: CompilationInfo { messages: vec![] },
+                        },
+                    )
+                })
             }
             crate::ShaderSource::Dummy(_) => {
                 panic!("found `ShaderSource::Dummy`")
             }
         };
+
+        #[cfg(naga)]
+        fn validate_transformed_shader_module(
+            module: &naga::Module,
+            source: &str,
+            desc: &crate::ShaderModuleDescriptor<'_>,
+        ) -> Result<webgpu_sys::GpuShaderModuleDescriptor, crate::CompilationInfo> {
+            use naga::{back, valid};
+            let mut validator =
+                valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all());
+            let module_info = validator.validate(module).map_err(|err| {
+                CompilationInfo::from(naga::error::ShaderError {
+                    source: source.to_string(),
+                    label: desc.label.map(|s| s.to_string()),
+                    inner: Box::new(err),
+                })
+            })?;
+
+            let writer_flags = naga::back::wgsl::WriterFlags::empty();
+            let wgsl_text = back::wgsl::write_string(module, &module_info, writer_flags).unwrap();
+            Ok(webgpu_sys::GpuShaderModuleDescriptor::new(
+                wgsl_text.as_str(),
+            ))
+        }
+        let (mut descriptor, compilation_info) = match shader_module_result {
+            Ok(v) => v,
+            Err(compilation_info) => (
+                webgpu_sys::GpuShaderModuleDescriptor::new(""),
+                WebShaderCompilationInfo::Transformed { compilation_info },
+            ),
+        };
         if let Some(label) = desc.label {
             descriptor.label(label);
         }
-        create_identified(device_data.0.create_shader_module(&descriptor))
+        let shader_module = WebShaderModule {
+            module: device_data.0.create_shader_module(&descriptor),
+            compilation_info,
+        };
+        let (id, data) = create_identified(shader_module);
+        (id, data)
     }
 
     unsafe fn device_create_shader_module_spirv(
@@ -1698,7 +1873,7 @@ impl crate::context::Context for ContextWebGpu {
     ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
         let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.vertex.module.data.as_ref());
-        let mut mapped_vertex_state = webgpu_sys::GpuVertexState::new(&module.0);
+        let mut mapped_vertex_state = webgpu_sys::GpuVertexState::new(&module.0.module);
         mapped_vertex_state.entry_point(desc.vertex.entry_point);
 
         let buffers = desc
@@ -1773,7 +1948,8 @@ impl crate::context::Context for ContextWebGpu {
                 .collect::<js_sys::Array>();
             let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
                 downcast_ref(frag.module.data.as_ref());
-            let mut mapped_fragment_desc = webgpu_sys::GpuFragmentState::new(&module.0, &targets);
+            let mut mapped_fragment_desc =
+                webgpu_sys::GpuFragmentState::new(&module.0.module, &targets);
             mapped_fragment_desc.entry_point(frag.entry_point);
             mapped_desc.fragment(&mapped_fragment_desc);
         }
@@ -1798,7 +1974,8 @@ impl crate::context::Context for ContextWebGpu {
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         let shader_module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.module.data.as_ref());
-        let mut mapped_compute_stage = webgpu_sys::GpuProgrammableStage::new(&shader_module.0);
+        let mut mapped_compute_stage =
+            webgpu_sys::GpuProgrammableStage::new(&shader_module.0.module);
         mapped_compute_stage.entry_point(desc.entry_point);
         let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
         let mut mapped_desc = webgpu_sys::GpuComputePipelineDescriptor::new(
@@ -2089,6 +2266,22 @@ impl crate::context::Context for ContextWebGpu {
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
         buffer_data.0.buffer.unmap();
         buffer_data.0.mapping.borrow_mut().mapped_buffer = None;
+    }
+
+    fn shader_get_compilation_info(
+        &self,
+        _shader: &Self::ShaderModuleId,
+        shader_data: &Self::ShaderModuleData,
+    ) -> Self::CompilationInfoFuture {
+        let compilation_info_promise = shader_data.0.module.get_compilation_info();
+        let map_future = Box::new({
+            let compilation_info = shader_data.0.compilation_info.clone();
+            move |result| future_compilation_info(result, &compilation_info)
+        });
+        MakeSendFuture::new(
+            wasm_bindgen_futures::JsFuture::from(compilation_info_promise),
+            map_future,
+        )
     }
 
     fn texture_create_view(

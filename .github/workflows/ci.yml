@@ -237,7 +237,7 @@ jobs:
           set -e
 
           # wgpu_core package
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps --package wgpu-core --document-private-items 
+          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps --package wgpu-core --package wgpu-hal --document-private-items 
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.
@@ -623,7 +623,7 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.20.9
+        uses: crate-ci/typos@v1.21.0
 
   check-cts-runner:
     # runtime is normally 2 minutes

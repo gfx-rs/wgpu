@@ -2210,13 +2210,13 @@ impl Parser {
                     lexer.expect(Token::Paren(')'))?;
                 }
                 ("vertex", name_span) => {
-                    stage.set(crate::ShaderStage::Vertex, name_span)?;
+                    stage.set(ShaderStage::Vertex, name_span)?;
                 }
                 ("fragment", name_span) => {
-                    stage.set(crate::ShaderStage::Fragment, name_span)?;
+                    stage.set(ShaderStage::Fragment, name_span)?;
                 }
                 ("compute", name_span) => {
-                    stage.set(crate::ShaderStage::Compute, name_span)?;
+                    stage.set(ShaderStage::Compute, name_span)?;
                     compute_span = name_span;
                 }
                 ("workgroup_size", name_span) => {

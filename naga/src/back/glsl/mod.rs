@@ -53,8 +53,7 @@ use crate::{
 use features::FeaturesManager;
 use std::{
     cmp::Ordering,
-    fmt,
-    fmt::{Error as FmtError, Write},
+    fmt::{self, Error as FmtError, Write},
     mem,
 };
 use thiserror::Error;
@@ -1248,7 +1247,7 @@ impl<'a, W: Write> Writer<'a, W> {
         self.reflection_names_globals.insert(handle, block_name);
 
         match self.module.types[global.ty].inner {
-            crate::TypeInner::Struct { ref members, .. }
+            TypeInner::Struct { ref members, .. }
                 if self.module.types[members.last().unwrap().ty]
                     .inner
                     .is_dynamically_sized(&self.module.types) =>
@@ -1317,6 +1316,12 @@ impl<'a, W: Write> Writer<'a, W> {
                                 _ => {}
                             }
                         }
+                    }
+                    crate::MathFunction::Pack4xI8
+                    | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Unpack4xI8
+                    | crate::MathFunction::Unpack4xU8 => {
+                        self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
                         // Only argument 1 is re-used.
@@ -1429,7 +1434,7 @@ impl<'a, W: Write> Writer<'a, W> {
         output: bool,
     ) -> Result<(), Error> {
         // For a struct, emit a separate global for each member with a binding.
-        if let crate::TypeInner::Struct { ref members, .. } = self.module.types[ty].inner {
+        if let TypeInner::Struct { ref members, .. } = self.module.types[ty].inner {
             for member in members {
                 self.write_varying(member.binding.as_ref(), member.ty, output)?;
             }
@@ -1701,7 +1706,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, " {name}")?;
                 write!(self.out, " = ")?;
                 match self.module.types[arg.ty].inner {
-                    crate::TypeInner::Struct { ref members, .. } => {
+                    TypeInner::Struct { ref members, .. } => {
                         self.write_type(arg.ty)?;
                         write!(self.out, "(")?;
                         for (index, member) in members.iter().enumerate() {
@@ -2186,7 +2191,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         if let Some(ref result) = ep.function.result {
                             let value = value.unwrap();
                             match self.module.types[result.ty].inner {
-                                crate::TypeInner::Struct { ref members, .. } => {
+                                TypeInner::Struct { ref members, .. } => {
                                     let temp_struct_name = match ctx.expressions[value] {
                                         crate::Expression::Compose { .. } => {
                                             let return_struct = "_tmp_return";
@@ -2968,7 +2973,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 if let Some(expr) = level {
                                     let cast_to_int = matches!(
                                         *ctx.resolve_type(expr, &self.module.types),
-                                        crate::TypeInner::Scalar(crate::Scalar {
+                                        TypeInner::Scalar(crate::Scalar {
                                             kind: crate::ScalarKind::Uint,
                                             ..
                                         })
@@ -3311,7 +3316,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(arg, ctx)?;
 
                         match *ctx.resolve_type(arg, &self.module.types) {
-                            crate::TypeInner::Vector { size, .. } => write!(
+                            TypeInner::Vector { size, .. } => write!(
                                 self.out,
                                 ", vec{}(0.0), vec{0}(1.0)",
                                 back::vector_size_str(size)
@@ -3358,7 +3363,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Pow => "pow",
                     // geometry
                     Mf::Dot => match *ctx.resolve_type(arg, &self.module.types) {
-                        crate::TypeInner::Vector {
+                        TypeInner::Vector {
                             scalar:
                                 crate::Scalar {
                                     kind: crate::ScalarKind::Float,
@@ -3366,7 +3371,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 },
                             ..
                         } => "dot",
-                        crate::TypeInner::Vector { size, .. } => {
+                        TypeInner::Vector { size, .. } => {
                             return self.write_dot_product(arg, arg1.unwrap(), size as usize, ctx)
                         }
                         _ => unreachable!(
@@ -3418,7 +3423,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     // bits
                     Mf::CountTrailingZeros => {
                         match *ctx.resolve_type(arg, &self.module.types) {
-                            crate::TypeInner::Vector { size, scalar, .. } => {
+                            TypeInner::Vector { size, scalar, .. } => {
                                 let s = back::vector_size_str(size);
                                 if let crate::ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min(uvec{s}(findLSB(")?;
@@ -3430,7 +3435,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     write!(self.out, ")), uvec{s}(32u)))")?;
                                 }
                             }
-                            crate::TypeInner::Scalar(scalar) => {
+                            TypeInner::Scalar(scalar) => {
                                 if let crate::ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min(uint(findLSB(")?;
                                     self.write_expr(arg, ctx)?;
@@ -3448,7 +3453,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::CountLeadingZeros => {
                         if self.options.version.supports_integer_functions() {
                             match *ctx.resolve_type(arg, &self.module.types) {
-                                crate::TypeInner::Vector { size, scalar } => {
+                                TypeInner::Vector { size, scalar } => {
                                     let s = back::vector_size_str(size);
 
                                     if let crate::ScalarKind::Uint = scalar.kind {
@@ -3463,7 +3468,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                         write!(self.out, ", ivec{s}(0)))")?;
                                     }
                                 }
-                                crate::TypeInner::Scalar(scalar) => {
+                                TypeInner::Scalar(scalar) => {
                                     if let crate::ScalarKind::Uint = scalar.kind {
                                         write!(self.out, "uint(31 - findMSB(")?;
                                     } else {
@@ -3479,7 +3484,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             };
                         } else {
                             match *ctx.resolve_type(arg, &self.module.types) {
-                                crate::TypeInner::Vector { size, scalar } => {
+                                TypeInner::Vector { size, scalar } => {
                                     let s = back::vector_size_str(size);
 
                                     if let crate::ScalarKind::Uint = scalar.kind {
@@ -3497,7 +3502,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                         write!(self.out, ", ivec{s}(0u))))")?;
                                     }
                                 }
-                                crate::TypeInner::Scalar(scalar) => {
+                                TypeInner::Scalar(scalar) => {
                                     if let crate::ScalarKind::Uint = scalar.kind {
                                         write!(self.out, "uint(31.0 - floor(log2(float(")?;
                                         self.write_expr(arg, ctx)?;
@@ -3582,12 +3587,66 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Pack2x16snorm => "packSnorm2x16",
                     Mf::Pack2x16unorm => "packUnorm2x16",
                     Mf::Pack2x16float => "packHalf2x16",
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let was_signed = match fun {
+                            Mf::Pack4xI8 => true,
+                            Mf::Pack4xU8 => false,
+                            _ => unreachable!(),
+                        };
+                        let const_suffix = if was_signed { "" } else { "u" };
+                        if was_signed {
+                            write!(self.out, "uint(")?;
+                        }
+                        write!(self.out, "(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[0] & 0xFF{const_suffix}) | ((")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[1] & 0xFF{const_suffix}) << 8) | ((")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[2] & 0xFF{const_suffix}) << 16) | ((")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, "[3] & 0xFF{const_suffix}) << 24)")?;
+                        if was_signed {
+                            write!(self.out, ")")?;
+                        }
+
+                        return Ok(());
+                    }
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpackSnorm4x8",
                     Mf::Unpack4x8unorm => "unpackUnorm4x8",
                     Mf::Unpack2x16snorm => "unpackSnorm2x16",
                     Mf::Unpack2x16unorm => "unpackUnorm2x16",
                     Mf::Unpack2x16float => "unpackHalf2x16",
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        let sign_prefix = match fun {
+                            Mf::Unpack4xI8 => 'i',
+                            Mf::Unpack4xU8 => 'u',
+                            _ => unreachable!(),
+                        };
+                        write!(self.out, "{sign_prefix}vec4(")?;
+                        for i in 0..4 {
+                            write!(self.out, "bitfieldExtract(")?;
+                            // Since bitfieldExtract only sign extends if the value is signed, this
+                            // cast is needed
+                            match fun {
+                                Mf::Unpack4xI8 => {
+                                    write!(self.out, "int(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")")?;
+                                }
+                                Mf::Unpack4xU8 => self.write_expr(arg, ctx)?,
+                                _ => unreachable!(),
+                            };
+                            write!(self.out, ", {}, 8)", i * 8)?;
+                            if i != 3 {
+                                write!(self.out, ", ")?;
+                            }
+                        }
+                        write!(self.out, ")")?;
+
+                        return Ok(());
+                    }
                 };
 
                 let extract_bits = fun == Mf::ExtractBits;
@@ -3605,11 +3664,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Check if the argument is an unsigned integer and return the vector size
                 // in case it's a vector
                 let maybe_uint_size = match *ctx.resolve_type(arg, &self.module.types) {
-                    crate::TypeInner::Scalar(crate::Scalar {
+                    TypeInner::Scalar(crate::Scalar {
                         kind: crate::ScalarKind::Uint,
                         ..
                     }) => Some(None),
-                    crate::TypeInner::Vector {
+                    TypeInner::Vector {
                         scalar:
                             crate::Scalar {
                                 kind: crate::ScalarKind::Uint,
@@ -4402,7 +4461,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 continue;
             }
             match self.module.types[var.ty].inner {
-                crate::TypeInner::Image { .. } => {
+                TypeInner::Image { .. } => {
                     let tex_name = self.reflection_names_globals[&handle].clone();
                     match texture_mapping.entry(tex_name) {
                         Entry::Vacant(v) => {
@@ -4438,7 +4497,7 @@ impl<'a, W: Write> Writer<'a, W> {
             //
             // This is potentially a bit wasteful, but the set of types in the program
             // shouldn't be too large.
-            let mut layouter = crate::proc::Layouter::default();
+            let mut layouter = proc::Layouter::default();
             layouter.update(self.module.to_ctx()).unwrap();
 
             // We start with the name of the binding itself.
@@ -4466,7 +4525,7 @@ impl<'a, W: Write> Writer<'a, W> {
         &mut self,
         ty: Handle<crate::Type>,
         segments: &mut Vec<String>,
-        layouter: &crate::proc::Layouter,
+        layouter: &proc::Layouter,
         offset: &mut u32,
         items: &mut Vec<PushConstantItem>,
     ) {

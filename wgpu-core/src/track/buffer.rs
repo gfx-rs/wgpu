@@ -303,8 +303,8 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
     ///
     /// A buffer is 'otherwise unused' when the only references to it are:
     ///
-    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_suspected`, has just
-    ///    drained from `LifetimeTracker::suspected_resources`,
+    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_resources`, is
+    ///    considering draining from `LifetimeTracker::suspected_resources`,
     ///
     /// 2) its `Arc` in [`self.metadata`] (owned by [`Device::trackers`]), and
     ///

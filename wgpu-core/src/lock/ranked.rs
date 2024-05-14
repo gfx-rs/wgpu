@@ -1,8 +1,8 @@
 //! Lock types that enforce well-ranked lock acquisition order.
 //!
-//! This module's [`Mutex`] type is instrumented to check that `wgpu-core`
-//! acquires locks according to their rank, to prevent deadlocks. To use it,
-//! put `--cfg wgpu_validate_locks` in `RUSTFLAGS`.
+//! This module's [`Mutex`] and [`RwLock` types are instrumented to check that
+//! `wgpu-core` acquires locks according to their rank, to prevent deadlocks. To
+//! use it, put `--cfg wgpu_validate_locks` in `RUSTFLAGS`.
 //!
 //! The [`LockRank`] constants in the [`lock::rank`] module describe edges in a
 //! directed graph of lock acquisitions: each lock's rank says, if this is the most
@@ -81,7 +81,11 @@ pub struct Mutex<T> {
 /// [mod]: crate::lock::ranked
 pub struct MutexGuard<'a, T> {
     inner: parking_lot::MutexGuard<'a, T>,
-    saved: LockState,
+    saved: LockStateGuard,
+}
+
+thread_local! {
+    static LOCK_STATE: Cell<LockState> = const { Cell::new(LockState::INITIAL) };
 }
 
 /// Per-thread state for the deadlock checker.
@@ -103,8 +107,77 @@ impl LockState {
     };
 }
 
+/// A container that restores a [`LockState`] when dropped.
+///
+/// This type serves two purposes:
+///
+/// - Operations like `RwLockWriteGuard::downgrade` would like to be able to
+///   destructure lock guards and reassemble their pieces into new guards, but
+///   if the guard type itself implements `Drop`, we can't destructure it
+///   without unsafe code or pointless `Option`s whose state is almost always
+///   statically known.
+///
+/// - We can just implement `Drop` for this type once, and then use it in lock
+///   guards, rather than implementing `Drop` separately for each guard type.
+struct LockStateGuard(LockState);
+
+impl Drop for LockStateGuard {
+    fn drop(&mut self) {
+        release(self.0)
+    }
+}
+
+/// Check and record the acquisition of a lock with `new_rank`.
+///
+/// Check that acquiring a lock with `new_rank` is permitted at this point, and
+/// update the per-thread state accordingly.
+///
+/// Return the `LockState` that must be restored when this thread is released.
+fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> LockState {
+    let state = LOCK_STATE.get();
+    // Initially, it's fine to acquire any lock. So we only
+    // need to check when `last_acquired` is `Some`.
+    if let Some((ref last_rank, ref last_location)) = state.last_acquired {
+        assert!(
+            last_rank.followers.contains(new_rank.bit),
+            "Attempt to acquire nested mutexes in wrong order:\n\
+             last locked {:<35} at {}\n\
+             now locking {:<35} at {}\n\
+             Locking {} after locking {} is not permitted.",
+            last_rank.bit.name(),
+            last_location,
+            new_rank.bit.name(),
+            location,
+            new_rank.bit.name(),
+            last_rank.bit.name(),
+        );
+    }
+    LOCK_STATE.set(LockState {
+        last_acquired: Some((new_rank, location)),
+        depth: state.depth + 1,
+    });
+    state
+}
+
+/// Record the release of a lock whose saved state was `saved`.
+///
+/// Check that locks are being acquired in stacking order, and update the
+/// per-thread state accordingly.
+fn release(saved: LockState) {
+    let prior = LOCK_STATE.replace(saved);
+
+    // Although Rust allows mutex guards to be dropped in any
+    // order, this analysis requires that locks be acquired and
+    // released in stack order: the next lock to be released must be
+    // the most recently acquired lock still held.
+    assert_eq!(
+        prior.depth,
+        saved.depth + 1,
+        "Lock not released in stacking order"
+    );
+}
+
 impl<T> Mutex<T> {
-    #[inline]
     pub fn new(rank: LockRank, value: T) -> Mutex<T> {
         Mutex {
             inner: parking_lot::Mutex::new(value),
@@ -112,57 +185,14 @@ impl<T> Mutex<T> {
         }
     }
 
-    #[inline]
     #[track_caller]
     pub fn lock(&self) -> MutexGuard<T> {
-        let state = LOCK_STATE.get();
-        let location = Location::caller();
-        // Initially, it's fine to acquire any lock. So we only
-        // need to check when `last_acquired` is `Some`.
-        if let Some((ref last_rank, ref last_location)) = state.last_acquired {
-            assert!(
-                last_rank.followers.contains(self.rank.bit),
-                "Attempt to acquire nested mutexes in wrong order:\n\
-                 last locked {:<35} at {}\n\
-                 now locking {:<35} at {}\n\
-                 Locking {} after locking {} is not permitted.",
-                last_rank.bit.name(),
-                last_location,
-                self.rank.bit.name(),
-                location,
-                self.rank.bit.name(),
-                last_rank.bit.name(),
-            );
-        }
-        LOCK_STATE.set(LockState {
-            last_acquired: Some((self.rank, location)),
-            depth: state.depth + 1,
-        });
+        let saved = acquire(self.rank, Location::caller());
         MutexGuard {
             inner: self.inner.lock(),
-            saved: state,
+            saved: LockStateGuard(saved),
         }
     }
-}
-
-impl<'a, T> Drop for MutexGuard<'a, T> {
-    fn drop(&mut self) {
-        let prior = LOCK_STATE.replace(self.saved);
-
-        // Although Rust allows mutex guards to be dropped in any
-        // order, this analysis requires that locks be acquired and
-        // released in stack order: the next lock to be released must be
-        // the most recently acquired lock still held.
-        assert_eq!(
-            prior.depth,
-            self.saved.depth + 1,
-            "Lock not released in stacking order"
-        );
-    }
-}
-
-thread_local! {
-    static LOCK_STATE: Cell<LockState> = const { Cell::new(LockState::INITIAL) };
 }
 
 impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
@@ -182,6 +212,109 @@ impl<'a, T> std::ops::DerefMut for MutexGuard<'a, T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for Mutex<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
+    }
+}
+
+/// An `RwLock` instrumented for deadlock prevention.
+///
+/// This is just a wrapper around a [`parking_lot::RwLock`], along with
+/// its rank in the `wgpu_core` lock ordering.
+///
+/// For details, see [the module documentation][mod].
+///
+/// [mod]: crate::lock::ranked
+pub struct RwLock<T> {
+    inner: parking_lot::RwLock<T>,
+    rank: LockRank,
+}
+
+/// A read guard produced by locking [`RwLock`] for reading.
+///
+/// This is just a wrapper around a [`parking_lot::RwLockReadGuard`], along with
+/// the state needed to track lock acquisition.
+///
+/// For details, see [the module documentation][mod].
+///
+/// [mod]: crate::lock::ranked
+pub struct RwLockReadGuard<'a, T> {
+    inner: parking_lot::RwLockReadGuard<'a, T>,
+    saved: LockStateGuard,
+}
+
+/// A write guard produced by locking [`RwLock`] for writing.
+///
+/// This is just a wrapper around a [`parking_lot::RwLockWriteGuard`], along
+/// with the state needed to track lock acquisition.
+///
+/// For details, see [the module documentation][mod].
+///
+/// [mod]: crate::lock::ranked
+pub struct RwLockWriteGuard<'a, T> {
+    inner: parking_lot::RwLockWriteGuard<'a, T>,
+    saved: LockStateGuard,
+}
+
+impl<T> RwLock<T> {
+    pub fn new(rank: LockRank, value: T) -> RwLock<T> {
+        RwLock {
+            inner: parking_lot::RwLock::new(value),
+            rank,
+        }
+    }
+
+    #[track_caller]
+    pub fn read(&self) -> RwLockReadGuard<T> {
+        let saved = acquire(self.rank, Location::caller());
+        RwLockReadGuard {
+            inner: self.inner.read(),
+            saved: LockStateGuard(saved),
+        }
+    }
+
+    #[track_caller]
+    pub fn write(&self) -> RwLockWriteGuard<T> {
+        let saved = acquire(self.rank, Location::caller());
+        RwLockWriteGuard {
+            inner: self.inner.write(),
+            saved: LockStateGuard(saved),
+        }
+    }
+}
+
+impl<'a, T> RwLockWriteGuard<'a, T> {
+    pub fn downgrade(this: Self) -> RwLockReadGuard<'a, T> {
+        RwLockReadGuard {
+            inner: parking_lot::RwLockWriteGuard::downgrade(this.inner),
+            saved: this.saved,
+        }
+    }
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for RwLock<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
+    }
+}
+
+impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
+    }
+}
+
+impl<'a, T> std::ops::DerefMut for RwLockWriteGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.deref_mut()
     }
 }
 

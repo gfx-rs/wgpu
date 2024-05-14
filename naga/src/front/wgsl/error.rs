@@ -13,6 +13,7 @@ use thiserror::Error;
 #[derive(Clone, Debug)]
 pub struct ParseError {
     message: String,
+    // The first span should be the primary span, and the other ones should be complementary.
     labels: Vec<(Span, Cow<'static, str>)>,
     notes: Vec<String>,
 }
@@ -61,7 +62,7 @@ impl ParseError {
     {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
         let writer = StandardStream::stderr(ColorChoice::Auto);
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
@@ -79,7 +80,7 @@ impl ParseError {
     {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
         let mut writer = NoColor::new(Vec::new());
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
         String::from_utf8(writer.into_inner()).unwrap()

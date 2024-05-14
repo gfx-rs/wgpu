@@ -270,6 +270,7 @@ struct PrivateCapabilities {
     has_unified_memory: Option<bool>,
     timestamp_query_support: TimestampQuerySupport,
     supports_simd_scoped_operations: bool,
+    int64: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -650,7 +651,7 @@ struct BufferResource {
     /// Buffers with the [`wgt::BufferBindingType::Storage`] binding type can
     /// hold WGSL runtime-sized arrays. When one does, we must pass its size to
     /// shader entry points to implement bounds checks and WGSL's `arrayLength`
-    /// function. See [`device::CompiledShader::sized_bindings`] for details.
+    /// function. See `device::CompiledShader::sized_bindings` for details.
     ///
     /// [`Storage`]: wgt::BufferBindingType::Storage
     binding_size: Option<wgt::BufferSize>,
@@ -681,12 +682,12 @@ struct PipelineStageInfo {
 
     /// The buffer argument table index at which we pass runtime-sized arrays' buffer sizes.
     ///
-    /// See [`device::CompiledShader::sized_bindings`] for more details.
+    /// See `device::CompiledShader::sized_bindings` for more details.
     sizes_slot: Option<naga::back::msl::Slot>,
 
     /// Bindings of all WGSL `storage` globals that contain runtime-sized arrays.
     ///
-    /// See [`device::CompiledShader::sized_bindings`] for more details.
+    /// See `device::CompiledShader::sized_bindings` for more details.
     sized_bindings: Vec<naga::ResourceBinding>,
 }
 
@@ -802,7 +803,7 @@ struct CommandState {
     ///
     /// Specifically:
     ///
-    /// - The keys are ['ResourceBinding`] values (that is, the WGSL `@group`
+    /// - The keys are [`ResourceBinding`] values (that is, the WGSL `@group`
     ///   and `@binding` attributes) for `var<storage>` global variables in the
     ///   current module that contain runtime-sized arrays.
     ///
@@ -814,7 +815,7 @@ struct CommandState {
     /// of the buffers listed in [`stage_infos.S.sized_bindings`], which we must
     /// pass to the entry point.
     ///
-    /// See [`device::CompiledShader::sized_bindings`] for more details.
+    /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
     storage_buffer_length_map: rustc_hash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,

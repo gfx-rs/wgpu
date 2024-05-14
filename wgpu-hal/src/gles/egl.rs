@@ -549,22 +549,28 @@ impl Inner {
         let mut khr_context_flags = 0;
         let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
 
-        //TODO: make it so `Device` == EGL Context
-        let mut context_attributes = vec![
-            khronos_egl::CONTEXT_MAJOR_VERSION,
-            3, // Request GLES 3.0 or higher
-        ];
-
-        if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+        let mut context_attributes = vec![];
+        if supports_opengl {
+            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+            context_attributes.push(3);
             context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-            context_attributes.push(match force_gles_minor_version {
-                wgt::Gles3MinorVersion::Version0 => 0,
-                wgt::Gles3MinorVersion::Version1 => 1,
-                wgt::Gles3MinorVersion::Version2 => 2,
-                _ => unreachable!(),
-            });
+            context_attributes.push(3);
+            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+                log::warn!("Ignoring specified GLES minor version as OpenGL is used");
+            }
+        } else {
+            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+            context_attributes.push(3); // Request GLES 3.0 or higher
+            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+                context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+                context_attributes.push(match force_gles_minor_version {
+                    wgt::Gles3MinorVersion::Automatic => unreachable!(),
+                    wgt::Gles3MinorVersion::Version0 => 0,
+                    wgt::Gles3MinorVersion::Version1 => 1,
+                    wgt::Gles3MinorVersion::Version2 => 2,
+                });
+            }
         }
-
         if flags.contains(wgt::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
                 log::debug!("\tEGL context: +debug");
@@ -594,8 +600,6 @@ impl Inner {
                 // because it's for desktop GL only, not GLES.
                 log::warn!("\tEGL context: -robust access");
             }
-
-            //TODO do we need `khronos_egl::CONTEXT_OPENGL_NOTIFICATION_STRATEGY_EXT`?
         }
         if khr_context_flags != 0 {
             context_attributes.push(EGL_CONTEXT_FLAGS_KHR);
@@ -1130,6 +1134,13 @@ impl Surface {
 
         unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer)) };
+
+        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+            // Disable sRGB conversions for `glBlitFramebuffer` as behavior does diverge between
+            // drivers and formats otherwise and we want to ensure no sRGB conversions happen.
+            unsafe { gl.disable(glow::FRAMEBUFFER_SRGB) };
+        }
+
         // Note the Y-flipping here. GL's presentation is not flipped,
         // but main rendering is. Therefore, we Y-flip the output positions
         // in the shader, and also this blit.
@@ -1147,6 +1158,11 @@ impl Surface {
                 glow::NEAREST,
             )
         };
+
+        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+            unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
+        }
+
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
 
         self.egl

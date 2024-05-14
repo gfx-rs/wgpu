@@ -399,7 +399,7 @@ fn run() -> anyhow::Result<()> {
         block_ctx_dump_prefix: args.block_ctx_dir.clone().map(std::path::PathBuf::from),
     };
 
-    params.entry_point = args.entry_point.clone();
+    params.entry_point.clone_from(&args.entry_point);
     if let Some(ref version) = args.profile {
         params.glsl.version = version.0;
     }
