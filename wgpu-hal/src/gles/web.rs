@@ -130,7 +130,7 @@ impl crate::Instance for Instance {
         let context_guard = self.webgl2_context.lock();
         let gl = match *context_guard {
             Some(ref webgl2_context) => glow::Context::from_webgl2_context(webgl2_context.clone()),
-            None => return Vec::new(),
+            None => return vec![],
         };
 
         unsafe { super::Adapter::expose(AdapterContext { glow_context: gl }) }

@@ -71,13 +71,13 @@ impl Writer {
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
-            constant_ids: Vec::new(),
+            constant_ids: vec![],
             cached_constants: crate::FastHashMap::default(),
-            global_variables: Vec::new(),
+            global_variables: vec![],
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
-            temp_list: Vec::new(),
+            temp_list: vec![],
         })
     }
 
@@ -334,8 +334,8 @@ impl Writer {
         let prelude_id = self.id_gen.next();
         let mut prelude = Block::new(prelude_id);
         let mut ep_context = EntryPointContext {
-            argument_ids: Vec::new(),
-            results: Vec::new(),
+            argument_ids: vec![],
+            results: vec![],
         };
 
         let mut local_invocation_id = None;
@@ -744,7 +744,7 @@ impl Writer {
         ir_module: &crate::Module,
         debug_info: &Option<DebugInfoInner>,
     ) -> Result<Instruction, Error> {
-        let mut interface_ids = Vec::new();
+        let mut interface_ids = vec![];
         let function_id = self.write_function(
             &entry_point.function,
             info,

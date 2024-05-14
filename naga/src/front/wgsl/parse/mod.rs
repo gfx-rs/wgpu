@@ -225,7 +225,7 @@ pub struct Parser {
 
 impl Parser {
     pub const fn new() -> Self {
-        Parser { rules: Vec::new() }
+        Parser { rules: vec![] }
     }
 
     fn reset(&mut self) {
@@ -519,7 +519,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Vec<Handle<ast::Expression<'a>>>, Error<'a>> {
         lexer.open_arguments()?;
-        let mut arguments = Vec::new();
+        let mut arguments = vec![];
         loop {
             if !arguments.is_empty() {
                 if !lexer.next_argument()? {
@@ -985,7 +985,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Vec<ast::StructMember<'a>>, Error<'a>> {
-        let mut members = Vec::new();
+        let mut members = vec![];
 
         lexer.expect(Token::Paren('{'))?;
         let mut ready = true;
@@ -1712,7 +1712,7 @@ impl Parser {
 
                         let accept = self.block(lexer, ctx, brace_nesting_level)?.0;
 
-                        let mut elsif_stack = Vec::new();
+                        let mut elsif_stack = vec![];
                         let mut elseif_span_start = lexer.start_byte_offset();
                         let mut reject = loop {
                             if !lexer.skip(Token::Word("else")) {
@@ -1761,7 +1761,7 @@ impl Parser {
                         let brace_span = lexer.expect_span(Token::Paren('{'))?;
                         let brace_nesting_level =
                             Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
-                        let mut cases = Vec::new();
+                        let mut cases = vec![];
 
                         loop {
                             // cases + default
@@ -2107,7 +2107,7 @@ impl Parser {
         ctx.local_table.push_scope();
 
         // read parameter list
-        let mut arguments = Vec::new();
+        let mut arguments = vec![];
         lexer.expect(Token::Paren('('))?;
         let mut ready = true;
         while !lexer.skip(Token::Paren(')')) {

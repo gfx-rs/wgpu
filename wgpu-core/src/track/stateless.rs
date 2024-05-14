@@ -29,7 +29,7 @@ pub(crate) struct StatelessBindGroupSate<T: Resource> {
 impl<T: Resource> StatelessBindGroupSate<T> {
     pub fn new() -> Self {
         Self {
-            resources: Mutex::new(rank::STATELESS_BIND_GROUP_STATE_RESOURCES, Vec::new()),
+            resources: Mutex::new(rank::STATELESS_BIND_GROUP_STATE_RESOURCES, vec![]),
         }
     }
 

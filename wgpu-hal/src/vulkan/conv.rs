@@ -480,7 +480,7 @@ pub fn map_composite_alpha_mode(mode: wgt::CompositeAlphaMode) -> vk::CompositeA
 }
 
 pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<wgt::CompositeAlphaMode> {
-    let mut modes = Vec::new();
+    let mut modes = vec![];
     if flags.contains(vk::CompositeAlphaFlagsKHR::OPAQUE) {
         modes.push(wgt::CompositeAlphaMode::Opaque);
     }

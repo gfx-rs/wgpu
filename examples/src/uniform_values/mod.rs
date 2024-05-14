@@ -59,7 +59,7 @@ impl AppState {
     // / derive macro and the buffer structs which hold data formatted for WGSL
     // in either the storage or uniform spaces.
     fn as_wgsl_bytes(&self) -> encase::internal::Result<Vec<u8>> {
-        let mut buffer = encase::UniformBuffer::new(Vec::new());
+        let mut buffer = encase::UniformBuffer::new(vec![]);
         buffer.write(self)?;
         Ok(buffer.into_inner())
     }

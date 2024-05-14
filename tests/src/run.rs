@@ -78,7 +78,7 @@ pub async fn execute_test(
         queue,
     };
 
-    let mut failures = Vec::new();
+    let mut failures = vec![];
 
     // Run the test, and catch panics (possibly due to failed assertions).
     let panic_res = AssertUnwindSafe((config.test.as_ref().unwrap())(context))

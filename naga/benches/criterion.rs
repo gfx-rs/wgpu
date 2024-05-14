@@ -5,7 +5,7 @@ use criterion::*;
 use std::{fs, path::PathBuf, slice};
 
 fn gather_inputs(folder: &str, extension: &str) -> Vec<Box<[u8]>> {
-    let mut list = Vec::new();
+    let mut list = vec![];
     let read_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join(folder)
         .read_dir()
@@ -113,7 +113,7 @@ fn gather_modules() -> Vec<naga::Module> {
 }
 #[cfg(not(feature = "wgsl-in"))]
 fn gather_modules() -> Vec<naga::Module> {
-    Vec::new()
+    vec![]
 }
 
 fn validation(c: &mut Criterion) {
@@ -173,7 +173,7 @@ fn backends(c: &mut Criterion) {
     #[cfg(feature = "spv-out")]
     group.bench_function("spv", |b| {
         b.iter(|| {
-            let mut data = Vec::new();
+            let mut data = vec![];
             let options = naga::back::spv::Options::default();
             for &(ref module, ref info) in inputs.iter() {
                 let mut writer = naga::back::spv::Writer::new(&options).unwrap();
@@ -185,7 +185,7 @@ fn backends(c: &mut Criterion) {
     #[cfg(feature = "spv-out")]
     group.bench_function("spv-separate", |b| {
         b.iter(|| {
-            let mut data = Vec::new();
+            let mut data = vec![];
             let options = naga::back::spv::Options::default();
             for &(ref module, ref info) in inputs.iter() {
                 let mut writer = naga::back::spv::Writer::new(&options).unwrap();

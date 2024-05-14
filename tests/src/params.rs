@@ -32,8 +32,8 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_downlevel_caps: LOWEST_DOWNLEVEL_PROPERTIES,
             required_limits: Limits::downlevel_webgl2_defaults(),
-            skips: Vec::new(),
-            failures: Vec::new(),
+            skips: vec![],
+            failures: vec![],
         }
     }
 }

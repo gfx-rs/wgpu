@@ -304,7 +304,7 @@ impl<A: HalApi> Device<A> {
             downlevel,
             instance_flags,
             pending_writes: Mutex::new(rank::DEVICE_PENDING_WRITES, Some(pending_writes)),
-            deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
+            deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, vec![]),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
         })
     }
@@ -658,7 +658,7 @@ impl<A: HalApi> Device<A> {
                 desc.label.borrow_or_default(),
                 Some(self.tracker_indices.buffers.clone()),
             ),
-            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, vec![]),
         })
     }
 
@@ -691,8 +691,8 @@ impl<A: HalApi> Device<A> {
                 Some(self.tracker_indices.textures.clone()),
             ),
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
-            views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
-            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
+            views: Mutex::new(rank::TEXTURE_VIEWS, vec![]),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, vec![]),
         }
     }
 
@@ -718,7 +718,7 @@ impl<A: HalApi> Device<A> {
                 desc.label.borrow_or_default(),
                 Some(self.tracker_indices.buffers.clone()),
             ),
-            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, vec![]),
         }
     }
 
@@ -2187,7 +2187,7 @@ impl<A: HalApi> Device<A> {
 
         // TODO: arrayvec/smallvec, or re-use allocations
         // Record binding info for dynamic offset validation
-        let mut dynamic_binding_info = Vec::new();
+        let mut dynamic_binding_info = vec![];
         // Map of binding -> shader reflected size
         //Note: we can't collect into a vector right away because
         // it needs to be in BGL iteration order, not BG entry order.
@@ -2199,12 +2199,12 @@ impl<A: HalApi> Device<A> {
         let texture_view_guard = hub.texture_views.read();
         let sampler_guard = hub.samplers.read();
 
-        let mut used_buffer_ranges = Vec::new();
-        let mut used_texture_ranges = Vec::new();
+        let mut used_buffer_ranges = vec![];
+        let mut used_texture_ranges = vec![];
         let mut hal_entries = Vec::with_capacity(desc.entries.len());
-        let mut hal_buffers = Vec::new();
-        let mut hal_samplers = Vec::new();
-        let mut hal_textures = Vec::new();
+        let mut hal_buffers = vec![];
+        let mut hal_samplers = vec![];
+        let mut hal_textures = vec![];
         let snatch_guard = self.snatchable_lock.read();
         for entry in desc.entries.iter() {
             let binding = entry.binding;

@@ -346,7 +346,7 @@ impl<A: HalApi> CommandBuffer<A> {
                     encoder: CommandEncoder {
                         raw: encoder,
                         is_open: false,
-                        list: Vec::new(),
+                        list: vec![],
                         label,
                     },
                     status: CommandEncoderStatus::Recording,
@@ -355,11 +355,7 @@ impl<A: HalApi> CommandBuffer<A> {
                     texture_memory_actions: Default::default(),
                     pending_query_resets: QueryResetMap::new(),
                     #[cfg(feature = "trace")]
-                    commands: if enable_tracing {
-                        Some(Vec::new())
-                    } else {
-                        None
-                    },
+                    commands: if enable_tracing { Some(vec![]) } else { None },
                 }),
             ),
         }
@@ -539,10 +535,10 @@ impl<C: Clone> BasePass<C> {
     fn new(label: &Label) -> Self {
         Self {
             label: label.as_ref().map(|cow| cow.to_string()),
-            commands: Vec::new(),
-            dynamic_offsets: Vec::new(),
-            string_data: Vec::new(),
-            push_constant_data: Vec::new(),
+            commands: vec![],
+            dynamic_offsets: vec![],
+            string_data: vec![],
+            push_constant_data: vec![],
         }
     }
 

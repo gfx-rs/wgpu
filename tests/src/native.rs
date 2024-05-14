@@ -67,7 +67,7 @@ impl NativeTest {
 }
 
 #[doc(hidden)]
-pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> = Mutex::new(Vec::new());
+pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> = Mutex::new(vec![]);
 
 /// Return value for the main function.
 pub type MainResult = anyhow::Result<()>;

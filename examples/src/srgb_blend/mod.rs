@@ -36,8 +36,8 @@ fn quad(vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>, color: [f32; 4], off
 }
 
 fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
-    let mut vertices = Vec::new();
-    let mut indices = Vec::new();
+    let mut vertices = vec![];
+    let mut indices = vec![];
 
     let red = [1.0, 0.0, 0.0, 0.5];
     let blue = [0.0, 0.0, 1.0, 0.5];

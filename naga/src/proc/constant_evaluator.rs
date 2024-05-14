@@ -357,7 +357,7 @@ pub struct ExpressionKindTracker {
 
 impl ExpressionKindTracker {
     pub const fn new() -> Self {
-        Self { inner: Vec::new() }
+        Self { inner: vec![] }
     }
 
     /// Forces the the expression to not be const

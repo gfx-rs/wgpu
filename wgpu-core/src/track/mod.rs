@@ -154,7 +154,7 @@ struct TrackerIndexAllocator {
 impl TrackerIndexAllocator {
     pub fn new() -> Self {
         TrackerIndexAllocator {
-            unused: Vec::new(),
+            unused: vec![],
             next_index: TrackerIndex(0),
         }
     }

@@ -997,7 +997,7 @@ impl crate::Adapter for super::Adapter {
                     .map_err(|_| crate::DeviceError::OutOfMemory)?,
                 shader_clear_program,
                 zero_buffer,
-                temp_query_results: Mutex::new(Vec::new()),
+                temp_query_results: Mutex::new(vec![]),
                 draw_buffer_count: AtomicU8::new(1),
                 current_index_buffer: Mutex::new(None),
             },

@@ -8,7 +8,7 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
-    let mut tests = Vec::new();
+    let mut tests = vec![];
 
     // Vector tests
     for components in [2, 3, 4] {
@@ -66,7 +66,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 writeln!(vector_loaded, "let vec_{column} = input.member[{column}];").unwrap();
             }
 
-            let mut output_values = Vec::new();
+            let mut output_values = vec![];
 
             let mut current_output_idx = 0;
             let mut current_input_idx = 0;
@@ -256,7 +256,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
 fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
-    let mut tests = Vec::new();
+    let mut tests = vec![];
 
     // 64 bit alignment tests
     for ty in ["u64", "i64"] {

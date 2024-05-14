@@ -109,7 +109,7 @@ impl<'source> ParsingContext<'source> {
         //     initializer_list COMMA initializer
         if let Some(Token { mut meta, .. }) = self.bump_if(frontend, TokenValue::LeftBrace) {
             // initializer_list
-            let mut components = Vec::new();
+            let mut components = vec![];
             loop {
                 // The type expected to be parsed inside the initializer list
                 let new_ty = element_or_member_type(ty, components.len(), &mut ctx.module.types);
@@ -552,7 +552,7 @@ impl<'source> ParsingContext<'source> {
             _ => unreachable!(),
         };
 
-        let mut members = Vec::new();
+        let mut members = vec![];
         let span = self.parse_struct_declaration_list(frontend, ctx, &mut members, layout)?;
         self.expect(frontend, TokenValue::RightBrace)?;
 

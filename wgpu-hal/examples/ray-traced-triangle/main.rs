@@ -776,8 +776,8 @@ impl<A: hal::Api> Example<A> {
                 encoder: cmd_encoder,
                 fence,
                 fence_value: init_fence_value + 1,
-                used_views: Vec::new(),
-                used_cmd_bufs: Vec::new(),
+                used_views: vec![],
+                used_cmd_bufs: vec![],
                 frames_recorded: 0,
             }],
             context_index: 0,
@@ -983,8 +983,8 @@ impl<A: hal::Api> Example<A> {
                         encoder: self.device.create_command_encoder(&hal_desc).unwrap(),
                         fence: self.device.create_fence().unwrap(),
                         fence_value: 0,
-                        used_views: Vec::new(),
-                        used_cmd_bufs: Vec::new(),
+                        used_views: vec![],
+                        used_cmd_bufs: vec![],
                         frames_recorded: 0,
                     }
                 });

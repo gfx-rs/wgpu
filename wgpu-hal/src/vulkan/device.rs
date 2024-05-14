@@ -62,7 +62,7 @@ impl super::DeviceShared {
         Ok(match self.render_passes.lock().entry(key) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
-                let mut vk_attachments = Vec::new();
+                let mut vk_attachments = vec![];
                 let mut color_refs = Vec::with_capacity(e.key().colors.len());
                 let mut resolve_refs = Vec::with_capacity(color_refs.capacity());
                 let mut ds_ref = None;
@@ -1203,8 +1203,8 @@ impl crate::Device for super::Device {
             active: vk::CommandBuffer::null(),
             bind_point: vk::PipelineBindPoint::default(),
             temp: super::Temp::default(),
-            free: Vec::new(),
-            discarded: Vec::new(),
+            free: vec![],
+            discarded: vec![],
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
         })
@@ -1224,7 +1224,7 @@ impl crate::Device for super::Device {
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Result<super::BindGroupLayout, crate::DeviceError> {
         let mut desc_count = gpu_descriptor::DescriptorTotalCount::default();
-        let mut types = Vec::new();
+        let mut types = vec![];
         for entry in desc.entries {
             let count = entry.count.map_or(1, |c| c.get());
             if entry.binding as usize >= types.len() {
@@ -1687,7 +1687,7 @@ impl crate::Device for super::Device {
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
         let mut vertex_buffers = Vec::with_capacity(desc.vertex_buffers.len());
-        let mut vertex_attributes = Vec::new();
+        let mut vertex_attributes = vec![];
 
         for (i, vb) in desc.vertex_buffers.iter().enumerate() {
             vertex_buffers.push(vk::VertexInputBindingDescription {
@@ -1985,8 +1985,8 @@ impl crate::Device for super::Device {
         } else {
             super::Fence::FencePool {
                 last_completed: 0,
-                active: Vec::new(),
-                free: Vec::new(),
+                active: vec![],
+                free: vec![],
             }
         })
     }

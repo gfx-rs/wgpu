@@ -673,7 +673,7 @@ impl crate::Device for super::Device {
             shared: Arc::clone(&self.shared),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
-            free_lists: Vec::new(),
+            free_lists: vec![],
             pass: super::PassState::new(),
             temp: super::Temp::default(),
             end_of_pass_timer_query: None,
@@ -784,7 +784,7 @@ impl crate::Device for super::Device {
             hlsl::BindTarget::default(),
             hlsl::BindTarget::default(),
         );
-        let mut parameters = Vec::new();
+        let mut parameters = vec![];
         let mut push_constants_target = None;
         let mut root_constant_info = None;
 
@@ -844,7 +844,7 @@ impl crate::Device for super::Device {
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
                 base_root_index: parameters.len() as u32,
-                dynamic_buffers: Vec::new(),
+                dynamic_buffers: vec![],
             };
 
             let mut visibility_view_static = wgt::ShaderStages::empty();
@@ -1107,7 +1107,7 @@ impl crate::Device for super::Device {
         if let Some(ref mut inner) = cpu_samplers {
             inner.stage.clear();
         }
-        let mut dynamic_buffers = Vec::new();
+        let mut dynamic_buffers = vec![];
 
         let layout_and_entry_iter = desc.entries.iter().map(|entry| {
             let layout = desc
@@ -1307,7 +1307,7 @@ impl crate::Device for super::Device {
         };
 
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
-        let mut input_element_descs = Vec::new();
+        let mut input_element_descs = vec![];
         for (i, (stride, vbuf)) in vertex_strides
             .iter_mut()
             .zip(desc.vertex_buffers)

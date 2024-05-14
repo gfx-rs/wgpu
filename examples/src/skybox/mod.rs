@@ -102,11 +102,11 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut entities = Vec::new();
+        let mut entities = vec![];
         {
             let source = include_bytes!("models/teslacyberv3.0.obj");
             let data = obj::ObjData::load_buf(&source[..]).unwrap();
-            let mut vertices = Vec::new();
+            let mut vertices = vec![];
             for object in data.objects {
                 for group in object.groups {
                     vertices.clear();

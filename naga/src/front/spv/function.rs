@@ -305,7 +305,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         // create a wrapping function
         let mut function = crate::Function {
             name: Some(format!("{}_wrap", ep.name)),
-            arguments: Vec::new(),
+            arguments: vec![],
             result: None,
             local_variables: Arena::new(),
             expressions: Arena::new(),
@@ -365,15 +365,15 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         function.body.push(
             crate::Statement::Call {
                 function: dummy_handle,
-                arguments: Vec::new(),
+                arguments: vec![],
                 result: None,
             },
             crate::Span::default(),
         );
 
         // 3. copy the outputs from privates to the result
-        let mut members = Vec::new();
-        let mut components = Vec::new();
+        let mut members = vec![];
+        let mut components = vec![];
         for &v_id in ep.variable_ids.iter() {
             let lvar = self.lookup_variable.lookup(v_id)?;
             if let super::Variable::Output(ref result) = lvar.inner {

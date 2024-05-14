@@ -100,10 +100,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             names: crate::FastHashMap::default(),
             namer: proc::Namer::default(),
             options,
-            entry_point_io: Vec::new(),
+            entry_point_io: vec![],
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
-            temp_access_chain: Vec::new(),
+            temp_access_chain: vec![],
             need_bake_expressions: Default::default(),
         }
     }
@@ -533,7 +533,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> Result<EntryPointBinding, Error> {
         let struct_name = format!("{stage:?}Input_{entry_point_name}");
 
-        let mut fake_members = Vec::new();
+        let mut fake_members = vec![];
         for arg in func.arguments.iter() {
             match module.types[arg.ty].inner {
                 TypeInner::Struct { ref members, .. } => {
@@ -576,7 +576,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> Result<EntryPointBinding, Error> {
         let struct_name = format!("{stage:?}Output_{entry_point_name}");
 
-        let mut fake_members = Vec::new();
+        let mut fake_members = vec![];
         let empty = [];
         let members = match module.types[result.ty].inner {
             TypeInner::Struct { ref members, .. } => members,

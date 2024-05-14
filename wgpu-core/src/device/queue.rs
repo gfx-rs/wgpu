@@ -217,10 +217,10 @@ impl<A: HalApi> PendingWrites<A> {
         Self {
             command_encoder,
             is_recording: false,
-            temp_resources: Vec::new(),
+            temp_resources: vec![],
             dst_buffers: FastHashMap::default(),
             dst_textures: FastHashMap::default(),
-            executing_command_buffers: Vec::new(),
+            executing_command_buffers: vec![],
         }
     }
 
@@ -1168,7 +1168,7 @@ impl Global {
                 .active_submission_index
                 .fetch_add(1, Ordering::Relaxed)
                 + 1;
-            let mut active_executions = Vec::new();
+            let mut active_executions = vec![];
 
             let mut used_surface_textures = track::TextureUsageScope::default();
 

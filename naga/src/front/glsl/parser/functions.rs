@@ -182,7 +182,7 @@ impl<'source> ParsingContext<'source> {
 
                 ctx.emit_restart();
 
-                let mut cases = Vec::new();
+                let mut cases = vec![];
                 // Track if any default case is present in the switch statement.
                 let mut default_present = false;
 

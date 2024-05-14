@@ -15,8 +15,8 @@ pub struct Block {
 impl Block {
     pub const fn new() -> Self {
         Self {
-            body: Vec::new(),
-            span_info: Vec::new(),
+            body: vec![],
+            span_info: vec![],
         }
     }
 

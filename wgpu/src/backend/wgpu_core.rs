@@ -998,7 +998,7 @@ impl crate::Context for ContextWgpuCore {
         let mut remaining_arrayed_texture_views = &arrayed_texture_views[..];
         let mut remaining_arrayed_samplers = &arrayed_samplers[..];
 
-        let mut arrayed_buffer_bindings = Vec::new();
+        let mut arrayed_buffer_bindings = vec![];
         if device_data
             .features
             .contains(Features::BUFFER_BINDING_ARRAY)
@@ -2981,7 +2981,7 @@ struct ErrorSinkRaw {
 impl ErrorSinkRaw {
     fn new() -> ErrorSinkRaw {
         ErrorSinkRaw {
-            scopes: Vec::new(),
+            scopes: vec![],
             uncaptured_handler: Box::from(default_error_handler),
         }
     }
@@ -3034,9 +3034,7 @@ impl From<CreateShaderModuleError> for CompilationInfo {
             // Device errors are reported through the error sink, and are not compilation errors.
             // Same goes for native shader module generation errors.
             CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
-                CompilationInfo {
-                    messages: Vec::new(),
-                }
+                CompilationInfo { messages: vec![] }
             }
             // Everything else is an error message without location information.
             _ => CompilationInfo {

@@ -233,8 +233,8 @@ impl Global {
                             clear_view: Some(clear_view),
                         },
                     ),
-                    views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
-                    bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
+                    views: Mutex::new(rank::TEXTURE_VIEWS, vec![]),
+                    bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, vec![]),
                 };
 
                 let (id, resource) = fid.assign(Arc::new(texture));

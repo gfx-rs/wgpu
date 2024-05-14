@@ -86,7 +86,7 @@ pub struct InterfaceVar {
 
 impl InterfaceVar {
     pub fn vertex_attribute(format: wgt::VertexFormat) -> Self {
-        InterfaceVar {
+        Self {
             ty: NumericType::from_vertex_format(format),
             interpolation: None,
             sampling: None,
@@ -745,7 +745,7 @@ impl NumericType {
             } => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
         };
 
-        NumericType {
+        Self {
             dim,
             //Note: Shader always sees data as int, uint, or float.
             // It doesn't know if the original is normalized in a tighter form.
@@ -753,7 +753,7 @@ impl NumericType {
         }
     }
 
-    fn is_subtype_of(&self, other: &NumericType) -> bool {
+    fn is_subtype_of(&self, other: &Self) -> bool {
         if self.scalar.width > other.scalar.width {
             return false;
         }
@@ -761,8 +761,8 @@ impl NumericType {
             return false;
         }
         match (self.dim, other.dim) {
-            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
-            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
+            (NumericDimension::Scalar, NumericDimension::Scalar)
+            | (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
             (NumericDimension::Vector(s0), NumericDimension::Vector(s1)) => s0 <= s1,
             (NumericDimension::Matrix(c0, r0), NumericDimension::Matrix(c1, r1)) => {
                 c0 == c1 && r0 == r1
@@ -775,13 +775,13 @@ impl NumericType {
         if self.scalar.kind != other.scalar.kind {
             return false;
         }
-        match (self.dim, other.dim) {
-            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
-            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
-            (NumericDimension::Vector(_), NumericDimension::Vector(_)) => true,
-            (NumericDimension::Matrix(..), NumericDimension::Matrix(..)) => true,
-            _ => false,
-        }
+        matches!(
+            (self.dim, other.dim),
+            (NumericDimension::Scalar, NumericDimension::Scalar)
+                | (NumericDimension::Scalar, NumericDimension::Vector(_))
+                | (NumericDimension::Vector(_), NumericDimension::Vector(_))
+                | (NumericDimension::Matrix(..), NumericDimension::Matrix(..))
+        )
     }
 }
 
@@ -811,11 +811,11 @@ pub enum BindingLayoutSource<'a> {
 
 impl<'a> BindingLayoutSource<'a> {
     pub fn new_derived(limits: &wgt::Limits) -> Self {
-        let mut array = ArrayVec::new();
-        for _ in 0..limits.max_bind_groups {
-            array.push(Default::default());
-        }
-        BindingLayoutSource::Derived(array)
+        Self::Derived(
+            std::iter::repeat(<_>::default())
+                .take(limits.max_bind_groups as _)
+                .collect(),
+        )
     }
 }
 

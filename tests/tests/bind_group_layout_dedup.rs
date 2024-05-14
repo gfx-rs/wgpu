@@ -131,8 +131,8 @@ async fn bgl_dedupe(ctx: TestingContext) {
     if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
         // Indices are made reusable as soon as the handle is dropped so we keep them around
         // for the duration of the loop.
-        let mut bgls = Vec::new();
-        let mut indices = Vec::new();
+        let mut bgls = vec![];
+        let mut indices = vec![];
         // Now all of the BGL ids should be dead, so we should get the same ids again.
         for _ in 0..=2 {
             let test_bgl = ctx

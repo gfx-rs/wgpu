@@ -1869,7 +1869,7 @@ pub struct ComputePassDescriptor<'a, A: Api> {
 /// This prevents the issue of one validation error terminating the
 /// entire process.
 pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
-    inner: Mutex::new(Vec::new()),
+    inner: Mutex::new(vec![]),
 };
 
 /// Flag for internal testing.

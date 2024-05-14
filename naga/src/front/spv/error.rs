@@ -151,7 +151,7 @@ impl Error {
     }
 
     pub fn emit_to_string(&self, source: &str) -> String {
-        let mut writer = NoColor::new(Vec::new());
+        let mut writer = NoColor::new(vec![]);
         self.emit_to_writer(&mut writer, source);
         String::from_utf8(writer.into_inner()).unwrap()
     }

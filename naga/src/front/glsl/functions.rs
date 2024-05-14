@@ -775,7 +775,7 @@ impl Frontend {
         let kind = overload.kind;
 
         let mut arguments = Vec::with_capacity(args.len());
-        let mut proxy_writes = Vec::new();
+        let mut proxy_writes = vec![];
 
         // Iterate through the function call arguments applying transformations as needed
         for (((parameter_info, call_argument), expr), parameter) in parameters_info
@@ -1215,7 +1215,7 @@ impl Frontend {
         function: Handle<Function>,
         mut ctx: Context,
     ) -> Result<()> {
-        let mut arguments = Vec::new();
+        let mut arguments = vec![];
 
         let body = Block::with_capacity(
             // global init body
@@ -1271,15 +1271,15 @@ impl Frontend {
         ctx.body.push(
             Statement::Call {
                 function,
-                arguments: Vec::new(),
+                arguments: vec![],
                 result: None,
             },
             Default::default(),
         );
 
         let mut span = 0;
-        let mut members = Vec::new();
-        let mut components = Vec::new();
+        let mut members = vec![];
+        let mut components = vec![];
 
         for arg in self.entry_args.iter() {
             if arg.storage != StorageQualifier::Output {

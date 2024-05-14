@@ -213,7 +213,7 @@ impl Default for Options {
         Options {
             lang_version: (1, 0),
             per_entry_point_map: EntryPointResourceMap::default(),
-            inline_samplers: Vec::new(),
+            inline_samplers: vec![],
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
             bounds_check_policies: index::BoundsCheckPolicies::default(),

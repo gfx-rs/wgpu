@@ -85,7 +85,7 @@ impl<'source> ParsingContext<'source> {
         stmt: &mut StmtContext,
         meta: &mut Span,
     ) -> Result<Vec<Handle<HirExpr>>> {
-        let mut args = Vec::new();
+        let mut args = vec![];
         if let Some(token) = self.bump_if(frontend, TokenValue::RightParen) {
             meta.subsume(token.meta);
         } else {

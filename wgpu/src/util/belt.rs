@@ -73,9 +73,9 @@ impl StagingBelt {
         let (sender, receiver) = std::sync::mpsc::channel();
         StagingBelt {
             chunk_size,
-            active_chunks: Vec::new(),
-            closed_chunks: Vec::new(),
-            free_chunks: Vec::new(),
+            active_chunks: vec![],
+            closed_chunks: vec![],
+            free_chunks: vec![],
             sender: Exclusive::new(sender),
             receiver: Exclusive::new(receiver),
         }

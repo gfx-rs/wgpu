@@ -6,7 +6,7 @@ pub(crate) struct Program {
 }
 
 pub(crate) fn check_all_programs(programs: &[Program]) -> anyhow::Result<()> {
-    let mut failed = Vec::new();
+    let mut failed = vec![];
     for Program {
         binary_name,
         crate_name,

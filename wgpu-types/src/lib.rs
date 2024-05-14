@@ -5273,8 +5273,8 @@ pub struct SurfaceCapabilities {
 impl Default for SurfaceCapabilities {
     fn default() -> Self {
         Self {
-            formats: Vec::new(),
-            present_modes: Vec::new(),
+            formats: vec![],
+            present_modes: vec![],
             alpha_modes: vec![CompositeAlphaMode::Opaque],
             usages: TextureUsages::RENDER_ATTACHMENT,
         }

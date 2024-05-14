@@ -828,7 +828,7 @@ impl PhysicalDeviceProperties {
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
     fn get_required_extensions(&self, requested_features: wgt::Features) -> Vec<&'static CStr> {
-        let mut extensions = Vec::new();
+        let mut extensions = vec![];
 
         // Note that quite a few extensions depend on the `VK_KHR_get_physical_device_properties2` instance extension.
         // We enable `VK_KHR_get_physical_device_properties2` unconditionally (if available).
@@ -2071,7 +2071,7 @@ impl crate::Adapter for super::Adapter {
                 Ok(present_modes) => present_modes,
                 Err(e) => {
                     log::error!("get_physical_device_surface_present_modes: {}", e);
-                    Vec::new()
+                    vec![]
                 }
             }
         };
@@ -2086,7 +2086,7 @@ impl crate::Adapter for super::Adapter {
                 Ok(formats) => formats,
                 Err(e) => {
                     log::error!("get_physical_device_surface_formats: {}", e);
-                    Vec::new()
+                    vec![]
                 }
             }
         };

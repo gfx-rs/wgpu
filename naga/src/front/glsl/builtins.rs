@@ -994,7 +994,7 @@ fn inject_standard_builtins(
         }
         "barrier" => declaration
             .overloads
-            .push(module.add_builtin(Vec::new(), MacroCall::Barrier)),
+            .push(module.add_builtin(vec![], MacroCall::Barrier)),
         // Add common builtins with floats
         _ => inject_common_builtin(declaration, module, name, 4),
     }

@@ -93,10 +93,10 @@ impl<'a> Context<'a> {
         let mut this = Context {
             expressions: Arena::new(),
             locals: Arena::new(),
-            arguments: Vec::new(),
+            arguments: vec![],
 
-            parameters: Vec::new(),
-            parameters_info: Vec::new(),
+            parameters: vec![],
+            parameters_info: vec![],
 
             symbol_table: crate::front::SymbolTable::default(),
             samplers: FastHashMap::default(),

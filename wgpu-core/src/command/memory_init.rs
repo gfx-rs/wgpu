@@ -276,7 +276,7 @@ impl<A: HalApi> BakedCommands<A> {
         device: &Device<A>,
         snatch_guard: &SnatchGuard<'_>,
     ) -> Result<(), DestroyedTextureError> {
-        let mut ranges: Vec<TextureInitRange> = Vec::new();
+        let mut ranges: Vec<TextureInitRange> = vec![];
         for texture_use in self.texture_memory_actions.drain_init_actions() {
             let mut initialization_status = texture_use.texture.initialization_status.write();
             let use_range = texture_use.range;

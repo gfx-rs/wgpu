@@ -3720,7 +3720,7 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        let mut pass_through_globals = Vec::new();
+        let mut pass_through_globals = vec![];
         for (fun_handle, fun) in module.functions.iter() {
             log::trace!(
                 "function {:?}, handle {:?}",
@@ -3979,7 +3979,7 @@ impl<W: Write> Writer<W> {
             // flattening structs into their members. In Metal, we will pass
             // each of these values to the entry point as a separate argument—
             // except for the varyings, handled next.
-            let mut flattened_arguments = Vec::new();
+            let mut flattened_arguments = vec![];
             for (arg_index, arg) in fun.arguments.iter().enumerate() {
                 match module.types[arg.ty].inner {
                     crate::TypeInner::Struct { ref members, .. } => {
@@ -4047,7 +4047,7 @@ impl<W: Write> Writer<W> {
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
                 Some(ref result) => {
-                    let mut result_members = Vec::new();
+                    let mut result_members = vec![];
                     if let crate::TypeInner::Struct { ref members, .. } =
                         module.types[result.ty].inner
                     {
@@ -4612,7 +4612,7 @@ mod workgroup_mem_init {
     impl AccessStack {
         const fn new() -> Self {
             Self {
-                stack: Vec::new(),
+                stack: vec![],
                 array_depth: 0,
             }
         }

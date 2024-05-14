@@ -16,9 +16,9 @@ impl Default for super::CommandState {
             raw_wg_size: metal::MTLSize::new(0, 0, 0),
             stage_infos: Default::default(),
             storage_buffer_length_map: Default::default(),
-            work_group_memory_sizes: Vec::new(),
-            push_constants: Vec::new(),
-            pending_timer_queries: Vec::new(),
+            work_group_memory_sizes: vec![],
+            push_constants: vec![],
+            pending_timer_queries: vec![],
         }
     }
 }

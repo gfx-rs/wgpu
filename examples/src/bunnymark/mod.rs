@@ -337,7 +337,7 @@ impl crate::framework::Example for Example {
             pipeline,
             global_group,
             local_group,
-            bunnies: Vec::new(),
+            bunnies: vec![],
             local_buffer,
             extent: [config.width, config.height],
             rng,

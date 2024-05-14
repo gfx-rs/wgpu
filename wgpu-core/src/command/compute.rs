@@ -386,7 +386,7 @@ impl Global {
             scope: device.new_usage_scope(),
             debug_scope_depth: 0,
         };
-        let mut temp_offsets = Vec::new();
+        let mut temp_offsets = vec![];
         let mut dynamic_offset_count = 0;
         let mut string_offset = 0;
         let mut active_query = None;

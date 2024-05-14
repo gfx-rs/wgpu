@@ -59,7 +59,7 @@ where
 {
     pub(crate) fn new() -> Self {
         Self {
-            map: Vec::new(),
+            map: vec![],
             kind: T::TYPE,
         }
     }

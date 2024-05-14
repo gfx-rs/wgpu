@@ -4,7 +4,7 @@ use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 fn create_numeric_builtin_test() -> Vec<ShaderTest> {
-    let mut tests = Vec::new();
+    let mut tests = vec![];
 
     #[rustfmt::skip]
     let clamp_values: &[(f32, f32, f32, &[f32])] = &[
@@ -55,7 +55,7 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
 // See https://github.com/gfx-rs/wgpu/issues/5276
 /*
 fn create_int64_polyfill_test() -> Vec<ShaderTest> {
-    let mut tests = Vec::new();
+    let mut tests = vec![];
 
     let u64_clz_values: &[(u64, u32)] = &[
         (u64::MAX, 0),

@@ -150,7 +150,7 @@ impl HexTerrainMesh {
     /// Creates the points required to render the mesh.
     ///
     pub fn make_buffer_data(&self) -> Vec<TerrainVertexAttributes> {
-        let mut vertices = Vec::new();
+        let mut vertices = vec![];
         fn middle(p1: &TerrainVertex, p2: &TerrainVertex, p: &TerrainVertex) -> glam::Vec3 {
             (p1.position + p2.position + p.position) / 3.0
         }
@@ -236,7 +236,7 @@ impl HexWaterMesh {
     /// Generates the points required to render the mesh.
     ///
     pub fn generate_points(&self) -> Vec<WaterVertexAttributes> {
-        let mut vertices = Vec::new();
+        let mut vertices = vec![];
 
         fn calculate_differences(a: [i16; 2], b: [i16; 2], c: [i16; 2]) -> [i8; 4] {
             [

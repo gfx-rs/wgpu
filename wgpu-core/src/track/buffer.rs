@@ -51,7 +51,7 @@ pub(crate) struct BufferBindGroupState<A: HalApi> {
 impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            buffers: Mutex::new(rank::BUFFER_BIND_GROUP_STATE_BUFFERS, Vec::new()),
+            buffers: Mutex::new(rank::BUFFER_BIND_GROUP_STATE_BUFFERS, vec![]),
 
             _phantom: PhantomData,
         }
@@ -114,7 +114,7 @@ pub(crate) struct BufferUsageScope<A: HalApi> {
 impl<A: HalApi> Default for BufferUsageScope<A> {
     fn default() -> Self {
         Self {
-            state: Vec::new(),
+            state: vec![],
             metadata: ResourceMetadata::new(),
         }
     }
@@ -348,12 +348,12 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
 impl<A: HalApi> BufferTracker<A> {
     pub fn new() -> Self {
         Self {
-            start: Vec::new(),
-            end: Vec::new(),
+            start: vec![],
+            end: vec![],
 
             metadata: ResourceMetadata::new(),
 
-            temp: Vec::new(),
+            temp: vec![],
         }
     }
 

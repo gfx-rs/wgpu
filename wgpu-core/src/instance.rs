@@ -32,7 +32,7 @@ pub struct FailedLimit {
 }
 
 fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
-    let mut failed = Vec::new();
+    let mut failed = vec![];
 
     requested.check_limits_with_fail_fn(allowed, false, |name, requested, allowed| {
         failed.push(FailedLimit {
@@ -756,7 +756,7 @@ impl Global {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
 
-        let mut adapters = Vec::new();
+        let mut adapters = vec![];
 
         #[cfg(vulkan)]
         self.enumerate(
@@ -841,7 +841,7 @@ impl Global {
                     device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
                     (id, adapters)
                 }
-                _ => (None, Vec::new()),
+                _ => (None, vec![]),
             }
         }
 
@@ -854,7 +854,7 @@ impl Global {
             })
             .transpose()?;
         let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
-        let mut device_types = Vec::new();
+        let mut device_types = vec![];
 
         #[cfg(vulkan)]
         let (id_vulkan, adapters_vk) = gather(

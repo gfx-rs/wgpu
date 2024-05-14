@@ -197,7 +197,7 @@ impl CpuPool {
         Self {
             device,
             ty,
-            heaps: Vec::new(),
+            heaps: vec![],
             available_heap_indices: BitSet::new(),
         }
     }
@@ -264,7 +264,7 @@ impl CpuHeap {
         Ok(Self {
             inner: Mutex::new(CpuHeapInner {
                 _raw: raw.clone(),
-                stage: Vec::new(),
+                stage: vec![],
             }),
             start: raw.start_cpu_descriptor(),
             handle_size,

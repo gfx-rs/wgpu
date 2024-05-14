@@ -173,8 +173,8 @@ impl super::Device {
 
         // collect sizes indices, immutable buffers, and work group memory sizes
         let ep_info = &module_info.get_entry_point(ep_index);
-        let mut wg_memory_sizes = Vec::new();
-        let mut sized_bindings = Vec::new();
+        let mut wg_memory_sizes = vec![];
+        let mut sized_bindings = vec![];
         let mut immutable_buffer_mask = 0;
         for (var_handle, var) in module.global_variables.iter() {
             match var.space {
@@ -1169,7 +1169,7 @@ impl crate::Device for super::Device {
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         Ok(super::Fence {
             completed_value: Arc::new(atomic::AtomicU64::new(0)),
-            pending_command_buffers: Vec::new(),
+            pending_command_buffers: vec![],
         })
     }
     unsafe fn destroy_fence(&self, _fence: super::Fence) {}

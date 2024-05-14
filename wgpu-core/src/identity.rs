@@ -120,7 +120,7 @@ impl<T: Marker> IdentityManager<T> {
             values: Mutex::new(
                 rank::IDENTITY_MANAGER_VALUES,
                 IdentityValues {
-                    free: Vec::new(),
+                    free: vec![],
                     next_index: 0,
                     count: 0,
                     id_source: IdSource::None,

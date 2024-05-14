@@ -269,8 +269,8 @@ impl<T> Arena<T> {
     /// Create a new arena with no initial capacity allocated.
     pub const fn new() -> Self {
         Arena {
-            data: Vec::new(),
-            span_info: Vec::new(),
+            data: vec![],
+            span_info: vec![],
         }
     }
 
@@ -562,7 +562,7 @@ impl<T> UniqueArena<T> {
     pub fn new() -> Self {
         UniqueArena {
             set: FastIndexSet::default(),
-            span_info: Vec::new(),
+            span_info: vec![],
         }
     }
 

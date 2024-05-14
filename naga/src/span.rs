@@ -165,7 +165,7 @@ impl<E> WithSpan<E> {
     pub const fn new(inner: E) -> Self {
         Self {
             inner,
-            spans: Vec::new(),
+            spans: vec![],
         }
     }
 
@@ -253,7 +253,7 @@ impl<E> WithSpan<E> {
                     .collect(),
             )
             .with_notes({
-                let mut notes = Vec::new();
+                let mut notes = vec![];
                 let mut source: &dyn Error = &self.inner;
                 while let Some(next) = Error::source(source) {
                     notes.push(next.to_string());
@@ -305,7 +305,7 @@ impl<E> WithSpan<E> {
 
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
+        let mut writer = NoColor::new(vec![]);
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
         String::from_utf8(writer.into_inner()).unwrap()
     }

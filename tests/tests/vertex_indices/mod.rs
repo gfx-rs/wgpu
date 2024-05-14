@@ -441,7 +441,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                     }
                 }
                 DrawCallKind::Indirect => {
-                    let mut indirect_bytes = Vec::new();
+                    let mut indirect_bytes = vec![];
                     for draw in draws {
                         draw.add_to_buffer(&mut indirect_bytes, features);
                     }

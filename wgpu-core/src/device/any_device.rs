@@ -30,7 +30,7 @@ pub struct AnyDevice {
 
 impl AnyDevice {
     /// Return an `AnyDevice` that holds an owning `Arc` pointer to `device`.
-    pub fn new<A: HalApi>(device: Arc<Device<A>>) -> AnyDevice {
+    pub fn new<A: HalApi>(device: Arc<Device<A>>) -> Self {
         unsafe fn drop_glue<A: HalApi>(ptr: *mut ()) {
             // Drop the arc this instance is holding.
             unsafe {
@@ -42,7 +42,7 @@ impl AnyDevice {
         // non-null.
         let data = unsafe { NonNull::new_unchecked(Arc::into_raw(device).cast_mut()) };
 
-        AnyDevice {
+        Self {
             data: data.cast(),
             vtable: &AnyDeviceVtable {
                 backend: A::VARIANT,

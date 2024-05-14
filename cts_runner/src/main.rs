@@ -97,7 +97,7 @@ mod native {
     fn op_read_file_sync(#[string] path: &str) -> Result<Vec<u8>, AnyError> {
         let path = std::path::Path::new(path);
         let mut file = std::fs::File::open(path)?;
-        let mut buf = Vec::new();
+        let mut buf = vec![];
         file.read_to_end(&mut buf)?;
         Ok(buf)
     }
@@ -129,7 +129,7 @@ mod native {
     }
 
     fn style<S: AsRef<str>>(s: S, colorspec: ColorSpec) -> impl fmt::Display {
-        let mut v = Vec::new();
+        let mut v = vec![];
         let mut ansi_writer = Ansi::new(&mut v);
         ansi_writer.set_color(&colorspec).unwrap();
         ansi_writer.write_all(s.as_ref().as_bytes()).unwrap();

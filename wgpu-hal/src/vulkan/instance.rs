@@ -234,7 +234,7 @@ impl super::Instance {
         let instance_extensions = Self::enumerate_instance_extension_properties(entry, None)?;
 
         // Check our extensions against the available extensions
-        let mut extensions: Vec<&'static CStr> = Vec::new();
+        let mut extensions: Vec<&'static CStr> = vec![];
 
         // VK_KHR_surface
         extensions.push(khr::surface::NAME);
@@ -660,7 +660,7 @@ impl crate::Instance for super::Instance {
         let obs_layer = CStr::from_bytes_with_nul(b"VK_LAYER_OBS_HOOK\0").unwrap();
         let has_obs_layer = find_layer(&instance_layers, obs_layer).is_some();
 
-        let mut layers: Vec<&'static CStr> = Vec::new();
+        let mut layers: Vec<&'static CStr> = vec![];
 
         let has_debug_extension = extensions.contains(&ext::debug_utils::NAME);
         let mut debug_user_data = has_debug_extension.then(|| {
@@ -887,7 +887,7 @@ impl crate::Instance for super::Instance {
             Ok(devices) => devices,
             Err(err) => {
                 log::error!("enumerate_adapters: {}", err);
-                Vec::new()
+                vec![]
             }
         };
 

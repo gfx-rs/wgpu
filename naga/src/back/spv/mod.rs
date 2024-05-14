@@ -117,7 +117,7 @@ impl Block {
     const fn new(label_id: Word) -> Self {
         Block {
             label_id,
-            body: Vec::new(),
+            body: vec![],
         }
     }
 }
@@ -782,7 +782,7 @@ pub fn write_vec(
     options: &Options,
     pipeline_options: Option<&PipelineOptions>,
 ) -> Result<Vec<u32>, Error> {
-    let mut words: Vec<u32> = Vec::new();
+    let mut words: Vec<u32> = vec![];
     let mut w = Writer::new(options)?;
 
     w.write(

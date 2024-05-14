@@ -84,7 +84,7 @@ impl<'source> ParsingContext<'source> {
                 let mut meta = token.meta;
                 let ty_name = self.expect_ident(frontend)?.0;
                 self.expect(frontend, TokenValue::LeftBrace)?;
-                let mut members = Vec::new();
+                let mut members = vec![];
                 let span = self.parse_struct_declaration_list(
                     frontend,
                     ctx,

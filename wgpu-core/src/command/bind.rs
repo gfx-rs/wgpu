@@ -57,7 +57,7 @@ mod compat {
         // Describe how bind group layouts are incompatible, for validation
         // error message.
         fn bgl_diff(&self) -> Vec<String> {
-            let mut diff = Vec::new();
+            let mut diff = vec![];
 
             if let Some(expected_bgl) = self.expected.as_ref() {
                 let expected_bgl_type = match expected_bgl.origin {

@@ -25,7 +25,7 @@ impl<T: Resource> ResourceMetadata<T> {
     pub(super) fn new() -> Self {
         Self {
             owned: BitVec::default(),
-            resources: Vec::new(),
+            resources: vec![],
         }
     }
 
@@ -144,7 +144,7 @@ impl<T: Resource> ResourceMetadata<T> {
         if !self.owned.is_empty() {
             self.tracker_assert_in_bounds(self.owned.len() - 1)
         };
-        let mut resources = Vec::new();
+        let mut resources = vec![];
         iterate_bitvec_indices(&self.owned).for_each(|index| {
             let resource = unsafe { self.resources.get_unchecked(index) };
             resources.push(resource.as_ref().unwrap().clone());

@@ -699,8 +699,8 @@ impl crate::Queue for Queue {
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
 
-        let mut wait_stage_masks = Vec::new();
-        let mut wait_semaphores = Vec::new();
+        let mut wait_stage_masks = vec![];
+        let mut wait_semaphores = vec![];
         let mut signal_semaphores = ArrayVec::<_, 2>::new();
         let mut signal_values = ArrayVec::<_, 2>::new();
 

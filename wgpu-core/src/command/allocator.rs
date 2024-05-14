@@ -21,7 +21,7 @@ pub(crate) struct CommandAllocator<A: HalApi> {
 impl<A: HalApi> CommandAllocator<A> {
     pub(crate) fn new() -> Self {
         Self {
-            free_encoders: Mutex::new(rank::COMMAND_ALLOCATOR_FREE_ENCODERS, Vec::new()),
+            free_encoders: Mutex::new(rank::COMMAND_ALLOCATOR_FREE_ENCODERS, vec![]),
         }
     }
 

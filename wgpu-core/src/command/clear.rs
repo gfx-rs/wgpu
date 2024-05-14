@@ -361,7 +361,7 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
     }
 
     // Gather list of zero_buffer copies and issue a single command then to perform them
-    let mut zero_buffer_copy_regions = Vec::new();
+    let mut zero_buffer_copy_regions = vec![];
     let buffer_copy_pitch = alignments.buffer_copy_pitch.get() as u32;
     let (block_width, block_height) = texture_desc.format.block_dimensions();
     let block_size = texture_desc.format.block_copy_size(None).unwrap();

@@ -4430,7 +4430,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let mut push_constant_segments = Vec::new();
+        let mut push_constant_segments = vec![];
         let mut push_constant_items = vec![];
 
         if let Some((name, ty)) = push_constant_info {

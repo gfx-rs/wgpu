@@ -359,7 +359,7 @@ impl RenderBundleEncoder {
             bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
             vertex: (0..hal::MAX_VERTEX_BUFFERS).map(|_| None).collect(),
             index: None,
-            flat_dynamic_offsets: Vec::new(),
+            flat_dynamic_offsets: vec![],
         };
 
         let indices = &device.tracker_indices;
@@ -389,9 +389,9 @@ impl RenderBundleEncoder {
             .write()
             .set_size(indices.query_sets.size());
 
-        let mut commands = Vec::new();
-        let mut buffer_memory_init_actions = Vec::new();
-        let mut texture_memory_init_actions = Vec::new();
+        let mut commands = vec![];
+        let mut buffer_memory_init_actions = vec![];
+        let mut texture_memory_init_actions = vec![];
 
         let base = self.base.as_ref();
         let mut next_dynamic_offset = 0;
@@ -768,8 +768,8 @@ impl RenderBundleEncoder {
                 label: desc.label.as_ref().map(|cow| cow.to_string()),
                 commands,
                 dynamic_offsets: state.flat_dynamic_offsets,
-                string_data: Vec::new(),
-                push_constant_data: Vec::new(),
+                string_data: vec![],
+                push_constant_data: vec![],
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,

@@ -287,12 +287,12 @@ pub(crate) struct LifetimeTracker<A: HalApi> {
 impl<A: HalApi> LifetimeTracker<A> {
     pub fn new() -> Self {
         Self {
-            mapped: Vec::new(),
-            future_suspected_buffers: Vec::new(),
-            future_suspected_textures: Vec::new(),
+            mapped: vec![],
+            future_suspected_buffers: vec![],
+            future_suspected_textures: vec![],
             suspected_resources: ResourceMaps::new(),
-            active: Vec::new(),
-            ready_to_map: Vec::new(),
+            active: vec![],
+            ready_to_map: vec![],
             work_done_closures: SmallVec::new(),
             device_lost_closure: None,
         }
@@ -344,7 +344,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.active.push(ActiveSubmission {
             index,
             last_resources,
-            mapped: Vec::new(),
+            mapped: vec![],
             encoders,
             work_done_closures: SmallVec::new(),
         });
@@ -477,7 +477,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     where
         R: Resource,
     {
-        let mut removed_resources = Vec::new();
+        let mut removed_resources = vec![];
         resources_map.retain(|&index, resource| {
             let submit_index = resource.as_info().submission_index();
             let non_referenced_resources = active
@@ -704,7 +704,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     }
 
     fn triage_suspected_pipeline_layouts(&mut self) -> &mut Self {
-        let mut removed_resources = Vec::new();
+        let mut removed_resources = vec![];
         self.suspected_resources
             .pipeline_layouts
             .retain(|_pipeline_layout_id, pipeline_layout| {
@@ -838,7 +838,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         snatch_guard: &SnatchGuard,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
-            return Vec::new();
+            return vec![];
         }
         let mut pending_callbacks: Vec<super::BufferMapPendingClosure> =
             Vec::with_capacity(self.ready_to_map.len());

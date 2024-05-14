@@ -437,7 +437,7 @@ impl Body {
     pub const fn with_parent(parent: usize) -> Self {
         Body {
             parent,
-            data: Vec::new(),
+            data: vec![],
         }
     }
 }
@@ -625,7 +625,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             data_offset: 0,
             state: ModuleState::Empty,
             layouter: Layouter::default(),
-            temp_bytes: Vec::new(),
+            temp_bytes: vec![],
             ext_glsl_id: None,
             future_decor: FastHashMap::default(),
             future_member_decor: FastHashMap::default(),
@@ -4123,7 +4123,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     .unwrap();
                 (fun_id, mem::take(&mut lookup.parameters_sampling))
             }
-            None => (0, Vec::new()),
+            None => (0, vec![]),
         };
 
         for (_, expr) in fun.expressions.iter_mut() {

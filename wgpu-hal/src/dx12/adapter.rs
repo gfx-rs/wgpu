@@ -509,7 +509,7 @@ impl crate::Adapter for super::Adapter {
             device,
             queue: super::Queue {
                 raw: queue,
-                temp_lists: Mutex::new(Vec::new()),
+                temp_lists: Mutex::new(vec![]),
             },
         })
     }

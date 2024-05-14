@@ -223,7 +223,7 @@ impl MapContext {
         Self {
             total_size,
             initial_range: 0..0,
-            sub_ranges: Vec::new(),
+            sub_ranges: vec![],
         }
     }
 

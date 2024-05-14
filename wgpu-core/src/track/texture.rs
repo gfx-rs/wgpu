@@ -164,7 +164,7 @@ pub(crate) struct TextureBindGroupState<A: HalApi> {
 impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            textures: Mutex::new(rank::TEXTURE_BIND_GROUP_STATE_TEXTURES, Vec::new()),
+            textures: Mutex::new(rank::TEXTURE_BIND_GROUP_STATE_TEXTURES, vec![]),
         }
     }
 
@@ -214,7 +214,7 @@ pub(crate) struct TextureStateSet {
 impl TextureStateSet {
     fn new() -> Self {
         Self {
-            simple: Vec::new(),
+            simple: vec![],
             complex: FastHashMap::default(),
         }
     }
@@ -445,7 +445,7 @@ impl<A: HalApi> TextureTracker<A> {
 
             metadata: ResourceMetadata::new(),
 
-            temp: Vec::new(),
+            temp: vec![],
 
             _phantom: PhantomData,
         }
@@ -501,7 +501,7 @@ impl<A: HalApi> TextureTracker<A> {
         &'a mut self,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> (PendingTransitionList, Vec<Option<&'a TextureInner<A>>>) {
-        let mut textures = Vec::new();
+        let mut textures = vec![];
         let transitions = self
             .temp
             .drain(..)

@@ -81,7 +81,7 @@ impl ParseError {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
+        let mut writer = NoColor::new(vec![]);
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
         String::from_utf8(writer.into_inner()).unwrap()
     }

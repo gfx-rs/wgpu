@@ -54,7 +54,7 @@ impl crate::Instance for Context {
     }
     unsafe fn destroy_surface(&self, surface: Context) {}
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
-        Vec::new()
+        vec![]
     }
 }
 

@@ -380,7 +380,7 @@ impl super::Device {
         for &(naga_stage, stage) in &shaders {
             has_stages |= map_naga_stage(naga_stage);
             let pc_item = {
-                push_constant_items.push(Vec::new());
+                push_constant_items.push(vec![]);
                 push_constant_items.last_mut().unwrap()
             };
             let context = CompilationContext {
@@ -1200,7 +1200,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
     ) -> Result<super::BindGroup, crate::DeviceError> {
-        let mut contents = Vec::new();
+        let mut contents = vec![];
 
         let layout_and_entry_iter = desc.entries.iter().map(|entry| {
             let layout = desc
@@ -1308,8 +1308,8 @@ impl crate::Device for super::Device {
             unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview) }?;
 
         let (vertex_buffers, vertex_attributes) = {
-            let mut buffers = Vec::new();
-            let mut attributes = Vec::new();
+            let mut buffers = vec![];
+            let mut attributes = vec![];
             for (index, vb_layout) in desc.vertex_buffers.iter().enumerate() {
                 buffers.push(super::VertexBufferDesc {
                     step: vb_layout.step_mode,
@@ -1329,7 +1329,7 @@ impl crate::Device for super::Device {
         };
 
         let color_targets = {
-            let mut targets = Vec::new();
+            let mut targets = vec![];
             for ct in desc.color_targets.iter().filter_map(|at| at.as_ref()) {
                 targets.push(super::ColorTargetDesc {
                     mask: ct.write_mask,
@@ -1445,7 +1445,7 @@ impl crate::Device for super::Device {
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         Ok(super::Fence {
             last_completed: 0,
-            pending: Vec::new(),
+            pending: vec![],
         })
     }
     unsafe fn destroy_fence(&self, fence: super::Fence) {

@@ -36,7 +36,7 @@ impl<'a> Index<'a> {
             module: tu,
             visited: vec![false; len],
             temp_visited: vec![false; len],
-            path: Vec::new(),
+            path: vec![],
             out: Vec::with_capacity(len),
         };
         let dependency_order = solver.solve()?;
