@@ -41,6 +41,14 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Remove lifetime bounds on `wgpu::ComputePass`
+
+TODO(wumpf): This is still work in progress. Should write a bit more about it. Also will very likely extend to `wgpu::RenderPass` before release.
+
+`wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
+
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569).
+
 #### Querying shader compilation errors
 
 Wgpu now supports querying [shader compilation info](https://www.w3.org/TR/webgpu/#dom-gpushadermodule-getcompilationinfo).
