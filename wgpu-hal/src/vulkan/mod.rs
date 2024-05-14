@@ -236,7 +236,6 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
-    subgroup_size_control: bool,
 }
 
 bitflags::bitflags!(
@@ -342,6 +341,7 @@ struct DeviceShared {
     timestamp_period: f32,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
+    features: wgt::Features,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
 }
