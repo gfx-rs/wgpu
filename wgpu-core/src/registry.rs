@@ -182,7 +182,7 @@ impl<T: Resource> Registry<T> {
                 if label.is_empty() {
                     format!("<{}-{:?}>", type_name, id.unzip())
                 } else {
-                    label
+                    label.to_owned()
                 }
             }
             Err(_) => format!(

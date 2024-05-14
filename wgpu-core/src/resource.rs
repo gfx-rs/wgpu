@@ -84,7 +84,8 @@ impl<T: Resource> Drop for ResourceInfo<T> {
 }
 
 impl<T: Resource> ResourceInfo<T> {
-    #[allow(unused_variables)]
+    // Note: Abstractly, this function should take `label: String` to minimize string cloning.
+    // But as actually used, every input is a literal or borrowed `&str`, so this is convenient.
     pub(crate) fn new(
         label: &str,
         tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
@@ -149,9 +150,16 @@ pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Self>;
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self>;
-    fn label(&self) -> String {
-        self.as_info().label.clone()
+
+    /// Returns a string identifying this resource for logging and errors.
+    ///
+    /// It may be a user-provided string or it may be a placeholder from wgpu.
+    ///
+    /// It is non-empty unless the user-provided string was empty.
+    fn label(&self) -> &str {
+        &self.as_info().label
     }
+
     fn ref_count(self: &Arc<Self>) -> usize {
         Arc::strong_count(self)
     }
@@ -718,8 +726,8 @@ impl<A: HalApi> Resource for StagingBuffer<A> {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        String::from("<StagingBuffer>")
+    fn label(&self) -> &str {
+        "<StagingBuffer>"
     }
 }
 

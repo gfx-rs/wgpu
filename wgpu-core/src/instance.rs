@@ -159,8 +159,8 @@ impl Resource for Surface {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        String::from("<Surface>")
+    fn label(&self) -> &str {
+        "<Surface>"
     }
 }
 
