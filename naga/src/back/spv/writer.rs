@@ -55,7 +55,7 @@ impl Writer {
         let gl450_ext_inst_id = id_gen.next();
         let void_type = id_gen.next();
 
-        Ok(Writer {
+        Ok(Self {
             physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
             id_gen,

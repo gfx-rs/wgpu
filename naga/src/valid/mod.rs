@@ -371,7 +371,7 @@ impl crate::TypeInner {
 impl Validator {
     /// Construct a new validator instance.
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
-        Validator {
+        Self {
             flags,
             capabilities,
             subgroup_stages: ShaderStages::empty(),

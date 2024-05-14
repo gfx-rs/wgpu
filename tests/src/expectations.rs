@@ -90,22 +90,22 @@ impl FailureCase {
 
     /// This case applies to all tests.
     pub fn always() -> Self {
-        FailureCase::default()
+        Self::default()
     }
 
     /// This case applies to no tests.
     pub fn never() -> Self {
-        FailureCase {
+        Self {
             backends: Some(wgpu::Backends::empty()),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
     /// Tests running on any of the given backends.
     pub fn backend(backends: wgpu::Backends) -> Self {
-        FailureCase {
+        Self {
             backends: Some(backends),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
@@ -117,9 +117,9 @@ impl FailureCase {
     ///
     /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
     pub fn adapter(adapter: &'static str) -> Self {
-        FailureCase {
+        Self {
             adapter: Some(adapter),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
@@ -132,28 +132,28 @@ impl FailureCase {
     ///
     /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
     pub fn backend_adapter(backends: wgpu::Backends, adapter: &'static str) -> Self {
-        FailureCase {
+        Self {
             backends: Some(backends),
             adapter: Some(adapter),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
     /// Tests running under WebGL.
     pub fn webgl2() -> Self {
         #[cfg(target_arch = "wasm32")]
-        let case = FailureCase::backend(wgpu::Backends::GL);
+        let case = Self::backend(wgpu::Backends::GL);
         #[cfg(not(target_arch = "wasm32"))]
-        let case = FailureCase::never();
+        let case = Self::never();
         case
     }
 
     /// Tests running on the MoltenVK Vulkan driver on macOS.
     pub fn molten_vk() -> Self {
-        FailureCase {
+        Self {
             backends: Some(wgpu::Backends::VULKAN),
             driver: Some("MoltenVK"),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
@@ -191,7 +191,7 @@ impl FailureCase {
     ///
     /// Use this _very_ sparyingly, and match as tightly as you can, including giving a specific failure message.
     pub fn flaky(self) -> Self {
-        FailureCase {
+        Self {
             behavior: FailureBehavior::Ignore,
             ..self
         }

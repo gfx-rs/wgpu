@@ -227,7 +227,7 @@ impl<'a> BlockContext<'a> {
     }
 
     const fn with_abilities(&self, abilities: ControlFlowAbility) -> Self {
-        BlockContext { abilities, ..*self }
+        Self { abilities, ..*self }
     }
 
     fn get_expression(&self, handle: Handle<crate::Expression>) -> &'a crate::Expression {

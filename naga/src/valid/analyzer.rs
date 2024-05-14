@@ -101,7 +101,7 @@ impl ops::BitOr for FunctionUniformity {
 
 impl FunctionUniformity {
     const fn new() -> Self {
-        FunctionUniformity {
+        Self {
             result: Uniformity::new(),
             exit: ExitFlags::empty(),
         }
@@ -179,7 +179,7 @@ pub struct ExpressionInfo {
 
 impl ExpressionInfo {
     const fn new() -> Self {
-        ExpressionInfo {
+        Self {
             uniformity: Uniformity::new(),
             ref_count: 0,
             assignable_global: None,

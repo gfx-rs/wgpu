@@ -115,7 +115,7 @@ struct TerminatedBlock {
 
 impl Block {
     const fn new(label_id: Word) -> Self {
-        Block {
+        Self {
             label_id,
             body: vec![],
         }
@@ -207,19 +207,19 @@ impl LocalImageType {
         let dim = spirv::Dim::from(dim);
 
         match class {
-            crate::ImageClass::Sampled { kind, multi } => LocalImageType {
+            crate::ImageClass::Sampled { kind, multi } => Self {
                 sampled_type: kind,
                 dim,
                 flags: make_flags(multi, ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
-            crate::ImageClass::Depth { multi } => LocalImageType {
+            crate::ImageClass::Depth { multi } => Self {
                 sampled_type: crate::ScalarKind::Float,
                 dim,
                 flags: make_flags(multi, ImageTypeFlags::DEPTH | ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
-            crate::ImageClass::Storage { format, access: _ } => LocalImageType {
+            crate::ImageClass::Storage { format, access: _ } => Self {
                 sampled_type: crate::ScalarKind::from(format),
                 dim,
                 flags: make_flags(false, ImageTypeFlags::empty()),
@@ -751,7 +751,7 @@ impl<'a> Default for Options<'a> {
         if cfg!(debug_assertions) {
             flags |= WriterFlags::DEBUG;
         }
-        Options {
+        Self {
             lang_version: (1, 0),
             flags,
             binding_map: BindingMap::default(),

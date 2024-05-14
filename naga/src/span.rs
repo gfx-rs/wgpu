@@ -15,12 +15,12 @@ impl Span {
     ///
     /// Note: end is exclusive, it doesn't belong to the `Span`
     pub const fn new(start: u32, end: u32) -> Self {
-        Span { start, end }
+        Self { start, end }
     }
 
     /// Returns a new `Span` starting at `self` and ending at `other`
     pub const fn until(&self, other: &Self) -> Self {
-        Span {
+        Self {
             start: self.start,
             end: other.end,
         }
@@ -37,7 +37,7 @@ impl Span {
             *self
         } else {
             // Both self and other are defined so calculate the span that contains them both
-            Span {
+            Self {
                 start: self.start.min(other.start),
                 end: self.end.max(other.end),
             }

@@ -27,7 +27,7 @@ pub struct ParsingContext<'source> {
 
 impl<'source> ParsingContext<'source> {
     pub fn new(lexer: Lexer<'source>) -> Self {
-        ParsingContext {
+        Self {
             lexer: lexer.peekable(),
             backtracked_token: None,
             last_meta: Span::default(),

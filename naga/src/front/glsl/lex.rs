@@ -34,7 +34,7 @@ impl<'a> Lexer<'a> {
         for (define, value) in defines {
             pp.add_define(define, value).unwrap(); //TODO: handle error
         }
-        Lexer { pp }
+        Self { pp }
     }
 }
 

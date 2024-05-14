@@ -130,8 +130,8 @@ impl Input {
     /// The `input` path is interpreted relative to the `BASE_DIR_IN`
     /// subdirectory of the directory given by the `CARGO_MANIFEST_DIR`
     /// environment variable.
-    fn new(subdirectory: Option<&str>, name: &str, extension: &str) -> Input {
-        Input {
+    fn new(subdirectory: Option<&str>, name: &str, extension: &str) -> Self {
+        Self {
             subdirectory: subdirectory.map(PathBuf::from),
             // Don't wipe out any extensions on `name`, as
             // `with_extension` would do.
@@ -141,7 +141,7 @@ impl Input {
     }
 
     /// Return an iterator that produces an `Input` for each entry in `subdirectory`.
-    fn files_in_dir(subdirectory: &str) -> impl Iterator<Item = Input> + 'static {
+    fn files_in_dir(subdirectory: &str) -> impl Iterator<Item = Self> + 'static {
         let subdirectory = subdirectory.to_string();
         let mut input_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join(BASE_DIR_IN);
         input_directory.push(&subdirectory);
@@ -152,7 +152,7 @@ impl Input {
                 let extension = file_name
                     .extension()
                     .expect("all files in snapshot input directory should have extensions");
-                let input = Input::new(
+                let input = Self::new(
                     Some(&subdirectory),
                     file_name.file_stem().unwrap().to_str().unwrap(),
                     extension.to_str().unwrap(),

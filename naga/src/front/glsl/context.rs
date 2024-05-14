@@ -90,7 +90,7 @@ impl<'a> Context<'a> {
         is_const: bool,
         global_expression_kind_tracker: &'a mut crate::proc::ExpressionKindTracker,
     ) -> Result<Self> {
-        let mut this = Context {
+        let mut this = Self {
             expressions: Arena::new(),
             locals: Arena::new(),
             arguments: vec![],
@@ -1491,7 +1491,7 @@ pub struct StmtContext {
 
 impl StmtContext {
     const fn new() -> Self {
-        StmtContext {
+        Self {
             hir_exprs: Arena::new(),
         }
     }

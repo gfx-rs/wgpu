@@ -620,7 +620,7 @@ pub struct Frontend<I> {
 
 impl<I: Iterator<Item = u32>> Frontend<I> {
     pub fn new(data: I, options: &Options) -> Self {
-        Frontend {
+        Self {
             data,
             data_offset: 0,
             state: ModuleState::Empty,

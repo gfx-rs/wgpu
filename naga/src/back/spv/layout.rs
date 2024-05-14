@@ -7,7 +7,7 @@ const GENERATOR: Word = 28;
 
 impl PhysicalLayout {
     pub(super) const fn new(version: Word) -> Self {
-        PhysicalLayout {
+        Self {
             magic_number: MAGIC_NUMBER,
             version,
             generator: GENERATOR,
@@ -27,7 +27,7 @@ impl PhysicalLayout {
 
 impl super::recyclable::Recyclable for PhysicalLayout {
     fn recycle(self) -> Self {
-        PhysicalLayout {
+        Self {
             magic_number: self.magic_number,
             version: self.version,
             generator: self.generator,
@@ -73,7 +73,7 @@ impl super::recyclable::Recyclable for LogicalLayout {
 
 impl Instruction {
     pub(super) const fn new(op: Op) -> Self {
-        Instruction {
+        Self {
             op,
             wc: 1, // Always start at 1 for the first word (OP + WC),
             type_id: None,

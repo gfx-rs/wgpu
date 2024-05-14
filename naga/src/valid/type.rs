@@ -209,7 +209,7 @@ pub(super) struct TypeInfo {
 
 impl TypeInfo {
     const fn dummy() -> Self {
-        TypeInfo {
+        Self {
             flags: TypeFlags::empty(),
             uniform_layout: Ok(Alignment::ONE),
             storage_layout: Ok(Alignment::ONE),
@@ -217,7 +217,7 @@ impl TypeInfo {
     }
 
     const fn new(flags: TypeFlags, alignment: Alignment) -> Self {
-        TypeInfo {
+        Self {
             flags,
             uniform_layout: Ok(alignment),
             storage_layout: Ok(alignment),
