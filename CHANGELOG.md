@@ -37,15 +37,17 @@ Bottom level categories:
 - Hal
 -->
 
-## Unreleased
-
-## v0.20.1 (2024-04-??)
+## Unreleased -- v0.20.1 (2024-04-??)
 
 ### Bug Fixes
 
 #### General
 
 - Clean up weak references to texture views and bind groups. By @xiaopengli89 [#5595](https://github.com/gfx-rs/wgpu/pull/5595).
+
+#### Vulkan
+
+- Fix enablement of subgroup ops extension on Vulkan devices that don't support Vulkan 1.3. By @cwfitzgerald in [#5624](https://github.com/gfx-rs/wgpu/pull/5624).
 
 
 ## v0.20.0 (2024-04-28)
