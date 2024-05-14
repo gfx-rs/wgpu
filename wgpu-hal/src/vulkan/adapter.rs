@@ -1485,9 +1485,6 @@ impl super::Instance {
                 }),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(vk::KhrImageFormatListFn::name()),
-            subgroup_size_control: phd_features
-                .subgroup_size_control
-                .map_or(false, |ext| ext.subgroup_size_control == vk::TRUE),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1792,6 +1789,7 @@ impl super::Adapter {
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             private_caps: self.private_caps.clone(),
+            features,
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),

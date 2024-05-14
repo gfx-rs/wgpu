@@ -789,7 +789,7 @@ impl super::Device {
         };
 
         let mut flags = vk::PipelineShaderStageCreateFlags::empty();
-        if self.shared.private_caps.subgroup_size_control {
+        if self.shared.features.contains(wgt::Features::SUBGROUP) {
             flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE
         }
 
