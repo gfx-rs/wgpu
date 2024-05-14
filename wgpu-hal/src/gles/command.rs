@@ -608,6 +608,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
             depth: 0.0..1.0,
         });
 
+        if !rendering_to_external_framebuffer {
+            // set the draw buffers and states
+            self.cmd_buffer
+                .commands
+                .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+        }
+
         // issue the clears
         for (i, cat) in desc
             .color_attachments
@@ -636,13 +643,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     },
                 );
             }
-        }
-
-        if !rendering_to_external_framebuffer {
-            // set the draw buffers and states
-            self.cmd_buffer
-                .commands
-                .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
         }
 
         if let Some(ref dsat) = desc.depth_stencil_attachment {
