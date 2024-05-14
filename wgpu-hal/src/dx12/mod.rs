@@ -336,9 +336,9 @@ fn test_dirty_mask() {
 
 impl PassState {
     fn new() -> Self {
-        PassState {
+        Self {
             has_label: false,
-            resolves: ArrayVec::new(),
+            resolves: <_>::default(),
             layout: PipelineLayoutShared {
                 signature: d3d12::RootSignature::null(),
                 total_root_elements: 0,

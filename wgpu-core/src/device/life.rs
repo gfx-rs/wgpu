@@ -42,26 +42,26 @@ pub(crate) struct ResourceMaps<A: HalApi> {
 
 impl<A: HalApi> ResourceMaps<A> {
     pub(crate) fn new() -> Self {
-        ResourceMaps {
-            buffers: FastHashMap::default(),
-            staging_buffers: FastHashMap::default(),
-            textures: FastHashMap::default(),
-            texture_views: FastHashMap::default(),
-            samplers: FastHashMap::default(),
-            bind_groups: FastHashMap::default(),
-            bind_group_layouts: FastHashMap::default(),
-            render_pipelines: FastHashMap::default(),
-            compute_pipelines: FastHashMap::default(),
-            pipeline_layouts: FastHashMap::default(),
-            render_bundles: FastHashMap::default(),
-            query_sets: FastHashMap::default(),
-            destroyed_buffers: FastHashMap::default(),
-            destroyed_textures: FastHashMap::default(),
+        Self {
+            buffers: <_>::default(),
+            staging_buffers: <_>::default(),
+            textures: <_>::default(),
+            texture_views: <_>::default(),
+            samplers: <_>::default(),
+            bind_groups: <_>::default(),
+            bind_group_layouts: <_>::default(),
+            render_pipelines: <_>::default(),
+            compute_pipelines: <_>::default(),
+            pipeline_layouts: <_>::default(),
+            render_bundles: <_>::default(),
+            query_sets: <_>::default(),
+            destroyed_buffers: <_>::default(),
+            destroyed_textures: <_>::default(),
         }
     }
 
     pub(crate) fn clear(&mut self) {
-        let ResourceMaps {
+        let Self {
             buffers,
             staging_buffers,
             textures,

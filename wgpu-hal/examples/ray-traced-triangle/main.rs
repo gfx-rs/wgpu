@@ -152,7 +152,7 @@ impl AccelerationStructureInstance {
             shader_binding_table_record_offset <= Self::MAX_U24,
             "shader_binding_table_record_offset uses more than 24 bits! {shader_binding_table_record_offset} > {}", Self::MAX_U24
         );
-        AccelerationStructureInstance {
+        Self {
             transform: Self::affine_to_rows(transform),
             custom_index_and_mask: (custom_index & Self::MAX_U24) | (u32::from(mask) << 24),
             shader_binding_table_record_offset_and_flags: (shader_binding_table_record_offset

@@ -153,7 +153,7 @@ struct TrackerIndexAllocator {
 
 impl TrackerIndexAllocator {
     pub fn new() -> Self {
-        TrackerIndexAllocator {
+        Self {
             unused: vec![],
             next_index: TrackerIndex(0),
         }
@@ -194,7 +194,7 @@ pub(crate) struct SharedTrackerIndexAllocator {
 
 impl SharedTrackerIndexAllocator {
     pub fn new() -> Self {
-        SharedTrackerIndexAllocator {
+        Self {
             inner: Mutex::new(
                 rank::SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
                 TrackerIndexAllocator::new(),
@@ -232,19 +232,19 @@ pub(crate) struct TrackerIndexAllocators {
 
 impl TrackerIndexAllocators {
     pub fn new() -> Self {
-        TrackerIndexAllocators {
-            buffers: Arc::new(SharedTrackerIndexAllocator::new()),
-            staging_buffers: Arc::new(SharedTrackerIndexAllocator::new()),
-            textures: Arc::new(SharedTrackerIndexAllocator::new()),
-            texture_views: Arc::new(SharedTrackerIndexAllocator::new()),
-            samplers: Arc::new(SharedTrackerIndexAllocator::new()),
-            bind_groups: Arc::new(SharedTrackerIndexAllocator::new()),
-            bind_group_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
-            compute_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
-            render_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
-            pipeline_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
-            bundles: Arc::new(SharedTrackerIndexAllocator::new()),
-            query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
+        Self {
+            buffers: SharedTrackerIndexAllocator::new().into(),
+            staging_buffers: SharedTrackerIndexAllocator::new().into(),
+            textures: SharedTrackerIndexAllocator::new().into(),
+            texture_views: SharedTrackerIndexAllocator::new().into(),
+            samplers: SharedTrackerIndexAllocator::new().into(),
+            bind_groups: SharedTrackerIndexAllocator::new().into(),
+            bind_group_layouts: SharedTrackerIndexAllocator::new().into(),
+            compute_pipelines: SharedTrackerIndexAllocator::new().into(),
+            render_pipelines: SharedTrackerIndexAllocator::new().into(),
+            pipeline_layouts: SharedTrackerIndexAllocator::new().into(),
+            bundles: SharedTrackerIndexAllocator::new().into(),
+            query_sets: SharedTrackerIndexAllocator::new().into(),
         }
     }
 }

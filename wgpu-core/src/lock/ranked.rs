@@ -178,8 +178,8 @@ fn release(saved: LockState) {
 }
 
 impl<T> Mutex<T> {
-    pub fn new(rank: LockRank, value: T) -> Mutex<T> {
-        Mutex {
+    pub fn new(rank: LockRank, value: T) -> Self {
+        Self {
             inner: parking_lot::Mutex::new(value),
             rank,
         }
@@ -255,8 +255,8 @@ pub struct RwLockWriteGuard<'a, T> {
 }
 
 impl<T> RwLock<T> {
-    pub fn new(rank: LockRank, value: T) -> RwLock<T> {
-        RwLock {
+    pub fn new(rank: LockRank, value: T) -> Self {
+        Self {
             inner: parking_lot::RwLock::new(value),
             rank,
         }

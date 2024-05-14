@@ -21,8 +21,8 @@ pub struct Mutex<T>(parking_lot::Mutex<T>);
 pub struct MutexGuard<'a, T>(parking_lot::MutexGuard<'a, T>);
 
 impl<T> Mutex<T> {
-    pub fn new(_rank: super::rank::LockRank, value: T) -> Mutex<T> {
-        Mutex(parking_lot::Mutex::new(value))
+    pub fn new(_rank: super::rank::LockRank, value: T) -> Self {
+        Self(parking_lot::Mutex::new(value))
     }
 
     pub fn lock(&self) -> MutexGuard<T> {
@@ -73,8 +73,8 @@ pub struct RwLockReadGuard<'a, T>(parking_lot::RwLockReadGuard<'a, T>);
 pub struct RwLockWriteGuard<'a, T>(parking_lot::RwLockWriteGuard<'a, T>);
 
 impl<T> RwLock<T> {
-    pub fn new(_rank: super::rank::LockRank, value: T) -> RwLock<T> {
-        RwLock(parking_lot::RwLock::new(value))
+    pub fn new(_rank: super::rank::LockRank, value: T) -> Self {
+        Self(parking_lot::RwLock::new(value))
     }
 
     pub fn read(&self) -> RwLockReadGuard<T> {

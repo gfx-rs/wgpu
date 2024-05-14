@@ -50,7 +50,7 @@ pub(crate) struct TextureInitTracker {
 
 impl TextureInitTracker {
     pub(crate) fn new(mip_level_count: u32, depth_or_array_layers: u32) -> Self {
-        TextureInitTracker {
+        Self {
             mips: std::iter::repeat(TextureLayerInitTracker::new(depth_or_array_layers))
                 .take(mip_level_count as usize)
                 .collect(),
