@@ -2979,8 +2979,8 @@ struct ErrorSinkRaw {
 }
 
 impl ErrorSinkRaw {
-    fn new() -> ErrorSinkRaw {
-        ErrorSinkRaw {
+    fn new() -> Self {
+        Self {
             scopes: vec![],
             uncaptured_handler: Box::from(default_error_handler),
         }
