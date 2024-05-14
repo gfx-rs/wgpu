@@ -47,7 +47,7 @@ TODO(wumpf): This is still work in progress. Should write a bit more about it. A
 
 `wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
 
-By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569).
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575).
 
 #### Querying shader compilation errors
 
