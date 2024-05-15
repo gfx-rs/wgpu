@@ -540,7 +540,7 @@ pub struct Device {
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
-    counters: crate::InternalCounters,
+    counters: wgt::HalCounters,
 }
 
 /// Semaphores for forcing queue submissions to run in order.

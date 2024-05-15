@@ -268,7 +268,7 @@ pub struct Device {
     main_vao: glow::VertexArray,
     #[cfg(all(native, feature = "renderdoc"))]
     render_doc: crate::auxil::renderdoc::RenderDoc,
-    counters: crate::InternalCounters,
+    counters: wgt::HalCounters,
 }
 
 pub struct ShaderClearProgram {

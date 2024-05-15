@@ -277,8 +277,8 @@ impl crate::Device for Context {
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
 
-    fn get_internal_counters(&self) -> &crate::InternalCounters {
-        unreachable!();
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        Default::default()
     }
 }
 

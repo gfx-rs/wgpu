@@ -1,5 +1,4 @@
 use super::{conv, PipelineCache};
-use crate::InternalCounters;
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
@@ -2388,10 +2387,12 @@ impl crate::Device for super::Device {
         }
     }
 
-    fn get_internal_counters(&self) -> &InternalCounters {
-        self.counters.memory_allocations.set(self.shared.memory_allocations_counter.read());
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        self.counters
+            .memory_allocations
+            .set(self.shared.memory_allocations_counter.read());
 
-        &self.counters
+        self.counters.clone()
     }
 }
 

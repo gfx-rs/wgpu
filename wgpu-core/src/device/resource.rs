@@ -3643,8 +3643,11 @@ impl<A: HalApi> Device<A> {
         UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
     }
 
-    pub fn get_hal_counters(&self) -> &hal::InternalCounters {
-        self.raw.as_ref().unwrap().get_internal_counters()
+    pub fn get_hal_counters(&self) -> wgt::HalCounters {
+        self.raw
+            .as_ref()
+            .map(|raw| raw.get_internal_counters())
+            .unwrap_or_default()
     }
 }
 

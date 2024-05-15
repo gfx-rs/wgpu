@@ -46,7 +46,6 @@ mod view;
 
 use crate::auxil::{self, dxgi::result::HResult as _};
 
-use crate::InternalCounters;
 use arrayvec::ArrayVec;
 use parking_lot::{Mutex, RwLock};
 use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
@@ -262,7 +261,7 @@ pub struct Device {
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
-    counters: InternalCounters,
+    counters: wgt::HalCounters,
 }
 
 unsafe impl Send for Device {}

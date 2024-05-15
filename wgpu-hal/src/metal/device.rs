@@ -8,7 +8,6 @@ use std::{
 
 use super::conv;
 use crate::auxil::map_naga_stage;
-use crate::InternalCounters;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -1410,7 +1409,7 @@ impl crate::Device for super::Device {
         unimplemented!()
     }
 
-    fn get_internal_counters(&self) -> &InternalCounters {
-        &self.counters
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        self.counters.clone()
     }
 }

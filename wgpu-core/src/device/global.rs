@@ -2403,6 +2403,21 @@ impl Global {
         }
     }
 
+    pub fn device_get_internal_counters<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+    ) -> wgt::InternalCounters {
+        let hub = A::hub(self);
+        if let Ok(device) = hub.devices.get(device_id) {
+            wgt::InternalCounters {
+                hal: device.get_hal_counters(),
+                core: wgt::CoreCounters {},
+            }
+        } else {
+            Default::default()
+        }
+    }
+
     pub fn queue_drop<A: HalApi>(&self, queue_id: QueueId) {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {queue_id:?}");

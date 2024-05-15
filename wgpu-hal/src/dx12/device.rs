@@ -1,7 +1,7 @@
 use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::shader_compilation,
-    DeviceError, InternalCounters,
+    DeviceError,
 };
 use d3d12::ComPtr;
 
@@ -391,6 +391,7 @@ impl crate::Device for super::Device {
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
             super::suballocation::free_buffer_allocation(
+                self,
                 alloc,
                 // SAFETY: for allocations to exist, the allocator must exist
                 unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
@@ -480,6 +481,7 @@ impl crate::Device for super::Device {
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         if let Some(alloc) = texture.allocation.take() {
             super::suballocation::free_texture_allocation(
+                self,
                 alloc,
                 // SAFETY: for allocations to exist, the allocator must exist
                 unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
@@ -1772,7 +1774,7 @@ impl crate::Device for super::Device {
         todo!()
     }
 
-    fn get_internal_counters(&self) -> &InternalCounters {
-        &self.counters
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        self.counters.clone()
     }
 }

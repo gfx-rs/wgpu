@@ -15,9 +15,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::{num::NonZeroU32, ops::Range};
 #[cfg(feature = "counters")]
 use std::sync::atomic::{AtomicIsize, Ordering};
+use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
 pub mod math;
@@ -7365,6 +7365,61 @@ impl Default for InternalCounter {
 
 impl std::fmt::Debug for InternalCounter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-       self.read().fmt(f)
+        self.read().fmt(f)
     }
+}
+
+/// `wgpu-hal`'s internal counters.
+#[derive(Clone, Default)]
+pub struct HalCounters {
+    // API objects
+    ///
+    pub buffers: InternalCounter,
+    ///
+    pub textures: InternalCounter,
+    ///
+    pub texture_views: InternalCounter,
+    ///
+    pub bind_groups: InternalCounter,
+    ///
+    pub bind_group_layouts: InternalCounter,
+    ///
+    pub render_pipelines: InternalCounter,
+    ///
+    pub compute_pipelines: InternalCounter,
+    ///
+    pub pipeline_layouts: InternalCounter,
+    ///
+    pub samplers: InternalCounter,
+    ///
+    pub command_encoders: InternalCounter,
+    ///
+    pub shader_modules: InternalCounter,
+    ///
+    pub query_sets: InternalCounter,
+    ///
+    pub fences: InternalCounter,
+
+    // Resources
+    /// Amount of allocated gpu memory attributed to buffers, in bytes.
+    pub buffer_memory: InternalCounter,
+    /// Amount of allocated gpu memory attributed to textures, in bytes.
+    pub texture_memory: InternalCounter,
+    /// Number of gpu memory allocations.
+    pub memory_allocations: InternalCounter,
+}
+
+/// `wgpu-core`'s internal counters.
+#[derive(Clone, Default)]
+pub struct CoreCounters {
+    // TODO
+}
+
+/// All internal counters, exposed for debugging purposes.
+#[derive(Clone, Default)]
+pub struct InternalCounters {
+    /// `wgpu-core` counters.
+    pub core: CoreCounters,
+    /// `wgpu-hal` counters.
+    pub hal: HalCounters,
 }

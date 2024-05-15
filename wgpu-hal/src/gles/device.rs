@@ -1604,8 +1604,8 @@ impl crate::Device for super::Device {
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: ()) {}
 
-    fn get_internal_counters(&self) -> &crate::InternalCounters {
-        &self.counters
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        self.counters.clone()
     }
 }
 
