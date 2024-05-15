@@ -2,8 +2,9 @@
 
 use std::{collections::HashMap, sync::Arc};
 use winit::{
-    event::{Event, WindowEvent},
-    event_loop::EventLoop,
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
 };
 
@@ -53,108 +54,31 @@ impl Viewport {
     }
 }
 
-async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color)>) {
-    let instance = wgpu::Instance::default();
-    let viewports: Vec<_> = viewports
-        .into_iter()
-        .map(|(window, color)| ViewportDesc::new(window, color, &instance))
-        .collect();
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            // Request an adapter which can render to our surface
-            compatible_surface: viewports.first().map(|desc| &desc.surface),
-            ..Default::default()
-        })
-        .await
-        .expect("Failed to find an appropriate adapter");
-
-    // Create the logical device and command queue
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-            },
-            None,
-        )
-        .await
-        .expect("Failed to create device");
-
-    let mut viewports: HashMap<WindowId, Viewport> = viewports
-        .into_iter()
-        .map(|desc| (desc.window.id(), desc.build(&adapter, &device)))
-        .collect();
-
-    event_loop
-        .run(move |event, target| {
-            // Have the closure take ownership of the resources.
-            // `event_loop.run` never returns, therefore we must do this to ensure
-            // the resources are properly cleaned up.
-            let _ = (&instance, &adapter);
-
-            if let Event::WindowEvent { window_id, event } = event {
-                match event {
-                    WindowEvent::Resized(new_size) => {
-                        // Recreate the swap chain with the new size
-                        if let Some(viewport) = viewports.get_mut(&window_id) {
-                            viewport.resize(&device, new_size);
-                            // On macos the window needs to be redrawn manually after resizing
-                            viewport.desc.window.request_redraw();
-                        }
-                    }
-                    WindowEvent::RedrawRequested => {
-                        if let Some(viewport) = viewports.get_mut(&window_id) {
-                            let frame = viewport.get_current_texture();
-                            let view = frame
-                                .texture
-                                .create_view(&wgpu::TextureViewDescriptor::default());
-                            let mut encoder =
-                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                    label: None,
-                                });
-                            {
-                                let _rpass =
-                                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                        label: None,
-                                        color_attachments: &[Some(
-                                            wgpu::RenderPassColorAttachment {
-                                                view: &view,
-                                                resolve_target: None,
-                                                ops: wgpu::Operations {
-                                                    load: wgpu::LoadOp::Clear(
-                                                        viewport.desc.background,
-                                                    ),
-                                                    store: wgpu::StoreOp::Store,
-                                                },
-                                            },
-                                        )],
-                                        depth_stencil_attachment: None,
-                                        timestamp_writes: None,
-                                        occlusion_query_set: None,
-                                    });
-                            }
-
-                            queue.submit(Some(encoder.finish()));
-                            frame.present();
-                        }
-                    }
-                    WindowEvent::CloseRequested => {
-                        viewports.remove(&window_id);
-                        if viewports.is_empty() {
-                            target.exit();
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        })
-        .unwrap();
+struct LoopState {
+    // See https://docs.rs/winit/latest/winit/changelog/v0_30/index.html#removed
+    // for the recommended pratcice regarding Window creation (from which everything depends)
+    // in winit >= 0.30.0.
+    // The actual state is in an Option because its initialization is now delayed to after
+    // the even loop starts running.
+    state: Option<InitializedLoopState>,
 }
 
-pub fn main() {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
+impl LoopState {
+    fn new() -> LoopState {
+        LoopState { state: None }
+    }
+}
+
+struct InitializedLoopState {
+    _instance: wgpu::Instance,
+    _adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    viewports: HashMap<WindowId, Viewport>,
+}
+
+impl InitializedLoopState {
+    async fn new(event_loop: &ActiveEventLoop) -> InitializedLoopState {
         const WINDOW_SIZE: u32 = 128;
         const WINDOW_PADDING: u32 = 16;
         const WINDOW_TITLEBAR: u32 = 32;
@@ -162,14 +86,18 @@ pub fn main() {
         const ROWS: u32 = 4;
         const COLUMNS: u32 = 4;
 
-        let event_loop = EventLoop::new().unwrap();
         let mut viewports = Vec::with_capacity((ROWS * COLUMNS) as usize);
         for row in 0..ROWS {
             for column in 0..COLUMNS {
-                let window = winit::window::WindowBuilder::new()
-                    .with_title(format!("x{column}y{row}"))
-                    .with_inner_size(winit::dpi::PhysicalSize::new(WINDOW_SIZE, WINDOW_SIZE))
-                    .build(&event_loop)
+                let window = event_loop
+                    .create_window(
+                        Window::default_attributes()
+                            .with_title(format!("x{column}y{row}"))
+                            .with_inner_size(winit::dpi::PhysicalSize::new(
+                                WINDOW_SIZE,
+                                WINDOW_SIZE,
+                            )),
+                    )
                     .unwrap();
                 let window = Arc::new(window);
                 window.set_outer_position(winit::dpi::PhysicalPosition::new(
@@ -191,8 +119,124 @@ pub fn main() {
             }
         }
 
+        let instance = wgpu::Instance::default();
+        let viewports: Vec<_> = viewports
+            .into_iter()
+            .map(|(window, color)| ViewportDesc::new(window, color, &instance))
+            .collect();
+        let adapter = wgpu::util::initialize_adapter_from_env_or_default(
+            &instance,
+            viewports.first().map(|desc| &desc.surface),
+        )
+        .await
+        .expect("Failed to find an appropriate adapter");
+
+        // Create the logical device and command queue
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                },
+                None,
+            )
+            .await
+            .expect("Failed to create device");
+
+        let viewports: HashMap<WindowId, Viewport> = viewports
+            .into_iter()
+            .map(|desc| (desc.window.id(), desc.build(&adapter, &device)))
+            .collect();
+
+        InitializedLoopState {
+            _instance: instance,
+            _adapter: adapter,
+            device,
+            queue,
+            viewports,
+        }
+    }
+}
+
+impl ApplicationHandler for LoopState {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.state.is_none() {
+            self.state = Some(pollster::block_on(InitializedLoopState::new(event_loop)));
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        if let Some(state) = self.state.as_mut() {
+            match event {
+                WindowEvent::Resized(new_size) => {
+                    // Recreate the swap chain with the new size
+                    if let Some(viewport) = state.viewports.get_mut(&window_id) {
+                        viewport.resize(&state.device, new_size);
+                        // On macos the window needs to be redrawn manually after resizing
+                        viewport.desc.window.request_redraw();
+                    }
+                }
+                WindowEvent::RedrawRequested => {
+                    if let Some(viewport) = state.viewports.get_mut(&window_id) {
+                        let frame = viewport.get_current_texture();
+                        let view = frame
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
+                        let mut encoder =
+                            state
+                                .device
+                                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                    label: None,
+                                });
+                        {
+                            let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: None,
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(viewport.desc.background),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                            });
+                        }
+
+                        state.queue.submit(Some(encoder.finish()));
+                        frame.present();
+                    }
+                }
+                WindowEvent::CloseRequested => {
+                    state.viewports.remove(&window_id);
+                    if state.viewports.is_empty() {
+                        event_loop.exit();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+pub fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
         env_logger::init();
-        pollster::block_on(run(event_loop, viewports));
+
+        let mut loop_state = LoopState::new();
+        let event_loop = EventLoop::new().unwrap();
+
+        log::info!("Entering event loop...");
+        event_loop.run_app(&mut loop_state).unwrap();
     }
     #[cfg(target_arch = "wasm32")]
     {

@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use wgpu::{Instance, Surface};
 use winit::{
+    application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{Event, KeyEvent, StartCause, WindowEvent},
-    event_loop::{EventLoop, EventLoopWindowTarget},
+    event::{KeyEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{Key, NamedKey},
-    window::Window,
+    window::{Window, WindowId},
 };
 
 pub trait Example: 'static + Sized {
@@ -89,36 +90,6 @@ fn init_logger() {
     }
 }
 
-struct EventLoopWrapper {
-    event_loop: EventLoop<()>,
-    window: Arc<Window>,
-}
-
-impl EventLoopWrapper {
-    pub fn new(title: &str) -> Self {
-        let event_loop = EventLoop::new().unwrap();
-        let mut builder = winit::window::WindowBuilder::new();
-        #[cfg(target_arch = "wasm32")]
-        {
-            use wasm_bindgen::JsCast;
-            use winit::platform::web::WindowBuilderExtWebSys;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id("canvas")
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .unwrap();
-            builder = builder.with_canvas(Some(canvas));
-        }
-        builder = builder.with_title(title);
-        let window = Arc::new(builder.build(&event_loop).unwrap());
-
-        Self { event_loop, window }
-    }
-}
-
 /// Wrapper type which manages the surface and surface configuration.
 ///
 /// As surface usage varies per platform, wrapping this up cleans up the event loop code.
@@ -146,17 +117,6 @@ impl SurfaceWrapper {
     fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
         if cfg!(target_arch = "wasm32") {
             self.surface = Some(instance.create_surface(window).unwrap());
-        }
-    }
-
-    /// Check if the event is the start condition for the surface.
-    fn start_condition(e: &Event<()>) -> bool {
-        match e {
-            // On all other platforms, we can create the surface immediately.
-            Event::NewEvents(StartCause::Init) => !cfg!(target_os = "android"),
-            // On android we need to wait for a resumed event to create the surface.
-            Event::Resumed => cfg!(target_os = "android"),
-            _ => false,
         }
     }
 
@@ -365,123 +325,173 @@ impl FrameCounter {
     }
 }
 
-async fn start<E: Example>(title: &str) {
-    init_logger();
-    let window_loop = EventLoopWrapper::new(title);
-    let mut surface = SurfaceWrapper::new();
-    let context = ExampleContext::init_async::<E>(&mut surface, window_loop.window.clone()).await;
-    let mut frame_counter = FrameCounter::new();
+struct LoopState<E: Example> {
+    // See https://docs.rs/winit/latest/winit/changelog/v0_30/index.html#removed
+    // for the recommended pratcice regarding Window creation (from which everything depends)
+    // in winit >= 0.30.0.
+    // The actual state is in an Option because its initialization is now delayed to after
+    // the even loop starts running.
+    state: Option<InitializedLoopState<E>>,
+    title: &'static str,
+}
 
-    // We wait to create the example until we have a valid surface.
-    let mut example = None;
+impl<E: Example> LoopState<E> {
+    fn new(title: &'static str) -> LoopState<E> {
+        LoopState { state: None, title }
+    }
+}
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            use winit::platform::web::EventLoopExtWebSys;
-            let event_loop_function = EventLoop::spawn;
-        } else {
-            let event_loop_function = EventLoop::run;
+struct InitializedLoopState<E: Example> {
+    window: Arc<Window>,
+    surface: SurfaceWrapper,
+    context: ExampleContext,
+    frame_counter: FrameCounter,
+    example: E,
+}
+
+impl<E: Example> InitializedLoopState<E> {
+    async fn new(title: &str, event_loop: &ActiveEventLoop) -> InitializedLoopState<E> {
+        let mut window_attributes = Window::default_attributes();
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowAttributesExtWebSys;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("canvas")
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            window_attributes = window_attributes.with_canvas(Some(canvas));
+        }
+        window_attributes = window_attributes.with_title(title);
+
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let mut surface = SurfaceWrapper::new();
+        let context = ExampleContext::init_async::<E>(&mut surface, window.clone()).await;
+        let frame_counter = FrameCounter::new();
+
+        surface.resume(&context, window.clone(), E::SRGB);
+
+        let example = E::init(
+            surface.config(),
+            &context.adapter,
+            &context.device,
+            &context.queue,
+        );
+
+        InitializedLoopState {
+            window,
+            surface,
+            context,
+            frame_counter,
+            example,
+        }
+    }
+}
+
+impl<E: Example> ApplicationHandler for LoopState<E> {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.state.is_none() {
+            cfg_if::cfg_if! {
+                if #[cfg(target_arch = "wasm32")] {
+                    self.state = Some(wasm_bindgen_futures::spawn_local(async move {
+                        InitializedLoopState::new(self.title, event_loop).await
+                    }));
+                } else {
+                    self.state = Some(pollster::block_on(InitializedLoopState::new(
+                        self.title, event_loop,
+                    )));
+                }
+            };
+        }
+
+        if let Some(state) = self.state.as_mut() {
+            state
+                .surface
+                .resume(&state.context, state.window.clone(), E::SRGB);
         }
     }
 
-    log::info!("Entering event loop...");
-    // On native this is a result, but on wasm it's a unit type.
-    #[allow(clippy::let_unit_value)]
-    let _ = (event_loop_function)(
-        window_loop.event_loop,
-        move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(state) = self.state.as_mut() {
+            state.surface.suspend();
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        if let Some(state) = self.state.as_mut() {
             match event {
-                ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, window_loop.window.clone(), E::SRGB);
+                WindowEvent::Resized(size) => {
+                    state.surface.resize(&state.context, size);
+                    state.example.resize(
+                        state.surface.config(),
+                        &state.context.device,
+                        &state.context.queue,
+                    );
 
-                    // If we haven't created the example yet, do so now.
-                    if example.is_none() {
-                        example = Some(E::init(
-                            surface.config(),
-                            &context.adapter,
-                            &context.device,
-                            &context.queue,
-                        ));
-                    }
+                    state.window.request_redraw();
                 }
-                Event::Suspended => {
-                    surface.suspend();
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            logical_key: Key::Named(NamedKey::Escape),
+                            ..
+                        },
+                    ..
                 }
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::Resized(size) => {
-                        surface.resize(&context, size);
-                        example.as_mut().unwrap().resize(
-                            surface.config(),
-                            &context.device,
-                            &context.queue,
-                        );
+                | WindowEvent::CloseRequested => {
+                    event_loop.exit();
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            logical_key: Key::Character(s),
+                            ..
+                        },
+                    ..
+                } if s == "r" => {
+                    println!("{:#?}", state.context.instance.generate_report());
+                }
+                WindowEvent::RedrawRequested => {
+                    state.frame_counter.update();
 
-                        window_loop.window.request_redraw();
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Named(NamedKey::Escape),
-                                ..
-                            },
-                        ..
-                    }
-                    | WindowEvent::CloseRequested => {
-                        target.exit();
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Character(s),
-                                ..
-                            },
-                        ..
-                    } if s == "r" => {
-                        println!("{:#?}", context.instance.generate_report());
-                    }
-                    WindowEvent::RedrawRequested => {
-                        // On MacOS, currently redraw requested comes in _before_ Init does.
-                        // If this happens, just drop the requested redraw on the floor.
-                        //
-                        // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
-                        if example.is_none() {
-                            return;
-                        }
+                    let frame = state.surface.acquire(&state.context);
+                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                        format: Some(state.surface.config().view_formats[0]),
+                        ..wgpu::TextureViewDescriptor::default()
+                    });
 
-                        frame_counter.update();
+                    state
+                        .example
+                        .render(&view, &state.context.device, &state.context.queue);
 
-                        let frame = surface.acquire(&context);
-                        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                            format: Some(surface.config().view_formats[0]),
-                            ..wgpu::TextureViewDescriptor::default()
-                        });
+                    frame.present();
 
-                        example
-                            .as_mut()
-                            .unwrap()
-                            .render(&view, &context.device, &context.queue);
-
-                        frame.present();
-
-                        window_loop.window.request_redraw();
-                    }
-                    _ => example.as_mut().unwrap().update(event),
-                },
-                _ => {}
+                    state.window.request_redraw();
+                }
+                _ => state.example.update(event),
             }
-        },
-    );
+        }
+    }
 }
 
 pub fn run<E: Example>(title: &'static str) {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            wasm_bindgen_futures::spawn_local(async move { start::<E>(title).await })
-        } else {
-            pollster::block_on(start::<E>(title));
-        }
-    }
+    init_logger();
+
+    let mut loop_state: LoopState<E> = LoopState::new(title);
+    let event_loop = EventLoop::new().unwrap();
+
+    log::info!("Entering event loop...");
+    event_loop.run_app(&mut loop_state).unwrap();
 }
 
 #[cfg(target_arch = "wasm32")]
