@@ -118,6 +118,8 @@ mod placed {
 
         null_comptr_check(resource)?;
 
+        device.counters.buffer_memory.add(allocation.size as isize);
+
         Ok((hr, Some(AllocationWrapper { allocation })))
     }
 
@@ -167,6 +169,8 @@ mod placed {
 
         null_comptr_check(resource)?;
 
+        device.counters.texture_memory.add(allocation.size() as isize);
+
         Ok((hr, Some(AllocationWrapper { allocation })))
     }
 
@@ -174,6 +178,7 @@ mod placed {
         allocation: AllocationWrapper,
         allocator: &Mutex<GpuAllocatorWrapper>,
     ) {
+        device.counters.buffer_memory.sub(allocation.allocation.size() as isize);
         match allocator.lock().allocator.free(allocation.allocation) {
             Ok(_) => (),
             // TODO: Don't panic here
@@ -185,6 +190,7 @@ mod placed {
         allocation: AllocationWrapper,
         allocator: &Mutex<GpuAllocatorWrapper>,
     ) {
+        device.counters.texture_memory.sub(allocation.allocation.size() as isize);
         match allocator.lock().allocator.free(allocation.allocation) {
             Ok(_) => (),
             // TODO: Don't panic here

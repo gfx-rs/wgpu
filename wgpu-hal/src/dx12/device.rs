@@ -1,7 +1,7 @@
 use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::shader_compilation,
-    DeviceError,
+    DeviceError, InternalCounters,
 };
 use d3d12::ComPtr;
 
@@ -181,6 +181,7 @@ impl super::Device {
             null_rtv_handle,
             mem_allocator,
             dxc_container,
+            counters: Default::default(),
         })
     }
 
@@ -1710,5 +1711,9 @@ impl crate::Device for super::Device {
     ) {
         // Destroy a D3D12 resource as per-usual.
         todo!()
+    }
+
+    fn get_internal_counters(&self) -> &InternalCounters {
+        &self.counters
     }
 }

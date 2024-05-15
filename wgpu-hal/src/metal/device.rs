@@ -8,6 +8,7 @@ use std::{
 
 use super::conv;
 use crate::auxil::map_naga_stage;
+use crate::InternalCounters;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -305,6 +306,7 @@ impl super::Device {
         super::Device {
             shared: Arc::new(super::AdapterShared::new(raw)),
             features,
+            counters: Default::default(),
         }
     }
 
@@ -1347,5 +1349,9 @@ impl crate::Device for super::Device {
         _acceleration_structure: super::AccelerationStructure,
     ) {
         unimplemented!()
+    }
+
+    fn get_internal_counters(&self) -> &InternalCounters {
+        &self.counters
     }
 }

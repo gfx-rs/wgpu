@@ -16,6 +16,8 @@ use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
+#[cfg(feature = "counters")]
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 pub mod assertions;
 pub mod math;
@@ -7269,4 +7271,100 @@ pub enum DeviceLostReason {
     /// will eventually be called. If the device is already invalid, wgpu
     /// will call the callback immediately, with this reason.
     DeviceInvalid = 4,
+}
+
+/// An internal counter for debugging purposes
+///
+/// Internally represented as an atomic isize if the `counters` feature is enabled,
+/// or compiles to nothing otherwise.
+pub struct InternalCounter {
+    #[cfg(feature = "counters")]
+    value: AtomicIsize,
+}
+
+impl InternalCounter {
+    /// Creates a counter with value 0.
+    #[inline]
+    pub const fn new() -> Self {
+        InternalCounter {
+            #[cfg(feature = "counters")]
+            value: AtomicIsize::new(0),
+        }
+    }
+
+    /// Get the counter's value.
+    #[cfg(feature = "counters")]
+    #[inline]
+    pub fn read(&self) -> isize {
+        self.value.load(Ordering::Relaxed)
+    }
+
+    /// Get the counter's value.
+    ///
+    /// Always returns 0 if the `counters` feature is not enabled.
+    #[cfg(not(feature = "counters"))]
+    #[inline]
+    pub fn read(&self) -> isize {
+        0
+    }
+
+    /// Get and reset the counter's value.
+    ///
+    /// Always returns 0 if the `counters` feature is not enabled.
+    #[cfg(feature = "counters")]
+    #[inline]
+    pub fn take(&self) -> isize {
+        self.value.swap(0, Ordering::Relaxed)
+    }
+
+    /// Get and reset the counter's value.
+    ///
+    /// Always returns 0 if the `counters` feature is not enabled.
+    #[cfg(not(feature = "counters"))]
+    #[inline]
+    pub fn take(&self) -> isize {
+        0
+    }
+
+    /// Increment the counter by the provided amount.
+    #[inline]
+    pub fn add(&self, _val: isize) {
+        #[cfg(feature = "counters")]
+        self.value.fetch_add(_val, Ordering::Relaxed);
+    }
+
+    /// Decrement the counter by the provided amount.
+    #[inline]
+    pub fn sub(&self, _val: isize) {
+        #[cfg(feature = "counters")]
+        self.value.fetch_add(-_val, Ordering::Relaxed);
+    }
+
+    /// Sets the counter to the provided value.
+    #[inline]
+    pub fn set(&self, _val: isize) {
+        #[cfg(feature = "counters")]
+        self.value.store(_val, Ordering::Relaxed);
+    }
+}
+
+impl Clone for InternalCounter {
+    fn clone(&self) -> Self {
+        InternalCounter {
+            #[cfg(feature = "counters")]
+            value: AtomicIsize::new(self.read()),
+        }
+    }
+}
+
+impl Default for InternalCounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for InternalCounter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+       self.read().fmt(f)
+    }
 }

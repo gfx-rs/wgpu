@@ -62,6 +62,7 @@ impl crate::Adapter for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 features,
+                counters: Default::default(),
             },
             queue: super::Queue {
                 raw: Arc::new(Mutex::new(queue)),

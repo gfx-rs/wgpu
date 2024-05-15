@@ -36,6 +36,7 @@ use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use metal::foreign_types::ForeignTypeRef as _;
 use parking_lot::{Mutex, RwLock};
+use crate::InternalCounters;
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -339,6 +340,7 @@ impl Queue {
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
+    counters: InternalCounters,
 }
 
 pub struct Surface {

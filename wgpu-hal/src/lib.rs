@@ -280,7 +280,7 @@ use std::{
 use bitflags::bitflags;
 use parking_lot::Mutex;
 use thiserror::Error;
-use wgt::WasmNotSendSync;
+use wgt::{InternalCounter, WasmNotSendSync};
 
 // - Vertex + Fragment
 // - Compute
@@ -884,6 +884,8 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
+
+    fn get_internal_counters(&self) -> &InternalCounters;
 }
 
 pub trait Queue: WasmNotSendSync {
@@ -2276,4 +2278,12 @@ bitflags::bitflags! {
 #[derive(Debug, Clone)]
 pub struct AccelerationStructureBarrier {
     pub usage: Range<AccelerationStructureUses>,
+}
+
+#[derive(Default)]
+pub struct InternalCounters {
+    // Resources
+    pub buffer_memory: InternalCounter,
+    pub texture_memory: InternalCounter,
+    pub memory_allocations: InternalCounter,
 }

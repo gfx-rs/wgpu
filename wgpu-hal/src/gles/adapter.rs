@@ -967,6 +967,7 @@ impl crate::Adapter for super::Adapter {
                 main_vao,
                 #[cfg(all(native, feature = "renderdoc"))]
                 render_doc: Default::default(),
+                counters: Default::default(),
             },
             queue: super::Queue {
                 shared: Arc::clone(&self.shared),

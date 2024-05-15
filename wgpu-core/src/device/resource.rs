@@ -3641,6 +3641,10 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn new_usage_scope(&self) -> UsageScope<'_, A> {
         UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
     }
+
+    pub fn get_hal_counters(&self) -> &hal::InternalCounters {
+        self.raw.as_ref().unwrap().get_internal_counters()
+    }
 }
 
 impl<A: HalApi> Device<A> {

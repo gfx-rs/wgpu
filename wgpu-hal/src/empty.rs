@@ -276,6 +276,10 @@ impl crate::Device for Context {
         Default::default()
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
+
+    fn get_internal_counters(&self) -> &crate::InternalCounters {
+        unreachable!();
+    }
 }
 
 impl crate::CommandEncoder for Encoder {

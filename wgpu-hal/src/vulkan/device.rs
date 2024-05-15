@@ -1,4 +1,5 @@
 use super::{conv, PipelineCache};
+use crate::InternalCounters;
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
@@ -312,7 +313,10 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
         }
 
         match unsafe { self.raw.allocate_memory(&info, None) } {
-            Ok(memory) => Ok(memory),
+            Ok(memory) => {
+                self.memory_allocations_counter.add(1);
+                Ok(memory)
+            }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(gpu_alloc::OutOfMemory::OutOfDeviceMemory)
             }
@@ -325,6 +329,8 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
     }
 
     unsafe fn deallocate_memory(&self, memory: vk::DeviceMemory) {
+        self.memory_allocations_counter.sub(1);
+
         unsafe { self.raw.free_memory(memory, None) };
     }
 
@@ -910,6 +916,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        self.counters.buffer_memory.add(block.size() as isize);
+
         Ok(super::Buffer {
             raw,
             block: Some(Mutex::new(block)),
@@ -918,11 +926,9 @@ impl crate::Device for super::Device {
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
         if let Some(block) = buffer.block {
-            unsafe {
-                self.mem_allocator
-                    .lock()
-                    .dealloc(&*self.shared, block.into_inner())
-            };
+            let block = block.into_inner();
+            self.counters.buffer_memory.sub(block.size() as isize);
+            unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
         }
     }
 
@@ -1049,6 +1055,8 @@ impl crate::Device for super::Device {
             )?
         };
 
+        self.counters.texture_memory.add(block.size() as isize);
+
         unsafe {
             self.shared
                 .raw
@@ -1075,6 +1083,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_image(texture.raw, None) };
         }
         if let Some(block) = texture.block {
+            self.counters.texture_memory.sub(block.size() as isize);
+
             unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
         }
     }
@@ -2319,6 +2329,12 @@ impl crate::Device for super::Device {
                 .lock()
                 .dealloc(&*self.shared, acceleration_structure.block.into_inner());
         }
+    }
+
+    fn get_internal_counters(&self) -> &InternalCounters {
+        self.counters.memory_allocations.set(self.shared.memory_allocations_counter.read());
+
+        &self.counters
     }
 }
 
