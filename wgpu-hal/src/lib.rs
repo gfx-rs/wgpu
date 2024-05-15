@@ -2282,6 +2282,20 @@ pub struct AccelerationStructureBarrier {
 
 #[derive(Default)]
 pub struct InternalCounters {
+    // API objects
+    pub buffers: InternalCounter,
+    pub textures: InternalCounter,
+    pub texture_views: InternalCounter,
+    pub bind_groups: InternalCounter,
+    pub bind_group_layouts: InternalCounter,
+    pub render_pipelines: InternalCounter,
+    pub compute_pipelines: InternalCounter,
+    pub pipeline_layouts: InternalCounter,
+    pub samplers: InternalCounter,
+    pub command_encoders: InternalCounter,
+    pub shader_modules: InternalCounter,
+    pub query_sets: InternalCounter,
+    pub fences: InternalCounter,
     // Resources
     pub buffer_memory: InternalCounter,
     pub texture_memory: InternalCounter,

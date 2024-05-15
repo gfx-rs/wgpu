@@ -404,6 +404,7 @@ impl<A: HalApi> Device<A> {
         snatch_guard: SnatchGuard,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
+
         let fence = fence_guard.as_ref().unwrap();
         let last_done_index = if maintain.is_wait() {
             let index_to_wait_for = match maintain {

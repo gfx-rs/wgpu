@@ -917,6 +917,7 @@ impl crate::Device for super::Device {
         }
 
         self.counters.buffer_memory.add(block.size() as isize);
+        self.counters.buffers.add(1);
 
         Ok(super::Buffer {
             raw,
@@ -930,6 +931,8 @@ impl crate::Device for super::Device {
             self.counters.buffer_memory.sub(block.size() as isize);
             unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
         }
+
+        self.counters.buffers.sub(1);
     }
 
     unsafe fn map_buffer(
@@ -1067,6 +1070,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        self.counters.textures.add(1);
+
         Ok(super::Texture {
             raw,
             drop_guard: None,
@@ -1087,6 +1092,8 @@ impl crate::Device for super::Device {
 
             unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
         }
+
+        self.counters.textures.sub(1);
     }
 
     unsafe fn create_texture_view(
@@ -1136,6 +1143,8 @@ impl crate::Device for super::Device {
                 .collect(),
         };
 
+        self.counters.texture_views.add(1);
+
         Ok(super::TextureView {
             raw,
             layers,
@@ -1153,6 +1162,8 @@ impl crate::Device for super::Device {
             fbuf_lock.retain(|key, _| !key.attachments.iter().any(|at| at.raw == view.raw));
         }
         unsafe { self.shared.raw.destroy_image_view(view.raw, None) };
+
+        self.counters.texture_views.sub(1);
     }
 
     unsafe fn create_sampler(
@@ -1194,10 +1205,14 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        self.counters.samplers.add(1);
+
         Ok(super::Sampler { raw })
     }
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
         unsafe { self.shared.raw.destroy_sampler(sampler.raw, None) };
+
+        self.counters.samplers.sub(1);
     }
 
     unsafe fn create_command_encoder(
@@ -1208,6 +1223,8 @@ impl crate::Device for super::Device {
             .queue_family_index(desc.queue.family_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
         let raw = unsafe { self.shared.raw.create_command_pool(&vk_info, None)? };
+
+        self.counters.command_encoders.add(1);
 
         Ok(super::CommandEncoder {
             raw,
@@ -1229,6 +1246,8 @@ impl crate::Device for super::Device {
             // fields.
             self.shared.raw.destroy_command_pool(cmd_encoder.raw, None);
         }
+
+        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1349,6 +1368,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        self.counters.bind_group_layouts.add(1);
+
         Ok(super::BindGroupLayout {
             raw,
             desc_count,
@@ -1362,6 +1383,8 @@ impl crate::Device for super::Device {
                 .raw
                 .destroy_descriptor_set_layout(bg_layout.raw, None)
         };
+
+        self.counters.bind_group_layouts.sub(1);
     }
 
     unsafe fn create_pipeline_layout(
@@ -1413,6 +1436,8 @@ impl crate::Device for super::Device {
             }
         }
 
+        self.counters.pipeline_layouts.add(1);
+
         Ok(super::PipelineLayout {
             raw,
             binding_arrays,
@@ -1424,6 +1449,8 @@ impl crate::Device for super::Device {
                 .raw
                 .destroy_pipeline_layout(pipeline_layout.raw, None)
         };
+
+        self.counters.pipeline_layouts.sub(1);
     }
 
     unsafe fn create_bind_group(
@@ -1606,14 +1633,20 @@ impl crate::Device for super::Device {
         }
 
         unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };
+
+        self.counters.bind_groups.add(1);
+
         Ok(super::BindGroup { set })
     }
+
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
         unsafe {
             self.desc_allocator
                 .lock()
                 .free(&*self.shared, Some(group.set))
         };
+
+        self.counters.bind_groups.sub(1);
     }
 
     unsafe fn create_shader_module(
@@ -1671,8 +1704,11 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        self.counters.shader_modules.add(1);
+
         Ok(super::ShaderModule::Raw(raw))
     }
+
     unsafe fn destroy_shader_module(&self, module: super::ShaderModule) {
         match module {
             super::ShaderModule::Raw(raw) => {
@@ -1680,6 +1716,8 @@ impl crate::Device for super::Device {
             }
             super::ShaderModule::Intermediate { .. } => {}
         }
+
+        self.counters.shader_modules.sub(1);
     }
 
     unsafe fn create_render_pipeline(
@@ -1910,10 +1948,14 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
 
+        self.counters.render_pipelines.add(1);
+
         Ok(super::RenderPipeline { raw })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
+
+        self.counters.render_pipelines.sub(1);
     }
 
     unsafe fn create_compute_pipeline(
@@ -1956,10 +1998,15 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
 
+        self.counters.compute_pipelines.add(1);
+
         Ok(super::ComputePipeline { raw })
     }
+
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
+
+        self.counters.compute_pipelines.sub(1);
     }
 
     unsafe fn create_pipeline_cache(
@@ -2011,18 +2058,26 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        self.counters.query_sets.add(1);
+
         Ok(super::QuerySet { raw })
     }
+
     unsafe fn destroy_query_set(&self, set: super::QuerySet) {
         unsafe { self.shared.raw.destroy_query_pool(set.raw, None) };
+
+        self.counters.query_sets.sub(1);
     }
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
+        self.counters.fences.add(1);
+
         Ok(if self.shared.private_caps.timeline_semaphores {
             let mut sem_type_info =
                 vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
             let vk_info = vk::SemaphoreCreateInfo::default().push_next(&mut sem_type_info);
             let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) }?;
+
             super::Fence::TimelineSemaphore(raw)
         } else {
             super::Fence::FencePool {
@@ -2050,6 +2105,8 @@ impl crate::Device for super::Device {
                 }
             }
         }
+
+        self.counters.fences.sub(1);
     }
     unsafe fn get_fence_value(
         &self,
