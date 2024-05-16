@@ -153,20 +153,20 @@ impl Global {
         let fid = hub.buffers.prepare(id_in);
 
         let mut to_destroy: ArrayVec<resource::Buffer<A>, 2> = ArrayVec::new();
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => {
-                    break DeviceError::Invalid.into();
+                    break 'error DeviceError::Invalid.into();
                 }
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             if desc.usage.is_empty() {
                 // Per spec, `usage` must not be zero.
-                break CreateBufferError::InvalidUsage(desc.usage);
+                break 'error CreateBufferError::InvalidUsage(desc.usage);
             }
 
             #[cfg(feature = "trace")]
@@ -182,7 +182,7 @@ impl Global {
             let buffer = match device.create_buffer(desc, false) {
                 Ok(buffer) => buffer,
                 Err(e) => {
-                    break e;
+                    break 'error e;
                 }
             };
 
@@ -206,7 +206,7 @@ impl Global {
                         Ok(ptr) => ptr,
                         Err(e) => {
                             to_destroy.push(buffer);
-                            break e.into();
+                            break 'error e.into();
                         }
                     }
                 };
@@ -230,7 +230,7 @@ impl Global {
                     Ok(stage) => Arc::new(stage),
                     Err(e) => {
                         to_destroy.push(buffer);
-                        break e;
+                        break 'error e;
                     }
                 };
 
@@ -240,7 +240,7 @@ impl Global {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         to_destroy.push(buffer);
-                        break CreateBufferError::Device(e.into());
+                        break 'error CreateBufferError::Device(e.into());
                     }
                 };
 
@@ -556,13 +556,13 @@ impl Global {
 
         let fid = hub.textures.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -571,7 +571,7 @@ impl Global {
 
             let texture = match device.create_texture(&device.adapter, desc) {
                 Ok(texture) => texture,
-                Err(error) => break error,
+                Err(error) => break 'error error,
             };
 
             let (id, resource) = fid.assign(Arc::new(texture));
@@ -610,13 +610,13 @@ impl Global {
 
         let fid = hub.textures.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             // NB: Any change done through the raw texture handle will not be
@@ -631,7 +631,7 @@ impl Global {
                 .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))
             {
                 Ok(features) => features,
-                Err(error) => break error,
+                Err(error) => break 'error error,
             };
 
             let mut texture = device.create_texture_from_hal(
@@ -685,13 +685,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.buffers.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             // NB: Any change done through the raw buffer handle will not be
@@ -796,16 +796,16 @@ impl Global {
 
         let fid = hub.texture_views.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let texture = match hub.textures.get(texture_id) {
                 Ok(texture) => texture,
-                Err(_) => break resource::CreateTextureViewError::InvalidTexture,
+                Err(_) => break 'error resource::CreateTextureViewError::InvalidTexture,
             };
             let device = &texture.device;
             {
                 let snatch_guard = device.snatchable_lock.read();
                 if texture.is_destroyed(&snatch_guard) {
-                    break resource::CreateTextureViewError::InvalidTexture;
+                    break 'error resource::CreateTextureViewError::InvalidTexture;
                 }
             }
             #[cfg(feature = "trace")]
@@ -819,7 +819,7 @@ impl Global {
 
             let view = match unsafe { device.create_texture_view(&texture, desc) } {
                 Ok(view) => view,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(view));
@@ -885,13 +885,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.samplers.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -901,7 +901,7 @@ impl Global {
 
             let sampler = match device.create_sampler(desc) {
                 Ok(sampler) => sampler,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(sampler));
@@ -949,13 +949,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.bind_group_layouts.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -965,7 +965,7 @@ impl Global {
 
             let entry_map = match bgl::EntryMap::from_entries(&device.limits, &desc.entries) {
                 Ok(map) => map,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             // Currently we make a distinction between fid.assign and fid.assign_existing. This distinction is incorrect,
@@ -994,7 +994,7 @@ impl Global {
 
             let layout = match bgl_result {
                 Ok(layout) => layout,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             // If the ID was not assigned, and we survived the above check,
@@ -1048,13 +1048,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.pipeline_layouts.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1064,7 +1064,7 @@ impl Global {
 
             let layout = match device.create_pipeline_layout(desc, &hub.bind_group_layouts) {
                 Ok(layout) => layout,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, _) = fid.assign(Arc::new(layout));
@@ -1106,13 +1106,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.bind_groups.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1122,16 +1122,16 @@ impl Global {
 
             let bind_group_layout = match hub.bind_group_layouts.get(desc.layout) {
                 Ok(layout) => layout,
-                Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
+                Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
             };
 
             if bind_group_layout.device.as_info().id() != device.as_info().id() {
-                break DeviceError::WrongDevice.into();
+                break 'error DeviceError::WrongDevice.into();
             }
 
             let bind_group = match device.create_bind_group(&bind_group_layout, desc, hub) {
                 Ok(bind_group) => bind_group,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(bind_group));
@@ -1203,13 +1203,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.shader_modules.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1246,7 +1246,7 @@ impl Global {
 
             let shader = match device.create_shader_module(desc, source) {
                 Ok(shader) => shader,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, _) = fid.assign(Arc::new(shader));
@@ -1281,13 +1281,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.shader_modules.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1304,7 +1304,7 @@ impl Global {
 
             let shader = match unsafe { device.create_shader_module_spirv(desc, &source) } {
                 Ok(shader) => shader,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
             let (id, _) = fid.assign(Arc::new(shader));
             api_log!("Device::create_shader_module_spirv -> {id:?}");
@@ -1342,23 +1342,23 @@ impl Global {
             .command_buffers
             .prepare(id_in.map(|id| id.into_command_buffer_id()));
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid,
+                Err(_) => break 'error DeviceError::Invalid,
             };
             if !device.is_valid() {
-                break DeviceError::Lost;
+                break 'error DeviceError::Lost;
             }
             let Some(queue) = device.get_queue() else {
-                break DeviceError::InvalidQueueId;
+                break 'error DeviceError::InvalidQueueId;
             };
             let encoder = match device
                 .command_allocator
                 .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
             {
                 Ok(raw) => raw,
-                Err(_) => break DeviceError::OutOfMemory,
+                Err(_) => break 'error DeviceError::OutOfMemory,
             };
             let command_buffer = command::CommandBuffer::new(
                 encoder,
@@ -1433,13 +1433,13 @@ impl Global {
 
         let fid = hub.render_bundles.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(bundle_encoder.parent()) {
                 Ok(device) => device,
-                Err(_) => break command::RenderBundleError::INVALID_DEVICE,
+                Err(_) => break 'error command::RenderBundleError::INVALID_DEVICE,
             };
             if !device.is_valid() {
-                break command::RenderBundleError::INVALID_DEVICE;
+                break 'error command::RenderBundleError::INVALID_DEVICE;
             }
 
             #[cfg(feature = "trace")]
@@ -1458,7 +1458,7 @@ impl Global {
 
             let render_bundle = match bundle_encoder.finish(desc, &device, hub) {
                 Ok(bundle) => bundle,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(render_bundle));
@@ -1502,13 +1502,13 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.query_sets.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1521,7 +1521,7 @@ impl Global {
 
             let query_set = match device.create_query_set(desc) {
                 Ok(query_set) => query_set,
-                Err(err) => break err,
+                Err(err) => break 'error err,
             };
 
             let (id, resource) = fid.assign(Arc::new(query_set));
@@ -1579,13 +1579,13 @@ impl Global {
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
         let implicit_error_context = implicit_context.clone();
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1599,7 +1599,7 @@ impl Global {
             let pipeline =
                 match device.create_render_pipeline(&device.adapter, desc, implicit_context, hub) {
                     Ok(pair) => pair,
-                    Err(e) => break e,
+                    Err(e) => break 'error e,
                 };
 
             let (id, resource) = fid.assign(Arc::new(pipeline));
@@ -1651,14 +1651,16 @@ impl Global {
     ) {
         let hub = A::hub(self);
 
-        let error = loop {
+        let error = 'error: {
             let pipeline = match hub.render_pipelines.get(pipeline_id) {
                 Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
                 Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                None => {
+                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
+                }
             };
             return (id, None);
         };
@@ -1713,13 +1715,13 @@ impl Global {
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
         let implicit_error_context = implicit_context.clone();
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::Invalid.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1732,7 +1734,7 @@ impl Global {
             }
             let pipeline = match device.create_compute_pipeline(desc, implicit_context, hub) {
                 Ok(pair) => pair,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(pipeline));
@@ -1780,15 +1782,17 @@ impl Global {
     ) {
         let hub = A::hub(self);
 
-        let error = loop {
+        let error = 'error: {
             let pipeline = match hub.compute_pipelines.get(pipeline_id) {
                 Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
 
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
                 Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                None => {
+                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
+                }
             };
 
             return (id, None);
@@ -1912,7 +1916,7 @@ impl Global {
             }
 
             if !caps.present_modes.contains(&config.present_mode) {
-                let new_mode = 'b: loop {
+                let new_mode = 'error: {
                     // Automatic present mode checks.
                     //
                     // The "Automatic" modes are never supported by the backends.
@@ -1936,7 +1940,7 @@ impl Global {
 
                     for &fallback in fallbacks {
                         if caps.present_modes.contains(&fallback) {
-                            break 'b fallback;
+                            break 'error fallback;
                         }
                     }
 
@@ -1959,7 +1963,7 @@ impl Global {
                 .composite_alpha_modes
                 .contains(&config.composite_alpha_mode)
             {
-                let new_alpha_mode = 'alpha: loop {
+                let new_alpha_mode = 'alpha: {
                     // Automatic alpha mode checks.
                     let fallbacks = match config.composite_alpha_mode {
                         wgt::CompositeAlphaMode::Auto => &[
@@ -2004,7 +2008,7 @@ impl Global {
 
         log::debug!("configuring surface with {:?}", config);
 
-        let error = 'outer: loop {
+        let error = 'error: {
             // User callbacks must not be called while we are holding locks.
             let user_callbacks;
             {
@@ -2014,10 +2018,10 @@ impl Global {
 
                 let device = match device_guard.get(device_id) {
                     Ok(device) => device,
-                    Err(_) => break DeviceError::Invalid.into(),
+                    Err(_) => break 'error DeviceError::Invalid.into(),
                 };
                 if !device.is_valid() {
-                    break DeviceError::Lost.into();
+                    break 'error DeviceError::Lost.into();
                 }
 
                 #[cfg(feature = "trace")]
@@ -2027,7 +2031,7 @@ impl Global {
 
                 let surface = match surface_guard.get(surface_id) {
                     Ok(surface) => surface,
-                    Err(_) => break E::InvalidSurface,
+                    Err(_) => break 'error E::InvalidSurface,
                 };
 
                 let caps = unsafe {
@@ -2035,7 +2039,7 @@ impl Global {
                     let adapter = &device.adapter;
                     match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
                         Some(caps) => caps,
-                        None => break E::UnsupportedQueueFamily,
+                        None => break 'error E::UnsupportedQueueFamily,
                     }
                 };
 
@@ -2045,13 +2049,13 @@ impl Global {
                         continue;
                     }
                     if !caps.formats.contains(&config.format) {
-                        break 'outer E::UnsupportedFormat {
+                        break 'error E::UnsupportedFormat {
                             requested: config.format,
                             available: caps.formats,
                         };
                     }
                     if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                        break 'outer E::InvalidViewFormat(*format, config.format);
+                        break 'error E::InvalidViewFormat(*format, config.format);
                     }
                     hal_view_formats.push(*format);
                 }
@@ -2060,7 +2064,7 @@ impl Global {
                     if let Err(missing_flag) =
                         device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
                     {
-                        break 'outer E::MissingDownlevelFlags(missing_flag);
+                        break 'error E::MissingDownlevelFlags(missing_flag);
                     }
                 }
 
@@ -2087,7 +2091,7 @@ impl Global {
                     &caps,
                     device.limits.max_texture_dimension_2d,
                 ) {
-                    break error;
+                    break 'error error;
                 }
 
                 // Wait for all work to finish before configuring the surface.
@@ -2098,14 +2102,14 @@ impl Global {
                         user_callbacks = closures;
                     }
                     Err(e) => {
-                        break e.into();
+                        break 'error e.into();
                     }
                 }
 
                 // All textures must be destroyed before the surface can be re-configured.
                 if let Some(present) = surface.presentation.lock().take() {
                     if present.acquired_texture.is_some() {
-                        break E::PreviousOutputExists;
+                        break 'error E::PreviousOutputExists;
                     }
                 }
 
@@ -2122,7 +2126,7 @@ impl Global {
                 } {
                     Ok(()) => (),
                     Err(error) => {
-                        break match error {
+                        break 'error match error {
                             hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
                                 E::InvalidSurface
                             }

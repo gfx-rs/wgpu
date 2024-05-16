@@ -1099,15 +1099,15 @@ impl Global {
         let device_fid = hub.devices.prepare(device_id_in);
         let queue_fid = hub.queues.prepare(queue_id_in);
 
-        let error = loop {
+        let error = 'error: {
             let adapter = match hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
-                Err(_) => break RequestDeviceError::InvalidAdapter,
+                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
             };
             let (device, mut queue) =
                 match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
                     Ok((device, queue)) => (device, queue),
-                    Err(e) => break e,
+                    Err(e) => break 'error e,
                 };
             let (device_id, _) = device_fid.assign(Arc::new(device));
             resource_log!("Created Device {:?}", device_id);
@@ -1147,10 +1147,10 @@ impl Global {
         let devices_fid = hub.devices.prepare(device_id_in);
         let queues_fid = hub.queues.prepare(queue_id_in);
 
-        let error = loop {
+        let error = 'error: {
             let adapter = match hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
-                Err(_) => break RequestDeviceError::InvalidAdapter,
+                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
             };
             let (device, mut queue) = match adapter.create_device_and_queue_from_hal(
                 hal_device,
@@ -1159,7 +1159,7 @@ impl Global {
                 trace_path,
             ) {
                 Ok(device) => device,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
             let (device_id, _) = devices_fid.assign(Arc::new(device));
             resource_log!("Created Device {:?}", device_id);
