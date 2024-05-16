@@ -495,6 +495,11 @@ pub enum CreateRenderPipelineError {
     PipelineExpectsShaderToUseDualSourceBlending,
     #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
     ShaderExpectsPipelineToUseDualSourceBlending,
+    #[error("{}", concat!(
+        "At least one color attachment or depth-stencil attachment was expected, ",
+        "but no render target for the pipeline was specified."
+    ))]
+    NoTargetSpecified,
 }
 
 bitflags::bitflags! {
