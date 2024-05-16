@@ -40,6 +40,10 @@ void main() {
     uint _e35 = subgroupShuffleDown(subgroup_invocation_id, 1u);
     uint _e37 = subgroupShuffleUp(subgroup_invocation_id, 1u);
     uint _e41 = subgroupShuffleXor(subgroup_invocation_id, (sizes.subgroup_size - 1u));
+    uint _e43 = subgroupQuadBroadcast(subgroup_invocation_id, 4u);
+    uint _e44 = subgroupQuadSwapHorizontal(subgroup_invocation_id);
+    uint _e45 = subgroupQuadSwapVertical(subgroup_invocation_id);
+    uint _e46 = subgroupQuadSwapDiagonal(subgroup_invocation_id);
     return;
 }
 
