@@ -260,6 +260,7 @@ impl crate::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         let pipeline_wire = if device
@@ -301,6 +302,7 @@ impl crate::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
             Some(pipeline_wire)
         } else {

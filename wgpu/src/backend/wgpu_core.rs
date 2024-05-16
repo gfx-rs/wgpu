@@ -4,10 +4,10 @@ use crate::{
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
-    SurfaceStatus, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    PipelineCacheDescriptor, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderModuleDescriptorSpirV, ShaderSource, StoreOp, SurfaceStatus, SurfaceTargetUnsafe,
+    TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -519,6 +519,8 @@ impl crate::Context for ContextWgpuCore {
     type RenderPipelineData = ();
     type ComputePipelineId = wgc::id::ComputePipelineId;
     type ComputePipelineData = ();
+    type PipelineCacheId = wgc::id::PipelineCacheId;
+    type PipelineCacheData = ();
     type CommandEncoderId = wgc::id::CommandEncoderId;
     type CommandEncoderData = CommandEncoder;
     type ComputePassId = Unused;
@@ -1191,6 +1193,7 @@ impl crate::Context for ContextWgpuCore {
                 targets: Borrowed(frag.targets),
             }),
             multiview: desc.multiview,
+            cache: desc.cache.map(|c| c.id.into()),
         };
 
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_render_pipeline(
@@ -1240,6 +1243,7 @@ impl crate::Context for ContextWgpuCore {
                     .compilation_options
                     .zero_initialize_workgroup_memory,
             },
+            cache: desc.cache.map(|c| c.id.into()),
         };
 
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_compute_pipeline(
@@ -1267,6 +1271,37 @@ impl crate::Context for ContextWgpuCore {
         }
         (id, ())
     }
+
+    unsafe fn device_create_pipeline_cache(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
+        use wgc::pipeline as pipe;
+
+        let descriptor = pipe::PipelineCacheDescriptor {
+            label: desc.label.map(Borrowed),
+            data: desc.data.map(Borrowed),
+            fallback: desc.fallback,
+        };
+        let (id, error) = wgc::gfx_select!(device => self.0.device_create_pipeline_cache(
+            *device,
+            &descriptor,
+            None
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &device_data.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::device_create_pipeline_cache_init",
+            );
+        }
+        (id, ())
+    }
+
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -1724,6 +1759,14 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::RenderPipelineData,
     ) {
         wgc::gfx_select!(*pipeline => self.0.render_pipeline_drop(*pipeline))
+    }
+
+    fn pipeline_cache_drop(
+        &self,
+        cache: &Self::PipelineCacheId,
+        _cache_data: &Self::PipelineCacheData,
+    ) {
+        wgc::gfx_select!(*cache => self.0.pipeline_cache_drop(*cache))
     }
 
     fn compute_pipeline_get_bind_group_layout(
@@ -2334,6 +2377,15 @@ impl crate::Context for ContextWgpuCore {
 
     fn device_stop_capture(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         wgc::gfx_select!(device => self.0.device_stop_capture(*device));
+    }
+
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &Self::PipelineCacheId,
+        // TODO: Used for error handling?
+        _cache_data: &Self::PipelineCacheData,
+    ) -> Option<Vec<u8>> {
+        wgc::gfx_select!(cache => self.0.pipeline_cache_get_data(*cache))
     }
 
     fn compute_pass_set_pipeline(

@@ -488,6 +488,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     multisample: wgpu::MultisampleState::default(),
                     fragment: None,
                     multiview: None,
+                    cache: None,
                 });
         });
 
@@ -500,6 +501,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     module: &shader_module,
                     entry_point: "",
                     compilation_options: Default::default(),
+                    cache: None,
                 });
         });
 
@@ -757,6 +759,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                 depth_stencil: None,
                 multisample: wgt::MultisampleState::default(),
                 multiview: None,
+                cache: None
             });
 
         // fail(&ctx.device, || {

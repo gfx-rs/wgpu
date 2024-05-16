@@ -207,6 +207,7 @@ impl RenderpassState {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     }),
                     multiview: None,
+                    cache: None,
                 });
 
         let render_target = device_state
@@ -304,6 +305,7 @@ impl RenderpassState {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     }),
                     multiview: None,
+                    cache: None,
                 },
             ));
         }

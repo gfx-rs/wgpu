@@ -1,4 +1,4 @@
-use super::conv;
+use super::{conv, PipelineCache};
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
@@ -1867,12 +1867,17 @@ impl crate::Device for super::Device {
                 .render_pass(raw_pass)
         }];
 
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
         let mut raw_vec = {
             profiling::scope!("vkCreateGraphicsPipelines");
             unsafe {
                 self.shared
                     .raw
-                    .create_graphics_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                    .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };
@@ -1915,12 +1920,17 @@ impl crate::Device for super::Device {
                 .stage(compiled.create_info)
         }];
 
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
         let mut raw_vec = {
             profiling::scope!("vkCreateComputePipelines");
             unsafe {
                 self.shared
                     .raw
-                    .create_compute_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                    .create_compute_pipelines(pipeline_cache, &vk_infos, None)
                     .map_err(|(_, e)| crate::DeviceError::from(e))
             }?
         };
@@ -1940,6 +1950,26 @@ impl crate::Device for super::Device {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
     }
 
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<PipelineCache, crate::PipelineCacheError> {
+        let mut info = vk::PipelineCacheCreateInfo::default();
+        if let Some(data) = desc.data {
+            info = info.initial_data(data)
+        }
+        profiling::scope!("vkCreatePipelineCache");
+        let raw = unsafe { self.shared.raw.create_pipeline_cache(&info, None) }
+            .map_err(crate::DeviceError::from)?;
+
+        Ok(PipelineCache { raw })
+    }
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        Some(self.shared.pipeline_cache_validation_key)
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: PipelineCache) {
+        unsafe { self.shared.raw.destroy_pipeline_cache(cache.raw, None) }
+    }
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
@@ -2103,6 +2133,11 @@ impl crate::Device for super::Device {
                     .end_frame_capture(raw_vk_instance_dispatch_table, ptr::null_mut())
             }
         }
+    }
+
+    unsafe fn pipeline_cache_get_data(&self, cache: &PipelineCache) -> Option<Vec<u8>> {
+        let data = unsafe { self.raw_device().get_pipeline_cache_data(cache.raw) };
+        data.ok()
     }
 
     unsafe fn get_acceleration_structure_build_sizes<'a>(
