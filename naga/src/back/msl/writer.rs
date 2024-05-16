@@ -3286,13 +3286,13 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ", ")?;
                     match direction {
                         crate::Direction::X => {
-                            write!(self.out, "0x01")?;
+                            write!(self.out, "1u")?;
                         }
                         crate::Direction::Y => {
-                            write!(self.out, "0x10")?;
+                            write!(self.out, "2u")?;
                         }
                         crate::Direction::Diagonal => {
-                            write!(self.out, "0x11")?;
+                            write!(self.out, "3u")?;
                         }
                     }
                     writeln!(self.out, ");")?;

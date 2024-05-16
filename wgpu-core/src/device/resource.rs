@@ -1631,7 +1631,13 @@ impl<A: HalApi> Device<A> {
 
         let subgroup_operations = if caps.contains(Caps::SUBGROUP) {
             use naga::valid::SubgroupOperationSet as S;
-            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+            S::BASIC
+                | S::VOTE
+                | S::ARITHMETIC
+                | S::BALLOT
+                | S::SHUFFLE
+                | S::SHUFFLE_RELATIVE
+                | S::QUAD_FRAGMENT_COMPUTE
         } else {
             naga::valid::SubgroupOperationSet::empty()
         };
