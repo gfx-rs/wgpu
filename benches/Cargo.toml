@@ -1,0 +1,46 @@
+[package]
+name = "wgpu-benchmark"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "wgpu benchmarking suite"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+autobenches = false
+publish = false
+
+[[bench]]
+name = "root"
+harness = false
+path = "benches/root.rs"
+
+[features]
+# Uncomment these features to enable tracy and superluminal profiling.
+# tracy = ["dep:tracy-client", "profiling/profile-with-tracy"]
+# superluminal = ["profiling/profile-with-superluminal"]
+
+[dependencies]
+bincode.workspace = true
+bytemuck.workspace = true
+criterion.workspace = true
+naga = { workspace = true, features = [
+    "deserialize",
+    "serialize",
+    "wgsl-in",
+    "spv-in",
+    "glsl-in",
+    "spv-out",
+    "msl-out",
+    "hlsl-out",
+    "glsl-out",
+    "wgsl-out",
+] }
+nanorand.workspace = true
+once_cell.workspace = true
+pollster.workspace = true
+profiling.workspace = true
+rayon.workspace = true
+tracy-client = { workspace = true, optional = true }
+wgpu.workspace = true

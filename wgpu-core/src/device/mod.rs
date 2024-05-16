@@ -32,7 +32,9 @@ pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;
 // value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
-const CLEANUP_WAIT_MS: u32 = 5000;
+// If a submission is not completed within this time, we go off into UB land.
+// See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
+const CLEANUP_WAIT_MS: u32 = 60000;
 
 const IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL: &str = "Implicit BindGroupLayout in the Error State";
 const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
