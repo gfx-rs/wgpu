@@ -3972,7 +3972,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         0 => crate::Direction::X,
                         1 => crate::Direction::Y,
                         2 => crate::Direction::Diagonal,
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
 
                     let result_type = self.lookup_type.lookup(result_type_id)?;

@@ -3271,8 +3271,12 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     writeln!(self.out, ");")?;
-                },
-                crate::Statement::SubgroupQuadSwap { direction, argument, result } => {
+                }
+                crate::Statement::SubgroupQuadSwap {
+                    direction,
+                    argument,
+                    result,
+                } => {
                     write!(self.out, "{level}")?;
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
@@ -3283,13 +3287,13 @@ impl<W: Write> Writer<W> {
                     match direction {
                         crate::Direction::X => {
                             write!(self.out, "0x01")?;
-                        },
+                        }
                         crate::Direction::Y => {
                             write!(self.out, "0x10")?;
-                        },
+                        }
                         crate::Direction::Diagonal => {
                             write!(self.out, "0x11")?;
-                        },
+                        }
                     }
                     writeln!(self.out, ");")?;
                 }

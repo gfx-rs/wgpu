@@ -1,5 +1,6 @@
 use crate::arena::Handle;
 use crate::arena::{Arena, UniqueArena};
+use crate::valid::SubgroupOperationSet;
 
 use super::validate_atomic_compare_exchange_struct;
 
@@ -55,7 +56,7 @@ pub enum SubgroupError {
     #[error("Result type for {0:?} doesn't match the statement")]
     ResultTypeMismatch(Handle<crate::Expression>),
     #[error("Support for subgroup operation {0:?} is required")]
-    UnsupportedOperation(super::SubgroupOperationSet),
+    UnsupportedOperation(SubgroupOperationSet),
     #[error("Unknown operation")]
     UnknownOperation,
 }
@@ -521,6 +522,35 @@ impl super::Validator {
             if matches!(scalar.kind, crate::ScalarKind::Uint | crate::ScalarKind::Sint | crate::ScalarKind::Float)
         ) {
             log::error!("Subgroup gather operand type {:?}", argument_inner);
+            return Err(SubgroupError::InvalidOperand(argument)
+                .with_span_handle(argument, context.expressions)
+                .into_other());
+        }
+
+        self.emit_expression(result, context)?;
+        match context.expressions[result] {
+            crate::Expression::SubgroupOperationResult { ty }
+                if { &context.types[ty].inner == argument_inner } => {}
+            _ => {
+                return Err(SubgroupError::ResultTypeMismatch(result)
+                    .with_span_handle(result, context.expressions)
+                    .into_other())
+            }
+        }
+        Ok(())
+    }
+    fn validate_subgroup_quad_swap(
+        &mut self,
+        argument: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
+        context: &BlockContext,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
+        if !matches!(*argument_inner,
+            crate::TypeInner::Scalar ( scalar, .. ) | crate::TypeInner::Vector { scalar, .. }
+            if matches!(scalar.kind, crate::ScalarKind::Uint | crate::ScalarKind::Sint | crate::ScalarKind::Float)
+        ) {
+            log::error!("Subgroup quad swap operand type {:?}", argument_inner);
             return Err(SubgroupError::InvalidOperand(argument)
                 .with_span_handle(argument, context.expressions)
                 .into_other());
@@ -1145,7 +1175,31 @@ impl super::Validator {
                     }
                     self.validate_subgroup_gather(mode, argument, result, context)?;
                 }
-                S::SubgroupQuadSwap { direction, argument, result } => {}
+                S::SubgroupQuadSwap {
+                    direction: _,
+                    argument,
+                    result,
+                } => {
+                    stages &= self.subgroup_stages;
+                    if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::SUBGROUP,
+                        )
+                        .with_span_static(span, "missing capability for this operation"));
+                    }
+                    if !self
+                        .subgroup_operations
+                        .contains(SubgroupOperationSet::QUAD_FRAGMENT_COMPUTE)
+                    {
+                        return Err(FunctionError::InvalidSubgroup(
+                            SubgroupError::UnsupportedOperation(
+                                SubgroupOperationSet::QUAD_FRAGMENT_COMPUTE,
+                            ),
+                        )
+                        .with_span_static(span, "support for this operation is not present"));
+                    }
+                    self.validate_subgroup_quad_swap(argument, result, context)?;
+                }
             }
         }
         Ok(BlockInfo { stages, finished })

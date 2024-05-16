@@ -131,10 +131,14 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result)
                     }
-                    St::SubgroupQuadSwap { direction, argument, result } => {
+                    St::SubgroupQuadSwap {
+                        direction: _,
+                        argument,
+                        result,
+                    } => {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result)
-                    },
+                    }
 
                     // Trivial statements.
                     St::Break
@@ -323,7 +327,11 @@ impl FunctionMap {
                         adjust(argument);
                         adjust(result);
                     }
-                    St::SubgroupQuadSwap { direction: _, ref mut argument, ref mut result } => {
+                    St::SubgroupQuadSwap {
+                        direction: _,
+                        ref mut argument,
+                        ref mut result,
+                    } => {
                         adjust(argument);
                         adjust(result);
                     }

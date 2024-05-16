@@ -2518,7 +2518,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::SubgroupQuadSwap { direction, argument, result } => {
+            Statement::SubgroupQuadSwap {
+                direction,
+                argument,
+                result,
+            } => {
                 write!(self.out, "{level}")?;
                 let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 let res_ty = ctx.info[result].ty.inner_with(&self.module.types);

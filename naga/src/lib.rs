@@ -1988,7 +1988,7 @@ pub enum Statement {
         ///
         /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
-    }
+    },
 }
 
 /// A function argument.

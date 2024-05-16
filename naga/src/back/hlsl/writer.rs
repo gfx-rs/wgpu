@@ -2193,7 +2193,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, ", ")?;
                         match mode {
                             crate::GatherMode::BroadcastFirst => unreachable!(),
-                            crate::GatherMode::Broadcast(index) | crate::GatherMode::Shuffle(index) => {
+                            crate::GatherMode::Broadcast(index)
+                            | crate::GatherMode::Shuffle(index) => {
                                 self.write_expr(module, index, func_ctx)?;
                             }
                             crate::GatherMode::ShuffleDown(index) => {
@@ -2208,13 +2209,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 write!(self.out, "WaveGetLaneIndex() ^ ")?;
                                 self.write_expr(module, index, func_ctx)?;
                             }
-                            crate::GatherMode::QuadBroadcast(_) => unreachable!()
+                            crate::GatherMode::QuadBroadcast(_) => unreachable!(),
                         }
                     }
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::SubgroupQuadSwap { direction, argument, result } => {
+            Statement::SubgroupQuadSwap {
+                direction,
+                argument,
+                result,
+            } => {
                 write!(self.out, "{level}")?;
                 write!(self.out, "const ")?;
                 let name = format!("{}{}", back::BAKE_PREFIX, result.index());
@@ -2230,13 +2235,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 match direction {
                     crate::Direction::X => {
                         write!(self.out, "QuadReadAcrossX(")?;
-                    },
+                    }
                     crate::Direction::Y => {
                         write!(self.out, "QuadReadAcrossY(")?;
-                    },
+                    }
                     crate::Direction::Diagonal => {
                         write!(self.out, "QuadReadAcrossDiagonal(")?;
-                    },
+                    }
                 }
                 self.write_expr(module, argument, func_ctx)?;
                 writeln!(self.out, ");")?;

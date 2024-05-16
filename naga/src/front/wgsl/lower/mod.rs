@@ -2431,8 +2431,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let ty = ctx.register_type(argument)?;
 
-                            let result =
-                                ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
                                 crate::Statement::SubgroupQuadSwap {
@@ -2442,7 +2444,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 },
                                 span,
                             );
-                            return Ok(Some(result))
+                            return Ok(Some(result));
                         }
 
                         "quadSwapY" => {
@@ -2453,8 +2455,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let ty = ctx.register_type(argument)?;
 
-                            let result =
-                                ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
                                 crate::Statement::SubgroupQuadSwap {
@@ -2464,7 +2468,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 },
                                 span,
                             );
-                            return Ok(Some(result))
+                            return Ok(Some(result));
                         }
 
                         "quadSwapDiagonal" => {
@@ -2475,8 +2479,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let ty = ctx.register_type(argument)?;
 
-                            let result =
-                                ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
                                 crate::Statement::SubgroupQuadSwap {
@@ -2486,7 +2492,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 },
                                 span,
                             );
-                            return Ok(Some(result))
+                            return Ok(Some(result));
                         }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }
