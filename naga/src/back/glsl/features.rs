@@ -280,6 +280,7 @@ impl FeaturesManager {
                 out,
                 "#extension GL_KHR_shader_subgroup_shuffle_relative : require"
             )?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_quad : require")?;
         }
 
         if self.0.contains(Features::TEXTURE_ATOMICS) {
