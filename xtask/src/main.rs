@@ -13,11 +13,21 @@ Usage: xtask <COMMAND>
 
 Commands:
   run-wasm
+    Build and run web examples
+
     --release   Build in release mode
     --no-serve  Just build the generated files, don't serve them
+
   test
+    Run tests
+
     --llvm-cov  Run tests with LLVM code coverage using the llvm-cov tool
+    --list      List all of the tests and their executables without running them
+    --retries   Number of times to retry failing tests
+
   vendor-web-sys
+    Re-vendor the WebGPU web-sys bindings.
+
     --no-cleanup        Don't clean up temporary checkout of wasm-bindgen
     One of:
         --path-to-checkout  Path to a local checkout of wasm-bindgen to generate bindings from.

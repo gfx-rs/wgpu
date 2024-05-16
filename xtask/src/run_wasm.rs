@@ -5,7 +5,7 @@ use xshell::Shell;
 
 use crate::util::{check_all_programs, Program};
 
-pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> Result<(), anyhow::Error> {
+pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let no_serve = args.contains("--no-serve");
     let release = args.contains("--release");
 
