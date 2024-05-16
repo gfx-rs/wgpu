@@ -209,8 +209,6 @@
     clippy::arc_with_non_send_sync,
     // for `if_then_panic` until it reaches stable
     unknown_lints,
-    // We use loops for getting early-out of scope without closures.
-    clippy::never_loop,
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
     // Redundant matching is more explicit.

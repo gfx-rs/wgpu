@@ -1174,26 +1174,26 @@ impl<A: HalApi> Device<A> {
         };
 
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
-        let render_extent = 'b: loop {
+        let render_extent = 'error: {
             if !texture
                 .desc
                 .usage
                 .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
             {
-                break 'b Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
+                break 'error Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
             }
 
             if !(resolved_dimension == TextureViewDimension::D2
                 || (self.features.contains(wgt::Features::MULTIVIEW)
                     && resolved_dimension == TextureViewDimension::D2Array))
             {
-                break 'b Err(TextureViewNotRenderableReason::Dimension(
+                break 'error Err(TextureViewNotRenderableReason::Dimension(
                     resolved_dimension,
                 ));
             }
 
             if resolved_mip_level_count != 1 {
-                break 'b Err(TextureViewNotRenderableReason::MipLevelCount(
+                break 'error Err(TextureViewNotRenderableReason::MipLevelCount(
                     resolved_mip_level_count,
                 ));
             }
@@ -1201,18 +1201,18 @@ impl<A: HalApi> Device<A> {
             if resolved_array_layer_count != 1
                 && !(self.features.contains(wgt::Features::MULTIVIEW))
             {
-                break 'b Err(TextureViewNotRenderableReason::ArrayLayerCount(
+                break 'error Err(TextureViewNotRenderableReason::ArrayLayerCount(
                     resolved_array_layer_count,
                 ));
             }
 
             if aspects != hal::FormatAspects::from(texture.desc.format) {
-                break 'b Err(TextureViewNotRenderableReason::Aspects(aspects));
+                break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
             }
 
-            break 'b Ok(texture
+            Ok(texture
                 .desc
-                .compute_render_extent(desc.range.base_mip_level));
+                .compute_render_extent(desc.range.base_mip_level))
         };
 
         // filter the usages based on the other criteria
@@ -2948,9 +2948,11 @@ impl<A: HalApi> Device<A> {
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
                 target_specified = true;
-                let error = loop {
+                let error = 'error: {
                     if cs.write_mask.contains_invalid_bits() {
-                        break Some(pipeline::ColorStateError::InvalidWriteMask(cs.write_mask));
+                        break 'error Some(pipeline::ColorStateError::InvalidWriteMask(
+                            cs.write_mask,
+                        ));
                     }
 
                     let format_features = self.describe_format_features(adapter, cs.format)?;
@@ -2958,7 +2960,9 @@ impl<A: HalApi> Device<A> {
                         .allowed_usages
                         .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
                     {
-                        break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
+                        break 'error Some(pipeline::ColorStateError::FormatNotRenderable(
+                            cs.format,
+                        ));
                     }
                     let blendable = format_features.flags.contains(Tfff::BLENDABLE);
                     let filterable = format_features.flags.contains(Tfff::FILTERABLE);
@@ -2970,10 +2974,12 @@ impl<A: HalApi> Device<A> {
                     // [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to elude
                     // this limitation
                     if cs.blend.is_some() && (!blendable || (!filterable && !adapter_specific)) {
-                        break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
+                        break 'error Some(pipeline::ColorStateError::FormatNotBlendable(
+                            cs.format,
+                        ));
                     }
                     if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
-                        break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
+                        break 'error Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                     }
 
                     if desc.multisample.count > 1
@@ -2981,7 +2987,7 @@ impl<A: HalApi> Device<A> {
                             .flags
                             .sample_count_supported(desc.multisample.count)
                     {
-                        break Some(pipeline::ColorStateError::InvalidSampleCount(
+                        break 'error Some(pipeline::ColorStateError::InvalidSampleCount(
                             desc.multisample.count,
                             cs.format,
                             cs.format
@@ -3015,7 +3021,7 @@ impl<A: HalApi> Device<A> {
                         }
                     }
 
-                    break None;
+                    break 'error None;
                 };
                 if let Some(e) = error {
                     return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
@@ -3035,23 +3041,23 @@ impl<A: HalApi> Device<A> {
 
         if let Some(ds) = depth_stencil_state {
             target_specified = true;
-            let error = loop {
+            let error = 'error: {
                 let format_features = self.describe_format_features(adapter, ds.format)?;
                 if !format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
                 {
-                    break Some(pipeline::DepthStencilStateError::FormatNotRenderable(
+                    break 'error Some(pipeline::DepthStencilStateError::FormatNotRenderable(
                         ds.format,
                     ));
                 }
 
                 let aspect = hal::FormatAspects::from(ds.format);
                 if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
-                    break Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
+                    break 'error Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
                 }
                 if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspects::STENCIL) {
-                    break Some(pipeline::DepthStencilStateError::FormatNotStencil(
+                    break 'error Some(pipeline::DepthStencilStateError::FormatNotStencil(
                         ds.format,
                     ));
                 }
@@ -3060,7 +3066,7 @@ impl<A: HalApi> Device<A> {
                         .flags
                         .sample_count_supported(desc.multisample.count)
                 {
-                    break Some(pipeline::DepthStencilStateError::InvalidSampleCount(
+                    break 'error Some(pipeline::DepthStencilStateError::InvalidSampleCount(
                         desc.multisample.count,
                         ds.format,
                         ds.format
@@ -3074,7 +3080,7 @@ impl<A: HalApi> Device<A> {
                     ));
                 }
 
-                break None;
+                break 'error None;
             };
             if let Some(e) = error {
                 return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
