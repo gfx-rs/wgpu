@@ -1954,7 +1954,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
     ) -> Result<PipelineCache, crate::PipelineCacheError> {
-        let mut info = vk::PipelineCacheCreateInfo::builder();
+        let mut info = vk::PipelineCacheCreateInfo::default();
         if let Some(data) = desc.data {
             info = info.initial_data(data)
         }
