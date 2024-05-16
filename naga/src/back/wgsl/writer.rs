@@ -964,22 +964,26 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::SubgroupQuadSwap { direction, argument, result } => {
+            Statement::SubgroupQuadSwap {
+                direction,
+                argument,
+                result,
+            } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_name = Baked(result).to_string();
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
                 match direction {
                     crate::Direction::X => {
                         write!(self.out, "quadSwapX(")?;
-                    },
+                    }
                     crate::Direction::Y => {
                         write!(self.out, "quadSwapY(")?;
-                    },
+                    }
                     crate::Direction::Diagonal => {
                         write!(self.out, "quadSwapDiagonal(")?;
-                    },
+                    }
                 }
                 self.write_expr(module, argument, func_ctx)?;
                 writeln!(self.out, ");")?;

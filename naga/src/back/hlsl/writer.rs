@@ -2640,10 +2640,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::SubgroupQuadSwap { direction, argument, result } => {
+            Statement::SubgroupQuadSwap {
+                direction,
+                argument,
+                result,
+            } => {
                 write!(self.out, "{level}")?;
                 write!(self.out, "const ")?;
-                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let name = Baked(result).to_string();
                 match func_ctx.info[result].ty {
                     proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
                     proc::TypeResolution::Value(ref value) => {
@@ -2656,13 +2660,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 match direction {
                     crate::Direction::X => {
                         write!(self.out, "QuadReadAcrossX(")?;
-                    },
+                    }
                     crate::Direction::Y => {
                         write!(self.out, "QuadReadAcrossY(")?;
-                    },
+                    }
                     crate::Direction::Diagonal => {
                         write!(self.out, "QuadReadAcrossDiagonal(")?;
-                    },
+                    }
                 }
                 self.write_expr(module, argument, func_ctx)?;
                 writeln!(self.out, ");")?;
