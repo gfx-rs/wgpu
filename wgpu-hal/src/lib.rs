@@ -1637,8 +1637,6 @@ pub struct ProgrammableStage<'a, A: Api> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
-    /// The cache which will be used and filled when compiling this pipeline
-    pub cache: Option<&'a A::PipelineCache>,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1649,7 +1647,6 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
-            cache: self.cache,
         }
     }
 }
@@ -1662,6 +1659,8 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     pub layout: &'a A::PipelineLayout,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStage<'a, A>,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a A::PipelineCache>,
 }
 
 pub struct PipelineCacheDescriptor<'a> {
@@ -1703,6 +1702,8 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a A::PipelineCache>,
 }
 
 #[derive(Debug, Clone)]

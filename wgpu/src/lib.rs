@@ -1932,6 +1932,8 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
@@ -1991,8 +1993,6 @@ pub struct PipelineCompilationOptions<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<&'a PipelineCache>,
 }
 
 impl<'a> Default for PipelineCompilationOptions<'a> {
@@ -2006,7 +2006,6 @@ impl<'a> Default for PipelineCompilationOptions<'a> {
         Self {
             constants,
             zero_initialize_workgroup_memory: true,
-            cache: None,
         }
     }
 }
@@ -2032,6 +2031,8 @@ pub struct ComputePipelineDescriptor<'a> {
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
     pub compilation_options: PipelineCompilationOptions<'a>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);

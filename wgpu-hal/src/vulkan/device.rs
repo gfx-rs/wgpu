@@ -1863,15 +1863,9 @@ impl crate::Device for super::Device {
                 .build()
         }];
 
-        let vertex_cache = desc.vertex_stage.cache.map(|it| it.raw);
-        let fragment_cache = desc
-            .fragment_stage
-            .as_ref()
-            .and_then(|it| it.cache)
-            .map(|it| it.raw);
-        // TODO: What should the behaviour be when both are set and different?
-        let pipeline_cache = vertex_cache
-            .or(fragment_cache)
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
             .unwrap_or(vk::PipelineCache::null());
 
         let mut raw_vec = {
@@ -1927,7 +1921,6 @@ impl crate::Device for super::Device {
         }];
 
         let pipeline_cache = desc
-            .stage
             .cache
             .map(|it| it.raw)
             .unwrap_or(vk::PipelineCache::null());

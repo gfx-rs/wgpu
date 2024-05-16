@@ -1167,7 +1167,6 @@ impl crate::Context for ContextWgpuCore {
                         .vertex
                         .compilation_options
                         .zero_initialize_workgroup_memory,
-                    cache: desc.vertex.compilation_options.cache.map(|c| c.id.into()),
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1182,11 +1181,11 @@ impl crate::Context for ContextWgpuCore {
                     zero_initialize_workgroup_memory: frag
                         .compilation_options
                         .zero_initialize_workgroup_memory,
-                    cache: frag.compilation_options.cache.map(|c| c.id.into()),
                 },
                 targets: Borrowed(frag.targets),
             }),
             multiview: desc.multiview,
+            cache: desc.cache.map(|c| c.id.into()),
         };
 
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_render_pipeline(
@@ -1235,8 +1234,8 @@ impl crate::Context for ContextWgpuCore {
                 zero_initialize_workgroup_memory: desc
                     .compilation_options
                     .zero_initialize_workgroup_memory,
-                cache: desc.compilation_options.cache.map(|c| c.id.into()),
             },
+            cache: desc.cache.map(|c| c.id.into()),
         };
 
         let (id, error) = wgc::gfx_select!(device => self.0.device_create_compute_pipeline(

@@ -309,6 +309,7 @@ async fn shader_input_output_test(
                 module: &sm,
                 entry_point: "cs_main",
                 compilation_options: Default::default(),
+                cache: None,
             });
 
         // -- Initializing data --

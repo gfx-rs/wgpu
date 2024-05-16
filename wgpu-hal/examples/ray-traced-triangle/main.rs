@@ -373,8 +373,8 @@ impl<A: hal::Api> Example<A> {
                     entry_point: "main",
                     constants: &Default::default(),
                     zero_initialize_workgroup_memory: true,
-                    cache: None,
                 },
+                cache: None,
             })
         }
         .unwrap();

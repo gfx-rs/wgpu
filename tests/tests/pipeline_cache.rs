@@ -114,10 +114,8 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                 layout: Some(&pipeline_layout),
                 module: &sm,
                 entry_point: "main",
-                compilation_options: wgpu::PipelineCompilationOptions {
-                    cache: Some(&first_cache),
-                    ..Default::default()
-                },
+                compilation_options: Default::default(),
+                cache: Some(&first_cache),
             });
         validate_pipeline(&ctx, first_pipeline, &bind_group, &gpu_buffer, &cpu_buffer).await;
         first_cache_data = first_cache.get_data();
@@ -139,10 +137,8 @@ async fn pipeline_cache_test(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &sm,
             entry_point: "main",
-            compilation_options: wgpu::PipelineCompilationOptions {
-                cache: Some(&second_cache),
-                ..Default::default()
-            },
+            compilation_options: Default::default(),
+            cache: Some(&second_cache),
         });
     validate_pipeline(&ctx, first_pipeline, &bind_group, &gpu_buffer, &cpu_buffer).await;
 
