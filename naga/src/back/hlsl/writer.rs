@@ -2214,7 +2214,33 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::SubgroupQuadSwap { direction, argument, result } => {}
+            Statement::SubgroupQuadSwap { direction, argument, result } => {
+                write!(self.out, "{level}")?;
+                write!(self.out, "const ")?;
+                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                match func_ctx.info[result].ty {
+                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    proc::TypeResolution::Value(ref value) => {
+                        self.write_value_type(module, value)?
+                    }
+                };
+                write!(self.out, " {name} = ")?;
+                self.named_expressions.insert(result, name);
+
+                match direction {
+                    crate::Direction::X => {
+                        write!(self.out, "QuadReadAcrossX(")?;
+                    },
+                    crate::Direction::Y => {
+                        write!(self.out, "QuadReadAcrossY(")?;
+                    },
+                    crate::Direction::Diagonal => {
+                        write!(self.out, "QuadReadAcrossDiagonal(")?;
+                    },
+                }
+                self.write_expr(module, argument, func_ctx)?;
+                writeln!(self.out, ");")?;
+            }
         }
 
         Ok(())

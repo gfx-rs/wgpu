@@ -3955,7 +3955,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
                     let argument_id = self.next()?;
-                    let direction = self.next()?;
+                    let direction_id = self.next()?;
 
                     let argument_lookup = self.lookup_expression.lookup(argument_id)?;
                     let argument_handle = get_expr_handle!(argument_id, argument_lookup);
@@ -3964,6 +3964,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
                         .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
                         .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let direction_const = self.lookup_constant.lookup(direction_id)?;
+                    let direction_const = resolve_constant(ctx.gctx(), &direction_const.inner)
+                        .ok_or(Error::InvalidOperand)?;
+                    let direction = match direction_const {
+                        0 => crate::Direction::X,
+                        1 => crate::Direction::Y,
+                        2 => crate::Direction::Diagonal,
+                        _ => unreachable!()
+                    };
 
                     let result_type = self.lookup_type.lookup(result_type_id)?;
 
@@ -3984,7 +3994,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     block.push(
                         crate::Statement::SubgroupQuadSwap {
-                            direction: crate::Direction::X,
+                            direction,
                             result: result_handle,
                             argument: argument_handle,
                         },
