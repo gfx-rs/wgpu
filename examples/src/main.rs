@@ -50,6 +50,7 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false, // No canvas for WebGL
         webgpu: true,
     },
+    #[cfg(not(target_arch = "wasm32"))]
     ExampleDesc {
         name: "hello_triangle",
         function: wgpu_examples::hello_triangle::main,
@@ -134,6 +135,7 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false,  // No canvas for WebGL
         webgpu: false, // No timestamp queries
     },
+    #[cfg(not(target_arch = "wasm32"))]
     ExampleDesc {
         name: "uniform_values",
         function: wgpu_examples::uniform_values::main,

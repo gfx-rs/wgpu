@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::ActiveEventLoop,
     window::{Window, WindowId},
 };
 
