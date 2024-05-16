@@ -3044,8 +3044,11 @@ impl<A: HalApi> Device<A> {
             );
         }
 
+        let mut target_specified = false;
+
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
+                target_specified = true;
                 let error = loop {
                     if cs.write_mask.contains_invalid_bits() {
                         break Some(pipeline::ColorStateError::InvalidWriteMask(cs.write_mask));
@@ -3073,6 +3076,7 @@ impl<A: HalApi> Device<A> {
                     if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
                         break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                     }
+
                     if desc.multisample.count > 1
                         && !format_features
                             .flags
@@ -3091,6 +3095,7 @@ impl<A: HalApi> Device<A> {
                                 .supported_sample_counts(),
                         ));
                     }
+
                     if let Some(blend_mode) = cs.blend {
                         for factor in [
                             blend_mode.color.src_factor,
@@ -3130,6 +3135,7 @@ impl<A: HalApi> Device<A> {
         }
 
         if let Some(ds) = depth_stencil_state {
+            target_specified = true;
             let error = loop {
                 let format_features = self.describe_format_features(adapter, ds.format)?;
                 if !format_features
@@ -3178,6 +3184,10 @@ impl<A: HalApi> Device<A> {
             if ds.bias.clamp != 0.0 {
                 self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
             }
+        }
+
+        if !target_specified {
+            return Err(pipeline::CreateRenderPipelineError::NoTargetSpecified);
         }
 
         // Get the pipeline layout from the desc if it is provided.
