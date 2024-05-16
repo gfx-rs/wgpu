@@ -226,7 +226,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} --no-default-features
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }} --tests --all-features
+          cargo clippy --target ${{ matrix.target }} --tests --benches --all-features
 
           # build docs
           cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
