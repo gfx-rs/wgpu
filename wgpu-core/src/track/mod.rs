@@ -180,8 +180,8 @@ impl TrackerIndexAllocator {
     }
 }
 
-impl std::fmt::Debug for TrackerIndexAllocator {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Debug for TrackerIndexAllocator {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         Ok(())
     }
 }

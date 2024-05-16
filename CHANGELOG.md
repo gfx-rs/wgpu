@@ -41,6 +41,14 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Remove lifetime bounds on `wgpu::ComputePass`
+
+TODO(wumpf): This is still work in progress. Should write a bit more about it. Also will very likely extend to `wgpu::RenderPass` before release.
+
+`wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
+
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569).
+
 #### Querying shader compilation errors
 
 Wgpu now supports querying [shader compilation info](https://www.w3.org/TR/webgpu/#dom-gpushadermodule-getcompilationinfo).
@@ -62,8 +70,6 @@ for message in compilation_info
 
 By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
-
-
 ### New features
 
 #### Vulkan
@@ -74,11 +80,25 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 #### Naga
 
+- Implement `WGSL`'s `unpack4xI8`,`unpack4xU8`,`pack4xI8` and `pack4xU8`. By @VlaDexa in [#5424](https://github.com/gfx-rs/wgpu/pull/5424)
+
+### Changes
+
+#### General
+
+- Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
+
 ### Bug Fixes
+
+#### Vulkan
+
+- Fix enablement of subgroup ops extension on Vulkan devices that don't support Vulkan 1.3. By @cwfitzgerald in [#5624](https://github.com/gfx-rs/wgpu/pull/5624).
 
 #### GLES / OpenGL
 
 -  Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
+-  Fix `ClearColorF`, `ClearColorU` and `ClearColorI` commands being issued before `SetDrawColorBuffers` [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
+-  Replace `glClear` with `glClearBufferF` because `glDrawBuffers` requires that the ith buffer must be `COLOR_ATTACHMENTi` or `NONE` [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
 
 ## v0.20.0 (2024-04-28)
 
@@ -255,6 +275,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
 - Add safety check to `wgpu_hal::vulkan::CommandEncoder` to make sure `discard_encoding` is not called in the closed state. By @villuna in [#5557](https://github.com/gfx-rs/wgpu/pull/5557)
 - Fix SPIR-V type capability requests to not depend on `LocalType` caching. By @atlv24 in [#5590](https://github.com/gfx-rs/wgpu/pull/5590)
+- Upgrade `ash` to `0.38`. By @MarijnS95 in [#5504](https://github.com/gfx-rs/wgpu/pull/5504).
 
 #### Tests
 

@@ -85,8 +85,8 @@ impl<A: HalApi> Resource for ShaderModule<A> {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        self.label.clone()
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 

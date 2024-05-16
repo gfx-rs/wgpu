@@ -514,8 +514,8 @@ impl<A: HalApi> Resource for BindGroupLayout<A> {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        self.label.clone()
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 impl<A: HalApi> BindGroupLayout<A> {

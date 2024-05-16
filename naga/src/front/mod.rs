@@ -268,10 +268,10 @@ where
     /// the current scope to the root scope, returning `Some` when a variable is
     /// found or `None` if there doesn't exist a variable with `name` in any
     /// scope.
-    pub fn lookup<Q: ?Sized>(&self, name: &Q) -> Option<&Var>
+    pub fn lookup<Q>(&self, name: &Q) -> Option<&Var>
     where
         Name: std::borrow::Borrow<Q>,
-        Q: std::hash::Hash + Eq,
+        Q: std::hash::Hash + Eq + ?Sized,
     {
         // Iterate backwards trough the scopes and try to find the variable
         for scope in self.scopes[..self.cursor].iter().rev() {

@@ -313,7 +313,7 @@ impl super::Queue {
                     let can_use_zero_buffer = self
                         .shared
                         .private_caps
-                        .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                        .contains(PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
                         || dst_target != glow::ELEMENT_ARRAY_BUFFER;
 
                     if can_use_zero_buffer {
@@ -358,7 +358,7 @@ impl super::Queue {
                 let is_index_buffer_only_element_dst = !self
                     .shared
                     .private_caps
-                    .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                    .contains(PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
                     && dst_target == glow::ELEMENT_ARRAY_BUFFER
                     || src_target == glow::ELEMENT_ARRAY_BUFFER;
 
@@ -1075,13 +1075,7 @@ impl super::Queue {
                 {
                     unsafe { self.perform_shader_clear(gl, draw_buffer, *color) };
                 } else {
-                    // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
-                    // on Windows.
-                    unsafe {
-                        gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
-                        gl.clear_color(color[0], color[1], color[2], color[3]);
-                        gl.clear(glow::COLOR_BUFFER_BIT);
-                    }
+                    unsafe { gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color) };
                 }
             }
             C::ClearColorU(draw_buffer, ref color) => {

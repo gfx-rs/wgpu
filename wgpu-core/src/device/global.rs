@@ -192,7 +192,7 @@ impl Global {
                 // buffer is mappable, so we are just doing that at start
                 let map_size = buffer.size;
                 let ptr = if map_size == 0 {
-                    std::ptr::NonNull::dangling()
+                    ptr::NonNull::dangling()
                 } else {
                     let snatch_guard = device.snatchable_lock.read();
                     match map_buffer(
@@ -1365,9 +1365,7 @@ impl Global {
                 &device,
                 #[cfg(feature = "trace")]
                 device.trace.lock().is_some(),
-                desc.label
-                    .to_hal(device.instance_flags)
-                    .map(|s| s.to_string()),
+                desc.label.to_hal(device.instance_flags).map(str::to_owned),
             );
 
             let (id, _) = fid.assign(Arc::new(command_buffer));
@@ -2153,7 +2151,7 @@ impl Global {
     }
 
     #[cfg(feature = "replay")]
-    /// Only triangle suspected resource IDs. This helps us to avoid ID collisions
+    /// Only triage suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.
     pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), InvalidDevice> {
         let hub = A::hub(self);

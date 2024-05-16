@@ -42,7 +42,7 @@ pub struct Queue<A: HalApi> {
 impl<A: HalApi> Resource for Queue<A> {
     const TYPE: ResourceType = "Queue";
 
-    type Marker = crate::id::markers::Queue;
+    type Marker = id::markers::Queue;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info

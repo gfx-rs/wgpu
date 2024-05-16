@@ -3754,30 +3754,27 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                     emitter.start(ctx.expressions);
                 }
-                spirv::Op::GroupNonUniformAll
-                | spirv::Op::GroupNonUniformAny
-                | spirv::Op::GroupNonUniformIAdd
-                | spirv::Op::GroupNonUniformFAdd
-                | spirv::Op::GroupNonUniformIMul
-                | spirv::Op::GroupNonUniformFMul
-                | spirv::Op::GroupNonUniformSMax
-                | spirv::Op::GroupNonUniformUMax
-                | spirv::Op::GroupNonUniformFMax
-                | spirv::Op::GroupNonUniformSMin
-                | spirv::Op::GroupNonUniformUMin
-                | spirv::Op::GroupNonUniformFMin
-                | spirv::Op::GroupNonUniformBitwiseAnd
-                | spirv::Op::GroupNonUniformBitwiseOr
-                | spirv::Op::GroupNonUniformBitwiseXor
-                | spirv::Op::GroupNonUniformLogicalAnd
-                | spirv::Op::GroupNonUniformLogicalOr
-                | spirv::Op::GroupNonUniformLogicalXor => {
+                Op::GroupNonUniformAll
+                | Op::GroupNonUniformAny
+                | Op::GroupNonUniformIAdd
+                | Op::GroupNonUniformFAdd
+                | Op::GroupNonUniformIMul
+                | Op::GroupNonUniformFMul
+                | Op::GroupNonUniformSMax
+                | Op::GroupNonUniformUMax
+                | Op::GroupNonUniformFMax
+                | Op::GroupNonUniformSMin
+                | Op::GroupNonUniformUMin
+                | Op::GroupNonUniformFMin
+                | Op::GroupNonUniformBitwiseAnd
+                | Op::GroupNonUniformBitwiseOr
+                | Op::GroupNonUniformBitwiseXor
+                | Op::GroupNonUniformLogicalAnd
+                | Op::GroupNonUniformLogicalOr
+                | Op::GroupNonUniformLogicalXor => {
                     block.extend(emitter.finish(ctx.expressions));
                     inst.expect(
-                        if matches!(
-                            inst.op,
-                            spirv::Op::GroupNonUniformAll | spirv::Op::GroupNonUniformAny
-                        ) {
+                        if matches!(inst.op, Op::GroupNonUniformAll | Op::GroupNonUniformAny) {
                             5
                         } else {
                             6
@@ -3787,7 +3784,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
                     let collective_op_id = match inst.op {
-                        spirv::Op::GroupNonUniformAll | spirv::Op::GroupNonUniformAny => {
+                        Op::GroupNonUniformAll | Op::GroupNonUniformAny => {
                             crate::CollectiveOperation::Reduce
                         }
                         _ => {
@@ -3817,26 +3814,29 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
 
                     let op_id = match inst.op {
-                        spirv::Op::GroupNonUniformAll => crate::SubgroupOperation::All,
-                        spirv::Op::GroupNonUniformAny => crate::SubgroupOperation::Any,
-                        spirv::Op::GroupNonUniformIAdd | spirv::Op::GroupNonUniformFAdd => {
+                        Op::GroupNonUniformAll => crate::SubgroupOperation::All,
+                        Op::GroupNonUniformAny => crate::SubgroupOperation::Any,
+                        Op::GroupNonUniformIAdd | Op::GroupNonUniformFAdd => {
                             crate::SubgroupOperation::Add
                         }
-                        spirv::Op::GroupNonUniformIMul | spirv::Op::GroupNonUniformFMul => {
+                        Op::GroupNonUniformIMul | Op::GroupNonUniformFMul => {
                             crate::SubgroupOperation::Mul
                         }
-                        spirv::Op::GroupNonUniformSMax
-                        | spirv::Op::GroupNonUniformUMax
-                        | spirv::Op::GroupNonUniformFMax => crate::SubgroupOperation::Max,
-                        spirv::Op::GroupNonUniformSMin
-                        | spirv::Op::GroupNonUniformUMin
-                        | spirv::Op::GroupNonUniformFMin => crate::SubgroupOperation::Min,
-                        spirv::Op::GroupNonUniformBitwiseAnd
-                        | spirv::Op::GroupNonUniformLogicalAnd => crate::SubgroupOperation::And,
-                        spirv::Op::GroupNonUniformBitwiseOr
-                        | spirv::Op::GroupNonUniformLogicalOr => crate::SubgroupOperation::Or,
-                        spirv::Op::GroupNonUniformBitwiseXor
-                        | spirv::Op::GroupNonUniformLogicalXor => crate::SubgroupOperation::Xor,
+                        Op::GroupNonUniformSMax
+                        | Op::GroupNonUniformUMax
+                        | Op::GroupNonUniformFMax => crate::SubgroupOperation::Max,
+                        Op::GroupNonUniformSMin
+                        | Op::GroupNonUniformUMin
+                        | Op::GroupNonUniformFMin => crate::SubgroupOperation::Min,
+                        Op::GroupNonUniformBitwiseAnd | Op::GroupNonUniformLogicalAnd => {
+                            crate::SubgroupOperation::And
+                        }
+                        Op::GroupNonUniformBitwiseOr | Op::GroupNonUniformLogicalOr => {
+                            crate::SubgroupOperation::Or
+                        }
+                        Op::GroupNonUniformBitwiseXor | Op::GroupNonUniformLogicalXor => {
+                            crate::SubgroupOperation::Xor
+                        }
                         _ => unreachable!(),
                     };
 
@@ -3874,13 +3874,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | Op::GroupNonUniformShuffleDown
                 | Op::GroupNonUniformShuffleUp
                 | Op::GroupNonUniformShuffleXor => {
-                    inst.expect(
-                        if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
-                            5
-                        } else {
-                            6
-                        },
-                    )?;
+                    inst.expect(if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
+                        5
+                    } else {
+                        6
+                    })?;
                     block.extend(emitter.finish(ctx.expressions));
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -3895,26 +3893,24 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
                         .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
 
-                    let mode = if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
+                    let mode = if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
                         crate::GatherMode::BroadcastFirst
                     } else {
                         let index_id = self.next()?;
                         let index_lookup = self.lookup_expression.lookup(index_id)?;
                         let index_handle = get_expr_handle!(index_id, index_lookup);
                         match inst.op {
-                            spirv::Op::GroupNonUniformBroadcast => {
+                            Op::GroupNonUniformBroadcast => {
                                 crate::GatherMode::Broadcast(index_handle)
                             }
-                            spirv::Op::GroupNonUniformShuffle => {
-                                crate::GatherMode::Shuffle(index_handle)
-                            }
-                            spirv::Op::GroupNonUniformShuffleDown => {
+                            Op::GroupNonUniformShuffle => crate::GatherMode::Shuffle(index_handle),
+                            Op::GroupNonUniformShuffleDown => {
                                 crate::GatherMode::ShuffleDown(index_handle)
                             }
-                            spirv::Op::GroupNonUniformShuffleUp => {
+                            Op::GroupNonUniformShuffleUp => {
                                 crate::GatherMode::ShuffleUp(index_handle)
                             }
-                            spirv::Op::GroupNonUniformShuffleXor => {
+                            Op::GroupNonUniformShuffleXor => {
                                 crate::GatherMode::ShuffleXor(index_handle)
                             }
                             _ => unreachable!(),
@@ -4229,7 +4225,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         // Do entry point specific processing after all functions are parsed so that we can
         // cull unused problematic builtins of gl_PerVertex.
-        for (ep, fun_id) in core::mem::take(&mut self.deferred_entry_points) {
+        for (ep, fun_id) in mem::take(&mut self.deferred_entry_points) {
             self.process_entry_point(&mut module, ep, fun_id)?;
         }
 
@@ -4374,8 +4370,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .lookup_entry_point
             .get_mut(&ep_id)
             .ok_or(Error::InvalidId(ep_id))?;
-        let mode = spirv::ExecutionMode::from_u32(mode_id)
-            .ok_or(Error::UnsupportedExecutionMode(mode_id))?;
+        let mode =
+            ExecutionMode::from_u32(mode_id).ok_or(Error::UnsupportedExecutionMode(mode_id))?;
 
         match mode {
             ExecutionMode::EarlyFragmentTests => {

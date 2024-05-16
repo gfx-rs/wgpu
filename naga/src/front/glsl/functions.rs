@@ -823,7 +823,7 @@ impl Frontend {
                 };
 
                 ctx.body.push(
-                    crate::Statement::Call {
+                    Statement::Call {
                         function,
                         arguments,
                         result,
@@ -1430,7 +1430,7 @@ impl Context<'_> {
                             base: pointer,
                             index,
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     )?;
 
                     let binding = crate::Binding::Location {
@@ -1456,7 +1456,7 @@ impl Context<'_> {
                             base: pointer,
                             index: i as u32,
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     )?;
 
                     let binding = match member.binding {

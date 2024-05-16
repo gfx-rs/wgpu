@@ -15,11 +15,15 @@ fn main() {
     u = pack2x16snorm(f2);
     u = pack2x16unorm(f2);
     u = pack2x16float(f2);
+    u = pack4xI8(i4);
+    u = pack4xU8(u4);
     f4 = unpack4x8snorm(u);
     f4 = unpack4x8unorm(u);
     f2 = unpack2x16snorm(u);
     f2 = unpack2x16unorm(u);
     f2 = unpack2x16float(u);
+    i4 = unpack4xI8(u);
+    u4 = unpack4xU8(u);
     i = insertBits(i, i, 5u, 10u);
     i2 = insertBits(i2, i2, 5u, 10u);
     i3 = insertBits(i3, i3, 5u, 10u);

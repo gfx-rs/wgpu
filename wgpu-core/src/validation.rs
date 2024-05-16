@@ -1118,7 +1118,7 @@ impl Interface {
 
                 let sampler_filtering = matches!(
                     sampler_layout.ty,
-                    wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering)
+                    BindingType::Sampler(wgt::SamplerBindingType::Filtering)
                 );
                 let texture_sample_type = match texture_layout.ty {
                     BindingType::Texture { sample_type, .. } => sample_type,

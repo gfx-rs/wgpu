@@ -1201,11 +1201,158 @@ impl<'w> BlockContext<'w> {
                     Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),
                     Mf::Pack2x16unorm => MathOp::Ext(spirv::GLOp::PackUnorm2x16),
                     Mf::Pack2x16snorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let (int_type, is_signed) = match fun {
+                            Mf::Pack4xI8 => (crate::ScalarKind::Sint, true),
+                            Mf::Pack4xU8 => (crate::ScalarKind::Uint, false),
+                            _ => unreachable!(),
+                        };
+                        let uint_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: int_type,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        let mut last_instruction = Instruction::new(spirv::Op::Nop);
+
+                        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0));
+                        let mut preresult = zero;
+                        block
+                            .body
+                            .reserve(usize::from(VEC_LENGTH) * (2 + usize::from(is_signed)));
+
+                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+                        const VEC_LENGTH: u8 = 4;
+                        for i in 0..u32::from(VEC_LENGTH) {
+                            let offset =
+                                self.writer.get_constant_scalar(crate::Literal::U32(i * 8));
+                            let mut extracted = self.gen_id();
+                            block.body.push(Instruction::binary(
+                                spirv::Op::CompositeExtract,
+                                int_type_id,
+                                extracted,
+                                arg0_id,
+                                i,
+                            ));
+                            if is_signed {
+                                let casted = self.gen_id();
+                                block.body.push(Instruction::unary(
+                                    spirv::Op::Bitcast,
+                                    uint_type_id,
+                                    casted,
+                                    extracted,
+                                ));
+                                extracted = casted;
+                            }
+                            let is_last = i == u32::from(VEC_LENGTH - 1);
+                            if is_last {
+                                last_instruction = Instruction::quaternary(
+                                    spirv::Op::BitFieldInsert,
+                                    result_type_id,
+                                    id,
+                                    preresult,
+                                    extracted,
+                                    offset,
+                                    eight,
+                                )
+                            } else {
+                                let new_preresult = self.gen_id();
+                                block.body.push(Instruction::quaternary(
+                                    spirv::Op::BitFieldInsert,
+                                    result_type_id,
+                                    new_preresult,
+                                    preresult,
+                                    extracted,
+                                    offset,
+                                    eight,
+                                ));
+                                preresult = new_preresult;
+                            }
+                        }
+
+                        MathOp::Custom(last_instruction)
+                    }
                     Mf::Unpack4x8unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm4x8),
                     Mf::Unpack4x8snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm4x8),
                     Mf::Unpack2x16float => MathOp::Ext(spirv::GLOp::UnpackHalf2x16),
                     Mf::Unpack2x16unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm2x16),
                     Mf::Unpack2x16snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm2x16),
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        let (int_type, extract_op, is_signed) = match fun {
+                            Mf::Unpack4xI8 => {
+                                (crate::ScalarKind::Sint, spirv::Op::BitFieldSExtract, true)
+                            }
+                            Mf::Unpack4xU8 => {
+                                (crate::ScalarKind::Uint, spirv::Op::BitFieldUExtract, false)
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        let sint_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: crate::ScalarKind::Sint,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+
+                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: None,
+                            scalar: crate::Scalar {
+                                kind: int_type,
+                                width: 4,
+                            },
+                            pointer_space: None,
+                        }));
+                        block
+                            .body
+                            .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
+                        let arg_id = if is_signed {
+                            let new_arg_id = self.gen_id();
+                            block.body.push(Instruction::unary(
+                                spirv::Op::Bitcast,
+                                sint_type_id,
+                                new_arg_id,
+                                arg0_id,
+                            ));
+                            new_arg_id
+                        } else {
+                            arg0_id
+                        };
+
+                        const VEC_LENGTH: u8 = 4;
+                        let parts: [_; VEC_LENGTH as usize] =
+                            std::array::from_fn(|_| self.gen_id());
+                        for (i, part_id) in parts.into_iter().enumerate() {
+                            let index = self
+                                .writer
+                                .get_constant_scalar(crate::Literal::U32(i as u32 * 8));
+                            block.body.push(Instruction::ternary(
+                                extract_op,
+                                int_type_id,
+                                part_id,
+                                arg_id,
+                                index,
+                                eight,
+                            ));
+                        }
+
+                        MathOp::Custom(Instruction::composite_construct(result_type_id, id, &parts))
+                    }
                 };
 
                 block.body.push(match math_op {
@@ -1920,7 +2067,7 @@ impl<'w> BlockContext<'w> {
                 ));
             };
             match *statement {
-                crate::Statement::Emit(ref range) => {
+                Statement::Emit(ref range) => {
                     for handle in range.clone() {
                         // omit const expressions as we've already cached those
                         if !self.expression_constness.is_const(handle) {
@@ -1928,7 +2075,7 @@ impl<'w> BlockContext<'w> {
                         }
                     }
                 }
-                crate::Statement::Block(ref block_statements) => {
+                Statement::Block(ref block_statements) => {
                     let scope_id = self.gen_id();
                     self.function.consume(block, Instruction::branch(scope_id));
 
@@ -1943,7 +2090,7 @@ impl<'w> BlockContext<'w> {
 
                     block = Block::new(merge_id);
                 }
-                crate::Statement::If {
+                Statement::If {
                     condition,
                     ref accept,
                     ref reject,
@@ -1997,7 +2144,7 @@ impl<'w> BlockContext<'w> {
 
                     block = Block::new(merge_id);
                 }
-                crate::Statement::Switch {
+                Statement::Switch {
                     selector,
                     ref cases,
                 } => {
@@ -2077,7 +2224,7 @@ impl<'w> BlockContext<'w> {
 
                     block = Block::new(merge_id);
                 }
-                crate::Statement::Loop {
+                Statement::Loop {
                     ref body,
                     ref continuing,
                     break_if,
@@ -2146,19 +2293,19 @@ impl<'w> BlockContext<'w> {
 
                     block = Block::new(merge_id);
                 }
-                crate::Statement::Break => {
+                Statement::Break => {
                     self.function
                         .consume(block, Instruction::branch(loop_context.break_id.unwrap()));
                     return Ok(());
                 }
-                crate::Statement::Continue => {
+                Statement::Continue => {
                     self.function.consume(
                         block,
                         Instruction::branch(loop_context.continuing_id.unwrap()),
                     );
                     return Ok(());
                 }
-                crate::Statement::Return { value: Some(value) } => {
+                Statement::Return { value: Some(value) } => {
                     let value_id = self.cached[value];
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
@@ -2177,18 +2324,18 @@ impl<'w> BlockContext<'w> {
                     self.function.consume(block, instruction);
                     return Ok(());
                 }
-                crate::Statement::Return { value: None } => {
+                Statement::Return { value: None } => {
                     self.function.consume(block, Instruction::return_void());
                     return Ok(());
                 }
-                crate::Statement::Kill => {
+                Statement::Kill => {
                     self.function.consume(block, Instruction::kill());
                     return Ok(());
                 }
-                crate::Statement::Barrier(flags) => {
+                Statement::Barrier(flags) => {
                     self.writer.write_barrier(flags, &mut block);
                 }
-                crate::Statement::Store { pointer, value } => {
+                Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
                     match self.write_expression_pointer(pointer, &mut block, None)? {
                         ExpressionPointer::Ready { pointer_id } => {
@@ -2237,13 +2384,13 @@ impl<'w> BlockContext<'w> {
                         }
                     };
                 }
-                crate::Statement::ImageStore {
+                Statement::ImageStore {
                     image,
                     coordinate,
                     array_index,
                     value,
                 } => self.write_image_store(image, coordinate, array_index, value, &mut block)?,
-                crate::Statement::Call {
+                Statement::Call {
                     function: local_function,
                     ref arguments,
                     result,
@@ -2269,7 +2416,7 @@ impl<'w> BlockContext<'w> {
                         &self.temp_list,
                     ));
                 }
-                crate::Statement::Atomic {
+                Statement::Atomic {
                     pointer,
                     ref fun,
                     value,
@@ -2449,7 +2596,7 @@ impl<'w> BlockContext<'w> {
 
                     block.body.push(instruction);
                 }
-                crate::Statement::WorkGroupUniformLoad { pointer, result } => {
+                Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.writer
                         .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
@@ -2489,16 +2636,16 @@ impl<'w> BlockContext<'w> {
                     self.writer
                         .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
                 }
-                crate::Statement::RayQuery { query, ref fun } => {
+                Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
                 }
-                crate::Statement::SubgroupBallot {
+                Statement::SubgroupBallot {
                     result,
                     ref predicate,
                 } => {
                     self.write_subgroup_ballot(predicate, result, &mut block)?;
                 }
-                crate::Statement::SubgroupCollectiveOperation {
+                Statement::SubgroupCollectiveOperation {
                     ref op,
                     ref collective_op,
                     argument,
@@ -2506,7 +2653,7 @@ impl<'w> BlockContext<'w> {
                 } => {
                     self.write_subgroup_operation(op, collective_op, argument, result, &mut block)?;
                 }
-                crate::Statement::SubgroupGather {
+                Statement::SubgroupGather {
                     ref mode,
                     argument,
                     result,

@@ -24,9 +24,11 @@ use std::{
     sync::Arc,
 };
 use wgc::{
-    command::{bundle_ffi::*, compute_commands::*, render_commands::*},
+    command::{bundle_ffi::*, render_commands::*},
     device::DeviceLostClosure,
-    id::{CommandEncoderId, TextureViewId},
+    gfx_select,
+    id::CommandEncoderId,
+    id::TextureViewId,
     pipeline::CreateShaderModuleError,
 };
 use wgt::WasmNotSendSync;
@@ -477,6 +479,12 @@ impl Queue {
 }
 
 #[derive(Debug)]
+pub struct ComputePass {
+    pass: Box<dyn wgc::command::DynComputePass>,
+    error_sink: ErrorSink,
+}
+
+#[derive(Debug)]
 pub struct CommandEncoder {
     error_sink: ErrorSink,
     open: bool,
@@ -516,7 +524,7 @@ impl crate::Context for ContextWgpuCore {
     type CommandEncoderId = wgc::id::CommandEncoderId;
     type CommandEncoderData = CommandEncoder;
     type ComputePassId = Unused;
-    type ComputePassData = wgc::command::ComputePass;
+    type ComputePassData = ComputePass;
     type RenderPassId = Unused;
     type RenderPassData = wgc::command::RenderPass;
     type CommandBufferId = wgc::id::CommandBufferId;
@@ -1884,7 +1892,7 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_begin_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
+        encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor<'_>,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
         let timestamp_writes =
@@ -1895,15 +1903,16 @@ impl crate::Context for ContextWgpuCore {
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
+
         (
             Unused,
-            wgc::command::ComputePass::new(
-                *encoder,
-                &wgc::command::ComputePassDescriptor {
+            Self::ComputePassData {
+                pass: gfx_select!(encoder => self.0.command_encoder_create_compute_pass_dyn(*encoder, &wgc::command::ComputePassDescriptor {
                     label: desc.label.map(Borrowed),
                     timestamp_writes: timestamp_writes.as_ref(),
-                },
-            ),
+                })),
+                error_sink: encoder_data.error_sink.clone(),
+            },
         )
     }
 
@@ -1914,9 +1923,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        if let Err(cause) = wgc::gfx_select!(
-            encoder => self.0.command_encoder_run_compute_pass(*encoder, pass_data)
-        ) {
+        if let Err(cause) = pass_data.pass.run(&self.0) {
             let name = wgc::gfx_select!(encoder => self.0.command_buffer_label(encoder.into_command_buffer_id()));
             self.handle_error(
                 &encoder_data.error_sink,
@@ -2388,7 +2395,9 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::ComputePipelineId,
         _pipeline_data: &Self::ComputePipelineData,
     ) {
-        wgpu_compute_pass_set_pipeline(pass_data, *pipeline)
+        if let Err(cause) = pass_data.pass.set_pipeline(&self.0, *pipeline) {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::set_pipeline");
+        }
     }
 
     fn compute_pass_set_bind_group(
@@ -2400,7 +2409,12 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        wgpu_compute_pass_set_bind_group(pass_data, index, *bind_group, offsets);
+        if let Err(cause) = pass_data
+            .pass
+            .set_bind_group(&self.0, index, *bind_group, offsets)
+        {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::set_bind_group");
+        }
     }
 
     fn compute_pass_set_push_constants(
@@ -2410,7 +2424,7 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        wgpu_compute_pass_set_push_constant(pass_data, offset, data);
+        pass_data.pass.set_push_constant(&self.0, offset, data);
     }
 
     fn compute_pass_insert_debug_marker(
@@ -2419,7 +2433,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         label: &str,
     ) {
-        wgpu_compute_pass_insert_debug_marker(pass_data, label, 0);
+        pass_data.pass.insert_debug_marker(&self.0, label, 0);
     }
 
     fn compute_pass_push_debug_group(
@@ -2428,7 +2442,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
     ) {
-        wgpu_compute_pass_push_debug_group(pass_data, group_label, 0);
+        pass_data.pass.push_debug_group(&self.0, group_label, 0);
     }
 
     fn compute_pass_pop_debug_group(
@@ -2436,7 +2450,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        wgpu_compute_pass_pop_debug_group(pass_data);
+        pass_data.pass.pop_debug_group(&self.0);
     }
 
     fn compute_pass_write_timestamp(
@@ -2447,7 +2461,12 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_compute_pass_write_timestamp(pass_data, *query_set, query_index)
+        if let Err(cause) = pass_data
+            .pass
+            .write_timestamp(&self.0, *query_set, query_index)
+        {
+            self.handle_error_nolabel(&pass_data.error_sink, cause, "ComputePass::write_timestamp");
+        }
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -2458,7 +2477,17 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_compute_pass_begin_pipeline_statistics_query(pass_data, *query_set, query_index)
+        if let Err(cause) =
+            pass_data
+                .pass
+                .begin_pipeline_statistics_query(&self.0, *query_set, query_index)
+        {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::begin_pipeline_statistics_query",
+            );
+        }
     }
 
     fn compute_pass_end_pipeline_statistics_query(
@@ -2466,7 +2495,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        wgpu_compute_pass_end_pipeline_statistics_query(pass_data)
+        pass_data.pass.end_pipeline_statistics_query(&self.0);
     }
 
     fn compute_pass_dispatch_workgroups(
@@ -2477,7 +2506,7 @@ impl crate::Context for ContextWgpuCore {
         y: u32,
         z: u32,
     ) {
-        wgpu_compute_pass_dispatch_workgroups(pass_data, x, y, z)
+        pass_data.pass.dispatch_workgroups(&self.0, x, y, z);
     }
 
     fn compute_pass_dispatch_workgroups_indirect(
@@ -2488,7 +2517,17 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_compute_pass_dispatch_workgroups_indirect(pass_data, *indirect_buffer, indirect_offset)
+        if let Err(cause) =
+            pass_data
+                .pass
+                .dispatch_workgroups_indirect(&self.0, *indirect_buffer, indirect_offset)
+        {
+            self.handle_error_nolabel(
+                &pass_data.error_sink,
+                cause,
+                "ComputePass::dispatch_workgroups_indirect",
+            );
+        }
     }
 
     fn render_bundle_encoder_set_pipeline(
