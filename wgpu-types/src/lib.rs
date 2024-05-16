@@ -2251,11 +2251,11 @@ bitflags::bitflags! {
         const FILTERABLE = 1 << 0;
         /// Allows [`TextureDescriptor::sample_count`] to be `2`.
         const MULTISAMPLE_X2 = 1 << 1;
-          /// Allows [`TextureDescriptor::sample_count`] to be `4`.
+        /// Allows [`TextureDescriptor::sample_count`] to be `4`.
         const MULTISAMPLE_X4 = 1 << 2 ;
-          /// Allows [`TextureDescriptor::sample_count`] to be `8`.
+        /// Allows [`TextureDescriptor::sample_count`] to be `8`.
         const MULTISAMPLE_X8 = 1 << 3 ;
-          /// Allows [`TextureDescriptor::sample_count`] to be `16`.
+        /// Allows [`TextureDescriptor::sample_count`] to be `16`.
         const MULTISAMPLE_X16 = 1 << 4;
         /// Allows a texture of this format to back a view passed as `resolve_target`
         /// to a render pass for an automatic driver-implemented resolve.
