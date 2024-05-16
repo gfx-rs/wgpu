@@ -161,6 +161,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             module: &sm,
             entry_point: "main",
             compilation_options: Default::default(),
+            cache: None,
         });
 
     ResourceSetup {
