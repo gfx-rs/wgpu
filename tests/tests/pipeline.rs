@@ -82,9 +82,9 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
                         });
                 }
             },
-            None,
+            Some(concat!(
+                "At least one color attachment or depth-stencil attachment was expected, ",
+                "but no render target for the pipeline was specified."
+            )),
         )
-        // TODO: concrete error message:
-        // At least one color attachment or depth-stencil attachment was expected, but no
-        // render target for the pipeline was specified.
     });
