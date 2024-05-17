@@ -34,5 +34,9 @@ void main(ComputeInput_main computeinput_main)
     const uint _e35 = WaveReadLaneAt(subgroup_invocation_id, WaveGetLaneIndex() + 1u);
     const uint _e37 = WaveReadLaneAt(subgroup_invocation_id, WaveGetLaneIndex() - 1u);
     const uint _e41 = WaveReadLaneAt(subgroup_invocation_id, WaveGetLaneIndex() ^ (sizes.subgroup_size - 1u));
+    const uint _e43 = QuadReadLaneAt(subgroup_invocation_id, 4u);
+    const uint _e44 = QuadReadAcrossX(subgroup_invocation_id);
+    const uint _e45 = QuadReadAcrossY(subgroup_invocation_id);
+    const uint _e46 = QuadReadAcrossDiagonal(subgroup_invocation_id);
     return;
 }

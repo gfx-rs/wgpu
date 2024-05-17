@@ -3253,6 +3253,9 @@ impl<W: Write> Writer<W> {
                         crate::GatherMode::ShuffleXor(_) => {
                             write!(self.out, "{NAMESPACE}::simd_shuffle_xor(")?;
                         }
+                        crate::GatherMode::QuadBroadcast(_) => {
+                            write!(self.out, "{NAMESPACE}::quad_broadcast(")?;
+                        }
                     }
                     self.put_expression(argument, &context.expression, true)?;
                     match mode {
@@ -3261,9 +3264,35 @@ impl<W: Write> Writer<W> {
                         | crate::GatherMode::Shuffle(index)
                         | crate::GatherMode::ShuffleDown(index)
                         | crate::GatherMode::ShuffleUp(index)
-                        | crate::GatherMode::ShuffleXor(index) => {
+                        | crate::GatherMode::ShuffleXor(index)
+                        | crate::GatherMode::QuadBroadcast(index) => {
                             write!(self.out, ", ")?;
                             self.put_expression(index, &context.expression, true)?;
+                        }
+                    }
+                    writeln!(self.out, ");")?;
+                }
+                crate::Statement::SubgroupQuadSwap {
+                    direction,
+                    argument,
+                    result,
+                } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    write!(self.out, "{NAMESPACE}::quad_shuffle_xor(")?;
+                    self.put_expression(argument, &context.expression, true)?;
+                    write!(self.out, ", ")?;
+                    match direction {
+                        crate::Direction::X => {
+                            write!(self.out, "1u")?;
+                        }
+                        crate::Direction::Y => {
+                            write!(self.out, "2u")?;
+                        }
+                        crate::Direction::Diagonal => {
+                            write!(self.out, "3u")?;
                         }
                     }
                     writeln!(self.out, ");")?;

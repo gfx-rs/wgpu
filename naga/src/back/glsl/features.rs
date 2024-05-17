@@ -276,6 +276,7 @@ impl FeaturesManager {
                 out,
                 "#extension GL_KHR_shader_subgroup_shuffle_relative : require"
             )?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_quad : require")?;
         }
 
         Ok(())

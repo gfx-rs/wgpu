@@ -1067,10 +1067,19 @@ impl FunctionInfo {
                         | crate::GatherMode::Shuffle(index)
                         | crate::GatherMode::ShuffleDown(index)
                         | crate::GatherMode::ShuffleUp(index)
-                        | crate::GatherMode::ShuffleXor(index) => {
+                        | crate::GatherMode::ShuffleXor(index)
+                        | crate::GatherMode::QuadBroadcast(index) => {
                             let _ = self.add_ref(index);
                         }
                     }
+                    FunctionUniformity::new()
+                }
+                S::SubgroupQuadSwap {
+                    direction: _,
+                    argument,
+                    result: _,
+                } => {
+                    let _ = self.add_ref(argument);
                     FunctionUniformity::new()
                 }
             };

@@ -2660,6 +2660,38 @@ impl<'w> BlockContext<'w> {
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
+                crate::Statement::SubgroupQuadSwap {
+                    ref direction,
+                    argument,
+                    result,
+                } => {
+                    self.writer.require_any(
+                        "GroupNonUniformQuad",
+                        &[spirv::Capability::GroupNonUniformQuad],
+                    )?;
+
+                    let id = self.gen_id();
+                    let result_ty = &self.fun_info[result].ty;
+                    let result_type_id = self.get_expression_type_id(result_ty);
+
+                    let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+
+                    let arg_id = self.cached[argument];
+
+                    let direction = self.get_index_constant(match *direction {
+                        crate::Direction::X => 0,
+                        crate::Direction::Y => 1,
+                        crate::Direction::Diagonal => 2,
+                    });
+
+                    block.body.push(Instruction::group_non_uniform_quad_swap(
+                        result_type_id,
+                        id,
+                        exec_scope_id,
+                        arg_id,
+                        direction,
+                    ));
+                }
             }
         }
 

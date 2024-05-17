@@ -144,8 +144,8 @@ bitflags::bitflags! {
         // We don't support these operations yet
         // /// Clustered
         // const CLUSTERED = 1 << 6;
-        // /// Quad supported
-        // const QUAD_FRAGMENT_COMPUTE = 1 << 7;
+        /// Quad supported
+        const QUAD_FRAGMENT_COMPUTE = 1 << 7;
         // /// Quad supported in all stages
         // const QUAD_ALL_STAGES = 1 << 8;
     }
@@ -170,6 +170,7 @@ impl super::GatherMode {
             Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
             Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
             Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
+            Self::QuadBroadcast(_) => S::QUAD_FRAGMENT_COMPUTE,
         }
     }
 }

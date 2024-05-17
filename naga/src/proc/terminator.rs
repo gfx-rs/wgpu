@@ -40,6 +40,7 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             | S::SubgroupBallot { .. }
             | S::SubgroupCollectiveOperation { .. }
             | S::SubgroupGather { .. }
+            | S::SubgroupQuadSwap { .. }
             | S::Barrier(_)),
         )
         | None => block.push(S::Return { value: None }, Default::default()),

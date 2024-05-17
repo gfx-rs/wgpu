@@ -2499,6 +2499,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::GatherMode::ShuffleXor(_) => {
                         write!(self.out, "subgroupShuffleXor(")?;
                     }
+                    crate::GatherMode::QuadBroadcast(_) => {
+                        write!(self.out, "subgroupQuadBroadcast(")?;
+                    }
                 }
                 self.write_expr(argument, ctx)?;
                 match mode {
@@ -2507,11 +2510,38 @@ impl<'a, W: Write> Writer<'a, W> {
                     | crate::GatherMode::Shuffle(index)
                     | crate::GatherMode::ShuffleDown(index)
                     | crate::GatherMode::ShuffleUp(index)
-                    | crate::GatherMode::ShuffleXor(index) => {
+                    | crate::GatherMode::ShuffleXor(index)
+                    | crate::GatherMode::QuadBroadcast(index) => {
                         write!(self.out, ", ")?;
                         self.write_expr(index, ctx)?;
                     }
                 }
+                writeln!(self.out, ");")?;
+            }
+            Statement::SubgroupQuadSwap {
+                direction,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {res_name} = ")?;
+                self.named_expressions.insert(result, res_name);
+
+                match direction {
+                    crate::Direction::X => {
+                        write!(self.out, "subgroupQuadSwapHorizontal(")?;
+                    }
+                    crate::Direction::Y => {
+                        write!(self.out, "subgroupQuadSwapVertical(")?;
+                    }
+                    crate::Direction::Diagonal => {
+                        write!(self.out, "subgroupQuadSwapDiagonal(")?;
+                    }
+                }
+                self.write_expr(argument, ctx)?;
                 writeln!(self.out, ");")?;
             }
         }

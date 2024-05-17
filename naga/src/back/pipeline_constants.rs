@@ -669,12 +669,21 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
                 | crate::GatherMode::Shuffle(ref mut index)
                 | crate::GatherMode::ShuffleDown(ref mut index)
                 | crate::GatherMode::ShuffleUp(ref mut index)
-                | crate::GatherMode::ShuffleXor(ref mut index) => {
+                | crate::GatherMode::ShuffleXor(ref mut index)
+                | crate::GatherMode::QuadBroadcast(ref mut index) => {
                     adjust(index);
                 }
             }
             adjust(argument);
             adjust(result)
+        }
+        Statement::SubgroupQuadSwap {
+            ref mut argument,
+            ref mut result,
+            ..
+        } => {
+            adjust(argument);
+            adjust(result);
         }
         Statement::Call {
             ref mut arguments,

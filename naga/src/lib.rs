@@ -1300,6 +1300,8 @@ pub enum GatherMode {
     ShuffleUp(Handle<Expression>),
     /// Each gathers from their lane xored with the given by the expression
     ShuffleXor(Handle<Expression>),
+    /// All gather from the same lane at the index given by the expression
+    QuadBroadcast(Handle<Expression>),
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -1326,6 +1328,16 @@ pub enum CollectiveOperation {
     Reduce = 0,
     InclusiveScan = 1,
     ExclusiveScan = 2,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum Direction {
+    X = 0,
+    Y = 1,
+    Diagonal = 2,
 }
 
 bitflags::bitflags! {
@@ -1961,6 +1973,16 @@ pub enum Statement {
         /// How to combine the results
         collective_op: CollectiveOperation,
         /// The value to compute over
+        argument: Handle<Expression>,
+        /// The [`SubgroupOperationResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
+        result: Handle<Expression>,
+    },
+    SubgroupQuadSwap {
+        /// In which direction to swap
+        direction: Direction,
+        /// The value to swap over
         argument: Handle<Expression>,
         /// The [`SubgroupOperationResult`] expression representing this load's result.
         ///
