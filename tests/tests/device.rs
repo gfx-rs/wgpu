@@ -770,21 +770,22 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
         // resource type) in the wrong list of a different resource type. Let's reproduce that
         // here.
 
-        let trivial_shaders_with_some_reversed_bindings = "\
-@group(0) @binding(3) var myTexture2: texture_2d<f32>;
-@group(0) @binding(2) var myTexture1: texture_2d<f32>;
-@group(0) @binding(1) var mySampler: sampler;
-
-@fragment
-fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4f {
-  return textureSample(myTexture1, mySampler, pos.xy) + textureSample(myTexture2, mySampler, pos.xy);
-}
-
-@vertex
-fn vs_main() -> @builtin(position) vec4<f32> {
-  return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-}
-";
+        let trivial_shaders_with_some_reversed_bindings = concat!(
+            "@group(0) @binding(3) var myTexture2: texture_2d<f32>;\n",
+            "@group(0) @binding(2) var myTexture1: texture_2d<f32>;\n",
+            "@group(0) @binding(1) var mySampler: sampler;\n",
+            "\n",
+            "@fragment\n",
+            "fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4f {\n",
+            "  return textureSample(myTexture1, mySampler, pos.xy) \n",
+            "    + textureSample(myTexture2, mySampler, pos.xy);\n",
+            "}\n",
+            "\n",
+            "@vertex\n",
+            "fn vs_main() -> @builtin(position) vec4<f32> {\n",
+            "  return vec4<f32>(0.0, 0.0, 0.0, 1.0);\n",
+            "}\n",
+        );
 
         let trivial_shaders_with_some_reversed_bindings =
             ctx.device
@@ -852,7 +853,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                 depth_stencil: None,
                 multisample: wgt::MultisampleState::default(),
                 multiview: None,
-                cache: None
+                cache: None,
             });
 
         // fail(&ctx.device, || {
