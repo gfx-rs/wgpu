@@ -466,59 +466,76 @@ pub struct Device {
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }
 
-/// Semaphores that a given submission should wait on and signal.
-struct RelaySemaphoreState {
-    wait: Option<vk::Semaphore>,
-    signal: vk::Semaphore,
-}
-
-/// A pair of binary semaphores that are used to synchronize each submission with the next.
+/// Semaphores for forcing queue submissions to run in order.
+///
+/// The [`wgpu_hal::Queue`] trait promises that if two calls to [`submit`] are
+/// ordered, then the first submission will finish on the GPU before the second
+/// submission begins. To get this behavior on Vulkan we need to pass semaphores
+/// to [`vkQueueSubmit`] for the commands to wait on before beginning execution,
+/// and to signal when their execution is done.
+///
+/// Normally this can be done with a single semaphore, waited on and then
+/// signalled for each submission. At any given time there's exactly one
+/// submission that would signal the semaphore, and exactly one waiting on it,
+/// as Vulkan requires.
+///
+/// However, as of Oct 2021, bug [#5508] in the Mesa ANV drivers caused them to
+/// hang if we use a single semaphore. The workaround is to alternate between
+/// two semaphores. The bug has been fixed in Mesa, but we should probably keep
+/// the workaround until, say, Oct 2026.
+///
+/// [`wgpu_hal::Queue`]: crate::Queue
+/// [`submit`]: crate::Queue::submit
+/// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
+/// [#5508]: https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508
+#[derive(Clone)]
 struct RelaySemaphores {
-    wait: vk::Semaphore,
-    /// Signals if the wait semaphore should be waited on.
-    ///
-    /// Because nothing will signal the semaphore for the first submission, we don't want to wait on it.
-    should_wait: bool,
+    /// The semaphore the next submission should wait on before beginning
+    /// execution on the GPU. This is `None` for the first submission, which
+    /// should not wait on anything at all.
+    wait: Option<vk::Semaphore>,
+
+    /// The semaphore the next submission should signal when it has finished
+    /// execution on the GPU.
     signal: vk::Semaphore,
 }
 
 impl RelaySemaphores {
-    fn new(device: &ash::Device) -> Result<Self, crate::DeviceError> {
-        let wait = unsafe {
-            device
-                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                .map_err(crate::DeviceError::from)?
-        };
-        let signal = unsafe {
-            device
-                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                .map_err(crate::DeviceError::from)?
-        };
+    fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
         Ok(Self {
-            wait,
-            should_wait: false,
-            signal,
+            wait: None,
+            signal: device.new_binary_semaphore()?,
         })
     }
 
     /// Advances the semaphores, returning the semaphores that should be used for a submission.
-    #[must_use]
-    fn advance(&mut self) -> RelaySemaphoreState {
-        let old = RelaySemaphoreState {
-            wait: self.should_wait.then_some(self.wait),
-            signal: self.signal,
+    fn advance(&mut self, device: &DeviceShared) -> Result<Self, crate::DeviceError> {
+        let old = self.clone();
+
+        // Build the state for the next submission.
+        match self.wait {
+            None => {
+                // The `old` values describe the first submission to this queue.
+                // The second submission should wait on `old.signal`, and then
+                // signal a new semaphore which we'll create now.
+                self.wait = Some(old.signal);
+                self.signal = device.new_binary_semaphore()?;
+            }
+            Some(ref mut wait) => {
+                // What this submission signals, the next should wait.
+                mem::swap(wait, &mut self.signal);
+            }
         };
 
-        mem::swap(&mut self.wait, &mut self.signal);
-        self.should_wait = true;
-
-        old
+        Ok(old)
     }
 
     /// Destroys the semaphores.
     unsafe fn destroy(&self, device: &ash::Device) {
         unsafe {
-            device.destroy_semaphore(self.wait, None);
+            if let Some(wait) = self.wait {
+                device.destroy_semaphore(wait, None);
+            }
             device.destroy_semaphore(self.signal, None);
         }
     }
@@ -909,7 +926,7 @@ impl crate::Queue for Queue {
 
         // In order for submissions to be strictly ordered, we encode a dependency between each submission
         // using a pair of semaphores. This adds a wait if it is needed, and signals the next semaphore.
-        let semaphore_state = self.relay_semaphores.lock().advance();
+        let semaphore_state = self.relay_semaphores.lock().advance(&self.device)?;
 
         if let Some(sem) = semaphore_state.wait {
             wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);

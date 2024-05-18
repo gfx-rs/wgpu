@@ -1780,7 +1780,7 @@ impl super::Adapter {
             framebuffers: Mutex::new(Default::default()),
         });
 
-        let relay_semaphores = super::RelaySemaphores::new(&shared.raw)?;
+        let relay_semaphores = super::RelaySemaphores::new(&shared)?;
 
         let queue = super::Queue {
             raw: raw_queue,
