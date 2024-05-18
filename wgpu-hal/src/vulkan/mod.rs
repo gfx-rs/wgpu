@@ -165,12 +165,9 @@ struct SwapchainSemaphores {
 }
 
 impl SwapchainSemaphores {
-    fn new(device: &ash::Device) -> Result<Self, crate::DeviceError> {
-        let acquire =
-            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)? };
-
+    fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
         Ok(Self {
-            acquire,
+            acquire: device.new_binary_semaphore()?,
             should_wait_for_acquire: true,
             present: Vec::new(),
             present_index: 0,
@@ -202,13 +199,12 @@ impl SwapchainSemaphores {
     /// If there aren't any available, a new one is created.
     fn get_submit_signal_semaphore(
         &mut self,
-        device: &ash::Device,
+        device: &DeviceShared,
     ) -> Result<vk::Semaphore, crate::DeviceError> {
         let sem = match self.present.get(self.present_index) {
             Some(sem) => *sem,
             None => {
-                let sem =
-                    unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)? };
+                let sem = device.new_binary_semaphore()?;
                 self.present.push(sem);
                 sem
             }
@@ -906,8 +902,7 @@ impl crate::Queue for Queue {
             }
 
             // Get the signal semaphore for this surface image and add it to the signal list.
-            let signal_semaphore =
-                swapchain_semaphore.get_submit_signal_semaphore(&self.device.raw)?;
+            let signal_semaphore = swapchain_semaphore.get_submit_signal_semaphore(&self.device)?;
             signal_semaphores.push(signal_semaphore);
             signal_values.push(!0);
         }
