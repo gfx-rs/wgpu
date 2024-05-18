@@ -4,7 +4,7 @@ use crate::{
     binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
     device::{
-        bgl,
+        bgl, create_validator,
         life::{LifetimeTracker, WaitIdleError},
         queue::PendingWrites,
         AttachmentData, DeviceLostInvocation, MissingDownlevelFlags, MissingFeatures,
@@ -20,7 +20,7 @@ use crate::{
     },
     instance::Adapter,
     lock::{rank, Mutex, MutexGuard, RwLock},
-    pipeline::{self},
+    pipeline,
     pool::ResourcePool,
     registry::Registry,
     resource::{
@@ -1485,16 +1485,19 @@ impl<A: HalApi> Device<A> {
                 None
             };
 
-        let info = self
-            .create_validator(naga::valid::ValidationFlags::all())
-            .validate(&module)
-            .map_err(|inner| {
-                pipeline::CreateShaderModuleError::Validation(naga::error::ShaderError {
-                    source,
-                    label: desc.label.as_ref().map(|l| l.to_string()),
-                    inner: Box::new(inner),
-                })
-            })?;
+        let info = create_validator(
+            self.features,
+            self.downlevel.flags,
+            naga::valid::ValidationFlags::all(),
+        )
+        .validate(&module)
+        .map_err(|inner| {
+            pipeline::CreateShaderModuleError::Validation(naga::error::ShaderError {
+                source,
+                label: desc.label.as_ref().map(|l| l.to_string()),
+                inner: Box::new(inner),
+            })
+        })?;
 
         let interface =
             validation::Interface::new(&module, &info, self.limits.clone(), self.features);
@@ -1534,111 +1537,6 @@ impl<A: HalApi> Device<A> {
             info: ResourceInfo::new(desc.label.borrow_or_default(), None),
             label: desc.label.borrow_or_default().to_string(),
         })
-    }
-
-    /// Create a validator with the given validation flags.
-    pub fn create_validator(
-        self: &Arc<Self>,
-        flags: naga::valid::ValidationFlags,
-    ) -> naga::valid::Validator {
-        use naga::valid::Capabilities as Caps;
-        let mut caps = Caps::empty();
-        caps.set(
-            Caps::PUSH_CONSTANT,
-            self.features.contains(wgt::Features::PUSH_CONSTANTS),
-        );
-        caps.set(
-            Caps::FLOAT64,
-            self.features.contains(wgt::Features::SHADER_F64),
-        );
-        caps.set(
-            Caps::PRIMITIVE_INDEX,
-            self.features
-                .contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
-        );
-        caps.set(
-            Caps::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            self.features.contains(
-                wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            ),
-        );
-        caps.set(
-            Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            self.features.contains(
-                wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            ),
-        );
-        // TODO: This needs a proper wgpu feature
-        caps.set(
-            Caps::SAMPLER_NON_UNIFORM_INDEXING,
-            self.features.contains(
-                wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            ),
-        );
-        caps.set(
-            Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
-            self.features
-                .contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
-        );
-        caps.set(
-            Caps::MULTIVIEW,
-            self.features.contains(wgt::Features::MULTIVIEW),
-        );
-        caps.set(
-            Caps::EARLY_DEPTH_TEST,
-            self.features
-                .contains(wgt::Features::SHADER_EARLY_DEPTH_TEST),
-        );
-        caps.set(
-            Caps::SHADER_INT64,
-            self.features.contains(wgt::Features::SHADER_INT64),
-        );
-        caps.set(
-            Caps::MULTISAMPLED_SHADING,
-            self.downlevel
-                .flags
-                .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
-        );
-        caps.set(
-            Caps::DUAL_SOURCE_BLENDING,
-            self.features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
-        );
-        caps.set(
-            Caps::CUBE_ARRAY_TEXTURES,
-            self.downlevel
-                .flags
-                .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
-        );
-        caps.set(
-            Caps::SUBGROUP,
-            self.features
-                .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX),
-        );
-        caps.set(
-            Caps::SUBGROUP_BARRIER,
-            self.features.intersects(wgt::Features::SUBGROUP_BARRIER),
-        );
-
-        let mut subgroup_stages = naga::valid::ShaderStages::empty();
-        subgroup_stages.set(
-            naga::valid::ShaderStages::COMPUTE | naga::valid::ShaderStages::FRAGMENT,
-            self.features.contains(wgt::Features::SUBGROUP),
-        );
-        subgroup_stages.set(
-            naga::valid::ShaderStages::VERTEX,
-            self.features.contains(wgt::Features::SUBGROUP_VERTEX),
-        );
-
-        let subgroup_operations = if caps.contains(Caps::SUBGROUP) {
-            use naga::valid::SubgroupOperationSet as S;
-            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
-        } else {
-            naga::valid::SubgroupOperationSet::empty()
-        };
-        let mut validator = naga::valid::Validator::new(flags, caps);
-        validator.subgroup_stages(subgroup_stages);
-        validator.subgroup_operations(subgroup_operations);
-        validator
     }
 
     #[allow(unused_unsafe)]
