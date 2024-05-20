@@ -33,7 +33,7 @@ mod instance;
 
 use std::{
     borrow::Borrow,
-    ffi::CStr,
+    ffi::{CStr, CString},
     fmt,
     num::NonZeroU32,
     sync::{
@@ -43,10 +43,7 @@ use std::{
 };
 
 use arrayvec::ArrayVec;
-use ash::{
-    extensions::{ext, khr},
-    vk,
-};
+use ash::{ext, khr, vk};
 use parking_lot::{Mutex, RwLock};
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
@@ -73,6 +70,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -83,7 +81,7 @@ impl crate::Api for Api {
 }
 
 struct DebugUtils {
-    extension: ext::DebugUtils,
+    extension: ext::debug_utils::Instance,
     messenger: vk::DebugUtilsMessengerEXT,
 
     /// Owning pointer to the debug messenger callback user data.
@@ -106,7 +104,7 @@ pub struct DebugUtilsCreateInfo {
 /// DebugUtilsMessenger for their workarounds
 struct ValidationLayerProperties {
     /// Validation layer description, from `vk::LayerProperties`.
-    layer_description: std::ffi::CString,
+    layer_description: CString,
 
     /// Validation layer specification version, from `vk::LayerProperties`.
     layer_spec_version: u32,
@@ -132,7 +130,7 @@ pub struct InstanceShared {
     drop_guard: Option<crate::DropGuard>,
     flags: wgt::InstanceFlags,
     debug_utils: Option<DebugUtils>,
-    get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
+    get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
     entry: ash::Entry,
     has_nv_optimus: bool,
     android_sdk_version: u32,
@@ -152,7 +150,7 @@ pub struct Instance {
 struct Swapchain {
     raw: vk::SwapchainKHR,
     raw_flags: vk::SwapchainCreateFlagsKHR,
-    functor: khr::Swapchain,
+    functor: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
@@ -166,7 +164,7 @@ struct Swapchain {
 
 pub struct Surface {
     raw: vk::SurfaceKHR,
-    functor: khr::Surface,
+    functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
     swapchain: RwLock<Option<Swapchain>>,
 }
@@ -205,14 +203,15 @@ enum ExtensionFn<T> {
 }
 
 struct DeviceExtensionFunctions {
-    draw_indirect_count: Option<khr::DrawIndirectCount>,
-    timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
+    debug_utils: Option<ext::debug_utils::Device>,
+    draw_indirect_count: Option<khr::draw_indirect_count::Device>,
+    timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
-    acceleration_structure: khr::AccelerationStructure,
-    buffer_device_address: khr::BufferDeviceAddress,
+    acceleration_structure: khr::acceleration_structure::Device,
+    buffer_device_address: khr::buffer_device_address::Device,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed
@@ -238,7 +237,6 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
-    subgroup_size_control: bool,
 }
 
 bitflags::bitflags!(
@@ -334,16 +332,18 @@ struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
     queue_index: u32,
-    raw_queue: ash::vk::Queue,
+    raw_queue: vk::Queue,
     handle_is_owned: bool,
     instance: Arc<InstanceShared>,
-    physical_device: ash::vk::PhysicalDevice,
+    physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
+    pipeline_cache_validation_key: [u8; 16],
     timestamp_period: f32,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
+    features: wgt::Features,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
 }
@@ -361,7 +361,7 @@ pub struct Device {
 
 pub struct Queue {
     raw: vk::Queue,
-    swapchain_fn: khr::Swapchain,
+    swapchain_fn: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     family_index: u32,
     /// We use a redundant chain of semaphores to pass on the signal
@@ -452,12 +452,9 @@ pub struct BindGroup {
 #[derive(Default)]
 struct Temp {
     marker: Vec<u8>,
-    buffer_barriers: Vec<vk::BufferMemoryBarrier>,
-    image_barriers: Vec<vk::ImageMemoryBarrier>,
+    buffer_barriers: Vec<vk::BufferMemoryBarrier<'static>>,
+    image_barriers: Vec<vk::ImageMemoryBarrier<'static>>,
 }
-
-unsafe impl Send for Temp {}
-unsafe impl Sync for Temp {}
 
 impl Temp {
     fn clear(&mut self) {
@@ -555,6 +552,11 @@ pub struct ComputePipeline {
 }
 
 #[derive(Debug)]
+pub struct PipelineCache {
+    raw: vk::PipelineCache,
+}
+
+#[derive(Debug)]
 pub struct QuerySet {
     raw: vk::QueryPool,
 }
@@ -638,7 +640,7 @@ impl Fence {
     fn get_latest(
         &self,
         device: &ash::Device,
-        extension: Option<&ExtensionFn<khr::TimelineSemaphore>>,
+        extension: Option<&ExtensionFn<khr::timeline_semaphore::Device>>,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         match *self {
             Self::TimelineSemaphore(raw) => unsafe {
@@ -684,9 +686,7 @@ impl Fence {
                 }
                 if free.len() != base_free {
                     active.retain(|&(value, _)| value > latest);
-                    unsafe {
-                        device.reset_fences(&free[base_free..])?;
-                    }
+                    unsafe { device.reset_fences(&free[base_free..]) }?
                 }
                 *last_completed = latest;
             }
@@ -749,7 +749,7 @@ impl crate::Queue for Queue {
                         None => unsafe {
                             self.device
                                 .raw
-                                .create_fence(&vk::FenceCreateInfo::builder(), None)?
+                                .create_fence(&vk::FenceCreateInfo::default(), None)?
                         },
                     };
                     active.push((value, fence_raw));
@@ -762,7 +762,7 @@ impl crate::Queue for Queue {
             .map(|cmd| cmd.raw)
             .collect::<Vec<_>>();
 
-        let mut vk_info = vk::SubmitInfo::builder().command_buffers(&vk_cmd_buffers);
+        let mut vk_info = vk::SubmitInfo::default().command_buffers(&vk_cmd_buffers);
 
         vk_info = vk_info
             .wait_semaphores(&wait_semaphores)
@@ -773,7 +773,7 @@ impl crate::Queue for Queue {
 
         if !signal_values.is_empty() {
             vk_timeline_info =
-                vk::TimelineSemaphoreSubmitInfo::builder().signal_semaphore_values(&signal_values);
+                vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&signal_values);
             vk_info = vk_info.push_next(&mut vk_timeline_info);
         }
 
@@ -781,7 +781,7 @@ impl crate::Queue for Queue {
         unsafe {
             self.device
                 .raw
-                .queue_submit(self.raw, &[vk_info.build()], fence_raw)?
+                .queue_submit(self.raw, &[vk_info], fence_raw)?
         };
         Ok(())
     }
@@ -796,7 +796,7 @@ impl crate::Queue for Queue {
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
-        let mut vk_info = vk::PresentInfoKHR::builder()
+        let mut vk_info = vk::PresentInfoKHR::default()
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 

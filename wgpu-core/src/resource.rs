@@ -14,7 +14,7 @@ use crate::{
     },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{Mutex, RwLock},
-    resource, resource_log,
+    resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
     validation::MissingBufferUsageError,
@@ -84,7 +84,8 @@ impl<T: Resource> Drop for ResourceInfo<T> {
 }
 
 impl<T: Resource> ResourceInfo<T> {
-    #[allow(unused_variables)]
+    // Note: Abstractly, this function should take `label: String` to minimize string cloning.
+    // But as actually used, every input is a literal or borrowed `&str`, so this is convenient.
     pub(crate) fn new(
         label: &str,
         tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
@@ -149,9 +150,16 @@ pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Self>;
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self>;
-    fn label(&self) -> String {
-        self.as_info().label.clone()
+
+    /// Returns a string identifying this resource for logging and errors.
+    ///
+    /// It may be a user-provided string or it may be a placeholder from wgpu.
+    ///
+    /// It is non-empty unless the user-provided string was empty.
+    fn label(&self) -> &str {
+        &self.as_info().label
     }
+
     fn ref_count(self: &Arc<Self>) -> usize {
         Arc::strong_count(self)
     }
@@ -442,8 +450,8 @@ impl<A: HalApi> Buffer<A> {
             .ok_or(BufferAccessError::Destroyed)?;
         let buffer_id = self.info.id();
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        match mem::replace(&mut *self.map_state.lock(), resource::BufferMapState::Idle) {
-            resource::BufferMapState::Init {
+        match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
+            BufferMapState::Init {
                 ptr,
                 stage_buffer,
                 needs_flush,
@@ -503,13 +511,13 @@ impl<A: HalApi> Buffer<A> {
                 pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
                 pending_writes.dst_buffers.insert(buffer_id, self.clone());
             }
-            resource::BufferMapState::Idle => {
+            BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
             }
-            resource::BufferMapState::Waiting(pending) => {
+            BufferMapState::Waiting(pending) => {
                 return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
             }
-            resource::BufferMapState::Active { ptr, range, host } => {
+            BufferMapState::Active { ptr, range, host } => {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
@@ -551,13 +559,13 @@ impl<A: HalApi> Buffer<A> {
             let raw = match self.raw.snatch(snatch_guard) {
                 Some(raw) => raw,
                 None => {
-                    return Err(resource::DestroyError::AlreadyDestroyed);
+                    return Err(DestroyError::AlreadyDestroyed);
                 }
             };
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
@@ -718,8 +726,8 @@ impl<A: HalApi> Resource for StagingBuffer<A> {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        String::from("<StagingBuffer>")
+    fn label(&self) -> &str {
+        "<StagingBuffer>"
     }
 }
 
@@ -882,18 +890,18 @@ impl<A: HalApi> Texture<A> {
                     return Ok(());
                 }
                 None => {
-                    return Err(resource::DestroyError::AlreadyDestroyed);
+                    return Err(DestroyError::AlreadyDestroyed);
                 }
             };
 
             let views = {
                 let mut guard = self.views.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {

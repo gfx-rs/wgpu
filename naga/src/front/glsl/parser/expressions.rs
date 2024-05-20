@@ -260,8 +260,8 @@ impl<'source> ParsingContext<'source> {
                         HirExpr {
                             kind: HirExprKind::PrePostfix {
                                 op: match value {
-                                    TokenValue::Increment => crate::BinaryOperator::Add,
-                                    _ => crate::BinaryOperator::Subtract,
+                                    TokenValue::Increment => BinaryOperator::Add,
+                                    _ => BinaryOperator::Subtract,
                                 },
                                 postfix: true,
                                 expr: base,
@@ -320,8 +320,8 @@ impl<'source> ParsingContext<'source> {
                     HirExpr {
                         kind: HirExprKind::PrePostfix {
                             op: match value {
-                                TokenValue::Increment => crate::BinaryOperator::Add,
-                                _ => crate::BinaryOperator::Subtract,
+                                TokenValue::Increment => BinaryOperator::Add,
+                                _ => BinaryOperator::Subtract,
                             },
                             postfix: false,
                             expr,

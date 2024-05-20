@@ -5,8 +5,9 @@ members = [
     "deno_webgpu",
 
     # default members
+    "benches",
     "d3d12",
-    "examples/",
+    "examples",
     "naga-cli",
     "naga",
     "naga/fuzz",
@@ -22,8 +23,9 @@ members = [
 ]
 exclude = []
 default-members = [
+    "benches",
     "d3d12",
-    "examples/",
+    "examples",
     "naga-cli",
     "naga",
     "naga/fuzz",
@@ -70,11 +72,13 @@ version = "0.20.0"
 [workspace.dependencies]
 anyhow = "1.0.23"
 arrayvec = "0.7"
+bincode = "1"
 bit-vec = "0.6"
 bitflags = "2"
 bytemuck = { version = "1.14", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
+criterion = "0.5"
 codespan-reporting = "0.11"
 ctor = "0.2"
 document-features = "0.2.8"
@@ -96,7 +100,6 @@ log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 # https://github.com/Razaekel/noise-rs/issues/335 (Updated dependencies)
 noise = { version = "0.8", git = "https://github.com/Razaekel/noise-rs.git", rev = "c6942d4fb70af26db4441edcf41f90fa115333f2" }
-num-traits = { version = "0.2" }
 nv-flip = "0.1"
 obj = "0.10"
 once_cell = "1"
@@ -110,6 +113,7 @@ png = "0.17.11"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.6"
+rayon = "1"
 renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
@@ -117,6 +121,7 @@ serde = "1"
 serde_json = "1.0.116"
 smallvec = "1"
 static_assertions = "1.1.0"
+tracy-client = "0.17"
 thiserror = "1"
 wgpu = { version = "0.20.0", path = "./wgpu" }
 wgpu-core = { version = "0.20.0", path = "./wgpu-core" }
@@ -134,7 +139,7 @@ objc = "0.2.5"
 
 # Vulkan dependencies
 android_system_properties = "0.1.1"
-ash = "0.37.3"
+ash = "0.38.0"
 gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
@@ -187,6 +192,10 @@ termcolor = "1.4.1"
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
+
+[profile.release]
+lto = "thin"
+debug = true
 
 # Speed up image comparison even in debug builds
 [profile.dev.package."nv-flip-sys"]

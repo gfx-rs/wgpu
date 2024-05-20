@@ -370,6 +370,7 @@ fn copy_via_compute(
         module: &sm,
         entry_point: "copy_texture_to_buffer",
         compilation_options: Default::default(),
+        cache: None,
     });
 
     {

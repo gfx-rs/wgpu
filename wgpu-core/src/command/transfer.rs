@@ -125,8 +125,6 @@ pub enum TransferError {
         "Copying to textures with format {0:?} is forbidden when copying from external texture"
     )]
     ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
-    #[error("The entire texture must be copied when copying from depth texture")]
-    InvalidDepthTextureExtent,
     #[error(
         "Source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible (they may only differ in srgb-ness)"
     )]
@@ -366,10 +364,6 @@ pub(crate) fn validate_texture_copy_range(
     )?;
     // physical size can be larger than the virtual
     let extent = extent_virtual.physical_size(desc.format);
-
-    if desc.format.is_depth_stencil_format() && *copy_size != extent {
-        return Err(TransferError::InvalidDepthTextureExtent);
-    }
 
     /// Return `Ok` if a run `size` texels long starting at `start_offset` falls
     /// entirely within `texture_size`. Otherwise, return an appropriate a`Err`.
@@ -666,13 +660,13 @@ impl Global {
             .downlevel
             .flags
             .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
-            && (src_buffer.usage.contains(wgt::BufferUsages::INDEX)
-                || dst_buffer.usage.contains(wgt::BufferUsages::INDEX))
+            && (src_buffer.usage.contains(BufferUsages::INDEX)
+                || dst_buffer.usage.contains(BufferUsages::INDEX))
         {
-            let forbidden_usages = wgt::BufferUsages::VERTEX
-                | wgt::BufferUsages::UNIFORM
-                | wgt::BufferUsages::INDIRECT
-                | wgt::BufferUsages::STORAGE;
+            let forbidden_usages = BufferUsages::VERTEX
+                | BufferUsages::UNIFORM
+                | BufferUsages::INDIRECT
+                | BufferUsages::STORAGE;
             if src_buffer.usage.intersects(forbidden_usages)
                 || dst_buffer.usage.intersects(forbidden_usages)
             {

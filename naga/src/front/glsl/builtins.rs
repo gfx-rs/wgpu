@@ -718,13 +718,13 @@ fn inject_standard_builtins(
 
             let ty = match fun {
                 MathFunction::Pack4x8snorm | MathFunction::Pack4x8unorm => TypeInner::Vector {
-                    size: crate::VectorSize::Quad,
+                    size: VectorSize::Quad,
                     scalar: Scalar::F32,
                 },
                 MathFunction::Pack2x16unorm
                 | MathFunction::Pack2x16snorm
                 | MathFunction::Pack2x16float => TypeInner::Vector {
-                    size: crate::VectorSize::Bi,
+                    size: VectorSize::Bi,
                     scalar: Scalar::F32,
                 },
                 _ => unreachable!(),

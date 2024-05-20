@@ -1105,6 +1105,100 @@ impl ComputePipeline {
     }
 }
 
+/// Handle to a pipeline cache, which is used to accelerate
+/// creating [`RenderPipeline`]s and [`ComputePipeline`]s
+/// in subsequent executions
+///
+/// This reuse is only applicable for the same or similar devices.
+/// See [`util::pipeline_cache_key`] for some details.
+///
+/// # Background
+///
+/// In most GPU drivers, shader code must be converted into a machine code
+/// which can be executed on the GPU.
+/// Generating this machine code can require a lot of computation.
+/// Pipeline caches allow this computation to be reused between executions
+/// of the program.
+/// This can be very useful for reducing program startup time.
+///
+/// Note that most desktop GPU drivers will manage their own caches,
+/// meaning that little advantage can be gained from this on those platforms.
+/// However, on some platforms, especially Android, drivers leave this to the
+/// application to implement.
+///
+/// Unfortunately, drivers do not expose whether they manage their own caches.
+/// Some reasonable policies for applications to use are:
+/// - Manage their own pipeline cache on all platforms
+/// - Only manage pipeline caches on Android
+///
+/// # Usage
+///
+/// It is valid to use this resource when creating multiple pipelines, in
+/// which case it will likely cache each of those pipelines.
+/// It is also valid to create a new cache for each pipeline.
+///
+/// This resource is most useful when the data produced from it (using
+/// [`PipelineCache::get_data`]) is persisted.
+/// Care should be taken that pipeline caches are only used for the same device,
+/// as pipeline caches from compatible devices are unlikely to provide any advantage.
+/// `util::pipeline_cache_key` can be used as a file/directory name to help ensure that.
+///
+/// It is recommended to store pipeline caches atomically. If persisting to disk,
+/// this can usually be achieved by creating a temporary file, then moving/[renaming]
+/// the temporary file over the existing cache
+///
+/// # Storage Usage
+///
+/// There is not currently an API available to reduce the size of a cache.
+/// This is due to limitations in the underlying graphics APIs used.
+/// This is especially impactful if your application is being updated, so
+/// previous caches are no longer being used.
+///
+/// One option to work around this is to regenerate the cache.
+/// That is, creating the pipelines which your program runs using
+/// with the stored cached data, then recreating the *same* pipelines
+/// using a new cache, which your application then store.
+///
+/// # Implementations
+///
+/// This resource currently only works on the following backends:
+///  - Vulkan
+///
+/// This type is unique to the Rust API of `wgpu`.
+///
+/// [renaming]: std::fs::rename
+#[derive(Debug)]
+pub struct PipelineCache {
+    context: Arc<C>,
+    id: ObjectId,
+    data: Box<Data>,
+}
+
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCache: Send, Sync);
+
+impl PipelineCache {
+    /// Get the data associated with this pipeline cache.
+    /// The data format is an implementation detail of `wgpu`.
+    /// The only defined operation on this data setting it as the `data` field
+    /// on [`PipelineCacheDescriptor`], then to [`Device::create_pipeline_cache`].
+    ///
+    /// This function is unique to the Rust API of `wgpu`.
+    pub fn get_data(&self) -> Option<Vec<u8>> {
+        self.context
+            .pipeline_cache_get_data(&self.id, self.data.as_ref())
+    }
+}
+
+impl Drop for PipelineCache {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context
+                .pipeline_cache_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
+
 /// Handle to a command buffer on the GPU.
 ///
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
@@ -1832,6 +1926,8 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
@@ -1929,9 +2025,37 @@ pub struct ComputePipelineDescriptor<'a> {
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
     pub compilation_options: PipelineCompilationOptions<'a>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
+
+/// Describes a pipeline cache, which allows reusing compilation work
+/// between program runs.
+///
+/// For use with [`Device::create_pipeline_cache`]
+///
+/// This type is unique to the Rust API of `wgpu`.
+#[derive(Clone, Debug)]
+pub struct PipelineCacheDescriptor<'a> {
+    /// Debug label of the pipeline cache. This might show up in some logs from `wgpu`
+    pub label: Label<'a>,
+    /// The data used to initialise the cache initialise
+    ///
+    /// # Safety
+    ///
+    /// This data must have been provided from a previous call to
+    /// [`PipelineCache::get_data`], if not `None`
+    pub data: Option<&'a [u8]>,
+    /// Whether to create a cache without data when the provided data
+    /// is invalid.
+    ///
+    /// Recommended to set to true
+    pub fallback: bool,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCacheDescriptor<'_>: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -3079,6 +3203,62 @@ impl Device {
     #[doc(hidden)]
     pub fn make_invalid(&self) {
         DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
+    }
+
+    /// Create a [`PipelineCache`] with initial data
+    ///
+    /// This can be passed to [`Device::create_compute_pipeline`]
+    /// and [`Device::create_render_pipeline`] to either accelerate these
+    /// or add the cache results from those.
+    ///
+    /// # Safety
+    ///
+    /// If the `data` field of `desc` is set, it must have previously been returned from a call
+    /// to [`PipelineCache::get_data`][^saving]. This `data` will only be used if it came
+    /// from an adapter with the same [`util::pipeline_cache_key`].
+    /// This *is* compatible across wgpu versions, as any data format change will
+    /// be accounted for.
+    ///
+    /// It is *not* supported to bring caches from previous direct uses of backend APIs
+    /// into this method.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error value if:
+    ///  * the [`PIPELINE_CACHE`](wgt::Features::PIPELINE_CACHE) feature is not enabled
+    ///  * this device is invalid; or
+    ///  * the device is out of memory
+    ///
+    /// This method also returns an error value if:
+    ///  * The `fallback` field on `desc` is false; and
+    ///  * the `data` provided would not be used[^data_not_used]
+    ///
+    /// If an error value is used in subsequent calls, default caching will be used.
+    ///
+    /// [^saving]: We do recognise that saving this data to disk means this condition
+    /// is impossible to fully prove. Consider the risks for your own application in this case.
+    ///
+    /// [^data_not_used]: This data may be not used if: the data was produced by a prior
+    /// version of wgpu; or was created for an incompatible adapter, or there was a GPU driver
+    /// update. In some cases, the data might not be used and a real value is returned,
+    /// this is left to the discretion of GPU drivers.
+    pub unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> PipelineCache {
+        let (id, data) = unsafe {
+            DynContext::device_create_pipeline_cache(
+                &*self.context,
+                &self.id,
+                self.data.as_ref(),
+                desc,
+            )
+        };
+        PipelineCache {
+            context: Arc::clone(&self.context),
+            id,
+            data,
+        }
     }
 }
 
@@ -4538,7 +4718,7 @@ impl<'a> ComputePass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::compute_pass_set_bind_group(
@@ -4553,7 +4733,7 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
             &*self.parent.context,
             &mut self.id,
@@ -4611,7 +4791,7 @@ impl<'a> ComputePass<'a> {
     /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
     pub fn dispatch_workgroups_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::compute_pass_dispatch_workgroups_indirect(

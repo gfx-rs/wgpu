@@ -1160,6 +1160,8 @@ impl crate::context::Context for ContextWebGpu {
     type SurfaceOutputDetail = SurfaceOutputDetail;
     type SubmissionIndex = Unused;
     type SubmissionIndexData = ();
+    type PipelineCacheId = Unused;
+    type PipelineCacheData = ();
 
     type RequestAdapterFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -2002,6 +2004,16 @@ impl crate::context::Context for ContextWebGpu {
 
         create_identified(device_data.0.create_compute_pipeline(&mapped_desc))
     }
+
+    unsafe fn device_create_pipeline_cache(
+        &self,
+        _: &Self::DeviceId,
+        _: &Self::DeviceData,
+        _: &crate::PipelineCacheDescriptor<'_>,
+    ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
+        (Unused, ())
+    }
+    fn pipeline_cache_drop(&self, _: &Self::PipelineCacheId, _: &Self::PipelineCacheData) {}
 
     fn device_create_buffer(
         &self,
@@ -2988,6 +3000,14 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_start_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
     fn device_stop_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
+
+    fn pipeline_cache_get_data(
+        &self,
+        _: &Self::PipelineCacheId,
+        _: &Self::PipelineCacheData,
+    ) -> Option<Vec<u8>> {
+        None
+    }
 
     fn compute_pass_set_pipeline(
         &self,

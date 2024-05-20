@@ -30,6 +30,7 @@ impl crate::Api for Api {
     type QuerySet = Resource;
     type Fence = Resource;
     type AccelerationStructure = Resource;
+    type PipelineCache = Resource;
 
     type BindGroupLayout = Resource;
     type BindGroup = Resource;
@@ -220,6 +221,13 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<Resource, crate::PipelineCacheError> {
+        Ok(Resource)
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: Resource) {}
 
     unsafe fn create_query_set(
         &self,

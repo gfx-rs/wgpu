@@ -254,13 +254,14 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
         None
     };
 
+    let instance = state.borrow::<super::Instance>();
+    let command_encoder = &command_encoder_resource.1;
     let descriptor = wgpu_core::command::ComputePassDescriptor {
         label: Some(label),
         timestamp_writes: timestamp_writes.as_ref(),
     };
 
-    let compute_pass =
-        wgpu_core::command::ComputePass::new(command_encoder_resource.1, &descriptor);
+    let compute_pass = gfx_select!(command_encoder => instance.command_encoder_create_compute_pass_dyn(*command_encoder, &descriptor));
 
     let rid = state
         .resource_table

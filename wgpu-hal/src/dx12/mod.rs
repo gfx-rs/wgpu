@@ -82,6 +82,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type PipelineCache = ();
 
     type AccelerationStructure = AccelerationStructure;
 }
@@ -256,7 +257,7 @@ pub struct Device {
     // library
     library: Arc<d3d12::D3D12Lib>,
     #[cfg(feature = "renderdoc")]
-    render_doc: crate::auxil::renderdoc::RenderDoc,
+    render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
@@ -331,7 +332,7 @@ struct PassState {
 
 #[test]
 fn test_dirty_mask() {
-    assert_eq!(MAX_ROOT_ELEMENTS, std::mem::size_of::<u64>() * 8);
+    assert_eq!(MAX_ROOT_ELEMENTS, mem::size_of::<u64>() * 8);
 }
 
 impl PassState {

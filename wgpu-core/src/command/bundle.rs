@@ -1093,7 +1093,7 @@ impl<A: HalApi> RenderBundle<A> {
 impl<A: HalApi> Resource for RenderBundle<A> {
     const TYPE: ResourceType = "RenderBundle";
 
-    type Marker = crate::id::markers::RenderBundle;
+    type Marker = id::markers::RenderBundle;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info

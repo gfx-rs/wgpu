@@ -14,7 +14,6 @@ pub struct DiscardRegion<'a> {
 pub type Resource = ComPtr<d3d12::ID3D12Resource>;
 
 impl Resource {
-    ///
     pub fn map(
         &self,
         subresource: Subresource,

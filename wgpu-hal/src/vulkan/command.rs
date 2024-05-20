@@ -1,7 +1,7 @@
 use super::conv;
 
 use arrayvec::ArrayVec;
-use ash::{extensions::ext, vk};
+use ash::vk;
 
 use std::{mem, ops::Range, slice};
 
@@ -39,12 +39,6 @@ impl super::Texture {
     }
 }
 
-impl super::DeviceShared {
-    fn debug_messenger(&self) -> Option<&ext::DebugUtils> {
-        Some(&self.instance.debug_utils.as_ref()?.extension)
-    }
-}
-
 impl super::CommandEncoder {
     fn write_pass_end_timestamp_if_requested(&mut self) {
         if let Some((query_set, index)) = self.end_of_pass_timer_query.take() {
@@ -65,10 +59,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         if self.free.is_empty() {
-            let vk_info = vk::CommandBufferAllocateInfo::builder()
+            let vk_info = vk::CommandBufferAllocateInfo::default()
                 .command_pool(self.raw)
-                .command_buffer_count(ALLOCATION_GRANULARITY)
-                .build();
+                .command_buffer_count(ALLOCATION_GRANULARITY);
             let cmd_buf_vec = unsafe { self.device.raw.allocate_command_buffers(&vk_info)? };
             self.free.extend(cmd_buf_vec);
         }
@@ -76,20 +69,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         // Set the name unconditionally, since there might be a
         // previous name assigned to this.
-        unsafe {
-            self.device.set_object_name(
-                vk::ObjectType::COMMAND_BUFFER,
-                raw,
-                label.unwrap_or_default(),
-            )
-        };
+        unsafe { self.device.set_object_name(raw, label.unwrap_or_default()) };
 
         // Reset this in case the last renderpass was never ended.
         self.rpass_debug_marker_active = false;
 
-        let vk_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-            .build();
+        let vk_info = vk::CommandBufferBeginInfo::default()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
         unsafe { self.device.raw.begin_command_buffer(raw, &vk_info) }?;
         self.active = raw;
 
@@ -145,12 +131,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             dst_stages |= dst_stage;
 
             vk_barriers.push(
-                vk::BufferMemoryBarrier::builder()
+                vk::BufferMemoryBarrier::default()
                     .buffer(bar.buffer.raw)
                     .size(vk::WHOLE_SIZE)
                     .src_access_mask(src_access)
-                    .dst_access_mask(dst_access)
-                    .build(),
+                    .dst_access_mask(dst_access),
             )
         }
 
@@ -192,14 +177,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
             dst_stages |= dst_stage;
 
             vk_barriers.push(
-                vk::ImageMemoryBarrier::builder()
+                vk::ImageMemoryBarrier::default()
                     .image(bar.texture.raw)
                     .subresource_range(range)
                     .src_access_mask(src_access)
                     .dst_access_mask(dst_access)
                     .old_layout(src_layout)
-                    .new_layout(dst_layout)
-                    .build(),
+                    .new_layout(dst_layout),
             );
         }
 
@@ -442,7 +426,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 Some(buffer) => ray_tracing_functions
                     .buffer_device_address
                     .get_buffer_device_address(
-                        &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                        &vk::BufferDeviceAddressInfo::default().buffer(buffer.raw),
                     ),
                 None => panic!("Buffers are required to build acceleration structures"),
             }
@@ -469,23 +453,24 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for desc in descriptors {
             let (geometries, ranges) = match *desc.entries {
                 crate::AccelerationStructureEntries::Instances(ref instances) => {
-                    let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder(
+                    let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::default(
+                    // TODO: Code is so large that rustfmt refuses to treat this... :(
                     )
                     .data(vk::DeviceOrHostAddressConstKHR {
                         device_address: get_device_address(instances.buffer),
                     });
 
-                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                    let geometry = vk::AccelerationStructureGeometryKHR::default()
                         .geometry_type(vk::GeometryTypeKHR::INSTANCES)
                         .geometry(vk::AccelerationStructureGeometryDataKHR {
-                            instances: *instance_data,
+                            instances: instance_data,
                         });
 
-                    let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                    let range = vk::AccelerationStructureBuildRangeInfoKHR::default()
                         .primitive_count(instances.count)
                         .primitive_offset(instances.offset);
 
-                    (smallvec::smallvec![*geometry], smallvec::smallvec![*range])
+                    (smallvec::smallvec![geometry], smallvec::smallvec![range])
                 }
                 crate::AccelerationStructureEntries::Triangles(ref in_geometries) => {
                     let mut ranges = smallvec::SmallVec::<
@@ -496,7 +481,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     >::with_capacity(in_geometries.len());
                     for triangles in in_geometries {
                         let mut triangle_data =
-                            vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                            vk::AccelerationStructureGeometryTrianglesDataKHR::default()
                                 .vertex_data(vk::DeviceOrHostAddressConstKHR {
                                     device_address: get_device_address(triangles.vertex_buffer),
                                 })
@@ -504,7 +489,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 .max_vertex(triangles.vertex_count)
                                 .vertex_stride(triangles.vertex_stride);
 
-                        let mut range = vk::AccelerationStructureBuildRangeInfoKHR::builder();
+                        let mut range = vk::AccelerationStructureBuildRangeInfoKHR::default();
 
                         if let Some(ref indices) = triangles.indices {
                             triangle_data = triangle_data
@@ -528,7 +513,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 ray_tracing_functions
                                     .buffer_device_address
                                     .get_buffer_device_address(
-                                        &vk::BufferDeviceAddressInfo::builder()
+                                        &vk::BufferDeviceAddressInfo::default()
                                             .buffer(transform.buffer.raw),
                                     )
                             };
@@ -540,17 +525,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             range = range.transform_offset(transform.offset);
                         }
 
-                        let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        let geometry = vk::AccelerationStructureGeometryKHR::default()
                             .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
                             .geometry(vk::AccelerationStructureGeometryDataKHR {
-                                triangles: *triangle_data,
+                                triangles: triangle_data,
                             })
                             .flags(conv::map_acceleration_structure_geometry_flags(
                                 triangles.flags,
                             ));
 
-                        geometries.push(*geometry);
-                        ranges.push(*range);
+                        geometries.push(geometry);
+                        ranges.push(range);
                     }
                     (geometries, ranges)
                 }
@@ -562,25 +547,25 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         [vk::AccelerationStructureGeometryKHR; CAPACITY_INNER],
                     >::with_capacity(in_geometries.len());
                     for aabb in in_geometries {
-                        let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                        let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::default()
                             .data(vk::DeviceOrHostAddressConstKHR {
                                 device_address: get_device_address(aabb.buffer),
                             })
                             .stride(aabb.stride);
 
-                        let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                        let range = vk::AccelerationStructureBuildRangeInfoKHR::default()
                             .primitive_count(aabb.count)
                             .primitive_offset(aabb.offset);
 
-                        let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        let geometry = vk::AccelerationStructureGeometryKHR::default()
                             .geometry_type(vk::GeometryTypeKHR::AABBS)
                             .geometry(vk::AccelerationStructureGeometryDataKHR {
-                                aabbs: *aabbs_data,
+                                aabbs: aabbs_data,
                             })
                             .flags(conv::map_acceleration_structure_geometry_flags(aabb.flags));
 
-                        geometries.push(*geometry);
-                        ranges.push(*range);
+                        geometries.push(geometry);
+                        ranges.push(range);
                     }
                     (geometries, ranges)
                 }
@@ -593,7 +578,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 ray_tracing_functions
                     .buffer_device_address
                     .get_buffer_device_address(
-                        &vk::BufferDeviceAddressInfo::builder().buffer(desc.scratch_buffer.raw),
+                        &vk::BufferDeviceAddressInfo::default().buffer(desc.scratch_buffer.raw),
                     )
             };
             let ty = match *desc.entries {
@@ -602,7 +587,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 }
                 _ => vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
             };
-            let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+            let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::default()
                 .ty(ty)
                 .mode(conv::map_acceleration_structure_build_mode(desc.mode))
                 .flags(conv::map_acceleration_structure_flags(desc.flags))
@@ -618,7 +603,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .raw;
             }
 
-            geometry_infos.push(*geometry_info);
+            geometry_infos.push(geometry_info);
         }
 
         for (i, geometry_info) in geometry_infos.iter_mut().enumerate() {
@@ -649,10 +634,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 src_stage | vk::PipelineStageFlags::TOP_OF_PIPE,
                 dst_stage | vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 vk::DependencyFlags::empty(),
-                &[vk::MemoryBarrier::builder()
+                &[vk::MemoryBarrier::default()
                     .src_access_mask(src_access)
-                    .dst_access_mask(dst_access)
-                    .build()],
+                    .dst_access_mask(dst_access)],
                 &[],
                 &[],
             )
@@ -754,17 +738,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .make_framebuffer(fb_key, raw_pass, desc.label)
             .unwrap();
 
-        let mut vk_info = vk::RenderPassBeginInfo::builder()
+        let mut vk_info = vk::RenderPassBeginInfo::default()
             .render_pass(raw_pass)
             .render_area(render_area)
             .clear_values(&vk_clear_values)
             .framebuffer(raw_framebuffer);
         let mut vk_attachment_info = if caps.imageless_framebuffers {
-            Some(
-                vk::RenderPassAttachmentBeginInfo::builder()
-                    .attachments(&vk_image_views)
-                    .build(),
-            )
+            Some(vk::RenderPassAttachmentBeginInfo::default().attachments(&vk_image_views))
         } else {
             None
         };
@@ -859,21 +839,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
-        if let Some(ext) = self.device.debug_messenger() {
+        if let Some(ext) = self.device.extension_fns.debug_utils.as_ref() {
             let cstr = self.temp.make_c_str(label);
-            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(cstr).build();
+            let vk_label = vk::DebugUtilsLabelEXT::default().label_name(cstr);
             unsafe { ext.cmd_insert_debug_utils_label(self.active, &vk_label) };
         }
     }
     unsafe fn begin_debug_marker(&mut self, group_label: &str) {
-        if let Some(ext) = self.device.debug_messenger() {
+        if let Some(ext) = self.device.extension_fns.debug_utils.as_ref() {
             let cstr = self.temp.make_c_str(group_label);
-            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(cstr).build();
+            let vk_label = vk::DebugUtilsLabelEXT::default().label_name(cstr);
             unsafe { ext.cmd_begin_debug_utils_label(self.active, &vk_label) };
         }
     }
     unsafe fn end_debug_marker(&mut self) {
-        if let Some(ext) = self.device.debug_messenger() {
+        if let Some(ext) = self.device.extension_fns.debug_utils.as_ref() {
             unsafe { ext.cmd_end_debug_utils_label(self.active) };
         }
     }

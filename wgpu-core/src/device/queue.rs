@@ -42,7 +42,7 @@ pub struct Queue<A: HalApi> {
 impl<A: HalApi> Resource for Queue<A> {
     const TYPE: ResourceType = "Queue";
 
-    type Marker = crate::id::markers::Queue;
+    type Marker = id::markers::Queue;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
@@ -1186,6 +1186,8 @@ impl Global {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
+                        profiling::scope!("process command buffer");
+
                         // we reset the used surface textures every time we use
                         // it, so make sure to set_size on it.
                         used_surface_textures.set_size(device.tracker_indices.textures.size());
@@ -1222,59 +1224,73 @@ impl Global {
                             continue;
                         }
 
-                        // optimize the tracked states
-                        // cmdbuf.trackers.optimize();
                         {
+                            profiling::scope!("update submission ids");
+
                             let cmd_buf_data = cmdbuf.data.lock();
                             let cmd_buf_trackers = &cmd_buf_data.as_ref().unwrap().trackers;
 
                             // update submission IDs
-                            for buffer in cmd_buf_trackers.buffers.used_resources() {
-                                if buffer.raw.get(&snatch_guard).is_none() {
-                                    return Err(QueueSubmitError::DestroyedBuffer(
-                                        buffer.info.id(),
-                                    ));
-                                }
-                                buffer.info.use_at(submit_index);
-
-                                match *buffer.map_state.lock() {
-                                    BufferMapState::Idle => (),
-                                    _ => {
-                                        return Err(QueueSubmitError::BufferStillMapped(
+                            {
+                                profiling::scope!("buffers");
+                                for buffer in cmd_buf_trackers.buffers.used_resources() {
+                                    if buffer.raw.get(&snatch_guard).is_none() {
+                                        return Err(QueueSubmitError::DestroyedBuffer(
                                             buffer.info.id(),
-                                        ))
-                                    }
-                                }
-                            }
-                            for texture in cmd_buf_trackers.textures.used_resources() {
-                                let should_extend = match texture.inner.get(&snatch_guard) {
-                                    None => {
-                                        return Err(QueueSubmitError::DestroyedTexture(
-                                            texture.info.id(),
                                         ));
                                     }
-                                    Some(TextureInner::Native { .. }) => false,
-                                    Some(TextureInner::Surface { ref raw, .. }) => {
-                                        if raw.is_some() {
-                                            submit_surface_textures_owned.push(texture.clone());
-                                        }
+                                    buffer.info.use_at(submit_index);
 
-                                        true
+                                    match *buffer.map_state.lock() {
+                                        BufferMapState::Idle => (),
+                                        _ => {
+                                            return Err(QueueSubmitError::BufferStillMapped(
+                                                buffer.info.id(),
+                                            ))
+                                        }
                                     }
-                                };
-                                texture.info.use_at(submit_index);
-                                if should_extend {
-                                    unsafe {
-                                        used_surface_textures
-                                            .merge_single(&texture, None, hal::TextureUses::PRESENT)
-                                            .unwrap();
-                                    };
                                 }
                             }
-                            for texture_view in cmd_buf_trackers.views.used_resources() {
-                                texture_view.info.use_at(submit_index);
+                            {
+                                profiling::scope!("textures");
+                                for texture in cmd_buf_trackers.textures.used_resources() {
+                                    let should_extend = match texture.inner.get(&snatch_guard) {
+                                        None => {
+                                            return Err(QueueSubmitError::DestroyedTexture(
+                                                texture.info.id(),
+                                            ));
+                                        }
+                                        Some(TextureInner::Native { .. }) => false,
+                                        Some(TextureInner::Surface { ref raw, .. }) => {
+                                            if raw.is_some() {
+                                                submit_surface_textures_owned.push(texture.clone());
+                                            }
+
+                                            true
+                                        }
+                                    };
+                                    texture.info.use_at(submit_index);
+                                    if should_extend {
+                                        unsafe {
+                                            used_surface_textures
+                                                .merge_single(
+                                                    &texture,
+                                                    None,
+                                                    hal::TextureUses::PRESENT,
+                                                )
+                                                .unwrap();
+                                        };
+                                    }
+                                }
                             }
                             {
+                                profiling::scope!("views");
+                                for texture_view in cmd_buf_trackers.views.used_resources() {
+                                    texture_view.info.use_at(submit_index);
+                                }
+                            }
+                            {
+                                profiling::scope!("bind groups (+ referenced views/samplers)");
                                 for bg in cmd_buf_trackers.bind_groups.used_resources() {
                                     bg.info.use_at(submit_index);
                                     // We need to update the submission indices for the contained
@@ -1288,36 +1304,51 @@ impl Global {
                                     }
                                 }
                             }
-                            // assert!(cmd_buf_trackers.samplers.is_empty());
-                            for compute_pipeline in
-                                cmd_buf_trackers.compute_pipelines.used_resources()
                             {
-                                compute_pipeline.info.use_at(submit_index);
+                                profiling::scope!("compute pipelines");
+                                for compute_pipeline in
+                                    cmd_buf_trackers.compute_pipelines.used_resources()
+                                {
+                                    compute_pipeline.info.use_at(submit_index);
+                                }
                             }
-                            for render_pipeline in
-                                cmd_buf_trackers.render_pipelines.used_resources()
                             {
-                                render_pipeline.info.use_at(submit_index);
-                            }
-                            for query_set in cmd_buf_trackers.query_sets.used_resources() {
-                                query_set.info.use_at(submit_index);
-                            }
-                            for bundle in cmd_buf_trackers.bundles.used_resources() {
-                                bundle.info.use_at(submit_index);
-                                // We need to update the submission indices for the contained
-                                // state-less (!) resources as well, excluding the bind groups.
-                                // They don't get deleted too early if the bundle goes out of scope.
+                                profiling::scope!("render pipelines");
                                 for render_pipeline in
-                                    bundle.used.render_pipelines.read().used_resources()
+                                    cmd_buf_trackers.render_pipelines.used_resources()
                                 {
                                     render_pipeline.info.use_at(submit_index);
                                 }
-                                for query_set in bundle.used.query_sets.read().used_resources() {
+                            }
+                            {
+                                profiling::scope!("query sets");
+                                for query_set in cmd_buf_trackers.query_sets.used_resources() {
                                     query_set.info.use_at(submit_index);
+                                }
+                            }
+                            {
+                                profiling::scope!(
+                                    "render bundles (+ referenced pipelines/query sets)"
+                                );
+                                for bundle in cmd_buf_trackers.bundles.used_resources() {
+                                    bundle.info.use_at(submit_index);
+                                    // We need to update the submission indices for the contained
+                                    // state-less (!) resources as well, excluding the bind groups.
+                                    // They don't get deleted too early if the bundle goes out of scope.
+                                    for render_pipeline in
+                                        bundle.used.render_pipelines.read().used_resources()
+                                    {
+                                        render_pipeline.info.use_at(submit_index);
+                                    }
+                                    for query_set in bundle.used.query_sets.read().used_resources()
+                                    {
+                                        query_set.info.use_at(submit_index);
+                                    }
                                 }
                             }
                         }
                         let mut baked = cmdbuf.from_arc_into_baked();
+
                         // execute resource transitions
                         unsafe {
                             baked
@@ -1385,6 +1416,13 @@ impl Global {
                             raw: baked.encoder,
                             cmd_buffers: baked.list,
                         });
+
+                        {
+                            // This involves actually decrementing the ref count of all command buffer
+                            // resources, so can be _very_ expensive.
+                            profiling::scope!("drop command buffer trackers");
+                            drop(baked.trackers);
+                        }
                     }
 
                     log::trace!("Device after submission {}", submit_index);

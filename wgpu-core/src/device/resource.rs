@@ -59,7 +59,7 @@ use std::{
 };
 
 use super::{
-    life::{self, ResourceMaps},
+    life::ResourceMaps,
     queue::{self, Queue},
     DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, ENTRYPOINT_FAILURE_ERROR,
     IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL, ZERO_BUFFER_SIZE,
@@ -229,7 +229,7 @@ impl<A: HalApi> Device<A> {
         let pending_encoder = command_allocator
             .acquire_encoder(&raw_device, raw_queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
-        let mut pending_writes = queue::PendingWrites::<A>::new(pending_encoder);
+        let mut pending_writes = PendingWrites::<A>::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
@@ -278,11 +278,8 @@ impl<A: HalApi> Device<A> {
             valid: AtomicBool::new(true),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, Tracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
-            life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, life::LifetimeTracker::new()),
-            temp_suspected: Mutex::new(
-                rank::DEVICE_TEMP_SUSPECTED,
-                Some(life::ResourceMaps::new()),
-            ),
+            life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
+            temp_suspected: Mutex::new(rank::DEVICE_TEMP_SUSPECTED, Some(ResourceMaps::new())),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(
@@ -941,8 +938,8 @@ impl<A: HalApi> Device<A> {
                 (true, hal::TextureUses::COLOR_TARGET)
             };
             let dimension = match desc.dimension {
-                wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-                wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                wgt::TextureDimension::D1 => TextureViewDimension::D1,
+                wgt::TextureDimension::D2 => TextureViewDimension::D2,
                 wgt::TextureDimension::D3 => unreachable!(),
             };
 
@@ -1025,15 +1022,15 @@ impl<A: HalApi> Device<A> {
         let resolved_dimension = desc
             .dimension
             .unwrap_or_else(|| match texture.desc.dimension {
-                wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                wgt::TextureDimension::D1 => TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => {
                     if texture.desc.array_layer_count() == 1 {
-                        wgt::TextureViewDimension::D2
+                        TextureViewDimension::D2
                     } else {
-                        wgt::TextureViewDimension::D2Array
+                        TextureViewDimension::D2Array
                     }
                 }
-                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+                wgt::TextureDimension::D3 => TextureViewDimension::D3,
             });
 
         let resolved_mip_level_count = desc.range.mip_level_count.unwrap_or_else(|| {
@@ -1047,16 +1044,14 @@ impl<A: HalApi> Device<A> {
             desc.range
                 .array_layer_count
                 .unwrap_or_else(|| match resolved_dimension {
-                    wgt::TextureViewDimension::D1
-                    | wgt::TextureViewDimension::D2
-                    | wgt::TextureViewDimension::D3 => 1,
-                    wgt::TextureViewDimension::Cube => 6,
-                    wgt::TextureViewDimension::D2Array | wgt::TextureViewDimension::CubeArray => {
-                        texture
-                            .desc
-                            .array_layer_count()
-                            .saturating_sub(desc.range.base_array_layer)
-                    }
+                    TextureViewDimension::D1
+                    | TextureViewDimension::D2
+                    | TextureViewDimension::D3 => 1,
+                    TextureViewDimension::Cube => 6,
+                    TextureViewDimension::D2Array | TextureViewDimension::CubeArray => texture
+                        .desc
+                        .array_layer_count()
+                        .saturating_sub(desc.range.base_array_layer),
                 });
 
         // validate TextureViewDescriptor
@@ -1087,7 +1082,7 @@ impl<A: HalApi> Device<A> {
         }
 
         // check if multisampled texture is seen as anything but 2D
-        if texture.desc.sample_count > 1 && resolved_dimension != wgt::TextureViewDimension::D2 {
+        if texture.desc.sample_count > 1 && resolved_dimension != TextureViewDimension::D2 {
             return Err(
                 resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
                     resolved_dimension,
@@ -1224,10 +1219,10 @@ impl<A: HalApi> Device<A> {
         let usage = {
             let mask_copy = !(hal::TextureUses::COPY_SRC | hal::TextureUses::COPY_DST);
             let mask_dimension = match resolved_dimension {
-                wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
                     hal::TextureUses::RESOURCE
                 }
-                wgt::TextureViewDimension::D3 => {
+                TextureViewDimension::D3 => {
                     hal::TextureUses::RESOURCE
                         | hal::TextureUses::STORAGE_READ
                         | hal::TextureUses::STORAGE_READ_WRITE
@@ -1809,7 +1804,7 @@ impl<A: HalApi> Device<A> {
                     format: _,
                 } => {
                     match view_dimension {
-                        wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                        TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
                             return Err(binding_model::CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
                                 error: BindGroupLayoutEntryError::StorageTextureCube,
@@ -2416,7 +2411,7 @@ impl<A: HalApi> Device<A> {
         features: wgt::Features,
         count: Option<NonZeroU32>,
         num_bindings: usize,
-    ) -> Result<(), super::binding_model::CreateBindGroupError> {
+    ) -> Result<(), binding_model::CreateBindGroupError> {
         use super::binding_model::CreateBindGroupError as Error;
 
         if let Some(count) = count {
@@ -2822,6 +2817,20 @@ impl<A: HalApi> Device<A> {
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
+        let cache = 'cache: {
+            let Some(cache) = desc.cache else {
+                break 'cache None;
+            };
+            let Ok(cache) = hub.pipeline_caches.get(cache) else {
+                break 'cache None;
+            };
+
+            if cache.device.as_info().id() != self.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+            Some(cache)
+        };
+
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw(),
@@ -2831,6 +2840,7 @@ impl<A: HalApi> Device<A> {
                 constants: desc.stage.constants.as_ref(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
+            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
 
         let raw = unsafe {
@@ -3034,8 +3044,11 @@ impl<A: HalApi> Device<A> {
             );
         }
 
+        let mut target_specified = false;
+
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
+                target_specified = true;
                 let error = loop {
                     if cs.write_mask.contains_invalid_bits() {
                         break Some(pipeline::ColorStateError::InvalidWriteMask(cs.write_mask));
@@ -3063,6 +3076,7 @@ impl<A: HalApi> Device<A> {
                     if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
                         break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                     }
+
                     if desc.multisample.count > 1
                         && !format_features
                             .flags
@@ -3081,6 +3095,7 @@ impl<A: HalApi> Device<A> {
                                 .supported_sample_counts(),
                         ));
                     }
+
                     if let Some(blend_mode) = cs.blend {
                         for factor in [
                             blend_mode.color.src_factor,
@@ -3094,7 +3109,7 @@ impl<A: HalApi> Device<A> {
                                     pipeline_expects_dual_source_blending = true;
                                     break;
                                 } else {
-                                    return Err(crate::pipeline::CreateRenderPipelineError
+                                    return Err(pipeline::CreateRenderPipelineError
                             ::BlendFactorOnUnsupportedTarget { factor, target: i as u32 });
                                 }
                             }
@@ -3120,6 +3135,7 @@ impl<A: HalApi> Device<A> {
         }
 
         if let Some(ds) = depth_stencil_state {
+            target_specified = true;
             let error = loop {
                 let format_features = self.describe_format_features(adapter, ds.format)?;
                 if !format_features
@@ -3170,6 +3186,10 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        if !target_specified {
+            return Err(pipeline::CreateRenderPipelineError::NoTargetSpecified);
+        }
+
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
             Some(pipeline_layout_id) => {
@@ -3204,6 +3224,7 @@ impl<A: HalApi> Device<A> {
 
         let vertex_shader_module;
         let vertex_entry_point_name;
+
         let vertex_stage = {
             let stage_desc = &desc.vertex.stage;
             let stage = wgt::ShaderStages::VERTEX;
@@ -3398,6 +3419,20 @@ impl<A: HalApi> Device<A> {
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
+        let pipeline_cache = 'cache: {
+            let Some(cache) = desc.cache else {
+                break 'cache None;
+            };
+            let Ok(cache) = hub.pipeline_caches.get(cache) else {
+                break 'cache None;
+            };
+
+            if cache.device.as_info().id() != self.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+            Some(cache)
+        };
+
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw(),
@@ -3409,6 +3444,7 @@ impl<A: HalApi> Device<A> {
             fragment_stage,
             color_targets,
             multiview: desc.multiview,
+            cache: pipeline_cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
         let raw = unsafe {
             self.raw
@@ -3487,6 +3523,53 @@ impl<A: HalApi> Device<A> {
             ),
         };
         Ok(pipeline)
+    }
+
+    /// # Safety
+    /// The `data` field on `desc` must have previously been returned from [`crate::global::Global::pipeline_cache_get_data`]
+    pub unsafe fn create_pipeline_cache(
+        self: &Arc<Self>,
+        desc: &pipeline::PipelineCacheDescriptor,
+    ) -> Result<pipeline::PipelineCache<A>, pipeline::CreatePipelineCacheError> {
+        use crate::pipeline_cache;
+        self.require_features(wgt::Features::PIPELINE_CACHE)?;
+        let data = if let Some((data, validation_key)) = desc
+            .data
+            .as_ref()
+            .zip(self.raw().pipeline_cache_validation_key())
+        {
+            let data = pipeline_cache::validate_pipeline_cache(
+                data,
+                &self.adapter.raw.info,
+                validation_key,
+            );
+            match data {
+                Ok(data) => Some(data),
+                Err(e) if e.was_avoidable() || !desc.fallback => return Err(e.into()),
+                // If the error was unavoidable and we are asked to fallback, do so
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+        let cache_desc = hal::PipelineCacheDescriptor {
+            data,
+            label: desc.label.to_hal(self.instance_flags),
+        };
+        let raw = match unsafe { self.raw().create_pipeline_cache(&cache_desc) } {
+            Ok(raw) => raw,
+            Err(e) => return Err(e.into()),
+        };
+        let cache = pipeline::PipelineCache {
+            device: self.clone(),
+            info: ResourceInfo::new(
+                desc.label.borrow_or_default(),
+                Some(self.tracker_indices.pipeline_caches.clone()),
+            ),
+            // This would be none in the error condition, which we don't implement yet
+            raw: Some(raw),
+        };
+        Ok(cache)
     }
 
     pub(crate) fn get_texture_format_features(
@@ -3700,7 +3783,7 @@ impl<A: HalApi> Device<A> {
 impl<A: HalApi> Resource for Device<A> {
     const TYPE: ResourceType = "Device";
 
-    type Marker = crate::id::markers::Device;
+    type Marker = id::markers::Device;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info

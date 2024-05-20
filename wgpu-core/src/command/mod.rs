@@ -5,6 +5,7 @@ mod clear;
 mod compute;
 mod compute_command;
 mod draw;
+mod dyn_compute_pass;
 mod memory_init;
 mod query;
 mod render;
@@ -14,8 +15,8 @@ use std::sync::Arc;
 
 pub(crate) use self::clear::clear_texture;
 pub use self::{
-    bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*, query::*,
-    render::*, transfer::*,
+    bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*,
+    dyn_compute_pass::DynComputePass, query::*, render::*, transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
 
@@ -333,13 +334,7 @@ impl<A: HalApi> CommandBuffer<A> {
             device: device.clone(),
             limits: device.limits.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
-            info: ResourceInfo::new(
-                label
-                    .as_ref()
-                    .unwrap_or(&String::from("<CommandBuffer>"))
-                    .as_str(),
-                None,
-            ),
+            info: ResourceInfo::new(label.as_deref().unwrap_or("<CommandBuffer>"), None),
             data: Mutex::new(
                 rank::COMMAND_BUFFER_DATA,
                 Some(CommandBufferMutable {
@@ -468,7 +463,7 @@ impl<A: HalApi> CommandBuffer<A> {
 impl<A: HalApi> Resource for CommandBuffer<A> {
     const TYPE: ResourceType = "CommandBuffer";
 
-    type Marker = crate::id::markers::CommandBuffer;
+    type Marker = id::markers::CommandBuffer;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
@@ -476,14 +471,6 @@ impl<A: HalApi> Resource for CommandBuffer<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
-    }
-
-    fn label(&self) -> String {
-        let str = match self.data.lock().as_ref().unwrap().encoder.label.as_ref() {
-            Some(label) => label.clone(),
-            _ => String::new(),
-        };
-        str
     }
 }
 

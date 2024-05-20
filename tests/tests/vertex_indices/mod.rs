@@ -295,6 +295,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             })],
         }),
         multiview: None,
+        cache: None,
     };
     let builtin_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
     pipeline_desc.vertex.entry_point = "vs_main_buffers";
