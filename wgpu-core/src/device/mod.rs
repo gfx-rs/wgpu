@@ -444,3 +444,92 @@ impl ImplicitPipelineIds<'_> {
         }
     }
 }
+
+/// Create a validator with the given validation flags.
+pub fn create_validator(
+    features: wgt::Features,
+    downlevel: wgt::DownlevelFlags,
+    flags: naga::valid::ValidationFlags,
+) -> naga::valid::Validator {
+    use naga::valid::Capabilities as Caps;
+    let mut caps = Caps::empty();
+    caps.set(
+        Caps::PUSH_CONSTANT,
+        features.contains(wgt::Features::PUSH_CONSTANTS),
+    );
+    caps.set(Caps::FLOAT64, features.contains(wgt::Features::SHADER_F64));
+    caps.set(
+        Caps::PRIMITIVE_INDEX,
+        features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
+    );
+    caps.set(
+        Caps::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    // TODO: This needs a proper wgpu feature
+    caps.set(
+        Caps::SAMPLER_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+        features.contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
+    );
+    caps.set(Caps::MULTIVIEW, features.contains(wgt::Features::MULTIVIEW));
+    caps.set(
+        Caps::EARLY_DEPTH_TEST,
+        features.contains(wgt::Features::SHADER_EARLY_DEPTH_TEST),
+    );
+    caps.set(
+        Caps::SHADER_INT64,
+        features.contains(wgt::Features::SHADER_INT64),
+    );
+    caps.set(
+        Caps::MULTISAMPLED_SHADING,
+        downlevel.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
+    );
+    caps.set(
+        Caps::DUAL_SOURCE_BLENDING,
+        features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
+    );
+    caps.set(
+        Caps::CUBE_ARRAY_TEXTURES,
+        downlevel.contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
+    );
+    caps.set(
+        Caps::SUBGROUP,
+        features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX),
+    );
+    caps.set(
+        Caps::SUBGROUP_BARRIER,
+        features.intersects(wgt::Features::SUBGROUP_BARRIER),
+    );
+
+    let mut subgroup_stages = naga::valid::ShaderStages::empty();
+    subgroup_stages.set(
+        naga::valid::ShaderStages::COMPUTE | naga::valid::ShaderStages::FRAGMENT,
+        features.contains(wgt::Features::SUBGROUP),
+    );
+    subgroup_stages.set(
+        naga::valid::ShaderStages::VERTEX,
+        features.contains(wgt::Features::SUBGROUP_VERTEX),
+    );
+
+    let subgroup_operations = if caps.contains(Caps::SUBGROUP) {
+        use naga::valid::SubgroupOperationSet as S;
+        S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+    } else {
+        naga::valid::SubgroupOperationSet::empty()
+    };
+    let mut validator = naga::valid::Validator::new(flags, caps);
+    validator.subgroup_stages(subgroup_stages);
+    validator.subgroup_operations(subgroup_operations);
+    validator
+}
