@@ -3818,7 +3818,7 @@ impl Drop for BufferMappedRange {
 }
 
 /// Adds the constants map to the given pipeline descriptor if the map is nonempty.
-/// Logs an error if the map cannot be set.
+/// Panics if the map cannot be set.
 ///
 /// This function is necessary because the constants array is not currently
 /// exposed by `wasm-bindgen`. See the following issues for details:
@@ -3826,11 +3826,8 @@ impl Drop for BufferMappedRange {
 /// - [rustwasm/wasm-bindgen#3587](https://github.com/rustwasm/wasm-bindgen/issues/3587)
 fn insert_constants_map(target: &JsValue, map: &HashMap<String, f64>) {
     if !map.is_empty() {
-        let result = js_sys::Reflect::set(target, &"constants".into(), &hashmap_to_jsvalue(map));
-
-        if let Err(error) = result {
-            log::error!("Failed to set constants map for pipeline: {error:?}");
-        }
+        js_sys::Reflect::set(target, &"constants".into(), &hashmap_to_jsvalue(map))
+            .expect("Setting the values in a Javascript pipeline descriptor should never fail");
     }
 }
 
