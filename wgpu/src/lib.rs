@@ -3547,6 +3547,30 @@ impl Buffer {
         }
     }
 
+    /// Returns the inner hal Buffer using a callback. The hal buffer will be `None` if the
+    /// backend type argument does not match with this wgpu Buffer
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Buffer must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+        &self,
+        hal_texture_callback: F,
+    ) -> R {
+        let id = self.id;
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.buffer_as_hal::<A, F, R>(id.into(), hal_texture_callback) }
+        } else {
+            hal_texture_callback(None)
+        }
+    }
+
     /// Use only a portion of this Buffer for a given operation. Choosing a range with no end
     /// will use the rest of the buffer. Using a totally unbounded range will use the entire buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {

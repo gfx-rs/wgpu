@@ -98,6 +98,21 @@ impl ContextWgpuCore {
         }
     }
 
+    pub unsafe fn buffer_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Buffer>) -> R,
+        R,
+    >(
+        &self,
+        id: wgc::id::BufferId,
+        hal_buffer_callback: F,
+    ) -> R {
+        unsafe {
+            self.0
+                .buffer_as_hal::<A, F, R>(id, hal_buffer_callback)
+        }
+    }
+
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,
