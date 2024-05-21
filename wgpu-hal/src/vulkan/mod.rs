@@ -147,7 +147,7 @@ pub struct Instance {
 
 /// The semaphores needed to use one image in a swapchain.
 #[derive(Debug)]
-struct SwapchainSemaphores {
+struct SwapchainImageSemaphores {
     /// A semaphore that is signaled when this image is safe for us to modify.
     ///
     /// When [`vkAcquireNextImageKHR`] returns the index of the next swapchain
@@ -176,7 +176,7 @@ struct SwapchainSemaphores {
     /// wait. We set this flag when this image is acquired, and clear it the
     /// first time it's passed to [`Queue::submit`] as a surface texture.
     ///
-    /// [`acquire`]: SwapchainSemaphores::acquire
+    /// [`acquire`]: SwapchainImageSemaphores::acquire
     /// [`Queue::submit`]: crate::Queue::submit
     should_wait_for_acquire: bool,
 
@@ -211,21 +211,21 @@ struct SwapchainSemaphores {
     /// by the next present call. Any semaphores beyond that index were created
     /// for prior presents and are simply being retained for recycling.
     ///
-    /// [`present_index`]: SwapchainSemaphores::present_index
+    /// [`present_index`]: SwapchainImageSemaphores::present_index
     /// [`vkQueuePresentKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueuePresentKHR
     /// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
     present: Vec<vk::Semaphore>,
 
     /// The number of semaphores in [`present`] to be signalled for this submission.
     ///
-    /// [`present`]: SwapchainSemaphores::present
+    /// [`present`]: SwapchainImageSemaphores::present
     present_index: usize,
 
     /// The fence value of the last command submission that wrote to this image.
     previously_used_submission_index: crate::FenceValue,
 }
 
-impl SwapchainSemaphores {
+impl SwapchainImageSemaphores {
     fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
         Ok(Self {
             acquire: device.new_binary_semaphore()?,
@@ -243,7 +243,7 @@ impl SwapchainSemaphores {
     /// Return the semaphore that commands drawing to this image should wait for, if any.
     ///
     /// This only returns `Some` once per acquisition; see
-    /// [`SwapchainSemaphores::should_wait_for_acquire`] for details.
+    /// [`SwapchainImageSemaphores::should_wait_for_acquire`] for details.
     fn get_acquire_wait_semaphore(&mut self) -> Option<vk::Semaphore> {
         if self.should_wait_for_acquire {
             self.should_wait_for_acquire = false;
@@ -256,7 +256,7 @@ impl SwapchainSemaphores {
     /// Return a semaphore that a submission that writes to this image should
     /// signal when it's done.
     ///
-    /// See [`SwapchainSemaphores::present`] for details.
+    /// See [`SwapchainImageSemaphores::present`] for details.
     fn get_submit_signal_semaphore(
         &mut self,
         device: &DeviceShared,
@@ -280,7 +280,7 @@ impl SwapchainSemaphores {
     ///
     /// Return a slice of semaphores that the call to [`vkQueueSubmit`] that
     /// ends this image's acquisition should wait for. See
-    /// [`SwapchainSemaphores::present`] for details.
+    /// [`SwapchainImageSemaphores::present`] for details.
     ///
     /// Reset `self` to be ready for the next acquisition cycle.
     ///
@@ -319,7 +319,7 @@ struct Swapchain {
     ///
     /// We need this to be `Arc<Mutex<>>` because we need to be able to pass this
     /// data into the surface texture, so submit/present can use it.
-    surface_semaphores: Vec<Arc<Mutex<SwapchainSemaphores>>>,
+    surface_semaphores: Vec<Arc<Mutex<SwapchainImageSemaphores>>>,
     /// The index of the next semaphore to use. Ideally we would use the same
     /// index as the image index, but we need to specify the semaphore as an argument
     /// to the acquire_next_image function which is what tells us which image to use.
@@ -332,7 +332,7 @@ impl Swapchain {
         self.next_semaphore_index = (self.next_semaphore_index + 1) % semaphore_count;
     }
 
-    fn get_surface_semaphores(&self) -> Arc<Mutex<SwapchainSemaphores>> {
+    fn get_surface_semaphores(&self) -> Arc<Mutex<SwapchainImageSemaphores>> {
         self.surface_semaphores[self.next_semaphore_index].clone()
     }
 }
@@ -348,7 +348,7 @@ pub struct Surface {
 pub struct SurfaceTexture {
     index: u32,
     texture: Texture,
-    surface_semaphores: Arc<Mutex<SwapchainSemaphores>>,
+    surface_semaphores: Arc<Mutex<SwapchainImageSemaphores>>,
 }
 
 impl Borrow<Texture> for SurfaceTexture {

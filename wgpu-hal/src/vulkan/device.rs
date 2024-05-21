@@ -617,7 +617,7 @@ impl super::Device {
         // acquire the next image with an unsignaled semaphore.
         let surface_semaphores = (0..=images.len())
             .map(|_| {
-                super::SwapchainSemaphores::new(&self.shared)
+                super::SwapchainImageSemaphores::new(&self.shared)
                     .map(Mutex::new)
                     .map(Arc::new)
             })
