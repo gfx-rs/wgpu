@@ -78,7 +78,7 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 #### General
 
-- Added `as_hal` for `Buffer` to access wgpu created buffers form wgpu-hal. By @JasondeWolff in [#5721](https://github.com/gfx-rs/wgpu/pull/5721)
+- Added `as_hal` for `Buffer` to access wgpu created buffers form wgpu-hal. By @JasondeWolff in [#5724](https://github.com/gfx-rs/wgpu/pull/5724)
 
 #### Naga
 
