@@ -145,22 +145,83 @@ pub struct Instance {
     shared: Arc<InstanceShared>,
 }
 
-/// The semaphores used to synchronize the swapchain image acquisition.
-///
-/// One of these is created per swapchain image and is used for the swapchain
-///
-/// The `acquire` semaphore is used to signal from the acquire operation to the first submit
-/// that uses the image.
-///
-/// The `present` semaphores are used to signal from each submit that uses the image to the
-/// present operation. We need use one per submit as we don't know at submit time which
-/// submission will be the last to use the image, so we add semaphores to them all.
+/// The semaphores needed to use one image in a swapchain.
 #[derive(Debug)]
 struct SwapchainSemaphores {
+    /// A semaphore that is signaled when this image is safe for us to modify.
+    ///
+    /// When [`vkAcquireNextImageKHR`] returns the index of the next swapchain
+    /// image that we should use, that image may actually still be in use by the
+    /// presentation engine, and is not yet safe to modify. However, that
+    /// function does accept a semaphore that it will signal when the image is
+    /// indeed safe to begin messing with.
+    ///
+    /// This semaphore is:
+    ///
+    /// - waited for by the first queue submission to operate on this image
+    ///   since it was acquired, and
+    ///
+    /// - signaled by [`vkAcquireNextImageKHR`] when the acquired image is ready
+    ///   for us to use.
+    ///
+    /// [`vkAcquireNextImageKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkAcquireNextImageKHR
     acquire: vk::Semaphore,
+
+    /// True if the next command submission operating on this image should wait
+    /// for [`acquire`].
+    ///
+    /// We must wait for `acquire` before drawing to this swapchain image, but
+    /// because `wgpu-hal` queue submissions are always strongly ordered, only
+    /// the first submission that works with a swapchain image actually needs to
+    /// wait. We set this flag when this image is acquired, and clear it the
+    /// first time it's passed to [`Queue::submit`] as a surface texture.
+    ///
+    /// [`acquire`]: SwapchainSemaphores::acquire
+    /// [`Queue::submit`]: crate::Queue::submit
     should_wait_for_acquire: bool,
+
+    /// A pool of semaphores for ordering presentation after drawing.
+    ///
+    /// The first [`present_index`] semaphores in this vector are:
+    ///
+    /// - all waited on by the call to [`vkQueuePresentKHR`] that presents this
+    ///   image, and
+    ///
+    /// - each signaled by some [`vkQueueSubmit`] queue submission that draws to
+    ///   this image, when the submission finishes execution.
+    ///
+    /// This vector accumulates one semaphore per submission that writes to this
+    /// image. This is awkward, but hard to avoid: [`vkQueuePresentKHR`]
+    /// requires a semaphore to order it with respect to drawing commands, and
+    /// we can't attach new completion semaphores to a command submission after
+    /// it's been submitted. This means that, at submission time, we must create
+    /// the semaphore we might need if the caller's next action is to enqueue a
+    /// presentation of this image.
+    ///
+    /// An alternative strategy would be for presentation to enqueue an empty
+    /// submit, ordered relative to other submits in the usual way, and
+    /// signaling a single presentation semaphore. But we suspect that submits
+    /// are usually expensive enough, and semaphores usually cheap enough, that
+    /// performance-sensitive users will avoid making many submits, so that the
+    /// cost of accumulated semaphores will usually be less than the cost of an
+    /// additional submit.
+    ///
+    /// Only the first [`present_index`] semaphores in the vector are actually
+    /// going to be signalled by submitted commands, and need to be waited for
+    /// by the next present call. Any semaphores beyond that index were created
+    /// for prior presents and are simply being retained for recycling.
+    ///
+    /// [`present_index`]: SwapchainSemaphores::present_index
+    /// [`vkQueuePresentKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueuePresentKHR
+    /// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
     present: Vec<vk::Semaphore>,
+
+    /// The number of semaphores in [`present`] to be signalled for this submission.
+    ///
+    /// [`present`]: SwapchainSemaphores::present
     present_index: usize,
+
+    /// The fence value of the last command submission that wrote to this image.
     previously_used_submission_index: crate::FenceValue,
 }
 
@@ -179,12 +240,10 @@ impl SwapchainSemaphores {
         self.previously_used_submission_index = value;
     }
 
-    /// Gets the semaphore to wait on for the acquire operation.
+    /// Return the semaphore that commands drawing to this image should wait for, if any.
     ///
-    /// This will only return Some once, and then None until this image is presented.
-    ///
-    /// As submissions are strictly ordered in wgpu-hal, we only need the first submission
-    /// to wait. Additionally, you can only wait on a semaphore once.
+    /// This only returns `Some` once per acquisition; see
+    /// [`SwapchainSemaphores::should_wait_for_acquire`] for details.
     fn get_acquire_wait_semaphore(&mut self) -> Option<vk::Semaphore> {
         if self.should_wait_for_acquire {
             self.should_wait_for_acquire = false;
@@ -194,13 +253,15 @@ impl SwapchainSemaphores {
         }
     }
 
-    /// Gets a semaphore to use for a submit.
+    /// Return a semaphore that a submission that writes to this image should
+    /// signal when it's done.
     ///
-    /// If there aren't any available, a new one is created.
+    /// See [`SwapchainSemaphores::present`] for details.
     fn get_submit_signal_semaphore(
         &mut self,
         device: &DeviceShared,
     ) -> Result<vk::Semaphore, crate::DeviceError> {
+        // Try to recycle a semaphore we created for a previous presentation.
         let sem = match self.present.get(self.present_index) {
             Some(sem) => *sem,
             None => {
@@ -215,13 +276,20 @@ impl SwapchainSemaphores {
         Ok(sem)
     }
 
-    /// Gets the semaphores to wait on for the present operation.
+    /// Return the semaphores that a presentation of this image should wait on.
     ///
-    /// This will enable re-using all of the semaphores for the next time this image is used.
+    /// Return a slice of semaphores that the call to [`vkQueueSubmit`] that
+    /// ends this image's acquisition should wait for. See
+    /// [`SwapchainSemaphores::present`] for details.
+    ///
+    /// Reset `self` to be ready for the next acquisition cycle.
+    ///
+    /// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
     fn get_present_wait_semaphores(&mut self) -> &[vk::Semaphore] {
         let old_index = self.present_index;
 
-        // Reset internal state
+        // Since this marks the end of this acquire/draw/present cycle, take the
+        // opportunity to reset `self` in preparation for the next acquisition.
         self.present_index = 0;
         self.should_wait_for_acquire = true;
 
@@ -249,7 +317,7 @@ struct Swapchain {
     /// One wait semaphore per swapchain image. This will be associated with the
     /// surface texture, and later collected during submission.
     ///
-    /// We need this to be Arc<Mutex<>> because we need to be able to pass this
+    /// We need this to be `Arc<Mutex<>>` because we need to be able to pass this
     /// data into the surface texture, so submit/present can use it.
     surface_semaphores: Vec<Arc<Mutex<SwapchainSemaphores>>>,
     /// The index of the next semaphore to use. Ideally we would use the same
@@ -910,15 +978,16 @@ impl crate::Queue for Queue {
         for mut swapchain_semaphore in locked_swapchain_semaphores {
             swapchain_semaphore.set_used_fence_value(signal_value);
 
-            // If we need to wait on the acquire semaphore, add it to the wait list.
-            //
-            // Only the first submit that uses the image needs to wait on the acquire semaphore.
+            // If we're the first submission to operate on this image, wait on
+            // its acquire semaphore, to make sure the presentation engine is
+            // done with it.
             if let Some(sem) = swapchain_semaphore.get_acquire_wait_semaphore() {
                 wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
                 wait_semaphores.push(sem);
             }
 
-            // Get the signal semaphore for this surface image and add it to the signal list.
+            // Get a semaphore to signal when we're done writing to this surface
+            // image. Presentation of this image will wait for this.
             let signal_semaphore = swapchain_semaphore.get_submit_signal_semaphore(&self.device)?;
             signal_semaphores.push(signal_semaphore);
             signal_values.push(!0);
