@@ -365,7 +365,8 @@ dependencies = [
 [[package]]
 name = "block2"
 version = "0.5.1"
-source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c132eebf10f5cad5289222520a4a058514204aed6d791f1cf4fe8088b82d15f"
 dependencies = [
  "objc2 0.5.2",
 ]
@@ -2480,7 +2481,8 @@ dependencies = [
 [[package]]
 name = "objc-sys"
 version = "0.3.5"
-source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdb91bdd390c7ce1a8607f35f3ca7151b65afc0ff5ff3b34fa350f7d7c7e4310"
 
 [[package]]
 name = "objc2"
@@ -2495,7 +2497,8 @@ dependencies = [
 [[package]]
 name = "objc2"
 version = "0.5.2"
-source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46a785d4eeff09c14c487497c162e92766fbb3e4059a71840cecc03d9a50b804"
 dependencies = [
  "objc-sys",
  "objc2-encode 4.0.3",
@@ -2510,12 +2513,14 @@ checksum = "d079845b37af429bfe5dfa76e6d087d788031045b25cfc6fd898486fd9847666"
 [[package]]
 name = "objc2-encode"
 version = "4.0.3"
-source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7891e71393cd1f227313c9379a26a584ff3d7e6e7159e988851f0934c993f0f8"
 
 [[package]]
 name = "objc2-foundation"
 version = "0.2.2"
-source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ee638a5da3799329310ad4cfa62fbf045d5f56e3ef5ba4149e7452dcf89d5a8"
 dependencies = [
  "bitflags 2.5.0",
  "block2 0.5.1",
@@ -2526,7 +2531,8 @@ dependencies = [
 [[package]]
 name = "objc2-metal"
 version = "0.2.2"
-source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd0cba1276f6023976a406a14ffa85e1fdd19df6b0f737b063b95f6c8c7aadd6"
 dependencies = [
  "bitflags 2.5.0",
  "block2 0.5.1",
@@ -2537,7 +2543,8 @@ dependencies = [
 [[package]]
 name = "objc2-quartz-core"
 version = "0.2.2"
-source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e42bee7bff906b14b167da2bac5efe6b6a07e6f7c0a21a7308d40c960242dc7a"
 dependencies = [
  "bitflags 2.5.0",
  "block2 0.5.1",

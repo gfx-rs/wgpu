@@ -49,12 +49,12 @@ fn create_stencil_desc(
     write_mask: u32,
 ) -> Retained<MTLStencilDescriptor> {
     let desc = unsafe { MTLStencilDescriptor::new() };
-    desc.set_stencil_compare_function(conv::map_compare_function(face.compare));
-    desc.set_read_mask(read_mask);
-    desc.set_write_mask(write_mask);
-    desc.set_stencil_failure_operation(conv::map_stencil_op(face.fail_op));
-    desc.set_depth_failure_operation(conv::map_stencil_op(face.depth_fail_op));
-    desc.set_depth_stencil_pass_operation(conv::map_stencil_op(face.pass_op));
+    desc.setStencilCompareFunction(conv::map_compare_function(face.compare));
+    desc.setReadMask(read_mask);
+    desc.setWriteMask(write_mask);
+    desc.setStencilFailureOperation(conv::map_stencil_op(face.fail_op));
+    desc.setDepthFailureOperation(conv::map_stencil_op(face.depth_fail_op));
+    desc.setDepthStencilPassOperation(conv::map_stencil_op(face.pass_op));
     desc
 }
 
@@ -62,14 +62,14 @@ fn create_depth_stencil_desc(
     state: &wgt::DepthStencilState,
 ) -> Retained<MTLDepthStencilDescriptor> {
     let desc = unsafe { MTLDepthStencilDescriptor::new() };
-    desc.set_depth_compare_function(conv::map_compare_function(state.depth_compare));
-    desc.set_depth_write_enabled(state.depth_write_enabled);
+    desc.setDepthCompareFunction(conv::map_compare_function(state.depth_compare));
+    desc.setDepthWriteEnabled(state.depth_write_enabled);
     let s = &state.stencil;
     if s.is_enabled() {
         let front_desc = create_stencil_desc(&s.front, s.read_mask, s.write_mask);
-        desc.set_front_face_stencil(Some(&front_desc));
+        desc.setFrontFaceStencil(Some(&front_desc));
         let back_desc = create_stencil_desc(&s.back, s.read_mask, s.write_mask);
-        desc.set_back_face_stencil(Some(&back_desc));
+        desc.setBackFaceStencil(Some(&back_desc));
     }
     desc
 }
@@ -192,17 +192,17 @@ impl super::Device {
         );
 
         let options = MTLCompileOptions::new();
-        options.set_language_version(self.shared.private_caps.msl_version);
+        options.setLanguageVersion(self.shared.private_caps.msl_version);
 
         if self.shared.private_caps.supports_preserve_invariance {
-            options.set_preserve_invariance(true);
+            options.setPreserveInvariance(true);
         }
 
         let library = self
             .shared
             .device
             .lock()
-            .new_library_with_source_options_error(&NSString::from_str(&source), Some(&options))
+            .newLibraryWithSource_options_error(&NSString::from_str(&source), Some(&options))
             .map_err(|err| {
                 log::warn!("Naga generated shader:\n{}", source);
                 crate::PipelineError::Linkage(stage_bit, format!("Metal: {}", err))
@@ -225,7 +225,7 @@ impl super::Device {
         };
 
         let function = library
-            .new_function_with_name(&NSString::from_str(ep_name))
+            .newFunctionWithName(&NSString::from_str(ep_name))
             .ok_or_else(|| {
                 log::error!("Function '{ep_name}' does not exist");
                 crate::PipelineError::EntryPoint(naga_stage)
@@ -296,8 +296,8 @@ impl super::Device {
         while immutable_mask != 0 {
             let slot = immutable_mask.trailing_zeros();
             immutable_mask ^= 1 << slot;
-            unsafe { buffers.object_at_indexed_subscript(slot as usize) }
-                .set_mutability(MTLMutability::Immutable);
+            unsafe { buffers.objectAtIndexedSubscript(slot as usize) }
+                .setMutability(MTLMutability::Immutable);
         }
     }
 
@@ -369,10 +369,10 @@ impl crate::Device for super::Device {
                 .shared
                 .device
                 .lock()
-                .new_buffer_with_length_options(desc.size as usize, options)
+                .newBufferWithLength_options(desc.size as usize, options)
                 .unwrap();
             if let Some(label) = desc.label {
-                raw.set_label(Some(&NSString::from_str(label)));
+                raw.setLabel(Some(&NSString::from_str(label)));
             }
             Ok(super::Buffer {
                 raw,
@@ -413,37 +413,37 @@ impl crate::Device for super::Device {
                 wgt::TextureDimension::D1 => MTLTextureType::MTLTextureType1D,
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
-                        descriptor.set_sample_count(desc.sample_count as usize);
+                        descriptor.setSampleCount(desc.sample_count as usize);
                         MTLTextureType::MTLTextureType2DMultisample
                     } else if desc.size.depth_or_array_layers > 1 {
-                        descriptor.set_array_length(desc.size.depth_or_array_layers as usize);
+                        descriptor.setArrayLength(desc.size.depth_or_array_layers as usize);
                         MTLTextureType::MTLTextureType2DArray
                     } else {
                         MTLTextureType::MTLTextureType2D
                     }
                 }
                 wgt::TextureDimension::D3 => {
-                    descriptor.set_depth(desc.size.depth_or_array_layers as usize);
+                    descriptor.setDepth(desc.size.depth_or_array_layers as usize);
                     MTLTextureType::MTLTextureType3D
                 }
             };
 
-            descriptor.set_texture_type(mtl_type);
-            descriptor.set_width(desc.size.width as usize);
-            descriptor.set_height(desc.size.height as usize);
-            descriptor.set_mipmap_level_count(desc.mip_level_count as usize);
-            descriptor.set_pixel_format(mtl_format);
-            descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
-            descriptor.set_storage_mode(MTLStorageMode::Private);
+            descriptor.setTextureType(mtl_type);
+            descriptor.setWidth(desc.size.width as usize);
+            descriptor.setHeight(desc.size.height as usize);
+            descriptor.setMipmapLevelCount(desc.mip_level_count as usize);
+            descriptor.setPixelFormat(mtl_format);
+            descriptor.setUsage(conv::map_texture_usage(desc.format, desc.usage));
+            descriptor.setStorageMode(MTLStorageMode::Private);
 
             let raw = self
                 .shared
                 .device
                 .lock()
-                .new_texture_with_descriptor(&descriptor)
+                .newTextureWithDescriptor(&descriptor)
                 .ok_or(crate::DeviceError::OutOfMemory)?;
             if let Some(label) = desc.label {
-                raw.set_label(Some(&NSString::from_str(label)));
+                raw.setLabel(Some(&NSString::from_str(label)));
             }
 
             Ok(super::Texture {
@@ -500,7 +500,7 @@ impl crate::Device for super::Device {
             objc2::rc::autoreleasepool(|_| {
                 let raw = texture
                     .raw
-                    .new_texture_view_with_pixel_format_texture_type_levels_slices(
+                    .newTextureViewWithPixelFormat_textureType_levels_slices(
                         raw_format,
                         raw_type,
                         NSRange {
@@ -514,7 +514,7 @@ impl crate::Device for super::Device {
                     )
                     .unwrap();
                 if let Some(label) = desc.label {
-                    raw.set_label(Some(&NSString::from_str(label)));
+                    raw.setLabel(Some(&NSString::from_str(label)));
                 }
                 raw
             })
@@ -531,9 +531,9 @@ impl crate::Device for super::Device {
         objc2::rc::autoreleasepool(|_| {
             let descriptor = MTLSamplerDescriptor::new();
 
-            descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
-            descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
-            descriptor.set_mip_filter(match desc.mipmap_filter {
+            descriptor.setMinFilter(conv::map_filter_mode(desc.min_filter));
+            descriptor.setMagFilter(conv::map_filter_mode(desc.mag_filter));
+            descriptor.setMipFilter(match desc.mipmap_filter {
                 wgt::FilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
                     MTLSamplerMipFilter::NotMipmapped
                 }
@@ -542,46 +542,46 @@ impl crate::Device for super::Device {
             });
 
             let [s, t, r] = desc.address_modes;
-            descriptor.set_s_address_mode(conv::map_address_mode(s));
-            descriptor.set_t_address_mode(conv::map_address_mode(t));
-            descriptor.set_r_address_mode(conv::map_address_mode(r));
+            descriptor.setSAddressMode(conv::map_address_mode(s));
+            descriptor.setTAddressMode(conv::map_address_mode(t));
+            descriptor.setRAddressMode(conv::map_address_mode(r));
 
             // Anisotropy is always supported on mac up to 16x
-            descriptor.set_max_anisotropy(desc.anisotropy_clamp as _);
+            descriptor.setMaxAnisotropy(desc.anisotropy_clamp as _);
 
-            descriptor.set_lod_min_clamp(desc.lod_clamp.start);
-            descriptor.set_lod_max_clamp(desc.lod_clamp.end);
+            descriptor.setLodMinClamp(desc.lod_clamp.start);
+            descriptor.setLodMaxClamp(desc.lod_clamp.end);
 
             if let Some(fun) = desc.compare {
-                descriptor.set_compare_function(conv::map_compare_function(fun));
+                descriptor.setCompareFunction(conv::map_compare_function(fun));
             }
 
             if let Some(border_color) = desc.border_color {
                 if let wgt::SamplerBorderColor::Zero = border_color {
                     if s == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_s_address_mode(MTLSamplerAddressMode::ClampToZero);
+                        descriptor.setSAddressMode(MTLSamplerAddressMode::ClampToZero);
                     }
 
                     if t == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_t_address_mode(MTLSamplerAddressMode::ClampToZero);
+                        descriptor.setTAddressMode(MTLSamplerAddressMode::ClampToZero);
                     }
 
                     if r == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_r_address_mode(MTLSamplerAddressMode::ClampToZero);
+                        descriptor.setRAddressMode(MTLSamplerAddressMode::ClampToZero);
                     }
                 } else {
-                    descriptor.set_border_color(conv::map_border_color(border_color));
+                    descriptor.setBorderColor(conv::map_border_color(border_color));
                 }
             }
 
             if let Some(label) = desc.label {
-                descriptor.set_label(Some(&NSString::from_str(label)));
+                descriptor.setLabel(Some(&NSString::from_str(label)));
             }
             let raw = self
                 .shared
                 .device
                 .lock()
-                .new_sampler_state_with_descriptor(&descriptor)
+                .newSamplerStateWithDescriptor(&descriptor)
                 .unwrap();
 
             Ok(super::Sampler { raw })
@@ -947,10 +947,10 @@ impl crate::Device for super::Device {
                     naga::ShaderStage::Vertex,
                 )?;
 
-                descriptor.set_vertex_function(Some(&vs.function));
+                descriptor.setVertexFunction(Some(&vs.function));
                 if self.shared.private_caps.supports_mutability {
                     Self::set_buffers_mutability(
-                        &descriptor.vertex_buffers(),
+                        &descriptor.vertexBuffers(),
                         vs.immutable_buffer_mask,
                     );
                 }
@@ -976,10 +976,10 @@ impl crate::Device for super::Device {
                         naga::ShaderStage::Fragment,
                     )?;
 
-                    descriptor.set_fragment_function(Some(&fs.function));
+                    descriptor.setFragmentFunction(Some(&fs.function));
                     if self.shared.private_caps.supports_mutability {
                         Self::set_buffers_mutability(
-                            &descriptor.fragment_buffers(),
+                            &descriptor.fragmentBuffers(),
                             fs.immutable_buffer_mask,
                         );
                     }
@@ -997,39 +997,37 @@ impl crate::Device for super::Device {
                     // TODO: This is a workaround for what appears to be a Metal validation bug
                     // A pixel format is required even though no attachments are provided
                     if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
-                        descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
+                        descriptor.setDepthAttachmentPixelFormat(MTLPixelFormat::Depth32Float);
                     }
                     (None, None)
                 }
             };
 
             for (i, ct) in desc.color_targets.iter().enumerate() {
-                let at_descriptor = descriptor
-                    .color_attachments()
-                    .object_at_indexed_subscript(i);
+                let at_descriptor = descriptor.colorAttachments().objectAtIndexedSubscript(i);
                 let ct = if let Some(color_target) = ct.as_ref() {
                     color_target
                 } else {
-                    at_descriptor.set_pixel_format(MTLPixelFormat::Invalid);
+                    at_descriptor.setPixelFormat(MTLPixelFormat::Invalid);
                     continue;
                 };
 
                 let raw_format = self.shared.private_caps.map_format(ct.format);
-                at_descriptor.set_pixel_format(raw_format);
-                at_descriptor.set_write_mask(conv::map_color_write(ct.write_mask));
+                at_descriptor.setPixelFormat(raw_format);
+                at_descriptor.setWriteMask(conv::map_color_write(ct.write_mask));
 
                 if let Some(ref blend) = ct.blend {
-                    at_descriptor.set_blending_enabled(true);
+                    at_descriptor.setBlendingEnabled(true);
                     let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
                     let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
 
-                    at_descriptor.set_rgb_blend_operation(color_op);
-                    at_descriptor.set_source_rgb_blend_factor(color_src);
-                    at_descriptor.set_destination_rgb_blend_factor(color_dst);
+                    at_descriptor.setRgbBlendOperation(color_op);
+                    at_descriptor.setSourceRGBBlendFactor(color_src);
+                    at_descriptor.setDestinationRGBBlendFactor(color_dst);
 
-                    at_descriptor.set_alpha_blend_operation(alpha_op);
-                    at_descriptor.set_source_alpha_blend_factor(alpha_src);
-                    at_descriptor.set_destination_alpha_blend_factor(alpha_dst);
+                    at_descriptor.setAlphaBlendOperation(alpha_op);
+                    at_descriptor.setSourceAlphaBlendFactor(alpha_src);
+                    at_descriptor.setDestinationAlphaBlendFactor(alpha_dst);
                 }
             }
 
@@ -1038,10 +1036,10 @@ impl crate::Device for super::Device {
                     let raw_format = self.shared.private_caps.map_format(ds.format);
                     let aspects = crate::FormatAspects::from(ds.format);
                     if aspects.contains(crate::FormatAspects::DEPTH) {
-                        descriptor.set_depth_attachment_pixel_format(raw_format);
+                        descriptor.setDepthAttachmentPixelFormat(raw_format);
                     }
                     if aspects.contains(crate::FormatAspects::STENCIL) {
-                        descriptor.set_stencil_attachment_pixel_format(raw_format);
+                        descriptor.setStencilAttachmentPixelFormat(raw_format);
                     }
 
                     let ds_descriptor = create_depth_stencil_desc(ds);
@@ -1049,7 +1047,7 @@ impl crate::Device for super::Device {
                         .shared
                         .device
                         .lock()
-                        .new_depth_stencil_state_with_descriptor(&ds_descriptor)
+                        .newDepthStencilStateWithDescriptor(&ds_descriptor)
                         .unwrap();
                     Some((raw, ds.bias))
                 }
@@ -1077,7 +1075,7 @@ impl crate::Device for super::Device {
                         self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
                     let buffer_desc = vertex_descriptor
                         .layouts()
-                        .object_at_indexed_subscript(buffer_index as usize);
+                        .objectAtIndexedSubscript(buffer_index as usize);
 
                     // Metal expects the stride to be the actual size of the attributes.
                     // The semantics of array_stride == 0 can be achieved by setting
@@ -1089,44 +1087,43 @@ impl crate::Device for super::Device {
                             .map(|attribute| attribute.offset + attribute.format.size())
                             .max()
                             .unwrap_or(0);
-                        buffer_desc.set_stride(wgt::math::align_to(stride as usize, 4));
-                        buffer_desc.set_step_function(MTLVertexStepFunction::Constant);
-                        buffer_desc.set_step_rate(0);
+                        buffer_desc.setStride(wgt::math::align_to(stride as usize, 4));
+                        buffer_desc.setStepFunction(MTLVertexStepFunction::Constant);
+                        buffer_desc.setStepRate(0);
                     } else {
-                        buffer_desc.set_stride(vb.array_stride as usize);
-                        buffer_desc.set_step_function(conv::map_step_mode(vb.step_mode));
+                        buffer_desc.setStride(vb.array_stride as usize);
+                        buffer_desc.setStepFunction(conv::map_step_mode(vb.step_mode));
                     }
 
                     for at in vb.attributes {
                         let attribute_desc = vertex_descriptor
                             .attributes()
-                            .object_at_indexed_subscript(at.shader_location as usize);
-                        attribute_desc.set_format(conv::map_vertex_format(at.format));
-                        attribute_desc.set_buffer_index(buffer_index as usize);
-                        attribute_desc.set_offset(at.offset as usize);
+                            .objectAtIndexedSubscript(at.shader_location as usize);
+                        attribute_desc.setFormat(conv::map_vertex_format(at.format));
+                        attribute_desc.setBufferIndex(buffer_index as usize);
+                        attribute_desc.setOffset(at.offset as usize);
                     }
                 }
-                descriptor.set_vertex_descriptor(Some(&vertex_descriptor));
+                descriptor.setVertexDescriptor(Some(&vertex_descriptor));
             }
 
             if desc.multisample.count != 1 {
                 //TODO: handle sample mask
                 #[allow(deprecated)]
-                descriptor.set_sample_count(desc.multisample.count as usize);
-                descriptor
-                    .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
+                descriptor.setSampleCount(desc.multisample.count as usize);
+                descriptor.setAlphaToCoverageEnabled(desc.multisample.alpha_to_coverage_enabled);
                 //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);
             }
 
             if let Some(name) = desc.label {
-                descriptor.set_label(Some(&NSString::from_str(name)));
+                descriptor.setLabel(Some(&NSString::from_str(name)));
             }
 
             let raw = self
                 .shared
                 .device
                 .lock()
-                .new_render_pipeline_state_with_descriptor_error(&descriptor)
+                .newRenderPipelineStateWithDescriptor_error(&descriptor)
                 .map_err(|e| {
                     crate::PipelineError::Linkage(
                         wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
@@ -1173,7 +1170,7 @@ impl crate::Device for super::Device {
                 MTLPrimitiveTopologyClass::Unspecified,
                 naga::ShaderStage::Compute,
             )?;
-            descriptor.set_compute_function(Some(&cs.function));
+            descriptor.setComputeFunction(Some(&cs.function));
 
             if self.shared.private_caps.supports_mutability {
                 Self::set_buffers_mutability(&descriptor.buffers(), cs.immutable_buffer_mask);
@@ -1187,7 +1184,7 @@ impl crate::Device for super::Device {
             };
 
             if let Some(name) = desc.label {
-                descriptor.set_label(Some(&NSString::from_str(name)));
+                descriptor.setLabel(Some(&NSString::from_str(name)));
             }
 
             let raw =
@@ -1232,10 +1229,10 @@ impl crate::Device for super::Device {
                         .shared
                         .device
                         .lock()
-                        .new_buffer_with_length_options(size as usize, options)
+                        .newBufferWithLength_options(size as usize, options)
                         .unwrap();
                     if let Some(label) = desc.label {
-                        raw_buffer.set_label(Some(&NSString::from_str(label)));
+                        raw_buffer.setLabel(Some(&NSString::from_str(label)));
                     }
                     Ok(super::QuerySet {
                         raw_buffer,
@@ -1247,17 +1244,17 @@ impl crate::Device for super::Device {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
                     let device = self.shared.device.lock();
                     let destination_buffer = device
-                        .new_buffer_with_length_options(size as usize, MTLResourceOptions::empty())
+                        .newBufferWithLength_options(size as usize, MTLResourceOptions::empty())
                         .unwrap();
 
                     let csb_desc = MTLCounterSampleBufferDescriptor::new();
-                    csb_desc.set_storage_mode(MTLStorageMode::Shared);
-                    csb_desc.set_sample_count(desc.count as _);
+                    csb_desc.setStorageMode(MTLStorageMode::Shared);
+                    csb_desc.setSampleCount(desc.count as _);
                     if let Some(label) = desc.label {
-                        csb_desc.set_label(&NSString::from_str(label));
+                        csb_desc.setLabel(&NSString::from_str(label));
                     }
 
-                    let counter_sets = device.counter_sets().unwrap();
+                    let counter_sets = device.counterSets().unwrap();
                     let timestamp_counter = match counter_sets
                         .iter()
                         .find(|cs| &*cs.name() == ns_string!("timestamp"))
@@ -1268,10 +1265,10 @@ impl crate::Device for super::Device {
                             return Err(crate::DeviceError::ResourceCreationFailed);
                         }
                     };
-                    csb_desc.set_counter_set(Some(timestamp_counter));
+                    csb_desc.setCounterSet(Some(timestamp_counter));
 
                     let counter_sample_buffer =
-                        match device.new_counter_sample_buffer_with_descriptor_error(&csb_desc) {
+                        match device.newCounterSampleBufferWithDescriptor_error(&csb_desc) {
                             Ok(buffer) => buffer,
                             Err(err) => {
                                 log::error!("Failed to create counter sample buffer: {:?}", err);
@@ -1348,20 +1345,20 @@ impl crate::Device for super::Device {
             return false;
         }
         let device = self.shared.device.lock();
-        let shared_capture_manager = MTLCaptureManager::shared_capture_manager();
-        let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device);
-        shared_capture_manager.set_default_capture_scope(Some(&default_capture_scope));
+        let shared_capture_manager = MTLCaptureManager::sharedCaptureManager();
+        let default_capture_scope = shared_capture_manager.newCaptureScopeWithDevice(&device);
+        shared_capture_manager.setDefaultCaptureScope(Some(&default_capture_scope));
         #[allow(deprecated)]
-        shared_capture_manager.start_capture_with_scope(&default_capture_scope);
-        default_capture_scope.begin_scope();
+        shared_capture_manager.startCaptureWithScope(&default_capture_scope);
+        default_capture_scope.beginScope();
         true
     }
     unsafe fn stop_capture(&self) {
-        let shared_capture_manager = MTLCaptureManager::shared_capture_manager();
-        if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
-            default_capture_scope.end_scope();
+        let shared_capture_manager = MTLCaptureManager::sharedCaptureManager();
+        if let Some(default_capture_scope) = shared_capture_manager.defaultCaptureScope() {
+            default_capture_scope.endScope();
         }
-        shared_capture_manager.stop_capture();
+        shared_capture_manager.stopCapture();
     }
 
     unsafe fn get_acceleration_structure_build_sizes(

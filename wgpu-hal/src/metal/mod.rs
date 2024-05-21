@@ -406,11 +406,11 @@ impl crate::Queue for Queue {
                     Some(&cmd_buf) => cmd_buf.raw.clone(),
                     None => {
                         let queue = self.raw.lock();
-                        queue.command_buffer_with_unretained_references().unwrap()
+                        queue.commandBufferWithUnretainedReferences().unwrap()
                     }
                 };
-                raw.set_label(Some(ns_string!("(wgpu internal) Signal")));
-                raw.add_completed_handler(block.cast_mut());
+                raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
+                raw.addCompletedHandler(block.cast_mut());
 
                 signal_fence.maintain();
                 signal_fence
@@ -440,18 +440,18 @@ impl crate::Queue for Queue {
     ) -> Result<(), crate::SurfaceError> {
         let queue = &self.raw.lock();
         objc2::rc::autoreleasepool(|_| {
-            let command_buffer = queue.command_buffer().unwrap();
-            command_buffer.set_label(Some(ns_string!("(wgpu internal) Present")));
+            let command_buffer = queue.commandBuffer().unwrap();
+            command_buffer.setLabel(Some(ns_string!("(wgpu internal) Present")));
 
             // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
             if !texture.present_with_transaction {
-                command_buffer.present_drawable(&texture.drawable);
+                command_buffer.presentDrawable(&texture.drawable);
             }
 
             command_buffer.commit();
 
             if texture.present_with_transaction {
-                command_buffer.wait_until_scheduled();
+                command_buffer.waitUntilScheduled();
                 texture.drawable.present();
             }
         });

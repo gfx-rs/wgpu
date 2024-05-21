@@ -194,8 +194,8 @@ impl crate::Surface for super::Surface {
         let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 
         match config.composite_alpha_mode {
-            wgt::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
-            wgt::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
+            wgt::CompositeAlphaMode::Opaque => render_layer.setOpaque(true),
+            wgt::CompositeAlphaMode::PostMultiplied => render_layer.setOpaque(false),
             _ => (),
         }
 
@@ -209,28 +209,28 @@ impl crate::Surface for super::Surface {
             if let Some(view) = self.view {
                 let main_layer: *mut AnyObject = msg_send![view.as_ptr(), layer];
                 let bounds: CGRect = msg_send![main_layer, bounds];
-                render_layer.set_frame(bounds);
+                render_layer.setFrame(bounds);
             }
         }
-        render_layer.set_device(Some(&device_raw));
-        render_layer.set_pixel_format(caps.map_format(config.format));
-        render_layer.set_framebuffer_only(framebuffer_only);
-        render_layer.set_presents_with_transaction(self.present_with_transaction);
+        render_layer.setDevice(Some(&device_raw));
+        render_layer.setPixelFormat(caps.map_format(config.format));
+        render_layer.setFramebufferOnly(framebuffer_only);
+        render_layer.setPresentsWithTransaction(self.present_with_transaction);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
         let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
-        if wants_edr != render_layer.wants_extended_dynamic_range_content() {
-            render_layer.set_wants_extended_dynamic_range_content(wants_edr);
+        if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
+            render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
         }
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-        render_layer.set_maximum_drawable_count(config.maximum_frame_latency as usize + 1);
-        render_layer.set_drawable_size(drawable_size);
+        render_layer.setMaximumDrawableCount(config.maximum_frame_latency as usize + 1);
+        render_layer.setDrawableSize(drawable_size);
         if caps.can_set_next_drawable_timeout {
-            render_layer.set_allows_next_drawable_timeout(false);
+            render_layer.setAllowsNextDrawableTimeout(false);
         }
         if caps.can_set_display_sync {
-            render_layer.set_display_sync_enabled(display_sync);
+            render_layer.setDisplaySyncEnabled(display_sync);
         }
 
         Ok(())
@@ -248,7 +248,7 @@ impl crate::Surface for super::Surface {
         let render_layer = self.render_layer.lock();
         let (drawable, texture) = match autoreleasepool(|_| {
             render_layer
-                .next_drawable()
+                .nextDrawable()
                 .map(|drawable| (drawable.to_owned(), drawable.texture().to_owned()))
         }) {
             Some(pair) => pair,
