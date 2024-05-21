@@ -999,7 +999,19 @@ impl crate::Surface for super::Surface {
             .try_lock()
             .expect("Failed to lock a SwapchainSemaphores.");
 
-        // Wait for the previously acquired image used by the semaphore to be available.
+        // Wait for all commands writing to the previously acquired image to
+        // complete.
+        //
+        // Almost all the steps in the usual acquire-draw-present flow are
+        // asynchronous: they get something started on the presentation engine
+        // or the GPU, but on the CPU, control returns immediately. Without some
+        // sort of intervention, the CPU could crank out frames much faster than
+        // the presentation engine can display them.
+        //
+        // This is the intervention: if any submissions drew on this image, and
+        // thus waited for `locked_swapchain_semaphores.acquire`, wait for all
+        // of them to finish, thus ensuring that it's okay to pass `acquire` to
+        // `vkAcquireNextImageKHR` again.
         swapchain.device.wait_for_fence(
             fence,
             locked_swapchain_semaphores.previously_used_submission_index,

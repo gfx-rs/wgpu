@@ -222,6 +222,12 @@ struct SwapchainImageSemaphores {
     present_index: usize,
 
     /// The fence value of the last command submission that wrote to this image.
+    ///
+    /// The next time we try to acquire this image, we'll block until
+    /// this submission finishes, proving that [`acquire`] is ready to
+    /// pass to `vkAcquireNextImageKHR` again.
+    ///
+    /// [`acquire`]: SwapchainImageSemaphores::acquire
     previously_used_submission_index: crate::FenceValue,
 }
 
