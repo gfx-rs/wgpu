@@ -3556,7 +3556,7 @@ impl Buffer {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
         &self,
-        hal_texture_callback: F,
+        hal_buffer_callback: F,
     ) -> R {
         let id = self.id;
 
@@ -3565,9 +3565,9 @@ impl Buffer {
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.buffer_as_hal::<A, F, R>(id.into(), hal_texture_callback) }
+            unsafe { ctx.buffer_as_hal::<A, F, R>(id.into(), hal_buffer_callback) }
         } else {
-            hal_texture_callback(None)
+            hal_buffer_callback(None)
         }
     }
 
