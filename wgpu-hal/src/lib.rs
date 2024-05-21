@@ -459,50 +459,101 @@ pub trait Instance: Sized + WasmNotSendSync {
 pub trait Surface: WasmNotSendSync {
     type A: Api;
 
-    /// Configures the surface to use the given device.
+    /// Configure `self` to use `device`.
     ///
     /// # Safety
     ///
-    /// - All gpu work that uses the surface must have been completed.
+    /// - All GPU work using `self` must have been completed.
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
-    /// - All surfaces created using other devices must have been unconfigured before this call.
+    /// - The surface `self` must not currently be configured to use any other [`Device`].
     unsafe fn configure(
         &self,
         device: &<Self::A as Api>::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
-    /// Unconfigures the surface on the given device.
+    /// Unconfigure `self` on `device`.
     ///
     /// # Safety
     ///
-    /// - All gpu work that uses the surface must have been completed.
+    /// - All GPU work that uses `surface` must have been completed.
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
-    /// - The surface must have been configured on the given device.
+    /// - The surface `self` must have been configured on `device`.
     unsafe fn unconfigure(&self, device: &<Self::A as Api>::Device);
 
-    /// Returns the next texture to be presented by the swapchain for drawing
+    /// Return the next texture to be presented by `self`, for the caller to draw on.
     ///
-    /// A `timeout` of `None` means to wait indefinitely, with no timeout.
+    /// On success, return an [`AcquiredSurfaceTexture`] representing the
+    /// texture into which the caller should draw the image to be displayed on
+    /// `self`.
+    ///
+    /// If `timeout` elapses before `self` has a texture ready to be acquired,
+    /// return `Ok(None)`. If `timeout` is `None`, wait indefinitely, with no
+    /// timeout.
+    ///
+    /// # Using an [`AcquiredSurfaceTexture`]
+    ///
+    /// On success, this function returns an [`AcquiredSurfaceTexture`] whose
+    /// [`texture`] field is a [`SurfaceTexture`] from which the caller can
+    /// [`borrow`] a [`Texture`] to draw on. The [`AcquiredSurfaceTexture`] also
+    /// carries some metadata about that [`SurfaceTexture`].
+    ///
+    /// All calls to [`Queue::submit`] that draw on that [`Texture`] must also
+    /// include the [`SurfaceTexture`] in the `surface_textures` argument.
+    ///
+    /// When you are done drawing on the texture, you can display it on `self`
+    /// by passing the [`SurfaceTexture`] and `self` to [`Queue::present`].
+    ///
+    /// If you do not wish to display the texture, you must pass the
+    /// [`SurfaceTexture`] to [`self.discard_texture`], so that it can be reused
+    /// by future acquisitions.
     ///
     /// # Portability
     ///
-    /// Some backends can't support a timeout when acquiring a texture and
-    /// the timeout will be ignored.
-    ///
-    /// Returns `None` on timing out.
+    /// Some backends can't support a timeout when acquiring a texture. On these
+    /// backends, `timeout` is ignored.
     ///
     /// # Safety
     ///
-    /// - The fence must be the same fence passed to all [`Queue::submit`]s
-    ///   that used textures acquired from this surface.
+    /// - The surface `self` must currently be configured on some [`Device`].
+    ///
+    /// - The `fence` argument must be the same [`Fence`] passed to all calls to
+    ///   [`Queue::submit`] that used [`Texture`]s acquired from this surface.
+    ///
+    /// - You may only have one texture acquired from `self` at a time. When
+    ///   `acquire_texture` returns `Ok(Some(ast))`, you must pass the returned
+    ///   [`SurfaceTexture`] `ast.texture` to either [`Queue::present`] or
+    ///   [`Surface::discard_texture`] before calling `acquire_texture` again.
+    ///
+    /// [`texture`]: AcquiredSurfaceTexture::texture
+    /// [`SurfaceTexture`]: Api::SurfaceTexture
+    /// [`borrow`]: std::borrow::Borrow::borrow
+    /// [`Texture`]: Api::Texture
+    /// [`Fence`]: Api::Fence
+    /// [`self.discard_texture`]: Surface::discard_texture
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
         fence: &<Self::A as Api>::Fence,
     ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
+
+    /// Relinquish an acquired texture without presenting it.
+    ///
+    /// After this call, the texture underlying [`SurfaceTexture`] may be
+    /// returned by subsequent calls to [`self.acquire_texture`].
+    ///
+    /// # Safety
+    ///
+    /// - The surface `self` must currently be configured on some [`Device`].
+    ///
+    /// - `texture` must be a [`SurfaceTexture`] returned by a call to
+    ///   [`self.acquire_texture`] that has not yet been passed to
+    ///   [`Queue::present`].
+    ///
+    /// [`SurfaceTexture`]: Api::SurfaceTexture
+    /// [`self.acquire_texture`]: Surface::acquire_texture
     unsafe fn discard_texture(&self, texture: <Self::A as Api>::SurfaceTexture);
 }
 
@@ -815,6 +866,9 @@ pub trait Queue: WasmNotSendSync {
     /// - Each [`SurfaceTexture`][st] in `surface_textures` must be configured
     ///   for use with the [`Device`][d] associated with this [`Queue`],
     ///   typically by calling [`Surface::configure`].
+    ///
+    /// - All calls to this function that include a given [`SurfaceTexture`][st]
+    ///   in `surface_textures` must use the same [`Fence`].
     ///
     /// [`Fence`]: Api::Fence
     /// [cb]: Api::CommandBuffer
