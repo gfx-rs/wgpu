@@ -945,8 +945,11 @@ impl Global {
         let hub = A::hub(self);
         let buffer_opt = { hub.buffers.try_get(id).ok().flatten() };
         let buffer = buffer_opt.as_ref().unwrap();
-        let snatch_guard = buffer.device.snatchable_lock.read();
-        let hal_buffer = buffer.raw(&snatch_guard);
+
+        let hal_buffer = {
+            let snatch_guard = buffer.device.snatchable_lock.read();
+            buffer.raw(&snatch_guard)
+        };
 
         hal_buffer_callback(hal_buffer)
     }
