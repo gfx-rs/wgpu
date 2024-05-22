@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 /// Make sure that the num_workgroups builtin works properly (it requires a workaround on D3D12).
 #[gpu_test]
@@ -12,8 +12,7 @@ static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new(
             .limits(wgpu::Limits {
                 max_push_constant_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
-            })
-            .expect_fail(FailureCase::backend(wgt::Backends::DX12)),
+            }),
     )
     .run_async(|ctx| async move {
         let num_workgroups = [1, 2, 3];
@@ -34,8 +33,7 @@ static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_compute_workgroups_per_dimension: 10,
                 max_push_constant_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
-            })
-            .expect_fail(FailureCase::backend(wgt::Backends::DX12)),
+            }),
     )
     .run_async(|ctx| async move {
         let max = ctx.device.limits().max_compute_workgroups_per_dimension;
