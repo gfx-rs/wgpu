@@ -1210,11 +1210,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
-        self.prepare_dispatch([0; 3]);
-        //TODO: update special constants indirectly
+        self.update_root_elements();
+        let cmd_signature = &self
+            .pass
+            .layout
+            .special_constants_cmd_signatures
+            .as_ref()
+            .unwrap_or_else(|| &self.shared.cmd_signatures)
+            .dispatch;
         unsafe {
             self.list.as_ref().unwrap().ExecuteIndirect(
-                &self.shared.cmd_signatures.dispatch,
+                cmd_signature,
                 1,
                 &buffer.resource,
                 offset,

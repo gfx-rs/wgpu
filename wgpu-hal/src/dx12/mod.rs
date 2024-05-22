@@ -564,6 +564,7 @@ struct Idler {
     event: Event,
 }
 
+#[derive(Debug, Clone)]
 struct CommandSignatures {
     draw: Direct3D12::ID3D12CommandSignature,
     draw_indexed: Direct3D12::ID3D12CommandSignature,
@@ -636,8 +637,11 @@ enum RootElement {
     Empty,
     Constant,
     SpecialConstantBuffer {
+        /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
         first_vertex: i32,
+        /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
         first_instance: u32,
+        /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
         other: u32,
     },
     /// Descriptor table.
@@ -682,6 +686,7 @@ impl PassState {
                 signature: None,
                 total_root_elements: 0,
                 special_constants_root_index: None,
+                special_constants_cmd_signatures: None,
                 root_constant_info: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
@@ -919,6 +924,7 @@ struct PipelineLayoutShared {
     signature: Option<Direct3D12::ID3D12RootSignature>,
     total_root_elements: RootIndex,
     special_constants_root_index: Option<RootIndex>,
+    special_constants_cmd_signatures: Option<CommandSignatures>,
     root_constant_info: Option<RootConstantInfo>,
 }
 
