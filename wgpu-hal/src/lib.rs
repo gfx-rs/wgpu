@@ -819,19 +819,23 @@ pub trait Queue: WasmNotSendSync {
 
     /// Submit `command_buffers` for execution on GPU.
     ///
-    /// If `signal_fence` is `(fence, value)`, update `fence` to `value`
-    /// when the operation is complete. See [`Fence`] for details.
+    /// Update `fence` to `value` when the operation is complete. See
+    /// [`Fence`] for details.
     ///
-    /// If two calls to `submit` on a single `Queue` occur in a particular order
-    /// (that is, they happen on the same thread, or on two threads that have
-    /// synchronized to establish an ordering), then the first submission's
-    /// commands all complete execution before any of the second submission's
-    /// commands begin. All results produced by one submission are visible to
-    /// the next.
+    /// A `wgpu_hal` queue is "single threaded": all command buffers are
+    /// executed in the order they're submitted, with each buffer able to see
+    /// previous buffers' results. Specifically:
     ///
-    /// Within a submission, command buffers execute in the order in which they
-    /// appear in `command_buffers`. All results produced by one buffer are
-    /// visible to the next.
+    /// - If two calls to `submit` on a single `Queue` occur in a particular
+    ///   order (that is, they happen on the same thread, or on two threads that
+    ///   have synchronized to establish an ordering), then the first
+    ///   submission's commands all complete execution before any of the second
+    ///   submission's commands begin. All results produced by one submission
+    ///   are visible to the next.
+    ///
+    /// - Within a submission, command buffers execute in the order in which they
+    ///   appear in `command_buffers`. All results produced by one buffer are
+    ///   visible to the next.
     ///
     /// If two calls to `submit` on a single `Queue` from different threads are
     /// not synchronized to occur in a particular order, they must pass distinct
