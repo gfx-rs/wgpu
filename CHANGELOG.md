@@ -90,6 +90,15 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 - Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
 
+#### Metal
+- Removed the `link` Cargo feature.
+
+  This was used to allow weakly linking frameworks. This can be achieved with putting something like the following in your `.cargo/config.toml` instead:
+  ```toml
+  [target.'cfg(target_vendor = "apple")']
+  rustflags = ["-C", "link-args=-weak_framework Metal -weak_framework QuartzCore -weak_framework CoreGraphics"]
+  ```
+
 ### Bug Fixes
 
 ### General
