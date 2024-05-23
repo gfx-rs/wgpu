@@ -33,7 +33,7 @@
 //!   it is among its youngest lock's permitted followers. Thus, as a thread
 //!   acquires locks, it must be traversing a path through the graph along its
 //!   edges.
-//!  
+//!
 //! - Because there are no cycles in the graph, whenever one thread is blocked
 //!   waiting to acquire a lock, that lock must be held by a different thread: if
 //!   you were allowed to acquire a lock you already hold, that would be a cycle in
