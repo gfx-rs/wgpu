@@ -161,6 +161,12 @@ pub enum ComputePassErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
+    #[error("Push constant offset must be aligned to 4 bytes")]
+    PushConstantOffsetAlignment,
+    #[error("Push constant size must be aligned to 4 bytes")]
+    PushConstantSizeAlignment,
+    #[error("Ran out of push constant space. Don't set 4gb of push constants per ComputePass.")]
+    PushConstantOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error(transparent)]
@@ -930,19 +936,19 @@ impl Global {
         let scope = PassErrorScope::SetPushConstant;
         let base = pass.base_mut(scope)?;
 
-        assert_eq!(
-            offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
-            0,
-            "Push constant offset must be aligned to 4 bytes."
-        );
-        assert_eq!(
-            data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
-            0,
-            "Push constant size must be aligned to 4 bytes."
-        );
-        let value_offset = base.push_constant_data.len().try_into().expect(
-            "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
-        ); // TODO: make this an error that can be handled
+        if offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+            return Err(ComputePassErrorInner::PushConstantOffsetAlignment).map_pass_err(scope);
+        }
+
+        if data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+            return Err(ComputePassErrorInner::PushConstantSizeAlignment).map_pass_err(scope);
+        }
+        let value_offset = base
+            .push_constant_data
+            .len()
+            .try_into()
+            .map_err(|_| ComputePassErrorInner::PushConstantOutOfMemory)
+            .map_pass_err(scope)?;
 
         base.push_constant_data.extend(
             data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
