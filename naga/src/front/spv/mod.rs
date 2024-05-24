@@ -3963,6 +3963,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::AtomicIIncrement => {
                     inst.expect(6)?;
                     let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
@@ -3980,20 +3981,29 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     self.lookup_atomic.insert(pointer_id, atomic);
 
                     log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+
                     let (p_lexp_handle, p_lexp_ty_id) = {
                         let lexp = self.lookup_expression.lookup(pointer_id)?;
-                        (lexp.handle, lexp.type_id)
+                        let handle = get_expr_handle!(pointer_id, &lexp);
+                        (handle, lexp.type_id)
                     };
-                    log::trace!("\t\t\tlooking up type {:?}", pointer_id);
+                    log::trace!("\t\t\tlooking up type {pointer_id:?}");
                     let p_ty = self.lookup_type.lookup(p_lexp_ty_id)?;
+                    let p_base_ty = if let Some(id) = p_ty.base_id {
+                        log::trace!("\t\t\tlooking up base type {id:?} of {p_ty:?}");
+                        self.lookup_type.lookup(id)?
+                    } else {
+                        log::warn!("\t\t\ttype {p_ty:?} has no base id");
+                        p_ty
+                    };
 
                     // Create an expression for our result
                     let r_lexp_handle = {
                         let expr = crate::Expression::AtomicResult {
-                            ty: p_ty.handle,
+                            ty: p_base_ty.handle,
                             comparison: false,
                         };
-                        let handle = ctx.expressions.append(expr, self.span_from_with_op(start));
+                        let handle = ctx.expressions.append(expr, span);
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
@@ -4007,17 +4017,23 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Create a literal "1" since WGSL lacks an increment operation
                     // Create a statement for the op itself
-                    let one_lexp_handle = {
-                        let expr = crate::Expression::Literal(crate::Literal::I32(1));
-                        ctx.expressions.append(expr, self.span_from_with_op(start))
-                    };
+                    let one_lexp_handle = make_index_literal(
+                        ctx,
+                        1,
+                        &mut block,
+                        &mut emitter,
+                        p_base_ty.handle,
+                        p_lexp_ty_id,
+                        span,
+                    )?;
+
                     let stmt = crate::Statement::Atomic {
                         pointer: p_lexp_handle,
                         fun: crate::AtomicFunction::Add,
                         value: one_lexp_handle,
                         result: r_lexp_handle,
                     };
-                    block.push(stmt, self.span_from_with_op(start));
+                    block.push(stmt, span);
                 }
                 _ => {
                     return Err(Error::UnsupportedInstruction(self.state, inst.op));
