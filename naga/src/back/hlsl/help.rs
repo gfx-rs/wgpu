@@ -1334,7 +1334,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     /// Parenthesizing the expression like `((float4)0).y` would work... except DXC can't handle
     /// cases like:
     ///
-    /// ```ignore
+    /// ```text
     /// tests\out\hlsl\access.hlsl:183:41: error: cannot compile this l-value expression yet
     ///     t_1.am = (__mat4x2[2])((float4x2[2])0);
     ///                                         ^
