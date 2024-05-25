@@ -5,8 +5,8 @@ use crate::{
         compute_command::{ArcComputeCommand, ComputeCommand},
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError, StateChange,
+        BasePass, BindGroupStateChange, CommandBuffer, CommandEncoderError, CommandEncoderStatus,
+        MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures},
     error::{ErrorFormatter, PrettyError},
@@ -35,7 +35,12 @@ use std::sync::Arc;
 use std::{fmt, mem, str};
 
 pub struct ComputePass<A: HalApi> {
-    base: BasePass<ArcComputeCommand<A>>,
+    /// All pass data & records is stored here.
+    ///
+    /// If this is `None`, the pass has been ended and can no longer be used.
+    /// Any attempt to record more commands will result in a validation error.
+    base: Option<BasePass<ArcComputeCommand<A>>>,
+
     parent_id: id::CommandEncoderId,
     timestamp_writes: Option<ComputePassTimestampWrites>,
 
@@ -47,7 +52,7 @@ pub struct ComputePass<A: HalApi> {
 impl<A: HalApi> ComputePass<A> {
     fn new(parent_id: id::CommandEncoderId, desc: &ComputePassDescriptor) -> Self {
         Self {
-            base: BasePass::<ArcComputeCommand<A>>::new(&desc.label),
+            base: Some(BasePass::<ArcComputeCommand<A>>::new(&desc.label)),
             parent_id,
             timestamp_writes: desc.timestamp_writes.cloned(),
 
@@ -56,8 +61,24 @@ impl<A: HalApi> ComputePass<A> {
         }
     }
 
+    #[inline]
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
+    }
+
+    #[inline]
+    pub fn label(&self) -> Option<&str> {
+        self.base.as_ref().and_then(|base| base.label.as_deref())
+    }
+
+    fn base_mut<'a>(
+        &'a mut self,
+        scope: PassErrorScope,
+    ) -> Result<&'a mut BasePass<ArcComputeCommand<A>>, ComputePassError> {
+        self.base
+            .as_mut()
+            .ok_or(ComputePassErrorInner::PassEnded)
+            .map_pass_err(scope)
     }
 }
 
@@ -140,12 +161,20 @@ pub enum ComputePassErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
+    #[error("Push constant offset must be aligned to 4 bytes")]
+    PushConstantOffsetAlignment,
+    #[error("Push constant size must be aligned to 4 bytes")]
+    PushConstantSizeAlignment,
+    #[error("Ran out of push constant space. Don't set 4gb of push constants per ComputePass.")]
+    PushConstantOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("The compute pass has already been ended and no further commands can be recorded")]
+    PassEnded,
 }
 
 impl PrettyError for ComputePassErrorInner {
@@ -279,32 +308,31 @@ impl Global {
         Box::new(ComputePass::<A>::new(parent_id, desc))
     }
 
-    pub fn command_encoder_run_compute_pass<A: HalApi>(
+    pub fn compute_pass_end<A: HalApi>(
         &self,
-        pass: &ComputePass<A>,
+        pass: &mut ComputePass<A>,
     ) -> Result<(), ComputePassError> {
-        self.command_encoder_run_compute_pass_impl(
-            pass.parent_id,
-            pass.base.as_ref(),
-            pass.timestamp_writes.as_ref(),
-        )
+        let base = pass.base.take().ok_or(ComputePassError {
+            scope: PassErrorScope::Pass(pass.parent_id),
+            inner: ComputePassErrorInner::PassEnded,
+        })?;
+        self.compute_pass_end_impl(pass.parent_id, base, pass.timestamp_writes.as_ref())
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_compute_pass_with_unresolved_commands<A: HalApi>(
+    pub fn compute_pass_end_with_unresolved_commands<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePassRef<ComputeCommand>,
+        base: BasePass<ComputeCommand>,
         timestamp_writes: Option<&ComputePassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
-        let resolved_commands =
-            ComputeCommand::resolve_compute_command_ids(A::hub(self), base.commands)?;
+        let commands = ComputeCommand::resolve_compute_command_ids(A::hub(self), &base.commands)?;
 
-        self.command_encoder_run_compute_pass_impl::<A>(
+        self.compute_pass_end_impl::<A>(
             encoder_id,
-            BasePassRef {
+            BasePass {
                 label: base.label,
-                commands: &resolved_commands,
+                commands,
                 dynamic_offsets: base.dynamic_offsets,
                 string_data: base.string_data,
                 push_constant_data: base.push_constant_data,
@@ -313,10 +341,10 @@ impl Global {
         )
     }
 
-    fn command_encoder_run_compute_pass_impl<A: HalApi>(
+    fn compute_pass_end_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePassRef<ArcComputeCommand<A>>,
+        base: BasePass<ArcComputeCommand<A>>,
         timestamp_writes: Option<&ComputePassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
@@ -341,7 +369,7 @@ impl Global {
         if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(crate::device::trace::Command::RunComputePass {
                 base: BasePass {
-                    label: base.label.map(str::to_string),
+                    label: base.label.clone(),
                     commands: base.commands.iter().map(Into::into).collect(),
                     dynamic_offsets: base.dynamic_offsets.to_vec(),
                     string_data: base.string_data.to_vec(),
@@ -429,7 +457,7 @@ impl Global {
             .flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
         let hal_desc = hal::ComputePassDescriptor {
-            label: hal_label(base.label, self.instance.flags),
+            label: hal_label(base.label.as_deref(), self.instance.flags),
             timestamp_writes,
         };
 
@@ -455,9 +483,9 @@ impl Global {
                     let scope = PassErrorScope::SetBindGroup(bind_group.as_info().id());
 
                     let max_bind_groups = cmd_buf.limits.max_bind_groups;
-                    if index >= &max_bind_groups {
+                    if index >= max_bind_groups {
                         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
-                            index: *index,
+                            index,
                             max: max_bind_groups,
                         })
                         .map_pass_err(scope);
@@ -470,9 +498,9 @@ impl Global {
                     );
                     dynamic_offset_count += num_dynamic_offsets;
 
-                    let bind_group = tracker.bind_groups.insert_single(bind_group.clone());
+                    let bind_group = tracker.bind_groups.insert_single(bind_group);
                     bind_group
-                        .validate_dynamic_bindings(*index, &temp_offsets, &cmd_buf.limits)
+                        .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(
@@ -494,7 +522,7 @@ impl Global {
                     let entries =
                         state
                             .binder
-                            .assign_group(*index as usize, bind_group, &temp_offsets);
+                            .assign_group(index as usize, bind_group, &temp_offsets);
                     if !entries.is_empty() && pipeline_layout.is_some() {
                         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
@@ -521,7 +549,7 @@ impl Global {
 
                     state.pipeline = Some(pipeline_id);
 
-                    tracker.compute_pipelines.insert_single(pipeline.clone());
+                    let pipeline = tracker.compute_pipelines.insert_single(pipeline);
 
                     unsafe {
                         raw.set_compute_pipeline(pipeline.raw());
@@ -592,7 +620,7 @@ impl Global {
                     let values_end_offset =
                         (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
                     let data_slice =
-                        &base.push_constant_data[(*values_offset as usize)..values_end_offset];
+                        &base.push_constant_data[(values_offset as usize)..values_end_offset];
 
                     let pipeline_layout = state
                         .binder
@@ -607,7 +635,7 @@ impl Global {
                     pipeline_layout
                         .validate_push_constant_ranges(
                             wgt::ShaderStages::COMPUTE,
-                            *offset,
+                            offset,
                             end_offset_bytes,
                         )
                         .map_pass_err(scope)?;
@@ -616,7 +644,7 @@ impl Global {
                         raw.set_push_constants(
                             pipeline_layout.raw(),
                             wgt::ShaderStages::COMPUTE,
-                            *offset,
+                            offset,
                             data_slice,
                         );
                     }
@@ -640,7 +668,7 @@ impl Global {
                     {
                         return Err(ComputePassErrorInner::Dispatch(
                             DispatchError::InvalidGroupSize {
-                                current: *groups,
+                                current: groups,
                                 limit: groups_size_limit,
                             },
                         ))
@@ -648,7 +676,7 @@ impl Global {
                     }
 
                     unsafe {
-                        raw.dispatch(*groups);
+                        raw.dispatch(groups);
                     }
                 }
                 ArcComputeCommand::DispatchIndirect { buffer, offset } => {
@@ -675,7 +703,7 @@ impl Global {
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
                     if end_offset > buffer.size {
                         return Err(ComputePassErrorInner::IndirectBufferOverrun {
-                            offset: *offset,
+                            offset,
                             end_offset,
                             buffer_size: buffer.size,
                         })
@@ -692,8 +720,8 @@ impl Global {
 
                     buffer_memory_init_actions.extend(
                         buffer.initialization_status.read().create_action(
-                            buffer,
-                            *offset..(*offset + stride),
+                            &buffer,
+                            offset..(offset + stride),
                             MemoryInitKind::NeedsInitializedMemory,
                         ),
                     );
@@ -707,7 +735,7 @@ impl Global {
                         )
                         .map_pass_err(scope)?;
                     unsafe {
-                        raw.dispatch_indirect(buf_raw, *offset);
+                        raw.dispatch_indirect(buf_raw, offset);
                     }
                 }
                 ArcComputeCommand::PushDebugGroup { color: _, len } => {
@@ -756,10 +784,10 @@ impl Global {
                         .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                         .map_pass_err(scope)?;
 
-                    let query_set = tracker.query_sets.insert_single(query_set.clone());
+                    let query_set = tracker.query_sets.insert_single(query_set);
 
                     query_set
-                        .validate_and_write_timestamp(raw, query_set_id, *query_index, None)
+                        .validate_and_write_timestamp(raw, query_set_id, query_index, None)
                         .map_pass_err(scope)?;
                 }
                 ArcComputeCommand::BeginPipelineStatisticsQuery {
@@ -769,13 +797,13 @@ impl Global {
                     let query_set_id = query_set.as_info().id();
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                    let query_set = tracker.query_sets.insert_single(query_set.clone());
+                    let query_set = tracker.query_sets.insert_single(query_set);
 
                     query_set
                         .validate_and_begin_pipeline_statistics_query(
                             raw,
                             query_set_id,
-                            *query_index,
+                            query_index,
                             None,
                             &mut active_query,
                         )
@@ -834,10 +862,17 @@ impl Global {
         bind_group_id: id::BindGroupId,
         offsets: &[DynamicOffset],
     ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::SetBindGroup(bind_group_id);
+        let base = pass
+            .base
+            .as_mut()
+            .ok_or(ComputePassErrorInner::PassEnded)
+            .map_pass_err(scope)?; // Can't use base_mut() utility here because of borrow checker.
+
         let redundant = pass.current_bind_groups.set_and_check_redundant(
             bind_group_id,
             index,
-            &mut pass.base.dynamic_offsets,
+            &mut base.dynamic_offsets,
             offsets,
         );
 
@@ -850,13 +885,11 @@ impl Global {
             .bind_groups
             .read()
             .get(bind_group_id)
-            .map_err(|_| ComputePassError {
-                scope: PassErrorScope::SetBindGroup(bind_group_id),
-                inner: ComputePassErrorInner::InvalidBindGroup(index),
-            })?
+            .map_err(|_| ComputePassErrorInner::InvalidBindGroup(index))
+            .map_pass_err(scope)?
             .clone();
 
-        pass.base.commands.push(ArcComputeCommand::SetBindGroup {
+        base.commands.push(ArcComputeCommand::SetBindGroup {
             index,
             num_dynamic_offsets: offsets.len(),
             bind_group,
@@ -870,7 +903,13 @@ impl Global {
         pass: &mut ComputePass<A>,
         pipeline_id: id::ComputePipelineId,
     ) -> Result<(), ComputePassError> {
-        if pass.current_pipeline.set_and_check_redundant(pipeline_id) {
+        let redundant = pass.current_pipeline.set_and_check_redundant(pipeline_id);
+
+        let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
+        let base = pass.base_mut(scope)?;
+
+        if redundant {
+            // Do redundant early-out **after** checking whether the pass is ended or not.
             return Ok(());
         }
 
@@ -879,15 +918,11 @@ impl Global {
             .compute_pipelines
             .read()
             .get(pipeline_id)
-            .map_err(|_| ComputePassError {
-                scope: PassErrorScope::SetPipelineCompute(pipeline_id),
-                inner: ComputePassErrorInner::InvalidPipeline(pipeline_id),
-            })?
+            .map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
+            .map_pass_err(scope)?
             .clone();
 
-        pass.base
-            .commands
-            .push(ArcComputeCommand::SetPipeline(pipeline));
+        base.commands.push(ArcComputeCommand::SetPipeline(pipeline));
 
         Ok(())
     }
@@ -897,33 +932,36 @@ impl Global {
         pass: &mut ComputePass<A>,
         offset: u32,
         data: &[u8],
-    ) {
-        assert_eq!(
-            offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
-            0,
-            "Push constant offset must be aligned to 4 bytes."
-        );
-        assert_eq!(
-            data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
-            0,
-            "Push constant size must be aligned to 4 bytes."
-        );
-        let value_offset = pass.base.push_constant_data.len().try_into().expect(
-            "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
-        ); // TODO: make this an error that can be handled
+    ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::SetPushConstant;
+        let base = pass.base_mut(scope)?;
 
-        pass.base.push_constant_data.extend(
+        if offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+            return Err(ComputePassErrorInner::PushConstantOffsetAlignment).map_pass_err(scope);
+        }
+
+        if data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+            return Err(ComputePassErrorInner::PushConstantSizeAlignment).map_pass_err(scope);
+        }
+        let value_offset = base
+            .push_constant_data
+            .len()
+            .try_into()
+            .map_err(|_| ComputePassErrorInner::PushConstantOutOfMemory)
+            .map_pass_err(scope)?;
+
+        base.push_constant_data.extend(
             data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
-        pass.base
-            .commands
-            .push(ArcComputeCommand::<A>::SetPushConstant {
-                offset,
-                size_bytes: data.len() as u32,
-                values_offset: value_offset,
-            });
+        base.commands.push(ArcComputeCommand::<A>::SetPushConstant {
+            offset,
+            size_bytes: data.len() as u32,
+            values_offset: value_offset,
+        });
+
+        Ok(())
     }
 
     pub fn compute_pass_dispatch_workgroups<A: HalApi>(
@@ -932,10 +970,18 @@ impl Global {
         groups_x: u32,
         groups_y: u32,
         groups_z: u32,
-    ) {
-        pass.base.commands.push(ArcComputeCommand::<A>::Dispatch([
+    ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::Dispatch {
+            indirect: false,
+            pipeline: pass.current_pipeline.last_state,
+        };
+
+        let base = pass.base_mut(scope)?;
+        base.commands.push(ArcComputeCommand::<A>::Dispatch([
             groups_x, groups_y, groups_z,
         ]));
+
+        Ok(())
     }
 
     pub fn compute_pass_dispatch_workgroups_indirect<A: HalApi>(
@@ -945,21 +991,21 @@ impl Global {
         offset: BufferAddress,
     ) -> Result<(), ComputePassError> {
         let hub = A::hub(self);
+        let scope = PassErrorScope::Dispatch {
+            indirect: true,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
         let buffer = hub
             .buffers
             .read()
             .get(buffer_id)
-            .map_err(|_| ComputePassError {
-                scope: PassErrorScope::Dispatch {
-                    indirect: true,
-                    pipeline: pass.current_pipeline.last_state,
-                },
-                inner: ComputePassErrorInner::InvalidBuffer(buffer_id),
-            })?
+            .map_err(|_| ComputePassErrorInner::InvalidBuffer(buffer_id))
+            .map_pass_err(scope)?
             .clone();
 
-        pass.base
-            .commands
+        base.commands
             .push(ArcComputeCommand::<A>::DispatchIndirect { buffer, offset });
 
         Ok(())
@@ -970,22 +1016,29 @@ impl Global {
         pass: &mut ComputePass<A>,
         label: &str,
         color: u32,
-    ) {
-        let bytes = label.as_bytes();
-        pass.base.string_data.extend_from_slice(bytes);
+    ) -> Result<(), ComputePassError> {
+        let base = pass.base_mut(PassErrorScope::PushDebugGroup)?;
 
-        pass.base
-            .commands
-            .push(ArcComputeCommand::<A>::PushDebugGroup {
-                color,
-                len: bytes.len(),
-            });
+        let bytes = label.as_bytes();
+        base.string_data.extend_from_slice(bytes);
+
+        base.commands.push(ArcComputeCommand::<A>::PushDebugGroup {
+            color,
+            len: bytes.len(),
+        });
+
+        Ok(())
     }
 
-    pub fn compute_pass_pop_debug_group<A: HalApi>(&self, pass: &mut ComputePass<A>) {
-        pass.base
-            .commands
-            .push(ArcComputeCommand::<A>::PopDebugGroup);
+    pub fn compute_pass_pop_debug_group<A: HalApi>(
+        &self,
+        pass: &mut ComputePass<A>,
+    ) -> Result<(), ComputePassError> {
+        let base = pass.base_mut(PassErrorScope::PopDebugGroup)?;
+
+        base.commands.push(ArcComputeCommand::<A>::PopDebugGroup);
+
+        Ok(())
     }
 
     pub fn compute_pass_insert_debug_marker<A: HalApi>(
@@ -993,16 +1046,19 @@ impl Global {
         pass: &mut ComputePass<A>,
         label: &str,
         color: u32,
-    ) {
-        let bytes = label.as_bytes();
-        pass.base.string_data.extend_from_slice(bytes);
+    ) -> Result<(), ComputePassError> {
+        let base = pass.base_mut(PassErrorScope::InsertDebugMarker)?;
 
-        pass.base
-            .commands
+        let bytes = label.as_bytes();
+        base.string_data.extend_from_slice(bytes);
+
+        base.commands
             .push(ArcComputeCommand::<A>::InsertDebugMarker {
                 color,
                 len: bytes.len(),
             });
+
+        Ok(())
     }
 
     pub fn compute_pass_write_timestamp<A: HalApi>(
@@ -1011,18 +1067,19 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::WriteTimestamp;
+        let base = pass.base_mut(scope)?;
+
         let hub = A::hub(self);
         let query_set = hub
             .query_sets
             .read()
             .get(query_set_id)
-            .map_err(|_| ComputePassError {
-                scope: PassErrorScope::WriteTimestamp,
-                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
-            })?
+            .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+            .map_pass_err(scope)?
             .clone();
 
-        pass.base.commands.push(ArcComputeCommand::WriteTimestamp {
+        base.commands.push(ArcComputeCommand::WriteTimestamp {
             query_set,
             query_index,
         });
@@ -1036,19 +1093,19 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+        let base = pass.base_mut(scope)?;
+
         let hub = A::hub(self);
         let query_set = hub
             .query_sets
             .read()
             .get(query_set_id)
-            .map_err(|_| ComputePassError {
-                scope: PassErrorScope::WriteTimestamp,
-                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
-            })?
+            .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+            .map_pass_err(scope)?
             .clone();
 
-        pass.base
-            .commands
+        base.commands
             .push(ArcComputeCommand::BeginPipelineStatisticsQuery {
                 query_set,
                 query_index,
@@ -1057,9 +1114,15 @@ impl Global {
         Ok(())
     }
 
-    pub fn compute_pass_end_pipeline_statistics_query<A: HalApi>(&self, pass: &mut ComputePass<A>) {
-        pass.base
-            .commands
+    pub fn compute_pass_end_pipeline_statistics_query<A: HalApi>(
+        &self,
+        pass: &mut ComputePass<A>,
+    ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::EndPipelineStatisticsQuery;
+        let base = pass.base_mut(scope)?;
+        base.commands
             .push(ArcComputeCommand::<A>::EndPipelineStatisticsQuery);
+
+        Ok(())
     }
 }

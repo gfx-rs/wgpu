@@ -4697,13 +4697,9 @@ impl<'a> RenderPass<'a> {
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent.context.command_encoder_end_render_pass(
-                parent_id,
-                self.parent.data.as_ref(),
-                &mut self.id,
-                self.data.as_mut(),
-            );
+            self.parent
+                .context
+                .render_pass_end(&mut self.id, self.data.as_mut());
         }
     }
 }
@@ -4875,13 +4871,9 @@ impl<'a> ComputePass<'a> {
 impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent.context.command_encoder_end_compute_pass(
-                parent_id,
-                self.parent.data.as_ref(),
-                &mut self.id,
-                self.data.as_mut(),
-            );
+            self.parent
+                .context
+                .compute_pass_end(&mut self.id, self.data.as_mut());
         }
     }
 }

@@ -467,26 +467,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor<'_>,
     ) -> (Self::ComputePassId, Self::ComputePassData);
-    fn command_encoder_end_compute_pass(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        pass: &mut Self::ComputePassId,
-        pass_data: &mut Self::ComputePassData,
-    );
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         desc: &RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData);
-    fn command_encoder_end_render_pass(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-    );
     fn command_encoder_finish(
         &self,
         encoder: Self::CommandEncoderId,
@@ -626,7 +612,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     fn device_start_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
-
     fn pipeline_cache_get_data(
         &self,
         cache: &Self::PipelineCacheId,
@@ -709,6 +694,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
+    );
+    fn compute_pass_end(
+        &self,
+        pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
     );
 
     fn render_bundle_encoder_set_pipeline(
@@ -1042,6 +1032,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         pass_data: &mut Self::RenderPassData,
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     );
+    fn render_pass_end(&self, pass: &mut Self::RenderPassId, pass_data: &mut Self::RenderPassData);
 }
 
 /// Object id.
@@ -1476,26 +1467,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         encoder_data: &crate::Data,
         desc: &ComputePassDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
-    fn command_encoder_end_compute_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    );
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         desc: &RenderPassDescriptor<'_, '_>,
     ) -> (ObjectId, Box<crate::Data>);
-    fn command_encoder_end_render_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    );
     fn command_encoder_finish(
         &self,
         encoder: ObjectId,
@@ -1707,6 +1684,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
     );
+    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
 
     fn render_bundle_encoder_set_pipeline(
         &self,
@@ -2031,6 +2009,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass_data: &mut crate::Data,
         render_bundles: &mut dyn Iterator<Item = (&ObjectId, &crate::Data)>,
     );
+    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
 }
 
 // Blanket impl of DynContext for all types which implement Context.
@@ -2804,26 +2783,6 @@ where
         (compute_pass.into(), Box::new(data) as _)
     }
 
-    fn command_encoder_end_compute_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    ) {
-        let encoder = <T::CommandEncoderId>::from(*encoder);
-        let encoder_data = downcast_ref(encoder_data);
-        let mut pass = <T::ComputePassId>::from(*pass);
-        let pass_data = downcast_mut(pass_data);
-        Context::command_encoder_end_compute_pass(
-            self,
-            &encoder,
-            encoder_data,
-            &mut pass,
-            pass_data,
-        )
-    }
-
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
@@ -2835,20 +2794,6 @@ where
         let (render_pass, data) =
             Context::command_encoder_begin_render_pass(self, &encoder, encoder_data, desc);
         (render_pass.into(), Box::new(data) as _)
-    }
-
-    fn command_encoder_end_render_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    ) {
-        let encoder = <T::CommandEncoderId>::from(*encoder);
-        let encoder_data = downcast_ref(encoder_data);
-        let mut pass = <T::RenderPassId>::from(*pass);
-        let pass_data = downcast_mut(pass_data);
-        Context::command_encoder_end_render_pass(self, &encoder, encoder_data, &mut pass, pass_data)
     }
 
     fn command_encoder_finish(
@@ -3310,6 +3255,12 @@ where
             indirect_buffer_data,
             indirect_offset,
         )
+    }
+
+    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+        let mut pass = <T::ComputePassId>::from(*pass);
+        let pass_data = downcast_mut(pass_data);
+        Context::compute_pass_end(self, &mut pass, pass_data)
     }
 
     fn render_bundle_encoder_set_pipeline(
@@ -4073,6 +4024,12 @@ where
             (<T::RenderBundleId>::from(*id), render_bundle_data)
         });
         Context::render_pass_execute_bundles(self, &mut pass, pass_data, &mut render_bundles)
+    }
+
+    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+        let mut pass = <T::RenderPassId>::from(*pass);
+        let pass_data = downcast_mut(pass_data);
+        Context::render_pass_end(self, &mut pass, pass_data)
     }
 }
 

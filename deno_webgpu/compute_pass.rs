@@ -57,7 +57,7 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups(
     compute_pass_resource
         .0
         .borrow_mut()
-        .dispatch_workgroups(state.borrow(), x, y, z);
+        .dispatch_workgroups(state.borrow(), x, y, z)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -95,7 +95,7 @@ pub fn op_webgpu_compute_pass_end(
         .resource_table
         .take::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource.0.borrow_mut().run(state.borrow())?;
+    compute_pass_resource.0.borrow_mut().end(state.borrow())?;
 
     Ok(WebGpuResult::empty())
 }
@@ -152,7 +152,7 @@ pub fn op_webgpu_compute_pass_push_debug_group(
         state.borrow(),
         group_label,
         0, // wgpu#975
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -170,7 +170,7 @@ pub fn op_webgpu_compute_pass_pop_debug_group(
     compute_pass_resource
         .0
         .borrow_mut()
-        .pop_debug_group(state.borrow());
+        .pop_debug_group(state.borrow())?;
 
     Ok(WebGpuResult::empty())
 }
@@ -190,7 +190,7 @@ pub fn op_webgpu_compute_pass_insert_debug_marker(
         state.borrow(),
         marker_label,
         0, // wgpu#975
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }

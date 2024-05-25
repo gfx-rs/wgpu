@@ -247,8 +247,14 @@ impl RenderPass {
         }
     }
 
+    #[inline]
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
+    }
+
+    #[inline]
+    pub fn label(&self) -> Option<&str> {
+        self.base.label.as_deref()
     }
 
     #[cfg(feature = "trace")]
@@ -1303,13 +1309,9 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 // Common routines between render/compute
 
 impl Global {
-    pub fn command_encoder_run_render_pass<A: HalApi>(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        pass: &RenderPass,
-    ) -> Result<(), RenderPassError> {
-        self.command_encoder_run_render_pass_impl::<A>(
-            encoder_id,
+    pub fn render_pass_end<A: HalApi>(&self, pass: &RenderPass) -> Result<(), RenderPassError> {
+        self.render_pass_end_impl::<A>(
+            pass.parent_id(),
             pass.base.as_ref(),
             &pass.color_targets,
             pass.depth_stencil_target.as_ref(),
@@ -1319,7 +1321,7 @@ impl Global {
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_render_pass_impl<A: HalApi>(
+    pub fn render_pass_end_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<RenderCommand>,
