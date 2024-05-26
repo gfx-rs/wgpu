@@ -934,6 +934,28 @@ impl<A: HalApi> Texture<A> {
 impl Global {
     /// # Safety
     ///
+    /// - The raw buffer handle must not be manually destroyed
+    pub unsafe fn buffer_as_hal<A: HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+        &self,
+        id: BufferId,
+        hal_buffer_callback: F,
+    ) -> R {
+        profiling::scope!("Buffer::as_hal");
+
+        let hub = A::hub(self);
+        let buffer_opt = { hub.buffers.try_get(id).ok().flatten() };
+        let buffer = buffer_opt.as_ref().unwrap();
+
+        let hal_buffer = {
+            let snatch_guard = buffer.device.snatchable_lock.read();
+            buffer.raw(&snatch_guard)
+        };
+
+        hal_buffer_callback(hal_buffer)
+    }
+
+    /// # Safety
+    ///
     /// - The raw texture handle must not be manually destroyed
     pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
