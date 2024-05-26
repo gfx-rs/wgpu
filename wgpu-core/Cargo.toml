@@ -131,7 +131,7 @@ version = "0.20.0"
 package = "wgpu-hal"
 path = "../wgpu-hal"
 version = "0.20.0"
-default_features = false
+default-features = false
 
 [build-dependencies]
 cfg_aliases.workspace = true
