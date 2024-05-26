@@ -1047,7 +1047,7 @@ impl PhysicalDeviceProperties {
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
             max_buffer_size,
-            max_non_sampler_bindings: std::u32::MAX,
+            max_non_sampler_bindings: u32::MAX,
         }
     }
 
@@ -1807,7 +1807,7 @@ impl super::Adapter {
                 if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
                     maintenance_3.max_memory_allocation_size
                 } else {
-                    u64::max_value()
+                    u64::MAX
                 };
             let properties = gpu_alloc::DeviceProperties {
                 max_memory_allocation_count: limits.max_memory_allocation_count,

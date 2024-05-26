@@ -28,7 +28,7 @@ pub use wgt::{math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndire
 /// This function panics if:
 ///
 /// - Input length isn't multiple of 4
-/// - Input is longer than [`usize::max_value`]
+/// - Input is longer than [`usize::MAX`]
 /// - Input is empty
 /// - SPIR-V magic number is missing from beginning of stream
 #[cfg(feature = "spirv")]
