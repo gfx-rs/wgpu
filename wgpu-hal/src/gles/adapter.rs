@@ -797,7 +797,7 @@ impl super::Adapter {
             },
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
-            max_non_sampler_bindings: std::u32::MAX,
+            max_non_sampler_bindings: u32::MAX,
         };
 
         let mut workarounds = super::Workarounds::empty();

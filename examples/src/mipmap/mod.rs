@@ -30,7 +30,7 @@ fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
             iter::once(0xFF - (count * 2) as u8)
                 .chain(iter::once(0xFF - (count * 5) as u8))
                 .chain(iter::once(0xFF - (count * 13) as u8))
-                .chain(iter::once(std::u8::MAX))
+                .chain(iter::once(u8::MAX))
         })
         .collect()
 }

@@ -124,7 +124,7 @@ impl HexTerrainMesh {
         let width = q_given_r(radius);
         let half_width = (width / 2) as isize;
         let mut map = HashMap::new();
-        let mut max = std::f32::NEG_INFINITY;
+        let mut max = f32::NEG_INFINITY;
         for i in -half_width..=half_width {
             let x_o = i as f32;
             for j in -half_width..=half_width {
