@@ -82,11 +82,9 @@ impl crate::Adapter for super::Adapter {
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
         let (read_write_tier1_if, read_write_tier2_if) = match pc.read_write_texture_tier {
-            metal::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
-            metal::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
-            metal::MTLReadWriteTextureTier::Tier2 => {
-                (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
-            }
+            MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
+            MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
+            MTLReadWriteTextureTier::Tier2 => (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE),
         };
         let msaa_count = pc.sample_count_mask;
 
