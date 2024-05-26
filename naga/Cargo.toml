@@ -48,8 +48,8 @@ rustc-hash = "1.1.0"
 indexmap = { version = "2", features = ["std"] }
 log = "0.4"
 spirv = { version = "0.3", optional = true }
-thiserror = "1.0.59"
-serde = { version = "1.0.200", features = ["derive"], optional = true }
+thiserror = "1.0.61"
+serde = { version = "1.0.202", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
