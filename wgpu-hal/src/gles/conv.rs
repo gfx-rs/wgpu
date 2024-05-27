@@ -212,6 +212,7 @@ pub(super) fn describe_vertex_format(vertex_format: wgt::VertexFormat) -> super:
         Vf::Uint32x4 => (4, glow::UNSIGNED_INT, Vak::Integer),
         Vf::Sint32x4 => (4, glow::INT, Vak::Integer),
         Vf::Float32x4 => (4, glow::FLOAT, Vak::Float),
+        Vf::Unorm10_10_10_2 => (4, glow::UNSIGNED_INT_10_10_10_2, Vak::Float),
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     };
 

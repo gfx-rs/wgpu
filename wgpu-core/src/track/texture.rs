@@ -24,6 +24,7 @@ use super::{
 };
 use crate::{
     hal_api::HalApi,
+    lock::{rank, Mutex},
     resource::{Resource, Texture, TextureInner},
     snatch::SnatchGuard,
     track::{
@@ -36,7 +37,6 @@ use hal::TextureUses;
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
 
-use parking_lot::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
@@ -164,7 +164,7 @@ pub(crate) struct TextureBindGroupState<A: HalApi> {
 impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            textures: Mutex::new(Vec::new()),
+            textures: Mutex::new(rank::TEXTURE_BIND_GROUP_STATE_TEXTURES, Vec::new()),
         }
     }
 
@@ -210,6 +210,7 @@ pub(crate) struct TextureStateSet {
     simple: Vec<TextureUses>,
     complex: FastHashMap<usize, ComplexTextureState>,
 }
+
 impl TextureStateSet {
     fn new() -> Self {
         Self {
@@ -235,15 +236,16 @@ pub(crate) struct TextureUsageScope<A: HalApi> {
     metadata: ResourceMetadata<Texture<A>>,
 }
 
-impl<A: HalApi> TextureUsageScope<A> {
-    pub fn new() -> Self {
+impl<A: HalApi> Default for TextureUsageScope<A> {
+    fn default() -> Self {
         Self {
             set: TextureStateSet::new(),
-
             metadata: ResourceMetadata::new(),
         }
     }
+}
 
+impl<A: HalApi> TextureUsageScope<A> {
     fn tracker_assert_in_bounds(&self, index: usize) {
         self.metadata.tracker_assert_in_bounds(index);
 
@@ -256,6 +258,11 @@ impl<A: HalApi> TextureUsageScope<A> {
         } else {
             true
         });
+    }
+
+    pub fn clear(&mut self) {
+        self.set.clear();
+        self.metadata.clear();
     }
 
     /// Sets the size of all the vectors inside the tracker.

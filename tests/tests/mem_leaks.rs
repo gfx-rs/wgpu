@@ -95,15 +95,17 @@ async fn draw_test_with_reports(
             layout: Some(&ppl),
             vertex: wgpu::VertexState {
                 buffers: &[],
-                entry_point: "vs_main_builtin",
                 module: &shader,
+                entry_point: "vs_main_builtin",
+                compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
-                entry_point: "fs_main",
                 module: &shader,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
@@ -111,6 +113,7 @@ async fn draw_test_with_reports(
                 })],
             }),
             multiview: None,
+            cache: None,
         });
 
     let global_report = ctx.instance.generate_report().unwrap();

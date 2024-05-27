@@ -12,6 +12,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Resource, Texture, TextureClearMode},
+    snatch::SnatchGuard,
     track::{TextureSelector, TextureTracker},
 };
 
@@ -103,6 +104,11 @@ impl Global {
             let dst_buffer = buffer_guard
                 .get(dst)
                 .map_err(|_| ClearError::InvalidBuffer(dst))?;
+
+            if dst_buffer.device.as_info().id() != cmd_buf.device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             cmd_buf_data
                 .trackers
                 .buffers
@@ -199,6 +205,10 @@ impl Global {
             .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
+        if dst_texture.device.as_info().id() != cmd_buf.device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         // Check if subresource aspects are valid.
         let clear_aspects =
             hal::FormatAspects::new(dst_texture.desc.format, subresource_range.aspect);
@@ -239,6 +249,7 @@ impl Global {
         }
         let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
+        let snatch_guard = device.snatchable_lock.read();
         clear_texture(
             &dst_texture,
             TextureInitRange {
@@ -249,6 +260,7 @@ impl Global {
             &mut tracker.textures,
             &device.alignments,
             device.zero_buffer.as_ref().unwrap(),
+            &snatch_guard,
         )
     }
 }
@@ -260,10 +272,10 @@ pub(crate) fn clear_texture<A: HalApi>(
     texture_tracker: &mut TextureTracker<A>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
-    let snatch_guard = dst_texture.device.snatchable_lock.read();
     let dst_raw = dst_texture
-        .raw(&snatch_guard)
+        .raw(snatch_guard)
         .ok_or_else(|| ClearError::InvalidTexture(dst_texture.as_info().id()))?;
 
     // Issue the right barrier.

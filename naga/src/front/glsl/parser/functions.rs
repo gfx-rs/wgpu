@@ -67,7 +67,7 @@ impl<'source> ParsingContext<'source> {
 
         let new_break = || {
             let mut block = Block::new();
-            block.push(Statement::Break, crate::Span::default());
+            block.push(Statement::Break, Span::default());
             block
         };
 
@@ -192,10 +192,13 @@ impl<'source> ParsingContext<'source> {
                         TokenValue::Case => {
                             self.bump(frontend)?;
 
-                            let (const_expr, meta) =
-                                self.parse_constant_expression(frontend, ctx.module)?;
+                            let (const_expr, meta) = self.parse_constant_expression(
+                                frontend,
+                                ctx.module,
+                                ctx.global_expression_kind_tracker,
+                            )?;
 
-                            match ctx.module.const_expressions[const_expr] {
+                            match ctx.module.global_expressions[const_expr] {
                                 Expression::Literal(Literal::I32(value)) => match uint {
                                     // This unchecked cast isn't good, but since
                                     // we only reach this code when the selector
@@ -352,7 +355,7 @@ impl<'source> ParsingContext<'source> {
                             accept: new_break(),
                             reject: Block::new(),
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     );
 
                     meta.subsume(expr_meta);
@@ -407,7 +410,7 @@ impl<'source> ParsingContext<'source> {
                             accept: new_break(),
                             reject: Block::new(),
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     );
 
                     if let Some(idx) = terminator {
@@ -495,7 +498,7 @@ impl<'source> ParsingContext<'source> {
                                 accept: new_break(),
                                 reject: Block::new(),
                             },
-                            crate::Span::default(),
+                            Span::default(),
                         );
 
                         self.expect(frontend, TokenValue::Semicolon)?;

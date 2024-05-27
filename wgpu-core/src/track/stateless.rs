@@ -6,9 +6,14 @@
 
 use std::sync::Arc;
 
-use parking_lot::Mutex;
-
-use crate::{id::Id, resource::Resource, resource_log, storage::Storage, track::ResourceMetadata};
+use crate::{
+    id::Id,
+    lock::{rank, Mutex},
+    resource::Resource,
+    resource_log,
+    storage::Storage,
+    track::ResourceMetadata,
+};
 
 use super::{ResourceTracker, TrackerIndex};
 
@@ -24,7 +29,7 @@ pub(crate) struct StatelessBindGroupSate<T: Resource> {
 impl<T: Resource> StatelessBindGroupSate<T> {
     pub fn new() -> Self {
         Self {
-            resources: Mutex::new(Vec::new()),
+            resources: Mutex::new(rank::STATELESS_BIND_GROUP_STATE_RESOURCES, Vec::new()),
         }
     }
 
@@ -153,16 +158,17 @@ impl<T: Resource> StatelessTracker<T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, resource: Arc<T>) {
+    ///
+    /// Returns a reference to the newly inserted resource.
+    /// (This allows avoiding a clone/reference count increase in many cases.)
+    pub fn insert_single(&mut self, resource: Arc<T>) -> &Arc<T> {
         let index = resource.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
 
         self.tracker_assert_in_bounds(index);
 
-        unsafe {
-            self.metadata.insert(index, resource);
-        }
+        unsafe { self.metadata.insert(index, resource) }
     }
 
     /// Adds the given resource to the tracker.

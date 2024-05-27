@@ -103,6 +103,8 @@ async fn partial_update_test(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &sm,
             entry_point: "main",
+            compilation_options: Default::default(),
+            cache: None,
         });
 
     let mut encoder = ctx

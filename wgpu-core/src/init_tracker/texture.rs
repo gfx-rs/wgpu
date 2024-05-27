@@ -61,10 +61,10 @@ impl TextureInitTracker {
         &self,
         action: &TextureInitTrackerAction<A>,
     ) -> Option<TextureInitTrackerAction<A>> {
-        let mut mip_range_start = std::usize::MAX;
-        let mut mip_range_end = std::usize::MIN;
-        let mut layer_range_start = std::u32::MAX;
-        let mut layer_range_end = std::u32::MIN;
+        let mut mip_range_start = usize::MAX;
+        let mut mip_range_end = usize::MIN;
+        let mut layer_range_start = u32::MAX;
+        let mut layer_range_end = u32::MIN;
 
         for (i, mip_tracker) in self
             .mips

@@ -1,0 +1,9 @@
+(
+    spv: (
+        version: (1, 0),
+		separate_entry_points: true,
+	),
+    pipeline_constants: {
+        "o": 2.0
+    }
+)

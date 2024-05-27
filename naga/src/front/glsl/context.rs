@@ -77,12 +77,19 @@ pub struct Context<'a> {
     pub body: Block,
     pub module: &'a mut crate::Module,
     pub is_const: bool,
-    /// Tracks the constness of `Expression`s residing in `self.expressions`
-    pub expression_constness: crate::proc::ExpressionConstnessTracker,
+    /// Tracks the expression kind of `Expression`s residing in `self.expressions`
+    pub local_expression_kind_tracker: crate::proc::ExpressionKindTracker,
+    /// Tracks the expression kind of `Expression`s residing in `self.module.global_expressions`
+    pub global_expression_kind_tracker: &'a mut crate::proc::ExpressionKindTracker,
 }
 
 impl<'a> Context<'a> {
-    pub fn new(frontend: &Frontend, module: &'a mut crate::Module, is_const: bool) -> Result<Self> {
+    pub fn new(
+        frontend: &Frontend,
+        module: &'a mut crate::Module,
+        is_const: bool,
+        global_expression_kind_tracker: &'a mut crate::proc::ExpressionKindTracker,
+    ) -> Result<Self> {
         let mut this = Context {
             expressions: Arena::new(),
             locals: Arena::new(),
@@ -101,7 +108,8 @@ impl<'a> Context<'a> {
             body: Block::new(),
             module,
             is_const: false,
-            expression_constness: crate::proc::ExpressionConstnessTracker::new(),
+            local_expression_kind_tracker: crate::proc::ExpressionKindTracker::new(),
+            global_expression_kind_tracker,
         };
 
         this.emit_start();
@@ -249,40 +257,24 @@ impl<'a> Context<'a> {
 
     pub fn add_expression(&mut self, expr: Expression, meta: Span) -> Result<Handle<Expression>> {
         let mut eval = if self.is_const {
-            crate::proc::ConstantEvaluator::for_glsl_module(self.module)
+            crate::proc::ConstantEvaluator::for_glsl_module(
+                self.module,
+                self.global_expression_kind_tracker,
+            )
         } else {
             crate::proc::ConstantEvaluator::for_glsl_function(
                 self.module,
                 &mut self.expressions,
-                &mut self.expression_constness,
+                &mut self.local_expression_kind_tracker,
                 &mut self.emitter,
                 &mut self.body,
             )
         };
 
-        let res = eval.try_eval_and_append(&expr, meta).map_err(|e| Error {
+        eval.try_eval_and_append(expr, meta).map_err(|e| Error {
             kind: e.into(),
             meta,
-        });
-
-        match res {
-            Ok(expr) => Ok(expr),
-            Err(e) => {
-                if self.is_const {
-                    Err(e)
-                } else {
-                    let needs_pre_emit = expr.needs_pre_emit();
-                    if needs_pre_emit {
-                        self.body.extend(self.emitter.finish(&self.expressions));
-                    }
-                    let h = self.expressions.append(expr, meta);
-                    if needs_pre_emit {
-                        self.emitter.start(&self.expressions);
-                    }
-                    Ok(h)
-                }
-            }
-        }
+        })
     }
 
     /// Add variable to current scope
@@ -1479,7 +1471,7 @@ impl Index<Handle<Expression>> for Context<'_> {
 
     fn index(&self, index: Handle<Expression>) -> &Self::Output {
         if self.is_const {
-            &self.module.const_expressions[index]
+            &self.module.global_expressions[index]
         } else {
             &self.expressions[index]
         }

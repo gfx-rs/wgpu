@@ -1,0 +1,77 @@
+; SPIR-V
+; Version: 1.4
+; Generator: rspirv
+; Bound: 46
+OpCapability Shader
+OpCapability RayQueryKHR
+OpExtension "SPV_KHR_ray_query"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %13 "main" %10
+OpExecutionMode %13 LocalSize 1 1 1
+OpMemberDecorate %8 0 Offset 0
+OpMemberDecorate %8 1 Offset 4
+OpMemberDecorate %8 2 Offset 8
+OpMemberDecorate %8 3 Offset 12
+OpMemberDecorate %8 4 Offset 16
+OpMemberDecorate %8 5 Offset 32
+OpDecorate %10 DescriptorSet 0
+OpDecorate %10 Binding 0
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%4 = OpTypeAccelerationStructureNV
+%5 = OpTypeRayQueryKHR
+%6 = OpTypeInt 32 0
+%7 = OpTypeVector %3 3
+%8 = OpTypeStruct %6 %6 %3 %3 %7 %7
+%9 = OpConstant  %3  2.0
+%11 = OpTypePointer UniformConstant %4
+%10 = OpVariable  %11  UniformConstant
+%14 = OpTypeFunction %2
+%16 = OpConstant  %6  4
+%17 = OpConstant  %6  255
+%18 = OpConstant  %3  34.0
+%19 = OpConstant  %3  38.0
+%20 = OpConstant  %3  46.0
+%21 = OpConstantComposite  %7  %20 %20 %20
+%22 = OpConstant  %3  58.0
+%23 = OpConstant  %3  62.0
+%24 = OpConstant  %3  74.0
+%25 = OpConstantComposite  %7  %22 %23 %24
+%26 = OpConstantComposite  %8  %16 %17 %18 %19 %21 %25
+%28 = OpTypePointer Function %5
+%41 = OpTypeBool
+%13 = OpFunction  %2  None %14
+%12 = OpLabel
+%27 = OpVariable  %28  Function
+%15 = OpLoad  %4  %10
+OpBranch %29
+%29 = OpLabel
+%30 = OpCompositeExtract  %6  %26 0
+%31 = OpCompositeExtract  %6  %26 1
+%32 = OpCompositeExtract  %3  %26 2
+%33 = OpCompositeExtract  %3  %26 3
+%34 = OpCompositeExtract  %7  %26 4
+%35 = OpCompositeExtract  %7  %26 5
+OpRayQueryInitializeKHR %27 %15 %30 %31 %34 %32 %35 %33
+OpBranch %36
+%36 = OpLabel
+OpLoopMerge %37 %39 None
+OpBranch %38
+%38 = OpLabel
+%40 = OpRayQueryProceedKHR  %41  %27
+OpSelectionMerge %42 None
+OpBranchConditional %40 %42 %43
+%43 = OpLabel
+OpBranch %37
+%42 = OpLabel
+OpBranch %44
+%44 = OpLabel
+OpBranch %45
+%45 = OpLabel
+OpBranch %39
+%39 = OpLabel
+OpBranch %36
+%37 = OpLabel
+OpReturn
+OpFunctionEnd

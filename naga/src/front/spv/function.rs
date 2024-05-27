@@ -8,12 +8,6 @@ use crate::proc::Emitter;
 
 pub type BlockId = u32;
 
-#[derive(Copy, Clone, Debug)]
-pub struct MergeInstruction {
-    pub merge_block_id: BlockId,
-    pub continue_block_id: Option<BlockId>,
-}
-
 impl<I: Iterator<Item = u32>> super::Frontend<I> {
     // Registers a function call. It will generate a dummy handle to call, which
     // gets resolved after all the functions are processed.
@@ -59,8 +53,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     })
                 },
                 local_variables: Arena::new(),
-                expressions: self
-                    .make_expression_storage(&module.global_variables, &module.constants),
+                expressions: self.make_expression_storage(
+                    &module.global_variables,
+                    &module.constants,
+                    &module.overrides,
+                ),
                 named_expressions: crate::NamedExpressions::default(),
                 body: crate::Block::new(),
             }
@@ -128,7 +125,8 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             expressions: &mut fun.expressions,
             local_arena: &mut fun.local_variables,
             const_arena: &mut module.constants,
-            const_expressions: &mut module.const_expressions,
+            overrides: &mut module.overrides,
+            global_expressions: &mut module.global_expressions,
             type_arena: &module.types,
             global_arena: &module.global_variables,
             arguments: &fun.arguments,
@@ -581,7 +579,8 @@ impl<'function> BlockContext<'function> {
         crate::proc::GlobalCtx {
             types: self.type_arena,
             constants: self.const_arena,
-            const_expressions: self.const_expressions,
+            overrides: self.overrides,
+            global_expressions: self.global_expressions,
         }
     }
 

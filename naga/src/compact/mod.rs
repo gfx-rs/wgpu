@@ -38,7 +38,7 @@ pub fn compact(module: &mut crate::Module) {
             log::trace!("tracing global {:?}", global.name);
             module_tracer.types_used.insert(global.ty);
             if let Some(init) = global.init {
-                module_tracer.const_expressions_used.insert(init);
+                module_tracer.global_expressions_used.insert(init);
             }
         }
     }
@@ -50,7 +50,15 @@ pub fn compact(module: &mut crate::Module) {
     for (handle, constant) in module.constants.iter() {
         if constant.name.is_some() {
             module_tracer.constants_used.insert(handle);
-            module_tracer.const_expressions_used.insert(constant.init);
+            module_tracer.global_expressions_used.insert(constant.init);
+        }
+    }
+
+    // We treat all overrides as used by definition.
+    for (_, override_) in module.overrides.iter() {
+        module_tracer.types_used.insert(override_.ty);
+        if let Some(init) = override_.init {
+            module_tracer.global_expressions_used.insert(init);
         }
     }
 
@@ -137,9 +145,9 @@ pub fn compact(module: &mut crate::Module) {
 
     // Drop unused constant expressions, reusing existing storage.
     log::trace!("adjusting constant expressions");
-    module.const_expressions.retain_mut(|handle, expr| {
-        if module_map.const_expressions.used(handle) {
-            module_map.adjust_expression(expr, &module_map.const_expressions);
+    module.global_expressions.retain_mut(|handle, expr| {
+        if module_map.global_expressions.used(handle) {
+            module_map.adjust_expression(expr, &module_map.global_expressions);
             true
         } else {
             false
@@ -151,12 +159,21 @@ pub fn compact(module: &mut crate::Module) {
     module.constants.retain_mut(|handle, constant| {
         if module_map.constants.used(handle) {
             module_map.types.adjust(&mut constant.ty);
-            module_map.const_expressions.adjust(&mut constant.init);
+            module_map.global_expressions.adjust(&mut constant.init);
             true
         } else {
             false
         }
     });
+
+    // Adjust override types and initializers.
+    log::trace!("adjusting overrides");
+    for (_, override_) in module.overrides.iter_mut() {
+        module_map.types.adjust(&mut override_.ty);
+        if let Some(init) = override_.init.as_mut() {
+            module_map.global_expressions.adjust(init);
+        }
+    }
 
     // Adjust global variables' types and initializers.
     log::trace!("adjusting global variables");
@@ -164,7 +181,7 @@ pub fn compact(module: &mut crate::Module) {
         log::trace!("adjusting global {:?}", global.name);
         module_map.types.adjust(&mut global.ty);
         if let Some(ref mut init) = global.init {
-            module_map.const_expressions.adjust(init);
+            module_map.global_expressions.adjust(init);
         }
     }
 
@@ -193,7 +210,7 @@ struct ModuleTracer<'module> {
     module: &'module crate::Module,
     types_used: HandleSet<crate::Type>,
     constants_used: HandleSet<crate::Constant>,
-    const_expressions_used: HandleSet<crate::Expression>,
+    global_expressions_used: HandleSet<crate::Expression>,
 }
 
 impl<'module> ModuleTracer<'module> {
@@ -202,7 +219,7 @@ impl<'module> ModuleTracer<'module> {
             module,
             types_used: HandleSet::for_arena(&module.types),
             constants_used: HandleSet::for_arena(&module.constants),
-            const_expressions_used: HandleSet::for_arena(&module.const_expressions),
+            global_expressions_used: HandleSet::for_arena(&module.global_expressions),
         }
     }
 
@@ -233,12 +250,13 @@ impl<'module> ModuleTracer<'module> {
 
     fn as_const_expression(&mut self) -> expressions::ExpressionTracer {
         expressions::ExpressionTracer {
-            expressions: &self.module.const_expressions,
+            expressions: &self.module.global_expressions,
             constants: &self.module.constants,
+            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
-            expressions_used: &mut self.const_expressions_used,
-            const_expressions_used: None,
+            expressions_used: &mut self.global_expressions_used,
+            global_expressions_used: None,
         }
     }
 
@@ -249,9 +267,10 @@ impl<'module> ModuleTracer<'module> {
         FunctionTracer {
             function,
             constants: &self.module.constants,
+            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
-            const_expressions_used: &mut self.const_expressions_used,
+            global_expressions_used: &mut self.global_expressions_used,
             expressions_used: HandleSet::for_arena(&function.expressions),
         }
     }
@@ -260,7 +279,7 @@ impl<'module> ModuleTracer<'module> {
 struct ModuleMap {
     types: HandleMap<crate::Type>,
     constants: HandleMap<crate::Constant>,
-    const_expressions: HandleMap<crate::Expression>,
+    global_expressions: HandleMap<crate::Expression>,
 }
 
 impl From<ModuleTracer<'_>> for ModuleMap {
@@ -268,7 +287,7 @@ impl From<ModuleTracer<'_>> for ModuleMap {
         ModuleMap {
             types: HandleMap::from_set(used.types_used),
             constants: HandleMap::from_set(used.constants_used),
-            const_expressions: HandleMap::from_set(used.const_expressions_used),
+            global_expressions: HandleMap::from_set(used.global_expressions_used),
         }
     }
 }

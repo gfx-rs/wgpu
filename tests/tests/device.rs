@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
@@ -296,220 +298,317 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // the device is not valid.
 
         // Creating a command encoder should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            },
+            None,
+        );
 
         // Creating a buffer should fail.
-        fail(&ctx.device, || {
-            ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: 256,
-                usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: 256,
+                    usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+                    mapped_at_creation: false,
+                });
+            },
+            None,
+        );
 
         // Creating a texture should fail.
-        fail(&ctx.device, || {
-            ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: 512,
-                    height: 512,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 2,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rg8Uint,
-                usage: wgpu::TextureUsages::COPY_SRC,
-                view_formats: &[],
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    size: wgpu::Extent3d {
+                        width: 512,
+                        height: 512,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 2,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rg8Uint,
+                    usage: wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
+                });
+            },
+            None,
+        );
 
         // Texture clear should fail.
-        fail(&ctx.device, || {
-            encoder_for_clear.clear_texture(
-                &texture_for_write,
-                &wgpu::ImageSubresourceRange {
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: 0,
-                    mip_level_count: None,
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                },
-            );
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_clear.clear_texture(
+                    &texture_for_write,
+                    &wgpu::ImageSubresourceRange {
+                        aspect: wgpu::TextureAspect::All,
+                        base_mip_level: 0,
+                        mip_level_count: None,
+                        base_array_layer: 0,
+                        array_layer_count: None,
+                    },
+                );
+            },
+            None,
+        );
 
         // Creating a compute pass should fail.
-        fail(&ctx.device, || {
-            encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: None,
+                    timestamp_writes: None,
+                });
+            },
+            None,
+        );
 
         // Creating a render pass should fail.
-        fail(&ctx.device, || {
-            encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations::default(),
-                    resolve_target: None,
-                    view: &target_view,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        ops: wgpu::Operations::default(),
+                        resolve_target: None,
+                        view: &target_view,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            },
+            None,
+        );
 
         // Copying a buffer to a buffer should fail.
-        fail(&ctx.device, || {
-            encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
-                &buffer_source,
-                0,
-                &buffer_dest,
-                0,
-                256,
-            );
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
+                    &buffer_source,
+                    0,
+                    &buffer_dest,
+                    0,
+                    256,
+                );
+            },
+            None,
+        );
 
         // Copying a buffer to a texture should fail.
-        fail(&ctx.device, || {
-            encoder_for_buffer_texture_copy.copy_buffer_to_texture(
-                wgpu::ImageCopyBuffer {
-                    buffer: &buffer_source,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4),
-                        rows_per_image: None,
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_buffer_texture_copy.copy_buffer_to_texture(
+                    wgpu::ImageCopyBuffer {
+                        buffer: &buffer_source,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: None,
+                        },
                     },
-                },
-                texture_for_write.as_image_copy(),
-                texture_extent,
-            );
-        });
+                    texture_for_write.as_image_copy(),
+                    texture_extent,
+                );
+            },
+            None,
+        );
 
         // Copying a texture to a buffer should fail.
-        fail(&ctx.device, || {
-            encoder_for_texture_buffer_copy.copy_texture_to_buffer(
-                texture_for_read.as_image_copy(),
-                wgpu::ImageCopyBuffer {
-                    buffer: &buffer_source,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4),
-                        rows_per_image: None,
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_texture_buffer_copy.copy_texture_to_buffer(
+                    texture_for_read.as_image_copy(),
+                    wgpu::ImageCopyBuffer {
+                        buffer: &buffer_source,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: None,
+                        },
                     },
-                },
-                texture_extent,
-            );
-        });
+                    texture_extent,
+                );
+            },
+            None,
+        );
 
         // Copying a texture to a texture should fail.
-        fail(&ctx.device, || {
-            encoder_for_texture_texture_copy.copy_texture_to_texture(
-                texture_for_read.as_image_copy(),
-                texture_for_write.as_image_copy(),
-                texture_extent,
-            );
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_texture_texture_copy.copy_texture_to_texture(
+                    texture_for_read.as_image_copy(),
+                    texture_for_write.as_image_copy(),
+                    texture_extent,
+                );
+            },
+            None,
+        );
 
         // Creating a bind group layout should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[],
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[],
+                    });
+            },
+            None,
+        );
 
         // Creating a bind group should fail.
-        fail(&ctx.device, || {
-            ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: None,
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(
-                        buffer_source.as_entire_buffer_binding(),
-                    ),
-                }],
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: None,
+                    layout: &bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(
+                            buffer_source.as_entire_buffer_binding(),
+                        ),
+                    }],
+                });
+            },
+            None,
+        );
 
         // Creating a pipeline layout should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts: &[],
-                    push_constant_ranges: &[],
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: None,
+                        bind_group_layouts: &[],
+                        push_constant_ranges: &[],
+                    });
+            },
+            None,
+        );
 
         // Creating a shader module should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: None,
-                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
+                    });
+            },
+            None,
+        );
 
         // Creating a shader module spirv should fail.
-        fail(&ctx.device, || unsafe {
-            ctx.device
-                .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
-                    label: None,
-                    source: std::borrow::Cow::Borrowed(&[]),
-                });
-        });
+        fail(
+            &ctx.device,
+            || unsafe {
+                ctx.device
+                    .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
+                        label: None,
+                        source: std::borrow::Cow::Borrowed(&[]),
+                    });
+            },
+            None,
+        );
 
         // Creating a render pipeline should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: None,
-                    layout: None,
-                    vertex: wgpu::VertexState {
-                        module: &shader_module,
-                        entry_point: "",
-                        buffers: &[],
-                    },
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: None,
-                    multiview: None,
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        vertex: wgpu::VertexState {
+                            module: &shader_module,
+                            entry_point: "",
+                            compilation_options: Default::default(),
+                            buffers: &[],
+                        },
+                        primitive: wgpu::PrimitiveState::default(),
+                        depth_stencil: None,
+                        multisample: wgpu::MultisampleState::default(),
+                        fragment: None,
+                        multiview: None,
+                        cache: None,
+                    });
+            },
+            None,
+        );
 
         // Creating a compute pipeline should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: None,
-                    layout: None,
-                    module: &shader_module,
-                    entry_point: "",
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        module: &shader_module,
+                        entry_point: "",
+                        compilation_options: Default::default(),
+                        cache: None,
+                    });
+            },
+            None,
+        );
+
+        // Creating a compute pipeline should fail.
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        module: &shader_module,
+                        entry_point: "",
+                        compilation_options: Default::default(),
+                        cache: None,
+                    });
+            },
+            None,
+        );
 
         // Buffer map should fail.
-        fail(&ctx.device, || {
-            buffer_for_map
-                .slice(..)
-                .map_async(wgpu::MapMode::Write, |_| ());
-        });
+        fail(
+            &ctx.device,
+            || {
+                buffer_for_map
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Write, |_| ());
+            },
+            None,
+        );
 
         // Buffer unmap should fail.
-        fail(&ctx.device, || {
-            buffer_for_unmap.unmap();
-        });
+        fail(
+            &ctx.device,
+            || {
+                buffer_for_unmap.unmap();
+            },
+            None,
+        );
     });
 
 #[gpu_test]
@@ -518,12 +617,11 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
     .run_async(|ctx| async move {
         // This test checks that when device.destroy is called, the provided
         // DeviceLostClosure is called with reason DeviceLostReason::Destroyed.
-        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
 
         // Set a LoseDeviceCallback on the device.
-        let was_called_clone = was_called.clone();
-        let callback = Box::new(move |reason, _m| {
-            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+        let callback = Box::new(|reason, _m| {
+            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(
                 matches!(reason, wgt::DeviceLostReason::Destroyed),
                 "Device lost info reason should match DeviceLostReason::Destroyed."
@@ -542,7 +640,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
             .is_queue_empty());
 
         assert!(
-            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
             "Device lost callback should have been called."
         );
     });
@@ -554,20 +652,13 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         // This test checks that when the device is dropped (such as in a GC),
         // the provided DeviceLostClosure is called with reason DeviceLostReason::Unknown.
         // Fails on webgl because webgl doesn't implement drop.
-        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+        static WAS_CALLED: std::sync::atomic::AtomicBool = AtomicBool::new(false);
 
         // Set a LoseDeviceCallback on the device.
-        let was_called_clone = was_called.clone();
-        let callback = Box::new(move |reason, message| {
-            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert!(
-                matches!(reason, wgt::DeviceLostReason::Dropped),
-                "Device lost info reason should match DeviceLostReason::Dropped."
-            );
-            assert!(
-                message == "Device dropped.",
-                "Device lost info message should be \"Device dropped.\"."
-            );
+        let callback = Box::new(|reason, message| {
+            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(reason, wgt::DeviceLostReason::Dropped);
+            assert_eq!(message, "Device dropped.");
         });
         ctx.device.set_device_lost_callback(callback);
 
@@ -575,7 +666,34 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         drop(ctx.device);
 
         assert!(
-            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });
+
+#[gpu_test]
+static DEVICE_INVALID_THEN_SET_LOST_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|ctx| {
+        // This test checks that when the device is invalid, a subsequent call
+        // to set the device lost callback will immediately call the callback.
+        // Invalidating the device is done via a testing-only method. Fails on
+        // webgl because webgl doesn't implement make_invalid.
+
+        // Make the device invalid.
+        ctx.device.make_invalid();
+
+        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
+
+        // Set a LoseDeviceCallback on the device.
+        let callback = Box::new(|reason, _m| {
+            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(reason, wgt::DeviceLostReason::DeviceInvalid);
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        assert!(
+            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
             "Device lost callback should have been called."
         );
     });
@@ -586,16 +704,12 @@ static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguratio
     .run_sync(|ctx| {
         // This test checks that a device_lost_callback is called when it is
         // replaced by another callback.
-        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
 
         // Set a LoseDeviceCallback on the device.
-        let was_called_clone = was_called.clone();
-        let callback = Box::new(move |reason, _m| {
-            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert!(
-                matches!(reason, wgt::DeviceLostReason::ReplacedCallback),
-                "Device lost info reason should match DeviceLostReason::ReplacedCallback."
-            );
+        let callback = Box::new(|reason, _m| {
+            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(reason, wgt::DeviceLostReason::ReplacedCallback);
         });
         ctx.device.set_device_lost_callback(callback);
 
@@ -604,7 +718,7 @@ static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguratio
         ctx.device.set_device_lost_callback(replacement_callback);
 
         assert!(
-            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
             "Device lost callback should have been called."
         );
     });
@@ -619,21 +733,13 @@ static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfigurat
         // wgpu without providing a more orderly shutdown. In such a case, the
         // device lost callback should be invoked with the message "Device is
         // dying."
-        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
 
         // Set a LoseDeviceCallback on the device.
-        let was_called_clone = was_called.clone();
-        let callback = Box::new(move |reason, message| {
-            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert!(
-                matches!(reason, wgt::DeviceLostReason::Dropped),
-                "Device lost info reason should match DeviceLostReason::Dropped."
-            );
-            assert!(
-                message == "Device is dying.",
-                "Device lost info message is \"{}\" and it should be \"Device is dying.\".",
-                message
-            );
+        let callback = Box::new(|reason, message| {
+            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(reason, wgt::DeviceLostReason::Dropped);
+            assert_eq!(message, "Device is dying.");
         });
         ctx.device.set_device_lost_callback(callback);
 
@@ -641,7 +747,172 @@ static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfigurat
 
         // Confirm that the callback was invoked.
         assert!(
-            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
             "Device lost callback should have been called."
         );
+    });
+
+#[gpu_test]
+static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        // This test addresses a bug found in multiple backends where `wgpu_core` and `wgpu_hal`
+        // backends made different assumptions about the element order of vectors of bind group
+        // layout entries and bind group resource bindings.
+        //
+        // Said bug was exposed originally by:
+        //
+        // 1. Shader-declared bindings having a different order than resource bindings provided to
+        //    `Device::create_bind_group`.
+        // 2. Having more of one type of resource in the bind group than another.
+        //
+        // …such that internals would accidentally attempt to use an out-of-bounds index (of one
+        // resource type) in the wrong list of a different resource type. Let's reproduce that
+        // here.
+
+        let trivial_shaders_with_some_reversed_bindings = concat!(
+            "@group(0) @binding(3) var myTexture2: texture_2d<f32>;\n",
+            "@group(0) @binding(2) var myTexture1: texture_2d<f32>;\n",
+            "@group(0) @binding(1) var mySampler: sampler;\n",
+            "\n",
+            "@fragment\n",
+            "fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4f {\n",
+            "  return textureSample(myTexture1, mySampler, pos.xy) \n",
+            "    + textureSample(myTexture2, mySampler, pos.xy);\n",
+            "}\n",
+            "\n",
+            "@vertex\n",
+            "fn vs_main() -> @builtin(position) vec4<f32> {\n",
+            "  return vec4<f32>(0.0, 0.0, 0.0, 1.0);\n",
+            "}\n",
+        );
+
+        let trivial_shaders_with_some_reversed_bindings =
+            ctx.device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: None,
+                    source: wgpu::ShaderSource::Wgsl(
+                        trivial_shaders_with_some_reversed_bindings.into(),
+                    ),
+                });
+
+        let my_texture = ctx.device.create_texture(&wgt::TextureDescriptor {
+            label: None,
+            size: wgt::Extent3d {
+                width: 1024,
+                height: 512,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgt::TextureDimension::D2,
+            format: wgt::TextureFormat::Rgba8Unorm,
+            usage: wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let my_texture_view = my_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: None,
+            format: None,
+            dimension: None,
+            aspect: wgt::TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
+
+        let my_sampler = ctx
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor::default());
+
+        let render_pipeline = ctx
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                fragment: Some(wgpu::FragmentState {
+                    module: &trivial_shaders_with_some_reversed_bindings,
+                    entry_point: "fs_main",
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgt::ColorTargetState {
+                        format: wgt::TextureFormat::Bgra8Unorm,
+                        blend: None,
+                        write_mask: wgt::ColorWrites::ALL,
+                    })],
+                }),
+                layout: None,
+
+                // Other fields below aren't interesting for this text.
+                label: None,
+                vertex: wgpu::VertexState {
+                    module: &trivial_shaders_with_some_reversed_bindings,
+                    entry_point: "vs_main",
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: wgt::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgt::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            });
+
+        // fail(&ctx.device, || {
+        // }, "");
+        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &render_pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&my_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&my_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&my_texture_view),
+                },
+            ],
+        });
+    });
+
+#[gpu_test]
+static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        // When a device is destroyed, its resources should be released,
+        // without causing a deadlock.
+
+        // Create a buffer to be left around until the device is destroyed.
+        let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 256,
+            usage: wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        // Create a texture to be left around until the device is destroyed.
+        let texture_extent = wgpu::Extent3d {
+            width: 512,
+            height: 512,
+            depth_or_array_layers: 1,
+        };
+        let _texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: texture_extent,
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Uint,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+
+        // Destroy the device.
+        ctx.device.destroy();
+
+        // Poll the device, which should try to clean up its resources.
+        ctx.instance.poll_all(true);
     });

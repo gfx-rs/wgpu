@@ -73,7 +73,7 @@ index format changes.
 
 [Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
 [Grbef]: crate::global::Global::render_bundle_encoder_finish
-[wrpeb]: crate::command::render_ffi::wgpu_render_pass_execute_bundles
+[wrpeb]: crate::command::render::render_commands::wgpu_render_pass_execute_bundles
 !*/
 
 #![allow(clippy::reversed_empty_ranges)]
@@ -99,6 +99,7 @@ use crate::{
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{Buffer, Resource, ResourceInfo, ResourceType},
     resource_log,
+    snatch::SnatchGuard,
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers,
@@ -112,7 +113,7 @@ use hal::CommandEncoder as _;
 
 use super::ArcRenderCommand;
 
-/// https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw
+/// <https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw>
 fn validate_draw<A: HalApi>(
     vertex: &[Option<VertexState<A>>],
     step: &[VertexStep],
@@ -165,7 +166,7 @@ fn validate_indexed_draw<A: HalApi>(
 ) -> Result<(), DrawError> {
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = index_state.limit();
-    if last_index <= index_limit {
+    if last_index > index_limit {
         return Err(DrawError::IndexBeyondLimit {
             last_index,
             index_limit,
@@ -887,14 +888,18 @@ unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 impl<A: HalApi> RenderBundle<A> {
     /// Actually encode the contents into a native command buffer.
     ///
-    /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
+    /// This is partially duplicating the logic of `render_pass_end`.
     /// However the point of this function is to be lighter, since we already had
     /// a chance to go through the commands in `render_bundle_encoder_finish`.
     ///
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(super) unsafe fn execute(&self, raw: &mut A::CommandEncoder) -> Result<(), ExecutionError> {
+    pub(super) unsafe fn execute(
+        &self,
+        raw: &mut A::CommandEncoder,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout = None::<Arc<PipelineLayout<A>>>;
         if !self.discard_hal_labels {
@@ -902,8 +907,6 @@ impl<A: HalApi> RenderBundle<A> {
                 unsafe { raw.begin_debug_marker(label) };
             }
         }
-
-        let snatch_guard = self.device.snatchable_lock.read();
 
         use ArcRenderCommand as Cmd;
         for command in self.base.commands.iter() {
@@ -914,7 +917,7 @@ impl<A: HalApi> RenderBundle<A> {
                     bind_group,
                 } => {
                     let raw_bg = bind_group
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::InvalidBindGroup(bind_group.info.id()))?;
                     unsafe {
                         raw.set_bind_group(
@@ -938,7 +941,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffer: &A::Buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     let bb = hal::BufferBinding {
                         buffer,
@@ -954,7 +957,7 @@ impl<A: HalApi> RenderBundle<A> {
                     size,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     let bb = hal::BufferBinding {
                         buffer,
@@ -1041,7 +1044,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: false,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     unsafe { raw.draw_indirect(buffer, *offset, 1) };
                 }
@@ -1052,7 +1055,7 @@ impl<A: HalApi> RenderBundle<A> {
                     indexed: true,
                 } => {
                     let buffer = buffer
-                        .raw(&snatch_guard)
+                        .raw(snatch_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
                     unsafe { raw.draw_indexed_indirect(buffer, *offset, 1) };
                 }
@@ -1090,7 +1093,7 @@ impl<A: HalApi> RenderBundle<A> {
 impl<A: HalApi> Resource for RenderBundle<A> {
     const TYPE: ResourceType = "RenderBundle";
 
-    type Marker = crate::id::markers::RenderBundle;
+    type Marker = id::markers::RenderBundle;
 
     fn as_info(&self) -> &ResourceInfo<Self> {
         &self.info
@@ -1545,15 +1548,14 @@ pub mod bundle_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = unsafe {
-            bundle.current_bind_groups.set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut bundle.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            )
-        };
+        let offsets = unsafe { slice::from_raw_parts(offsets, offset_length) };
+
+        let redundant = bundle.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut bundle.base.dynamic_offsets,
+            offsets,
+        );
 
         if redundant {
             return;

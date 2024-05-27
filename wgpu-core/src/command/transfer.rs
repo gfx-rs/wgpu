@@ -14,6 +14,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{Resource, Texture, TextureErrorDimension},
+    snatch::SnatchGuard,
     track::{TextureSelector, Tracker},
 };
 
@@ -124,8 +125,6 @@ pub enum TransferError {
         "Copying to textures with format {0:?} is forbidden when copying from external texture"
     )]
     ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
-    #[error("The entire texture must be copied when copying from depth texture")]
-    InvalidDepthTextureExtent,
     #[error(
         "Source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible (they may only differ in srgb-ness)"
     )]
@@ -366,10 +365,6 @@ pub(crate) fn validate_texture_copy_range(
     // physical size can be larger than the virtual
     let extent = extent_virtual.physical_size(desc.format);
 
-    if desc.format.is_depth_stencil_format() && *copy_size != extent {
-        return Err(TransferError::InvalidDepthTextureExtent);
-    }
-
     /// Return `Ok` if a run `size` texels long starting at `start_offset` falls
     /// entirely within `texture_size`. Otherwise, return an appropriate a`Err`.
     fn check_dimension(
@@ -452,6 +447,7 @@ fn handle_texture_init<A: HalApi>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Arc<Texture<A>>,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
     let init_action = TextureInitTrackerAction {
         texture: texture.clone(),
@@ -480,6 +476,7 @@ fn handle_texture_init<A: HalApi>(
                 &mut trackers.textures,
                 &device.alignments,
                 device.zero_buffer.as_ref().unwrap(),
+                snatch_guard,
             )?;
         }
     }
@@ -499,6 +496,7 @@ fn handle_src_texture_init<A: HalApi>(
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Arc<Texture<A>>,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     handle_texture_init(
         MemoryInitKind::NeedsInitializedMemory,
@@ -509,6 +507,7 @@ fn handle_src_texture_init<A: HalApi>(
         source,
         copy_size,
         texture,
+        snatch_guard,
     )?;
     Ok(())
 }
@@ -525,6 +524,7 @@ fn handle_dst_texture_init<A: HalApi>(
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Arc<Texture<A>>,
+    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     // Attention: If we don't write full texture subresources, we need to a full
     // clear first since we don't track subrects. This means that in rare cases
@@ -549,6 +549,7 @@ fn handle_dst_texture_init<A: HalApi>(
         destination,
         copy_size,
         texture,
+        snatch_guard,
     )?;
     Ok(())
 }
@@ -600,6 +601,11 @@ impl Global {
             let src_buffer = buffer_guard
                 .get(source)
                 .map_err(|_| TransferError::InvalidBuffer(source))?;
+
+            if src_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             cmd_buf_data
                 .trackers
                 .buffers
@@ -621,6 +627,11 @@ impl Global {
             let dst_buffer = buffer_guard
                 .get(destination)
                 .map_err(|_| TransferError::InvalidBuffer(destination))?;
+
+            if dst_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             cmd_buf_data
                 .trackers
                 .buffers
@@ -649,13 +660,13 @@ impl Global {
             .downlevel
             .flags
             .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
-            && (src_buffer.usage.contains(wgt::BufferUsages::INDEX)
-                || dst_buffer.usage.contains(wgt::BufferUsages::INDEX))
+            && (src_buffer.usage.contains(BufferUsages::INDEX)
+                || dst_buffer.usage.contains(BufferUsages::INDEX))
         {
-            let forbidden_usages = wgt::BufferUsages::VERTEX
-                | wgt::BufferUsages::UNIFORM
-                | wgt::BufferUsages::INDIRECT
-                | wgt::BufferUsages::STORAGE;
+            let forbidden_usages = BufferUsages::VERTEX
+                | BufferUsages::UNIFORM
+                | BufferUsages::INDIRECT
+                | BufferUsages::STORAGE;
             if src_buffer.usage.intersects(forbidden_usages)
                 || dst_buffer.usage.intersects(forbidden_usages)
             {
@@ -770,6 +781,10 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
+        if dst_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
             destination,
             &dst_texture.desc,
@@ -778,6 +793,8 @@ impl Global {
         )?;
 
         let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, &dst_texture)?;
+
+        let snatch_guard = device.snatchable_lock.read();
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
@@ -790,15 +807,19 @@ impl Global {
             destination,
             copy_size,
             &dst_texture,
+            &snatch_guard,
         )?;
-
-        let snatch_guard = device.snatchable_lock.read();
 
         let (src_buffer, src_pending) = {
             let buffer_guard = hub.buffers.read();
             let src_buffer = buffer_guard
                 .get(source.buffer)
                 .map_err(|_| TransferError::InvalidBuffer(source.buffer))?;
+
+            if src_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             tracker
                 .buffers
                 .set_single(src_buffer, hal::BufferUses::COPY_SRC)
@@ -930,10 +951,16 @@ impl Global {
             .get(source.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
+        if src_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
 
         let (src_range, src_base) = extract_texture_selector(source, copy_size, &src_texture)?;
+
+        let snatch_guard = device.snatchable_lock.read();
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
@@ -946,9 +973,8 @@ impl Global {
             source,
             copy_size,
             &src_texture,
+            &snatch_guard,
         )?;
-
-        let snatch_guard = device.snatchable_lock.read();
 
         let src_pending = tracker
             .textures
@@ -980,6 +1006,11 @@ impl Global {
             let dst_buffer = buffer_guard
                 .get(destination.buffer)
                 .map_err(|_| TransferError::InvalidBuffer(destination.buffer))?;
+
+            if dst_buffer.device.as_info().id() != device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             tracker
                 .buffers
                 .set_single(dst_buffer, hal::BufferUses::COPY_DST)
@@ -1108,6 +1139,13 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
+        if src_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+        if dst_texture.device.as_info().id() != device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         // src and dst texture format must be copy-compatible
         // https://gpuweb.github.io/gpuweb/#copy-compatible
         if src_texture.desc.format.remove_srgb_suffix()
@@ -1152,6 +1190,7 @@ impl Global {
             source,
             copy_size,
             &src_texture,
+            &snatch_guard,
         )?;
         handle_dst_texture_init(
             encoder,
@@ -1161,6 +1200,7 @@ impl Global {
             destination,
             copy_size,
             &dst_texture,
+            &snatch_guard,
         )?;
 
         let src_pending = cmd_buf_data

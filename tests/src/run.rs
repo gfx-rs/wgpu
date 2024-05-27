@@ -116,7 +116,10 @@ pub async fn execute_test(
 
     // The call to matches_failure will log.
     if expectations_match_failures(&test_info.failures, failures) == ExpectationMatchResult::Panic {
-        panic!();
+        panic!(
+            "{}: test {:?} did not behave as expected",
+            config.location, config.name
+        );
     }
     // Print the name of the test.
     log::info!("TEST FINISHED: {}", config.name);

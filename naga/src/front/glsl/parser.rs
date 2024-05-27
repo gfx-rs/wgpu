@@ -164,9 +164,15 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse(&mut self, frontend: &mut Frontend) -> Result<Module> {
         let mut module = Module::default();
+        let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
         // Body and expression arena for global initialization
-        let mut ctx = Context::new(frontend, &mut module, false)?;
+        let mut ctx = Context::new(
+            frontend,
+            &mut module,
+            false,
+            &mut global_expression_kind_tracker,
+        )?;
 
         while self.peek(frontend).is_some() {
             self.parse_external_declaration(frontend, &mut ctx)?;
@@ -196,7 +202,11 @@ impl<'source> ParsingContext<'source> {
         frontend: &mut Frontend,
         ctx: &mut Context,
     ) -> Result<(u32, Span)> {
-        let (const_expr, meta) = self.parse_constant_expression(frontend, ctx.module)?;
+        let (const_expr, meta) = self.parse_constant_expression(
+            frontend,
+            ctx.module,
+            ctx.global_expression_kind_tracker,
+        )?;
 
         let res = ctx.module.to_ctx().eval_expr_to_u32(const_expr);
 
@@ -219,8 +229,9 @@ impl<'source> ParsingContext<'source> {
         &mut self,
         frontend: &mut Frontend,
         module: &mut Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
     ) -> Result<(Handle<Expression>, Span)> {
-        let mut ctx = Context::new(frontend, module, true)?;
+        let mut ctx = Context::new(frontend, module, true, global_expression_kind_tracker)?;
 
         let mut stmt_ctx = ctx.stmt_ctx();
         let expr = self.parse_conditional(frontend, &mut ctx, &mut stmt_ctx, None)?;

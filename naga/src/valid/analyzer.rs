@@ -145,10 +145,35 @@ pub struct SamplingKey {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+/// Information about an expression in a function body.
 pub struct ExpressionInfo {
+    /// Whether this expression is uniform, and why.
+    ///
+    /// If this expression's value is not uniform, this is the handle
+    /// of the expression from which this one's non-uniformity
+    /// originates. Otherwise, this is `None`.
     pub uniformity: Uniformity,
+
+    /// The number of statements and other expressions using this
+    /// expression's value.
     pub ref_count: usize,
+
+    /// The global variable into which this expression produces a pointer.
+    ///
+    /// This is `None` unless this expression is either a
+    /// [`GlobalVariable`], or an [`Access`] or [`AccessIndex`] that
+    /// ultimately refers to some part of a global.
+    ///
+    /// [`Load`] expressions applied to pointer-typed arguments could
+    /// refer to globals, but we leave this as `None` for them.
+    ///
+    /// [`GlobalVariable`]: crate::Expression::GlobalVariable
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    /// [`Load`]: crate::Expression::Load
     assignable_global: Option<Handle<crate::GlobalVariable>>,
+
+    /// The type of this expression.
     pub ty: TypeResolution,
 }
 
@@ -201,7 +226,7 @@ struct Sampling {
     sampler: GlobalOrArgument,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {
@@ -311,14 +336,20 @@ pub enum UniformityDisruptor {
 }
 
 impl FunctionInfo {
-    /// Adds a value-type reference to an expression.
+    /// Record a use of `expr` of the sort given by `global_use`.
+    ///
+    /// Bump `expr`'s reference count, and return its uniformity.
+    ///
+    /// If `expr` is a pointer to a global variable, or some part of
+    /// a global variable, add `global_use` to that global's set of
+    /// uses.
     #[must_use]
     fn add_ref_impl(
         &mut self,
-        handle: Handle<crate::Expression>,
+        expr: Handle<crate::Expression>,
         global_use: GlobalUse,
     ) -> NonUniformResult {
-        let info = &mut self.expressions[handle.index()];
+        let info = &mut self.expressions[expr.index()];
         info.ref_count += 1;
         // mark the used global as read
         if let Some(global) = info.assignable_global {
@@ -327,22 +358,42 @@ impl FunctionInfo {
         info.uniformity.non_uniform_result
     }
 
-    /// Adds a value-type reference to an expression.
+    /// Record a use of `expr` for its value.
+    ///
+    /// This is used for almost all expression references. Anything
+    /// that writes to the value `expr` points to, or otherwise wants
+    /// contribute flags other than `GlobalUse::READ`, should use
+    /// `add_ref_impl` directly.
     #[must_use]
-    fn add_ref(&mut self, handle: Handle<crate::Expression>) -> NonUniformResult {
-        self.add_ref_impl(handle, GlobalUse::READ)
+    fn add_ref(&mut self, expr: Handle<crate::Expression>) -> NonUniformResult {
+        self.add_ref_impl(expr, GlobalUse::READ)
     }
 
-    /// Adds a potentially assignable reference to an expression.
-    /// These are destinations for `Store` and `ImageStore` statements,
-    /// which can transit through `Access` and `AccessIndex`.
+    /// Record a use of `expr`, and indicate which global variable it
+    /// refers to, if any.
+    ///
+    /// Bump `expr`'s reference count, and return its uniformity.
+    ///
+    /// If `expr` is a pointer to a global variable, or some part
+    /// thereof, store that global in `*assignable_global`. Leave the
+    /// global's uses unchanged.
+    ///
+    /// This is used to determine the [`assignable_global`] for
+    /// [`Access`] and [`AccessIndex`] expressions that ultimately
+    /// refer to a global variable. Those expressions don't contribute
+    /// any usage to the global themselves; that depends on how other
+    /// expressions use them.
+    ///
+    /// [`assignable_global`]: ExpressionInfo::assignable_global
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
     #[must_use]
     fn add_assignable_ref(
         &mut self,
-        handle: Handle<crate::Expression>,
+        expr: Handle<crate::Expression>,
         assignable_global: &mut Option<Handle<crate::GlobalVariable>>,
     ) -> NonUniformResult {
-        let info = &mut self.expressions[handle.index()];
+        let info = &mut self.expressions[expr.index()];
         info.ref_count += 1;
         // propagate the assignable global up the chain, till it either hits
         // a value-type expression, or the assignment statement.
@@ -527,7 +578,7 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(vector),
                 requirements: UniformityRequirements::empty(),
             },
-            E::Literal(_) | E::Constant(_) | E::ZeroValue(_) => Uniformity::new(),
+            E::Literal(_) | E::Constant(_) | E::Override(_) | E::ZeroValue(_) => Uniformity::new(),
             E::Compose { ref components, .. } => {
                 let non_uniform_result = components
                     .iter()
@@ -740,6 +791,14 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
+            E::SubgroupBallotResult => Uniformity {
+                non_uniform_result: Some(handle),
+                requirements: UniformityRequirements::empty(),
+            },
+            E::SubgroupOperationResult { .. } => Uniformity {
+                non_uniform_result: Some(handle),
+                requirements: UniformityRequirements::empty(),
+            },
         };
 
         let ty = resolve_context.resolve(expression, |h| Ok(&self[h].ty))?;
@@ -780,7 +839,7 @@ impl FunctionInfo {
                         let req = self.expressions[expr.index()].uniformity.requirements;
                         if self
                             .flags
-                            .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
+                            .contains(ValidationFlags::CONTROL_FLOW_UNIFORMITY)
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
@@ -982,6 +1041,42 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::SubgroupBallot {
+                    result: _,
+                    predicate,
+                } => {
+                    if let Some(predicate) = predicate {
+                        let _ = self.add_ref(predicate);
+                    }
+                    FunctionUniformity::new()
+                }
+                S::SubgroupCollectiveOperation {
+                    op: _,
+                    collective_op: _,
+                    argument,
+                    result: _,
+                } => {
+                    let _ = self.add_ref(argument);
+                    FunctionUniformity::new()
+                }
+                S::SubgroupGather {
+                    mode,
+                    argument,
+                    result: _,
+                } => {
+                    let _ = self.add_ref(argument);
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            let _ = self.add_ref(index);
+                        }
+                    }
+                    FunctionUniformity::new()
+                }
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());
@@ -1000,7 +1095,7 @@ impl ModuleInfo {
         gctx: crate::proc::GlobalCtx,
     ) -> Result<(), super::ConstExpressionError> {
         self.const_expression_types[handle.index()] =
-            resolve_context.resolve(&gctx.const_expressions[handle], |h| Ok(&self[h]))?;
+            resolve_context.resolve(&gctx.global_expressions[handle], |h| Ok(&self[h]))?;
         Ok(())
     }
 
@@ -1139,6 +1234,7 @@ fn uniform_control_flow() {
     };
     let resolve_context = ResolveContext {
         constants: &Arena::new(),
+        overrides: &Arena::new(),
         types: &type_arena,
         special_types: &crate::SpecialTypes::default(),
         global_vars: &global_var_arena,

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
 use crate::{
     id::Id,
     identity::IdentityManager,
+    lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard},
     resource::Resource,
     storage::{Element, InvalidId, Storage},
 };
@@ -37,7 +37,8 @@ impl RegistryReport {
 /// any other dependent resource
 ///
 #[derive(Debug)]
-pub struct Registry<T: Resource> {
+pub(crate) struct Registry<T: Resource> {
+    // Must only contain an id which has either never been used or has been released from `storage`
     identity: Arc<IdentityManager<T::Marker>>,
     storage: RwLock<Storage<T>>,
     backend: Backend,
@@ -47,7 +48,7 @@ impl<T: Resource> Registry<T> {
     pub(crate) fn new(backend: Backend) -> Self {
         Self {
             identity: Arc::new(IdentityManager::new()),
-            storage: RwLock::new(Storage::new()),
+            storage: RwLock::new(rank::REGISTRY_STORAGE, Storage::new()),
             backend,
         }
     }
@@ -78,21 +79,26 @@ impl<T: Resource> FutureId<'_, T> {
         Arc::new(value)
     }
 
+    pub fn init_in_place(&self, mut value: Arc<T>) -> Arc<T> {
+        Arc::get_mut(&mut value)
+            .unwrap()
+            .as_info_mut()
+            .set_id(self.id);
+        value
+    }
+
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry, and fills out the resource info.
-    pub fn assign(self, value: T) -> (Id<T::Marker>, Arc<T>) {
+    pub fn assign(self, value: Arc<T>) -> (Id<T::Marker>, Arc<T>) {
         let mut data = self.data.write();
-        data.insert(self.id, self.init(value));
+        data.insert(self.id, self.init_in_place(value));
         (self.id, data.get(self.id).unwrap().clone())
     }
 
     /// Assign an existing resource to a new ID.
     ///
     /// Registers it with the registry.
-    ///
-    /// This _will_ leak the ID, and it will not be recycled again.
-    /// See https://github.com/gfx-rs/wgpu/issues/4912.
     pub fn assign_existing(self, value: &Arc<T>) -> Id<T::Marker> {
         let mut data = self.data.write();
         debug_assert!(!data.contains(self.id));
@@ -138,28 +144,35 @@ impl<T: Resource> Registry<T> {
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub fn unregister_locked(&self, id: Id<T::Marker>, storage: &mut Storage<T>) -> Option<Arc<T>> {
+    pub(crate) fn unregister_locked(
+        &self,
+        id: Id<T::Marker>,
+        storage: &mut Storage<T>,
+    ) -> Option<Arc<T>> {
         self.identity.free(id);
         storage.remove(id)
     }
-    pub fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
+    pub(crate) fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
         let mut storage = self.storage.write();
         value.as_info_mut().set_id(id);
         storage.force_replace(id, value)
     }
-    pub fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
+    pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
         let mut storage = self.storage.write();
         storage.remove(id);
         storage.insert_error(id, label);
     }
     pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
-        self.identity.free(id);
         let value = self.storage.write().remove(id);
+        // This needs to happen *after* removing it from the storage, to maintain the
+        // invariant that `self.identity` only contains ids which are actually available
+        // See https://github.com/gfx-rs/wgpu/issues/5372
+        self.identity.free(id);
         //Returning None is legal if it's an error ID
         value
     }
 
-    pub fn label_for_resource(&self, id: Id<T::Marker>) -> String {
+    pub(crate) fn label_for_resource(&self, id: Id<T::Marker>) -> String {
         let guard = self.storage.read();
 
         let type_name = guard.kind();
@@ -169,7 +182,7 @@ impl<T: Resource> Registry<T> {
                 if label.is_empty() {
                     format!("<{}-{:?}>", type_name, id.unzip())
                 } else {
-                    label
+                    label.to_owned()
                 }
             }
             Err(_) => format!(
@@ -195,5 +208,55 @@ impl<T: Resource> Registry<T> {
             }
         }
         report
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::{
+        id::Marker,
+        resource::{Resource, ResourceInfo, ResourceType},
+    };
+
+    use super::Registry;
+    struct TestData {
+        info: ResourceInfo<TestData>,
+    }
+    struct TestDataId;
+    impl Marker for TestDataId {}
+
+    impl Resource for TestData {
+        type Marker = TestDataId;
+
+        const TYPE: ResourceType = "Test data";
+
+        fn as_info(&self) -> &ResourceInfo<Self> {
+            &self.info
+        }
+
+        fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
+            &mut self.info
+        }
+    }
+
+    #[test]
+    fn simultaneous_registration() {
+        let registry = Registry::without_backend();
+        std::thread::scope(|s| {
+            for _ in 0..5 {
+                s.spawn(|| {
+                    for _ in 0..1000 {
+                        let value = Arc::new(TestData {
+                            info: ResourceInfo::new("Test data", None),
+                        });
+                        let new_id = registry.prepare(None);
+                        let (id, _) = new_id.assign(value);
+                        registry.unregister(id);
+                    }
+                });
+            }
+        })
     }
 }

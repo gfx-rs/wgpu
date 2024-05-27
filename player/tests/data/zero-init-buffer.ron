@@ -134,6 +134,8 @@
                 stage: (
                     module: Id(0, 1, Empty),
                     entry_point: None,
+                    constants: {},
+                    zero_initialize_workgroup_memory: true,
                 ),
             ),
         ),

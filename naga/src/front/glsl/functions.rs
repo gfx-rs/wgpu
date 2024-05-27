@@ -823,7 +823,7 @@ impl Frontend {
                 };
 
                 ctx.body.push(
-                    crate::Statement::Call {
+                    Statement::Call {
                         function,
                         arguments,
                         result,
@@ -1236,6 +1236,8 @@ impl Frontend {
             let pointer = ctx
                 .expressions
                 .append(Expression::GlobalVariable(arg.handle), Default::default());
+            ctx.local_expression_kind_tracker
+                .insert(pointer, crate::proc::ExpressionKind::Runtime);
 
             let ty = ctx.module.global_variables[arg.handle].ty;
 
@@ -1256,6 +1258,8 @@ impl Frontend {
                     let value = ctx
                         .expressions
                         .append(Expression::FunctionArgument(idx), Default::default());
+                    ctx.local_expression_kind_tracker
+                        .insert(value, crate::proc::ExpressionKind::Runtime);
                     ctx.body
                         .push(Statement::Store { pointer, value }, Default::default());
                 },
@@ -1285,6 +1289,8 @@ impl Frontend {
             let pointer = ctx
                 .expressions
                 .append(Expression::GlobalVariable(arg.handle), Default::default());
+            ctx.local_expression_kind_tracker
+                .insert(pointer, crate::proc::ExpressionKind::Runtime);
 
             let ty = ctx.module.global_variables[arg.handle].ty;
 
@@ -1307,6 +1313,8 @@ impl Frontend {
                     let load = ctx
                         .expressions
                         .append(Expression::Load { pointer }, Default::default());
+                    ctx.local_expression_kind_tracker
+                        .insert(load, crate::proc::ExpressionKind::Runtime);
                     ctx.body.push(
                         Statement::Emit(ctx.expressions.range_from(len)),
                         Default::default(),
@@ -1329,6 +1337,8 @@ impl Frontend {
             let res = ctx
                 .expressions
                 .append(Expression::Compose { ty, components }, Default::default());
+            ctx.local_expression_kind_tracker
+                .insert(res, crate::proc::ExpressionKind::Runtime);
             ctx.body.push(
                 Statement::Emit(ctx.expressions.range_from(len)),
                 Default::default(),
@@ -1420,7 +1430,7 @@ impl Context<'_> {
                             base: pointer,
                             index,
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     )?;
 
                     let binding = crate::Binding::Location {
@@ -1446,7 +1456,7 @@ impl Context<'_> {
                             base: pointer,
                             index: i as u32,
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     )?;
 
                     let binding = match member.binding {

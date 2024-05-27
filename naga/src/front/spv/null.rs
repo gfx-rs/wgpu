@@ -5,14 +5,14 @@ use crate::arena::{Arena, Handle};
 pub fn generate_default_built_in(
     built_in: Option<crate::BuiltIn>,
     ty: Handle<crate::Type>,
-    const_expressions: &mut Arena<crate::Expression>,
+    global_expressions: &mut Arena<crate::Expression>,
     span: crate::Span,
 ) -> Result<Handle<crate::Expression>, Error> {
     let expr = match built_in {
         Some(crate::BuiltIn::Position { .. }) => {
-            let zero = const_expressions
+            let zero = global_expressions
                 .append(crate::Expression::Literal(crate::Literal::F32(0.0)), span);
-            let one = const_expressions
+            let one = global_expressions
                 .append(crate::Expression::Literal(crate::Literal::F32(1.0)), span);
             crate::Expression::Compose {
                 ty,
@@ -27,5 +27,5 @@ pub fn generate_default_built_in(
         // Note: `crate::BuiltIn::ClipDistance` is intentionally left for the default path
         _ => crate::Expression::ZeroValue(ty),
     };
-    Ok(const_expressions.append(expr, span))
+    Ok(global_expressions.append(expr, span))
 }

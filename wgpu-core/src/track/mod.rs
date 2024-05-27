@@ -102,10 +102,14 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,
+    binding_model, command, conv,
+    hal_api::HalApi,
+    id,
+    lock::{rank, Mutex, RwLock},
+    pipeline, resource,
+    snatch::SnatchGuard,
 };
 
-use parking_lot::{Mutex, RwLock};
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
@@ -136,7 +140,8 @@ impl TrackerIndex {
 /// of a certain type. This index is separate from the resource ID for various reasons:
 /// - There can be multiple resource IDs pointing the the same resource.
 /// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
-/// - The plan is to remove IDs in the long run (https://github.com/gfx-rs/wgpu/issues/5121).
+/// - The plan is to remove IDs in the long run
+///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).
 /// In order to produce these tracker indices, there is a shared TrackerIndexAllocator
 /// per resource type. Indices have the same lifetime as the internal resource they
 /// are associated to (alloc happens when creating the resource and free is called when
@@ -175,8 +180,8 @@ impl TrackerIndexAllocator {
     }
 }
 
-impl std::fmt::Debug for TrackerIndexAllocator {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Debug for TrackerIndexAllocator {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         Ok(())
     }
 }
@@ -190,7 +195,10 @@ pub(crate) struct SharedTrackerIndexAllocator {
 impl SharedTrackerIndexAllocator {
     pub fn new() -> Self {
         SharedTrackerIndexAllocator {
-            inner: Mutex::new(TrackerIndexAllocator::new()),
+            inner: Mutex::new(
+                rank::SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+                TrackerIndexAllocator::new(),
+            ),
         }
     }
 
@@ -220,6 +228,7 @@ pub(crate) struct TrackerIndexAllocators {
     pub pipeline_layouts: Arc<SharedTrackerIndexAllocator>,
     pub bundles: Arc<SharedTrackerIndexAllocator>,
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
+    pub pipeline_caches: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
@@ -237,6 +246,7 @@ impl TrackerIndexAllocators {
             pipeline_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
+            pipeline_caches: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
 }
@@ -480,11 +490,26 @@ impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new() -> Self {
         Self {
-            buffers: RwLock::new(BufferUsageScope::new()),
-            textures: RwLock::new(TextureUsageScope::new()),
-            bind_groups: RwLock::new(StatelessTracker::new()),
-            render_pipelines: RwLock::new(StatelessTracker::new()),
-            query_sets: RwLock::new(StatelessTracker::new()),
+            buffers: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_BUFFERS,
+                BufferUsageScope::default(),
+            ),
+            textures: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_TEXTURES,
+                TextureUsageScope::default(),
+            ),
+            bind_groups: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_BIND_GROUPS,
+                StatelessTracker::new(),
+            ),
+            render_pipelines: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_RENDER_PIPELINES,
+                StatelessTracker::new(),
+            ),
+            query_sets: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_QUERY_SETS,
+                StatelessTracker::new(),
+            ),
         }
     }
 
@@ -512,28 +537,52 @@ impl<A: HalApi> RenderBundleScope<A> {
     }
 }
 
+/// A pool for storing the memory used by [`UsageScope`]s. We take and store this memory when the
+/// scope is dropped to avoid reallocating. The memory required only grows and allocation cost is
+/// significant when a large number of resources have been used.
+pub(crate) type UsageScopePool<A> = Mutex<Vec<(BufferUsageScope<A>, TextureUsageScope<A>)>>;
+
 /// A usage scope tracker. Only needs to store stateful resources as stateless
 /// resources cannot possibly have a usage conflict.
 #[derive(Debug)]
-pub(crate) struct UsageScope<A: HalApi> {
+pub(crate) struct UsageScope<'a, A: HalApi> {
+    pub pool: &'a UsageScopePool<A>,
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
 }
 
-impl<A: HalApi> UsageScope<A> {
-    /// Create the render bundle scope and pull the maximum IDs from the hubs.
-    pub fn new(tracker_indices: &TrackerIndexAllocators) -> Self {
-        let mut value = Self {
-            buffers: BufferUsageScope::new(),
-            textures: TextureUsageScope::new(),
+impl<'a, A: HalApi> Drop for UsageScope<'a, A> {
+    fn drop(&mut self) {
+        // clear vecs and push into pool
+        self.buffers.clear();
+        self.textures.clear();
+        self.pool.lock().push((
+            std::mem::take(&mut self.buffers),
+            std::mem::take(&mut self.textures),
+        ));
+    }
+}
+
+impl<A: HalApi> UsageScope<'static, A> {
+    pub fn new_pooled<'d>(
+        pool: &'d UsageScopePool<A>,
+        tracker_indices: &TrackerIndexAllocators,
+    ) -> UsageScope<'d, A> {
+        let pooled = pool.lock().pop().unwrap_or_default();
+
+        let mut scope = UsageScope::<'d, A> {
+            pool,
+            buffers: pooled.0,
+            textures: pooled.1,
         };
 
-        value.buffers.set_size(tracker_indices.buffers.size());
-        value.textures.set_size(tracker_indices.textures.size());
-
-        value
+        scope.buffers.set_size(tracker_indices.buffers.size());
+        scope.textures.set_size(tracker_indices.textures.size());
+        scope
     }
+}
 
+impl<'a, A: HalApi> UsageScope<'a, A> {
     /// Merge the inner contents of a bind group into the usage scope.
     ///
     /// Only stateful things are merged in here, all other resources are owned
@@ -615,8 +664,8 @@ impl<A: HalApi> Tracker<A> {
     ///
     /// If a transition is needed to get the resources into the needed
     /// state, those transitions are stored within the tracker. A
-    /// subsequent call to [`BufferTracker::drain`] or
-    /// [`TextureTracker::drain`] is needed to get those transitions.
+    /// subsequent call to [`BufferTracker::drain_transitions`] or
+    /// [`TextureTracker::drain_transitions`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate

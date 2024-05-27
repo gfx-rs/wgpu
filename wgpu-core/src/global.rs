@@ -45,7 +45,7 @@ impl GlobalReport {
 
 pub struct Global {
     pub instance: Instance,
-    pub surfaces: Registry<Surface>,
+    pub(crate) surfaces: Registry<Surface>,
     pub(crate) hubs: Hubs,
 }
 
@@ -155,11 +155,9 @@ impl Drop for Global {
         // destroy surfaces
         for element in surfaces_locked.map.drain(..) {
             if let Element::Occupied(arc_surface, _) = element {
-                if let Some(surface) = Arc::into_inner(arc_surface) {
-                    self.instance.destroy_surface(surface);
-                } else {
-                    panic!("Surface cannot be destroyed because is still in use");
-                }
+                let surface = Arc::into_inner(arc_surface)
+                    .expect("Surface cannot be destroyed because is still in use");
+                self.instance.destroy_surface(surface);
             }
         }
     }

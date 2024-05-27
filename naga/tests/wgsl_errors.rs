@@ -570,11 +570,11 @@ fn local_var_missing_type() {
                 var x;
             }
         "#,
-        r#"error: variable `x` needs a type
+        r#"error: declaration of `x` needs a type specifier or initializer
   ┌─ wgsl:3:21
   │
 3 │                 var x;
-  │                     ^ definition of `x`
+  │                     ^ needs a type specifier or initializer
 
 "#,
     );
@@ -2150,4 +2150,130 @@ fn compaction_preserves_spans() {
     ) {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }
+}
+
+#[test]
+fn limit_braced_statement_nesting() {
+    let too_many_braces = "fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
+
+    let expected_diagnostic = r###"error: brace nesting limit reached
+  ┌─ wgsl:1:72
+  │
+1 │ fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
+  │                                                                        ^ limit reached at this brace
+  │
+  = note: nesting limit is currently set to 64
+
+"###;
+
+    // In debug builds, we might actually overflow the stack before exercising this error case,
+    // depending on the platform and the `RUST_MIN_STACK` env. var. Use a thread with a custom
+    // stack size that works on all platforms.
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024 * 2 /* MB */)
+        .spawn(|| check(too_many_braces, expected_diagnostic))
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+#[test]
+fn too_many_unclosed_loops() {
+    let too_many_braces = "fn f() {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+           ";
+
+    let expected_diagnostic = r###"error: brace nesting limit reached
+   ┌─ wgsl:65:13
+   │
+65 │        loop {
+   │             ^ limit reached at this brace
+   │
+   = note: nesting limit is currently set to 64
+
+"###;
+
+    // In debug builds, we might actually overflow the stack before exercising this error case,
+    // depending on the platform and the `RUST_MIN_STACK` env. var. Use a thread with a custom
+    // stack size that works on all platforms.
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024 * 2 /* MB */)
+        .spawn(|| check(too_many_braces, expected_diagnostic))
+        .unwrap()
+        .join()
+        .unwrap()
 }

@@ -159,119 +159,101 @@
     constants: [
         (
             name: None,
-            override: None,
             ty: 1,
             init: 1,
         ),
         (
             name: None,
-            override: None,
             ty: 1,
             init: 2,
         ),
         (
             name: None,
-            override: None,
             ty: 1,
             init: 3,
         ),
         (
             name: None,
-            override: None,
             ty: 1,
             init: 4,
         ),
         (
             name: None,
-            override: None,
             ty: 1,
             init: 5,
         ),
         (
             name: None,
-            override: None,
             ty: 2,
             init: 9,
         ),
         (
             name: None,
-            override: None,
             ty: 3,
             init: 10,
         ),
         (
             name: None,
-            override: None,
             ty: 3,
             init: 11,
         ),
         (
             name: None,
-            override: None,
             ty: 3,
             init: 12,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 13,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 14,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 15,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 16,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 17,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 18,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 19,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 20,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 21,
         ),
         (
             name: None,
-            override: None,
             ty: 7,
             init: 22,
         ),
     ],
+    overrides: [],
     global_variables: [
         (
             name: Some("t_shadow"),
@@ -337,7 +319,7 @@
             init: None,
         ),
     ],
-    const_expressions: [
+    global_expressions: [
         Literal(F32(0.0)),
         Literal(F32(1.0)),
         Literal(F32(0.5)),

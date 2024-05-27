@@ -247,8 +247,14 @@ impl RenderPass {
         }
     }
 
+    #[inline]
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
+    }
+
+    #[inline]
+    pub fn label(&self) -> Option<&str> {
+        self.base.label.as_deref()
     }
 
     #[cfg(feature = "trace")]
@@ -739,9 +745,9 @@ impl<A: HalApi> TextureView<A> {
 const MAX_TOTAL_ATTACHMENTS: usize = hal::MAX_COLOR_ATTACHMENTS + hal::MAX_COLOR_ATTACHMENTS + 1;
 type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 
-struct RenderPassInfo<'a, A: HalApi> {
+struct RenderPassInfo<'a, 'd, A: HalApi> {
     context: RenderPassContext,
-    usage_scope: UsageScope<A>,
+    usage_scope: UsageScope<'d, A>,
     /// All render attachments, including depth/stencil
     render_attachments: AttachmentDataVec<RenderAttachment<'a, A>>,
     is_depth_read_only: bool,
@@ -754,7 +760,7 @@ struct RenderPassInfo<'a, A: HalApi> {
     multiview: Option<NonZeroU32>,
 }
 
-impl<'a, A: HalApi> RenderPassInfo<'a, A> {
+impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
     fn add_pass_texture_init_actions<V>(
         channel: &PassChannel<V>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
@@ -790,7 +796,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     }
 
     fn start(
-        device: &Device<A>,
+        device: &'d Device<A>,
         label: Option<&str>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
@@ -1214,7 +1220,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         Ok(Self {
             context,
-            usage_scope: UsageScope::new(&device.tracker_indices),
+            usage_scope: device.new_usage_scope(),
             render_attachments,
             is_depth_read_only,
             is_stencil_read_only,
@@ -1230,7 +1236,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         snatch_guard: &SnatchGuard,
-    ) -> Result<(UsageScope<A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
+    ) -> Result<(UsageScope<'d, A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
         unsafe {
             raw.end_render_pass();
@@ -1303,13 +1309,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 // Common routines between render/compute
 
 impl Global {
-    pub fn command_encoder_run_render_pass<A: HalApi>(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        pass: &RenderPass,
-    ) -> Result<(), RenderPassError> {
-        self.command_encoder_run_render_pass_impl::<A>(
-            encoder_id,
+    pub fn render_pass_end<A: HalApi>(&self, pass: &RenderPass) -> Result<(), RenderPassError> {
+        self.render_pass_end_impl::<A>(
+            pass.parent_id(),
             pass.base.as_ref(),
             &pass.color_targets,
             pass.depth_stencil_target.as_ref(),
@@ -1319,7 +1321,7 @@ impl Global {
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_render_pass_impl<A: HalApi>(
+    pub fn render_pass_end_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<RenderCommand>,
@@ -1343,7 +1345,8 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
+        let cmd_buf: Arc<CommandBuffer<A>> =
+            CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
         let device = &cmd_buf.device;
         let snatch_guard = device.snatchable_lock.read();
 
@@ -2374,7 +2377,7 @@ impl Global {
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        unsafe { bundle.execute(raw) }
+                        unsafe { bundle.execute(raw, &snatch_guard) }
                             .map_err(|e| match e {
                                 ExecutionError::DestroyedBuffer(id) => {
                                     RenderCommandError::DestroyedBuffer(id)
@@ -2409,7 +2412,10 @@ impl Global {
             (trackers, pending_discard_init_fixups)
         };
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.transmute()).unwrap();
+        let cmd_buf = hub
+            .command_buffers
+            .get(encoder_id.into_command_buffer_id())
+            .unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -2427,6 +2433,7 @@ impl Global {
                 transit,
                 &mut tracker.textures,
                 &cmd_buf.device,
+                &snatch_guard,
             );
 
             cmd_buf_data
@@ -2439,12 +2446,7 @@ impl Global {
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
-            super::CommandBuffer::insert_barriers_from_scope(
-                transit,
-                tracker,
-                &scope,
-                &snatch_guard,
-            );
+            CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, &snatch_guard);
         }
 
         *status = CommandEncoderStatus::Recording;
@@ -2454,36 +2456,27 @@ impl Global {
     }
 }
 
-pub mod render_ffi {
+pub mod render_commands {
     use super::{
         super::{Rect, RenderCommand},
         RenderPass,
     };
-    use crate::{id, RawString};
-    use std::{convert::TryInto, ffi, num::NonZeroU32, slice};
+    use crate::id;
+    use std::{convert::TryInto, num::NonZeroU32};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `offset_length` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
+    pub fn wgpu_render_pass_set_bind_group(
         pass: &mut RenderPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: *const DynamicOffset,
-        offset_length: usize,
+        offsets: &[DynamicOffset],
     ) {
-        let redundant = unsafe {
-            pass.current_bind_groups.set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut pass.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            )
-        };
+        let redundant = pass.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut pass.base.dynamic_offsets,
+            offsets,
+        );
 
         if redundant {
             return;
@@ -2491,16 +2484,12 @@ pub mod render_ffi {
 
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index,
-            num_dynamic_offsets: offset_length,
+            num_dynamic_offsets: offsets.len(),
             bind_group_id,
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_pipeline(
-        pass: &mut RenderPass,
-        pipeline_id: id::RenderPipelineId,
-    ) {
+    pub fn wgpu_render_pass_set_pipeline(pass: &mut RenderPass, pipeline_id: id::RenderPipelineId) {
         if pass.current_pipeline.set_and_check_redundant(pipeline_id) {
             return;
         }
@@ -2510,8 +2499,7 @@ pub mod render_ffi {
             .push(RenderCommand::SetPipeline(pipeline_id));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_vertex_buffer(
+    pub fn wgpu_render_pass_set_vertex_buffer(
         pass: &mut RenderPass,
         slot: u32,
         buffer_id: id::BufferId,
@@ -2526,8 +2514,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_index_buffer(
+    pub fn wgpu_render_pass_set_index_buffer(
         pass: &mut RenderPass,
         buffer: id::BufferId,
         index_format: IndexFormat,
@@ -2537,22 +2524,19 @@ pub mod render_ffi {
         pass.set_index_buffer(buffer, index_format, offset, size);
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_blend_constant(pass: &mut RenderPass, color: &Color) {
+    pub fn wgpu_render_pass_set_blend_constant(pass: &mut RenderPass, color: &Color) {
         pass.base
             .commands
             .push(RenderCommand::SetBlendConstant(*color));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
+    pub fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
         pass.base
             .commands
             .push(RenderCommand::SetStencilReference(value));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_viewport(
+    pub fn wgpu_render_pass_set_viewport(
         pass: &mut RenderPass,
         x: f32,
         y: f32,
@@ -2568,8 +2552,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_scissor_rect(
+    pub fn wgpu_render_pass_set_scissor_rect(
         pass: &mut RenderPass,
         x: u32,
         y: u32,
@@ -2581,17 +2564,11 @@ pub mod render_ffi {
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `size_bytes` bytes.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_set_push_constants(
+    pub fn wgpu_render_pass_set_push_constants(
         pass: &mut RenderPass,
         stages: wgt::ShaderStages,
         offset: u32,
-        size_bytes: u32,
-        data: *const u8,
+        data: &[u8],
     ) {
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
@@ -2599,31 +2576,28 @@ pub mod render_ffi {
             "Push constant offset must be aligned to 4 bytes."
         );
         assert_eq!(
-            size_bytes & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
+            data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per RenderPass.",
         );
 
         pass.base.push_constant_data.extend(
-            data_slice
-                .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
+            data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
         pass.base.commands.push(RenderCommand::SetPushConstant {
             stages,
             offset,
-            size_bytes,
+            size_bytes: data.len() as u32,
             values_offset: Some(value_offset),
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw(
+    pub fn wgpu_render_pass_draw(
         pass: &mut RenderPass,
         vertex_count: u32,
         instance_count: u32,
@@ -2638,8 +2612,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw_indexed(
+    pub fn wgpu_render_pass_draw_indexed(
         pass: &mut RenderPass,
         index_count: u32,
         instance_count: u32,
@@ -2656,8 +2629,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw_indirect(
+    pub fn wgpu_render_pass_draw_indirect(
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -2670,8 +2642,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw_indexed_indirect(
+    pub fn wgpu_render_pass_draw_indexed_indirect(
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -2684,8 +2655,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indirect(
+    pub fn wgpu_render_pass_multi_draw_indirect(
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -2699,8 +2669,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indexed_indirect(
+    pub fn wgpu_render_pass_multi_draw_indexed_indirect(
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -2714,8 +2683,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indirect_count(
+    pub fn wgpu_render_pass_multi_draw_indirect_count(
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -2735,8 +2703,7 @@ pub mod render_ffi {
             });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indexed_indirect_count(
+    pub fn wgpu_render_pass_multi_draw_indexed_indirect_count(
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -2756,17 +2723,8 @@ pub mod render_ffi {
             });
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_push_debug_group(
-        pass: &mut RenderPass,
-        label: RawString,
-        color: u32,
-    ) {
-        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
+    pub fn wgpu_render_pass_push_debug_group(pass: &mut RenderPass, label: &str, color: u32) {
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::PushDebugGroup {
@@ -2775,22 +2733,12 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
+    pub fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
         pass.base.commands.push(RenderCommand::PopDebugGroup);
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given `label`
-    /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_insert_debug_marker(
-        pass: &mut RenderPass,
-        label: RawString,
-        color: u32,
-    ) {
-        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
+    pub fn wgpu_render_pass_insert_debug_marker(pass: &mut RenderPass, label: &str, color: u32) {
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::InsertDebugMarker {
@@ -2799,8 +2747,7 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_write_timestamp(
+    pub fn wgpu_render_pass_write_timestamp(
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -2811,23 +2758,17 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_begin_occlusion_query(
-        pass: &mut RenderPass,
-        query_index: u32,
-    ) {
+    pub fn wgpu_render_pass_begin_occlusion_query(pass: &mut RenderPass, query_index: u32) {
         pass.base
             .commands
             .push(RenderCommand::BeginOcclusionQuery { query_index });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_end_occlusion_query(pass: &mut RenderPass) {
+    pub fn wgpu_render_pass_end_occlusion_query(pass: &mut RenderPass) {
         pass.base.commands.push(RenderCommand::EndOcclusionQuery);
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_begin_pipeline_statistics_query(
+    pub fn wgpu_render_pass_begin_pipeline_statistics_query(
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
@@ -2840,26 +2781,17 @@ pub mod render_ffi {
             });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
+    pub fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
         pass.base
             .commands
             .push(RenderCommand::EndPipelineStatisticsQuery);
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointer is
-    /// valid for `render_bundle_ids_length` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_execute_bundles(
+    pub fn wgpu_render_pass_execute_bundles(
         pass: &mut RenderPass,
-        render_bundle_ids: *const id::RenderBundleId,
-        render_bundle_ids_length: usize,
+        render_bundle_ids: &[id::RenderBundleId],
     ) {
-        for &bundle_id in
-            unsafe { slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) }
-        {
+        for &bundle_id in render_bundle_ids {
             pass.base
                 .commands
                 .push(RenderCommand::ExecuteBundle(bundle_id));

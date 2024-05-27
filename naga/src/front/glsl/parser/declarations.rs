@@ -251,7 +251,7 @@ impl<'source> ParsingContext<'source> {
                     init.and_then(|expr| ctx.ctx.lift_up_const_expression(expr).ok());
                 late_initializer = None;
             } else if let Some(init) = init {
-                if ctx.is_inside_loop || !ctx.ctx.expression_constness.is_const(init) {
+                if ctx.is_inside_loop || !ctx.ctx.local_expression_kind_tracker.is_const(init) {
                     decl_initializer = None;
                     late_initializer = Some(init);
                 } else {
@@ -326,7 +326,12 @@ impl<'source> ParsingContext<'source> {
 
                             let result = ty.map(|ty| FunctionResult { ty, binding: None });
 
-                            let mut context = Context::new(frontend, ctx.module, false)?;
+                            let mut context = Context::new(
+                                frontend,
+                                ctx.module,
+                                false,
+                                ctx.global_expression_kind_tracker,
+                            )?;
 
                             self.parse_function_args(frontend, &mut context)?;
 

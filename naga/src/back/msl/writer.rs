@@ -1131,21 +1131,10 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_atomic_fetch(
-        &mut self,
-        pointer: Handle<crate::Expression>,
-        key: &str,
-        value: Handle<crate::Expression>,
-        context: &ExpressionContext,
-    ) -> BackendResult {
-        self.put_atomic_operation(pointer, "fetch_", key, value, context)
-    }
-
     fn put_atomic_operation(
         &mut self,
         pointer: Handle<crate::Expression>,
-        key1: &str,
-        key2: &str,
+        key: &str,
         value: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
@@ -1163,7 +1152,7 @@ impl<W: Write> Writer<W> {
 
         write!(
             self.out,
-            "{NAMESPACE}::atomic_{key1}{key2}_explicit({ATOMIC_REFERENCE}"
+            "{NAMESPACE}::atomic_{key}_explicit({ATOMIC_REFERENCE}"
         )?;
         self.put_access_chain(pointer, policy, context)?;
         write!(self.out, ", ")?;
@@ -1248,7 +1237,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
-            &module.const_expressions,
+            &module.global_expressions,
             module,
             mod_info,
             &(module, mod_info),
@@ -1431,6 +1420,7 @@ impl<W: Write> Writer<W> {
                     |writer, context, expr| writer.put_expression(expr, context, true),
                 )?;
             }
+            crate::Expression::Override(_) => return Err(Error::Override),
             crate::Expression::Access { base, .. }
             | crate::Expression::AccessIndex { base, .. } => {
                 // This is an acceptable place to generate a `ReadZeroSkipWrite` check.
@@ -1606,7 +1596,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::Expression::Binary { op, left, right } => {
-                let op_str = crate::back::binary_operation_str(op);
+                let op_str = back::binary_operation_str(op);
                 let kind = context
                     .resolve_type(left)
                     .scalar_kind()
@@ -1838,12 +1828,16 @@ impl<W: Write> Writer<W> {
                     Mf::Pack2x16snorm => "pack_float_to_snorm2x16",
                     Mf::Pack2x16unorm => "pack_float_to_unorm2x16",
                     Mf::Pack2x16float => "",
+                    Mf::Pack4xI8 => "",
+                    Mf::Pack4xU8 => "",
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpack_snorm4x8_to_float",
                     Mf::Unpack4x8unorm => "unpack_unorm4x8_to_float",
                     Mf::Unpack2x16snorm => "unpack_snorm2x16_to_float",
                     Mf::Unpack2x16unorm => "unpack_unorm2x16_to_float",
                     Mf::Unpack2x16float => "",
+                    Mf::Unpack4xI8 => "",
+                    Mf::Unpack4xU8 => "",
                 };
 
                 match fun {
@@ -1863,133 +1857,177 @@ impl<W: Write> Writer<W> {
                     _ => {}
                 }
 
-                if fun == Mf::Distance && scalar_argument {
-                    write!(self.out, "{NAMESPACE}::abs(")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, " - ")?;
-                    self.put_expression(arg1.unwrap(), context, false)?;
-                    write!(self.out, ")")?;
-                } else if fun == Mf::FindLsb {
-                    let scalar = context.resolve_type(arg).scalar().unwrap();
-                    let constant = scalar.width * 8 + 1;
+                match fun {
+                    Mf::Distance if scalar_argument => {
+                        write!(self.out, "{NAMESPACE}::abs(")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, " - ")?;
+                        self.put_expression(arg1.unwrap(), context, false)?;
+                        write!(self.out, ")")?;
+                    }
+                    Mf::FindLsb => {
+                        let scalar = context.resolve_type(arg).scalar().unwrap();
+                        let constant = scalar.width * 8 + 1;
 
-                    write!(self.out, "((({NAMESPACE}::ctz(")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, ") + 1) % {constant}) - 1)")?;
-                } else if fun == Mf::FindMsb {
-                    let inner = context.resolve_type(arg);
-                    let scalar = inner.scalar().unwrap();
-                    let constant = scalar.width * 8 - 1;
-
-                    write!(
-                        self.out,
-                        "{NAMESPACE}::select({constant} - {NAMESPACE}::clz("
-                    )?;
-
-                    if scalar.kind == crate::ScalarKind::Sint {
-                        write!(self.out, "{NAMESPACE}::select(")?;
+                        write!(self.out, "((({NAMESPACE}::ctz(")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, ", ~")?;
+                        write!(self.out, ") + 1) % {constant}) - 1)")?;
+                    }
+                    Mf::FindMsb => {
+                        let inner = context.resolve_type(arg);
+                        let scalar = inner.scalar().unwrap();
+                        let constant = scalar.width * 8 - 1;
+
+                        write!(
+                            self.out,
+                            "{NAMESPACE}::select({constant} - {NAMESPACE}::clz("
+                        )?;
+
+                        if scalar.kind == crate::ScalarKind::Sint {
+                            write!(self.out, "{NAMESPACE}::select(")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, ", ~")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " < 0)")?;
+                        } else {
+                            self.put_expression(arg, context, true)?;
+                        }
+
+                        write!(self.out, "), ")?;
+
+                        // or metal will complain that select is ambiguous
+                        match *inner {
+                            crate::TypeInner::Vector { size, scalar } => {
+                                let size = back::vector_size_str(size);
+                                let name = scalar.to_msl_name();
+                                write!(self.out, "{name}{size}")?;
+                            }
+                            crate::TypeInner::Scalar(scalar) => {
+                                let name = scalar.to_msl_name();
+                                write!(self.out, "{name}")?;
+                            }
+                            _ => (),
+                        }
+
+                        write!(self.out, "(-1), ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " == 0 || ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " == -1)")?;
+                    }
+                    Mf::Unpack2x16float => {
+                        write!(self.out, "float2(as_type<half2>(")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, "))")?;
+                    }
+                    Mf::Pack2x16float => {
+                        write!(self.out, "as_type<uint>(half2(")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, "))")?;
+                    }
+                    Mf::ExtractBits => {
+                        // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
+                        // to first sanitize the offset and count first. If we don't do this, Apple chips
+                        // will return out-of-spec values if the extracted range is not within the bit width.
+                        //
+                        // This encodes the exact formula specified by the wgsl spec, without temporary values:
+                        // https://gpuweb.github.io/gpuweb/wgsl/#extractBits-unsigned-builtin
+                        //
+                        // w = sizeof(x) * 8
+                        // o = min(offset, w)
+                        // tmp = w - o
+                        // c = min(count, tmp)
+                        //
+                        // bitfieldExtract(x, o, c)
+                        //
+                        // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
+
+                        let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
+
+                        write!(self.out, "{NAMESPACE}::extract_bits(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", {NAMESPACE}::min(")?;
+                        self.put_expression(arg1.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
+                        self.put_expression(arg2.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
+                        self.put_expression(arg1.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u)))")?;
+                    }
+                    Mf::InsertBits => {
+                        // The behavior of InsertBits has the same issue as ExtractBits.
+                        //
+                        // insertBits(e, newBits, min(offset, w), min(count, w - min(offset, w))))
+
+                        let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
+
+                        write!(self.out, "{NAMESPACE}::insert_bits(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arg1.unwrap(), context, true)?;
+                        write!(self.out, ", {NAMESPACE}::min(")?;
+                        self.put_expression(arg2.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
+                        self.put_expression(arg3.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
+                        self.put_expression(arg2.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u)))")?;
+                    }
+                    Mf::Radians => {
+                        write!(self.out, "((")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, ") * 0.017453292519943295474)")?;
+                    }
+                    Mf::Degrees => {
+                        write!(self.out, "((")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, ") * 57.295779513082322865)")?;
+                    }
+                    Mf::Modf | Mf::Frexp => {
+                        write!(self.out, "{fun_name}")?;
+                        self.put_call_parameters(iter::once(arg), context)?;
+                    }
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let was_signed = fun == Mf::Pack4xI8;
+                        if was_signed {
+                            write!(self.out, "uint(")?;
+                        }
+                        write!(self.out, "(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[0] & 0xFF) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[1] & 0xFF) << 8) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[2] & 0xFF) << 16) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[3] & 0xFF) << 24)")?;
+                        if was_signed {
+                            write!(self.out, ")")?;
+                        }
+                    }
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        if matches!(fun, Mf::Unpack4xU8) {
+                            write!(self.out, "u")?;
+                        }
+                        write!(self.out, "int4(")?;
                         self.put_expression(arg, context, true)?;
                         write!(self.out, ", ")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, " < 0)")?;
-                    } else {
+                        write!(self.out, " >> 8, ")?;
                         self.put_expression(arg, context, true)?;
+                        write!(self.out, " >> 16, ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " >> 24) << 24 >> 24")?;
                     }
-
-                    write!(self.out, "), ")?;
-
-                    // or metal will complain that select is ambiguous
-                    match *inner {
-                        crate::TypeInner::Vector { size, scalar } => {
-                            let size = back::vector_size_str(size);
-                            let name = scalar.to_msl_name();
-                            write!(self.out, "{name}{size}")?;
-                        }
-                        crate::TypeInner::Scalar(scalar) => {
-                            let name = scalar.to_msl_name();
-                            write!(self.out, "{name}")?;
-                        }
-                        _ => (),
+                    _ => {
+                        write!(self.out, "{NAMESPACE}::{fun_name}")?;
+                        self.put_call_parameters(
+                            iter::once(arg).chain(arg1).chain(arg2).chain(arg3),
+                            context,
+                        )?;
                     }
-
-                    write!(self.out, "(-1), ")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, " == 0 || ")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, " == -1)")?;
-                } else if fun == Mf::Unpack2x16float {
-                    write!(self.out, "float2(as_type<half2>(")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, "))")?;
-                } else if fun == Mf::Pack2x16float {
-                    write!(self.out, "as_type<uint>(half2(")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, "))")?;
-                } else if fun == Mf::ExtractBits {
-                    // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
-                    // to first sanitize the offset and count first. If we don't do this, Apple chips
-                    // will return out-of-spec values if the extracted range is not within the bit width.
-                    //
-                    // This encodes the exact formula specified by the wgsl spec, without temporary values:
-                    // https://gpuweb.github.io/gpuweb/wgsl/#extractBits-unsigned-builtin
-                    //
-                    // w = sizeof(x) * 8
-                    // o = min(offset, w)
-                    // tmp = w - o
-                    // c = min(count, tmp)
-                    //
-                    // bitfieldExtract(x, o, c)
-                    //
-                    // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
-
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap();
-
-                    write!(self.out, "{NAMESPACE}::extract_bits(")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, ", {NAMESPACE}::min(")?;
-                    self.put_expression(arg1.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
-                    self.put_expression(arg2.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
-                    self.put_expression(arg1.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u)))")?;
-                } else if fun == Mf::InsertBits {
-                    // The behavior of InsertBits has the same issue as ExtractBits.
-                    //
-                    // insertBits(e, newBits, min(offset, w), min(count, w - min(offset, w))))
-
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap();
-
-                    write!(self.out, "{NAMESPACE}::insert_bits(")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arg1.unwrap(), context, true)?;
-                    write!(self.out, ", {NAMESPACE}::min(")?;
-                    self.put_expression(arg2.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
-                    self.put_expression(arg3.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
-                    self.put_expression(arg2.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u)))")?;
-                } else if fun == Mf::Radians {
-                    write!(self.out, "((")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, ") * 0.017453292519943295474)")?;
-                } else if fun == Mf::Degrees {
-                    write!(self.out, "((")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, ") * 57.295779513082322865)")?;
-                } else if fun == Mf::Modf || fun == Mf::Frexp {
-                    write!(self.out, "{fun_name}")?;
-                    self.put_call_parameters(iter::once(arg), context)?;
-                } else {
-                    write!(self.out, "{NAMESPACE}::{fun_name}")?;
-                    self.put_call_parameters(
-                        iter::once(arg).chain(arg1).chain(arg2).chain(arg3),
-                        context,
-                    )?;
                 }
             }
             crate::Expression::As {
@@ -2041,6 +2079,8 @@ impl<W: Write> Writer<W> {
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
+            | crate::Expression::SubgroupBallotResult
+            | crate::Expression::SubgroupOperationResult { .. }
             | crate::Expression::RayQueryProceedResult => {
                 unreachable!()
             }
@@ -2607,7 +2647,11 @@ impl<W: Write> Writer<W> {
                             }
                         }
                     }
-                    crate::MathFunction::FindMsb => {
+                    crate::MathFunction::FindMsb
+                    | crate::MathFunction::Pack4xI8
+                    | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Unpack4xI8
+                    | crate::MathFunction::Unpack4xU8 => {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
@@ -2994,43 +3038,8 @@ impl<W: Write> Writer<W> {
                     let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                     self.start_baking_expression(result, &context.expression, &res_name)?;
                     self.named_expressions.insert(result, res_name);
-                    match *fun {
-                        crate::AtomicFunction::Add => {
-                            self.put_atomic_fetch(pointer, "add", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Subtract => {
-                            self.put_atomic_fetch(pointer, "sub", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::And => {
-                            self.put_atomic_fetch(pointer, "and", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::InclusiveOr => {
-                            self.put_atomic_fetch(pointer, "or", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::ExclusiveOr => {
-                            self.put_atomic_fetch(pointer, "xor", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Min => {
-                            self.put_atomic_fetch(pointer, "min", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Max => {
-                            self.put_atomic_fetch(pointer, "max", value, &context.expression)?;
-                        }
-                        crate::AtomicFunction::Exchange { compare: None } => {
-                            self.put_atomic_operation(
-                                pointer,
-                                "exchange",
-                                "",
-                                value,
-                                &context.expression,
-                            )?;
-                        }
-                        crate::AtomicFunction::Exchange { .. } => {
-                            return Err(Error::FeatureNotImplemented(
-                                "atomic CompareExchange".to_string(),
-                            ));
-                        }
-                    }
+                    let fun_str = fun.to_msl()?;
+                    self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
                     // done
                     writeln!(self.out, ";")?;
                 }
@@ -3144,6 +3153,121 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
+                crate::Statement::SubgroupBallot { result, predicate } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    write!(self.out, "uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    if let Some(predicate) = predicate {
+                        self.put_expression(predicate, &context.expression, true)?;
+                    } else {
+                        write!(self.out, "true")?;
+                    }
+                    writeln!(self.out, "), 0, 0, 0);")?;
+                }
+                crate::Statement::SubgroupCollectiveOperation {
+                    op,
+                    collective_op,
+                    argument,
+                    result,
+                } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    match (collective_op, op) {
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                            write!(self.out, "{NAMESPACE}::simd_all(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                            write!(self.out, "{NAMESPACE}::simd_any(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                            write!(self.out, "{NAMESPACE}::simd_sum(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                            write!(self.out, "{NAMESPACE}::simd_product(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                            write!(self.out, "{NAMESPACE}::simd_max(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                            write!(self.out, "{NAMESPACE}::simd_min(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                            write!(self.out, "{NAMESPACE}::simd_and(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                            write!(self.out, "{NAMESPACE}::simd_or(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                            write!(self.out, "{NAMESPACE}::simd_xor(")?
+                        }
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_exclusive_sum(")?,
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_exclusive_product(")?,
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_inclusive_sum(")?,
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_inclusive_product(")?,
+                        _ => unimplemented!(),
+                    }
+                    self.put_expression(argument, &context.expression, true)?;
+                    writeln!(self.out, ");")?;
+                }
+                crate::Statement::SubgroupGather {
+                    mode,
+                    argument,
+                    result,
+                } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {
+                            write!(self.out, "{NAMESPACE}::simd_broadcast_first(")?;
+                        }
+                        crate::GatherMode::Broadcast(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_broadcast(")?;
+                        }
+                        crate::GatherMode::Shuffle(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle(")?;
+                        }
+                        crate::GatherMode::ShuffleDown(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_down(")?;
+                        }
+                        crate::GatherMode::ShuffleUp(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_up(")?;
+                        }
+                        crate::GatherMode::ShuffleXor(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_xor(")?;
+                        }
+                    }
+                    self.put_expression(argument, &context.expression, true)?;
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            write!(self.out, ", ")?;
+                            self.put_expression(index, &context.expression, true)?;
+                        }
+                    }
+                    writeln!(self.out, ");")?;
+                }
             }
         }
 
@@ -3220,6 +3344,10 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        if !module.overrides.is_empty() {
+            return Err(Error::Override);
+        }
+
         self.names.clear();
         self.namer.reset(
             module,
@@ -3897,7 +4025,7 @@ impl<W: Write> Writer<W> {
             // mapping.
             let mut flattened_member_names = FastHashMap::default();
             // Varyings' members get their own namespace
-            let mut varyings_namer = crate::proc::Namer::default();
+            let mut varyings_namer = proc::Namer::default();
 
             // List all the Naga `EntryPoint`'s `Function`'s arguments,
             // flattening structs into their members. In Metal, we will pass
@@ -4487,6 +4615,12 @@ impl<W: Write> Writer<W> {
                 "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
             )?;
         }
+        if flags.contains(crate::Barrier::SUB_GROUP) {
+            writeln!(
+                self.out,
+                "{level}{NAMESPACE}::simdgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
+            )?;
+        }
         Ok(())
     }
 }
@@ -4722,7 +4856,7 @@ fn test_stack_size() {
     );
     let _ = module.functions.append(fun, Default::default());
     // analyse the module
-    let info = crate::valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
+    let info = valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
         .validate(&module)
         .unwrap();
     // process the module
@@ -4757,8 +4891,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
-        // last observed macOS value: 19152 (CI)
-        if !(9000..=20000).contains(&stack_size) {
+        // last observed macOS value: 22256 (CI)
+        if !(15000..=25000).contains(&stack_size) {
             panic!("`put_block` stack size {stack_size} has changed!");
         }
     }

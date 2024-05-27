@@ -13,7 +13,7 @@ To begin, take a look at the documentation for the [`Frontend`].
 */
 
 pub use ast::{Precision, Profile};
-pub use error::{Error, ErrorKind, ExpectedToken, ParseError};
+pub use error::{Error, ErrorKind, ExpectedToken, ParseErrors};
 pub use token::TokenValue;
 
 use crate::{proc::Layouter, FastHashMap, FastHashSet, Handle, Module, ShaderStage, Span, Type};
@@ -196,7 +196,7 @@ impl Frontend {
         &mut self,
         options: &Options,
         source: &str,
-    ) -> std::result::Result<Module, ParseError> {
+    ) -> std::result::Result<Module, ParseErrors> {
         self.reset(options.stage);
 
         let lexer = lex::Lexer::new(source, &options.defines);

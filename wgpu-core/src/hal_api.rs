@@ -11,7 +11,7 @@ pub trait HalApi: hal::Api + 'static + WasmNotSendSync {
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;
     fn hub(global: &Global) -> &Hub<Self>;
-    fn get_surface(surface: &Surface) -> Option<&Self::Surface>;
+    fn surface_as_hal(surface: &Surface) -> Option<&Self::Surface>;
 }
 
 impl HalApi for hal::api::Empty {
@@ -25,7 +25,7 @@ impl HalApi for hal::api::Empty {
     fn hub(_: &Global) -> &Hub<Self> {
         unimplemented!("called empty api")
     }
-    fn get_surface(_: &Surface) -> Option<&Self::Surface> {
+    fn surface_as_hal(_: &Surface) -> Option<&Self::Surface> {
         unimplemented!("called empty api")
     }
 }
@@ -46,8 +46,8 @@ impl HalApi for hal::api::Vulkan {
     fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.vulkan
     }
-    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
-        surface.raw.downcast_ref::<Self>()
+    fn surface_as_hal(surface: &Surface) -> Option<&Self::Surface> {
+        surface.vulkan.as_ref()
     }
 }
 
@@ -67,8 +67,8 @@ impl HalApi for hal::api::Metal {
     fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.metal
     }
-    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
-        surface.raw.downcast_ref::<Self>()
+    fn surface_as_hal(surface: &Surface) -> Option<&Self::Surface> {
+        surface.metal.as_ref()
     }
 }
 
@@ -88,8 +88,8 @@ impl HalApi for hal::api::Dx12 {
     fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.dx12
     }
-    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
-        surface.raw.downcast_ref::<Self>()
+    fn surface_as_hal(surface: &Surface) -> Option<&Self::Surface> {
+        surface.dx12.as_ref()
     }
 }
 
@@ -110,7 +110,7 @@ impl HalApi for hal::api::Gles {
     fn hub(global: &Global) -> &Hub<Self> {
         &global.hubs.gl
     }
-    fn get_surface(surface: &Surface) -> Option<&Self::Surface> {
-        surface.raw.downcast_ref::<Self>()
+    fn surface_as_hal(surface: &Surface) -> Option<&Self::Surface> {
+        surface.gl.as_ref()
     }
 }

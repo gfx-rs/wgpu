@@ -4,7 +4,7 @@ struct PrimeIndices {
 
 @group(0) @binding(0) 
 var<storage, read_write> global: PrimeIndices;
-var<private> gl_GlobalInvocationID: vec3<u32>;
+var<private> gl_GlobalInvocationID_1: vec3<u32>;
 
 fn collatz_iterations(n: u32) -> u32 {
     var n_1: u32;
@@ -41,7 +41,7 @@ fn collatz_iterations(n: u32) -> u32 {
 fn main_1() {
     var index: u32;
 
-    let _e3 = gl_GlobalInvocationID;
+    let _e3 = gl_GlobalInvocationID_1;
     index = _e3.x;
     let _e6 = index;
     let _e8 = index;
@@ -53,8 +53,8 @@ fn main_1() {
 }
 
 @compute @workgroup_size(1, 1, 1) 
-fn main(@builtin(global_invocation_id) param: vec3<u32>) {
-    gl_GlobalInvocationID = param;
+fn main(@builtin(global_invocation_id) gl_GlobalInvocationID: vec3<u32>) {
+    gl_GlobalInvocationID_1 = gl_GlobalInvocationID;
     main_1();
     return;
 }

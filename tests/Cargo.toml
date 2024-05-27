@@ -27,7 +27,6 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
-heck.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
 parking_lot.workspace = true
@@ -47,12 +46,8 @@ parking_lot = { workspace = true, features = ["deadlock_detection"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_log.workspace = true
-raw-window-handle.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true }
-
-[dev-dependencies]
-naga = { workspace = true, features = ["wgsl-in"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true

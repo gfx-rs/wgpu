@@ -33,7 +33,7 @@ mod instance;
 
 use std::{
     borrow::Borrow,
-    ffi::CStr,
+    ffi::{CStr, CString},
     fmt,
     num::NonZeroU32,
     sync::{
@@ -43,10 +43,7 @@ use std::{
 };
 
 use arrayvec::ArrayVec;
-use ash::{
-    extensions::{ext, khr},
-    vk,
-};
+use ash::{ext, khr, vk};
 use parking_lot::{Mutex, RwLock};
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
@@ -73,6 +70,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -83,7 +81,7 @@ impl crate::Api for Api {
 }
 
 struct DebugUtils {
-    extension: ext::DebugUtils,
+    extension: ext::debug_utils::Instance,
     messenger: vk::DebugUtilsMessengerEXT,
 
     /// Owning pointer to the debug messenger callback user data.
@@ -106,7 +104,7 @@ pub struct DebugUtilsCreateInfo {
 /// DebugUtilsMessenger for their workarounds
 struct ValidationLayerProperties {
     /// Validation layer description, from `vk::LayerProperties`.
-    layer_description: std::ffi::CString,
+    layer_description: CString,
 
     /// Validation layer specification version, from `vk::LayerProperties`.
     layer_spec_version: u32,
@@ -132,7 +130,7 @@ pub struct InstanceShared {
     drop_guard: Option<crate::DropGuard>,
     flags: wgt::InstanceFlags,
     debug_utils: Option<DebugUtils>,
-    get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
+    get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
     entry: ash::Entry,
     has_nv_optimus: bool,
     android_sdk_version: u32,
@@ -152,7 +150,7 @@ pub struct Instance {
 struct Swapchain {
     raw: vk::SwapchainKHR,
     raw_flags: vk::SwapchainCreateFlagsKHR,
-    functor: khr::Swapchain,
+    functor: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
@@ -166,7 +164,7 @@ struct Swapchain {
 
 pub struct Surface {
     raw: vk::SurfaceKHR,
-    functor: khr::Surface,
+    functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
     swapchain: RwLock<Option<Swapchain>>,
 }
@@ -189,7 +187,7 @@ pub struct Adapter {
     instance: Arc<InstanceShared>,
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
-    phd_capabilities: adapter::PhysicalDeviceCapabilities,
+    phd_capabilities: adapter::PhysicalDeviceProperties,
     //phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
@@ -205,14 +203,15 @@ enum ExtensionFn<T> {
 }
 
 struct DeviceExtensionFunctions {
-    draw_indirect_count: Option<khr::DrawIndirectCount>,
-    timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
+    debug_utils: Option<ext::debug_utils::Device>,
+    draw_indirect_count: Option<khr::draw_indirect_count::Device>,
+    timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
-    acceleration_structure: khr::AccelerationStructure,
-    buffer_device_address: khr::BufferDeviceAddress,
+    acceleration_structure: khr::acceleration_structure::Device,
+    buffer_device_address: khr::buffer_device_address::Device,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed
@@ -333,16 +332,18 @@ struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
     queue_index: u32,
-    raw_queue: ash::vk::Queue,
+    raw_queue: vk::Queue,
     handle_is_owned: bool,
     instance: Arc<InstanceShared>,
-    physical_device: ash::vk::PhysicalDevice,
+    physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
+    pipeline_cache_validation_key: [u8; 16],
     timestamp_period: f32,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
+    features: wgt::Features,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
 }
@@ -360,7 +361,7 @@ pub struct Device {
 
 pub struct Queue {
     raw: vk::Queue,
-    swapchain_fn: khr::Swapchain,
+    swapchain_fn: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     family_index: u32,
     /// We use a redundant chain of semaphores to pass on the signal
@@ -413,6 +414,15 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl TextureView {
+    /// # Safety
+    ///
+    /// - The image view handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::ImageView {
+        self.raw
+    }
+}
+
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
@@ -438,15 +448,13 @@ pub struct BindGroup {
     set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
+/// Miscellaneous allocation recycling pool for `CommandAllocator`.
 #[derive(Default)]
 struct Temp {
     marker: Vec<u8>,
-    buffer_barriers: Vec<vk::BufferMemoryBarrier>,
-    image_barriers: Vec<vk::ImageMemoryBarrier>,
+    buffer_barriers: Vec<vk::BufferMemoryBarrier<'static>>,
+    image_barriers: Vec<vk::ImageMemoryBarrier<'static>>,
 }
-
-unsafe impl Send for Temp {}
-unsafe impl Sync for Temp {}
 
 impl Temp {
     fn clear(&mut self) {
@@ -467,11 +475,31 @@ impl Temp {
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
+
+    /// The current command buffer, if `self` is in the ["recording"]
+    /// state.
+    ///
+    /// ["recording"]: crate::CommandEncoder
+    ///
+    /// If non-`null`, the buffer is in the Vulkan "recording" state.
     active: vk::CommandBuffer,
+
+    /// What kind of pass we are currently within: compute or render.
     bind_point: vk::PipelineBindPoint,
+
+    /// Allocation recycling pool for this encoder.
     temp: Temp,
+
+    /// A pool of available command buffers.
+    ///
+    /// These are all in the Vulkan "initial" state.
     free: Vec<vk::CommandBuffer>,
+
+    /// A pool of discarded command buffers.
+    ///
+    /// These could be in any Vulkan state except "pending".
     discarded: Vec<vk::CommandBuffer>,
+
     /// If this is true, the active renderpass enabled a debug span,
     /// and needs to be disabled on renderpass close.
     rpass_debug_marker_active: bool,
@@ -479,6 +507,15 @@ pub struct CommandEncoder {
     /// If set, the end of the next render/compute pass will write a timestamp at
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
+}
+
+impl CommandEncoder {
+    /// # Safety
+    ///
+    /// - The command buffer handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::CommandBuffer {
+        self.active
+    }
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -515,13 +552,56 @@ pub struct ComputePipeline {
 }
 
 #[derive(Debug)]
+pub struct PipelineCache {
+    raw: vk::PipelineCache,
+}
+
+#[derive(Debug)]
 pub struct QuerySet {
     raw: vk::QueryPool,
 }
 
+/// The [`Api::Fence`] type for [`vulkan::Api`].
+///
+/// This is an `enum` because there are two possible implementations of
+/// `wgpu-hal` fences on Vulkan: Vulkan fences, which work on any version of
+/// Vulkan, and Vulkan timeline semaphores, which are easier and cheaper but
+/// require non-1.0 features.
+///
+/// [`Device::create_fence`] returns a [`TimelineSemaphore`] if
+/// [`VK_KHR_timeline_semaphore`] is available and enabled, and a [`FencePool`]
+/// otherwise.
+///
+/// [`Api::Fence`]: crate::Api::Fence
+/// [`vulkan::Api`]: Api
+/// [`Device::create_fence`]: crate::Device::create_fence
+/// [`TimelineSemaphore`]: Fence::TimelineSemaphore
+/// [`VK_KHR_timeline_semaphore`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VK_KHR_timeline_semaphore
+/// [`FencePool`]: Fence::FencePool
 #[derive(Debug)]
 pub enum Fence {
+    /// A Vulkan [timeline semaphore].
+    ///
+    /// These are simpler to use than Vulkan fences, since timeline semaphores
+    /// work exactly the way [`wpgu_hal::Api::Fence`] is specified to work.
+    ///
+    /// [timeline semaphore]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-semaphores
+    /// [`wpgu_hal::Api::Fence`]: crate::Api::Fence
     TimelineSemaphore(vk::Semaphore),
+
+    /// A collection of Vulkan [fence]s, each associated with a [`FenceValue`].
+    ///
+    /// The effective [`FenceValue`] of this variant is the greater of
+    /// `last_completed` and the maximum value associated with a signalled fence
+    /// in `active`.
+    ///
+    /// Fences are available in all versions of Vulkan, but since they only have
+    /// two states, "signaled" and "unsignaled", we need to use a separate fence
+    /// for each queue submission we might want to wait for, and remember which
+    /// [`FenceValue`] each one represents.
+    ///
+    /// [fence]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-fences
+    /// [`FenceValue`]: crate::FenceValue
     FencePool {
         last_completed: crate::FenceValue,
         /// The pending fence values have to be ascending.
@@ -531,25 +611,36 @@ pub enum Fence {
 }
 
 impl Fence {
+    /// Return the highest [`FenceValue`] among the signalled fences in `active`.
+    ///
+    /// As an optimization, assume that we already know that the fence has
+    /// reached `last_completed`, and don't bother checking fences whose values
+    /// are less than that: those fences remain in the `active` array only
+    /// because we haven't called `maintain` yet to clean them up.
+    ///
+    /// [`FenceValue`]: crate::FenceValue
     fn check_active(
         device: &ash::Device,
-        mut max_value: crate::FenceValue,
+        mut last_completed: crate::FenceValue,
         active: &[(crate::FenceValue, vk::Fence)],
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         for &(value, raw) in active.iter() {
             unsafe {
-                if value > max_value && device.get_fence_status(raw)? {
-                    max_value = value;
+                if value > last_completed && device.get_fence_status(raw)? {
+                    last_completed = value;
                 }
             }
         }
-        Ok(max_value)
+        Ok(last_completed)
     }
 
+    /// Return the highest signalled [`FenceValue`] for `self`.
+    ///
+    /// [`FenceValue`]: crate::FenceValue
     fn get_latest(
         &self,
         device: &ash::Device,
-        extension: Option<&ExtensionFn<khr::TimelineSemaphore>>,
+        extension: Option<&ExtensionFn<khr::timeline_semaphore::Device>>,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         match *self {
             Self::TimelineSemaphore(raw) => unsafe {
@@ -566,6 +657,18 @@ impl Fence {
         }
     }
 
+    /// Trim the internal state of this [`Fence`].
+    ///
+    /// This function has no externally visible effect, but you should call it
+    /// periodically to keep this fence's resource consumption under control.
+    ///
+    /// For fences using the [`FencePool`] implementation, this function
+    /// recycles fences that have been signaled. If you don't call this,
+    /// [`Queue::submit`] will just keep allocating a new Vulkan fence every
+    /// time it's called.
+    ///
+    /// [`FencePool`]: Fence::FencePool
+    /// [`Queue::submit`]: crate::Queue::submit
     fn maintain(&mut self, device: &ash::Device) -> Result<(), crate::DeviceError> {
         match *self {
             Self::TimelineSemaphore(_) => {}
@@ -583,9 +686,7 @@ impl Fence {
                 }
                 if free.len() != base_free {
                     active.retain(|&(value, _)| value > latest);
-                    unsafe {
-                        device.reset_fences(&free[base_free..])?;
-                    }
+                    unsafe { device.reset_fences(&free[base_free..]) }?
                 }
                 *last_completed = latest;
             }
@@ -594,7 +695,9 @@ impl Fence {
     }
 }
 
-impl crate::Queue<Api> for Queue {
+impl crate::Queue for Queue {
+    type A = Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
@@ -646,7 +749,7 @@ impl crate::Queue<Api> for Queue {
                         None => unsafe {
                             self.device
                                 .raw
-                                .create_fence(&vk::FenceCreateInfo::builder(), None)?
+                                .create_fence(&vk::FenceCreateInfo::default(), None)?
                         },
                     };
                     active.push((value, fence_raw));
@@ -659,7 +762,7 @@ impl crate::Queue<Api> for Queue {
             .map(|cmd| cmd.raw)
             .collect::<Vec<_>>();
 
-        let mut vk_info = vk::SubmitInfo::builder().command_buffers(&vk_cmd_buffers);
+        let mut vk_info = vk::SubmitInfo::default().command_buffers(&vk_cmd_buffers);
 
         vk_info = vk_info
             .wait_semaphores(&wait_semaphores)
@@ -670,7 +773,7 @@ impl crate::Queue<Api> for Queue {
 
         if !signal_values.is_empty() {
             vk_timeline_info =
-                vk::TimelineSemaphoreSubmitInfo::builder().signal_semaphore_values(&signal_values);
+                vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&signal_values);
             vk_info = vk_info.push_next(&mut vk_timeline_info);
         }
 
@@ -678,7 +781,7 @@ impl crate::Queue<Api> for Queue {
         unsafe {
             self.device
                 .raw
-                .queue_submit(self.raw, &[vk_info.build()], fence_raw)?
+                .queue_submit(self.raw, &[vk_info], fence_raw)?
         };
         Ok(())
     }
@@ -693,7 +796,7 @@ impl crate::Queue<Api> for Queue {
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
-        let mut vk_info = vk::PresentInfoKHR::builder()
+        let mut vk_info = vk::PresentInfoKHR::default()
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 

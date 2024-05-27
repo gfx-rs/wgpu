@@ -187,6 +187,7 @@ const fn decl_ident<'a>(decl: &ast::GlobalDecl<'a>) -> ast::Ident<'a> {
         ast::GlobalDeclKind::Fn(ref f) => f.name,
         ast::GlobalDeclKind::Var(ref v) => v.name,
         ast::GlobalDeclKind::Const(ref c) => c.name,
+        ast::GlobalDeclKind::Override(ref o) => o.name,
         ast::GlobalDeclKind::Struct(ref s) => s.name,
         ast::GlobalDeclKind::Type(ref t) => t.name,
     }

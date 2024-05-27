@@ -13,6 +13,7 @@ use thiserror::Error;
 #[derive(Clone, Debug)]
 pub struct ParseError {
     message: String,
+    // The first span should be the primary span, and the other ones should be complementary.
     labels: Vec<(Span, Cow<'static, str>)>,
     notes: Vec<String>,
 }
@@ -61,7 +62,7 @@ impl ParseError {
     {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
         let writer = StandardStream::stderr(ColorChoice::Auto);
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
@@ -79,7 +80,7 @@ impl ParseError {
     {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
         let mut writer = NoColor::new(Vec::new());
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
         String::from_utf8(writer.into_inner()).unwrap()
@@ -190,7 +191,7 @@ pub enum Error<'a> {
         expected: String,
         got: String,
     },
-    MissingType(Span),
+    DeclMissingTypeAndInit(Span),
     MissingAttribute(&'static str, Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
@@ -269,6 +270,11 @@ pub enum Error<'a> {
         scalar: String,
         inner: ConstantEvaluatorError,
     },
+    ExceededLimitForNestedBraces {
+        span: Span,
+        limit: u8,
+    },
+    PipelineConstantIDValue(Span),
 }
 
 impl<'a> Error<'a> {
@@ -518,11 +524,11 @@ impl<'a> Error<'a> {
                     notes: vec![],
                 }
             }
-            Error::MissingType(name_span) => ParseError {
-                message: format!("variable `{}` needs a type", &source[name_span]),
+            Error::DeclMissingTypeAndInit(name_span) => ParseError {
+                message: format!("declaration of `{}` needs a type specifier or initializer", &source[name_span]),
                 labels: vec![(
                     name_span,
-                    format!("definition of `{}`", &source[name_span]).into(),
+                    "needs a type specifier or initializer".into(),
                 )],
                 notes: vec![],
             },
@@ -769,6 +775,21 @@ impl<'a> Error<'a> {
                 notes: vec![
                     format!("the expression should have been converted to have {} scalar type", scalar),
                 ]
+            },
+            Error::ExceededLimitForNestedBraces { span, limit } => ParseError {
+                message: "brace nesting limit reached".into(),
+                labels: vec![(span, "limit reached at this brace".into())],
+                notes: vec![
+                    format!("nesting limit is currently set to {limit}"),
+                ],
+            },
+            Error::PipelineConstantIDValue(span) => ParseError {
+                message: "pipeline constant ID must be between 0 and 65535 inclusive".to_string(),
+                labels: vec![(
+                    span,
+                    "must be between 0 and 65535 inclusive".into(),
+                )],
+                notes: vec![],
             },
         }
     }

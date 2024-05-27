@@ -1,0 +1,81 @@
+; SPIR-V
+; Version: 1.3
+; Generator: rspirv
+; Bound: 58
+OpCapability Shader
+OpCapability GroupNonUniform
+OpCapability GroupNonUniformBallot
+OpCapability GroupNonUniformVote
+OpCapability GroupNonUniformArithmetic
+OpCapability GroupNonUniformShuffle
+OpCapability GroupNonUniformShuffleRelative
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %17 "main" %8 %11 %13 %15
+OpExecutionMode %17 LocalSize 1 1 1
+OpMemberDecorate %4 0 Offset 0
+OpMemberDecorate %4 1 Offset 4
+OpDecorate %8 BuiltIn NumSubgroups
+OpDecorate %11 BuiltIn SubgroupSize
+OpDecorate %13 BuiltIn SubgroupId
+OpDecorate %15 BuiltIn SubgroupLocalInvocationId
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 0
+%4 = OpTypeStruct %3 %3
+%5 = OpTypeBool
+%9 = OpTypePointer Input %3
+%8 = OpVariable  %9  Input
+%11 = OpVariable  %9  Input
+%13 = OpVariable  %9  Input
+%15 = OpVariable  %9  Input
+%18 = OpTypeFunction %2
+%19 = OpConstant  %3  1
+%20 = OpConstant  %3  0
+%21 = OpConstant  %3  4
+%23 = OpConstant  %3  3
+%24 = OpConstant  %3  2
+%25 = OpConstant  %3  8
+%28 = OpTypeVector %3 4
+%30 = OpConstantTrue  %5
+%17 = OpFunction  %2  None %18
+%6 = OpLabel
+%10 = OpLoad  %3  %8
+%12 = OpLoad  %3  %11
+%7 = OpCompositeConstruct  %4  %10 %12
+%14 = OpLoad  %3  %13
+%16 = OpLoad  %3  %15
+OpBranch %22
+%22 = OpLabel
+OpControlBarrier %23 %24 %25
+%26 = OpBitwiseAnd  %3  %16 %19
+%27 = OpIEqual  %5  %26 %19
+%29 = OpGroupNonUniformBallot  %28  %23 %27
+%31 = OpGroupNonUniformBallot  %28  %23 %30
+%32 = OpINotEqual  %5  %16 %20
+%33 = OpGroupNonUniformAll  %5  %23 %32
+%34 = OpIEqual  %5  %16 %20
+%35 = OpGroupNonUniformAny  %5  %23 %34
+%36 = OpGroupNonUniformIAdd  %3  %23 Reduce %16
+%37 = OpGroupNonUniformIMul  %3  %23 Reduce %16
+%38 = OpGroupNonUniformUMin  %3  %23 Reduce %16
+%39 = OpGroupNonUniformUMax  %3  %23 Reduce %16
+%40 = OpGroupNonUniformBitwiseAnd  %3  %23 Reduce %16
+%41 = OpGroupNonUniformBitwiseOr  %3  %23 Reduce %16
+%42 = OpGroupNonUniformBitwiseXor  %3  %23 Reduce %16
+%43 = OpGroupNonUniformIAdd  %3  %23 ExclusiveScan %16
+%44 = OpGroupNonUniformIMul  %3  %23 ExclusiveScan %16
+%45 = OpGroupNonUniformIAdd  %3  %23 InclusiveScan %16
+%46 = OpGroupNonUniformIMul  %3  %23 InclusiveScan %16
+%47 = OpGroupNonUniformBroadcastFirst  %3  %23 %16
+%48 = OpGroupNonUniformShuffle  %3  %23 %16 %21
+%49 = OpCompositeExtract  %3  %7 1
+%50 = OpISub  %3  %49 %19
+%51 = OpISub  %3  %50 %16
+%52 = OpGroupNonUniformShuffle  %3  %23 %16 %51
+%53 = OpGroupNonUniformShuffleDown  %3  %23 %16 %19
+%54 = OpGroupNonUniformShuffleUp  %3  %23 %16 %19
+%55 = OpCompositeExtract  %3  %7 1
+%56 = OpISub  %3  %55 %19
+%57 = OpGroupNonUniformShuffleXor  %3  %23 %16 %56
+OpReturn
+OpFunctionEnd

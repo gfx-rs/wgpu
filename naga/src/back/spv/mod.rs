@@ -13,6 +13,7 @@ mod layout;
 mod ray;
 mod recyclable;
 mod selection;
+mod subgroup;
 mod writer;
 
 pub use spirv::Capability;
@@ -70,6 +71,8 @@ pub enum Error {
     FeatureNotImplemented(&'static str),
     #[error("module is not validated properly: {0}")]
     Validation(&'static str),
+    #[error("overrides should not be present at this stage")]
+    Override,
 }
 
 #[derive(Default)]
@@ -245,7 +248,7 @@ impl LocalImageType {
 /// this, by converting everything possible to a `LocalType` before inspecting
 /// it.
 ///
-/// ## `Localtype` equality and SPIR-V `OpType` uniqueness
+/// ## `LocalType` equality and SPIR-V `OpType` uniqueness
 ///
 /// The definition of `Eq` on `LocalType` is carefully chosen to help us follow
 /// certain SPIR-V rules. SPIR-V §2.8 requires some classes of `OpType...`
@@ -454,7 +457,7 @@ impl recyclable::Recyclable for CachedExpressions {
 
 #[derive(Eq, Hash, PartialEq)]
 enum CachedConstant {
-    Literal(crate::Literal),
+    Literal(crate::proc::HashableLiteral),
     Composite {
         ty: LookupType,
         constituent_ids: Vec<Word>,
@@ -527,6 +530,42 @@ struct FunctionArgument {
     handle_id: Word,
 }
 
+/// Tracks the expressions for which the backend emits the following instructions:
+/// - OpConstantTrue
+/// - OpConstantFalse
+/// - OpConstant
+/// - OpConstantComposite
+/// - OpConstantNull
+struct ExpressionConstnessTracker {
+    inner: bit_set::BitSet,
+}
+
+impl ExpressionConstnessTracker {
+    fn from_arena(arena: &crate::Arena<crate::Expression>) -> Self {
+        let mut inner = bit_set::BitSet::new();
+        for (handle, expr) in arena.iter() {
+            let insert = match *expr {
+                crate::Expression::Literal(_)
+                | crate::Expression::ZeroValue(_)
+                | crate::Expression::Constant(_) => true,
+                crate::Expression::Compose { ref components, .. } => {
+                    components.iter().all(|h| inner.contains(h.index()))
+                }
+                crate::Expression::Splat { value, .. } => inner.contains(value.index()),
+                _ => false,
+            };
+            if insert {
+                inner.insert(handle.index());
+            }
+        }
+        Self { inner }
+    }
+
+    fn is_const(&self, value: Handle<crate::Expression>) -> bool {
+        self.inner.contains(value.index())
+    }
+}
+
 /// General information needed to emit SPIR-V for Naga statements.
 struct BlockContext<'w> {
     /// The writer handling the module to which this code belongs.
@@ -552,7 +591,7 @@ struct BlockContext<'w> {
     temp_list: Vec<Word>,
 
     /// Tracks the constness of `Expression`s residing in `self.ir_function.expressions`
-    expression_constness: crate::proc::ExpressionConstnessTracker,
+    expression_constness: ExpressionConstnessTracker,
 }
 
 impl BlockContext<'_> {
@@ -575,6 +614,15 @@ impl BlockContext<'_> {
     fn get_scope_constant(&mut self, scope: Word) -> Word {
         self.writer
             .get_constant_scalar(crate::Literal::I32(scope as _))
+    }
+
+    fn get_pointer_id(
+        &mut self,
+        handle: Handle<crate::Type>,
+        class: spirv::StorageClass,
+    ) -> Result<Word, Error> {
+        self.writer
+            .get_pointer_id(&self.ir_module.types, handle, class)
     }
 }
 
@@ -708,7 +756,7 @@ impl<'a> Default for Options<'a> {
             flags,
             binding_map: BindingMap::default(),
             capabilities: None,
-            bounds_check_policies: crate::proc::BoundsCheckPolicies::default(),
+            bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             debug_info: None,
         }
@@ -716,7 +764,7 @@ impl<'a> Default for Options<'a> {
 }
 
 // A subset of options meant to be changed per pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {

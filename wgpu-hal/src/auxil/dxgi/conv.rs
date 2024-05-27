@@ -261,6 +261,7 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> dxgiformat::DXGI_FORMAT {
         Vf::Uint32x4 => DXGI_FORMAT_R32G32B32A32_UINT,
         Vf::Sint32x4 => DXGI_FORMAT_R32G32B32A32_SINT,
         Vf::Float32x4 => DXGI_FORMAT_R32G32B32A32_FLOAT,
+        Vf::Unorm10_10_10_2 => DXGI_FORMAT_R10G10B10A2_UNORM,
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
 }

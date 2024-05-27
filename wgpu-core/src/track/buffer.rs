@@ -11,6 +11,7 @@ use super::{PendingTransition, ResourceTracker, TrackerIndex};
 use crate::{
     hal_api::HalApi,
     id::BufferId,
+    lock::{rank, Mutex},
     resource::{Buffer, Resource},
     snatch::SnatchGuard,
     storage::Storage,
@@ -20,7 +21,6 @@ use crate::{
     },
 };
 use hal::{BufferBarrier, BufferUses};
-use parking_lot::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 impl ResourceUses for BufferUses {
@@ -51,7 +51,7 @@ pub(crate) struct BufferBindGroupState<A: HalApi> {
 impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            buffers: Mutex::new(Vec::new()),
+            buffers: Mutex::new(rank::BUFFER_BIND_GROUP_STATE_BUFFERS, Vec::new()),
 
             _phantom: PhantomData,
         }
@@ -108,22 +108,26 @@ impl<A: HalApi> BufferBindGroupState<A> {
 #[derive(Debug)]
 pub(crate) struct BufferUsageScope<A: HalApi> {
     state: Vec<BufferUses>,
-
     metadata: ResourceMetadata<Buffer<A>>,
 }
 
-impl<A: HalApi> BufferUsageScope<A> {
-    pub fn new() -> Self {
+impl<A: HalApi> Default for BufferUsageScope<A> {
+    fn default() -> Self {
         Self {
             state: Vec::new(),
-
             metadata: ResourceMetadata::new(),
         }
     }
+}
 
+impl<A: HalApi> BufferUsageScope<A> {
     fn tracker_assert_in_bounds(&self, index: usize) {
         strict_assert!(index < self.state.len());
         self.metadata.tracker_assert_in_bounds(index);
+    }
+    pub fn clear(&mut self) {
+        self.state.clear();
+        self.metadata.clear();
     }
 
     /// Sets the size of all the vectors inside the tracker.
@@ -241,6 +245,22 @@ impl<A: HalApi> BufferUsageScope<A> {
             .get(id)
             .map_err(|_| UsageConflict::BufferInvalid { id })?;
 
+        self.insert_merge_single(buffer.clone(), new_state)
+            .map(|_| buffer)
+    }
+
+    /// Merge a single state into the UsageScope, using an already resolved buffer.
+    ///
+    /// If the resulting state is invalid, returns a usage
+    /// conflict with the details of the invalid state.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// the vectors will be extended. A call to set_size is not needed.
+    pub fn insert_merge_single(
+        &mut self,
+        buffer: Arc<Buffer<A>>,
+        new_state: BufferUses,
+    ) -> Result<(), UsageConflict> {
         let index = buffer.info.tracker_index().as_usize();
 
         self.allow_index(index);
@@ -256,12 +276,12 @@ impl<A: HalApi> BufferUsageScope<A> {
                 index,
                 BufferStateProvider::Direct { state: new_state },
                 ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(buffer.clone()),
+                    resource: Cow::Owned(buffer),
                 },
             )?;
         }
 
-        Ok(buffer)
+        Ok(())
     }
 }
 
@@ -283,8 +303,8 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
     ///
     /// A buffer is 'otherwise unused' when the only references to it are:
     ///
-    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_suspected`, has just
-    ///    drained from `LifetimeTracker::suspected_resources`,
+    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_resources`, is
+    ///    considering draining from `LifetimeTracker::suspected_resources`,
     ///
     /// 2) its `Arc` in [`self.metadata`] (owned by [`Device::trackers`]), and
     ///

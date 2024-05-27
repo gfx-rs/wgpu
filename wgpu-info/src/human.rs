@@ -143,6 +143,8 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_vertex_buffers,
         max_vertex_attributes,
         max_vertex_buffer_array_stride,
+        min_subgroup_size,
+        max_subgroup_size,
         max_push_constant_size,
         min_uniform_buffer_offset_alignment,
         min_storage_buffer_offset_alignment,
@@ -176,6 +178,8 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                              Max Vertex Buffers: {max_vertex_buffers}")?;
     writeln!(output, "\t\t                           Max Vertex Attributes: {max_vertex_attributes}")?;
     writeln!(output, "\t\t                  Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
+    writeln!(output, "\t\t                               Min Subgroup Size: {min_subgroup_size}")?;
+    writeln!(output, "\t\t                               Max Subgroup Size: {max_subgroup_size}")?;
     writeln!(output, "\t\t                          Max Push Constant Size: {max_push_constant_size}")?;
     writeln!(output, "\t\t             Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t             Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;

@@ -110,7 +110,7 @@ use crate::{
     device::{queue::Queue, Device},
     hal_api::HalApi,
     instance::{Adapter, Surface},
-    pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
+    pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
     resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
     storage::{Element, Storage},
@@ -130,6 +130,7 @@ pub struct HubReport {
     pub render_bundles: RegistryReport,
     pub render_pipelines: RegistryReport,
     pub compute_pipelines: RegistryReport,
+    pub pipeline_caches: RegistryReport,
     pub query_sets: RegistryReport,
     pub buffers: RegistryReport,
     pub textures: RegistryReport,
@@ -169,23 +170,24 @@ impl HubReport {
 ///
 /// [`A::hub(global)`]: HalApi::hub
 pub struct Hub<A: HalApi> {
-    pub adapters: Registry<Adapter<A>>,
-    pub devices: Registry<Device<A>>,
-    pub queues: Registry<Queue<A>>,
-    pub pipeline_layouts: Registry<PipelineLayout<A>>,
-    pub shader_modules: Registry<ShaderModule<A>>,
-    pub bind_group_layouts: Registry<BindGroupLayout<A>>,
-    pub bind_groups: Registry<BindGroup<A>>,
-    pub command_buffers: Registry<CommandBuffer<A>>,
-    pub render_bundles: Registry<RenderBundle<A>>,
-    pub render_pipelines: Registry<RenderPipeline<A>>,
-    pub compute_pipelines: Registry<ComputePipeline<A>>,
-    pub query_sets: Registry<QuerySet<A>>,
-    pub buffers: Registry<Buffer<A>>,
-    pub staging_buffers: Registry<StagingBuffer<A>>,
-    pub textures: Registry<Texture<A>>,
-    pub texture_views: Registry<TextureView<A>>,
-    pub samplers: Registry<Sampler<A>>,
+    pub(crate) adapters: Registry<Adapter<A>>,
+    pub(crate) devices: Registry<Device<A>>,
+    pub(crate) queues: Registry<Queue<A>>,
+    pub(crate) pipeline_layouts: Registry<PipelineLayout<A>>,
+    pub(crate) shader_modules: Registry<ShaderModule<A>>,
+    pub(crate) bind_group_layouts: Registry<BindGroupLayout<A>>,
+    pub(crate) bind_groups: Registry<BindGroup<A>>,
+    pub(crate) command_buffers: Registry<CommandBuffer<A>>,
+    pub(crate) render_bundles: Registry<RenderBundle<A>>,
+    pub(crate) render_pipelines: Registry<RenderPipeline<A>>,
+    pub(crate) compute_pipelines: Registry<ComputePipeline<A>>,
+    pub(crate) pipeline_caches: Registry<PipelineCache<A>>,
+    pub(crate) query_sets: Registry<QuerySet<A>>,
+    pub(crate) buffers: Registry<Buffer<A>>,
+    pub(crate) staging_buffers: Registry<StagingBuffer<A>>,
+    pub(crate) textures: Registry<Texture<A>>,
+    pub(crate) texture_views: Registry<TextureView<A>>,
+    pub(crate) samplers: Registry<Sampler<A>>,
 }
 
 impl<A: HalApi> Hub<A> {
@@ -202,6 +204,7 @@ impl<A: HalApi> Hub<A> {
             render_bundles: Registry::new(A::VARIANT),
             render_pipelines: Registry::new(A::VARIANT),
             compute_pipelines: Registry::new(A::VARIANT),
+            pipeline_caches: Registry::new(A::VARIANT),
             query_sets: Registry::new(A::VARIANT),
             buffers: Registry::new(A::VARIANT),
             staging_buffers: Registry::new(A::VARIANT),
@@ -235,13 +238,14 @@ impl<A: HalApi> Hub<A> {
         self.pipeline_layouts.write().map.clear();
         self.compute_pipelines.write().map.clear();
         self.render_pipelines.write().map.clear();
+        self.pipeline_caches.write().map.clear();
         self.query_sets.write().map.clear();
 
         for element in surface_guard.map.iter() {
             if let Element::Occupied(ref surface, _epoch) = *element {
                 if let Some(ref mut present) = surface.presentation.lock().take() {
                     if let Some(device) = present.device.downcast_ref::<A>() {
-                        let suf = A::get_surface(surface);
+                        let suf = A::surface_as_hal(surface);
                         unsafe {
                             suf.unwrap().unconfigure(device.raw());
                             //TODO: we could destroy the surface here
@@ -280,6 +284,7 @@ impl<A: HalApi> Hub<A> {
             render_bundles: self.render_bundles.generate_report(),
             render_pipelines: self.render_pipelines.generate_report(),
             compute_pipelines: self.compute_pipelines.generate_report(),
+            pipeline_caches: self.pipeline_caches.generate_report(),
             query_sets: self.query_sets.generate_report(),
             buffers: self.buffers.generate_report(),
             textures: self.textures.generate_report(),

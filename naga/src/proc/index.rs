@@ -239,7 +239,7 @@ pub enum GuardedIndex {
 pub fn find_checked_indexes(
     module: &crate::Module,
     function: &crate::Function,
-    info: &crate::valid::FunctionInfo,
+    info: &valid::FunctionInfo,
     policies: BoundsCheckPolicies,
 ) -> BitSet {
     use crate::Expression as Ex;
@@ -321,7 +321,7 @@ pub fn access_needs_check(
     mut index: GuardedIndex,
     module: &crate::Module,
     function: &crate::Function,
-    info: &crate::valid::FunctionInfo,
+    info: &valid::FunctionInfo,
 ) -> Option<IndexableLength> {
     let base_inner = info[base].ty.inner_with(&module.types);
     // Unwrap safety: `Err` here indicates unindexable base types and invalid

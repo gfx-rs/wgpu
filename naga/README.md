@@ -42,7 +42,7 @@ First, install `naga-cli` from crates.io or directly from GitHub.
 cargo install naga-cli
 
 # development version
-cargo install naga-cli --git https://github.com/gfx-rs/naga.git
+cargo install naga-cli --git https://github.com/gfx-rs/wgpu.git
 ```
 
 Then, you can run `naga` command.

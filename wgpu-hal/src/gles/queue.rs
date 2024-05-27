@@ -213,12 +213,27 @@ impl super::Queue {
                 instance_count,
                 ref first_instance_location,
             } => {
-                match base_vertex {
-                    0 => {
-                        unsafe {
-                            gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
-                        };
+                let supports_full_instancing = self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
 
+                if supports_full_instancing {
+                    unsafe {
+                        gl.draw_elements_instanced_base_vertex_base_instance(
+                            topology,
+                            index_count as i32,
+                            index_type,
+                            index_offset as i32,
+                            instance_count as i32,
+                            base_vertex,
+                            first_instance,
+                        )
+                    }
+                } else {
+                    unsafe { gl.uniform_1_u32(first_instance_location.as_ref(), first_instance) };
+
+                    if base_vertex == 0 {
                         unsafe {
                             // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
                             // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
@@ -231,41 +246,17 @@ impl super::Queue {
                                 instance_count as i32,
                             )
                         }
-                    }
-                    _ => {
-                        let supports_full_instancing = self
-                            .shared
-                            .private_caps
-                            .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
-
-                        if supports_full_instancing {
-                            unsafe {
-                                gl.draw_elements_instanced_base_vertex_base_instance(
-                                    topology,
-                                    index_count as i32,
-                                    index_type,
-                                    index_offset as i32,
-                                    instance_count as i32,
-                                    base_vertex,
-                                    first_instance,
-                                )
-                            }
-                        } else {
-                            unsafe {
-                                gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
-                            };
-
-                            // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
-                            unsafe {
-                                gl.draw_elements_instanced_base_vertex(
-                                    topology,
-                                    index_count as _,
-                                    index_type,
-                                    index_offset as i32,
-                                    instance_count as i32,
-                                    base_vertex,
-                                )
-                            }
+                    } else {
+                        // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
+                        unsafe {
+                            gl.draw_elements_instanced_base_vertex(
+                                topology,
+                                index_count as _,
+                                index_type,
+                                index_offset as i32,
+                                instance_count as i32,
+                                base_vertex,
+                            )
                         }
                     }
                 }
@@ -322,7 +313,7 @@ impl super::Queue {
                     let can_use_zero_buffer = self
                         .shared
                         .private_caps
-                        .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                        .contains(PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
                         || dst_target != glow::ELEMENT_ARRAY_BUFFER;
 
                     if can_use_zero_buffer {
@@ -367,7 +358,7 @@ impl super::Queue {
                 let is_index_buffer_only_element_dst = !self
                     .shared
                     .private_caps
-                    .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                    .contains(PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
                     && dst_target == glow::ELEMENT_ARRAY_BUFFER
                     || src_target == glow::ELEMENT_ARRAY_BUFFER;
 
@@ -1084,13 +1075,7 @@ impl super::Queue {
                 {
                     unsafe { self.perform_shader_clear(gl, draw_buffer, *color) };
                 } else {
-                    // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
-                    // on Windows.
-                    unsafe {
-                        gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
-                        gl.clear_color(color[0], color[1], color[2], color[3]);
-                        gl.clear(glow::COLOR_BUFFER_BIT);
-                    }
+                    unsafe { gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color) };
                 }
             }
             C::ClearColorU(draw_buffer, ref color) => {
@@ -1748,7 +1733,9 @@ impl super::Queue {
     }
 }
 
-impl crate::Queue<super::Api> for super::Queue {
+impl crate::Queue for super::Queue {
+    type A = super::Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&super::CommandBuffer],

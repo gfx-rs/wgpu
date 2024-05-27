@@ -102,11 +102,13 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             vertex: wgpu::VertexState {
                 module: &vs_sm,
                 entry_point: "vs_main",
+                compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fs_sm,
                 entry_point: "fs_main",
+                compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
@@ -117,6 +119,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {

@@ -1,6 +1,6 @@
 [package]
 name = "d3d12"
-version = "0.19.0"
+version = "0.20.0"
 authors = ["gfx-rs developers"]
 description = "Low level D3D12 API wrapper"
 repository = "https://github.com/gfx-rs/wgpu/tree/trunk/d3d12"

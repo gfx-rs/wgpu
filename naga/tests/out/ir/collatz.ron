@@ -46,6 +46,7 @@
         predeclared_types: {},
     ),
     constants: [],
+    overrides: [],
     global_variables: [
         (
             name: Some("v_indices"),
@@ -60,7 +61,7 @@
             init: None,
         ),
     ],
-    const_expressions: [],
+    global_expressions: [],
     functions: [
         (
             name: Some("collatz_iterations"),

@@ -185,6 +185,7 @@ pub enum ResolveError {
 
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
+    pub overrides: &'a Arena<crate::Override>,
     pub types: &'a UniqueArena<crate::Type>,
     pub special_types: &'a crate::SpecialTypes,
     pub global_vars: &'a Arena<crate::GlobalVariable>,
@@ -202,6 +203,7 @@ impl<'a> ResolveContext<'a> {
     ) -> Self {
         Self {
             constants: &module.constants,
+            overrides: &module.overrides,
             types: &module.types,
             special_types: &module.special_types,
             global_vars: &module.global_variables,
@@ -407,6 +409,7 @@ impl<'a> ResolveContext<'a> {
             },
             crate::Expression::Literal(lit) => TypeResolution::Value(lit.ty_inner()),
             crate::Expression::Constant(h) => TypeResolution::Handle(self.constants[h].ty),
+            crate::Expression::Override(h) => TypeResolution::Handle(self.overrides[h].ty),
             crate::Expression::ZeroValue(ty) => TypeResolution::Handle(ty),
             crate::Expression::Compose { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::FunctionArgument(index) => {
@@ -595,6 +598,7 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::ShiftRight => past(left)?.clone(),
             },
             crate::Expression::AtomicResult { ty, .. } => TypeResolution::Handle(ty),
+            crate::Expression::SubgroupOperationResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::WorkGroupUniformLoadResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::Select { accept, .. } => past(accept)?.clone(),
             crate::Expression::Derivative { expr, .. } => past(expr)?.clone(),
@@ -806,7 +810,9 @@ impl<'a> ResolveContext<'a> {
                     Mf::Pack4x8unorm |
                     Mf::Pack2x16snorm |
                     Mf::Pack2x16unorm |
-                    Mf::Pack2x16float => TypeResolution::Value(Ti::Scalar(crate::Scalar::U32)),
+                    Mf::Pack2x16float |
+                    Mf::Pack4xI8 |
+                    Mf::Pack4xU8 => TypeResolution::Value(Ti::Scalar(crate::Scalar::U32)),
                     // data unpacking
                     Mf::Unpack4x8snorm |
                     Mf::Unpack4x8unorm => TypeResolution::Value(Ti::Vector {
@@ -818,6 +824,14 @@ impl<'a> ResolveContext<'a> {
                     Mf::Unpack2x16float => TypeResolution::Value(Ti::Vector {
                         size: crate::VectorSize::Bi,
                         scalar: crate::Scalar::F32
+                    }),
+                    Mf::Unpack4xI8 => TypeResolution::Value(Ti::Vector {
+                        size: crate::VectorSize::Quad,
+                        scalar: crate::Scalar::I32
+                    }),
+                    Mf::Unpack4xU8 => TypeResolution::Value(Ti::Vector {
+                        size: crate::VectorSize::Quad,
+                        scalar: crate::Scalar::U32
                     }),
                 }
             }
@@ -882,6 +896,10 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::SubgroupBallotResult => TypeResolution::Value(Ti::Vector {
+                scalar: crate::Scalar::U32,
+                size: crate::VectorSize::Quad,
+            }),
         })
     }
 }

@@ -227,8 +227,12 @@ impl super::CommandEncoder {
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
-        self.state.first_instance_location = inner.first_instance_location.clone();
-        self.state.push_constant_descs = inner.push_constant_descs.clone();
+        self.state
+            .first_instance_location
+            .clone_from(&inner.first_instance_location);
+        self.state
+            .push_constant_descs
+            .clone_from(&inner.push_constant_descs);
 
         // rebind textures, if needed
         let mut dirty_textures = 0u32;
@@ -250,7 +254,9 @@ impl super::CommandEncoder {
     }
 }
 
-impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
+impl crate::CommandEncoder for super::CommandEncoder {
+    type A = super::Api;
+
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         self.state = State::default();
         self.cmd_buffer.label = label.map(str::to_string);
@@ -602,6 +608,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             depth: 0.0..1.0,
         });
 
+        if !rendering_to_external_framebuffer {
+            // set the draw buffers and states
+            self.cmd_buffer
+                .commands
+                .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+        }
+
         // issue the clears
         for (i, cat) in desc
             .color_attachments
@@ -630,13 +643,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     },
                 );
             }
-        }
-
-        if !rendering_to_external_framebuffer {
-            // set the draw buffers and states
-            self.cmd_buffer
-                .commands
-                .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
         }
 
         if let Some(ref dsat) = desc.depth_stencil_attachment {

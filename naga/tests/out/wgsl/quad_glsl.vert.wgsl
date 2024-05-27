@@ -1,6 +1,6 @@
 struct VertexOutput {
     @location(0) v_uv: vec2<f32>,
-    @builtin(position) member: vec4<f32>,
+    @builtin(position) gl_Position: vec4<f32>,
 }
 
 const c_scale: f32 = 1.2f;
@@ -14,8 +14,8 @@ fn main_1() {
     let _e4 = a_uv_1;
     v_uv = _e4;
     let _e6 = a_pos_1;
-    let _e8 = (c_scale * _e6);
-    gl_Position = vec4<f32>(_e8.x, _e8.y, 0f, 1f);
+    let _e7 = (c_scale * _e6);
+    gl_Position = vec4<f32>(_e7.x, _e7.y, 0f, 1f);
     return;
 }
 

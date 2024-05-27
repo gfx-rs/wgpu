@@ -1,19 +1,19 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
-    any_surface::AnySurface,
     api_log,
     device::{queue::Queue, resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
     id::markers,
     id::{AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
+    lock::{rank, Mutex},
     present::Presentation,
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use parking_lot::Mutex;
 use wgt::{Backend, Backends, PowerPreference};
 
 use hal::{Adapter as _, Instance as _, OpenDevice};
@@ -21,6 +21,7 @@ use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 type HalInstance<A> = <A as hal::Api>::Instance;
+type HalSurface<A> = <A as hal::Api>::Surface;
 
 #[derive(Clone, Debug, Error)]
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
@@ -113,31 +114,36 @@ impl Instance {
     }
 
     pub(crate) fn destroy_surface(&self, surface: Surface) {
-        fn destroy<A: HalApi>(instance: &Option<A::Instance>, surface: AnySurface) {
-            unsafe {
-                if let Some(suf) = surface.take::<A>() {
-                    instance.as_ref().unwrap().destroy_surface(suf);
+        fn destroy<A: HalApi>(instance: &Option<A::Instance>, mut surface: Option<HalSurface<A>>) {
+            if let Some(surface) = surface.take() {
+                unsafe {
+                    instance.as_ref().unwrap().destroy_surface(surface);
                 }
             }
         }
-        match surface.raw.backend() {
-            #[cfg(vulkan)]
-            Backend::Vulkan => destroy::<hal::api::Vulkan>(&self.vulkan, surface.raw),
-            #[cfg(metal)]
-            Backend::Metal => destroy::<hal::api::Metal>(&self.metal, surface.raw),
-            #[cfg(dx12)]
-            Backend::Dx12 => destroy::<hal::api::Dx12>(&self.dx12, surface.raw),
-            #[cfg(gles)]
-            Backend::Gl => destroy::<hal::api::Gles>(&self.gl, surface.raw),
-            _ => unreachable!(),
-        }
+        #[cfg(vulkan)]
+        destroy::<hal::api::Vulkan>(&self.vulkan, surface.vulkan);
+        #[cfg(metal)]
+        destroy::<hal::api::Metal>(&self.metal, surface.metal);
+        #[cfg(dx12)]
+        destroy::<hal::api::Dx12>(&self.dx12, surface.dx12);
+        #[cfg(gles)]
+        destroy::<hal::api::Gles>(&self.gl, surface.gl);
     }
 }
 
 pub struct Surface {
     pub(crate) presentation: Mutex<Option<Presentation>>,
     pub(crate) info: ResourceInfo<Surface>,
-    pub(crate) raw: AnySurface,
+
+    #[cfg(vulkan)]
+    pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
+    #[cfg(metal)]
+    pub metal: Option<HalSurface<hal::api::Metal>>,
+    #[cfg(dx12)]
+    pub dx12: Option<HalSurface<hal::api::Dx12>>,
+    #[cfg(gles)]
+    pub gl: Option<HalSurface<hal::api::Gles>>,
 }
 
 impl Resource for Surface {
@@ -153,8 +159,8 @@ impl Resource for Surface {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        String::from("<Surface>")
+    fn label(&self) -> &str {
+        "<Surface>"
     }
 }
 
@@ -163,7 +169,7 @@ impl Surface {
         &self,
         adapter: &Adapter<A>,
     ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
-        let suf = A::get_surface(self).ok_or(GetSurfaceSupportError::Unsupported)?;
+        let suf = A::surface_as_hal(self).ok_or(GetSurfaceSupportError::Unsupported)?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe {
             adapter
@@ -203,7 +209,7 @@ impl<A: HalApi> Adapter<A> {
     }
 
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
-        let suf = A::get_surface(surface);
+        let suf = A::surface_as_hal(surface);
 
         // If get_surface returns None, then the API does not advertise support for the surface.
         //
@@ -324,7 +330,7 @@ impl<A: HalApi> Adapter<A> {
         }
 
         let caps = &self.raw.capabilities;
-        if wgt::Backends::PRIMARY.contains(wgt::Backends::from(A::VARIANT))
+        if Backends::PRIMARY.contains(Backends::from(A::VARIANT))
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;
@@ -461,13 +467,25 @@ pub enum RequestAdapterError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateSurfaceError {
-    #[error("No backend is available")]
-    NoSupportedBackend,
-    #[error(transparent)]
-    InstanceError(#[from] hal::InstanceError),
+    #[error("The backend {0} was not enabled on the instance.")]
+    BackendNotEnabled(Backend),
+    #[error("Failed to create surface for any enabled backend: {0:?}")]
+    FailedToCreateSurfaceForAnyBackend(HashMap<Backend, hal::InstanceError>),
 }
 
 impl Global {
+    /// Creates a new surface targeting the given display/window handles.
+    ///
+    /// Internally attempts to create hal surfaces for all enabled backends.
+    ///
+    /// Fails only if creation for surfaces for all enabled backends fails in which case
+    /// the error for each enabled backend is listed.
+    /// Vice versa, if creation for any backend succeeds, success is returned.
+    /// Surface creation errors are logged to the debug log in any case.
+    ///
+    /// id_in:
+    /// - If `Some`, the id to assign to the surface. A new one will be generated otherwise.
+    ///
     /// # Safety
     ///
     /// - `display_handle` must be a valid object to create a surface upon.
@@ -483,50 +501,86 @@ impl Global {
         profiling::scope!("Instance::create_surface");
 
         fn init<A: HalApi>(
+            errors: &mut HashMap<Backend, hal::InstanceError>,
+            any_created: &mut bool,
+            backend: Backend,
             inst: &Option<A::Instance>,
             display_handle: raw_window_handle::RawDisplayHandle,
             window_handle: raw_window_handle::RawWindowHandle,
-        ) -> Option<Result<AnySurface, hal::InstanceError>> {
-            inst.as_ref().map(|inst| unsafe {
-                match inst.create_surface(display_handle, window_handle) {
-                    Ok(raw) => Ok(AnySurface::new::<A>(raw)),
-                    Err(e) => Err(e),
+        ) -> Option<HalSurface<A>> {
+            inst.as_ref().and_then(|inst| {
+                match unsafe { inst.create_surface(display_handle, window_handle) } {
+                    Ok(raw) => {
+                        *any_created = true;
+                        Some(raw)
+                    }
+                    Err(err) => {
+                        log::debug!(
+                            "Instance::create_surface: failed to create surface for {:?}: {:?}",
+                            backend,
+                            err
+                        );
+                        errors.insert(backend, err);
+                        None
+                    }
                 }
             })
         }
 
-        let mut hal_surface: Option<Result<AnySurface, hal::InstanceError>> = None;
-
-        #[cfg(vulkan)]
-        if hal_surface.is_none() {
-            hal_surface =
-                init::<hal::api::Vulkan>(&self.instance.vulkan, display_handle, window_handle);
-        }
-        #[cfg(metal)]
-        if hal_surface.is_none() {
-            hal_surface =
-                init::<hal::api::Metal>(&self.instance.metal, display_handle, window_handle);
-        }
-        #[cfg(dx12)]
-        if hal_surface.is_none() {
-            hal_surface =
-                init::<hal::api::Dx12>(&self.instance.dx12, display_handle, window_handle);
-        }
-        #[cfg(gles)]
-        if hal_surface.is_none() {
-            hal_surface = init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle);
-        }
-
-        let hal_surface = hal_surface.ok_or(CreateSurfaceError::NoSupportedBackend)??;
+        let mut errors = HashMap::default();
+        let mut any_created = false;
 
         let surface = Surface {
-            presentation: Mutex::new(None),
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
             info: ResourceInfo::new("<Surface>", None),
-            raw: hal_surface,
+
+            #[cfg(vulkan)]
+            vulkan: init::<hal::api::Vulkan>(
+                &mut errors,
+                &mut any_created,
+                Backend::Vulkan,
+                &self.instance.vulkan,
+                display_handle,
+                window_handle,
+            ),
+            #[cfg(metal)]
+            metal: init::<hal::api::Metal>(
+                &mut errors,
+                &mut any_created,
+                Backend::Metal,
+                &self.instance.metal,
+                display_handle,
+                window_handle,
+            ),
+            #[cfg(dx12)]
+            dx12: init::<hal::api::Dx12>(
+                &mut errors,
+                &mut any_created,
+                Backend::Dx12,
+                &self.instance.dx12,
+                display_handle,
+                window_handle,
+            ),
+            #[cfg(gles)]
+            gl: init::<hal::api::Gles>(
+                &mut errors,
+                &mut any_created,
+                Backend::Gl,
+                &self.instance.gl,
+                display_handle,
+                window_handle,
+            ),
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        Ok(id)
+        if any_created {
+            #[allow(clippy::arc_with_non_send_sync)]
+            let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+            Ok(id)
+        } else {
+            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
+                errors,
+            ))
+        }
     }
 
     /// # Safety
@@ -537,29 +591,57 @@ impl Global {
         &self,
         layer: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface_metal");
 
         let surface = Surface {
-            presentation: Mutex::new(None),
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
             info: ResourceInfo::new("<Surface>", None),
-            raw: {
-                let hal_surface = self
-                    .instance
-                    .metal
-                    .as_ref()
-                    .map(|inst| {
-                        // we don't want to link to metal-rs for this
-                        #[allow(clippy::transmute_ptr_to_ref)]
-                        inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
-                    })
-                    .unwrap();
-                AnySurface::new::<hal::api::Metal>(hal_surface)
-            },
+            metal: Some(self.instance.metal.as_ref().map_or(
+                Err(CreateSurfaceError::BackendNotEnabled(Backend::Metal)),
+                |inst| {
+                    // we don't want to link to metal-rs for this
+                    #[allow(clippy::transmute_ptr_to_ref)]
+                    Ok(inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) }))
+                },
+            )?),
+            #[cfg(dx12)]
+            dx12: None,
+            #[cfg(vulkan)]
+            vulkan: None,
+            #[cfg(gles)]
+            gl: None,
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
+    }
+
+    #[cfg(dx12)]
+    fn instance_create_surface_dx12(
+        &self,
+        id_in: Option<SurfaceId>,
+        create_surface_func: impl FnOnce(&HalInstance<hal::api::Dx12>) -> HalSurface<hal::api::Dx12>,
+    ) -> Result<SurfaceId, CreateSurfaceError> {
+        let surface = Surface {
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+            info: ResourceInfo::new("<Surface>", None),
+            dx12: Some(create_surface_func(
+                self.instance
+                    .dx12
+                    .as_ref()
+                    .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Dx12))?,
+            )),
+            #[cfg(metal)]
+            metal: None,
+            #[cfg(vulkan)]
+            vulkan: None,
+            #[cfg(gles)]
+            gl: None,
+        };
+
+        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     #[cfg(dx12)]
@@ -570,25 +652,11 @@ impl Global {
         &self,
         visual: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_visual");
-
-        let surface = Surface {
-            presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>", None),
-            raw: {
-                let hal_surface = self
-                    .instance
-                    .dx12
-                    .as_ref()
-                    .map(|inst| unsafe { inst.create_surface_from_visual(visual as _) })
-                    .unwrap();
-                AnySurface::new::<hal::api::Dx12>(hal_surface)
-            },
-        };
-
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id
+        self.instance_create_surface_dx12(id_in, |inst| unsafe {
+            inst.create_surface_from_visual(visual as _)
+        })
     }
 
     #[cfg(dx12)]
@@ -599,25 +667,11 @@ impl Global {
         &self,
         surface_handle: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_surface_handle");
-
-        let surface = Surface {
-            presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>", None),
-            raw: {
-                let hal_surface = self
-                    .instance
-                    .dx12
-                    .as_ref()
-                    .map(|inst| unsafe { inst.create_surface_from_surface_handle(surface_handle) })
-                    .unwrap();
-                AnySurface::new::<hal::api::Dx12>(hal_surface)
-            },
-        };
-
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id
+        self.instance_create_surface_dx12(id_in, |inst| unsafe {
+            inst.create_surface_from_surface_handle(surface_handle)
+        })
     }
 
     #[cfg(dx12)]
@@ -628,27 +682,11 @@ impl Global {
         &self,
         swap_chain_panel: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
-
-        let surface = Surface {
-            presentation: Mutex::new(None),
-            info: ResourceInfo::new("<Surface>", None),
-            raw: {
-                let hal_surface = self
-                    .instance
-                    .dx12
-                    .as_ref()
-                    .map(|inst| unsafe {
-                        inst.create_surface_from_swap_chain_panel(swap_chain_panel as _)
-                    })
-                    .unwrap();
-                AnySurface::new::<hal::api::Dx12>(hal_surface)
-            },
-        };
-
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id
+        self.instance_create_surface_dx12(id_in, |inst| unsafe {
+            inst.create_surface_from_swap_chain_panel(swap_chain_panel as _)
+        })
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
@@ -656,32 +694,34 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        fn unconfigure<A: HalApi>(global: &Global, surface: &AnySurface, present: &Presentation) {
-            let hub = HalApi::hub(global);
-            if let Some(hal_surface) = surface.downcast_ref::<A>() {
+        fn unconfigure<A: HalApi>(
+            global: &Global,
+            surface: &Option<HalSurface<A>>,
+            present: &Presentation,
+        ) {
+            if let Some(surface) = surface {
+                let hub = HalApi::hub(global);
                 if let Some(device) = present.device.downcast_ref::<A>() {
-                    hub.surface_unconfigure(device, hal_surface);
+                    hub.surface_unconfigure(device, surface);
                 }
             }
         }
 
         let surface = self.surfaces.unregister(id);
-        if let Some(surface) = Arc::into_inner(surface.unwrap()) {
-            if let Some(present) = surface.presentation.lock().take() {
-                #[cfg(vulkan)]
-                unconfigure::<hal::api::Vulkan>(self, &surface.raw, &present);
-                #[cfg(metal)]
-                unconfigure::<hal::api::Metal>(self, &surface.raw, &present);
-                #[cfg(dx12)]
-                unconfigure::<hal::api::Dx12>(self, &surface.raw, &present);
-                #[cfg(gles)]
-                unconfigure::<hal::api::Gles>(self, &surface.raw, &present);
-            }
+        let surface = Arc::into_inner(surface.unwrap())
+            .expect("Surface cannot be destroyed because is still in use");
 
-            self.instance.destroy_surface(surface);
-        } else {
-            panic!("Surface cannot be destroyed because is still in use");
+        if let Some(present) = surface.presentation.lock().take() {
+            #[cfg(vulkan)]
+            unconfigure::<hal::api::Vulkan>(self, &surface.vulkan, &present);
+            #[cfg(metal)]
+            unconfigure::<hal::api::Metal>(self, &surface.metal, &present);
+            #[cfg(dx12)]
+            unconfigure::<hal::api::Dx12>(self, &surface.dx12, &present);
+            #[cfg(gles)]
+            unconfigure::<hal::api::Gles>(self, &surface.gl, &present);
         }
+        self.instance.destroy_surface(surface);
     }
 
     fn enumerate<A: HalApi>(
@@ -707,7 +747,7 @@ impl Global {
         for raw in hal_adapters {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-            let (id, _) = hub.adapters.prepare(id_backend).assign(adapter);
+            let (id, _) = hub.adapters.prepare(id_backend).assign(Arc::new(adapter));
             list.push(id);
         }
     }
@@ -754,7 +794,10 @@ impl Global {
             None => {
                 let adapter = Adapter::new(list.swap_remove(*selected));
                 log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-                let (id, _) = HalApi::hub(self).adapters.prepare(new_id).assign(adapter);
+                let (id, _) = HalApi::hub(self)
+                    .adapters
+                    .prepare(new_id)
+                    .assign(Arc::new(adapter));
                 Some(id)
             }
         }
@@ -784,7 +827,7 @@ impl Global {
                         adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
                     }
                     if let Some(surface) = compatible_surface {
-                        let surface = &A::get_surface(surface);
+                        let surface = &A::surface_as_hal(surface);
                         adapters.retain(|exposed| unsafe {
                             // If the surface does not exist for this backend,
                             // then the surface is not supported.
@@ -937,13 +980,13 @@ impl Global {
 
         let (id, _adapter): (_, Arc<Adapter<A>>) = match A::VARIANT {
             #[cfg(vulkan)]
-            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Vulkan => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(metal)]
-            Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Metal => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(dx12)]
-            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Dx12 => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(gles)]
-            Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
+            Backend::Gl => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             _ => unreachable!(),
         };
         resource_log!("Created Adapter {:?}", id);
@@ -1066,13 +1109,13 @@ impl Global {
                     Ok((device, queue)) => (device, queue),
                     Err(e) => break e,
                 };
-            let (device_id, _) = device_fid.assign(device);
+            let (device_id, _) = device_fid.assign(Arc::new(device));
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
-            let (queue_id, queue) = queue_fid.assign(queue);
+            let (queue_id, queue) = queue_fid.assign(Arc::new(queue));
             resource_log!("Created Queue {:?}", queue_id);
 
             device.set_queue(queue);
@@ -1118,13 +1161,13 @@ impl Global {
                 Ok(device) => device,
                 Err(e) => break e,
             };
-            let (device_id, _) = devices_fid.assign(device);
+            let (device_id, _) = devices_fid.assign(Arc::new(device));
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
-            let (queue_id, queue) = queues_fid.assign(queue);
+            let (queue_id, queue) = queues_fid.assign(Arc::new(queue));
             resource_log!("Created Queue {:?}", queue_id);
 
             device.set_queue(queue);

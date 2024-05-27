@@ -90,6 +90,8 @@ pub enum ExpressionError {
         sampler: bool,
         has_ref: bool,
     },
+    #[error("Sample offset must be a const-expression")]
+    InvalidSampleOffsetExprType,
     #[error("Sample offset constant {1:?} doesn't match the image dimension {0:?}")]
     InvalidSampleOffset(crate::ImageDimension, Handle<crate::Expression>),
     #[error("Depth reference {0:?} is not a scalar float")]
@@ -129,9 +131,12 @@ pub enum ExpressionError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum ConstExpressionError {
-    #[error("The expression is not a constant expression")]
-    NonConst,
+    #[error("The expression is not a constant or override expression")]
+    NonConstOrOverride,
+    #[error("The expression is not a fully evaluated constant expression")]
+    NonFullyEvaluatedConst,
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
     #[error("Splatting {0:?} can't be done")]
@@ -184,10 +189,15 @@ impl super::Validator {
         handle: Handle<crate::Expression>,
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<(), ConstExpressionError> {
         use crate::Expression as E;
 
-        match gctx.const_expressions[handle] {
+        if !global_expr_kind.is_const_or_override(handle) {
+            return Err(ConstExpressionError::NonConstOrOverride);
+        }
+
+        match gctx.global_expressions[handle] {
             E::Literal(literal) => {
                 self.validate_literal(literal)?;
             }
@@ -201,14 +211,19 @@ impl super::Validator {
             }
             E::Splat { value, .. } => match *mod_info[value].inner_with(gctx.types) {
                 crate::TypeInner::Scalar { .. } => {}
-                _ => return Err(super::ConstExpressionError::InvalidSplatType(value)),
+                _ => return Err(ConstExpressionError::InvalidSplatType(value)),
             },
-            _ => return Err(super::ConstExpressionError::NonConst),
+            _ if global_expr_kind.is_const(handle) || !self.allow_overrides => {
+                return Err(ConstExpressionError::NonFullyEvaluatedConst)
+            }
+            // the constant evaluator will report errors about override-expressions
+            _ => {}
         }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn validate_expression(
         &self,
         root: Handle<crate::Expression>,
@@ -217,6 +232,7 @@ impl super::Validator {
         module: &crate::Module,
         info: &FunctionInfo,
         mod_info: &ModuleInfo,
+        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<ShaderStages, ExpressionError> {
         use crate::{Expression as E, Scalar as Sc, ScalarKind as Sk, TypeInner as Ti};
 
@@ -252,9 +268,7 @@ impl super::Validator {
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
                 }
-                if dynamic_indexing_restricted
-                    && function.expressions[index].is_dynamic_index(module)
-                {
+                if dynamic_indexing_restricted && function.expressions[index].is_dynamic_index() {
                     return Err(ExpressionError::IndexMustBeConstant(base));
                 }
 
@@ -347,7 +361,7 @@ impl super::Validator {
                 self.validate_literal(literal)?;
                 ShaderStages::all()
             }
-            E::Constant(_) | E::ZeroValue(_) => ShaderStages::all(),
+            E::Constant(_) | E::Override(_) | E::ZeroValue(_) => ShaderStages::all(),
             E::Compose { ref components, ty } => {
                 validate_compose(
                     ty,
@@ -464,6 +478,10 @@ impl super::Validator {
 
                 // check constant offset
                 if let Some(const_expr) = offset {
+                    if !global_expr_kind.is_const(const_expr) {
+                        return Err(ExpressionError::InvalidSampleOffsetExprType);
+                    }
+
                     match *mod_info[const_expr].inner_with(&module.types) {
                         Ti::Scalar(Sc { kind: Sk::Sint, .. }) if num_components == 1 => {}
                         Ti::Vector {
@@ -1509,11 +1527,30 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
+                    mf @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let scalar_kind = match mf {
+                            Mf::Pack4xI8 => Sk::Sint,
+                            Mf::Pack4xU8 => Sk::Uint,
+                            _ => unreachable!(),
+                        };
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Vector {
+                                size: crate::VectorSize::Quad,
+                                scalar: Sc { kind, .. },
+                            } if kind == scalar_kind => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
                     Mf::Unpack2x16float
                     | Mf::Unpack2x16snorm
                     | Mf::Unpack2x16unorm
                     | Mf::Unpack4x8snorm
-                    | Mf::Unpack4x8unorm => {
+                    | Mf::Unpack4x8unorm
+                    | Mf::Unpack4xI8
+                    | Mf::Unpack4xU8 => {
                         if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
@@ -1623,6 +1660,7 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidRayQueryType(query));
                 }
             },
+            E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
         };
         Ok(stages)
     }
@@ -1716,7 +1754,7 @@ fn validate_with_const_expression(
     use crate::span::Span;
 
     let mut module = crate::Module::default();
-    module.const_expressions.append(expr, Span::default());
+    module.global_expressions.append(expr, Span::default());
 
     let mut validator = super::Validator::new(super::ValidationFlags::CONSTANTS, caps);
 
