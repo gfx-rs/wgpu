@@ -151,18 +151,21 @@ impl MultiTargetRenderer {
             vertex: wgpu::VertexState {
                 module: shader,
                 entry_point: "vs_main",
+                compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: shader,
                 entry_point: "fs_multi_main",
                 // IMPORTANT: specify the color states for the outputs:
+                compilation_options: Default::default(),
                 targets: ts.as_slice(),
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         Self {
@@ -250,11 +253,13 @@ impl TargetRenderer {
             vertex: wgpu::VertexState {
                 module: shader,
                 entry_point: "vs_main",
+                compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: shader,
                 entry_point: "fs_display_main",
+                compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: None,
@@ -265,6 +270,7 @@ impl TargetRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         let (bg_left, bg_right) =
