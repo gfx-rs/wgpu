@@ -2291,7 +2291,7 @@ impl crate::Device for super::Device {
 
         let vk_buffer_info = vk::BufferCreateInfo::default()
             .size(desc.size)
-            .usage(vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR)
+            .usage(vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         unsafe {
