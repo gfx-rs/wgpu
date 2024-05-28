@@ -273,7 +273,7 @@ async fn clear_texture_tests(ctx: TestingContext, formats: &'static [wgpu::Textu
         let is_compressed_or_depth_stencil_format =
             format.is_compressed() || format.is_depth_stencil_format();
         let supports_1d = !is_compressed_or_depth_stencil_format;
-        let supports_3d = !is_compressed_or_depth_stencil_format;
+        let supports_3d = !format.is_depth_stencil_format();
 
         // 1D texture
         if supports_1d {
