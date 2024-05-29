@@ -975,10 +975,13 @@ impl crate::Queue for Queue {
             "More than one surface texture is being used from the same swapchain. This will cause a deadlock in release."
         );
 
-        // We lock access to all of the semaphores. This may block if two submissions are in flight at the same time.
         let locked_swapchain_semaphores = surface_textures
             .iter()
-            .map(|st| st.surface_semaphores.lock())
+            .map(|st| {
+                st.surface_semaphores
+                    .try_lock()
+                    .expect("Failed to lock surface semaphore.")
+            })
             .collect::<Vec<_>>();
 
         for mut swapchain_semaphore in locked_swapchain_semaphores {
@@ -1072,12 +1075,6 @@ impl crate::Queue for Queue {
         let mut swapchain = surface.swapchain.write();
         let ssc = swapchain.as_mut().unwrap();
         let mut swapchain_semaphores = texture.surface_semaphores.lock();
-
-        // debug_assert_eq!(
-        //     Arc::as_ptr(&texture.surface_semaphores),
-        //     Arc::as_ptr(&ssc.surface_semaphores[ssc.next_semaphore_index]),
-        //     "Trying to use a surface texture that does not belong to the current swapchain."
-        // );
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
