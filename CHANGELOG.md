@@ -111,6 +111,10 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 - Replace `glClear` with `glClearBufferF` because `glDrawBuffers` requires that the ith buffer must be `COLOR_ATTACHMENTi` or `NONE` [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
 - Return the unmodified version in driver_info. By @Valaphee in [#5753](https://github.com/gfx-rs/wgpu/pull/5753)
 
+#### WebGPU
+
+- Added support for pipeline-overridable constants to the WebGPU backend by @DouglasDwyer in [#5688](https://github.com/gfx-rs/wgpu/pull/5688)
+
 ## v0.20.0 (2024-04-28)
 
 ### Major Changes
