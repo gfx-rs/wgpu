@@ -96,10 +96,13 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 - Ensure render pipelines have at least 1 target. By @ErichDonGubler in [#5715](https://github.com/gfx-rs/wgpu/pull/5715)
 
+#### Metal
+
+- Fix unrecognized selector crash on iOS 12. By @vladasz in [#5744](https://github.com/gfx-rs/wgpu/pull/5744).
+
 #### Vulkan
 
 - Fix enablement of subgroup ops extension on Vulkan devices that don't support Vulkan 1.3. By @cwfitzgerald in [#5624](https://github.com/gfx-rs/wgpu/pull/5624).
-- Fix unrecognized selector crash on iOS 12. By @vladasz in [#5744](https://github.com/gfx-rs/wgpu/pull/5744).
 
 #### GLES / OpenGL
 
