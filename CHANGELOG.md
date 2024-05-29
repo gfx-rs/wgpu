@@ -47,7 +47,13 @@ TODO(wumpf): This is still work in progress. Should write a bit more about it. A
 
 `wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
 
-By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575).
+Furthermore, `wgpu::ComputePass` no longer has a life time dependency on its parent `wgpu::CommandEncoder`.
+⚠️ As long as a `wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
+Previously, this was statically enforced by a lifetime constraint.
+TODO(wumpf): There was some discussion on whether to make this life time constraint opt-in or opt-out (entirely on `wgpu` side, no changes to `wgpu-core`).
+Lifting this lifetime dependencies is very useful for library authors, but opens up an easy way for incorrect use.
+
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620).
 
 #### Querying shader compilation errors
 

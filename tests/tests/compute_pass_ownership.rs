@@ -1,9 +1,6 @@
 //! Tests that compute passes take ownership of resources that are associated with.
 //! I.e. once a resource is passed in to a compute pass, it can be dropped.
 //!
-//! TODO: Test doesn't check on timestamp writes & pipeline statistics queries yet.
-//!       (Not important as long as they are lifetime constrained to the command encoder,
-//!       but once we lift this constraint, we should add tests for this as well!)
 //! TODO: Also should test resource ownership for:
 //!       * write_timestamp
 //!       * begin_pipeline_statistics_query
@@ -11,7 +8,7 @@
 use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
 
 const SHADER_SRC: &str = "
 @group(0) @binding(0)
@@ -73,6 +70,50 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
 
     let floats: &[f32] = bytemuck::cast_slice(&data);
     assert_eq!(floats, [2.0, 4.0, 6.0, 8.0]);
+}
+
+#[gpu_test]
+static COMPUTE_PASS_KEEP_ENCODER_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_async(compute_pass_keep_encoder_alive);
+
+async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
+    let ResourceSetup {
+        gpu_buffer: _,
+        cpu_buffer: _,
+        buffer_size: _,
+        indirect_buffer,
+        bind_group,
+        pipeline,
+    } = resource_setup(&ctx);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("encoder"),
+        });
+
+    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("compute_pass"),
+        timestamp_writes: None,
+    });
+
+    // Now drop the encoder - it is kept alive by the compute pass.
+    drop(encoder);
+    ctx.async_poll(wgpu::Maintain::wait())
+        .await
+        .panic_on_timeout();
+
+    // Record some draw commands.
+    cpass.set_pipeline(&pipeline);
+    cpass.set_bind_group(0, &bind_group, &[]);
+    cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
+
+    // Dropping the pass will still execute the pass, even though there's no way to submit it.
+    // Ideally, this would log an error, but the encoder is not dropped until the compute pass is dropped,
+    // making this a valid operation.
+    // (If instead the encoder was explicitly destroyed or finished, this would be an error.)
+    valid(&ctx.device, || drop(cpass));
 }
 
 // Setup ------------------------------------------------------------
