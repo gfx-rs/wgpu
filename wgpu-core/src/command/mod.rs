@@ -422,15 +422,10 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
-    /// Return the [`CommandBuffer`] for `id`, for recording new commands.
-    ///
-    /// In `wgpu_core`, the [`CommandBuffer`] type serves both as encoder and
-    /// buffer, which is why this function takes an [`id::CommandEncoderId`] but
-    /// returns a [`CommandBuffer`]. The returned command buffer must be in the
-    /// "recording" state. Otherwise, an error is returned.
-    fn get_encoder(
+    fn get_encoder_impl(
         hub: &Hub<A>,
         id: id::CommandEncoderId,
+        lock_on_acquire: bool,
     ) -> Result<Arc<Self>, CommandEncoderError> {
         let storage = hub.command_buffers.read();
         match storage.get(id.into_command_buffer_id()) {
@@ -438,7 +433,12 @@ impl<A: HalApi> CommandBuffer<A> {
                 let mut cmd_buf_data = cmd_buf.data.lock();
                 let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
                 match cmd_buf_data.status {
-                    CommandEncoderStatus::Recording => Ok(cmd_buf.clone()),
+                    CommandEncoderStatus::Recording => {
+                        if lock_on_acquire {
+                            cmd_buf_data.status = CommandEncoderStatus::Locked;
+                        }
+                        Ok(cmd_buf.clone())
+                    }
                     CommandEncoderStatus::Locked => {
                         // Any operation on a locked encoder is required to put it into the invalid/error state.
                         // See https://www.w3.org/TR/webgpu/#encoder-state-locked
@@ -454,6 +454,20 @@ impl<A: HalApi> CommandBuffer<A> {
         }
     }
 
+    /// Return the [`CommandBuffer`] for `id`, for recording new commands.
+    ///
+    /// In `wgpu_core`, the [`CommandBuffer`] type serves both as encoder and
+    /// buffer, which is why this function takes an [`id::CommandEncoderId`] but
+    /// returns a [`CommandBuffer`]. The returned command buffer must be in the
+    /// "recording" state. Otherwise, an error is returned.
+    fn get_encoder(
+        hub: &Hub<A>,
+        id: id::CommandEncoderId,
+    ) -> Result<Arc<Self>, CommandEncoderError> {
+        let lock_on_acquire = false;
+        Self::get_encoder_impl(hub, id, lock_on_acquire)
+    }
+
     /// Return the [`CommandBuffer`] for `id` and if successful puts it into the [`CommandEncoderStatus::Locked`] state.
     ///
     /// See [`CommandBuffer::get_encoder`].
@@ -462,27 +476,8 @@ impl<A: HalApi> CommandBuffer<A> {
         hub: &Hub<A>,
         id: id::CommandEncoderId,
     ) -> Result<Arc<Self>, CommandEncoderError> {
-        let storage = hub.command_buffers.read();
-        match storage.get(id.into_command_buffer_id()) {
-            Ok(cmd_buf) => {
-                let mut cmd_buf_data = cmd_buf.data.lock();
-                let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-                match cmd_buf_data.status {
-                    CommandEncoderStatus::Recording => {
-                        cmd_buf_data.status = CommandEncoderStatus::Locked;
-                        Ok(cmd_buf.clone())
-                    }
-                    CommandEncoderStatus::Locked => {
-                        cmd_buf_data.encoder.discard();
-                        cmd_buf_data.status = CommandEncoderStatus::Error;
-                        Err(CommandEncoderError::Locked)
-                    }
-                    CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
-                    CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
-                }
-            }
-            Err(_) => Err(CommandEncoderError::Invalid),
-        }
+        let lock_on_acquire = true;
+        Self::get_encoder_impl(hub, id, lock_on_acquire)
     }
 
     /// Unlocks the [`CommandBuffer`] for `id` and puts it back into the [`CommandEncoderStatus::Recording`] state.
