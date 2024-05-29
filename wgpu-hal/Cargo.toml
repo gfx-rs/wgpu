@@ -37,7 +37,6 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["link"]
 metal = ["naga/msl-out", "dep:block"]
 vulkan = [
     "naga/spv-out",
@@ -76,7 +75,6 @@ windows_rs = ["dep:gpu-allocator"]
 dxc_shader_compiler = ["dep:hassle-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
-link = ["metal/link"]
 # Panic when running into an out-of-memory error (for debugging purposes).
 #
 # Only affects the d3d12 and vulkan backends.
