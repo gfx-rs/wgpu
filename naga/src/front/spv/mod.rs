@@ -3989,13 +3989,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     };
                     log::trace!("\t\t\tlooking up type {pointer_id:?}");
                     let p_ty = self.lookup_type.lookup(p_lexp_ty_id)?;
-                    let p_base_ty = if let Some(id) = p_ty.base_id {
-                        log::trace!("\t\t\tlooking up base type {id:?} of {p_ty:?}");
-                        self.lookup_type.lookup(id)?
-                    } else {
-                        log::warn!("\t\t\ttype {p_ty:?} has no base id");
-                        p_ty
-                    };
+                    let p_ty_base_id =
+                        p_ty.base_id.ok_or(Error::InvalidAccessType(p_lexp_ty_id))?;
+                    log::trace!("\t\t\tlooking up base type {p_ty_base_id:?} of {p_ty:?}");
+                    let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
 
                     // Create an expression for our result
                     let r_lexp_handle = {
@@ -4016,7 +4013,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     };
 
                     // Create a literal "1" since WGSL lacks an increment operation
-                    // Create a statement for the op itself
                     let one_lexp_handle = make_index_literal(
                         ctx,
                         1,
@@ -4027,6 +4023,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         span,
                     )?;
 
+                    // Create a statement for the op itself
                     let stmt = crate::Statement::Atomic {
                         pointer: p_lexp_handle,
                         fun: crate::AtomicFunction::Add,
