@@ -466,6 +466,15 @@ impl Buffer {
     }
 }
 
+impl crate::BufferBinding<'_, Api> {
+    fn resolve_size(&self) -> wgt::BufferAddress {
+        match self.size {
+            Some(size) => size.get(),
+            None => self.buffer.size - self.offset,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Texture {
     raw: metal::Texture,
@@ -690,6 +699,9 @@ struct PipelineStageInfo {
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
     sized_bindings: Vec<naga::ResourceBinding>,
+
+    /// Info on all bound vertex buffers.
+    vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
 }
 
 impl PipelineStageInfo {
@@ -697,6 +709,7 @@ impl PipelineStageInfo {
         self.push_constants = None;
         self.sizes_slot = None;
         self.sized_bindings.clear();
+        self.vertex_buffer_mappings.clear();
     }
 
     fn assign_from(&mut self, other: &Self) {
@@ -704,6 +717,9 @@ impl PipelineStageInfo {
         self.sizes_slot = other.sizes_slot;
         self.sized_bindings.clear();
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
+        self.vertex_buffer_mappings.clear();
+        self.vertex_buffer_mappings
+            .extend_from_slice(&other.vertex_buffer_mappings);
     }
 }
 
@@ -820,6 +836,8 @@ struct CommandState {
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
     storage_buffer_length_map: rustc_hash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+
+    vertex_buffer_size_map: rustc_hash::FxHashMap<u64, wgt::BufferSize>,
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,

@@ -736,7 +736,9 @@ impl super::PrivateCapabilities {
                 4
             },
             // Per https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
-            max_color_attachment_bytes_per_sample: if device.supports_family(MTLGPUFamily::Apple4) {
+            max_color_attachment_bytes_per_sample: if family_check
+                && device.supports_family(MTLGPUFamily::Apple4)
+            {
                 64
             } else {
                 32

@@ -2741,6 +2741,7 @@ impl<A: HalApi> Device<A> {
                 entry_point: final_entry_point_name.as_ref(),
                 constants: desc.stage.constants.as_ref(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+                vertex_pulling_transform: false,
             },
             cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
@@ -3169,6 +3170,7 @@ impl<A: HalApi> Device<A> {
                 entry_point: &vertex_entry_point_name,
                 constants: stage_desc.constants.as_ref(),
                 zero_initialize_workgroup_memory: stage_desc.zero_initialize_workgroup_memory,
+                vertex_pulling_transform: stage_desc.vertex_pulling_transform,
             }
         };
 
@@ -3232,6 +3234,7 @@ impl<A: HalApi> Device<A> {
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
+                    vertex_pulling_transform: false,
                 })
             }
             None => None,

@@ -17,7 +17,7 @@ use objc::{
 use parking_lot::{Mutex, RwLock};
 
 #[cfg(target_os = "macos")]
-#[cfg_attr(feature = "link", link(name = "QuartzCore", kind = "framework"))]
+#[link(name = "QuartzCore", kind = "framework")]
 extern "C" {
     #[allow(non_upper_case_globals)]
     static kCAGravityTopLeft: *mut Object;

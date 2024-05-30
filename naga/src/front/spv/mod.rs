@@ -564,6 +564,20 @@ enum SignAnchor {
     Operand,
 }
 
+enum AtomicOpInst {
+    AtomicIIncrement,
+}
+
+#[allow(dead_code)]
+struct AtomicOp {
+    instruction: AtomicOpInst,
+    result_type_id: spirv::Word,
+    result_id: spirv::Word,
+    pointer_id: spirv::Word,
+    scope_id: spirv::Word,
+    memory_semantics_id: spirv::Word,
+}
+
 pub struct Frontend<I> {
     data: I,
     data_offset: usize,
@@ -575,6 +589,8 @@ pub struct Frontend<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
     handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, image::SamplingFlags>,
+    // Used to upgrade types used in atomic ops to atomic types, keyed by pointer id
+    lookup_atomic: FastHashMap<spirv::Word, AtomicOp>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
     lookup_storage_buffer_types: FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
@@ -630,6 +646,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
             lookup_member: FastHashMap::default(),
+            lookup_atomic: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_void_type: None,
             lookup_storage_buffer_types: FastHashMap::default(),
@@ -3943,7 +3960,81 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                     emitter.start(ctx.expressions);
                 }
-                _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
+                Op::AtomicIIncrement => {
+                    inst.expect(6)?;
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let scope_id = self.next()?;
+                    let memory_semantics_id = self.next()?;
+                    // Store the op for a later pass where we "upgrade" the pointer type
+                    let atomic = AtomicOp {
+                        instruction: AtomicOpInst::AtomicIIncrement,
+                        result_type_id,
+                        result_id,
+                        pointer_id,
+                        scope_id,
+                        memory_semantics_id,
+                    };
+                    self.lookup_atomic.insert(pointer_id, atomic);
+
+                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+
+                    let (p_lexp_handle, p_lexp_ty_id) = {
+                        let lexp = self.lookup_expression.lookup(pointer_id)?;
+                        let handle = get_expr_handle!(pointer_id, &lexp);
+                        (handle, lexp.type_id)
+                    };
+                    log::trace!("\t\t\tlooking up type {pointer_id:?}");
+                    let p_ty = self.lookup_type.lookup(p_lexp_ty_id)?;
+                    let p_ty_base_id =
+                        p_ty.base_id.ok_or(Error::InvalidAccessType(p_lexp_ty_id))?;
+                    log::trace!("\t\t\tlooking up base type {p_ty_base_id:?} of {p_ty:?}");
+                    let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
+
+                    // Create an expression for our result
+                    let r_lexp_handle = {
+                        let expr = crate::Expression::AtomicResult {
+                            ty: p_base_ty.handle,
+                            comparison: false,
+                        };
+                        let handle = ctx.expressions.append(expr, span);
+                        self.lookup_expression.insert(
+                            result_id,
+                            LookupExpression {
+                                handle,
+                                type_id: result_type_id,
+                                block_id,
+                            },
+                        );
+                        handle
+                    };
+
+                    // Create a literal "1" since WGSL lacks an increment operation
+                    let one_lexp_handle = make_index_literal(
+                        ctx,
+                        1,
+                        &mut block,
+                        &mut emitter,
+                        p_base_ty.handle,
+                        p_lexp_ty_id,
+                        span,
+                    )?;
+
+                    // Create a statement for the op itself
+                    let stmt = crate::Statement::Atomic {
+                        pointer: p_lexp_handle,
+                        fun: crate::AtomicFunction::Add,
+                        value: one_lexp_handle,
+                        result: r_lexp_handle,
+                    };
+                    block.push(stmt, span);
+                }
+                _ => {
+                    return Err(Error::UnsupportedInstruction(self.state, inst.op));
+                }
             }
         };
 
@@ -5592,5 +5683,39 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
+    }
+
+    #[test]
+    fn atomic_i_inc() {
+        let _ = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Trace)
+            .try_init();
+        let bytes = include_bytes!("../../../tests/in/spv/atomic_i_increment.spv");
+        let m = super::parse_u8_slice(bytes, &Default::default()).unwrap();
+        let mut validator = crate::valid::Validator::new(
+            crate::valid::ValidationFlags::empty(),
+            Default::default(),
+        );
+        let info = validator.validate(&m).unwrap();
+        let wgsl =
+            crate::back::wgsl::write_string(&m, &info, crate::back::wgsl::WriterFlags::empty())
+                .unwrap();
+        log::info!("atomic_i_increment:\n{wgsl}");
+
+        let m = match crate::front::wgsl::parse_str(&wgsl) {
+            Ok(m) => m,
+            Err(e) => {
+                log::error!("{}", e.emit_to_string(&wgsl));
+                // at this point we know atomics create invalid modules
+                // so simply bail
+                return;
+            }
+        };
+        let mut validator =
+            crate::valid::Validator::new(crate::valid::ValidationFlags::all(), Default::default());
+        if let Err(e) = validator.validate(&m) {
+            log::error!("{}", e.emit_to_string(&wgsl));
+        }
     }
 }

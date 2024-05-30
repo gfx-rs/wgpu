@@ -16,6 +16,7 @@ impl Default for super::CommandState {
             raw_wg_size: metal::MTLSize::new(0, 0, 0),
             stage_infos: Default::default(),
             storage_buffer_length_map: Default::default(),
+            vertex_buffer_size_map: Default::default(),
             work_group_memory_sizes: Vec::new(),
             push_constants: Vec::new(),
             pending_timer_queries: Vec::new(),
@@ -137,6 +138,7 @@ impl super::CommandEncoder {
 impl super::CommandState {
     fn reset(&mut self) {
         self.storage_buffer_length_map.clear();
+        self.vertex_buffer_size_map.clear();
         self.stage_infos.vs.clear();
         self.stage_infos.fs.clear();
         self.stage_infos.cs.clear();
@@ -156,6 +158,15 @@ impl super::CommandState {
         result_sizes.extend(stage_info.sized_bindings.iter().map(|br| {
             self.storage_buffer_length_map
                 .get(br)
+                .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
+                .unwrap_or_default()
+        }));
+
+        // Extend with the sizes of the mapped vertex buffers, in the order
+        // they were added to the map.
+        result_sizes.extend(stage_info.vertex_buffer_mappings.iter().map(|vbm| {
+            self.vertex_buffer_size_map
+                .get(&(vbm.id as u64))
                 .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
@@ -927,6 +938,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let buffer_index = self.shared.private_caps.max_vertex_buffers as u64 - 1 - index as u64;
         let encoder = self.state.render.as_ref().unwrap();
         encoder.set_vertex_buffer(buffer_index, Some(&binding.buffer.raw), binding.offset);
+
+        let buffer_size = binding.resolve_size();
+        if buffer_size > 0 {
+            self.state.vertex_buffer_size_map.insert(
+                buffer_index,
+                std::num::NonZeroU64::new(buffer_size).unwrap(),
+            );
+        } else {
+            self.state.vertex_buffer_size_map.remove(&buffer_index);
+        }
+
+        if let Some((index, sizes)) = self
+            .state
+            .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
+        {
+            encoder.set_vertex_bytes(
+                index as _,
+                (sizes.len() * WORD_SIZE) as u64,
+                sizes.as_ptr() as _,
+            );
+        }
     }
 
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {

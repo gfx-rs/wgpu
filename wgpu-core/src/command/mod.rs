@@ -25,7 +25,6 @@ use self::memory_init::CommandBufferTextureMemoryActions;
 use crate::device::{Device, DeviceError};
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::hub::Hub;
-use crate::id::CommandBufferId;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
@@ -51,9 +50,22 @@ pub(crate) enum CommandEncoderStatus {
     /// [`compute_pass_end`] require the encoder to be in this
     /// state.
     ///
+    /// This corresponds to WebGPU's "open" state.
+    /// See <https://www.w3.org/TR/webgpu/#encoder-state-open>
+    ///
     /// [`command_encoder_clear_buffer`]: Global::command_encoder_clear_buffer
     /// [`compute_pass_end`]: Global::compute_pass_end
     Recording,
+
+    /// Locked by a render or compute pass.
+    ///
+    /// This state is entered when a render/compute pass is created,
+    /// and exited when the pass is ended.
+    ///
+    /// As long as the command encoder is locked, any command building operation on it will fail
+    /// and put the encoder into the [`CommandEncoderStatus::Error`] state.
+    /// See <https://www.w3.org/TR/webgpu/#encoder-state-locked>
+    Locked,
 
     /// Command recording is complete, and the buffer is ready for submission.
     ///
@@ -410,6 +422,38 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
+    fn get_encoder_impl(
+        hub: &Hub<A>,
+        id: id::CommandEncoderId,
+        lock_on_acquire: bool,
+    ) -> Result<Arc<Self>, CommandEncoderError> {
+        let storage = hub.command_buffers.read();
+        match storage.get(id.into_command_buffer_id()) {
+            Ok(cmd_buf) => {
+                let mut cmd_buf_data = cmd_buf.data.lock();
+                let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+                match cmd_buf_data.status {
+                    CommandEncoderStatus::Recording => {
+                        if lock_on_acquire {
+                            cmd_buf_data.status = CommandEncoderStatus::Locked;
+                        }
+                        Ok(cmd_buf.clone())
+                    }
+                    CommandEncoderStatus::Locked => {
+                        // Any operation on a locked encoder is required to put it into the invalid/error state.
+                        // See https://www.w3.org/TR/webgpu/#encoder-state-locked
+                        cmd_buf_data.encoder.discard();
+                        cmd_buf_data.status = CommandEncoderStatus::Error;
+                        Err(CommandEncoderError::Locked)
+                    }
+                    CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
+                    CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
+                }
+            }
+            Err(_) => Err(CommandEncoderError::Invalid),
+        }
+    }
+
     /// Return the [`CommandBuffer`] for `id`, for recording new commands.
     ///
     /// In `wgpu_core`, the [`CommandBuffer`] type serves both as encoder and
@@ -420,14 +464,37 @@ impl<A: HalApi> CommandBuffer<A> {
         hub: &Hub<A>,
         id: id::CommandEncoderId,
     ) -> Result<Arc<Self>, CommandEncoderError> {
-        let storage = hub.command_buffers.read();
-        match storage.get(id.into_command_buffer_id()) {
-            Ok(cmd_buf) => match cmd_buf.data.lock().as_ref().unwrap().status {
-                CommandEncoderStatus::Recording => Ok(cmd_buf.clone()),
-                CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
-                CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
-            },
-            Err(_) => Err(CommandEncoderError::Invalid),
+        let lock_on_acquire = false;
+        Self::get_encoder_impl(hub, id, lock_on_acquire)
+    }
+
+    /// Return the [`CommandBuffer`] for `id` and if successful puts it into the [`CommandEncoderStatus::Locked`] state.
+    ///
+    /// See [`CommandBuffer::get_encoder`].
+    /// Call [`CommandBuffer::unlock_encoder`] to put the [`CommandBuffer`] back into the [`CommandEncoderStatus::Recording`] state.
+    fn lock_encoder(
+        hub: &Hub<A>,
+        id: id::CommandEncoderId,
+    ) -> Result<Arc<Self>, CommandEncoderError> {
+        let lock_on_acquire = true;
+        Self::get_encoder_impl(hub, id, lock_on_acquire)
+    }
+
+    /// Unlocks the [`CommandBuffer`] for `id` and puts it back into the [`CommandEncoderStatus::Recording`] state.
+    ///
+    /// This function is the counterpart to [`CommandBuffer::lock_encoder`].
+    /// It is only valid to call this function if the encoder is in the [`CommandEncoderStatus::Locked`] state.
+    fn unlock_encoder(&self) -> Result<(), CommandEncoderError> {
+        let mut data_lock = self.data.lock();
+        let status = &mut data_lock.as_mut().unwrap().status;
+        match *status {
+            CommandEncoderStatus::Recording => Err(CommandEncoderError::Invalid),
+            CommandEncoderStatus::Locked => {
+                *status = CommandEncoderStatus::Recording;
+                Ok(())
+            }
+            CommandEncoderStatus::Finished => Err(CommandEncoderError::Invalid),
+            CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
         }
     }
 
@@ -564,6 +631,8 @@ pub enum CommandEncoderError {
     NotRecording,
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error("Command encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
+    Locked,
 }
 
 impl Global {
@@ -571,7 +640,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
-    ) -> (CommandBufferId, Option<CommandEncoderError>) {
+    ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         profiling::scope!("CommandEncoder::finish");
 
         let hub = A::hub(self);
@@ -591,6 +660,11 @@ impl Global {
                             log::trace!("Command buffer {:?}", encoder_id);
                             None
                         }
+                    }
+                    CommandEncoderStatus::Locked => {
+                        cmd_buf_data.encoder.discard();
+                        cmd_buf_data.status = CommandEncoderStatus::Error;
+                        Some(CommandEncoderError::Locked)
                     }
                     CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),
                     CommandEncoderStatus::Error => {
@@ -805,7 +879,12 @@ pub enum PassErrorScope {
     #[error("In a bundle parameter")]
     Bundle,
     #[error("In a pass parameter")]
-    Pass(id::CommandEncoderId),
+    // TODO: To be removed in favor of `Pass`.
+    // ComputePass is already operating on command buffer instead,
+    // same should apply to RenderPass in the future.
+    PassEncoder(id::CommandEncoderId),
+    #[error("In a pass parameter")]
+    Pass(Option<id::CommandBufferId>),
     #[error("In a set_bind_group command")]
     SetBindGroup(id::BindGroupId),
     #[error("In a set_pipeline command")]
@@ -859,8 +938,11 @@ impl PrettyError for PassErrorScope {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         // This error is not in the error chain, only notes are needed
         match *self {
-            Self::Pass(id) => {
+            Self::PassEncoder(id) => {
                 fmt.command_buffer_label(&id.into_command_buffer_id());
+            }
+            Self::Pass(Some(id)) => {
+                fmt.command_buffer_label(&id);
             }
             Self::SetBindGroup(id) => {
                 fmt.bind_group_label(&id);
