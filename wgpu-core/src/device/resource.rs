@@ -791,6 +791,14 @@ impl<A: HalApi> Device<A> {
                     },
                 ));
             }
+
+            // Only BCn formats are supported for 3D textures
+            if desc.dimension == wgt::TextureDimension::D3 && !desc.format.is_bcn() {
+                return Err(CreateTextureError::InvalidCompressedDimension(
+                    desc.dimension,
+                    desc.format,
+                ));
+            }
         }
 
         {

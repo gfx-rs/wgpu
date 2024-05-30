@@ -3153,6 +3153,27 @@ impl TextureFormat {
         self.block_dimensions() != (1, 1)
     }
 
+    /// Returns `true` for BCn compressed formats.
+    pub fn is_bcn(&self) -> bool {
+        match *self {
+            Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc4RUnorm
+            | Self::Bc4RSnorm
+            | Self::Bc5RgUnorm
+            | Self::Bc5RgSnorm
+            | Self::Bc6hRgbUfloat
+            | Self::Bc6hRgbFloat
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb => true,
+            _ => false,
+        }
+    }
+
     /// Returns the required features (if any) in order to use the texture.
     pub fn required_features(&self) -> Features {
         match *self {
