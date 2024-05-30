@@ -156,6 +156,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
             })
             .unwrap()
     };
+    let mut fence = unsafe { od.device.create_fence().unwrap() };
     let rp_desc = hal::RenderPassDescriptor {
         label: None,
         extent: wgt::Extent3d {
@@ -183,6 +184,6 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
         encoder.begin_render_pass(&rp_desc);
         encoder.end_render_pass();
         let cmd_buf = encoder.end_encoding().unwrap();
-        od.queue.submit(&[&cmd_buf], &[], None).unwrap();
+        od.queue.submit(&[&cmd_buf], &[], (&mut fence, 0)).unwrap();
     }
 }

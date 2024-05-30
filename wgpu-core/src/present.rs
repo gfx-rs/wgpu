@@ -154,17 +154,20 @@ impl Global {
                 parent_id: surface_id,
             });
         }
-        #[cfg(not(feature = "trace"))]
-        let _ = device;
+
+        let fence_guard = device.fence.read();
+        let fence = fence_guard.as_ref().unwrap();
 
         let suf = A::surface_as_hal(surface.as_ref());
         let (texture_id, status) = match unsafe {
-            suf.unwrap()
-                .acquire_texture(Some(std::time::Duration::from_millis(
-                    FRAME_TIMEOUT_MS as u64,
-                )))
+            suf.unwrap().acquire_texture(
+                Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
+                fence,
+            )
         } {
             Ok(Some(ast)) => {
+                drop(fence_guard);
+
                 let texture_desc = wgt::TextureDescriptor {
                     label: (),
                     size: wgt::Extent3d {
