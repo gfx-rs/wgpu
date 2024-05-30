@@ -267,21 +267,14 @@ async fn single_texture_clear_test(
 async fn clear_texture_tests(ctx: TestingContext, formats: &'static [wgpu::TextureFormat]) {
     for &format in formats {
         let (block_width, block_height) = format.block_dimensions();
-        let rounded_width = if block_width == 1 {
-            wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
-        } else {
-            block_width
-        };
-        let rounded_height = if block_height == 1 {
-            wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
-        } else {
-            block_height
-        };
+        let rounded_width = block_width * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let rounded_height = block_height * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
 
         let is_compressed_or_depth_stencil_format =
             format.is_compressed() || format.is_depth_stencil_format();
+        let is_bcn_format = TEXTURE_FORMATS_BC.contains(&format);
         let supports_1d = !is_compressed_or_depth_stencil_format;
-        let supports_3d = !format.is_depth_stencil_format();
+        let supports_3d = is_bcn_format || !format.is_depth_stencil_format();
 
         // 1D texture
         if supports_1d {
@@ -323,6 +316,14 @@ async fn clear_texture_tests(ctx: TestingContext, formats: &'static [wgpu::Textu
         .await;
         if supports_3d {
             // volume texture
+            let rounded_width = wgpu::util::align_to(
+                (block_width + 1)
+                    * format
+                        .block_copy_size(Some(wgpu::TextureAspect::All))
+                        .unwrap(),
+                wgpu::COPY_BYTES_PER_ROW_ALIGNMENT,
+            ) / block_width;
+            let rounded_height = 1;
             single_texture_clear_test(
                 &ctx,
                 format,
@@ -394,6 +395,10 @@ static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration
     .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
+            .limits(wgpu::Limits {
+                max_texture_dimension_3d: 1024,
+                ..wgpu::Limits::downlevel_defaults()
+            })
             // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
             .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
             // compressed texture copy to buffer not yet implemented
