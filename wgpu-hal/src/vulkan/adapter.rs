@@ -3,11 +3,7 @@ use super::conv;
 use ash::{extensions::khr, vk};
 use parking_lot::Mutex;
 
-use std::{
-    collections::BTreeMap,
-    ffi::CStr,
-    sync::{atomic::AtomicIsize, Arc},
-};
+use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
     vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
@@ -1794,21 +1790,15 @@ impl super::Adapter {
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
         });
-        let mut relay_semaphores = [vk::Semaphore::null(); 2];
-        for sem in relay_semaphores.iter_mut() {
-            unsafe {
-                *sem = shared
-                    .raw
-                    .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?
-            };
-        }
+
+        let relay_semaphores = super::RelaySemaphores::new(&shared)?;
+
         let queue = super::Queue {
             raw: raw_queue,
             swapchain_fn,
             device: Arc::clone(&shared),
             family_index,
-            relay_semaphores,
-            relay_index: AtomicIsize::new(-1),
+            relay_semaphores: Mutex::new(relay_semaphores),
         };
 
         let mem_allocator = {

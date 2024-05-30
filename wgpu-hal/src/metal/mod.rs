@@ -376,38 +376,37 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         _surface_textures: &[&SurfaceTexture],
-        signal_fence: Option<(&mut Fence, crate::FenceValue)>,
+        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         objc::rc::autoreleasepool(|| {
-            let extra_command_buffer = match signal_fence {
-                Some((fence, value)) => {
-                    let completed_value = Arc::clone(&fence.completed_value);
-                    let block = block::ConcreteBlock::new(move |_cmd_buf| {
-                        completed_value.store(value, atomic::Ordering::Release);
-                    })
-                    .copy();
+            let extra_command_buffer = {
+                let completed_value = Arc::clone(&signal_fence.completed_value);
+                let block = block::ConcreteBlock::new(move |_cmd_buf| {
+                    completed_value.store(signal_value, atomic::Ordering::Release);
+                })
+                .copy();
 
-                    let raw = match command_buffers.last() {
-                        Some(&cmd_buf) => cmd_buf.raw.to_owned(),
-                        None => {
-                            let queue = self.raw.lock();
-                            queue
-                                .new_command_buffer_with_unretained_references()
-                                .to_owned()
-                        }
-                    };
-                    raw.set_label("(wgpu internal) Signal");
-                    raw.add_completed_handler(&block);
-
-                    fence.maintain();
-                    fence.pending_command_buffers.push((value, raw.to_owned()));
-                    // only return an extra one if it's extra
-                    match command_buffers.last() {
-                        Some(_) => None,
-                        None => Some(raw),
+                let raw = match command_buffers.last() {
+                    Some(&cmd_buf) => cmd_buf.raw.to_owned(),
+                    None => {
+                        let queue = self.raw.lock();
+                        queue
+                            .new_command_buffer_with_unretained_references()
+                            .to_owned()
                     }
+                };
+                raw.set_label("(wgpu internal) Signal");
+                raw.add_completed_handler(&block);
+
+                signal_fence.maintain();
+                signal_fence
+                    .pending_command_buffers
+                    .push((signal_value, raw.to_owned()));
+                // only return an extra one if it's extra
+                match command_buffers.last() {
+                    Some(_) => None,
+                    None => Some(raw),
                 }
-                None => None,
             };
 
             for cmd_buffer in command_buffers {
