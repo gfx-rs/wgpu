@@ -271,10 +271,11 @@ bitflags::bitflags! {
     ///
     /// Note that these exactly correspond to the SPIR-V "Ray Flags" mask, and
     /// the SPIR-V backend passes them directly through to the
-    /// `OpRayQueryInitializeKHR` instruction. (We have to choose something, so
+    /// [`OpRayQueryInitializeKHR`][op] instruction. (We have to choose something, so
     /// we might as well make one back end's life easier.)
     ///
     /// [`RayDesc`]: crate::Module::generate_ray_desc_type
+    /// [op]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpRayQueryInitializeKHR
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct RayFlag: u32 {
         const OPAQUE = 0x01;
