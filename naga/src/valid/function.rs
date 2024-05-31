@@ -241,9 +241,7 @@ impl<'a> BlockContext<'a> {
         handle: Handle<crate::Expression>,
         valid_expressions: &BitSet,
     ) -> Result<&crate::TypeInner, WithSpan<ExpressionError>> {
-        if handle.index() >= self.expressions.len() {
-            Err(ExpressionError::DoesntExist.with_span())
-        } else if !valid_expressions.contains(handle.index()) {
+        if !valid_expressions.contains(handle.index()) {
             Err(ExpressionError::NotInScope.with_span_handle(handle, self.expressions))
         } else {
             Ok(self.info[handle].ty.inner_with(self.types))
@@ -263,14 +261,7 @@ impl<'a> BlockContext<'a> {
         &self,
         handle: Handle<crate::Expression>,
     ) -> Result<&crate::TypeInner, FunctionError> {
-        if handle.index() >= self.expressions.len() {
-            Err(FunctionError::Expression {
-                handle,
-                source: ExpressionError::DoesntExist,
-            })
-        } else {
-            Ok(self.info[handle].ty.inner_with(self.types))
-        }
+        Ok(self.info[handle].ty.inner_with(self.types))
     }
 }
 
