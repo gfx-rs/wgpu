@@ -2218,7 +2218,7 @@ pub fn sampled_to_depth(
 }
 
 bitflags::bitflags! {
-    /// Influences the operation `texture_args_generator`
+    /// Influences the operation [`texture_args_generator`]
     struct TextureArgsOptions: u32 {
         /// Generates multisampled variants of images
         const MULTI = 1 << 0;
