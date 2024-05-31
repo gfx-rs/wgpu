@@ -257,11 +257,8 @@ impl<'a> BlockContext<'a> {
             .map_err_inner(|source| FunctionError::Expression { handle, source }.with_span())
     }
 
-    fn resolve_pointer_type(
-        &self,
-        handle: Handle<crate::Expression>,
-    ) -> Result<&crate::TypeInner, FunctionError> {
-        Ok(self.info[handle].ty.inner_with(self.types))
+    fn resolve_pointer_type(&self, handle: Handle<crate::Expression>) -> &crate::TypeInner {
+        self.info[handle].ty.inner_with(self.types)
     }
 }
 
@@ -810,9 +807,6 @@ impl super::Validator {
                 S::Store { pointer, value } => {
                     let mut current = pointer;
                     loop {
-                        let _ = context
-                            .resolve_pointer_type(current)
-                            .map_err(|e| e.with_span())?;
                         match context.expressions[current] {
                             crate::Expression::Access { base, .. }
                             | crate::Expression::AccessIndex { base, .. } => current = base,
@@ -835,9 +829,7 @@ impl super::Validator {
                         _ => {}
                     }
 
-                    let pointer_ty = context
-                        .resolve_pointer_type(pointer)
-                        .map_err(|e| e.with_span())?;
+                    let pointer_ty = context.resolve_pointer_type(pointer);
 
                     let good = match *pointer_ty {
                         Ti::Pointer { base, space: _ } => match context.types[base].inner {
