@@ -359,7 +359,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15b55663a85f33501257357e6421bb33e769d5c9ffb5ba0921c975a123e35e68"
 dependencies = [
  "block-sys",
- "objc2",
+ "objc2 0.4.1",
+]
+
+[[package]]
+name = "block2"
+version = "0.5.1"
+source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+dependencies = [
+ "objc2 0.5.2",
 ]
 
 [[package]]
@@ -1806,9 +1814,9 @@ version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d3aaff8a54577104bafdf686ff18565c3b6903ca5782a2026ef06e2c7aa319"
 dependencies = [
- "block2",
+ "block2 0.3.0",
  "dispatch",
- "objc2",
+ "objc2 0.4.1",
 ]
 
 [[package]]
@@ -2132,21 +2140,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "metal"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5637e166ea14be6063a3f8ba5ccb9a4159df7d8f6d61c02fc3d480b1f90dcfcb"
-dependencies = [
- "bitflags 2.5.0",
- "block",
- "core-graphics-types",
- "foreign-types 0.5.0",
- "log",
- "objc",
- "paste",
 ]
 
 [[package]]
@@ -2487,8 +2480,7 @@ dependencies = [
 [[package]]
 name = "objc-sys"
 version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdb91bdd390c7ce1a8607f35f3ca7151b65afc0ff5ff3b34fa350f7d7c7e4310"
+source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
 
 [[package]]
 name = "objc2"
@@ -2497,7 +2489,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "559c5a40fdd30eb5e344fbceacf7595a81e242529fb4e21cf5f43fb4f11ff98d"
 dependencies = [
  "objc-sys",
- "objc2-encode",
+ "objc2-encode 3.0.0",
+]
+
+[[package]]
+name = "objc2"
+version = "0.5.2"
+source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+dependencies = [
+ "objc-sys",
+ "objc2-encode 4.0.3",
 ]
 
 [[package]]
@@ -2505,6 +2506,45 @@ name = "objc2-encode"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d079845b37af429bfe5dfa76e6d087d788031045b25cfc6fd898486fd9847666"
+
+[[package]]
+name = "objc2-encode"
+version = "4.0.3"
+source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+
+[[package]]
+name = "objc2-foundation"
+version = "0.2.2"
+source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+dependencies = [
+ "bitflags 2.5.0",
+ "block2 0.5.1",
+ "libc",
+ "objc2 0.5.2",
+]
+
+[[package]]
+name = "objc2-metal"
+version = "0.2.2"
+source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+dependencies = [
+ "bitflags 2.5.0",
+ "block2 0.5.1",
+ "objc2 0.5.2",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-quartz-core"
+version = "0.2.2"
+source = "git+https://github.com/madsmtm/objc2?branch=metal-wgpu#ecdcf28682a5307412f33620874faa87199d662c"
+dependencies = [
+ "bitflags 2.5.0",
+ "block2 0.5.1",
+ "objc2 0.5.2",
+ "objc2-foundation",
+ "objc2-metal",
+]
 
 [[package]]
 name = "object"
@@ -2603,12 +2643,6 @@ dependencies = [
  "thread-id",
  "windows-targets 0.52.5",
 ]
-
-[[package]]
-name = "paste"
-version = "1.0.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "percent-encoding"
@@ -4303,10 +4337,9 @@ dependencies = [
  "ash",
  "bit-set",
  "bitflags 2.5.0",
- "block",
+ "block2 0.5.1",
  "cfg-if",
  "cfg_aliases",
- "core-graphics-types",
  "d3d12",
  "env_logger",
  "glam",
@@ -4322,10 +4355,12 @@ dependencies = [
  "libc",
  "libloading 0.8.3",
  "log",
- "metal",
  "naga",
  "ndk-sys 0.5.0+25.2.9519653",
- "objc",
+ "objc2 0.5.2",
+ "objc2-foundation",
+ "objc2-metal",
+ "objc2-quartz-core",
  "once_cell",
  "parking_lot",
  "profiling",
@@ -4810,7 +4845,7 @@ dependencies = [
  "memmap2 0.9.4",
  "ndk 0.8.0",
  "ndk-sys 0.5.0+25.2.9519653",
- "objc2",
+ "objc2 0.4.1",
  "once_cell",
  "orbclient",
  "percent-encoding",

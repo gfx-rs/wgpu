@@ -515,7 +515,7 @@ impl super::Instance {
         }
 
         let layer = unsafe {
-            crate::metal::Surface::get_metal_layer(view as *mut objc::runtime::Object, None)
+            crate::metal::Surface::get_metal_layer(view as *mut objc2::runtime::AnyObject, None)
         };
 
         let surface = {

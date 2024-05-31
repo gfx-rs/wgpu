@@ -18,10 +18,9 @@ rust-version = "1.74"
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
 #
-# However, the metal features fail to be documented because the docs.rs runner cross-compiling under
-# x86_64-unknown-linux-gnu and metal-rs cannot compile in that environment at the moment. The same applies
-# for the dx12 feature.
-features = ["vulkan", "gles", "renderdoc"]
+# However, the dx12 features fail to be documented because the docs.rs runner cross-compiling under
+# x86_64-unknown-linux-gnu cannot compile in that environment at the moment.
+features = ["metal", "vulkan", "gles", "renderdoc"]
 rustdoc-args = ["--cfg", "docsrs"]
 targets = [
     "x86_64-unknown-linux-gnu",
@@ -37,7 +36,7 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-metal = ["naga/msl-out", "dep:block"]
+metal = ["naga/msl-out"]
 vulkan = [
     "naga/spv-out",
     "dep:ash",
@@ -156,11 +155,50 @@ d3d12 = { path = "../d3d12/", version = "0.20.0", optional = true, features = [
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
-block = { version = "0.1", optional = true }
-
-metal = { version = "0.28.0" }
-objc = "0.2.5"
-core-graphics-types = "0.1"
+block2 = "0.5.1"
+objc2 = "0.5.2"
+objc2-foundation = { version = "0.2.2", features = [
+    "NSError",
+    "NSGeometry",
+    "NSProcessInfo",
+    "NSRange",
+    "NSString",
+] }
+objc2-metal = { version = "0.2.2", features = [
+    "block2",
+    "MTLBlitCommandEncoder",
+    "MTLBlitPass",
+    "MTLBuffer",
+    "MTLCaptureManager",
+    "MTLCaptureScope",
+    "MTLCommandBuffer",
+    "MTLCommandEncoder",
+    "MTLCommandQueue",
+    "MTLComputeCommandEncoder",
+    "MTLComputePass",
+    "MTLComputePipeline",
+    "MTLCounters",
+    "MTLDepthStencil",
+    "MTLDevice",
+    "MTLDrawable",
+    "MTLLibrary",
+    "MTLPipeline",
+    "MTLPixelFormat",
+    "MTLRenderCommandEncoder",
+    "MTLRenderPass",
+    "MTLRenderPipeline",
+    "MTLResource",
+    "MTLSampler",
+    "MTLStageInputOutputDescriptor",
+    "MTLTexture",
+    "MTLTypes",
+    "MTLVertexDescriptor",
+] }
+objc2-quartz-core = { version = "0.2.2", features = [
+    "CALayer",
+    "CAMetalLayer",
+    "objc2-metal",
+] }
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = "0.2.87"

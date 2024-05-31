@@ -2,64 +2,63 @@
 
 use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
-use core_graphics_types::{
-    base::CGFloat,
-    geometry::{CGRect, CGSize},
-};
-use objc::{
+use objc2::{
     class,
-    declare::ClassDecl,
+    declare::ClassBuilder,
     msg_send,
-    rc::autoreleasepool,
-    runtime::{Class, Object, Sel, BOOL, NO, YES},
-    sel, sel_impl,
+    rc::{autoreleasepool, Retained},
+    runtime::{AnyClass, AnyObject, Bool, ProtocolObject, Sel},
+    sel, ClassType,
 };
+use objc2_foundation::{CGFloat, CGRect, CGSize};
+use objc2_metal::MTLTextureType;
+use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
 use parking_lot::{Mutex, RwLock};
 
 #[cfg(target_os = "macos")]
 #[link(name = "QuartzCore", kind = "framework")]
 extern "C" {
     #[allow(non_upper_case_globals)]
-    static kCAGravityTopLeft: *mut Object;
+    static kCAGravityTopLeft: *mut AnyObject;
 }
 
 extern "C" fn layer_should_inherit_contents_scale_from_window(
-    _: &Class,
+    _: &AnyClass,
     _: Sel,
-    _layer: *mut Object,
+    _layer: *mut AnyObject,
     _new_scale: CGFloat,
-    _from_window: *mut Object,
-) -> BOOL {
-    YES
+    _from_window: *mut AnyObject,
+) -> Bool {
+    Bool::YES
 }
 
 static CAML_DELEGATE_REGISTER: Once = Once::new();
 
 #[derive(Debug)]
-pub struct HalManagedMetalLayerDelegate(&'static Class);
+pub struct HalManagedMetalLayerDelegate(&'static AnyClass);
 
 impl HalManagedMetalLayerDelegate {
     pub fn new() -> Self {
         let class_name = format!("HalManagedMetalLayerDelegate@{:p}", &CAML_DELEGATE_REGISTER);
 
         CAML_DELEGATE_REGISTER.call_once(|| {
-            type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
-            let mut decl = ClassDecl::new(&class_name, class!(NSObject)).unwrap();
+            let mut decl = ClassBuilder::new(&class_name, class!(NSObject)).unwrap();
             #[allow(trivial_casts)] // false positive
             unsafe {
                 decl.add_class_method(
                     sel!(layer:shouldInheritContentsScale:fromWindow:),
-                    layer_should_inherit_contents_scale_from_window as Fun,
+                    layer_should_inherit_contents_scale_from_window
+                        as extern "C" fn(_, _, _, _, _) -> _,
                 );
             }
             decl.register();
         });
-        Self(Class::get(&class_name).unwrap())
+        Self(AnyClass::get(&class_name).unwrap())
     }
 }
 
 impl super::Surface {
-    fn new(view: Option<NonNull<Object>>, layer: metal::MetalLayer) -> Self {
+    fn new(view: Option<NonNull<AnyObject>>, layer: Retained<CAMetalLayer>) -> Self {
         Self {
             view,
             render_layer: Mutex::new(layer),
@@ -82,46 +81,46 @@ impl super::Surface {
         view: *mut c_void,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
-        let view = view as *mut Object;
+        let view = view as *mut AnyObject;
         let render_layer = {
             let layer = unsafe { Self::get_metal_layer(view, delegate) };
-            unsafe { mem::transmute::<_, &metal::MetalLayerRef>(layer) }
+            unsafe { mem::transmute::<_, &CAMetalLayer>(layer) }
         }
-        .to_owned();
-        let _: *mut c_void = msg_send![view, retain];
+        .retain();
+        let _: *mut AnyObject = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }
 
-    pub unsafe fn from_layer(layer: &metal::MetalLayerRef) -> Self {
+    pub unsafe fn from_layer(layer: &CAMetalLayer) -> Self {
         let class = class!(CAMetalLayer);
-        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
-        assert_eq!(proper_kind, YES);
-        Self::new(None, layer.to_owned())
+        let proper_kind: bool = msg_send![layer, isKindOfClass: class];
+        assert!(proper_kind);
+        Self::new(None, layer.retain())
     }
 
     /// If not called on the main thread, this will panic.
     pub(crate) unsafe fn get_metal_layer(
-        view: *mut Object,
+        view: *mut AnyObject,
         delegate: Option<&HalManagedMetalLayerDelegate>,
-    ) -> *mut Object {
+    ) -> *mut AnyObject {
         if view.is_null() {
             panic!("window does not have a valid contentView");
         }
 
-        let is_main_thread: BOOL = msg_send![class!(NSThread), isMainThread];
-        if is_main_thread == NO {
+        let is_main_thread: bool = msg_send![class!(NSThread), isMainThread];
+        if !is_main_thread {
             panic!("get_metal_layer cannot be called in non-ui thread.");
         }
 
-        let main_layer: *mut Object = msg_send![view, layer];
+        let main_layer: *mut AnyObject = msg_send![view, layer];
         let class = class!(CAMetalLayer);
-        let is_valid_layer: BOOL = msg_send![main_layer, isKindOfClass: class];
+        let is_valid_layer: bool = msg_send![main_layer, isKindOfClass: class];
 
-        if is_valid_layer == YES {
+        if is_valid_layer {
             main_layer
         } else {
             // If the main layer is not a CAMetalLayer, we create a CAMetalLayer and use it.
-            let new_layer: *mut Object = msg_send![class, new];
+            let new_layer: *mut AnyObject = msg_send![class, new];
             let frame: CGRect = msg_send![main_layer, bounds];
             let () = msg_send![new_layer, setFrame: frame];
             #[cfg(target_os = "ios")]
@@ -130,23 +129,25 @@ impl super::Surface {
                 let () = msg_send![main_layer, addSublayer: new_layer];
                 // On iOS, "from_view" may be called before the application initialization is complete,
                 // `msg_send![view, window]` and `msg_send![window, screen]` will get null.
-                let screen: *mut Object = msg_send![class!(UIScreen), mainScreen];
+                let screen: *mut AnyObject = msg_send![class!(UIScreen), mainScreen];
                 let scale_factor: CGFloat = msg_send![screen, nativeScale];
                 let () = msg_send![view, setContentScaleFactor: scale_factor];
             };
             #[cfg(target_os = "macos")]
             {
                 let () = msg_send![view, setLayer: new_layer];
-                let () = msg_send![view, setWantsLayer: YES];
+                let () = msg_send![view, setWantsLayer: true];
                 let () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityTopLeft }];
-                let window: *mut Object = msg_send![view, window];
+                let window: *mut AnyObject = msg_send![view, window];
                 if !window.is_null() {
                     let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
                     let () = msg_send![new_layer, setContentsScale: scale_factor];
                 }
             };
             if let Some(delegate) = delegate {
-                let () = msg_send![new_layer, setDelegate: delegate.0];
+                let ptr: *const AnyClass = delegate.0;
+                let ptr: *const AnyObject = ptr.cast();
+                let () = msg_send![new_layer, setDelegate: ptr];
             }
             new_layer
         }
@@ -206,12 +207,12 @@ impl crate::Surface for super::Surface {
         #[cfg(target_os = "ios")]
         {
             if let Some(view) = self.view {
-                let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
+                let main_layer: *mut AnyObject = msg_send![view.as_ptr(), layer];
                 let bounds: CGRect = msg_send![main_layer, bounds];
-                let () = msg_send![*render_layer, setFrame: bounds];
+                render_layer.set_frame(bounds);
             }
         }
-        render_layer.set_device(&device_raw);
+        render_layer.set_device(Some(&device_raw));
         render_layer.set_pixel_format(caps.map_format(config.format));
         render_layer.set_framebuffer_only(framebuffer_only);
         render_layer.set_presents_with_transaction(self.present_with_transaction);
@@ -223,13 +224,13 @@ impl crate::Surface for super::Surface {
         }
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-        render_layer.set_maximum_drawable_count(config.maximum_frame_latency as u64 + 1);
+        render_layer.set_maximum_drawable_count(config.maximum_frame_latency as usize + 1);
         render_layer.set_drawable_size(drawable_size);
         if caps.can_set_next_drawable_timeout {
-            let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];
+            render_layer.set_allows_next_drawable_timeout(false);
         }
         if caps.can_set_display_sync {
-            let () = msg_send![*render_layer, setDisplaySyncEnabled: display_sync];
+            render_layer.set_display_sync_enabled(display_sync);
         }
 
         Ok(())
@@ -245,7 +246,7 @@ impl crate::Surface for super::Surface {
         _fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
-        let (drawable, texture) = match autoreleasepool(|| {
+        let (drawable, texture) = match autoreleasepool(|_| {
             render_layer
                 .next_drawable()
                 .map(|drawable| (drawable.to_owned(), drawable.texture().to_owned()))
@@ -260,7 +261,7 @@ impl crate::Surface for super::Surface {
             texture: super::Texture {
                 raw: texture,
                 format: swapchain_format,
-                raw_type: metal::MTLTextureType::D2,
+                raw_type: MTLTextureType::MTLTextureType2D,
                 array_layers: 1,
                 mip_levels: 1,
                 copy_size: crate::CopyExtent {
@@ -269,7 +270,7 @@ impl crate::Surface for super::Surface {
                     depth: 1,
                 },
             },
-            drawable,
+            drawable: ProtocolObject::from_retained(drawable),
             present_with_transaction: self.present_with_transaction,
         };
 

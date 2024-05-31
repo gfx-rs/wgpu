@@ -192,6 +192,13 @@ termcolor = "1.4.1"
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
+block2 = { git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+objc2 = { git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+objc2-encode = { git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+objc-sys = { git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+objc2-foundation = { git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+objc2-quartz-core = { git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+objc2-metal = { git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
 
 [profile.release]
 lto = "thin"
