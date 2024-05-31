@@ -12,8 +12,6 @@ use crate::{
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ExpressionError {
-    #[error("Doesn't exist")]
-    DoesntExist,
     #[error("Used by a statement before it was introduced into the scope by any of the dominating blocks")]
     NotInScope,
     #[error("Base type {0:?} is not compatible with this expression")]
