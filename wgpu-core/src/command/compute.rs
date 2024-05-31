@@ -13,7 +13,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label,
-    id::{self, DeviceId},
+    id::{self},
     init_tracker::MemoryInitKind,
     resource::{self, Resource},
     snatch::SnatchGuard,
@@ -34,14 +34,20 @@ use wgt::{BufferAddress, DynamicOffset};
 use std::sync::Arc;
 use std::{fmt, mem, str};
 
+use super::DynComputePass;
+
 pub struct ComputePass<A: HalApi> {
     /// All pass data & records is stored here.
     ///
-    /// If this is `None`, the pass has been ended and can no longer be used.
+    /// If this is `None`, the pass is in the 'ended' state and can no longer be used.
     /// Any attempt to record more commands will result in a validation error.
     base: Option<BasePass<ArcComputeCommand<A>>>,
 
-    parent_id: id::CommandEncoderId,
+    /// Parent command buffer that this pass records commands into.
+    ///
+    /// If it is none, this pass is invalid and any operation on it will return an error.
+    parent: Option<Arc<CommandBuffer<A>>>,
+
     timestamp_writes: Option<ComputePassTimestampWrites>,
 
     // Resource binding dedupe state.
@@ -50,10 +56,11 @@ pub struct ComputePass<A: HalApi> {
 }
 
 impl<A: HalApi> ComputePass<A> {
-    fn new(parent_id: id::CommandEncoderId, desc: &ComputePassDescriptor) -> Self {
+    /// If the parent command buffer is invalid, the returned pass will be invalid.
+    fn new(parent: Option<Arc<CommandBuffer<A>>>, desc: &ComputePassDescriptor) -> Self {
         Self {
-            base: Some(BasePass::<ArcComputeCommand<A>>::new(&desc.label)),
-            parent_id,
+            base: Some(BasePass::new(&desc.label)),
+            parent,
             timestamp_writes: desc.timestamp_writes.cloned(),
 
             current_bind_groups: BindGroupStateChange::new(),
@@ -62,8 +69,8 @@ impl<A: HalApi> ComputePass<A> {
     }
 
     #[inline]
-    pub fn parent_id(&self) -> id::CommandEncoderId {
-        self.parent_id
+    pub fn parent_id(&self) -> Option<id::CommandBufferId> {
+        self.parent.as_ref().map(|cmd_buf| cmd_buf.as_info().id())
     }
 
     #[inline]
@@ -84,7 +91,7 @@ impl<A: HalApi> ComputePass<A> {
 
 impl<A: HalApi> fmt::Debug for ComputePass<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ComputePass {{ encoder_id: {:?} }}", self.parent_id)
+        write!(f, "ComputePass {{ parent: {:?} }}", self.parent_id())
     }
 }
 
@@ -129,10 +136,12 @@ pub enum ComputePassErrorInner {
     Device(#[from] DeviceError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+    #[error("Parent encoder is invalid")]
+    InvalidParentEncoder,
     #[error("Bind group at index {0:?} is invalid")]
     InvalidBindGroup(u32),
     #[error("Device {0:?} is invalid")]
-    InvalidDevice(DeviceId),
+    InvalidDevice(id::DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
@@ -292,31 +301,55 @@ impl<'a, A: HalApi> State<'a, A> {
 // Running the compute pass.
 
 impl Global {
+    /// Creates a compute pass.
+    ///
+    /// If creation fails, an invalid pass is returned.
+    /// Any operation on an invalid pass will return an error.
+    ///
+    /// If successful, puts the encoder into the [`CommandEncoderStatus::Locked`] state.
     pub fn command_encoder_create_compute_pass<A: HalApi>(
         &self,
-        parent_id: id::CommandEncoderId,
+        encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor,
-    ) -> ComputePass<A> {
-        ComputePass::new(parent_id, desc)
+    ) -> (ComputePass<A>, Option<CommandEncoderError>) {
+        let hub = A::hub(self);
+
+        match CommandBuffer::lock_encoder(hub, encoder_id) {
+            Ok(cmd_buf) => (ComputePass::new(Some(cmd_buf), desc), None),
+            Err(err) => (ComputePass::new(None, desc), Some(err)),
+        }
     }
 
+    /// Creates a type erased compute pass.
+    ///
+    /// If creation fails, an invalid pass is returned.
+    /// Any operation on an invalid pass will return an error.
     pub fn command_encoder_create_compute_pass_dyn<A: HalApi>(
         &self,
-        parent_id: id::CommandEncoderId,
+        encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor,
-    ) -> Box<dyn super::DynComputePass> {
-        Box::new(ComputePass::<A>::new(parent_id, desc))
+    ) -> (Box<dyn DynComputePass>, Option<CommandEncoderError>) {
+        let (pass, err) = self.command_encoder_create_compute_pass::<A>(encoder_id, desc);
+        (Box::new(pass), err)
     }
 
     pub fn compute_pass_end<A: HalApi>(
         &self,
         pass: &mut ComputePass<A>,
     ) -> Result<(), ComputePassError> {
-        let base = pass.base.take().ok_or(ComputePassError {
-            scope: PassErrorScope::Pass(pass.parent_id),
-            inner: ComputePassErrorInner::PassEnded,
-        })?;
-        self.compute_pass_end_impl(pass.parent_id, base, pass.timestamp_writes.as_ref())
+        let scope = PassErrorScope::Pass(pass.parent_id());
+        let Some(parent) = pass.parent.as_ref() else {
+            return Err(ComputePassErrorInner::InvalidParentEncoder).map_pass_err(scope);
+        };
+
+        parent.unlock_encoder().map_pass_err(scope)?;
+
+        let base = pass
+            .base
+            .take()
+            .ok_or(ComputePassErrorInner::PassEnded)
+            .map_pass_err(scope)?;
+        self.compute_pass_end_impl(parent, base, pass.timestamp_writes.as_ref())
     }
 
     #[doc(hidden)]
@@ -326,10 +359,14 @@ impl Global {
         base: BasePass<ComputeCommand>,
         timestamp_writes: Option<&ComputePassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
+        let hub = A::hub(self);
+
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id)
+            .map_pass_err(PassErrorScope::PassEncoder(encoder_id))?;
         let commands = ComputeCommand::resolve_compute_command_ids(A::hub(self), &base.commands)?;
 
         self.compute_pass_end_impl::<A>(
-            encoder_id,
+            &cmd_buf,
             BasePass {
                 label: base.label,
                 commands,
@@ -343,17 +380,15 @@ impl Global {
 
     fn compute_pass_end_impl<A: HalApi>(
         &self,
-        encoder_id: id::CommandEncoderId,
+        cmd_buf: &CommandBuffer<A>,
         base: BasePass<ArcComputeCommand<A>>,
         timestamp_writes: Option<&ComputePassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
-        let pass_scope = PassErrorScope::Pass(encoder_id);
+        let pass_scope = PassErrorScope::Pass(Some(cmd_buf.as_info().id()));
 
         let hub = A::hub(self);
 
-        let cmd_buf: Arc<CommandBuffer<A>> =
-            CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
         let device = &cmd_buf.device;
         if !device.is_valid() {
             return Err(ComputePassErrorInner::InvalidDevice(

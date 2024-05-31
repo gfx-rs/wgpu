@@ -459,44 +459,101 @@ pub trait Instance: Sized + WasmNotSendSync {
 pub trait Surface: WasmNotSendSync {
     type A: Api;
 
-    /// Configures the surface to use the given device.
+    /// Configure `self` to use `device`.
     ///
     /// # Safety
     ///
-    /// - All gpu work that uses the surface must have been completed.
+    /// - All GPU work using `self` must have been completed.
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
-    /// - All surfaces created using other devices must have been unconfigured before this call.
+    /// - The surface `self` must not currently be configured to use any other [`Device`].
     unsafe fn configure(
         &self,
         device: &<Self::A as Api>::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
-    /// Unconfigures the surface on the given device.
+    /// Unconfigure `self` on `device`.
     ///
     /// # Safety
     ///
-    /// - All gpu work that uses the surface must have been completed.
+    /// - All GPU work that uses `surface` must have been completed.
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
-    /// - The surface must have been configured on the given device.
+    /// - The surface `self` must have been configured on `device`.
     unsafe fn unconfigure(&self, device: &<Self::A as Api>::Device);
 
-    /// Returns the next texture to be presented by the swapchain for drawing
+    /// Return the next texture to be presented by `self`, for the caller to draw on.
     ///
-    /// A `timeout` of `None` means to wait indefinitely, with no timeout.
+    /// On success, return an [`AcquiredSurfaceTexture`] representing the
+    /// texture into which the caller should draw the image to be displayed on
+    /// `self`.
+    ///
+    /// If `timeout` elapses before `self` has a texture ready to be acquired,
+    /// return `Ok(None)`. If `timeout` is `None`, wait indefinitely, with no
+    /// timeout.
+    ///
+    /// # Using an [`AcquiredSurfaceTexture`]
+    ///
+    /// On success, this function returns an [`AcquiredSurfaceTexture`] whose
+    /// [`texture`] field is a [`SurfaceTexture`] from which the caller can
+    /// [`borrow`] a [`Texture`] to draw on. The [`AcquiredSurfaceTexture`] also
+    /// carries some metadata about that [`SurfaceTexture`].
+    ///
+    /// All calls to [`Queue::submit`] that draw on that [`Texture`] must also
+    /// include the [`SurfaceTexture`] in the `surface_textures` argument.
+    ///
+    /// When you are done drawing on the texture, you can display it on `self`
+    /// by passing the [`SurfaceTexture`] and `self` to [`Queue::present`].
+    ///
+    /// If you do not wish to display the texture, you must pass the
+    /// [`SurfaceTexture`] to [`self.discard_texture`], so that it can be reused
+    /// by future acquisitions.
     ///
     /// # Portability
     ///
-    /// Some backends can't support a timeout when acquiring a texture and
-    /// the timeout will be ignored.
+    /// Some backends can't support a timeout when acquiring a texture. On these
+    /// backends, `timeout` is ignored.
     ///
-    /// Returns `None` on timing out.
+    /// # Safety
+    ///
+    /// - The surface `self` must currently be configured on some [`Device`].
+    ///
+    /// - The `fence` argument must be the same [`Fence`] passed to all calls to
+    ///   [`Queue::submit`] that used [`Texture`]s acquired from this surface.
+    ///
+    /// - You may only have one texture acquired from `self` at a time. When
+    ///   `acquire_texture` returns `Ok(Some(ast))`, you must pass the returned
+    ///   [`SurfaceTexture`] `ast.texture` to either [`Queue::present`] or
+    ///   [`Surface::discard_texture`] before calling `acquire_texture` again.
+    ///
+    /// [`texture`]: AcquiredSurfaceTexture::texture
+    /// [`SurfaceTexture`]: Api::SurfaceTexture
+    /// [`borrow`]: std::borrow::Borrow::borrow
+    /// [`Texture`]: Api::Texture
+    /// [`Fence`]: Api::Fence
+    /// [`self.discard_texture`]: Surface::discard_texture
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        fence: &<Self::A as Api>::Fence,
     ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
+
+    /// Relinquish an acquired texture without presenting it.
+    ///
+    /// After this call, the texture underlying [`SurfaceTexture`] may be
+    /// returned by subsequent calls to [`self.acquire_texture`].
+    ///
+    /// # Safety
+    ///
+    /// - The surface `self` must currently be configured on some [`Device`].
+    ///
+    /// - `texture` must be a [`SurfaceTexture`] returned by a call to
+    ///   [`self.acquire_texture`] that has not yet been passed to
+    ///   [`Queue::present`].
+    ///
+    /// [`SurfaceTexture`]: Api::SurfaceTexture
+    /// [`self.acquire_texture`]: Surface::acquire_texture
     unsafe fn discard_texture(&self, texture: <Self::A as Api>::SurfaceTexture);
 }
 
@@ -762,19 +819,23 @@ pub trait Queue: WasmNotSendSync {
 
     /// Submit `command_buffers` for execution on GPU.
     ///
-    /// If `signal_fence` is `Some(fence, value)`, update `fence` to `value`
-    /// when the operation is complete. See [`Fence`] for details.
+    /// Update `fence` to `value` when the operation is complete. See
+    /// [`Fence`] for details.
     ///
-    /// If two calls to `submit` on a single `Queue` occur in a particular order
-    /// (that is, they happen on the same thread, or on two threads that have
-    /// synchronized to establish an ordering), then the first submission's
-    /// commands all complete execution before any of the second submission's
-    /// commands begin. All results produced by one submission are visible to
-    /// the next.
+    /// A `wgpu_hal` queue is "single threaded": all command buffers are
+    /// executed in the order they're submitted, with each buffer able to see
+    /// previous buffers' results. Specifically:
     ///
-    /// Within a submission, command buffers execute in the order in which they
-    /// appear in `command_buffers`. All results produced by one buffer are
-    /// visible to the next.
+    /// - If two calls to `submit` on a single `Queue` occur in a particular
+    ///   order (that is, they happen on the same thread, or on two threads that
+    ///   have synchronized to establish an ordering), then the first
+    ///   submission's commands all complete execution before any of the second
+    ///   submission's commands begin. All results produced by one submission
+    ///   are visible to the next.
+    ///
+    /// - Within a submission, command buffers execute in the order in which they
+    ///   appear in `command_buffers`. All results produced by one buffer are
+    ///   visible to the next.
     ///
     /// If two calls to `submit` on a single `Queue` from different threads are
     /// not synchronized to occur in a particular order, they must pass distinct
@@ -803,9 +864,15 @@ pub trait Queue: WasmNotSendSync {
     /// - Every [`SurfaceTexture`][st] that any command in `command_buffers`
     ///   writes to must appear in the `surface_textures` argument.
     ///
+    /// - No [`SurfaceTexture`][st] may appear in the `surface_textures`
+    ///   argument more than once.
+    ///
     /// - Each [`SurfaceTexture`][st] in `surface_textures` must be configured
     ///   for use with the [`Device`][d] associated with this [`Queue`],
     ///   typically by calling [`Surface::configure`].
+    ///
+    /// - All calls to this function that include a given [`SurfaceTexture`][st]
+    ///   in `surface_textures` must use the same [`Fence`].
     ///
     /// [`Fence`]: Api::Fence
     /// [cb]: Api::CommandBuffer
@@ -819,7 +886,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
-        signal_fence: Option<(&mut <Self::A as Api>::Fence, FenceValue)>,
+        signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
     unsafe fn present(
         &self,
@@ -1714,6 +1781,8 @@ pub struct ProgrammableStage<'a, A: Api> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
+    pub vertex_pulling_transform: bool,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1724,6 +1793,7 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+            vertex_pulling_transform: self.vertex_pulling_transform,
         }
     }
 }

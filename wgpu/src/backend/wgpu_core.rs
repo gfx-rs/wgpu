@@ -98,6 +98,14 @@ impl ContextWgpuCore {
         }
     }
 
+    pub unsafe fn buffer_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+        &self,
+        id: wgc::id::BufferId,
+        hal_buffer_callback: F,
+    ) -> R {
+        unsafe { self.0.buffer_as_hal::<A, F, R>(id, hal_buffer_callback) }
+    }
+
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,
@@ -1181,6 +1189,10 @@ impl crate::Context for ContextWgpuCore {
                         .vertex
                         .compilation_options
                         .zero_initialize_workgroup_memory,
+                    vertex_pulling_transform: desc
+                        .vertex
+                        .compilation_options
+                        .vertex_pulling_transform,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1195,6 +1207,7 @@ impl crate::Context for ContextWgpuCore {
                     zero_initialize_workgroup_memory: frag
                         .compilation_options
                         .zero_initialize_workgroup_memory,
+                    vertex_pulling_transform: false,
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1248,6 +1261,7 @@ impl crate::Context for ContextWgpuCore {
                 zero_initialize_workgroup_memory: desc
                     .compilation_options
                     .zero_initialize_workgroup_memory,
+                vertex_pulling_transform: false,
             },
             cache: desc.cache.map(|c| c.id.into()),
         };
@@ -1910,13 +1924,25 @@ impl crate::Context for ContextWgpuCore {
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
+        let (pass, err) = gfx_select!(encoder => self.0.command_encoder_create_compute_pass_dyn(*encoder, &wgc::command::ComputePassDescriptor {
+            label: desc.label.map(Borrowed),
+            timestamp_writes: timestamp_writes.as_ref(),
+        }));
+
+        if let Some(cause) = err {
+            self.handle_error(
+                &encoder_data.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "CommandEncoder::begin_compute_pass",
+            );
+        }
+
         (
             Unused,
             Self::ComputePassData {
-                pass: gfx_select!(encoder => self.0.command_encoder_create_compute_pass_dyn(*encoder, &wgc::command::ComputePassDescriptor {
-                    label: desc.label.map(Borrowed),
-                    timestamp_writes: timestamp_writes.as_ref(),
-                })),
+                pass,
                 error_sink: encoder_data.error_sink.clone(),
             },
         )
