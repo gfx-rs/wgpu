@@ -1,9 +1,7 @@
-use naga::{valid, Expression, Function, Scalar};
+use naga::{valid, Expression, Function, Module, Scalar, Type, TypeInner};
 
 #[test]
 fn emit_atomic_result() {
-    use naga::{Module, Type, TypeInner};
-
     // We want to ensure that the *only* problem with the code is the
     // use of an `Emit` statement instead of an `Atomic` statement. So
     // validate two versions of the module varying only in that
@@ -88,8 +86,6 @@ fn emit_atomic_result() {
 
 #[test]
 fn emit_call_result() {
-    use naga::{Module, Type, TypeInner};
-
     // We want to ensure that the *only* problem with the code is the
     // use of an `Emit` statement instead of a `Call` statement. So
     // validate two versions of the module varying only in that
@@ -161,8 +157,6 @@ fn emit_call_result() {
 
 #[test]
 fn emit_workgroup_uniform_load_result() {
-    use naga::{Module, Type, TypeInner};
-
     // We want to ensure that the *only* problem with the code is the
     // use of an `Emit` statement instead of an `Atomic` statement. So
     // validate two versions of the module varying only in that
