@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    num::{NonZeroU32, NonZeroU64},
+    time::{Duration, Instant},
+};
 
 use criterion::{criterion_group, Criterion, Throughput};
 use nanorand::{Rng, WyRand};
@@ -34,10 +37,6 @@ impl ComputepassState {
     fn new() -> Self {
         let device_state = DeviceState::new();
 
-        // let limits = device_state.device.limits();
-        // let supported = limits.max_sampled_textures_per_shader_stage >= TEXTURE_COUNT as _
-        //     && limits.max_storage_buffers_per_shader_stage >= STORAGE_BUFFER_COUNT as _
-        //     && limits.max_storage_textures_per_shader_stage >= STORAGE_TEXTURE_COUNT as _;
         let supports_bindless = device_state.device.features().contains(
             wgpu::Features::BUFFER_BINDING_ARRAY
                 | wgpu::Features::TEXTURE_BINDING_ARRAY
@@ -83,7 +82,7 @@ impl ComputepassState {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
-                    min_binding_size: std::num::NonZeroU64::new(BUFFER_SIZE),
+                    min_binding_size: NonZeroU64::new(BUFFER_SIZE),
                 },
                 count: None,
             });
@@ -121,6 +120,7 @@ impl ComputepassState {
             }));
         }
         random.shuffle(&mut texture_views);
+        let texture_view_refs: Vec<_> = texture_views.iter().collect();
 
         let mut storage_texture_views = Vec::with_capacity(STORAGE_TEXTURE_COUNT);
         for i in 0..TEXTURE_COUNT {
@@ -146,6 +146,7 @@ impl ComputepassState {
             }));
         }
         random.shuffle(&mut storage_texture_views);
+        let storage_texture_view_refs: Vec<_> = storage_texture_views.iter().collect();
 
         let mut storage_buffers = Vec::with_capacity(STORAGE_BUFFER_COUNT);
         for i in 0..STORAGE_BUFFER_COUNT {
@@ -157,6 +158,10 @@ impl ComputepassState {
             }));
         }
         random.shuffle(&mut storage_buffers);
+        let storage_buffer_bindings: Vec<_> = storage_buffers
+            .iter()
+            .map(|b| b.as_entire_buffer_binding())
+            .collect();
 
         let mut bind_groups = Vec::with_capacity(DISPATCH_COUNT);
         for dispatch_idx in 0..DISPATCH_COUNT {
@@ -226,10 +231,105 @@ impl ComputepassState {
                     cache: None,
                 });
 
-        let mut bindless_bind_group = None;
-        let mut bindless_pipeline = None;
+        let (bindless_bind_group, bindless_pipeline) = if supports_bindless {
+            let bindless_bind_group_layout =
+                device_state
+                    .device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::Texture {
+                                    sample_type: wgpu::TextureSampleType::Float {
+                                        filterable: true,
+                                    },
+                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                                count: Some(NonZeroU32::new(TEXTURE_COUNT as u32).unwrap()),
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::StorageTexture {
+                                    access: wgpu::StorageTextureAccess::ReadWrite,
+                                    format: wgpu::TextureFormat::Rgba32Float,
+                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                },
+                                count: Some(NonZeroU32::new(STORAGE_TEXTURE_COUNT as u32).unwrap()),
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 2,
+                                visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                    has_dynamic_offset: false,
+                                    min_binding_size: std::num::NonZeroU64::new(BUFFER_SIZE),
+                                },
+                                count: Some(NonZeroU32::new(STORAGE_BUFFER_COUNT as u32).unwrap()),
+                            },
+                        ],
+                    });
 
-        // TODO: bindless (see renderpass)
+            let bindless_bind_group =
+                device_state
+                    .device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: None,
+                        layout: &bindless_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureViewArray(
+                                    &texture_view_refs,
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::TextureViewArray(
+                                    &storage_texture_view_refs,
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: wgpu::BindingResource::BufferArray(
+                                    &storage_buffer_bindings,
+                                ),
+                            },
+                        ],
+                    });
+
+            let bindless_sm = device_state
+                .device
+                .create_shader_module(wgpu::include_wgsl!("computepass-bindless.wgsl"));
+
+            let bindless_pipeline_layout =
+                device_state
+                    .device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: None,
+                        bind_group_layouts: &[&bindless_bind_group_layout],
+                        push_constant_ranges: &[],
+                    });
+
+            let bindless_pipeline =
+                device_state
+                    .device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: Some("Compute Pipeline bindless"),
+                        layout: Some(&bindless_pipeline_layout),
+                        module: &bindless_sm,
+                        entry_point: "cs_main",
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                        cache: None,
+                    });
+
+            (Some(bindless_bind_group), Some(bindless_pipeline))
+        } else {
+            (None, None)
+        };
 
         Self {
             device_state,
@@ -319,12 +419,6 @@ fn run_bench(ctx: &mut Criterion) {
                     b.iter_custom(|iters| {
                         profiling::scope!("benchmark invocation");
 
-                        // TODO: is this happening with compute as well or is it just renderpass?
-                        // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
-                        // if state.device_state.adapter_info.name.contains("Paravirtual") {
-                        //     return Duration::from_secs_f32(1.0);
-                        // }
-
                         let mut duration = Duration::ZERO;
 
                         for _ in 0..iters {
@@ -373,12 +467,6 @@ fn run_bench(ctx: &mut Criterion) {
 
                 b.iter_custom(|iters| {
                     profiling::scope!("benchmark invocation");
-
-                    // TODO: is this happening with compute as well or is it just renderpass?
-                    // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
-                    // if state.device_state.adapter_info.name.contains("Paravirtual") {
-                    //     return Duration::from_secs_f32(1.0);
-                    // }
 
                     let mut duration = Duration::ZERO;
 
