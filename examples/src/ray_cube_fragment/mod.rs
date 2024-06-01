@@ -202,11 +202,13 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
+                compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
+                compilation_options: Default::default(),
                 targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
@@ -216,6 +218,7 @@ impl crate::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
