@@ -1,0 +1,31 @@
+(
+  msl_pipeline: (
+    allow_and_force_point_size: false,
+    vertex_pulling_transform: true,
+    vertex_buffer_mappings: [(
+      id: 1,
+      stride: 20,
+      indexed_by_vertex: true,
+      attributes: [(
+        shader_location: 0, // position
+        offset: 0,
+        format: Float32,    // too small, inflated to a vec4
+      ),
+      (
+        shader_location: 1, // normal
+        offset: 4,
+        format: Float32x4,  // too big, truncated to a vec3
+      )],
+    ),
+    (
+      id: 2,
+      stride: 16,
+      indexed_by_vertex: false,
+      attributes: [(
+        shader_location: 2, // texcoord
+        offset: 0,
+        format: Float32x2,
+      )],
+    )],
+  ),
+)

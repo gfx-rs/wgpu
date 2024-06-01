@@ -66,6 +66,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type PipelineCache = ();
 
     type AccelerationStructure = AccelerationStructure;
 }
@@ -376,38 +377,37 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         _surface_textures: &[&SurfaceTexture],
-        signal_fence: Option<(&mut Fence, crate::FenceValue)>,
+        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         objc::rc::autoreleasepool(|| {
-            let extra_command_buffer = match signal_fence {
-                Some((fence, value)) => {
-                    let completed_value = Arc::clone(&fence.completed_value);
-                    let block = block::ConcreteBlock::new(move |_cmd_buf| {
-                        completed_value.store(value, atomic::Ordering::Release);
-                    })
-                    .copy();
+            let extra_command_buffer = {
+                let completed_value = Arc::clone(&signal_fence.completed_value);
+                let block = block::ConcreteBlock::new(move |_cmd_buf| {
+                    completed_value.store(signal_value, atomic::Ordering::Release);
+                })
+                .copy();
 
-                    let raw = match command_buffers.last() {
-                        Some(&cmd_buf) => cmd_buf.raw.to_owned(),
-                        None => {
-                            let queue = self.raw.lock();
-                            queue
-                                .new_command_buffer_with_unretained_references()
-                                .to_owned()
-                        }
-                    };
-                    raw.set_label("(wgpu internal) Signal");
-                    raw.add_completed_handler(&block);
-
-                    fence.maintain();
-                    fence.pending_command_buffers.push((value, raw.to_owned()));
-                    // only return an extra one if it's extra
-                    match command_buffers.last() {
-                        Some(_) => None,
-                        None => Some(raw),
+                let raw = match command_buffers.last() {
+                    Some(&cmd_buf) => cmd_buf.raw.to_owned(),
+                    None => {
+                        let queue = self.raw.lock();
+                        queue
+                            .new_command_buffer_with_unretained_references()
+                            .to_owned()
                     }
+                };
+                raw.set_label("(wgpu internal) Signal");
+                raw.add_completed_handler(&block);
+
+                signal_fence.maintain();
+                signal_fence
+                    .pending_command_buffers
+                    .push((signal_value, raw.to_owned()));
+                // only return an extra one if it's extra
+                match command_buffers.last() {
+                    Some(_) => None,
+                    None => Some(raw),
                 }
-                None => None,
             };
 
             for cmd_buffer in command_buffers {
@@ -462,6 +462,15 @@ unsafe impl Sync for Buffer {}
 impl Buffer {
     fn as_raw(&self) -> BufferPtr {
         unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
+    }
+}
+
+impl crate::BufferBinding<'_, Api> {
+    fn resolve_size(&self) -> wgt::BufferAddress {
+        match self.size {
+            Some(size) => size.get(),
+            None => self.buffer.size - self.offset,
+        }
     }
 }
 
@@ -689,6 +698,9 @@ struct PipelineStageInfo {
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
     sized_bindings: Vec<naga::ResourceBinding>,
+
+    /// Info on all bound vertex buffers.
+    vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
 }
 
 impl PipelineStageInfo {
@@ -696,6 +708,7 @@ impl PipelineStageInfo {
         self.push_constants = None;
         self.sizes_slot = None;
         self.sized_bindings.clear();
+        self.vertex_buffer_mappings.clear();
     }
 
     fn assign_from(&mut self, other: &Self) {
@@ -703,6 +716,9 @@ impl PipelineStageInfo {
         self.sizes_slot = other.sizes_slot;
         self.sized_bindings.clear();
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
+        self.vertex_buffer_mappings.clear();
+        self.vertex_buffer_mappings
+            .extend_from_slice(&other.vertex_buffer_mappings);
     }
 }
 
@@ -819,6 +835,8 @@ struct CommandState {
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
     storage_buffer_length_map: rustc_hash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+
+    vertex_buffer_size_map: rustc_hash::FxHashMap<u64, wgt::BufferSize>,
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,

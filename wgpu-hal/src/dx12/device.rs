@@ -149,11 +149,7 @@ impl super::Device {
         // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
         raw.create_render_target_view(
             ComPtr::null(),
-            &d3d12::RenderTargetViewDesc::texture_2d(
-                winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
-                0,
-                0,
-            ),
+            &d3d12::RenderTargetViewDesc::texture_2d(dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM, 0, 0),
             null_rtv_handle.raw,
         );
 
@@ -217,7 +213,7 @@ impl super::Device {
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         use naga::back::hlsl;
 
-        let stage_bit = crate::auxil::map_naga_stage(naga_stage);
+        let stage_bit = auxil::map_naga_stage(naga_stage);
 
         let (module, info) = naga::back::pipeline_constants::process_overrides(
             &stage.module.naga.module,
@@ -272,7 +268,7 @@ impl super::Device {
 
         // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
-            super::shader_compilation::compile_dxc(
+            shader_compilation::compile_dxc(
                 self,
                 &source,
                 source_name,
@@ -282,7 +278,7 @@ impl super::Device {
                 dxc_container,
             )
         } else {
-            super::shader_compilation::compile_fxc(
+            shader_compilation::compile_fxc(
                 self,
                 &source,
                 source_name,
@@ -1516,6 +1512,14 @@ impl crate::Device for super::Device {
         })
     }
     unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        _desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<(), crate::PipelineCacheError> {
+        Ok(())
+    }
+    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
 
     unsafe fn create_query_set(
         &self,

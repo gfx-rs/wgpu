@@ -61,6 +61,7 @@ async fn scissor_test_impl(
                 })],
             }),
             multiview: None,
+            cache: None,
         });
 
     let readback_buffer = image::ReadbackBuffers::new(&ctx.device, &texture);

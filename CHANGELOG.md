@@ -41,6 +41,20 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Remove lifetime bounds on `wgpu::ComputePass`
+
+TODO(wumpf): This is still work in progress. Should write a bit more about it. Also will very likely extend to `wgpu::RenderPass` before release.
+
+`wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
+
+Furthermore, `wgpu::ComputePass` no longer has a life time dependency on its parent `wgpu::CommandEncoder`.
+⚠️ As long as a `wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
+Previously, this was statically enforced by a lifetime constraint.
+TODO(wumpf): There was some discussion on whether to make this life time constraint opt-in or opt-out (entirely on `wgpu` side, no changes to `wgpu-core`).
+Lifting this lifetime dependencies is very useful for library authors, but opens up an easy way for incorrect use.
+
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620).
+
 #### Querying shader compilation errors
 
 Wgpu now supports querying [shader compilation info](https://www.w3.org/TR/webgpu/#dom-gpushadermodule-getcompilationinfo).
@@ -62,15 +76,60 @@ for message in compilation_info
 
 By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
-
-
 ### New features
+
+#### Vulkan
+
+- Added a `PipelineCache` resource to allow using Vulkan pipeline caches. By @DJMcNab in [#5319](https://github.com/gfx-rs/wgpu/pull/5319)
 
 #### General
 
+- Added `as_hal` for `Buffer` to access wgpu created buffers form wgpu-hal. By @JasondeWolff in [#5724](https://github.com/gfx-rs/wgpu/pull/5724)
+
 #### Naga
 
+- Implement `WGSL`'s `unpack4xI8`,`unpack4xU8`,`pack4xI8` and `pack4xU8`. By @VlaDexa in [#5424](https://github.com/gfx-rs/wgpu/pull/5424)
+- Began work adding support for atomics to the SPIR-V frontend. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5702](https://github.com/gfx-rs/wgpu/pull/5702).
+
+### Changes
+
+#### General
+
+- Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
+
+#### Metal
+- Removed the `link` Cargo feature.
+
+  This was used to allow weakly linking frameworks. This can be achieved with putting something like the following in your `.cargo/config.toml` instead:
+  ```toml
+  [target.'cfg(target_vendor = "apple")']
+  rustflags = ["-C", "link-args=-weak_framework Metal -weak_framework QuartzCore -weak_framework CoreGraphics"]
+  ```
+
 ### Bug Fixes
+
+#### General
+
+- Ensure render pipelines have at least 1 target. By @ErichDonGubler in [#5715](https://github.com/gfx-rs/wgpu/pull/5715)
+
+#### Metal
+
+- Fix unrecognized selector crash on iOS 12. By @vladasz in [#5744](https://github.com/gfx-rs/wgpu/pull/5744).
+
+#### Vulkan
+
+- Fix enablement of subgroup ops extension on Vulkan devices that don't support Vulkan 1.3. By @cwfitzgerald in [#5624](https://github.com/gfx-rs/wgpu/pull/5624).
+
+#### GLES / OpenGL
+
+- Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
+- Fix `ClearColorF`, `ClearColorU` and `ClearColorI` commands being issued before `SetDrawColorBuffers` [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
+- Replace `glClear` with `glClearBufferF` because `glDrawBuffers` requires that the ith buffer must be `COLOR_ATTACHMENTi` or `NONE` [#5666](https://github.com/gfx-rs/wgpu/pull/5666)
+- Return the unmodified version in driver_info. By @Valaphee in [#5753](https://github.com/gfx-rs/wgpu/pull/5753)
+
+#### WebGPU
+
+- Added support for pipeline-overridable constants to the WebGPU backend by @DouglasDwyer in [#5688](https://github.com/gfx-rs/wgpu/pull/5688)
 
 ## v0.20.0 (2024-04-28)
 
@@ -223,6 +282,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Fix deadlocks caused by recursive read-write lock acquisitions [#5426](https://github.com/gfx-rs/wgpu/pull/5426).
 - Remove exposed C symbols (`extern "C"` + [no_mangle]) from RenderPass & ComputePass recording. By @wumpf in [#5409](https://github.com/gfx-rs/wgpu/pull/5409).
 - Fix surfaces being only compatible with first backend enabled on an instance, causing failures when manually specifying an adapter. By @Wumpf in [#5535](https://github.com/gfx-rs/wgpu/pull/5535).
+- Clean up weak references to texture views and bind groups. By @xiaopengli89 [#5595](https://github.com/gfx-rs/wgpu/pull/5595).
 
 #### Naga
 
@@ -246,6 +306,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Set object labels when the DEBUG flag is set, even if the VALIDATION flag is disabled. By @DJMcNab in [#5345](https://github.com/gfx-rs/wgpu/pull/5345).
 - Add safety check to `wgpu_hal::vulkan::CommandEncoder` to make sure `discard_encoding` is not called in the closed state. By @villuna in [#5557](https://github.com/gfx-rs/wgpu/pull/5557)
 - Fix SPIR-V type capability requests to not depend on `LocalType` caching. By @atlv24 in [#5590](https://github.com/gfx-rs/wgpu/pull/5590)
+- Upgrade `ash` to `0.38`. By @MarijnS95 in [#5504](https://github.com/gfx-rs/wgpu/pull/5504).
 
 #### Tests
 

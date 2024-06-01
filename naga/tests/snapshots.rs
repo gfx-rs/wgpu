@@ -14,14 +14,15 @@ const BASE_DIR_OUT: &str = "tests/out";
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
     struct Targets: u32 {
-        const IR = 0x1;
-        const ANALYSIS = 0x2;
-        const SPIRV = 0x4;
-        const METAL = 0x8;
-        const GLSL = 0x10;
-        const DOT = 0x20;
-        const HLSL = 0x40;
-        const WGSL = 0x80;
+        const IR = 1;
+        const ANALYSIS = 1 << 1;
+        const SPIRV = 1 << 2;
+        const METAL = 1 << 3;
+        const GLSL = 1 << 4;
+        const DOT = 1 << 5;
+        const HLSL = 1 << 6;
+        const WGSL = 1 << 7;
+        const NO_VALIDATION = 1 << 8;
     }
 }
 
@@ -292,7 +293,13 @@ fn check_targets(
         }
     }
 
-    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+    let validation_flags = if targets.contains(Targets::NO_VALIDATION) {
+        naga::valid::ValidationFlags::empty()
+    } else {
+        naga::valid::ValidationFlags::all()
+    };
+
+    let info = naga::valid::Validator::new(validation_flags, capabilities)
         .subgroup_stages(subgroup_stages)
         .subgroup_operations(subgroup_operations)
         .validate(module)
@@ -317,7 +324,7 @@ fn check_targets(
             }
         }
 
-        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        naga::valid::Validator::new(validation_flags, capabilities)
             .subgroup_stages(subgroup_stages)
             .subgroup_operations(subgroup_operations)
             .validate(module)
@@ -883,6 +890,7 @@ fn convert_wgsl() {
             "overrides-ray-query",
             Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
+        ("vertex-pulling-transform", Targets::METAL),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -978,6 +986,12 @@ fn convert_spv_all() {
         "subgroup-operations-s",
         false,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv(
+        "atomic_i_increment",
+        false,
+        // TODO(@schell): remove Targets::NO_VALIDATION when OpAtomicIIncrement lands
+        Targets::IR | Targets::NO_VALIDATION,
     );
 }
 

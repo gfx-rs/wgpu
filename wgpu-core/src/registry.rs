@@ -176,16 +176,22 @@ impl<T: Resource> Registry<T> {
         let guard = self.storage.read();
 
         let type_name = guard.kind();
-        match guard.get(id) {
-            Ok(res) => {
+
+        // Using `get` over `try_get` is fine for the most part.
+        // However, there's corner cases where it can happen that a resource still holds an Arc
+        // to another resource that was already dropped explicitly from the registry.
+        // That resource is now in an invalid state, likely causing an error that lead
+        // us here, trying to print its label but failing because the id is now vacant.
+        match guard.try_get(id) {
+            Ok(Some(res)) => {
                 let label = res.label();
                 if label.is_empty() {
                     format!("<{}-{:?}>", type_name, id.unzip())
                 } else {
-                    label
+                    label.to_owned()
                 }
             }
-            Err(_) => format!(
+            _ => format!(
                 "<Invalid-{} label={}>",
                 type_name,
                 guard.label_for_invalid_id(id)

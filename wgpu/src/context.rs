@@ -11,11 +11,12 @@ use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, ComputePassDescriptor,
     ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer,
-    ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineLayoutDescriptor,
-    QuerySetDescriptor, RenderBundleDescriptor, RenderBundleEncoderDescriptor,
-    RenderPassDescriptor, RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe,
-    Texture, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
+    ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineCacheDescriptor,
+    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
+    RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
+    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
+    TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -59,6 +60,8 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type RenderPipelineData: ContextData;
     type ComputePipelineId: ContextId + WasmNotSendSync;
     type ComputePipelineData: ContextData;
+    type PipelineCacheId: ContextId + WasmNotSendSync;
+    type PipelineCacheData: ContextData;
     type CommandEncoderId: ContextId + WasmNotSendSync;
     type CommandEncoderData: ContextData;
     type ComputePassId: ContextId;
@@ -238,6 +241,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData);
+    unsafe fn device_create_pipeline_cache(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> (Self::PipelineCacheId, Self::PipelineCacheData);
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -400,6 +409,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         pipeline: &Self::RenderPipelineId,
         pipeline_data: &Self::RenderPipelineData,
     );
+    fn pipeline_cache_drop(
+        &self,
+        cache: &Self::PipelineCacheId,
+        cache_data: &Self::PipelineCacheData,
+    );
 
     fn compute_pipeline_get_bind_group_layout(
         &self,
@@ -458,26 +472,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor<'_>,
     ) -> (Self::ComputePassId, Self::ComputePassData);
-    fn command_encoder_end_compute_pass(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        pass: &mut Self::ComputePassId,
-        pass_data: &mut Self::ComputePassData,
-    );
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         desc: &RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData);
-    fn command_encoder_end_render_pass(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-    );
     fn command_encoder_finish(
         &self,
         encoder: Self::CommandEncoderId,
@@ -617,6 +617,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     fn device_start_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &Self::PipelineCacheId,
+        cache_data: &Self::PipelineCacheData,
+    ) -> Option<Vec<u8>>;
 
     fn compute_pass_set_pipeline(
         &self,
@@ -694,6 +699,11 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
+    );
+    fn compute_pass_end(
+        &self,
+        pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
     );
 
     fn render_bundle_encoder_set_pipeline(
@@ -1027,6 +1037,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         pass_data: &mut Self::RenderPassData,
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     );
+    fn render_pass_end(&self, pass: &mut Self::RenderPassId, pass_data: &mut Self::RenderPassData);
 
     fn device_create_blas(
         &self,
@@ -1308,6 +1319,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
+    unsafe fn device_create_pipeline_cache(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> (ObjectId, Box<crate::Data>);
     fn device_create_buffer(
         &self,
         device: &ObjectId,
@@ -1428,6 +1445,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn render_bundle_drop(&self, render_bundle: &ObjectId, render_bundle_data: &crate::Data);
     fn compute_pipeline_drop(&self, pipeline: &ObjectId, pipeline_data: &crate::Data);
     fn render_pipeline_drop(&self, pipeline: &ObjectId, pipeline_data: &crate::Data);
+    fn pipeline_cache_drop(&self, cache: &ObjectId, _cache_data: &crate::Data);
 
     fn compute_pipeline_get_bind_group_layout(
         &self,
@@ -1486,26 +1504,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         encoder_data: &crate::Data,
         desc: &ComputePassDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
-    fn command_encoder_end_compute_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    );
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         desc: &RenderPassDescriptor<'_, '_>,
     ) -> (ObjectId, Box<crate::Data>);
-    fn command_encoder_end_render_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    );
     fn command_encoder_finish(
         &self,
         encoder: ObjectId,
@@ -1638,6 +1642,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn device_start_capture(&self, device: &ObjectId, data: &crate::Data);
     fn device_stop_capture(&self, device: &ObjectId, data: &crate::Data);
 
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &ObjectId,
+        cache_data: &crate::Data,
+    ) -> Option<Vec<u8>>;
+
     fn compute_pass_set_pipeline(
         &self,
         pass: &mut ObjectId,
@@ -1711,6 +1721,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
     );
+    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
 
     fn render_bundle_encoder_set_pipeline(
         &self,
@@ -2066,6 +2077,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn blas_drop(&self, blas: &ObjectId, blas_data: &crate::Data);
     fn tlas_destroy(&self, tlas: &ObjectId, tlas_data: &crate::Data);
     fn tlas_drop(&self, tlas: &ObjectId, tlas_data: &crate::Data);
+    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
 }
 
 // Blanket impl of DynContext for all types which implement Context.
@@ -2363,6 +2375,19 @@ where
         let (compute_pipeline, data) =
             Context::device_create_compute_pipeline(self, &device, device_data, desc);
         (compute_pipeline.into(), Box::new(data) as _)
+    }
+
+    unsafe fn device_create_pipeline_cache(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> (ObjectId, Box<crate::Data>) {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        let (pipeline_cache, data) =
+            unsafe { Context::device_create_pipeline_cache(self, &device, device_data, desc) };
+        (pipeline_cache.into(), Box::new(data) as _)
     }
 
     fn device_create_buffer(
@@ -2689,6 +2714,12 @@ where
         Context::render_pipeline_drop(self, &pipeline, pipeline_data)
     }
 
+    fn pipeline_cache_drop(&self, cache: &ObjectId, cache_data: &crate::Data) {
+        let cache = <T::PipelineCacheId>::from(*cache);
+        let cache_data = downcast_ref(cache_data);
+        Context::pipeline_cache_drop(self, &cache, cache_data)
+    }
+
     fn compute_pipeline_get_bind_group_layout(
         &self,
         pipeline: &ObjectId,
@@ -2820,26 +2851,6 @@ where
         (compute_pass.into(), Box::new(data) as _)
     }
 
-    fn command_encoder_end_compute_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    ) {
-        let encoder = <T::CommandEncoderId>::from(*encoder);
-        let encoder_data = downcast_ref(encoder_data);
-        let mut pass = <T::ComputePassId>::from(*pass);
-        let pass_data = downcast_mut(pass_data);
-        Context::command_encoder_end_compute_pass(
-            self,
-            &encoder,
-            encoder_data,
-            &mut pass,
-            pass_data,
-        )
-    }
-
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
@@ -2851,20 +2862,6 @@ where
         let (render_pass, data) =
             Context::command_encoder_begin_render_pass(self, &encoder, encoder_data, desc);
         (render_pass.into(), Box::new(data) as _)
-    }
-
-    fn command_encoder_end_render_pass(
-        &self,
-        encoder: &ObjectId,
-        encoder_data: &crate::Data,
-        pass: &mut ObjectId,
-        pass_data: &mut crate::Data,
-    ) {
-        let encoder = <T::CommandEncoderId>::from(*encoder);
-        let encoder_data = downcast_ref(encoder_data);
-        let mut pass = <T::RenderPassId>::from(*pass);
-        let pass_data = downcast_mut(pass_data);
-        Context::command_encoder_end_render_pass(self, &encoder, encoder_data, &mut pass, pass_data)
     }
 
     fn command_encoder_finish(
@@ -3151,6 +3148,16 @@ where
         Context::device_stop_capture(self, &device, device_data)
     }
 
+    fn pipeline_cache_get_data(
+        &self,
+        cache: &ObjectId,
+        cache_data: &crate::Data,
+    ) -> Option<Vec<u8>> {
+        let cache = <T::PipelineCacheId>::from(*cache);
+        let cache_data = downcast_ref::<T::PipelineCacheData>(cache_data);
+        Context::pipeline_cache_get_data(self, &cache, cache_data)
+    }
+
     fn compute_pass_set_pipeline(
         &self,
         pass: &mut ObjectId,
@@ -3316,6 +3323,12 @@ where
             indirect_buffer_data,
             indirect_offset,
         )
+    }
+
+    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+        let mut pass = <T::ComputePassId>::from(*pass);
+        let pass_data = downcast_mut(pass_data);
+        Context::compute_pass_end(self, &mut pass, pass_data)
     }
 
     fn render_bundle_encoder_set_pipeline(
@@ -4079,6 +4092,12 @@ where
             (<T::RenderBundleId>::from(*id), render_bundle_data)
         });
         Context::render_pass_execute_bundles(self, &mut pass, pass_data, &mut render_bundles)
+    }
+
+    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+        let mut pass = <T::RenderPassId>::from(*pass);
+        let pass_data = downcast_mut(pass_data);
+        Context::render_pass_end(self, &mut pass, pass_data)
     }
 
     fn device_create_blas(

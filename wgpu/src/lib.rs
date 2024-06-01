@@ -83,32 +83,27 @@ pub use wgt::{
 /// Re-export of our `wgpu-core` dependency.
 ///
 #[cfg(wgpu_core)]
-#[doc(inline)]
 pub use ::wgc as core;
 
 /// Re-export of our `wgpu-hal` dependency.
 ///
 ///
 #[cfg(wgpu_core)]
-#[doc(inline)]
 pub use ::hal;
 
 /// Re-export of our `naga` dependency.
 ///
 #[cfg(wgpu_core)]
 #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-#[doc(inline)]
 // We re-export wgpu-core's re-export of naga, as we may not have direct access to it.
 pub use ::wgc::naga;
 /// Re-export of our `naga` dependency.
 ///
 #[cfg(all(not(wgpu_core), naga))]
 #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-#[doc(inline)]
 // If that's not available, we re-export our own.
 pub use naga;
 
-#[doc(inline)]
 /// Re-export of our `raw-window-handle` dependency.
 ///
 pub use raw_window_handle as rwh;
@@ -116,7 +111,6 @@ pub use raw_window_handle as rwh;
 /// Re-export of our `web-sys` dependency.
 ///
 #[cfg(any(webgl, webgpu))]
-#[doc(inline)]
 pub use web_sys;
 
 // wasm-only types, we try to keep as many types non-platform
@@ -1125,6 +1119,100 @@ impl ComputePipeline {
     }
 }
 
+/// Handle to a pipeline cache, which is used to accelerate
+/// creating [`RenderPipeline`]s and [`ComputePipeline`]s
+/// in subsequent executions
+///
+/// This reuse is only applicable for the same or similar devices.
+/// See [`util::pipeline_cache_key`] for some details.
+///
+/// # Background
+///
+/// In most GPU drivers, shader code must be converted into a machine code
+/// which can be executed on the GPU.
+/// Generating this machine code can require a lot of computation.
+/// Pipeline caches allow this computation to be reused between executions
+/// of the program.
+/// This can be very useful for reducing program startup time.
+///
+/// Note that most desktop GPU drivers will manage their own caches,
+/// meaning that little advantage can be gained from this on those platforms.
+/// However, on some platforms, especially Android, drivers leave this to the
+/// application to implement.
+///
+/// Unfortunately, drivers do not expose whether they manage their own caches.
+/// Some reasonable policies for applications to use are:
+/// - Manage their own pipeline cache on all platforms
+/// - Only manage pipeline caches on Android
+///
+/// # Usage
+///
+/// It is valid to use this resource when creating multiple pipelines, in
+/// which case it will likely cache each of those pipelines.
+/// It is also valid to create a new cache for each pipeline.
+///
+/// This resource is most useful when the data produced from it (using
+/// [`PipelineCache::get_data`]) is persisted.
+/// Care should be taken that pipeline caches are only used for the same device,
+/// as pipeline caches from compatible devices are unlikely to provide any advantage.
+/// `util::pipeline_cache_key` can be used as a file/directory name to help ensure that.
+///
+/// It is recommended to store pipeline caches atomically. If persisting to disk,
+/// this can usually be achieved by creating a temporary file, then moving/[renaming]
+/// the temporary file over the existing cache
+///
+/// # Storage Usage
+///
+/// There is not currently an API available to reduce the size of a cache.
+/// This is due to limitations in the underlying graphics APIs used.
+/// This is especially impactful if your application is being updated, so
+/// previous caches are no longer being used.
+///
+/// One option to work around this is to regenerate the cache.
+/// That is, creating the pipelines which your program runs using
+/// with the stored cached data, then recreating the *same* pipelines
+/// using a new cache, which your application then store.
+///
+/// # Implementations
+///
+/// This resource currently only works on the following backends:
+///  - Vulkan
+///
+/// This type is unique to the Rust API of `wgpu`.
+///
+/// [renaming]: std::fs::rename
+#[derive(Debug)]
+pub struct PipelineCache {
+    context: Arc<C>,
+    id: ObjectId,
+    data: Box<Data>,
+}
+
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCache: Send, Sync);
+
+impl PipelineCache {
+    /// Get the data associated with this pipeline cache.
+    /// The data format is an implementation detail of `wgpu`.
+    /// The only defined operation on this data setting it as the `data` field
+    /// on [`PipelineCacheDescriptor`], then to [`Device::create_pipeline_cache`].
+    ///
+    /// This function is unique to the Rust API of `wgpu`.
+    pub fn get_data(&self) -> Option<Vec<u8>> {
+        self.context
+            .pipeline_cache_get_data(&self.id, self.data.as_ref())
+    }
+}
+
+impl Drop for PipelineCache {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context
+                .pipeline_cache_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
+
 /// Handle to a command buffer on the GPU.
 ///
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
@@ -1212,10 +1300,10 @@ pub struct RenderPass<'a> {
 /// Corresponds to [WebGPU `GPUComputePassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#compute-pass-encoder).
 #[derive(Debug)]
-pub struct ComputePass<'a> {
+pub struct ComputePass {
     id: ObjectId,
     data: Box<Data>,
-    parent: &'a mut CommandEncoder,
+    context: Arc<C>,
 }
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
@@ -1854,6 +1942,8 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
@@ -1913,6 +2003,8 @@ pub struct PipelineCompilationOptions<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
+    pub vertex_pulling_transform: bool,
 }
 
 impl<'a> Default for PipelineCompilationOptions<'a> {
@@ -1926,6 +2018,7 @@ impl<'a> Default for PipelineCompilationOptions<'a> {
         Self {
             constants,
             zero_initialize_workgroup_memory: true,
+            vertex_pulling_transform: false,
         }
     }
 }
@@ -1951,9 +2044,37 @@ pub struct ComputePipelineDescriptor<'a> {
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
     pub compilation_options: PipelineCompilationOptions<'a>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
+
+/// Describes a pipeline cache, which allows reusing compilation work
+/// between program runs.
+///
+/// For use with [`Device::create_pipeline_cache`]
+///
+/// This type is unique to the Rust API of `wgpu`.
+#[derive(Clone, Debug)]
+pub struct PipelineCacheDescriptor<'a> {
+    /// Debug label of the pipeline cache. This might show up in some logs from `wgpu`
+    pub label: Label<'a>,
+    /// The data used to initialise the cache initialise
+    ///
+    /// # Safety
+    ///
+    /// This data must have been provided from a previous call to
+    /// [`PipelineCache::get_data`], if not `None`
+    pub data: Option<&'a [u8]>,
+    /// Whether to create a cache without data when the provided data
+    /// is invalid.
+    ///
+    /// Recommended to set to true
+    pub fallback: bool,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCacheDescriptor<'_>: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -2453,6 +2574,11 @@ impl Adapter {
     ///
     /// Returns the [`Device`] together with a [`Queue`] that executes command buffers.
     ///
+    /// [Per the WebGPU specification], an [`Adapter`] may only be used once to create a device.
+    /// If another device is wanted, call [`Instance::request_adapter()`] again to get a fresh
+    /// [`Adapter`].
+    /// However, `wgpu` does not currently enforce this restriction.
+    ///
     /// # Arguments
     ///
     /// - `desc` - Description of the features and limits requested from the given device.
@@ -2461,10 +2587,13 @@ impl Adapter {
     ///
     /// # Panics
     ///
+    /// - `request_device()` was already called on this `Adapter`.
     /// - Features specified by `desc` are not supported by this adapter.
     /// - Unsafe features were requested but not enabled when requesting the adapter.
     /// - Limits requested exceed the values provided by the adapter.
     /// - Adapter does not support all features wgpu requires to safely operate.
+    ///
+    /// [Per the WebGPU specification]: https://www.w3.org/TR/webgpu/#dom-gpuadapter-requestdevice
     pub fn request_device(
         &self,
         desc: &DeviceDescriptor<'_>,
@@ -3102,6 +3231,62 @@ impl Device {
     pub fn make_invalid(&self) {
         DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
     }
+
+    /// Create a [`PipelineCache`] with initial data
+    ///
+    /// This can be passed to [`Device::create_compute_pipeline`]
+    /// and [`Device::create_render_pipeline`] to either accelerate these
+    /// or add the cache results from those.
+    ///
+    /// # Safety
+    ///
+    /// If the `data` field of `desc` is set, it must have previously been returned from a call
+    /// to [`PipelineCache::get_data`][^saving]. This `data` will only be used if it came
+    /// from an adapter with the same [`util::pipeline_cache_key`].
+    /// This *is* compatible across wgpu versions, as any data format change will
+    /// be accounted for.
+    ///
+    /// It is *not* supported to bring caches from previous direct uses of backend APIs
+    /// into this method.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error value if:
+    ///  * the [`PIPELINE_CACHE`](wgt::Features::PIPELINE_CACHE) feature is not enabled
+    ///  * this device is invalid; or
+    ///  * the device is out of memory
+    ///
+    /// This method also returns an error value if:
+    ///  * The `fallback` field on `desc` is false; and
+    ///  * the `data` provided would not be used[^data_not_used]
+    ///
+    /// If an error value is used in subsequent calls, default caching will be used.
+    ///
+    /// [^saving]: We do recognise that saving this data to disk means this condition
+    /// is impossible to fully prove. Consider the risks for your own application in this case.
+    ///
+    /// [^data_not_used]: This data may be not used if: the data was produced by a prior
+    /// version of wgpu; or was created for an incompatible adapter, or there was a GPU driver
+    /// update. In some cases, the data might not be used and a real value is returned,
+    /// this is left to the discretion of GPU drivers.
+    pub unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> PipelineCache {
+        let (id, data) = unsafe {
+            DynContext::device_create_pipeline_cache(
+                &*self.context,
+                &self.id,
+                self.data.as_ref(),
+                desc,
+            )
+        };
+        PipelineCache {
+            context: Arc::clone(&self.context),
+            id,
+            data,
+        }
+    }
 }
 
 impl Drop for Device {
@@ -3386,6 +3571,30 @@ impl Buffer {
             buffer: self,
             offset: 0,
             size: None,
+        }
+    }
+
+    /// Returns the inner hal Buffer using a callback. The hal buffer will be `None` if the
+    /// backend type argument does not match with this wgpu Buffer
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Buffer must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+        &self,
+        hal_buffer_callback: F,
+    ) -> R {
+        let id = self.id;
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.buffer_as_hal::<A, F, R>(id.into(), hal_buffer_callback) }
+        } else {
+            hal_buffer_callback(None)
         }
     }
 
@@ -3694,7 +3903,7 @@ impl CommandEncoder {
     /// Begins recording of a compute pass.
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
-    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass<'_> {
+    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
@@ -3705,7 +3914,7 @@ impl CommandEncoder {
         ComputePass {
             id,
             data,
-            parent: self,
+            context: self.context.clone(),
         }
     }
 
@@ -4539,18 +4748,14 @@ impl<'a> RenderPass<'a> {
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent.context.command_encoder_end_render_pass(
-                parent_id,
-                self.parent.data.as_ref(),
-                &mut self.id,
-                self.data.as_mut(),
-            );
+            self.parent
+                .context
+                .render_pass_end(&mut self.id, self.data.as_mut());
         }
     }
 }
 
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
     ///
@@ -4560,11 +4765,11 @@ impl<'a> ComputePass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::compute_pass_set_bind_group(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             index,
@@ -4575,9 +4780,9 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &pipeline.id,
@@ -4588,7 +4793,7 @@ impl<'a> ComputePass<'a> {
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
         DynContext::compute_pass_insert_debug_marker(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             label,
@@ -4598,7 +4803,7 @@ impl<'a> ComputePass<'a> {
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
         DynContext::compute_pass_push_debug_group(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             label,
@@ -4607,11 +4812,7 @@ impl<'a> ComputePass<'a> {
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        DynContext::compute_pass_pop_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-        );
+        DynContext::compute_pass_pop_debug_group(&*self.context, &mut self.id, self.data.as_mut());
     }
 
     /// Dispatches compute work operations.
@@ -4619,7 +4820,7 @@ impl<'a> ComputePass<'a> {
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
         DynContext::compute_pass_dispatch_workgroups(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             x,
@@ -4633,11 +4834,11 @@ impl<'a> ComputePass<'a> {
     /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
     pub fn dispatch_workgroups_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::compute_pass_dispatch_workgroups_indirect(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &indirect_buffer.id,
@@ -4648,7 +4849,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Set push constant data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -4659,7 +4860,7 @@ impl<'a> ComputePass<'a> {
     /// call will write `data` to bytes `4..12` of push constant storage.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         DynContext::compute_pass_set_push_constants(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             offset,
@@ -4669,7 +4870,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
     /// Must be multiplied by [`Queue::get_timestamp_period`] to get
@@ -4678,7 +4879,7 @@ impl<'a> ComputePass<'a> {
     /// for a string of operations to complete.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_write_timestamp(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &query_set.id,
@@ -4689,12 +4890,12 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl ComputePass {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
             &query_set.id,
@@ -4707,23 +4908,18 @@ impl<'a> ComputePass<'a> {
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
-            &*self.parent.context,
+            &*self.context,
             &mut self.id,
             self.data.as_mut(),
         );
     }
 }
 
-impl<'a> Drop for ComputePass<'a> {
+impl Drop for ComputePass {
     fn drop(&mut self) {
         if !thread::panicking() {
-            let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent.context.command_encoder_end_compute_pass(
-                parent_id,
-                self.parent.data.as_ref(),
-                &mut self.id,
-                self.data.as_mut(),
-            );
+            self.context
+                .compute_pass_end(&mut self.id, self.data.as_mut());
         }
     }
 }

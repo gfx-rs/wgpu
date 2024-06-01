@@ -179,33 +179,13 @@ impl super::Adapter {
             0
         };
 
-        let driver;
-        let driver_info;
-        if version.starts_with("WebGL ") || version.starts_with("OpenGL ") {
-            let es_sig = " ES";
-            match version.find(es_sig) {
-                Some(pos) => {
-                    driver = version[..pos + es_sig.len()].to_owned();
-                    driver_info = version[pos + es_sig.len() + 1..].to_owned();
-                }
-                None => {
-                    let pos = version.find(' ').unwrap();
-                    driver = version[..pos].to_owned();
-                    driver_info = version[pos + 1..].to_owned();
-                }
-            }
-        } else {
-            driver = "OpenGL".to_owned();
-            driver_info = version;
-        }
-
         wgt::AdapterInfo {
             name: renderer_orig,
             vendor: vendor_id,
             device: 0,
             device_type: inferred_device_type,
-            driver,
-            driver_info,
+            driver: "".to_owned(),
+            driver_info: version,
             backend: wgt::Backend::Gl,
         }
     }
@@ -797,7 +777,7 @@ impl super::Adapter {
             },
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
-            max_non_sampler_bindings: std::u32::MAX,
+            max_non_sampler_bindings: u32::MAX,
         };
 
         let mut workarounds = super::Workarounds::empty();

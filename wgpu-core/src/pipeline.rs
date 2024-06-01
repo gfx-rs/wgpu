@@ -1,11 +1,12 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
+pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
-    id::{PipelineLayoutId, ShaderModuleId},
+    id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
     resource::{Resource, ResourceInfo, ResourceType},
     resource_log, validation, Label,
 };
@@ -84,8 +85,8 @@ impl<A: HalApi> Resource for ShaderModule<A> {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        self.label.clone()
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 
@@ -165,6 +166,8 @@ pub struct ProgrammableStageDescriptor<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
+    pub vertex_pulling_transform: bool,
 }
 
 /// Number of implicit bind groups derived at pipeline creation.
@@ -192,6 +195,8 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<PipelineLayoutId>,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<PipelineCacheId>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -259,6 +264,68 @@ impl<A: HalApi> ComputePipeline<A> {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreatePipelineCacheError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("Pipeline cache validation failed")]
+    Validation(#[from] PipelineCacheValidationError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+
+impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
+    fn from(value: hal::PipelineCacheError) -> Self {
+        match value {
+            hal::PipelineCacheError::Device(device) => {
+                CreatePipelineCacheError::Device(device.into())
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PipelineCache<A: HalApi> {
+    pub(crate) raw: Option<A::PipelineCache>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<PipelineCache<A>>,
+}
+
+impl<A: HalApi> Drop for PipelineCache<A> {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw PipelineCache {:?}", self.info.label());
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = self.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyPipelineCache(self.info.id()));
+            }
+
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_pipeline_cache(raw);
+            }
+        }
+    }
+}
+
+impl<A: HalApi> Resource for PipelineCache<A> {
+    const TYPE: ResourceType = "PipelineCache";
+
+    type Marker = crate::id::markers::PipelineCache;
+
+    fn as_info(&self) -> &ResourceInfo<Self> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
+        &mut self.info
+    }
+}
+
 /// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -315,6 +382,16 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<PipelineCacheId>,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PipelineCacheDescriptor<'a> {
+    pub label: Label<'a>,
+    pub data: Option<Cow<'a, [u8]>>,
+    pub fallback: bool,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -420,6 +497,11 @@ pub enum CreateRenderPipelineError {
     PipelineExpectsShaderToUseDualSourceBlending,
     #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
     ShaderExpectsPipelineToUseDualSourceBlending,
+    #[error("{}", concat!(
+        "At least one color attachment or depth-stencil attachment was expected, ",
+        "but no render target for the pipeline was specified."
+    ))]
+    NoTargetSpecified,
 }
 
 bitflags::bitflags! {

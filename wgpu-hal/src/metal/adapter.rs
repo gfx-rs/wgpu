@@ -82,11 +82,9 @@ impl crate::Adapter for super::Adapter {
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
         let (read_write_tier1_if, read_write_tier2_if) = match pc.read_write_texture_tier {
-            metal::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
-            metal::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
-            metal::MTLReadWriteTextureTier::Tier2 => {
-                (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
-            }
+            MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
+            MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
+            MTLReadWriteTextureTier::Tier2 => (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE),
         };
         let msaa_count = pc.sample_count_mask;
 
@@ -738,7 +736,9 @@ impl super::PrivateCapabilities {
                 4
             },
             // Per https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
-            max_color_attachment_bytes_per_sample: if device.supports_family(MTLGPUFamily::Apple4) {
+            max_color_attachment_bytes_per_sample: if family_check
+                && device.supports_family(MTLGPUFamily::Apple4)
+            {
                 64
             } else {
                 32
@@ -981,7 +981,7 @@ impl super::PrivateCapabilities {
                 max_compute_workgroup_size_z: self.max_threads_per_group,
                 max_compute_workgroups_per_dimension: 0xFFFF,
                 max_buffer_size: self.max_buffer_size,
-                max_non_sampler_bindings: std::u32::MAX,
+                max_non_sampler_bindings: u32::MAX,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

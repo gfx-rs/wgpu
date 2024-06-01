@@ -172,6 +172,8 @@ impl<A: HalApi> BakedCommands<A> {
         device_tracker: &mut Tracker<A>,
         snatch_guard: &SnatchGuard<'_>,
     ) -> Result<(), DestroyedBufferError> {
+        profiling::scope!("initialize_buffer_memory");
+
         // Gather init ranges for each buffer so we can collapse them.
         // It is not possible to do this at an earlier point since previously
         // executed command buffer change the resource init state.
@@ -276,6 +278,8 @@ impl<A: HalApi> BakedCommands<A> {
         device: &Device<A>,
         snatch_guard: &SnatchGuard<'_>,
     ) -> Result<(), DestroyedTextureError> {
+        profiling::scope!("initialize_texture_memory");
+
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
             let mut initialization_status = texture_use.texture.initialization_status.write();

@@ -1044,7 +1044,12 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         crate::Expression::GlobalVariable(var_handle) => {
                             &module.global_variables[var_handle]
                         }
-                        ref other => unreachable!("Array length of base {:?}", other),
+                        ref other => {
+                            return Err(super::Error::Unimplemented(format!(
+                                "Array length of base {:?}",
+                                other
+                            )))
+                        }
                     };
                     let storage_access = match global_var.space {
                         crate::AddressSpace::Storage { access } => access,
@@ -1329,7 +1334,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     /// Parenthesizing the expression like `((float4)0).y` would work... except DXC can't handle
     /// cases like:
     ///
-    /// ```ignore
+    /// ```text
     /// tests\out\hlsl\access.hlsl:183:41: error: cannot compile this l-value expression yet
     ///     t_1.am = (__mat4x2[2])((float4x2[2])0);
     ///                                         ^

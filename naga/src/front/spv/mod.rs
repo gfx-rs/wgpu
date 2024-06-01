@@ -313,14 +313,14 @@ struct LookupVariable {
     type_id: spirv::Word,
 }
 
-/// Information about SPIR-V result ids, stored in `Parser::lookup_expression`.
+/// Information about SPIR-V result ids, stored in `Frontend::lookup_expression`.
 #[derive(Clone, Debug)]
 struct LookupExpression {
     /// The `Expression` constructed for this result.
     ///
     /// Note that, while a SPIR-V result id can be used in any block dominated
     /// by its definition, a Naga `Expression` is only in scope for the rest of
-    /// its subtree. `Parser::get_expr_handle` takes care of spilling the result
+    /// its subtree. `Frontend::get_expr_handle` takes care of spilling the result
     /// to a `LocalVariable` which can then be used anywhere.
     handle: Handle<crate::Expression>,
 
@@ -564,6 +564,20 @@ enum SignAnchor {
     Operand,
 }
 
+enum AtomicOpInst {
+    AtomicIIncrement,
+}
+
+#[allow(dead_code)]
+struct AtomicOp {
+    instruction: AtomicOpInst,
+    result_type_id: spirv::Word,
+    result_id: spirv::Word,
+    pointer_id: spirv::Word,
+    scope_id: spirv::Word,
+    memory_semantics_id: spirv::Word,
+}
+
 pub struct Frontend<I> {
     data: I,
     data_offset: usize,
@@ -575,10 +589,11 @@ pub struct Frontend<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
     handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, image::SamplingFlags>,
+    // Used to upgrade types used in atomic ops to atomic types, keyed by pointer id
+    lookup_atomic: FastHashMap<spirv::Word, AtomicOp>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
     lookup_storage_buffer_types: FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
-    // Lookup for samplers and sampled images, storing flags on how they are used.
     lookup_constant: FastHashMap<spirv::Word, LookupConstant>,
     lookup_variable: FastHashMap<spirv::Word, LookupVariable>,
     lookup_expression: FastHashMap<spirv::Word, LookupExpression>,
@@ -631,6 +646,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
             lookup_member: FastHashMap::default(),
+            lookup_atomic: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_void_type: None,
             lookup_storage_buffer_types: FastHashMap::default(),
@@ -3754,30 +3770,27 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                     emitter.start(ctx.expressions);
                 }
-                spirv::Op::GroupNonUniformAll
-                | spirv::Op::GroupNonUniformAny
-                | spirv::Op::GroupNonUniformIAdd
-                | spirv::Op::GroupNonUniformFAdd
-                | spirv::Op::GroupNonUniformIMul
-                | spirv::Op::GroupNonUniformFMul
-                | spirv::Op::GroupNonUniformSMax
-                | spirv::Op::GroupNonUniformUMax
-                | spirv::Op::GroupNonUniformFMax
-                | spirv::Op::GroupNonUniformSMin
-                | spirv::Op::GroupNonUniformUMin
-                | spirv::Op::GroupNonUniformFMin
-                | spirv::Op::GroupNonUniformBitwiseAnd
-                | spirv::Op::GroupNonUniformBitwiseOr
-                | spirv::Op::GroupNonUniformBitwiseXor
-                | spirv::Op::GroupNonUniformLogicalAnd
-                | spirv::Op::GroupNonUniformLogicalOr
-                | spirv::Op::GroupNonUniformLogicalXor => {
+                Op::GroupNonUniformAll
+                | Op::GroupNonUniformAny
+                | Op::GroupNonUniformIAdd
+                | Op::GroupNonUniformFAdd
+                | Op::GroupNonUniformIMul
+                | Op::GroupNonUniformFMul
+                | Op::GroupNonUniformSMax
+                | Op::GroupNonUniformUMax
+                | Op::GroupNonUniformFMax
+                | Op::GroupNonUniformSMin
+                | Op::GroupNonUniformUMin
+                | Op::GroupNonUniformFMin
+                | Op::GroupNonUniformBitwiseAnd
+                | Op::GroupNonUniformBitwiseOr
+                | Op::GroupNonUniformBitwiseXor
+                | Op::GroupNonUniformLogicalAnd
+                | Op::GroupNonUniformLogicalOr
+                | Op::GroupNonUniformLogicalXor => {
                     block.extend(emitter.finish(ctx.expressions));
                     inst.expect(
-                        if matches!(
-                            inst.op,
-                            spirv::Op::GroupNonUniformAll | spirv::Op::GroupNonUniformAny
-                        ) {
+                        if matches!(inst.op, Op::GroupNonUniformAll | Op::GroupNonUniformAny) {
                             5
                         } else {
                             6
@@ -3787,7 +3800,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
                     let collective_op_id = match inst.op {
-                        spirv::Op::GroupNonUniformAll | spirv::Op::GroupNonUniformAny => {
+                        Op::GroupNonUniformAll | Op::GroupNonUniformAny => {
                             crate::CollectiveOperation::Reduce
                         }
                         _ => {
@@ -3817,26 +3830,29 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
 
                     let op_id = match inst.op {
-                        spirv::Op::GroupNonUniformAll => crate::SubgroupOperation::All,
-                        spirv::Op::GroupNonUniformAny => crate::SubgroupOperation::Any,
-                        spirv::Op::GroupNonUniformIAdd | spirv::Op::GroupNonUniformFAdd => {
+                        Op::GroupNonUniformAll => crate::SubgroupOperation::All,
+                        Op::GroupNonUniformAny => crate::SubgroupOperation::Any,
+                        Op::GroupNonUniformIAdd | Op::GroupNonUniformFAdd => {
                             crate::SubgroupOperation::Add
                         }
-                        spirv::Op::GroupNonUniformIMul | spirv::Op::GroupNonUniformFMul => {
+                        Op::GroupNonUniformIMul | Op::GroupNonUniformFMul => {
                             crate::SubgroupOperation::Mul
                         }
-                        spirv::Op::GroupNonUniformSMax
-                        | spirv::Op::GroupNonUniformUMax
-                        | spirv::Op::GroupNonUniformFMax => crate::SubgroupOperation::Max,
-                        spirv::Op::GroupNonUniformSMin
-                        | spirv::Op::GroupNonUniformUMin
-                        | spirv::Op::GroupNonUniformFMin => crate::SubgroupOperation::Min,
-                        spirv::Op::GroupNonUniformBitwiseAnd
-                        | spirv::Op::GroupNonUniformLogicalAnd => crate::SubgroupOperation::And,
-                        spirv::Op::GroupNonUniformBitwiseOr
-                        | spirv::Op::GroupNonUniformLogicalOr => crate::SubgroupOperation::Or,
-                        spirv::Op::GroupNonUniformBitwiseXor
-                        | spirv::Op::GroupNonUniformLogicalXor => crate::SubgroupOperation::Xor,
+                        Op::GroupNonUniformSMax
+                        | Op::GroupNonUniformUMax
+                        | Op::GroupNonUniformFMax => crate::SubgroupOperation::Max,
+                        Op::GroupNonUniformSMin
+                        | Op::GroupNonUniformUMin
+                        | Op::GroupNonUniformFMin => crate::SubgroupOperation::Min,
+                        Op::GroupNonUniformBitwiseAnd | Op::GroupNonUniformLogicalAnd => {
+                            crate::SubgroupOperation::And
+                        }
+                        Op::GroupNonUniformBitwiseOr | Op::GroupNonUniformLogicalOr => {
+                            crate::SubgroupOperation::Or
+                        }
+                        Op::GroupNonUniformBitwiseXor | Op::GroupNonUniformLogicalXor => {
+                            crate::SubgroupOperation::Xor
+                        }
                         _ => unreachable!(),
                     };
 
@@ -3874,13 +3890,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | Op::GroupNonUniformShuffleDown
                 | Op::GroupNonUniformShuffleUp
                 | Op::GroupNonUniformShuffleXor => {
-                    inst.expect(
-                        if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
-                            5
-                        } else {
-                            6
-                        },
-                    )?;
+                    inst.expect(if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
+                        5
+                    } else {
+                        6
+                    })?;
                     block.extend(emitter.finish(ctx.expressions));
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -3895,26 +3909,24 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
                         .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
 
-                    let mode = if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
+                    let mode = if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
                         crate::GatherMode::BroadcastFirst
                     } else {
                         let index_id = self.next()?;
                         let index_lookup = self.lookup_expression.lookup(index_id)?;
                         let index_handle = get_expr_handle!(index_id, index_lookup);
                         match inst.op {
-                            spirv::Op::GroupNonUniformBroadcast => {
+                            Op::GroupNonUniformBroadcast => {
                                 crate::GatherMode::Broadcast(index_handle)
                             }
-                            spirv::Op::GroupNonUniformShuffle => {
-                                crate::GatherMode::Shuffle(index_handle)
-                            }
-                            spirv::Op::GroupNonUniformShuffleDown => {
+                            Op::GroupNonUniformShuffle => crate::GatherMode::Shuffle(index_handle),
+                            Op::GroupNonUniformShuffleDown => {
                                 crate::GatherMode::ShuffleDown(index_handle)
                             }
-                            spirv::Op::GroupNonUniformShuffleUp => {
+                            Op::GroupNonUniformShuffleUp => {
                                 crate::GatherMode::ShuffleUp(index_handle)
                             }
-                            spirv::Op::GroupNonUniformShuffleXor => {
+                            Op::GroupNonUniformShuffleXor => {
                                 crate::GatherMode::ShuffleXor(index_handle)
                             }
                             _ => unreachable!(),
@@ -3948,7 +3960,81 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                     emitter.start(ctx.expressions);
                 }
-                _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
+                Op::AtomicIIncrement => {
+                    inst.expect(6)?;
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let scope_id = self.next()?;
+                    let memory_semantics_id = self.next()?;
+                    // Store the op for a later pass where we "upgrade" the pointer type
+                    let atomic = AtomicOp {
+                        instruction: AtomicOpInst::AtomicIIncrement,
+                        result_type_id,
+                        result_id,
+                        pointer_id,
+                        scope_id,
+                        memory_semantics_id,
+                    };
+                    self.lookup_atomic.insert(pointer_id, atomic);
+
+                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+
+                    let (p_lexp_handle, p_lexp_ty_id) = {
+                        let lexp = self.lookup_expression.lookup(pointer_id)?;
+                        let handle = get_expr_handle!(pointer_id, &lexp);
+                        (handle, lexp.type_id)
+                    };
+                    log::trace!("\t\t\tlooking up type {pointer_id:?}");
+                    let p_ty = self.lookup_type.lookup(p_lexp_ty_id)?;
+                    let p_ty_base_id =
+                        p_ty.base_id.ok_or(Error::InvalidAccessType(p_lexp_ty_id))?;
+                    log::trace!("\t\t\tlooking up base type {p_ty_base_id:?} of {p_ty:?}");
+                    let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
+
+                    // Create an expression for our result
+                    let r_lexp_handle = {
+                        let expr = crate::Expression::AtomicResult {
+                            ty: p_base_ty.handle,
+                            comparison: false,
+                        };
+                        let handle = ctx.expressions.append(expr, span);
+                        self.lookup_expression.insert(
+                            result_id,
+                            LookupExpression {
+                                handle,
+                                type_id: result_type_id,
+                                block_id,
+                            },
+                        );
+                        handle
+                    };
+
+                    // Create a literal "1" since WGSL lacks an increment operation
+                    let one_lexp_handle = make_index_literal(
+                        ctx,
+                        1,
+                        &mut block,
+                        &mut emitter,
+                        p_base_ty.handle,
+                        p_lexp_ty_id,
+                        span,
+                    )?;
+
+                    // Create a statement for the op itself
+                    let stmt = crate::Statement::Atomic {
+                        pointer: p_lexp_handle,
+                        fun: crate::AtomicFunction::Add,
+                        value: one_lexp_handle,
+                        result: r_lexp_handle,
+                    };
+                    block.push(stmt, span);
+                }
+                _ => {
+                    return Err(Error::UnsupportedInstruction(self.state, inst.op));
+                }
             }
         };
 
@@ -4229,7 +4315,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         // Do entry point specific processing after all functions are parsed so that we can
         // cull unused problematic builtins of gl_PerVertex.
-        for (ep, fun_id) in core::mem::take(&mut self.deferred_entry_points) {
+        for (ep, fun_id) in mem::take(&mut self.deferred_entry_points) {
             self.process_entry_point(&mut module, ep, fun_id)?;
         }
 
@@ -4374,8 +4460,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .lookup_entry_point
             .get_mut(&ep_id)
             .ok_or(Error::InvalidId(ep_id))?;
-        let mode = spirv::ExecutionMode::from_u32(mode_id)
-            .ok_or(Error::UnsupportedExecutionMode(mode_id))?;
+        let mode =
+            ExecutionMode::from_u32(mode_id).ok_or(Error::UnsupportedExecutionMode(mode_id))?;
 
         match mode {
             ExecutionMode::EarlyFragmentTests => {
@@ -5597,5 +5683,39 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
+    }
+
+    #[test]
+    fn atomic_i_inc() {
+        let _ = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Trace)
+            .try_init();
+        let bytes = include_bytes!("../../../tests/in/spv/atomic_i_increment.spv");
+        let m = super::parse_u8_slice(bytes, &Default::default()).unwrap();
+        let mut validator = crate::valid::Validator::new(
+            crate::valid::ValidationFlags::empty(),
+            Default::default(),
+        );
+        let info = validator.validate(&m).unwrap();
+        let wgsl =
+            crate::back::wgsl::write_string(&m, &info, crate::back::wgsl::WriterFlags::empty())
+                .unwrap();
+        log::info!("atomic_i_increment:\n{wgsl}");
+
+        let m = match crate::front::wgsl::parse_str(&wgsl) {
+            Ok(m) => m,
+            Err(e) => {
+                log::error!("{}", e.emit_to_string(&wgsl));
+                // at this point we know atomics create invalid modules
+                // so simply bail
+                return;
+            }
+        };
+        let mut validator =
+            crate::valid::Validator::new(crate::valid::ValidationFlags::all(), Default::default());
+        if let Err(e) = validator.validate(&m) {
+            log::error!("{}", e.emit_to_string(&wgsl));
+        }
     }
 }

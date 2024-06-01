@@ -243,12 +243,16 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "pack2x16snorm" => Mf::Pack2x16snorm,
         "pack2x16unorm" => Mf::Pack2x16unorm,
         "pack2x16float" => Mf::Pack2x16float,
+        "pack4xI8" => Mf::Pack4xI8,
+        "pack4xU8" => Mf::Pack4xU8,
         // data unpacking
         "unpack4x8snorm" => Mf::Unpack4x8snorm,
         "unpack4x8unorm" => Mf::Unpack4x8unorm,
         "unpack2x16snorm" => Mf::Unpack2x16snorm,
         "unpack2x16unorm" => Mf::Unpack2x16unorm,
         "unpack2x16float" => Mf::Unpack2x16float,
+        "unpack4xI8" => Mf::Unpack4xI8,
+        "unpack4xU8" => Mf::Unpack4xU8,
         _ => return None,
     })
 }

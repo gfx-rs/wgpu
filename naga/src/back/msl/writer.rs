@@ -75,6 +75,14 @@ fn put_numeric_type(
     }
 }
 
+const fn scalar_is_int(scalar: crate::Scalar) -> bool {
+    use crate::ScalarKind::*;
+    match scalar.kind {
+        Sint | Uint | AbstractInt | Bool => true,
+        Float | AbstractFloat => false,
+    }
+}
+
 /// Prefix for cached clamped level-of-detail values for `ImageLoad` expressions.
 const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
 
@@ -85,6 +93,22 @@ struct TypeContext<'a> {
     access: crate::StorageAccess,
     binding: Option<&'a super::ResolvedBinding>,
     first_time: bool,
+}
+
+impl<'a> TypeContext<'a> {
+    fn scalar(&self) -> Option<crate::Scalar> {
+        let ty = &self.gctx.types[self.handle];
+        ty.inner.scalar()
+    }
+
+    fn vertex_input_dimension(&self) -> u32 {
+        let ty = &self.gctx.types[self.handle];
+        match ty.inner {
+            crate::TypeInner::Scalar(_) => 1,
+            crate::TypeInner::Vector { size, .. } => size as u32,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<'a> Display for TypeContext<'a> {
@@ -1596,7 +1620,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::Expression::Binary { op, left, right } => {
-                let op_str = crate::back::binary_operation_str(op);
+                let op_str = back::binary_operation_str(op);
                 let kind = context
                     .resolve_type(left)
                     .scalar_kind()
@@ -1828,12 +1852,16 @@ impl<W: Write> Writer<W> {
                     Mf::Pack2x16snorm => "pack_float_to_snorm2x16",
                     Mf::Pack2x16unorm => "pack_float_to_unorm2x16",
                     Mf::Pack2x16float => "",
+                    Mf::Pack4xI8 => "",
+                    Mf::Pack4xU8 => "",
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpack_snorm4x8_to_float",
                     Mf::Unpack4x8unorm => "unpack_unorm4x8_to_float",
                     Mf::Unpack2x16snorm => "unpack_snorm2x16_to_float",
                     Mf::Unpack2x16unorm => "unpack_unorm2x16_to_float",
                     Mf::Unpack2x16float => "",
+                    Mf::Unpack4xI8 => "",
+                    Mf::Unpack4xU8 => "",
                 };
 
                 match fun {
@@ -1853,133 +1881,177 @@ impl<W: Write> Writer<W> {
                     _ => {}
                 }
 
-                if fun == Mf::Distance && scalar_argument {
-                    write!(self.out, "{NAMESPACE}::abs(")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, " - ")?;
-                    self.put_expression(arg1.unwrap(), context, false)?;
-                    write!(self.out, ")")?;
-                } else if fun == Mf::FindLsb {
-                    let scalar = context.resolve_type(arg).scalar().unwrap();
-                    let constant = scalar.width * 8 + 1;
+                match fun {
+                    Mf::Distance if scalar_argument => {
+                        write!(self.out, "{NAMESPACE}::abs(")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, " - ")?;
+                        self.put_expression(arg1.unwrap(), context, false)?;
+                        write!(self.out, ")")?;
+                    }
+                    Mf::FindLsb => {
+                        let scalar = context.resolve_type(arg).scalar().unwrap();
+                        let constant = scalar.width * 8 + 1;
 
-                    write!(self.out, "((({NAMESPACE}::ctz(")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, ") + 1) % {constant}) - 1)")?;
-                } else if fun == Mf::FindMsb {
-                    let inner = context.resolve_type(arg);
-                    let scalar = inner.scalar().unwrap();
-                    let constant = scalar.width * 8 - 1;
-
-                    write!(
-                        self.out,
-                        "{NAMESPACE}::select({constant} - {NAMESPACE}::clz("
-                    )?;
-
-                    if scalar.kind == crate::ScalarKind::Sint {
-                        write!(self.out, "{NAMESPACE}::select(")?;
+                        write!(self.out, "((({NAMESPACE}::ctz(")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, ", ~")?;
+                        write!(self.out, ") + 1) % {constant}) - 1)")?;
+                    }
+                    Mf::FindMsb => {
+                        let inner = context.resolve_type(arg);
+                        let scalar = inner.scalar().unwrap();
+                        let constant = scalar.width * 8 - 1;
+
+                        write!(
+                            self.out,
+                            "{NAMESPACE}::select({constant} - {NAMESPACE}::clz("
+                        )?;
+
+                        if scalar.kind == crate::ScalarKind::Sint {
+                            write!(self.out, "{NAMESPACE}::select(")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, ", ~")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " < 0)")?;
+                        } else {
+                            self.put_expression(arg, context, true)?;
+                        }
+
+                        write!(self.out, "), ")?;
+
+                        // or metal will complain that select is ambiguous
+                        match *inner {
+                            crate::TypeInner::Vector { size, scalar } => {
+                                let size = back::vector_size_str(size);
+                                let name = scalar.to_msl_name();
+                                write!(self.out, "{name}{size}")?;
+                            }
+                            crate::TypeInner::Scalar(scalar) => {
+                                let name = scalar.to_msl_name();
+                                write!(self.out, "{name}")?;
+                            }
+                            _ => (),
+                        }
+
+                        write!(self.out, "(-1), ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " == 0 || ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " == -1)")?;
+                    }
+                    Mf::Unpack2x16float => {
+                        write!(self.out, "float2(as_type<half2>(")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, "))")?;
+                    }
+                    Mf::Pack2x16float => {
+                        write!(self.out, "as_type<uint>(half2(")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, "))")?;
+                    }
+                    Mf::ExtractBits => {
+                        // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
+                        // to first sanitize the offset and count first. If we don't do this, Apple chips
+                        // will return out-of-spec values if the extracted range is not within the bit width.
+                        //
+                        // This encodes the exact formula specified by the wgsl spec, without temporary values:
+                        // https://gpuweb.github.io/gpuweb/wgsl/#extractBits-unsigned-builtin
+                        //
+                        // w = sizeof(x) * 8
+                        // o = min(offset, w)
+                        // tmp = w - o
+                        // c = min(count, tmp)
+                        //
+                        // bitfieldExtract(x, o, c)
+                        //
+                        // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
+
+                        let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
+
+                        write!(self.out, "{NAMESPACE}::extract_bits(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", {NAMESPACE}::min(")?;
+                        self.put_expression(arg1.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
+                        self.put_expression(arg2.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
+                        self.put_expression(arg1.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u)))")?;
+                    }
+                    Mf::InsertBits => {
+                        // The behavior of InsertBits has the same issue as ExtractBits.
+                        //
+                        // insertBits(e, newBits, min(offset, w), min(count, w - min(offset, w))))
+
+                        let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
+
+                        write!(self.out, "{NAMESPACE}::insert_bits(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arg1.unwrap(), context, true)?;
+                        write!(self.out, ", {NAMESPACE}::min(")?;
+                        self.put_expression(arg2.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
+                        self.put_expression(arg3.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
+                        self.put_expression(arg2.unwrap(), context, true)?;
+                        write!(self.out, ", {scalar_bits}u)))")?;
+                    }
+                    Mf::Radians => {
+                        write!(self.out, "((")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, ") * 0.017453292519943295474)")?;
+                    }
+                    Mf::Degrees => {
+                        write!(self.out, "((")?;
+                        self.put_expression(arg, context, false)?;
+                        write!(self.out, ") * 57.295779513082322865)")?;
+                    }
+                    Mf::Modf | Mf::Frexp => {
+                        write!(self.out, "{fun_name}")?;
+                        self.put_call_parameters(iter::once(arg), context)?;
+                    }
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let was_signed = fun == Mf::Pack4xI8;
+                        if was_signed {
+                            write!(self.out, "uint(")?;
+                        }
+                        write!(self.out, "(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[0] & 0xFF) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[1] & 0xFF) << 8) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[2] & 0xFF) << 16) | ((")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "[3] & 0xFF) << 24)")?;
+                        if was_signed {
+                            write!(self.out, ")")?;
+                        }
+                    }
+                    fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        if matches!(fun, Mf::Unpack4xU8) {
+                            write!(self.out, "u")?;
+                        }
+                        write!(self.out, "int4(")?;
                         self.put_expression(arg, context, true)?;
                         write!(self.out, ", ")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, " < 0)")?;
-                    } else {
+                        write!(self.out, " >> 8, ")?;
                         self.put_expression(arg, context, true)?;
+                        write!(self.out, " >> 16, ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " >> 24) << 24 >> 24")?;
                     }
-
-                    write!(self.out, "), ")?;
-
-                    // or metal will complain that select is ambiguous
-                    match *inner {
-                        crate::TypeInner::Vector { size, scalar } => {
-                            let size = back::vector_size_str(size);
-                            let name = scalar.to_msl_name();
-                            write!(self.out, "{name}{size}")?;
-                        }
-                        crate::TypeInner::Scalar(scalar) => {
-                            let name = scalar.to_msl_name();
-                            write!(self.out, "{name}")?;
-                        }
-                        _ => (),
+                    _ => {
+                        write!(self.out, "{NAMESPACE}::{fun_name}")?;
+                        self.put_call_parameters(
+                            iter::once(arg).chain(arg1).chain(arg2).chain(arg3),
+                            context,
+                        )?;
                     }
-
-                    write!(self.out, "(-1), ")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, " == 0 || ")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, " == -1)")?;
-                } else if fun == Mf::Unpack2x16float {
-                    write!(self.out, "float2(as_type<half2>(")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, "))")?;
-                } else if fun == Mf::Pack2x16float {
-                    write!(self.out, "as_type<uint>(half2(")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, "))")?;
-                } else if fun == Mf::ExtractBits {
-                    // The behavior of ExtractBits is undefined when offset + count > bit_width. We need
-                    // to first sanitize the offset and count first. If we don't do this, Apple chips
-                    // will return out-of-spec values if the extracted range is not within the bit width.
-                    //
-                    // This encodes the exact formula specified by the wgsl spec, without temporary values:
-                    // https://gpuweb.github.io/gpuweb/wgsl/#extractBits-unsigned-builtin
-                    //
-                    // w = sizeof(x) * 8
-                    // o = min(offset, w)
-                    // tmp = w - o
-                    // c = min(count, tmp)
-                    //
-                    // bitfieldExtract(x, o, c)
-                    //
-                    // extract_bits(e, min(offset, w), min(count, w - min(offset, w))))
-
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
-
-                    write!(self.out, "{NAMESPACE}::extract_bits(")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, ", {NAMESPACE}::min(")?;
-                    self.put_expression(arg1.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
-                    self.put_expression(arg2.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
-                    self.put_expression(arg1.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u)))")?;
-                } else if fun == Mf::InsertBits {
-                    // The behavior of InsertBits has the same issue as ExtractBits.
-                    //
-                    // insertBits(e, newBits, min(offset, w), min(count, w - min(offset, w))))
-
-                    let scalar_bits = context.resolve_type(arg).scalar_width().unwrap() * 8;
-
-                    write!(self.out, "{NAMESPACE}::insert_bits(")?;
-                    self.put_expression(arg, context, true)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(arg1.unwrap(), context, true)?;
-                    write!(self.out, ", {NAMESPACE}::min(")?;
-                    self.put_expression(arg2.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u), {NAMESPACE}::min(")?;
-                    self.put_expression(arg3.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u - {NAMESPACE}::min(")?;
-                    self.put_expression(arg2.unwrap(), context, true)?;
-                    write!(self.out, ", {scalar_bits}u)))")?;
-                } else if fun == Mf::Radians {
-                    write!(self.out, "((")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, ") * 0.017453292519943295474)")?;
-                } else if fun == Mf::Degrees {
-                    write!(self.out, "((")?;
-                    self.put_expression(arg, context, false)?;
-                    write!(self.out, ") * 57.295779513082322865)")?;
-                } else if fun == Mf::Modf || fun == Mf::Frexp {
-                    write!(self.out, "{fun_name}")?;
-                    self.put_call_parameters(iter::once(arg), context)?;
-                } else {
-                    write!(self.out, "{NAMESPACE}::{fun_name}")?;
-                    self.put_call_parameters(
-                        iter::once(arg).chain(arg1).chain(arg2).chain(arg3),
-                        context,
-                    )?;
                 }
             }
             crate::Expression::As {
@@ -2599,7 +2671,11 @@ impl<W: Write> Writer<W> {
                             }
                         }
                     }
-                    crate::MathFunction::FindMsb => {
+                    crate::MathFunction::FindMsb
+                    | crate::MathFunction::Pack4xI8
+                    | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Unpack4xI8
+                    | crate::MathFunction::Unpack4xU8 => {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
@@ -2949,7 +3025,7 @@ impl<W: Write> Writer<W> {
                     // follow-up with any global resources used
                     let mut separate = !arguments.is_empty();
                     let fun_info = &context.expression.mod_info[function];
-                    let mut supports_array_length = false;
+                    let mut needs_buffer_sizes = false;
                     for (handle, var) in context.expression.module.global_variables.iter() {
                         if fun_info[handle].is_empty() {
                             continue;
@@ -2963,10 +3039,10 @@ impl<W: Write> Writer<W> {
                             }
                             write!(self.out, "{name}")?;
                         }
-                        supports_array_length |=
+                        needs_buffer_sizes |=
                             needs_array_length(var.ty, &context.expression.module.types);
                     }
-                    if supports_array_length {
+                    if needs_buffer_sizes {
                         if separate {
                             write!(self.out, ", ")?;
                         }
@@ -3365,11 +3441,20 @@ impl<W: Write> Writer<W> {
                 }
             }
 
-            if !indices.is_empty() {
+            let mut buffer_indices = vec![];
+            for vbm in &pipeline_options.vertex_buffer_mappings {
+                buffer_indices.push(vbm.id);
+            }
+
+            if !indices.is_empty() || !buffer_indices.is_empty() {
                 writeln!(self.out, "struct _mslBufferSizes {{")?;
 
                 for idx in indices {
                     writeln!(self.out, "{}uint size{};", back::INDENT, idx)?;
+                }
+
+                for idx in buffer_indices {
+                    writeln!(self.out, "{}uint buffer_size{};", back::INDENT, idx)?;
                 }
 
                 writeln!(self.out, "}};")?;
@@ -3712,6 +3797,672 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn write_unpacking_function(
+        &mut self,
+        format: back::msl::VertexFormat,
+    ) -> Result<(String, u32, u32), Error> {
+        use back::msl::VertexFormat::*;
+        match format {
+            Uint8x2 => {
+                let name = self.namer.call("unpackUint8x2");
+                writeln!(
+                    self.out,
+                    "metal::uint2 {name}(metal::uchar b0, \
+                                         metal::uchar b1) {{"
+                )?;
+                writeln!(self.out, "{}return metal::uint2(b0, b1);", back::INDENT)?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Uint8x4 => {
+                let name = self.namer.call("unpackUint8x4");
+                writeln!(
+                    self.out,
+                    "metal::uint4 {name}(metal::uchar b0, \
+                                         metal::uchar b1, \
+                                         metal::uchar b2, \
+                                         metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint4(b0, b1, b2, b3);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Sint8x2 => {
+                let name = self.namer.call("unpackSint8x2");
+                writeln!(
+                    self.out,
+                    "metal::int2 {name}(metal::uchar b0, \
+                                        metal::uchar b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int2(as_type<char>(b0), \
+                                          as_type<char>(b1));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Sint8x4 => {
+                let name = self.namer.call("unpackSint8x4");
+                writeln!(
+                    self.out,
+                    "metal::int4 {name}(metal::uchar b0, \
+                                        metal::uchar b1, \
+                                        metal::uchar b2, \
+                                        metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int4(as_type<char>(b0), \
+                                          as_type<char>(b1), \
+                                          as_type<char>(b2), \
+                                          as_type<char>(b3));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Unorm8x2 => {
+                let name = self.namer.call("unpackUnorm8x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::uchar b0, \
+                                          metal::uchar b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(float(b0) / 255.0f, \
+                                            float(b1) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Unorm8x4 => {
+                let name = self.namer.call("unpackUnorm8x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::uchar b0, \
+                                          metal::uchar b1, \
+                                          metal::uchar b2, \
+                                          metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(float(b0) / 255.0f, \
+                                            float(b1) / 255.0f, \
+                                            float(b2) / 255.0f, \
+                                            float(b3) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Snorm8x2 => {
+                let name = self.namer.call("unpackSnorm8x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::uchar b0, \
+                                          metal::uchar b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2((float(b0) - 128.0f) / 255.0f, \
+                                            (float(b1) - 128.0f) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Snorm8x4 => {
+                let name = self.namer.call("unpackSnorm8x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::uchar b0, \
+                                          metal::uchar b1, \
+                                          metal::uchar b2, \
+                                          metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4((float(b0) - 128.0f) / 255.0f, \
+                                            (float(b1) - 128.0f) / 255.0f, \
+                                            (float(b2) - 128.0f) / 255.0f, \
+                                            (float(b3) - 128.0f) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Uint16x2 => {
+                let name = self.namer.call("unpackUint16x2");
+                writeln!(
+                    self.out,
+                    "metal::uint2 {name}(metal::uint b0, \
+                                         metal::uint b1, \
+                                         metal::uint b2, \
+                                         metal::uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint2(b1 << 8 | b0, \
+                                           b3 << 8 | b2);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Uint16x4 => {
+                let name = self.namer.call("unpackUint16x4");
+                writeln!(
+                    self.out,
+                    "metal::uint4 {name}(metal::uint b0, \
+                                         metal::uint b1, \
+                                         metal::uint b2, \
+                                         metal::uint b3, \
+                                         metal::uint b4, \
+                                         metal::uint b5, \
+                                         metal::uint b6, \
+                                         metal::uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint4(b1 << 8 | b0, \
+                                           b3 << 8 | b2, \
+                                           b5 << 8 | b4, \
+                                           b7 << 8 | b6);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Sint16x2 => {
+                let name = self.namer.call("unpackSint16x2");
+                writeln!(
+                    self.out,
+                    "metal::int2 {name}(metal::ushort b0, \
+                                        metal::ushort b1, \
+                                        metal::ushort b2, \
+                                        metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int2(as_type<metal::short>(b1 << 8 | b0), \
+                                          as_type<metal::short>(b3 << 8 | b2));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Sint16x4 => {
+                let name = self.namer.call("unpackSint16x4");
+                writeln!(
+                    self.out,
+                    "metal::int4 {name}(metal::ushort b0, \
+                                        metal::ushort b1, \
+                                        metal::ushort b2, \
+                                        metal::ushort b3, \
+                                        metal::ushort b4, \
+                                        metal::ushort b5, \
+                                        metal::ushort b6, \
+                                        metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int4(as_type<metal::short>(b1 << 8 | b0), \
+                                          as_type<metal::short>(b3 << 8 | b2), \
+                                          as_type<metal::short>(b5 << 8 | b4), \
+                                          as_type<metal::short>(b7 << 8 | b6));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Unorm16x2 => {
+                let name = self.namer.call("unpackUnorm16x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(float(b1 << 8 | b0) / 65535.0f, \
+                                            float(b3 << 8 | b2) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Unorm16x4 => {
+                let name = self.namer.call("unpackUnorm16x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3, \
+                                          metal::ushort b4, \
+                                          metal::ushort b5, \
+                                          metal::ushort b6, \
+                                          metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(float(b1 << 8 | b0) / 65535.0f, \
+                                            float(b3 << 8 | b2) / 65535.0f, \
+                                            float(b5 << 8 | b4) / 65535.0f, \
+                                            float(b7 << 8 | b6) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Snorm16x2 => {
+                let name = self.namer.call("unpackSnorm16x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2((float(b1 << 8 | b0) - 32767.0f) / 65535.0f, \
+                                            (float(b3 << 8 | b2) - 32767.0f) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Snorm16x4 => {
+                let name = self.namer.call("unpackSnorm16x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3, \
+                                          metal::ushort b4, \
+                                          metal::ushort b5, \
+                                          metal::ushort b6, \
+                                          metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4((float(b1 << 8 | b0) - 32767.0f) / 65535.0f, \
+                                            (float(b3 << 8 | b2) - 32767.0f) / 65535.0f, \
+                                            (float(b5 << 8 | b4) - 32767.0f) / 65535.0f, \
+                                            (float(b7 << 8 | b6) - 32767.0f) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Float16x2 => {
+                let name = self.namer.call("unpackFloat16x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(as_type<metal::half>(b1 << 8 | b0), \
+                                            as_type<metal::half>(b3 << 8 | b2));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Float16x4 => {
+                let name = self.namer.call("unpackFloat16x4");
+                writeln!(
+                    self.out,
+                    "metal::int4 {name}(metal::ushort b0, \
+                                        metal::ushort b1, \
+                                        metal::ushort b2, \
+                                        metal::ushort b3, \
+                                        metal::ushort b4, \
+                                        metal::ushort b5, \
+                                        metal::ushort b6, \
+                                        metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int4(as_type<metal::half>(b1 << 8 | b0), \
+                                          as_type<metal::half>(b3 << 8 | b2), \
+                                          as_type<metal::half>(b5 << 8 | b4), \
+                                          as_type<metal::half>(b7 << 8 | b6));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Float32 => {
+                let name = self.namer.call("unpackFloat32");
+                writeln!(
+                    self.out,
+                    "float {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 1))
+            }
+            Float32x2 => {
+                let name = self.namer.call("unpackFloat32x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3, \
+                                          uint b4, \
+                                          uint b5, \
+                                          uint b6, \
+                                          uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                            as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 2))
+            }
+            Float32x3 => {
+                let name = self.namer.call("unpackFloat32x3");
+                writeln!(
+                    self.out,
+                    "metal::float3 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3, \
+                                          uint b4, \
+                                          uint b5, \
+                                          uint b6, \
+                                          uint b7, \
+                                          uint b8, \
+                                          uint b9, \
+                                          uint b10, \
+                                          uint b11) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float3(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                            as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                            as_type<float>(b11 << 24 | b10 << 16 | b9 << 8 | b8));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 12, 3))
+            }
+            Float32x4 => {
+                let name = self.namer.call("unpackFloat32x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3, \
+                                          uint b4, \
+                                          uint b5, \
+                                          uint b6, \
+                                          uint b7, \
+                                          uint b8, \
+                                          uint b9, \
+                                          uint b10, \
+                                          uint b11, \
+                                          uint b12, \
+                                          uint b13, \
+                                          uint b14, \
+                                          uint b15) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                            as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                            as_type<float>(b11 << 24 | b10 << 16 | b9 << 8 | b8), \
+                                            as_type<float>(b15 << 24 | b14 << 16 | b13 << 8 | b12));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 16, 4))
+            }
+            Uint32 => {
+                let name = self.namer.call("unpackUint32");
+                writeln!(
+                    self.out,
+                    "uint {name}(uint b0, \
+                                 uint b1, \
+                                 uint b2, \
+                                 uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return (b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 1))
+            }
+            Uint32x2 => {
+                let name = self.namer.call("unpackUint32x2");
+                writeln!(
+                    self.out,
+                    "uint2 {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3, \
+                                  uint b4, \
+                                  uint b5, \
+                                  uint b6, \
+                                  uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return uint2((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                    (b7 << 24 | b6 << 16 | b5 << 8 | b4));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 2))
+            }
+            Uint32x3 => {
+                let name = self.namer.call("unpackUint32x3");
+                writeln!(
+                    self.out,
+                    "uint3 {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3, \
+                                  uint b4, \
+                                  uint b5, \
+                                  uint b6, \
+                                  uint b7, \
+                                  uint b8, \
+                                  uint b9, \
+                                  uint b10, \
+                                  uint b11) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return uint3((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                    (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                    (b11 << 24 | b10 << 16 | b9 << 8 | b8));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 12, 3))
+            }
+            Uint32x4 => {
+                let name = self.namer.call("unpackUint32x4");
+                writeln!(
+                    self.out,
+                    "uint4 {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3, \
+                                  uint b4, \
+                                  uint b5, \
+                                  uint b6, \
+                                  uint b7, \
+                                  uint b8, \
+                                  uint b9, \
+                                  uint b10, \
+                                  uint b11, \
+                                  uint b12, \
+                                  uint b13, \
+                                  uint b14, \
+                                  uint b15) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                    (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                    (b11 << 24 | b10 << 16 | b9 << 8 | b8), \
+                                    (b15 << 24 | b14 << 16 | b13 << 8 | b12));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 16, 4))
+            }
+            Sint32 => {
+                let name = self.namer.call("unpackSint32");
+                writeln!(
+                    self.out,
+                    "metal::int {name}(uint b0, \
+                                       uint b1, \
+                                       uint b2, \
+                                       uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 1))
+            }
+            Sint32x2 => {
+                let name = self.namer.call("unpackSint32x2");
+                writeln!(
+                    self.out,
+                    "metal::int2 {name}(uint b0, \
+                                        uint b1, \
+                                        uint b2, \
+                                        uint b3, \
+                                        uint b4, \
+                                        uint b5, \
+                                        uint b6, \
+                                        uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int2(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 2))
+            }
+            Sint32x3 => {
+                let name = self.namer.call("unpackSint32x3");
+                writeln!(
+                    self.out,
+                    "metal::int3 {name}(uint b0, \
+                                        uint b1, \
+                                        uint b2, \
+                                        uint b3, \
+                                        uint b4, \
+                                        uint b5, \
+                                        uint b6, \
+                                        uint b7, \
+                                        uint b8, \
+                                        uint b9, \
+                                        uint b10, \
+                                        uint b11) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int3(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                          as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 12, 3))
+            }
+            Sint32x4 => {
+                let name = self.namer.call("unpackSint32x4");
+                writeln!(
+                    self.out,
+                    "metal::int4 {name}(uint b0, \
+                                        uint b1, \
+                                        uint b2, \
+                                        uint b3, \
+                                        uint b4, \
+                                        uint b5, \
+                                        uint b6, \
+                                        uint b7, \
+                                        uint b8, \
+                                        uint b9, \
+                                        uint b10, \
+                                        uint b11, \
+                                        uint b12, \
+                                        uint b13, \
+                                        uint b14, \
+                                        uint b15) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int4(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                          as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8), \
+                                          as_type<int>(b15 << 24 | b14 << 16 | b13 << 8 | b12);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 16, 4))
+            }
+            Unorm10_10_10_2 => {
+                let name = self.namer.call("unpackUnorm10_10_10_2");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return unpack_unorm10a2_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+        }
+    }
+
     // Returns the array of mapped entry point names.
     fn write_functions(
         &mut self,
@@ -3720,6 +4471,101 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        use back::msl::VertexFormat;
+
+        // Define structs to hold resolved/generated data for vertex buffers and
+        // their attributes.
+        struct AttributeMappingResolved {
+            ty_name: String,
+            dimension: u32,
+            ty_is_int: bool,
+            name: String,
+        }
+        let mut am_resolved = FastHashMap::<u32, AttributeMappingResolved>::default();
+
+        struct VertexBufferMappingResolved<'a> {
+            id: u32,
+            stride: u32,
+            indexed_by_vertex: bool,
+            ty_name: String,
+            param_name: String,
+            elem_name: String,
+            attributes: &'a Vec<back::msl::AttributeMapping>,
+        }
+        let mut vbm_resolved = Vec::<VertexBufferMappingResolved>::new();
+
+        // Define a struct to hold a named reference to a byte-unpacking function.
+        struct UnpackingFunction {
+            name: String,
+            byte_count: u32,
+            dimension: u32,
+        }
+        let mut unpacking_functions = FastHashMap::<VertexFormat, UnpackingFunction>::default();
+
+        // Check if we are attempting vertex pulling. If we are, generate some
+        // names we'll need, and iterate the vertex buffer mappings to output
+        // all the conversion functions we'll need to unpack the attribute data.
+        // We can re-use these names for all entry points that need them, since
+        // those entry points also use self.namer.
+        let mut needs_vertex_id = false;
+        let v_id = self.namer.call("v_id");
+
+        let mut needs_instance_id = false;
+        let i_id = self.namer.call("i_id");
+        if pipeline_options.vertex_pulling_transform {
+            for vbm in &pipeline_options.vertex_buffer_mappings {
+                let buffer_id = vbm.id;
+                let buffer_stride = vbm.stride;
+
+                assert!(
+                    buffer_stride > 0,
+                    "Vertex pulling requires a non-zero buffer stride."
+                );
+
+                if vbm.indexed_by_vertex {
+                    needs_vertex_id = true;
+                } else {
+                    needs_instance_id = true;
+                }
+
+                let buffer_ty = self.namer.call(format!("vb_{buffer_id}_type").as_str());
+                let buffer_param = self.namer.call(format!("vb_{buffer_id}_in").as_str());
+                let buffer_elem = self.namer.call(format!("vb_{buffer_id}_elem").as_str());
+
+                vbm_resolved.push(VertexBufferMappingResolved {
+                    id: buffer_id,
+                    stride: buffer_stride,
+                    indexed_by_vertex: vbm.indexed_by_vertex,
+                    ty_name: buffer_ty,
+                    param_name: buffer_param,
+                    elem_name: buffer_elem,
+                    attributes: &vbm.attributes,
+                });
+
+                // Iterate the attributes and generate needed unpacking functions.
+                for attribute in &vbm.attributes {
+                    if unpacking_functions.contains_key(&attribute.format) {
+                        continue;
+                    }
+                    let (name, byte_count, dimension) =
+                        match self.write_unpacking_function(attribute.format) {
+                            Ok((name, byte_count, dimension)) => (name, byte_count, dimension),
+                            _ => {
+                                continue;
+                            }
+                        };
+                    unpacking_functions.insert(
+                        attribute.format,
+                        UnpackingFunction {
+                            name,
+                            byte_count,
+                            dimension,
+                        },
+                    );
+                }
+            }
+        }
+
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
             log::trace!(
@@ -3730,13 +4576,13 @@ impl<W: Write> Writer<W> {
 
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
-            let mut supports_array_length = false;
+            let mut needs_buffer_sizes = false;
             for (handle, var) in module.global_variables.iter() {
                 if !fun_info[handle].is_empty() {
                     if var.space.needs_pass_through() {
                         pass_through_globals.push(handle);
                     }
-                    supports_array_length |= needs_array_length(var.ty, &module.types);
+                    needs_buffer_sizes |= needs_array_length(var.ty, &module.types);
                 }
             }
 
@@ -3773,7 +4619,7 @@ impl<W: Write> Writer<W> {
                 let separator = separate(
                     !pass_through_globals.is_empty()
                         || index + 1 != fun.arguments.len()
-                        || supports_array_length,
+                        || needs_buffer_sizes,
                 );
                 writeln!(
                     self.out,
@@ -3794,13 +4640,13 @@ impl<W: Write> Writer<W> {
                     reference: true,
                 };
                 let separator =
-                    separate(index + 1 != pass_through_globals.len() || supports_array_length);
+                    separate(index + 1 != pass_through_globals.len() || needs_buffer_sizes);
                 write!(self.out, "{}", back::INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{separator}")?;
             }
 
-            if supports_array_length {
+            if needs_buffer_sizes {
                 writeln!(
                     self.out,
                     "{}constant _mslBufferSizes& _buffer_sizes",
@@ -3865,18 +4711,51 @@ impl<W: Write> Writer<W> {
             let fun_info = mod_info.get_entry_point(ep_index);
             let mut ep_error = None;
 
+            // For vertex_id and instance_id arguments, presume that we'll
+            // use our generated names, but switch to the name of an
+            // existing @builtin param, if we find one.
+            let mut v_existing_id = None;
+            let mut i_existing_id = None;
+
             log::trace!(
                 "entry point {:?}, index {:?}",
                 fun.name.as_deref().unwrap_or("(anonymous)"),
                 ep_index
             );
 
+            let (em_str, in_mode, out_mode, can_vertex_pull) = match ep.stage {
+                crate::ShaderStage::Vertex => (
+                    "vertex",
+                    LocationMode::VertexInput,
+                    LocationMode::VertexOutput,
+                    true,
+                ),
+                crate::ShaderStage::Fragment { .. } => (
+                    "fragment",
+                    LocationMode::FragmentInput,
+                    LocationMode::FragmentOutput,
+                    false,
+                ),
+                crate::ShaderStage::Compute { .. } => (
+                    "kernel",
+                    LocationMode::Uniform,
+                    LocationMode::Uniform,
+                    false,
+                ),
+            };
+
+            // Should this entry point be modified to do vertex pulling?
+            let do_vertex_pulling = can_vertex_pull
+                && pipeline_options.vertex_pulling_transform
+                && !pipeline_options.vertex_buffer_mappings.is_empty();
+
             // Is any global variable used by this entry point dynamically sized?
-            let supports_array_length = module
-                .global_variables
-                .iter()
-                .filter(|&(handle, _)| !fun_info[handle].is_empty())
-                .any(|(_, var)| needs_array_length(var.ty, &module.types));
+            let needs_buffer_sizes = do_vertex_pulling
+                || module
+                    .global_variables
+                    .iter()
+                    .filter(|&(handle, _)| !fun_info[handle].is_empty())
+                    .any(|(_, var)| needs_array_length(var.ty, &module.types));
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.
@@ -3934,7 +4813,7 @@ impl<W: Write> Writer<W> {
                         | crate::AddressSpace::WorkGroup => {}
                     }
                 }
-                if supports_array_length {
+                if needs_buffer_sizes {
                     if let Err(err) = options.resolve_sizes_buffer(ep) {
                         ep_error = Some(err);
                     }
@@ -3950,22 +4829,6 @@ impl<W: Write> Writer<W> {
 
             writeln!(self.out)?;
 
-            let (em_str, in_mode, out_mode) = match ep.stage {
-                crate::ShaderStage::Vertex => (
-                    "vertex",
-                    LocationMode::VertexInput,
-                    LocationMode::VertexOutput,
-                ),
-                crate::ShaderStage::Fragment { .. } => (
-                    "fragment",
-                    LocationMode::FragmentInput,
-                    LocationMode::FragmentOutput,
-                ),
-                crate::ShaderStage::Compute { .. } => {
-                    ("kernel", LocationMode::Uniform, LocationMode::Uniform)
-                }
-            };
-
             // Since `Namer.reset` wasn't expecting struct members to be
             // suddenly injected into another namespace like this,
             // `self.names` doesn't keep them distinct from other variables.
@@ -3973,7 +4836,7 @@ impl<W: Write> Writer<W> {
             // mapping.
             let mut flattened_member_names = FastHashMap::default();
             // Varyings' members get their own namespace
-            let mut varyings_namer = crate::proc::Namer::default();
+            let mut varyings_namer = proc::Namer::default();
 
             // List all the Naga `EntryPoint`'s `Function`'s arguments,
             // flattening structs into their members. In Metal, we will pass
@@ -3993,7 +4856,11 @@ impl<W: Write> Writer<W> {
                             let name_key = NameKey::StructMember(arg.ty, member_index);
                             let name = match member.binding {
                                 Some(crate::Binding::Location { .. }) => {
-                                    varyings_namer.call(&self.names[&name_key])
+                                    if do_vertex_pulling {
+                                        self.namer.call(&self.names[&name_key])
+                                    } else {
+                                        varyings_namer.call(&self.names[&name_key])
+                                    }
                                 }
                                 _ => self.namer.call(&self.names[&name_key]),
                             };
@@ -4008,19 +4875,24 @@ impl<W: Write> Writer<W> {
                 }
             }
 
-            // Identify the varyings among the argument values, and emit a
-            // struct type named `<fun>Input` to hold them.
+            // Identify the varyings among the argument values, and maybe emit
+            // a struct type named `<fun>Input` to hold them. If we are doing
+            // vertex pulling, we instead update our attribute mapping to
+            // note the types, names, and zero values of the attributes.
             let stage_in_name = format!("{fun_name}Input");
             let varyings_member_name = self.namer.call("varyings");
             let mut has_varyings = false;
             if !flattened_arguments.is_empty() {
-                writeln!(self.out, "struct {stage_in_name} {{")?;
+                if !do_vertex_pulling {
+                    writeln!(self.out, "struct {stage_in_name} {{")?;
+                }
                 for &(ref name_key, ty, binding) in flattened_arguments.iter() {
-                    let binding = match binding {
-                        Some(ref binding @ &crate::Binding::Location { .. }) => binding,
+                    let (binding, location) = match binding {
+                        Some(ref binding @ &crate::Binding::Location { location, .. }) => {
+                            (binding, location)
+                        }
                         _ => continue,
                     };
-                    has_varyings = true;
                     let name = match *name_key {
                         NameKey::StructMember(..) => &flattened_member_names[name_key],
                         _ => &self.names[name_key],
@@ -4034,11 +4906,27 @@ impl<W: Write> Writer<W> {
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
-                    write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                    resolved.try_fmt(&mut self.out)?;
-                    writeln!(self.out, ";")?;
+                    if do_vertex_pulling {
+                        // Update our attribute mapping.
+                        am_resolved.insert(
+                            location,
+                            AttributeMappingResolved {
+                                ty_name: ty_name.to_string(),
+                                dimension: ty_name.vertex_input_dimension(),
+                                ty_is_int: ty_name.scalar().map_or(false, scalar_is_int),
+                                name: name.to_string(),
+                            },
+                        );
+                    } else {
+                        has_varyings = true;
+                        write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                        resolved.try_fmt(&mut self.out)?;
+                        writeln!(self.out, ";")?;
+                    }
                 }
-                writeln!(self.out, "}};")?;
+                if !do_vertex_pulling {
+                    writeln!(self.out, "}};")?;
+                }
             }
 
             // Define a struct type named for the return value, if any, named
@@ -4121,6 +5009,23 @@ impl<W: Write> Writer<W> {
                 None => "void",
             };
 
+            // If we're doing a vertex pulling transform, define the buffer
+            // structure types.
+            if do_vertex_pulling {
+                for vbm in &vbm_resolved {
+                    let buffer_stride = vbm.stride;
+                    let buffer_ty = &vbm.ty_name;
+
+                    // Define a structure of bytes of the appropriate size.
+                    // When we access the attributes, we'll be unpacking these
+                    // bytes at some offset.
+                    writeln!(
+                        self.out,
+                        "struct {buffer_ty} {{ metal::uchar data[{buffer_stride}]; }};"
+                    )?;
+                }
+            }
+
             // Write the entry point function's name, and begin its argument list.
             writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
             let mut is_first_argument = true;
@@ -4161,6 +5066,17 @@ impl<W: Write> Writer<W> {
                     binding: None,
                     first_time: false,
                 };
+
+                match *binding {
+                    crate::Binding::BuiltIn(crate::BuiltIn::VertexIndex) => {
+                        v_existing_id = Some(name.clone());
+                    }
+                    crate::Binding::BuiltIn(crate::BuiltIn::InstanceIndex) => {
+                        i_existing_id = Some(name.clone());
+                    }
+                    _ => {}
+                };
+
                 let resolved = options.resolve_local_binding(binding, in_mode)?;
                 let separator = if is_first_argument {
                     is_first_argument = false;
@@ -4353,16 +5269,45 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
-            // If this entry uses any variable-length arrays, their sizes are
-            // passed as a final struct-typed argument.
-            if supports_array_length {
-                // this is checked earlier
-                let resolved = options.resolve_sizes_buffer(ep).unwrap();
-                let separator = if module.global_variables.is_empty() {
+            if do_vertex_pulling {
+                assert!(needs_vertex_id || needs_instance_id);
+
+                let mut separator = if is_first_argument {
+                    is_first_argument = false;
                     ' '
                 } else {
                     ','
                 };
+
+                if needs_vertex_id && v_existing_id.is_none() {
+                    // Write the [[vertex_id]] argument.
+                    writeln!(self.out, "{separator} uint {v_id} [[vertex_id]]")?;
+                    separator = ',';
+                }
+
+                if needs_instance_id && i_existing_id.is_none() {
+                    writeln!(self.out, "{separator} uint {i_id} [[instance_id]]")?;
+                }
+
+                // Iterate vbm_resolved, output one argument for every vertex buffer,
+                // using the names we generated earlier.
+                for vbm in &vbm_resolved {
+                    let id = &vbm.id;
+                    let ty_name = &vbm.ty_name;
+                    let param_name = &vbm.param_name;
+                    writeln!(
+                        self.out,
+                        ", const device {ty_name}* {param_name} [[buffer({id})]]"
+                    )?;
+                }
+            }
+
+            // If this entry uses any variable-length arrays, their sizes are
+            // passed as a final struct-typed argument.
+            if needs_buffer_sizes {
+                // this is checked earlier
+                let resolved = options.resolve_sizes_buffer(ep).unwrap();
+                let separator = if is_first_argument { ' ' } else { ',' };
                 write!(
                     self.out,
                     "{separator} constant _mslBufferSizes& _buffer_sizes",
@@ -4373,6 +5318,126 @@ impl<W: Write> Writer<W> {
 
             // end of the entry point argument list
             writeln!(self.out, ") {{")?;
+
+            // Starting the function body.
+            if do_vertex_pulling {
+                // Provide zero values for all the attributes, which we will overwrite with
+                // real data from the vertex attribute buffers, if the indices are in-bounds.
+                for vbm in &vbm_resolved {
+                    for attribute in vbm.attributes {
+                        let location = attribute.shader_location;
+                        let am_option = am_resolved.get(&location);
+                        if am_option.is_none() {
+                            // This bound attribute isn't used in this entry point, so
+                            // don't bother zero-initializing it.
+                            continue;
+                        }
+                        let am = am_option.unwrap();
+                        let attribute_ty_name = &am.ty_name;
+                        let attribute_name = &am.name;
+
+                        writeln!(
+                            self.out,
+                            "{}{attribute_ty_name} {attribute_name} = {{}};",
+                            back::Level(1)
+                        )?;
+                    }
+
+                    // Output a bounds check block that will set real values for the
+                    // attributes, if the bounds are satisfied.
+                    write!(self.out, "{}if (", back::Level(1))?;
+
+                    let idx = &vbm.id;
+                    let stride = &vbm.stride;
+                    let index_name = if vbm.indexed_by_vertex {
+                        if let Some(ref name) = v_existing_id {
+                            name
+                        } else {
+                            &v_id
+                        }
+                    } else if let Some(ref name) = i_existing_id {
+                        name
+                    } else {
+                        &i_id
+                    };
+                    write!(
+                        self.out,
+                        "{index_name} < (_buffer_sizes.buffer_size{idx} / {stride})"
+                    )?;
+
+                    writeln!(self.out, ") {{")?;
+
+                    // Pull the bytes out of the vertex buffer.
+                    let ty_name = &vbm.ty_name;
+                    let elem_name = &vbm.elem_name;
+                    let param_name = &vbm.param_name;
+
+                    writeln!(
+                        self.out,
+                        "{}const {ty_name} {elem_name} = {param_name}[{index_name}];",
+                        back::Level(2),
+                    )?;
+
+                    // Now set real values for each of the attributes, by unpacking the data
+                    // from the buffer elements.
+                    for attribute in vbm.attributes {
+                        let location = attribute.shader_location;
+                        let am_option = am_resolved.get(&location);
+                        if am_option.is_none() {
+                            // This bound attribute isn't used in this entry point, so
+                            // don't bother extracting the data. Too bad we emitted the
+                            // unpacking function earlier -- it might not get used.
+                            continue;
+                        }
+                        let am = am_option.unwrap();
+                        let attribute_name = &am.name;
+                        let attribute_ty_name = &am.ty_name;
+
+                        let offset = attribute.offset;
+                        let func = unpacking_functions
+                            .get(&attribute.format)
+                            .expect("Should have generated this unpacking function earlier.");
+                        let func_name = &func.name;
+
+                        write!(self.out, "{}{attribute_name} = ", back::Level(2),)?;
+
+                        // Check dimensionality of the attribute compared to the unpacking
+                        // function. If attribute dimension is < unpack dimension, then
+                        // we need to explicitly cast down the result. Otherwise, if attribute
+                        // dimension > unpack dimension, we have to pad out the unpack value
+                        // from a vec4(0, 0, 0, 1) of matching scalar type.
+
+                        let needs_truncate_or_padding = am.dimension != func.dimension;
+                        if needs_truncate_or_padding {
+                            write!(self.out, "{attribute_ty_name}(")?;
+                        }
+
+                        write!(self.out, "{func_name}({elem_name}.data[{offset}]",)?;
+                        for i in (offset + 1)..(offset + func.byte_count) {
+                            write!(self.out, ", {elem_name}.data[{i}]")?;
+                        }
+                        write!(self.out, ")")?;
+
+                        if needs_truncate_or_padding {
+                            let zero_value = if am.ty_is_int { "0" } else { "0.0" };
+                            let one_value = if am.ty_is_int { "1" } else { "1.0" };
+                            for i in func.dimension..am.dimension {
+                                write!(
+                                    self.out,
+                                    ", {}",
+                                    if i == 3 { one_value } else { zero_value }
+                                )?;
+                            }
+                            write!(self.out, ")")?;
+                        }
+
+                        writeln!(self.out, ";")?;
+                    }
+
+                    // End the bounds check / attribute setting block.
+                    writeln!(self.out, "{}}}", back::Level(1))?;
+                }
+            }
 
             if need_workgroup_variables_initialization {
                 self.write_workgroup_variables_initialization(
@@ -4466,7 +5531,9 @@ impl<W: Write> Writer<W> {
                                 write!(self.out, "{{}}, ")?;
                             }
                             if let Some(crate::Binding::Location { .. }) = member.binding {
-                                write!(self.out, "{varyings_member_name}.")?;
+                                if has_varyings {
+                                    write!(self.out, "{varyings_member_name}.")?;
+                                }
                             }
                             write!(self.out, "{name}")?;
                         }
@@ -4474,14 +5541,16 @@ impl<W: Write> Writer<W> {
                     }
                     _ => {
                         if let Some(crate::Binding::Location { .. }) = arg.binding {
-                            writeln!(
-                                self.out,
-                                "{}const auto {} = {}.{};",
-                                back::INDENT,
-                                arg_name,
-                                varyings_member_name,
-                                arg_name
-                            )?;
+                            if has_varyings {
+                                writeln!(
+                                    self.out,
+                                    "{}const auto {} = {}.{};",
+                                    back::INDENT,
+                                    arg_name,
+                                    varyings_member_name,
+                                    arg_name
+                                )?;
+                            }
                         }
                     }
                 }
@@ -4804,7 +5873,7 @@ fn test_stack_size() {
     );
     let _ = module.functions.append(fun, Default::default());
     // analyse the module
-    let info = crate::valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
+    let info = valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
         .validate(&module)
         .unwrap();
     // process the module

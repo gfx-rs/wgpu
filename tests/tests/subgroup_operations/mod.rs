@@ -75,6 +75,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             module: &cs_module,
             entry_point: "main",
             compilation_options: Default::default(),
+            cache: None,
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {

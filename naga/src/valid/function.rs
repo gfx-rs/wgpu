@@ -172,6 +172,8 @@ pub enum FunctionError {
     WorkgroupUniformLoadInvalidPointer(Handle<crate::Expression>),
     #[error("Subgroup operation is invalid")]
     InvalidSubgroup(#[from] SubgroupError),
+    #[error("Emit statement should not cover \"result\" expressions like {0:?}")]
+    EmitResult(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -554,7 +556,45 @@ impl super::Validator {
             match *statement {
                 S::Emit(ref range) => {
                     for handle in range.clone() {
-                        self.emit_expression(handle, context)?;
+                        use crate::Expression as Ex;
+                        match context.expressions[handle] {
+                            Ex::Literal(_)
+                            | Ex::Constant(_)
+                            | Ex::Override(_)
+                            | Ex::ZeroValue(_)
+                            | Ex::Compose { .. }
+                            | Ex::Access { .. }
+                            | Ex::AccessIndex { .. }
+                            | Ex::Splat { .. }
+                            | Ex::Swizzle { .. }
+                            | Ex::FunctionArgument(_)
+                            | Ex::GlobalVariable(_)
+                            | Ex::LocalVariable(_)
+                            | Ex::Load { .. }
+                            | Ex::ImageSample { .. }
+                            | Ex::ImageLoad { .. }
+                            | Ex::ImageQuery { .. }
+                            | Ex::Unary { .. }
+                            | Ex::Binary { .. }
+                            | Ex::Select { .. }
+                            | Ex::Derivative { .. }
+                            | Ex::Relational { .. }
+                            | Ex::Math { .. }
+                            | Ex::As { .. }
+                            | Ex::ArrayLength(_)
+                            | Ex::RayQueryGetIntersection { .. } => {
+                                self.emit_expression(handle, context)?
+                            }
+                            Ex::CallResult(_)
+                            | Ex::AtomicResult { .. }
+                            | Ex::WorkGroupUniformLoadResult { .. }
+                            | Ex::RayQueryProceedResult
+                            | Ex::SubgroupBallotResult
+                            | Ex::SubgroupOperationResult { .. } => {
+                                return Err(FunctionError::EmitResult(handle)
+                                    .with_span_handle(handle, context.expressions));
+                            }
+                        }
                     }
                 }
                 S::Block(ref block) => {

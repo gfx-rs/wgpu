@@ -4,7 +4,6 @@ use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
-    id::BindGroupId,
     pipeline::LateSizedBufferGroup,
     resource::Resource,
 };
@@ -359,11 +358,11 @@ impl<A: HalApi> Binder<A> {
         &self.payloads[bind_range]
     }
 
-    pub(super) fn list_active(&self) -> impl Iterator<Item = BindGroupId> + '_ {
+    pub(super) fn list_active<'a>(&'a self) -> impl Iterator<Item = &'a Arc<BindGroup<A>>> + '_ {
         let payloads = &self.payloads;
         self.manager
             .list_active()
-            .map(move |index| payloads[index].group.as_ref().unwrap().as_info().id())
+            .map(move |index| payloads[index].group.as_ref().unwrap())
     }
 
     pub(super) fn invalid_mask(&self) -> BindGroupMask {
