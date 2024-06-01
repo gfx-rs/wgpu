@@ -25,6 +25,15 @@ By default it measures 10k draw calls, with 90k total resources.
 Within this benchmark, both single threaded and multi-threaded recording are tested, as well as splitting
 the render pass into multiple passes over multiple command buffers.
 
+#### `Computepass`
+
+This benchmark measures the performance of recording and submitting a compute pass with a large
+number of dispatches and resources.
+By default it measures 10k dispatch calls, with 60k total resources, emulating an unusually complex and sequential compute workload.
+
+Within this benchmark, both single threaded and multi-threaded recording are tested, as well as splitting
+the compute pass into multiple passes over multiple command buffers.
+
 #### `Resource Creation`
 
 This benchmark measures the performance of creating large resources. By default it makes buffers that are 256MB. It tests this over a range of thread counts.
