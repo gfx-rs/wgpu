@@ -429,7 +429,6 @@ impl Global {
         let raw = encoder.open().map_pass_err(pass_scope)?;
 
         let query_set_guard = hub.query_sets.read();
-        let buffer_guard = hub.buffers.read();
         let tlas_guard = hub.tlas_s.read();
 
         let mut state = State {

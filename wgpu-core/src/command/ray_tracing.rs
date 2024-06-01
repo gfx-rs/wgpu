@@ -13,6 +13,7 @@ use crate::{
     resource::{Blas, Tlas},
     storage::Storage,
     FastHashSet,
+    lock::{Mutex, RwLockReadGuard},
 };
 
 use wgt::{math::align_to, BufferUsages};
@@ -21,10 +22,10 @@ use crate::ray_tracing::BlasTriangleGeometry;
 use crate::resource::{Buffer, Resource, ResourceInfo, StagingBuffer};
 use crate::track::PendingTransition;
 use hal::{BufferUses, CommandEncoder, Device};
-use parking_lot::{Mutex, RwLockReadGuard};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
+use crate::lock::rank;
 
 use super::BakedCommands;
 
@@ -699,7 +700,7 @@ impl Global {
             .unwrap()
             .temp_resources
             .push(TempResource::StagingBuffer(Arc::new(StagingBuffer {
-                raw: Mutex::new(Some(scratch_buffer)),
+                raw: Mutex::new(rank::BLAS, Some(scratch_buffer)),
                 device: device.clone(),
                 size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
                 info: ResourceInfo::new(
@@ -1346,7 +1347,7 @@ impl Global {
                     .map_err(crate::device::DeviceError::from)?;
                 assert!(mapping.is_coherent);
                 let buf = StagingBuffer {
-                    raw: Mutex::new(Some(staging_buffer)),
+                    raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(staging_buffer)),
                     device: device.clone(),
                     size: instance_buffer_staging_source.len() as u64,
                     info: ResourceInfo::new(
@@ -1541,7 +1542,7 @@ impl Global {
         };
 
         let buf = StagingBuffer {
-            raw: Mutex::new(Some(scratch_buffer)),
+            raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(scratch_buffer)),
             device: device.clone(),
             size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
             info: ResourceInfo::new(

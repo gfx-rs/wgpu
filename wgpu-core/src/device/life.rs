@@ -20,7 +20,6 @@ use crate::{
 use smallvec::SmallVec;
 
 use crate::resource::{Blas, Tlas};
-use parking_lot::Mutex;
 use std::sync::Arc;
 use thiserror::Error;
 

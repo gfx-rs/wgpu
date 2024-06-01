@@ -1355,23 +1355,9 @@ impl Global {
                             }
                             for blas in cmd_buf_trackers.blas_s.used_resources() {
                                 blas.info.use_at(submit_index);
-                                if blas.is_unique() {
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .blas_s
-                                        .insert(blas.as_info().tracker_index(), blas.clone());
-                                }
                             }
                             for tlas in cmd_buf_trackers.tlas_s.used_resources() {
                                 tlas.info.use_at(submit_index);
-                                if tlas.is_unique() {
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .tlas_s
-                                        .insert(tlas.as_info().tracker_index(), tlas.clone());
-                                }
                             }
                         }
 
