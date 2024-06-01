@@ -5,6 +5,7 @@ use crate::{
     hal_api::HalApi,
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
+    lock::{Mutex, RwLockReadGuard},
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
         BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasPackage,
@@ -13,11 +14,11 @@ use crate::{
     resource::{Blas, Tlas},
     storage::Storage,
     FastHashSet,
-    lock::{Mutex, RwLockReadGuard},
 };
 
 use wgt::{math::align_to, BufferUsages};
 
+use crate::lock::rank;
 use crate::ray_tracing::BlasTriangleGeometry;
 use crate::resource::{Buffer, Resource, ResourceInfo, StagingBuffer};
 use crate::track::PendingTransition;
@@ -25,7 +26,6 @@ use hal::{BufferUses, CommandEncoder, Device};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
-use crate::lock::rank;
 
 use super::BakedCommands;
 

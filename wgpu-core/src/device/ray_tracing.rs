@@ -5,15 +5,15 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{self, BlasId, TlasId},
+    lock::{Mutex, RwLock},
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
-    lock::{Mutex, RwLock},
 };
 use std::sync::Arc;
 
+use crate::lock::rank;
 use crate::resource::{ResourceInfo, StagingBuffer};
 use hal::{AccelerationStructureTriangleIndices, Device as _};
-use crate::lock::rank;
 
 impl<A: HalApi> Device<A> {
     fn create_blas(
