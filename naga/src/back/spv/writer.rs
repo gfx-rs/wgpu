@@ -2175,7 +2175,9 @@ impl Writer {
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
             // spirv does not about whether these have vertex return - that is done by us
-            if let &crate::TypeInner::AccelerationStructure { .. } | &crate::TypeInner::RayQuery { .. } = inner {
+            if let &crate::TypeInner::AccelerationStructure { .. }
+            | &crate::TypeInner::RayQuery { .. } = inner
+            {
                 has_ray_query = true
             }
         }
