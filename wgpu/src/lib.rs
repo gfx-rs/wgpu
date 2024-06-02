@@ -3906,8 +3906,8 @@ impl CommandEncoder {
     ///
     /// As long as the returned  [`ComputePass`] has not ended,
     /// any mutating operation on this command encoder causes an error and invalidates it.
-    /// Note that the lifetime constraint protects against this, but it is possible to opt out of it
-    /// by calling [`ComputePass::make_static`].
+    /// Note that the `'encoder` lifetime relationship protects against this,
+    /// but it is possible to opt out of it by calling [`ComputePass::make_static`].
     /// This can be useful for runtime handling of the encoder->pass
     /// dependency e.g. when pass and encoder are stored in the same data structure.
     pub fn begin_compute_pass<'encoder>(
@@ -4771,10 +4771,10 @@ impl<'encoder> ComputePass<'encoder> {
     /// Drops the lifetime relationship to the parent command encoder, making usage of
     /// the encoder while this pass is recorded a run-time error instead.
     ///
-    /// Attention: As long as the compute pass has not been ended, any mutable operation on the parent
+    /// Attention: As long as the compute pass has not been ended, any mutating operation on the parent
     /// command encoder will cause a runtime error and invalidate it!
     /// By default the lifetime constraint protects from this, but it can be useful
-    /// to handle this at runtime, for example in order to store the pass and encoder in the same
+    /// to handle this at run time, for example in order to store the pass and encoder in the same
     /// data structure.
     ///
     /// This operation has no effect on pass recording and is considered low overhead.
