@@ -4774,7 +4774,7 @@ impl<'encoder> ComputePass<'encoder> {
     ///
     /// Attention: As long as the compute pass has not been ended, any mutating operation on the parent
     /// command encoder will cause a run-time error and invalidate it!
-    /// By default the lifetime constraint prevents this, but it can be useful
+    /// By default, the lifetime constraint prevents this, but it can be useful
     /// to handle this at run time, such as when storing the pass and encoder in the same
     /// data structure.
     ///
