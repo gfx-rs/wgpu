@@ -476,6 +476,11 @@ fn run_bench(ctx: &mut Criterion) {
                 b.iter_custom(|iters| {
                     profiling::scope!("benchmark invocation");
 
+                    // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
+                    if state.device_state.adapter_info.name.contains("Paravirtual") {
+                        return Duration::from_secs_f32(1.0);
+                    }
+
                     let mut duration = Duration::ZERO;
 
                     for _ in 0..iters {
@@ -510,6 +515,11 @@ fn run_bench(ctx: &mut Criterion) {
 
         b.iter_custom(|iters| {
             profiling::scope!("benchmark invocation");
+
+            // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
+            if state.device_state.adapter_info.name.contains("Paravirtual") {
+                return Duration::from_secs_f32(1.0);
+            }
 
             // Need bindless to run this benchmark
             if state.bindless_bind_group.is_none() {
