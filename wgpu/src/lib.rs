@@ -3876,10 +3876,12 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
-    ///
-    /// As long as the returned  [`RenderPass`] has not ended,
-    /// any recording operation on this command encoder causes an error and invalidates it.
-    /// (Note that the lifetime constraint protects against this.)
+    //
+    // TODO(https://github.com/gfx-rs/wgpu/issues/1453):
+    // Just like with compute passes, we should have a way to opt out of the lifetime constraint.
+    // See https://github.com/gfx-rs/wgpu/pull/5768 for details
+    // Once this is done, the documentation for `begin_render_pass` and `begin_compute_pass` should
+    // be nearly identical.
     pub fn begin_render_pass<'pass>(
         &'pass mut self,
         desc: &RenderPassDescriptor<'pass, '_>,
@@ -3903,7 +3905,7 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     ///
     /// As long as the returned  [`ComputePass`] has not ended,
-    /// any mutable operation on this command encoder causes an error and invalidates it.
+    /// any mutating operation on this command encoder causes an error and invalidates it.
     /// Note that the lifetime constraint protects against this, but it is possible to opt out of it
     /// by calling [`ComputePass::make_static`].
     /// This can be useful for runtime handling of the encoder->pass
@@ -4766,8 +4768,8 @@ impl<'a> Drop for RenderPass<'a> {
 }
 
 impl<'a> ComputePass<'a> {
-    /// Drops lifetime constraint to the parent command encoder, making usage of the encoder
-    /// while this pass is recorded a runtime error instead.
+    /// Drops the lifetime relationship to the parent command encoder, making usage of
+    /// the encoder while this pass is recorded a run-time error instead.
     ///
     /// Attention: As long as the compute pass has not been ended, any mutable operation on the parent
     /// command encoder will cause a runtime error and invalidate it!
@@ -4783,7 +4785,7 @@ impl<'a> ComputePass<'a> {
         // since `repr(rust)` objects have no guarantees about padding or alignment
         // even for seemingly equivalent types like `ComputePass<'a>` and `ComputePass<'static>`!
 
-        // Instead, make sure that dropping of `self` is a no-op.
+        // Instead, make sure that dropping of `self` is a no-op other than dropping its pointers.
         // (but preserve drop-on-end behavior of the original object)
         let call_end_on_drop_before = self.call_end_on_drop;
         self.call_end_on_drop = false;
