@@ -3910,10 +3910,10 @@ impl CommandEncoder {
     /// by calling [`ComputePass::make_static`].
     /// This can be useful for runtime handling of the encoder->pass
     /// dependency e.g. when pass and encoder are stored in the same data structure.
-    pub fn begin_compute_pass<'a>(
-        &'a mut self,
+    pub fn begin_compute_pass<'encoder>(
+        &'encoder mut self,
         desc: &ComputePassDescriptor<'_>,
-    ) -> ComputePass<'a> {
+    ) -> ComputePass<'encoder> {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
@@ -4767,7 +4767,7 @@ impl<'a> Drop for RenderPass<'a> {
     }
 }
 
-impl<'a> ComputePass<'a> {
+impl<'encoder> ComputePass<'encoder> {
     /// Drops the lifetime relationship to the parent command encoder, making usage of
     /// the encoder while this pass is recorded a run-time error instead.
     ///
@@ -4896,7 +4896,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl<'encoder> ComputePass<'encoder> {
     /// Set push constant data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -4917,7 +4917,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl<'encoder> ComputePass<'encoder> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
     /// Must be multiplied by [`Queue::get_timestamp_period`] to get
@@ -4937,7 +4937,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl<'encoder> ComputePass<'encoder> {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
@@ -4962,7 +4962,7 @@ impl<'a> ComputePass<'a> {
     }
 }
 
-impl<'a> Drop for ComputePass<'a> {
+impl<'encoder> Drop for ComputePass<'encoder> {
     fn drop(&mut self) {
         if !thread::panicking() && self.call_end_on_drop {
             self.call_end_on_drop = false;
