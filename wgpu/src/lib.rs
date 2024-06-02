@@ -4772,14 +4772,14 @@ impl<'encoder> ComputePass<'encoder> {
     /// the encoder while this pass is recorded a run-time error instead.
     ///
     /// Attention: As long as the compute pass has not been ended, any mutating operation on the parent
-    /// command encoder will cause a runtime error and invalidate it!
-    /// By default the lifetime constraint protects from this, but it can be useful
-    /// to handle this at run time, for example in order to store the pass and encoder in the same
+    /// command encoder will cause a run-time error and invalidate it!
+    /// By default the lifetime constraint prevents this, but it can be useful
+    /// to handle this at run time, such as when storing the pass and encoder in the same
     /// data structure.
     ///
     /// This operation has no effect on pass recording and is considered low overhead.
     /// It's a safe operation, since [`CommandEncoder`] is in a locked state as long as the pass is active
-    /// regardless of here lifted lifetime constraint.
+    /// regardless of the lifetime constraint or its absence.
     pub fn make_static(mut self) -> ComputePass<'static> {
         // It's tempting to simply transmute the object, but that would be unsound
         // since `repr(rust)` objects have no guarantees about padding or alignment
