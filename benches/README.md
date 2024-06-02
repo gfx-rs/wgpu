@@ -24,6 +24,8 @@ By default it measures 10k draw calls, with 90k total resources.
 
 Within this benchmark, both single threaded and multi-threaded recording are tested, as well as splitting
 the render pass into multiple passes over multiple command buffers.
+If available, it also tests a bindless approach, binding all textures at once instead of switching
+the bind group for every draw call.
 
 #### `Computepass`
 
@@ -33,6 +35,10 @@ By default it measures 10k dispatch calls, with 60k total resources, emulating a
 
 Within this benchmark, both single threaded and multi-threaded recording are tested, as well as splitting
 the compute pass into multiple passes over multiple command buffers.
+If available, it also tests a bindless approach, binding all resources at once instead of switching
+the bind group for every draw call.
+TODO(https://github.com/gfx-rs/wgpu/issues/5766): The bindless version uses only 1k dispatches with 6k resources since it would be too slow for a reasonable benchmarking time otherwise.
+
 
 #### `Resource Creation`
 

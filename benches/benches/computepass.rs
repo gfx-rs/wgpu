@@ -11,6 +11,14 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use crate::DeviceState;
 
 const DISPATCH_COUNT: usize = 10_000;
+
+// Currently bindless is _much_ slower than with regularly resources,
+// since wgpu needs to issues barriers for all resources between each dispatch for all read/write textures & buffers.
+// This is in fact so slow that it makes the benchmark unusable when we use the same amount of
+// resources as the regular benchmark.
+// For details see https://github.com/gfx-rs/wgpu/issues/5766
+const DISPATCH_COUNT_BINDLESS: usize = 1_000;
+
 // Must match the number of textures in the computepass.wgsl shader
 const TEXTURES_PER_DISPATCH: usize = 2;
 const STORAGE_TEXTURES_PER_DISPATCH: usize = 2;
@@ -283,19 +291,19 @@ impl ComputepassState {
                             wgpu::BindGroupEntry {
                                 binding: 0,
                                 resource: wgpu::BindingResource::TextureViewArray(
-                                    &texture_view_refs,
+                                    &texture_view_refs[..DISPATCH_COUNT_BINDLESS],
                                 ),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
                                 resource: wgpu::BindingResource::TextureViewArray(
-                                    &storage_texture_view_refs,
+                                    &storage_texture_view_refs[..DISPATCH_COUNT_BINDLESS],
                                 ),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 2,
                                 resource: wgpu::BindingResource::BufferArray(
-                                    &storage_buffer_bindings,
+                                    &storage_buffer_bindings[..DISPATCH_COUNT_BINDLESS],
                                 ),
                             },
                         ],
@@ -384,7 +392,7 @@ impl ComputepassState {
 
         compute_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
         compute_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]);
-        for _ in 0..DISPATCH_COUNT {
+        for _ in 0..DISPATCH_COUNT_BINDLESS {
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
 
@@ -495,9 +503,9 @@ fn run_bench(ctx: &mut Criterion) {
 
     // Test 10k dispatch calls split up over 1, 2, 4, and 8 threads.
     let mut group = ctx.benchmark_group("Computepass: Bindless");
-    group.throughput(Throughput::Elements(DISPATCH_COUNT as _));
+    group.throughput(Throughput::Elements(DISPATCH_COUNT_BINDLESS as _));
 
-    group.bench_function(&format!("{DISPATCH_COUNT} dispatch"), |b| {
+    group.bench_function(&format!("{DISPATCH_COUNT_BINDLESS} dispatch"), |b| {
         Lazy::force(&state);
 
         b.iter_custom(|iters| {
