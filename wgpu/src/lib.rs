@@ -1287,19 +1287,19 @@ pub struct RenderPass<'a> {
 /// https://gpuweb.github.io/gpuweb/#compute-pass-encoder).
 #[derive(Debug)]
 pub struct ComputePass<'encoder> {
+    /// The inner data of the compute pass, separated out so it's easy to replace the lifetime with 'static if desired.
+    inner: ComputePassInner,
+
+    /// This lifetime is used to protect the [`CommandEncoder`] from being used
+    /// while the pass is alive.
+    encoder_guard: PhantomData<&'encoder ()>,
+}
+
+#[derive(Debug)]
+struct ComputePassInner {
     id: ObjectId,
     data: Box<Data>,
     context: Arc<C>,
-
-    /// Whether end should be called on drop.
-    ///
-    /// Setting this to false is useful for manual ending and
-    /// for safe conversion of the [`ComputePass::encoder_guard`].
-    call_end_on_drop: bool,
-
-    /// The lifetime is just there to protect the [`CommandEncoder`] from being used
-    /// while the pass is alive.
-    encoder_guard: PhantomData<&'encoder ()>,
 }
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
@@ -3922,10 +3922,11 @@ impl CommandEncoder {
             desc,
         );
         ComputePass {
-            id,
-            data,
-            context: self.context.clone(),
-            call_end_on_drop: true,
+            inner: ComputePassInner {
+                id,
+                data,
+                context: self.context.clone(),
+            },
             encoder_guard: PhantomData,
         }
     }
@@ -4777,28 +4778,12 @@ impl<'encoder> ComputePass<'encoder> {
     /// to handle this at run time, such as when storing the pass and encoder in the same
     /// data structure.
     ///
-    /// This operation has no effect on pass recording and is considered low overhead.
+    /// This operation has no effect on pass recording.
     /// It's a safe operation, since [`CommandEncoder`] is in a locked state as long as the pass is active
     /// regardless of the lifetime constraint or its absence.
-    pub fn make_static(mut self) -> ComputePass<'static> {
-        // It's tempting to simply transmute the object, but that would be unsound
-        // since `repr(rust)` objects have no guarantees about padding or alignment
-        // even for seemingly equivalent types like `ComputePass<'a>` and `ComputePass<'static>`!
-
-        // Instead, make sure that dropping of `self` is a no-op other than dropping its pointers.
-        // (but preserve drop-on-end behavior of the original object)
-        let call_end_on_drop_before = self.call_end_on_drop;
-        self.call_end_on_drop = false;
-
-        // The introduced some unnecessary overhead, but keeps everything safe!
-        let context = self.context.clone();
-        let data = std::mem::replace(&mut self.data, Box::new(())); // Note that `Box::new::(())` is guaranteed to not allocate.
-
+    pub fn make_static(self) -> ComputePass<'static> {
         ComputePass {
-            context,
-            id: self.id,
-            data,
-            call_end_on_drop: call_end_on_drop_before,
+            inner: self.inner,
             encoder_guard: PhantomData,
         }
     }
@@ -4816,9 +4801,9 @@ impl<'encoder> ComputePass<'encoder> {
         offsets: &[DynamicOffset],
     ) {
         DynContext::compute_pass_set_bind_group(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             index,
             &bind_group.id,
             bind_group.data.as_ref(),
@@ -4829,9 +4814,9 @@ impl<'encoder> ComputePass<'encoder> {
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &pipeline.id,
             pipeline.data.as_ref(),
         );
@@ -4840,9 +4825,9 @@ impl<'encoder> ComputePass<'encoder> {
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
         DynContext::compute_pass_insert_debug_marker(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             label,
         );
     }
@@ -4850,16 +4835,20 @@ impl<'encoder> ComputePass<'encoder> {
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
         DynContext::compute_pass_push_debug_group(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             label,
         );
     }
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        DynContext::compute_pass_pop_debug_group(&*self.context, &mut self.id, self.data.as_mut());
+        DynContext::compute_pass_pop_debug_group(
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
+        );
     }
 
     /// Dispatches compute work operations.
@@ -4867,9 +4856,9 @@ impl<'encoder> ComputePass<'encoder> {
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
         DynContext::compute_pass_dispatch_workgroups(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             x,
             y,
             z,
@@ -4885,9 +4874,9 @@ impl<'encoder> ComputePass<'encoder> {
         indirect_offset: BufferAddress,
     ) {
         DynContext::compute_pass_dispatch_workgroups_indirect(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4907,9 +4896,9 @@ impl<'encoder> ComputePass<'encoder> {
     /// call will write `data` to bytes `4..12` of push constant storage.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         DynContext::compute_pass_set_push_constants(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             offset,
             data,
         );
@@ -4926,9 +4915,9 @@ impl<'encoder> ComputePass<'encoder> {
     /// for a string of operations to complete.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_write_timestamp(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
@@ -4942,9 +4931,9 @@ impl<'encoder> ComputePass<'encoder> {
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
@@ -4955,17 +4944,16 @@ impl<'encoder> ComputePass<'encoder> {
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
-            &*self.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
         );
     }
 }
 
-impl<'encoder> Drop for ComputePass<'encoder> {
+impl Drop for ComputePassInner {
     fn drop(&mut self) {
-        if !thread::panicking() && self.call_end_on_drop {
-            self.call_end_on_drop = false;
+        if !thread::panicking() {
             self.context
                 .compute_pass_end(&mut self.id, self.data.as_mut());
         }
