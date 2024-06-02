@@ -93,13 +93,16 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
             label: Some("encoder"),
         });
 
-    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+    let cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("compute_pass"),
         timestamp_writes: None,
     });
 
     // Now drop the encoder - it is kept alive by the compute pass.
+    // To do so, we have to make the compute pass forget the lifetime constraint first.
+    let mut cpass = cpass.make_static();
     drop(encoder);
+
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();

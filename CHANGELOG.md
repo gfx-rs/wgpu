@@ -47,13 +47,18 @@ TODO(wumpf): This is still work in progress. Should write a bit more about it. A
 
 `wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
 
-Furthermore, `wgpu::ComputePass` no longer has a life time dependency on its parent `wgpu::CommandEncoder`.
+Furthermore, you can now opt out of `wgpu::ComputePass`'s life time dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::make_static`:
+```rust
+fn independent_cpass<'enc>(encoder: &'enc mut wgpu::CommandEncoder) -> wgpu::ComputePass<'static> {
+    let cpass: wgpu::ComputePass<'enc> = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+    cpass.make_static()
+}
+```
 ⚠️ As long as a `wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
-Previously, this was statically enforced by a lifetime constraint.
-TODO(wumpf): There was some discussion on whether to make this life time constraint opt-in or opt-out (entirely on `wgpu` side, no changes to `wgpu-core`).
-Lifting this lifetime dependencies is very useful for library authors, but opens up an easy way for incorrect use.
+This is very useful for library authors, but opens up an easy way for incorrect use, so use with care.
+`make_static` is low overhead and has no side effects on pass recording.
 
-By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620).
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768)
 
 #### Querying shader compilation errors
 

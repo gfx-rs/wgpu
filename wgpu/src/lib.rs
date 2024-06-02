@@ -1286,10 +1286,20 @@ pub struct RenderPass<'a> {
 /// Corresponds to [WebGPU `GPUComputePassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#compute-pass-encoder).
 #[derive(Debug)]
-pub struct ComputePass {
+pub struct ComputePass<'encoder> {
     id: ObjectId,
     data: Box<Data>,
     context: Arc<C>,
+
+    /// Whether end should be called on drop.
+    ///
+    /// Setting this to false is useful for manual ending and
+    /// for safe conversion of the [`ComputePass::encoder_guard`].
+    call_end_on_drop: bool,
+
+    /// The lifetime is just there to protect the [`CommandEncoder`] from being used
+    /// while the pass is alive.
+    encoder_guard: PhantomData<&'encoder ()>,
 }
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
@@ -3866,6 +3876,10 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
+    ///
+    /// As long as the returned  [`RenderPass`] has not ended,
+    /// any recording operation on this command encoder causes an error and invalidates it.
+    /// (Note that the lifetime constraint protects against this.)
     pub fn begin_render_pass<'pass>(
         &'pass mut self,
         desc: &RenderPassDescriptor<'pass, '_>,
@@ -3887,7 +3901,17 @@ impl CommandEncoder {
     /// Begins recording of a compute pass.
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
-    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass {
+    ///
+    /// As long as the returned  [`ComputePass`] has not ended,
+    /// any mutable operation on this command encoder causes an error and invalidates it.
+    /// Note that the lifetime constraint protects against this, but it is possible to opt out of it
+    /// by calling [`ComputePass::make_static`].
+    /// This can be useful for runtime handling of the encoder->pass
+    /// dependency e.g. when pass and encoder are stored in the same data structure.
+    pub fn begin_compute_pass<'a>(
+        &'a mut self,
+        desc: &ComputePassDescriptor<'_>,
+    ) -> ComputePass<'a> {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
@@ -3899,6 +3923,8 @@ impl CommandEncoder {
             id,
             data,
             context: self.context.clone(),
+            call_end_on_drop: true,
+            encoder_guard: PhantomData,
         }
     }
 
@@ -4739,7 +4765,42 @@ impl<'a> Drop for RenderPass<'a> {
     }
 }
 
-impl ComputePass {
+impl<'a> ComputePass<'a> {
+    /// Drops lifetime constraint to the parent command encoder, making usage of the encoder
+    /// while this pass is recorded a runtime error instead.
+    ///
+    /// Attention: As long as the compute pass has not been ended, any mutable operation on the parent
+    /// command encoder will cause a runtime error and invalidate it!
+    /// By default the lifetime constraint protects from this, but it can be useful
+    /// to handle this at runtime, for example in order to store the pass and encoder in the same
+    /// data structure.
+    ///
+    /// This operation has no effect on pass recording and is considered low overhead.
+    /// It's a safe operation, since [`CommandEncoder`] is in a locked state as long as the pass is active
+    /// regardless of here lifted lifetime constraint.
+    pub fn make_static(mut self) -> ComputePass<'static> {
+        // It's tempting to simply transmute the object, but that would be unsound
+        // since `repr(rust)` objects have no guarantees about padding or alignment
+        // even for seemingly equivalent types like `ComputePass<'a>` and `ComputePass<'static>`!
+
+        // Instead, make sure that dropping of `self` is a no-op.
+        // (but preserve drop-on-end behavior of the original object)
+        let call_end_on_drop_before = self.call_end_on_drop;
+        self.call_end_on_drop = false;
+
+        // The introduced some unnecessary overhead, but keeps everything safe!
+        let context = self.context.clone();
+        let data = std::mem::replace(&mut self.data, Box::new(())); // Note that `Box::new::(())` is guaranteed to not allocate.
+
+        ComputePass {
+            context,
+            id: self.id,
+            data,
+            call_end_on_drop: call_end_on_drop_before,
+            encoder_guard: PhantomData,
+        }
+    }
+
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
     ///
@@ -4833,7 +4894,7 @@ impl ComputePass {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl ComputePass {
+impl<'a> ComputePass<'a> {
     /// Set push constant data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -4854,7 +4915,7 @@ impl ComputePass {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl ComputePass {
+impl<'a> ComputePass<'a> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
     /// Must be multiplied by [`Queue::get_timestamp_period`] to get
@@ -4874,7 +4935,7 @@ impl ComputePass {
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl ComputePass {
+impl<'a> ComputePass<'a> {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
@@ -4899,9 +4960,10 @@ impl ComputePass {
     }
 }
 
-impl Drop for ComputePass {
+impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
-        if !thread::panicking() {
+        if !thread::panicking() && self.call_end_on_drop {
+            self.call_end_on_drop = false;
             self.context
                 .compute_pass_end(&mut self.id, self.data.as_mut());
         }
