@@ -2558,6 +2558,11 @@ impl Adapter {
     ///
     /// Returns the [`Device`] together with a [`Queue`] that executes command buffers.
     ///
+    /// [Per the WebGPU specification], an [`Adapter`] may only be used once to create a device.
+    /// If another device is wanted, call [`Instance::request_adapter()`] again to get a fresh
+    /// [`Adapter`].
+    /// However, `wgpu` does not currently enforce this restriction.
+    ///
     /// # Arguments
     ///
     /// - `desc` - Description of the features and limits requested from the given device.
@@ -2566,10 +2571,13 @@ impl Adapter {
     ///
     /// # Panics
     ///
+    /// - `request_device()` was already called on this `Adapter`.
     /// - Features specified by `desc` are not supported by this adapter.
     /// - Unsafe features were requested but not enabled when requesting the adapter.
     /// - Limits requested exceed the values provided by the adapter.
     /// - Adapter does not support all features wgpu requires to safely operate.
+    ///
+    /// [Per the WebGPU specification]: https://www.w3.org/TR/webgpu/#dom-gpuadapter-requestdevice
     pub fn request_device(
         &self,
         desc: &DeviceDescriptor<'_>,
