@@ -2,7 +2,7 @@
 var tex: binding_array<texture_2d<f32>>;
 
 @group(0) @binding(1)
-// TODO(https://github.com/gfx-rs/wgpu/issues/5765): The extra whitespace between the angle brakets is needed to workaround a parsing bug.
+// TODO(https://github.com/gfx-rs/wgpu/issues/5765): The extra whitespace between the angle brackets is needed to workaround a parsing bug.
 var images: binding_array<texture_storage_2d<rgba32float, read_write> >;
 struct BufferElement {
     element: vec4f,

@@ -462,7 +462,7 @@ fn run_bench(ctx: &mut Criterion) {
     }
     group.finish();
 
-    // Test 10k disptach calls split up over 2, 4, and 8 threads.
+    // Test 10k dispatch calls split up over 2, 4, and 8 threads.
     let mut group = ctx.benchmark_group("Computepass: Multi Threaded");
     group.throughput(Throughput::Elements(DISPATCH_COUNT as _));
 
