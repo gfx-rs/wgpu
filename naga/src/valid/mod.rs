@@ -246,6 +246,26 @@ pub struct Validator {
     valid_expression_set: BitSet,
     override_ids: FastHashSet<u16>,
     allow_overrides: bool,
+
+    /// A checklist of expressions that must be visited by a specific kind of
+    /// statement.
+    ///
+    /// For example:
+    ///
+    /// - [`CallResult`] expressions must be visited by a [`Call`] statement.
+    /// - [`AtomicResult`] expressions must be visited by an [`Atomic`] statement.
+    ///
+    /// Be sure not to remove any [`Expression`] handle from this set unless
+    /// you've explicitly checked that it is the right kind of expression for
+    /// the visiting [`Statement`].
+    ///
+    /// [`CallResult`]: crate::Expression::CallResult
+    /// [`Call`]: crate::Statement::Call
+    /// [`AtomicResult`]: crate::Expression::AtomicResult
+    /// [`Atomic`]: crate::Statement::Atomic
+    /// [`Expression`]: crate::Expression
+    /// [`Statement`]: crate::Statement
+    needs_visit: BitSet,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -398,6 +418,7 @@ impl Validator {
             valid_expression_set: BitSet::new(),
             override_ids: FastHashSet::default(),
             allow_overrides: true,
+            needs_visit: BitSet::new(),
         }
     }
 
