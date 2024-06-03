@@ -22,6 +22,8 @@ pub enum CallError {
     },
     #[error("Result expression {0:?} has already been introduced earlier")]
     ResultAlreadyInScope(Handle<crate::Expression>),
+    #[error("Result expression {0:?} is populated by multiple `Call` statements")]
+    ResultAlreadyPopulated(Handle<crate::Expression>),
     #[error("Result value is invalid")]
     ResultValue(#[source] ExpressionError),
     #[error("Requires {required} arguments, but {seen} are provided")]
@@ -45,6 +47,8 @@ pub enum AtomicError {
     InvalidOperand(Handle<crate::Expression>),
     #[error("Result type for {0:?} doesn't match the statement")]
     ResultTypeMismatch(Handle<crate::Expression>),
+    #[error("Result expression {0:?} is populated by multiple `Atomic` statements")]
+    ResultAlreadyPopulated(Handle<crate::Expression>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -174,6 +178,8 @@ pub enum FunctionError {
     InvalidSubgroup(#[from] SubgroupError),
     #[error("Emit statement should not cover \"result\" expressions like {0:?}")]
     EmitResult(Handle<crate::Expression>),
+    #[error("Expression not visited by the appropriate statement")]
+    UnvisitedExpression(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -305,7 +311,13 @@ impl super::Validator {
             }
             match context.expressions[expr] {
                 crate::Expression::CallResult(callee)
-                    if fun.result.is_some() && callee == function => {}
+                    if fun.result.is_some() && callee == function =>
+                {
+                    if !self.needs_visit.remove(expr.index()) {
+                        return Err(CallError::ResultAlreadyPopulated(expr)
+                            .with_span_handle(expr, context.expressions));
+                    }
+                }
                 _ => {
                     return Err(CallError::ExpressionMismatch(result)
                         .with_span_handle(expr, context.expressions))
@@ -397,7 +409,14 @@ impl super::Validator {
                         }
                         _ => false,
                     }
-                } => {}
+                } =>
+            {
+                if !self.needs_visit.remove(result.index()) {
+                    return Err(AtomicError::ResultAlreadyPopulated(result)
+                        .with_span_handle(result, context.expressions)
+                        .into_other());
+                }
+            }
             _ => {
                 return Err(AtomicError::ResultTypeMismatch(result)
                     .with_span_handle(result, context.expressions)
@@ -1290,11 +1309,20 @@ impl super::Validator {
 
         self.valid_expression_set.clear();
         self.valid_expression_list.clear();
+        self.needs_visit.clear();
         for (handle, expr) in fun.expressions.iter() {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
             }
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
+                // Mark expressions that need to be visited by a particular kind of
+                // statement.
+                if let crate::Expression::CallResult(_) | crate::Expression::AtomicResult { .. } =
+                    *expr
+                {
+                    self.needs_visit.insert(handle.index());
+                }
+
                 match self.validate_expression(
                     handle,
                     expr,
@@ -1321,6 +1349,15 @@ impl super::Validator {
                 )?
                 .stages;
             info.available_stages &= stages;
+
+            if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
+                if let Some(unvisited) = self.needs_visit.iter().next() {
+                    let index = std::num::NonZeroU32::new(unvisited as u32 + 1).unwrap();
+                    let handle = Handle::new(index);
+                    return Err(FunctionError::UnvisitedExpression(handle)
+                        .with_span_handle(handle, &fun.expressions));
+                }
+            }
         }
         Ok(info)
     }
