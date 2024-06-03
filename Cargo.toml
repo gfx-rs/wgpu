@@ -103,7 +103,7 @@ noise = { version = "0.8", git = "https://github.com/Razaekel/noise-rs.git", rev
 nv-flip = "0.1"
 obj = "0.10"
 once_cell = "1"
-parking_lot = ">=0.11,<0.13" # parking_lot 0.12 switches from `winapi` to `windows`; permit either
+parking_lot = ">=0.11, <0.13" # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 pico-args = { version = "0.5.0", features = [
     "eq-separator",
     "short-space-opt",
@@ -176,7 +176,7 @@ deno_url = "0.143.0"
 deno_web = "0.174.0"
 deno_webidl = "0.143.0"
 deno_webgpu = { version = "0.118.0", path = "./deno_webgpu" }
-tokio = "1.37.0"
+tokio = "1.38.0"
 termcolor = "1.4.1"
 
 [patch."https://github.com/gfx-rs/naga"]
