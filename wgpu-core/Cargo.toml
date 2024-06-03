@@ -104,7 +104,7 @@ indexmap = "2"
 log = "0.4"
 once_cell = "1"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
-parking_lot = ">=0.11,<0.13"
+parking_lot = ">=0.11, <0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", optional = true }
 ron = { version = "0.8", optional = true }
