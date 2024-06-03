@@ -682,16 +682,29 @@ bitflags::bitflags! {
     pub struct WriterFlags: u32 {
         /// Include debug labels for everything.
         const DEBUG = 0x1;
-        /// Flip Y coordinate of `BuiltIn::Position` output.
+
+        /// Flip Y coordinate of [`BuiltIn::Position`] output.
+        ///
+        /// [`BuiltIn::Position`]: crate::BuiltIn::Position
         const ADJUST_COORDINATE_SPACE = 0x2;
-        /// Emit `OpName` for input/output locations.
+
+        /// Emit [`OpName`][op] for input/output locations.
+        ///
         /// Contrary to spec, some drivers treat it as semantic, not allowing
         /// any conflicts.
+        ///
+        /// [op]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpName
         const LABEL_VARYINGS = 0x4;
-        /// Emit `PointSize` output builtin to vertex shaders, which is
+
+        /// Emit [`PointSize`] output builtin to vertex shaders, which is
         /// required for drawing with `PointList` topology.
+        ///
+        /// [`PointSize`]: crate::BuiltIn::PointSize
         const FORCE_POINT_SIZE = 0x8;
-        /// Clamp `BuiltIn::FragDepth` output between 0 and 1.
+
+        /// Clamp [`BuiltIn::FragDepth`] output between 0 and 1.
+        ///
+        /// [`BuiltIn::FragDepth`]: crate::BuiltIn::FragDepth
         const CLAMP_FRAG_DEPTH = 0x10;
     }
 }
