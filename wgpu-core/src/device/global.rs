@@ -1484,7 +1484,6 @@ impl Global {
                         .vertex
                         .stage
                         .zero_initialize_workgroup_memory,
-                    vertex_pulling_transform: desc.vertex.stage.vertex_pulling_transform,
                 };
                 ResolvedVertexState {
                     stage,
@@ -1511,7 +1510,6 @@ impl Global {
                         .vertex
                         .stage
                         .zero_initialize_workgroup_memory,
-                    vertex_pulling_transform: state.stage.vertex_pulling_transform,
                 };
                 Some(ResolvedFragmentState {
                     stage,
@@ -1720,7 +1718,6 @@ impl Global {
                 entry_point: desc.stage.entry_point.clone(),
                 constants: desc.stage.constants.clone(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
-                vertex_pulling_transform: desc.stage.vertex_pulling_transform,
             };
 
             let desc = ResolvedComputePipelineDescriptor {

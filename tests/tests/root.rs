@@ -42,6 +42,7 @@ mod subgroup_operations;
 mod texture_bounds;
 mod texture_view_creation;
 mod transfer;
+mod vertex_formats;
 mod vertex_indices;
 mod write_texture;
 mod zero_init_texture_after_discard;
