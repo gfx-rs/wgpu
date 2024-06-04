@@ -1768,7 +1768,11 @@ impl Writer {
                         if let crate::TypeInner::Struct { members, .. } = &ty.inner {
                             // only the last member in a struct can be dynamically sized
                             if let Some(last_member) = members.last() {
-                                if let crate::TypeInner::Array { size: crate::ArraySize::Dynamic, .. } = &ir_module.types[last_member.ty].inner {
+                                if let crate::TypeInner::Array {
+                                    size: crate::ArraySize::Dynamic,
+                                    ..
+                                } = &ir_module.types[last_member.ty].inner
+                                {
                                     should_decorate = false;
                                 }
                             }
