@@ -2424,6 +2424,23 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
+    fn compute_pass_clear_bind_group(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        index: u32,
+    ) {
+        if let Err(cause) = pass_data.pass.clear_bind_group(&self.0, index) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                LABEL,
+                pass_data.pass.label(),
+                "ComputePass::clear_bind_group",
+            );
+        }
+    }
+
     fn compute_pass_set_push_constants(
         &self,
         _pass: &mut Self::ComputePassId,
@@ -2641,6 +2658,15 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
+    fn render_bundle_encoder_clear_bind_group(
+        &self,
+        __encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        index: u32,
+    ) {
+        wgpu_render_bundle_clear_bind_group(encoder_data, index)
+    }
+
     fn render_bundle_encoder_set_index_buffer(
         &self,
         __encoder: &mut Self::RenderBundleEncoderId,
@@ -2816,6 +2842,15 @@ impl crate::Context for ContextWgpuCore {
         offsets: &[wgt::DynamicOffset],
     ) {
         wgpu_render_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets)
+    }
+
+    fn render_pass_clear_bind_group(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        index: u32,
+    ) {
+        wgpu_render_pass_clear_bind_group(&mut pass_data.pass, index)
     }
 
     fn render_pass_set_index_buffer(

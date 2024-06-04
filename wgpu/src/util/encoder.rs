@@ -12,6 +12,9 @@ pub trait RenderEncoder<'a> {
     /// If the bind group have dynamic offsets, provide them in order of their declaration.
     fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]);
 
+    /// Clears the active bind group for a given bind group index.
+    fn clear_bind_group(&mut self, index: u32);
+
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
@@ -106,6 +109,11 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
     }
 
     #[inline(always)]
+    fn clear_bind_group(&mut self, index: u32) {
+        Self::clear_bind_group(self, index);
+    }
+
+    #[inline(always)]
     fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
         Self::set_pipeline(self, pipeline);
     }
@@ -154,6 +162,11 @@ impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
     #[inline(always)]
     fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]) {
         Self::set_bind_group(self, index, bind_group, offsets);
+    }
+
+    #[inline(always)]
+    fn clear_bind_group(&mut self, index: u32) {
+        Self::clear_bind_group(self, index);
     }
 
     #[inline(always)]

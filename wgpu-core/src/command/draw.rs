@@ -148,6 +148,9 @@ pub enum RenderCommand {
         num_dynamic_offsets: usize,
         bind_group_id: id::BindGroupId,
     },
+    ClearBindGroup {
+        index: u32,
+    },
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
         buffer_id: id::BufferId,

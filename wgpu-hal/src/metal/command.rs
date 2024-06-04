@@ -807,6 +807,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    unsafe fn clear_bind_group(&mut self, _layout: &super::PipelineLayout, _group_index: u32) {
+        // TODO.
+    }
+
     unsafe fn set_push_constants(
         &mut self,
         layout: &super::PipelineLayout,

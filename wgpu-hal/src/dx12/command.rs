@@ -921,6 +921,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.reset_signature(&layout.shared);
         };
     }
+    unsafe fn clear_bind_group(&mut self, _layout: &super::PipelineLayout, _index: u32) {
+        // TODO.
+    }
     unsafe fn set_push_constants(
         &mut self,
         layout: &super::PipelineLayout,

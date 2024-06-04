@@ -636,6 +636,18 @@ impl Global {
                         }
                     }
                 }
+                ArcComputeCommand::ClearBindGroup { index } => {
+                    let pipeline_layout = state.binder.pipeline_layout.clone();
+                    let entries = state.binder.unassign_group(index as usize);
+                    if !entries.is_empty() && pipeline_layout.is_some() {
+                        let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
+                        for (i, ..) in entries.iter().enumerate() {
+                            unsafe {
+                                raw.clear_bind_group(pipeline_layout, index + i as u32);
+                            }
+                        }
+                    }
+                }
                 ArcComputeCommand::SetPipeline(pipeline) => {
                     let pipeline_id = pipeline.as_info().id();
                     let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
@@ -981,6 +993,26 @@ impl Global {
             num_dynamic_offsets: offsets.len(),
             bind_group,
         });
+
+        Ok(())
+    }
+
+    pub fn compute_pass_clear_bind_group<A: HalApi>(
+        &self,
+        pass: &mut ComputePass<A>,
+        index: u32,
+    ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::ClearBindGroup;
+        let base = pass
+            .base
+            .as_mut()
+            .ok_or(ComputePassErrorInner::PassEnded)
+            .map_pass_err(scope)?; // Can't use base_mut() utility here because of borrow checker.
+
+        pass.current_bind_groups.clear_bind_group(index);
+
+        base.commands
+            .push(ArcComputeCommand::ClearBindGroup { index });
 
         Ok(())
     }

@@ -16,6 +16,11 @@ pub trait DynComputePass: std::fmt::Debug + WasmNotSendSync {
         bind_group_id: id::BindGroupId,
         offsets: &[wgt::DynamicOffset],
     ) -> Result<(), ComputePassError>;
+    fn clear_bind_group(
+        &mut self,
+        context: &global::Global,
+        index: u32,
+    ) -> Result<(), ComputePassError>;
     fn set_pipeline(
         &mut self,
         context: &global::Global,
@@ -83,6 +88,14 @@ impl<A: HalApi> DynComputePass for ComputePass<A> {
         offsets: &[wgt::DynamicOffset],
     ) -> Result<(), ComputePassError> {
         context.compute_pass_set_bind_group(self, index, bind_group_id, offsets)
+    }
+
+    fn clear_bind_group(
+        &mut self,
+        context: &global::Global,
+        index: u32,
+    ) -> Result<(), ComputePassError> {
+        context.compute_pass_clear_bind_group(self, index)
     }
 
     fn set_pipeline(

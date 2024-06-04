@@ -365,6 +365,7 @@ impl crate::CommandEncoder for Encoder {
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
     }
+    unsafe fn clear_bind_group(&mut self, layout: &Resource, index: u32) {}
     unsafe fn set_push_constants(
         &mut self,
         layout: &Resource,

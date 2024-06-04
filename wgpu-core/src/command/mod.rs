@@ -861,6 +861,13 @@ impl BindGroupStateChange {
         }
         false
     }
+
+    fn clear_bind_group(&mut self, index: u32) {
+        if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
+            current_bind_group.reset();
+        }
+    }
+
     fn reset(&mut self) {
         self.last_states = [StateChange::new(); hal::MAX_BIND_GROUPS];
     }
@@ -889,6 +896,8 @@ pub enum PassErrorScope {
     Pass(Option<id::CommandBufferId>),
     #[error("In a set_bind_group command")]
     SetBindGroup(id::BindGroupId),
+    #[error("In a set_bind_group command with a null BindGroup")]
+    ClearBindGroup,
     #[error("In a set_pipeline command")]
     SetPipelineRender(id::RenderPipelineId),
     #[error("In a set_pipeline command")]

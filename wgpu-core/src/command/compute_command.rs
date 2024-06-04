@@ -19,6 +19,10 @@ pub enum ComputeCommand {
         bind_group_id: id::BindGroupId,
     },
 
+    ClearBindGroup {
+        index: u32,
+    },
+
     SetPipeline(id::ComputePipelineId),
 
     /// Set a range of push constants to values stored in `push_constant_data`.
@@ -102,6 +106,10 @@ impl ComputeCommand {
                             }
                         })?,
                     },
+
+                    ComputeCommand::ClearBindGroup { index } => {
+                        ArcComputeCommand::ClearBindGroup { index }
+                    }
 
                     ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
                         pipelines_guard
@@ -194,6 +202,10 @@ pub enum ArcComputeCommand<A: HalApi> {
         bind_group: Arc<BindGroup<A>>,
     },
 
+    ClearBindGroup {
+        index: u32,
+    },
+
     SetPipeline(Arc<ComputePipeline<A>>),
 
     /// Set a range of push constants to values stored in `push_constant_data`.
@@ -260,6 +272,10 @@ impl<A: HalApi> From<&ArcComputeCommand<A>> for ComputeCommand {
                 num_dynamic_offsets: *num_dynamic_offsets,
                 bind_group_id: bind_group.as_info().id(),
             },
+
+            ArcComputeCommand::ClearBindGroup { index } => {
+                ComputeCommand::ClearBindGroup { index: *index }
+            }
 
             ArcComputeCommand::SetPipeline(pipeline) => {
                 ComputeCommand::SetPipeline(pipeline.as_info().id())

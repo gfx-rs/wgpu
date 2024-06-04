@@ -1093,6 +1093,9 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
+    /// Clears the bind group at `index`.
+    unsafe fn clear_bind_group(&mut self, layout: &<Self::A as Api>::PipelineLayout, index: u32);
+
     /// Sets a range in push constant data.
     ///
     /// IMPORTANT: while the data is passed as words, the offset is in bytes!

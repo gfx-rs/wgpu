@@ -191,6 +191,11 @@ mod compat {
             self.make_range(index)
         }
 
+        pub fn unassign(&mut self, index: usize) -> Range<usize> {
+            self.entries[index].assigned = None;
+            self.make_range(index)
+        }
+
         pub fn list_active(&self) -> impl Iterator<Item = usize> + '_ {
             self.entries
                 .iter()
@@ -355,6 +360,16 @@ impl<A: HalApi> Binder<A> {
         }
 
         let bind_range = self.manager.assign(index, bind_group.layout.clone());
+        &self.payloads[bind_range]
+    }
+
+    pub(super) fn unassign_group<'a>(&'a mut self, index: usize) -> &'a [EntryPayload<A>] {
+        let payload = &mut self.payloads[index];
+
+        payload.group = None;
+        payload.dynamic_offsets.clear();
+
+        let bind_range = self.manager.unassign(index);
         &self.payloads[bind_range]
     }
 

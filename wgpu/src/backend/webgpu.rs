@@ -3023,6 +3023,15 @@ impl crate::context::Context for ContextWebGpu {
         }
     }
 
+    fn compute_pass_clear_bind_group(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        _pass_data: &mut Self::ComputePassData,
+        _index: u32,
+    ) {
+        // TODO.
+    }
+
     fn compute_pass_set_push_constants(
         &self,
         _pass: &mut Self::ComputePassId,
@@ -3161,6 +3170,15 @@ impl crate::context::Context for ContextWebGpu {
                     offsets.len() as u32,
                 );
         }
+    }
+
+    fn render_bundle_encoder_clear_bind_group(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        _encoder_data: &mut Self::RenderBundleEncoderData,
+        _index: u32,
+    ) {
+        // TODO.
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -3382,6 +3400,15 @@ impl crate::context::Context for ContextWebGpu {
                     offsets.len() as u32,
                 );
         }
+    }
+
+    fn render_pass_clear_bind_group(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+        _index: u32,
+    ) {
+        // TODO.
     }
 
     fn render_pass_set_index_buffer(

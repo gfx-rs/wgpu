@@ -467,6 +467,11 @@ impl RenderBundleEncoder {
                     //Note: stateless trackers are not merged: the lifetime reference
                     // is held to the bind group itself.
                 }
+                RenderCommand::ClearBindGroup {
+                    index,
+                } => {
+                    state.clear_bind_group(index);
+                }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let scope = PassErrorScope::SetPipelineRender(pipeline_id);
 
@@ -1351,6 +1356,15 @@ impl<A: HalApi> State<A> {
         self.invalidate_bind_group_from(slot as usize + 1);
     }
 
+    fn clear_bind_group(&mut self, slot: u32) {
+        // Record the index's new state.
+        self.bind[slot as usize] = None;
+
+        // Once we've changed the bind group at a particular index, all
+        // subsequent indices need to be rewritten.
+        self.invalidate_bind_group_from(slot as usize + 1);
+    }
+
     /// Determine which bind group slots need to be re-set after a pipeline change.
     ///
     /// Given that we are switching from the current pipeline state to `new`,
@@ -1566,6 +1580,19 @@ pub mod bundle_ffi {
             num_dynamic_offsets: offset_length,
             bind_group_id,
         });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_bundle_clear_bind_group(
+        bundle: &mut RenderBundleEncoder,
+        index: u32,
+    ) {
+        bundle.current_bind_groups.clear_bind_group(index);
+
+        bundle
+            .base
+            .commands
+            .push(RenderCommand::ClearBindGroup { index });
     }
 
     #[no_mangle]

@@ -1532,6 +1532,18 @@ impl Global {
                             }
                         }
                     }
+                    RenderCommand::ClearBindGroup { index } => {
+                        let pipeline_layout = state.binder.pipeline_layout.clone();
+                        let entries = state.binder.unassign_group(index as usize);
+                        if !entries.is_empty() && pipeline_layout.is_some() {
+                            let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
+                            for (i, ..) in entries.iter().enumerate() {
+                                unsafe {
+                                    raw.clear_bind_group(pipeline_layout, index + i as u32);
+                                }
+                            }
+                        }
+                    }
                     RenderCommand::SetPipeline(pipeline_id) => {
                         api_log!("RenderPass::set_pipeline {pipeline_id:?}");
 
@@ -2486,6 +2498,14 @@ pub mod render_commands {
             num_dynamic_offsets: offsets.len(),
             bind_group_id,
         });
+    }
+
+    pub fn wgpu_render_pass_clear_bind_group(pass: &mut RenderPass, index: u32) {
+        pass.current_bind_groups.clear_bind_group(index);
+
+        pass.base
+            .commands
+            .push(RenderCommand::ClearBindGroup { index });
     }
 
     pub fn wgpu_render_pass_set_pipeline(pass: &mut RenderPass, pipeline_id: id::RenderPipelineId) {

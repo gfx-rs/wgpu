@@ -634,6 +634,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         bind_group_data: &Self::BindGroupData,
         offsets: &[DynamicOffset],
     );
+    fn compute_pass_clear_bind_group(
+        &self,
+        pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        index: u32,
+    );
     fn compute_pass_set_push_constants(
         &self,
         pass: &mut Self::ComputePassId,
@@ -716,6 +722,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         bind_group: &Self::BindGroupId,
         bind_group_data: &Self::BindGroupData,
         offsets: &[DynamicOffset],
+    );
+    fn render_bundle_encoder_clear_bind_group(
+        &self,
+        encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        index: u32,
     );
     #[allow(clippy::too_many_arguments)]
     fn render_bundle_encoder_set_index_buffer(
@@ -838,6 +850,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         bind_group: &Self::BindGroupId,
         bind_group_data: &Self::BindGroupData,
         offsets: &[DynamicOffset],
+    );
+    fn render_pass_clear_bind_group(
+        &self,
+        pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        index: u32,
     );
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_index_buffer(
@@ -1627,6 +1645,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         bind_group_data: &crate::Data,
         offsets: &[DynamicOffset],
     );
+    fn compute_pass_clear_bind_group(
+        &self,
+        pass: &mut ObjectId,
+        pass_data: &mut crate::Data,
+        index: u32,
+    );
     fn compute_pass_set_push_constants(
         &self,
         pass: &mut ObjectId,
@@ -1701,6 +1725,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         bind_group: &ObjectId,
         bind_group_data: &crate::Data,
         offsets: &[DynamicOffset],
+    );
+    fn render_bundle_encoder_clear_bind_group(
+        &self,
+        encoder: &mut ObjectId,
+        encoder_data: &mut crate::Data,
+        index: u32,
     );
     #[allow(clippy::too_many_arguments)]
     fn render_bundle_encoder_set_index_buffer(
@@ -1823,6 +1853,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         bind_group: &ObjectId,
         bind_group_data: &crate::Data,
         offsets: &[DynamicOffset],
+    );
+    fn render_pass_clear_bind_group(
+        &self,
+        pass: &mut ObjectId,
+        pass_data: &mut crate::Data,
+        index: u32,
     );
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_index_buffer(
@@ -3128,6 +3164,17 @@ where
         )
     }
 
+    fn compute_pass_clear_bind_group(
+        &self,
+        pass: &mut ObjectId,
+        pass_data: &mut crate::Data,
+        index: u32,
+    ) {
+        let mut pass = <T::ComputePassId>::from(*pass);
+        let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
+        Context::compute_pass_clear_bind_group(self, &mut pass, pass_data, index)
+    }
+
     fn compute_pass_set_push_constants(
         &self,
         pass: &mut ObjectId,
@@ -3305,6 +3352,17 @@ where
             bind_group_data,
             offsets,
         )
+    }
+
+    fn render_bundle_encoder_clear_bind_group(
+        &self,
+        encoder: &mut ObjectId,
+        encoder_data: &mut crate::Data,
+        index: u32,
+    ) {
+        let mut encoder = <T::RenderBundleEncoderId>::from(*encoder);
+        let encoder_data = downcast_mut::<T::RenderBundleEncoderData>(encoder_data);
+        Context::render_bundle_encoder_clear_bind_group(self, &mut encoder, encoder_data, index)
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -3603,6 +3661,17 @@ where
             bind_group_data,
             offsets,
         )
+    }
+
+    fn render_pass_clear_bind_group(
+        &self,
+        pass: &mut ObjectId,
+        pass_data: &mut crate::Data,
+        index: u32,
+    ) {
+        let mut pass = <T::RenderPassId>::from(*pass);
+        let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
+        Context::render_pass_clear_bind_group(self, &mut pass, pass_data, index)
     }
 
     fn render_pass_set_index_buffer(

@@ -4194,6 +4194,17 @@ impl<'a> RenderPass<'a> {
         )
     }
 
+    /// Clear the active bind group for a given bind group index. This corresponds to
+    /// passing a null BindGroup to setBindGroup().
+    pub fn clear_bind_group(&mut self, index: u32) {
+        DynContext::render_pass_clear_bind_group(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            index,
+        )
+    }
+
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
@@ -4811,6 +4822,17 @@ impl<'encoder> ComputePass<'encoder> {
         );
     }
 
+    /// Clear the active bind group for a given bind group index. This corresponds to
+    /// passing a null BindGroup to setBindGroup().
+    pub fn clear_bind_group(&mut self, index: u32) {
+        DynContext::compute_pass_clear_bind_group(
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
+            index,
+        )
+    }
+
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
@@ -4990,6 +5012,17 @@ impl<'a> RenderBundleEncoder<'a> {
             &bind_group.id,
             bind_group.data.as_ref(),
             offsets,
+        )
+    }
+
+    /// Clear the active bind group for a given bind group index. This corresponds to
+    /// passing a null BindGroup to setBindGroup().
+    pub fn clear_bind_group(&mut self, index: u32) {
+        DynContext::render_bundle_encoder_clear_bind_group(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            index,
         )
     }
 
