@@ -174,6 +174,8 @@ pub enum FunctionError {
     InvalidSubgroup(#[from] SubgroupError),
     #[error("Emit statement should not cover \"result\" expressions like {0:?}")]
     EmitResult(Handle<crate::Expression>),
+    #[error("Order-sensitive expression not covered by an `Emit` statement: {0:?}")]
+    EmitMissing(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -558,9 +560,7 @@ impl super::Validator {
                             | Ex::FunctionArgument(_)
                             | Ex::GlobalVariable(_)
                             | Ex::LocalVariable(_)
-                            | Ex::Load { .. }
                             | Ex::ImageSample { .. }
-                            | Ex::ImageLoad { .. }
                             | Ex::ImageQuery { .. }
                             | Ex::Unary { .. }
                             | Ex::Binary { .. }
@@ -571,6 +571,10 @@ impl super::Validator {
                             | Ex::As { .. }
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. } => {
+                                self.emit_expression(handle, context)?
+                            }
+                            Ex::Load { .. } | Ex::ImageLoad { .. } => {
+                                self.order_sensitive_expression_set.remove(handle.index());
                                 self.emit_expression(handle, context)?
                             }
                             Ex::CallResult(_)
@@ -1290,11 +1294,16 @@ impl super::Validator {
 
         self.valid_expression_set.clear();
         self.valid_expression_list.clear();
+        self.order_sensitive_expression_set.clear();
         for (handle, expr) in fun.expressions.iter() {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
             }
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
+                if expr.is_order_sensitive() {
+                    self.order_sensitive_expression_set.insert(handle.index());
+                }
+
                 match self.validate_expression(
                     handle,
                     expr,
@@ -1321,6 +1330,15 @@ impl super::Validator {
                 )?
                 .stages;
             info.available_stages &= stages;
+
+            if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
+                if let Some(expr_index) = self.order_sensitive_expression_set.iter().next() {
+                    let expr_index = std::num::NonZeroU32::new((expr_index + 1) as u32).unwrap();
+                    let expr_handle = Handle::new(expr_index);
+                    return Err(FunctionError::EmitMissing(expr_handle)
+                        .with_span_handle(expr_handle, &fun.expressions));
+                }
+            }
         }
         Ok(info)
     }

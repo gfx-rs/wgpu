@@ -540,6 +540,27 @@ impl crate::Expression {
             _ => true,
         }
     }
+
+    /// Return true if this expression's value is sensitive to when it is evaluated.
+    ///
+    /// Expressions like [`Load`] and [`ImageLoad`] can produce different
+    /// values, even when their operands' values are unchanged, because they are
+    /// sensitive to side effects of other statements in the function.
+    ///
+    /// Such order-sensitive expressions must be covered by an [`Emit`]
+    /// statement, ensuring that front ends have fully specified the ordering
+    /// the input language requires, or chosen one arbitrarily if the input
+    /// language doesn't care.
+    ///
+    /// [`Load`]: crate::Expression::Load
+    /// [`ImageLoad`]: crate::Expression::ImageLoad
+    /// [`Emit`]: crate::Statement::Emit
+    pub const fn is_order_sensitive(&self) -> bool {
+        match *self {
+            Self::Load { .. } | Self::ImageLoad { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 impl crate::Function {

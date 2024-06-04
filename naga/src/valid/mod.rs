@@ -244,6 +244,15 @@ pub struct Validator {
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
+
+    /// The set of expressions that must be covered by an [`Emit`].
+    ///
+    /// [`Expression::is_order_sensitive`] returns `true` for expressions that
+    /// must be covered by an [`Emit`] statement to ensure they produce the
+    /// value expected by the front end. We add such expressions to this set
+    /// during expression validation, and "check them off" (that is, remove) them
+    /// during block validation when we see an [`Emit`] statement that covers them.
+    order_sensitive_expression_set: BitSet,
     override_ids: FastHashSet<u16>,
     allow_overrides: bool,
 }
@@ -396,6 +405,7 @@ impl Validator {
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
             valid_expression_set: BitSet::new(),
+            order_sensitive_expression_set: BitSet::new(),
             override_ids: FastHashSet::default(),
             allow_overrides: true,
         }
