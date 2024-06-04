@@ -1760,8 +1760,23 @@ impl Writer {
             if let crate::AddressSpace::Storage { .. } = global_variable.space {
                 match ir_module.types[global_variable.ty].inner {
                     crate::TypeInner::BindingArray { base, .. } => {
-                        let decorated_id = self.get_type_id(LookupType::Handle(base));
-                        self.decorate(decorated_id, Decoration::Block, &[]);
+                        let ty = &ir_module.types[base];
+                        let mut should_decorate = true;
+                        // Check if the type has a runtime array.
+                        // A normal runtime array gets validated out,
+                        // so only structs can be with runtime arrays
+                        if let crate::TypeInner::Struct { members, .. } = &ty.inner {
+                            // only the last member in a struct can be dynamically sized
+                            if let Some(last_member) = members.last() {
+                                if let crate::TypeInner::Array { size: crate::ArraySize::Dynamic, .. } = &ir_module.types[last_member.ty].inner {
+                                    should_decorate = false;
+                                }
+                            }
+                        }
+                        if should_decorate {
+                            let decorated_id = self.get_type_id(LookupType::Handle(base));
+                            self.decorate(decorated_id, Decoration::Block, &[]);
+                        }
                     }
                     _ => (),
                 };
