@@ -112,7 +112,6 @@ pub fn op_webgpu_create_compute_pipeline(
             entry_point: compute.entry_point.map(Cow::from),
             constants: Cow::Owned(compute.constants.unwrap_or_default()),
             zero_initialize_workgroup_memory: true,
-            vertex_pulling_transform: false,
         },
         cache: None,
     };
@@ -348,7 +347,6 @@ pub fn op_webgpu_create_render_pipeline(
                 constants: Cow::Owned(fragment.constants.unwrap_or_default()),
                 // Required to be true for WebGPU
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
             },
             targets: Cow::Owned(fragment.targets),
         })
@@ -374,7 +372,6 @@ pub fn op_webgpu_create_render_pipeline(
                 constants: Cow::Owned(args.vertex.constants.unwrap_or_default()),
                 // Required to be true for WebGPU
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
             },
             buffers: Cow::Owned(vertex_buffers),
         },
