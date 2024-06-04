@@ -1765,10 +1765,10 @@ impl Writer {
                         // Check if the type has a runtime array.
                         // A normal runtime array gets validated out,
                         // so only structs can be with runtime arrays
-                        if let crate::TypeInner::Struct { members, .. } = &ty.inner {
+                        if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
                             // only the last member in a struct can be dynamically sized
                             if let Some(last_member) = members.last() {
-                                if let crate::TypeInner::Array {
+                                if let &crate::TypeInner::Array {
                                     size: crate::ArraySize::Dynamic,
                                     ..
                                 } = &ir_module.types[last_member.ty].inner
