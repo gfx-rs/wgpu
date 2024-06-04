@@ -3992,8 +3992,8 @@ impl<W: Write> Writer<W> {
                 )?;
                 writeln!(
                     self.out,
-                    "{}return metal::int2(as_type<metal::short>(b1 << 8 | b0), \
-                                          as_type<metal::short>(b3 << 8 | b2));",
+                    "{}return metal::int2(as_type<short>(metal::ushort(b1 << 8 | b0)), \
+                                          as_type<short>(metal::ushort(b3 << 8 | b2)));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -4014,10 +4014,10 @@ impl<W: Write> Writer<W> {
                 )?;
                 writeln!(
                     self.out,
-                    "{}return metal::int4(as_type<metal::short>(b1 << 8 | b0), \
-                                          as_type<metal::short>(b3 << 8 | b2), \
-                                          as_type<metal::short>(b5 << 8 | b4), \
-                                          as_type<metal::short>(b7 << 8 | b6));",
+                    "{}return metal::int4(as_type<short>(metal::ushort(b1 << 8 | b0)), \
+                                          as_type<short>(metal::ushort(b3 << 8 | b2)), \
+                                          as_type<short>(metal::ushort(b5 << 8 | b4)), \
+                                          as_type<short>(metal::ushort(b7 << 8 | b6)));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -4118,8 +4118,8 @@ impl<W: Write> Writer<W> {
                 )?;
                 writeln!(
                     self.out,
-                    "{}return metal::float2(as_type<metal::half>(b1 << 8 | b0), \
-                                            as_type<metal::half>(b3 << 8 | b2));",
+                    "{}return metal::float2(as_type<metal::half>(metal::ushort(b1 << 8 | b0)), \
+                                            as_type<metal::half>(metal::ushort(b3 << 8 | b2)));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -4140,10 +4140,10 @@ impl<W: Write> Writer<W> {
                 )?;
                 writeln!(
                     self.out,
-                    "{}return metal::int4(as_type<metal::half>(b1 << 8 | b0), \
-                                          as_type<metal::half>(b3 << 8 | b2), \
-                                          as_type<metal::half>(b5 << 8 | b4), \
-                                          as_type<metal::half>(b7 << 8 | b6));",
+                    "{}return metal::int4(as_type<metal::half>(metal::ushort(b1 << 8 | b0)), \
+                                          as_type<metal::half>(metal::ushort(b3 << 8 | b2)), \
+                                          as_type<metal::half>(metal::ushort(b5 << 8 | b4)), \
+                                          as_type<metal::half>(metal::ushort(b7 << 8 | b6)));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -4349,10 +4349,10 @@ impl<W: Write> Writer<W> {
                 let name = self.namer.call("unpackSint32");
                 writeln!(
                     self.out,
-                    "metal::int {name}(uint b0, \
-                                       uint b1, \
-                                       uint b2, \
-                                       uint b3) {{"
+                    "int {name}(uint b0, \
+                                uint b1, \
+                                uint b2, \
+                                uint b3) {{"
                 )?;
                 writeln!(
                     self.out,

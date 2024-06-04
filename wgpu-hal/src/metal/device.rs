@@ -158,7 +158,7 @@ impl super::Device {
                 metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
-            vertex_pulling_transform: stage.vertex_pulling_transform,
+            vertex_pulling_transform: true,
             vertex_buffer_mappings: vertex_buffer_mappings.to_vec(),
         };
 

@@ -1189,10 +1189,6 @@ impl crate::Context for ContextWgpuCore {
                         .vertex
                         .compilation_options
                         .zero_initialize_workgroup_memory,
-                    vertex_pulling_transform: desc
-                        .vertex
-                        .compilation_options
-                        .vertex_pulling_transform,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1207,7 +1203,6 @@ impl crate::Context for ContextWgpuCore {
                     zero_initialize_workgroup_memory: frag
                         .compilation_options
                         .zero_initialize_workgroup_memory,
-                    vertex_pulling_transform: false,
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1261,7 +1256,6 @@ impl crate::Context for ContextWgpuCore {
                 zero_initialize_workgroup_memory: desc
                     .compilation_options
                     .zero_initialize_workgroup_memory,
-                vertex_pulling_transform: false,
             },
             cache: desc.cache.map(|c| c.id.into()),
         };

@@ -1781,8 +1781,6 @@ pub struct ProgrammableStage<'a, A: Api> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
-    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
-    pub vertex_pulling_transform: bool,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1793,7 +1791,6 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
-            vertex_pulling_transform: self.vertex_pulling_transform,
         }
     }
 }

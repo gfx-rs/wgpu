@@ -185,7 +185,6 @@ struct Test {
     id_source: IdSource,
     draw_call_kind: DrawCallKind,
     encoder_kind: EncoderKind,
-    vertex_pulling_transform: bool,
 }
 
 impl Test {
@@ -299,15 +298,6 @@ async fn vertex_index_common(ctx: TestingContext) {
         cache: None,
     };
     let builtin_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = true;
-    let builtin_pipeline_vpt = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = false;
 
     pipeline_desc.vertex.entry_point = "vs_main_buffers";
     pipeline_desc.vertex.buffers = &[
@@ -323,15 +313,6 @@ async fn vertex_index_common(ctx: TestingContext) {
         },
     ];
     let buffer_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = true;
-    let buffer_pipeline_vpt = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = false;
 
     let dummy = ctx
         .device
@@ -360,22 +341,18 @@ async fn vertex_index_common(ctx: TestingContext) {
         TestCase::ARRAY.len()
             * IdSource::ARRAY.len()
             * DrawCallKind::ARRAY.len()
-            * EncoderKind::ARRAY.len()
-            * 2, /* vertex pulling transform: on and off */
+            * EncoderKind::ARRAY.len(),
     );
     for case in TestCase::ARRAY {
         for id_source in IdSource::ARRAY {
             for draw_call_kind in DrawCallKind::ARRAY {
                 for encoder_kind in EncoderKind::ARRAY {
-                    for vertex_pulling_transform in [false, true] {
-                        tests.push(Test {
-                            case,
-                            id_source,
-                            draw_call_kind,
-                            encoder_kind,
-                            vertex_pulling_transform,
-                        })
-                    }
+                    tests.push(Test {
+                        case,
+                        id_source,
+                        draw_call_kind,
+                        encoder_kind,
+                    })
                 }
             }
         }
@@ -386,20 +363,8 @@ async fn vertex_index_common(ctx: TestingContext) {
     let mut failed = false;
     for test in tests {
         let pipeline = match test.id_source {
-            IdSource::Buffers => {
-                if test.vertex_pulling_transform {
-                    &buffer_pipeline_vpt
-                } else {
-                    &buffer_pipeline
-                }
-            }
-            IdSource::Builtins => {
-                if test.vertex_pulling_transform {
-                    &builtin_pipeline_vpt
-                } else {
-                    &builtin_pipeline
-                }
-            }
+            IdSource::Buffers => &buffer_pipeline,
+            IdSource::Builtins => &builtin_pipeline,
         };
 
         let expected = test.expectation(&ctx);
