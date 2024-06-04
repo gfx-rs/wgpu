@@ -58,7 +58,7 @@ fn independent_cpass<'enc>(encoder: &'enc mut wgpu::CommandEncoder) -> wgpu::Com
 This is very useful for library authors, but opens up an easy way for incorrect use, so use with care.
 `forget_lifetime` is zero overhead and has no side effects on pass recording.
 
-By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768) (together with @kpreid).
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768) (together with @kpreid), [#5671](https://github.com/gfx-rs/wgpu/pull/5671).
 
 #### Querying shader compilation errors
 
@@ -116,6 +116,7 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 #### General
 
 - Ensure render pipelines have at least 1 target. By @ErichDonGubler in [#5715](https://github.com/gfx-rs/wgpu/pull/5715)
+- `wgpu::ComputePass` now internally takes ownership of `QuerySet` for both `wgpu::ComputePassTimestampWrites` as well as timestamp writes and statistics query, fixing crashes when destroying `QuerySet` before ending the pass. By @wumpf in [#5671](https://github.com/gfx-rs/wgpu/pull/5671)
 
 #### Metal
 
