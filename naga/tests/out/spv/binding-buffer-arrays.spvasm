@@ -19,7 +19,6 @@ OpMemberDecorate %10 0 Offset 0
 OpDecorate %11 NonWritable
 OpDecorate %11 DescriptorSet 0
 OpDecorate %11 Binding 0
-OpDecorate %7 Block
 OpDecorate %15 DescriptorSet 0
 OpDecorate %15 Binding 10
 OpDecorate %16 Block
