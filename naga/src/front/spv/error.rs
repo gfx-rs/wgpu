@@ -1,5 +1,5 @@
 use super::ModuleState;
-use crate::arena::Handle;
+use crate::{arena::Handle, front::atomic_upgrade};
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
@@ -134,6 +134,9 @@ pub enum Error {
     NonBindingArrayOfImageOrSamplers,
     #[error("naga only supports specialization constant IDs up to 65535 but was given {0}")]
     SpecIdTooHigh(u32),
+
+    #[error("atomic upgrade error: {0}")]
+    AtomicUpgradeError(atomic_upgrade::Error),
 }
 
 impl Error {
