@@ -150,6 +150,18 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     }
 }
 
+trait LookupMutHelper {
+    type Target;
+    fn lookup_mut(&mut self, key: spirv::Word) -> Result<&mut Self::Target, Error>;
+}
+
+impl<T> LookupMutHelper for FastHashMap<spirv::Word, T> {
+    type Target = T;
+    fn lookup_mut(&mut self, key: spirv::Word) -> Result<&mut T, Error> {
+        self.get_mut(&key).ok_or(Error::InvalidId(key))
+    }
+}
+
 impl crate::ImageDimension {
     const fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
         match *self {
@@ -565,18 +577,17 @@ enum SignAnchor {
     Operand,
 }
 
+#[derive(Debug)]
 enum AtomicOpInst {
     AtomicIIncrement,
 }
 
-#[allow(dead_code)]
+#[derive(Debug)]
 struct AtomicOp {
     instruction: AtomicOpInst,
-    result_type_id: spirv::Word,
-    result_id: spirv::Word,
     pointer_id: spirv::Word,
-    scope_id: spirv::Word,
-    memory_semantics_id: spirv::Word,
+    _scope_id: spirv::Word,
+    _memory_semantics_id: spirv::Word,
 }
 
 pub struct Frontend<I> {
@@ -3968,30 +3979,27 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
-                    let scope_id = self.next()?;
-                    let memory_semantics_id = self.next()?;
                     // Store the op for a later pass where we "upgrade" the pointer type
                     let atomic = AtomicOp {
                         instruction: AtomicOpInst::AtomicIIncrement,
-                        result_type_id,
-                        result_id,
                         pointer_id,
-                        scope_id,
-                        memory_semantics_id,
+                        _scope_id: self.next()?,
+                        _memory_semantics_id: self.next()?,
                     };
                     self.lookup_atomic.insert(pointer_id, atomic);
 
                     log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
-
                     let (p_lexp_handle, p_lexp_ty_id) = {
                         let lexp = self.lookup_expression.lookup(pointer_id)?;
                         let handle = get_expr_handle!(pointer_id, &lexp);
                         (handle, lexp.type_id)
                     };
+
                     log::trace!("\t\t\tlooking up type {pointer_id:?}");
                     let p_ty = self.lookup_type.lookup(p_lexp_ty_id)?;
                     let p_ty_base_id =
                         p_ty.base_id.ok_or(Error::InvalidAccessType(p_lexp_ty_id))?;
+
                     log::trace!("\t\t\tlooking up base type {p_ty_base_id:?} of {p_ty:?}");
                     let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
 
@@ -4312,6 +4320,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
             }?;
+        }
+
+        if !self.lookup_atomic.is_empty() {
+            log::info!("Upgrading atomic pointers...");
+            // Upgrade the types of pointers used in atomic ops
+            self.upgrade_atomics(&mut module)?;
         }
 
         // Do entry point specific processing after all functions are parsed so that we can
@@ -5604,6 +5618,48 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 type_id,
             },
         );
+        Ok(())
+    }
+
+    fn upgrade_atomics(&self, module: &mut crate::Module) -> Result<(), Error> {
+        for op in self.lookup_atomic.values() {
+            log::info!("\tupgrading {:?} {}", op.instruction, op.pointer_id);
+            log::trace!("\t\tlooking up pointer {}", op.pointer_id);
+            let p_lexp = self.lookup_expression.lookup(op.pointer_id)?;
+
+            log::trace!("\t\tlooking up pointer type {}", p_lexp.type_id);
+            let p_ty = self.lookup_type.lookup(p_lexp.type_id)?;
+
+            let p_ty_base_id = p_ty
+                .base_id
+                .ok_or(Error::InvalidAccessType(p_lexp.type_id))?;
+            log::trace!("\t\tlooking up pointer base type {p_ty_base_id}");
+            let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
+
+            log::trace!(
+                "\t\tgetting pointer base type by handle {:?}",
+                p_base_ty.handle
+            );
+
+            // Upgrade pointer's base type by replacing it in the module with an atomic
+            if let Some(base_ty) = module.types.get_handle(p_base_ty.handle).ok().cloned() {
+                // At this point we're only concerned with AtomicIIncrement, which takes a
+                // scalar i32 or u32, so we can be certain that it _should_ be a scalar. If it
+                // isn't we'll just ignore it and the module will fail to validate.
+                if let Some(scalar) = base_ty.inner.scalar() {
+                    let atomic_base_ty = crate::Type {
+                        name: base_ty.name.clone(),
+                        inner: crate::TypeInner::Atomic(scalar),
+                    };
+                    log::trace!(
+                        "\t\treplacing {:?} base type of {scalar:?} with {atomic_base_ty:?}",
+                        p_base_ty.handle
+                    );
+                    module.types.replace(p_base_ty.handle, atomic_base_ty);
+                }
+            }
+        }
+
         Ok(())
     }
 }
