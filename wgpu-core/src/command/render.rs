@@ -10,9 +10,9 @@ use crate::{
         bind::Binder,
         end_occlusion_query, end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        CommandEncoderStatus, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryUseError,
-        RenderCommand, RenderCommandError, StateChange,
+        BasePass, BindGroupStateChange, CommandBuffer, CommandEncoderError, CommandEncoderStatus,
+        DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryUseError, RenderCommandError,
+        StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -49,10 +49,12 @@ use serde::Serialize;
 use std::sync::Arc;
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
+use super::render_command::{ArcRenderCommand, RenderCommand};
 use super::{
     memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
     QueryResetMap,
 };
+use super::{DrawKind, Rect};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -220,7 +222,13 @@ pub struct RenderPassDescriptor<'a> {
 
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct RenderPass {
-    base: BasePass<RenderCommand>,
+    /// All pass data & records is stored here.
+    ///
+    /// If this is `None`, the pass is in the 'ended' state and can no longer be used.
+    /// Any attempt to record more commands will result in a validation error.
+    // TODO: this is soon to become `ArcRenderCommand<A>`
+    base: Option<BasePass<RenderCommand>>,
+
     parent_id: id::CommandEncoderId,
     color_targets: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
@@ -237,7 +245,7 @@ pub struct RenderPass {
 impl RenderPass {
     pub fn new(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
         Self {
-            base: BasePass::new(&desc.label),
+            base: Some(BasePass::new(&desc.label)),
             parent_id,
             color_targets: desc.color_attachments.iter().cloned().collect(),
             depth_stencil_target: desc.depth_stencil_attachment.cloned(),
@@ -256,33 +264,17 @@ impl RenderPass {
 
     #[inline]
     pub fn label(&self) -> Option<&str> {
-        self.base.label.as_deref()
+        self.base.as_ref().and_then(|base| base.label.as_deref())
     }
 
-    #[cfg(feature = "trace")]
-    pub fn into_command(self) -> crate::device::trace::Command {
-        crate::device::trace::Command::RunRenderPass {
-            base: self.base,
-            target_colors: self.color_targets.into_iter().collect(),
-            target_depth_stencil: self.depth_stencil_target,
-            timestamp_writes: self.timestamp_writes,
-            occlusion_query_set_id: self.occlusion_query_set_id,
-        }
-    }
-
-    pub fn set_index_buffer(
-        &mut self,
-        buffer_id: id::BufferId,
-        index_format: IndexFormat,
-        offset: BufferAddress,
-        size: Option<BufferSize>,
-    ) {
-        self.base.commands.push(RenderCommand::SetIndexBuffer {
-            buffer_id,
-            index_format,
-            offset,
-            size,
-        });
+    fn base_mut<'a>(
+        &'a mut self,
+        scope: PassErrorScope,
+    ) -> Result<&'a mut BasePass<RenderCommand>, RenderPassError> {
+        self.base
+            .as_mut()
+            .ok_or(RenderPassErrorInner::PassEnded)
+            .map_pass_err(scope)
     }
 }
 
@@ -292,11 +284,23 @@ impl fmt::Debug for RenderPass {
             .field("encoder_id", &self.parent_id)
             .field("color_targets", &self.color_targets)
             .field("depth_stencil_target", &self.depth_stencil_target)
-            .field("command count", &self.base.commands.len())
-            .field("dynamic offset count", &self.base.dynamic_offsets.len())
+            .field(
+                "command count",
+                &self.base.as_ref().map_or(0, |base| base.commands.len()),
+            )
+            .field(
+                "dynamic offset count",
+                &self
+                    .base
+                    .as_ref()
+                    .map_or(0, |base| base.dynamic_offsets.len()),
+            )
             .field(
                 "push constant u32 count",
-                &self.base.push_constant_data.len(),
+                &self
+                    .base
+                    .as_ref()
+                    .map_or(0, |base| base.push_constant_data.len()),
             )
             .finish()
     }
@@ -601,6 +605,8 @@ pub enum RenderPassErrorInner {
     SurfaceTextureDropped,
     #[error("Not enough memory left for render pass")]
     OutOfMemory,
+    #[error("The bind group at index {0:?} is invalid")]
+    InvalidBindGroup(u32),
     #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,
     #[error("Unable to clear non-present/read-only stencil")]
@@ -649,6 +655,12 @@ pub enum RenderPassErrorInner {
     Draw(#[from] DrawError),
     #[error(transparent)]
     Bind(#[from] BindError),
+    #[error("Push constant offset must be aligned to 4 bytes")]
+    PushConstantOffsetAlignment,
+    #[error("Push constant size must be aligned to 4 bytes")]
+    PushConstantSizeAlignment,
+    #[error("Ran out of push constant space. Don't set 4gb of push constants per ComputePass.")]
+    PushConstantOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error("Multiview layer count must match")]
@@ -663,6 +675,8 @@ pub enum RenderPassErrorInner {
     MissingOcclusionQuerySet,
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error("The compute pass has already been ended and no further commands can be recorded")]
+    PassEnded,
 }
 
 impl PrettyError for RenderPassErrorInner {
@@ -703,7 +717,7 @@ impl From<DeviceError> for RenderPassErrorInner {
 pub struct RenderPassError {
     pub scope: PassErrorScope,
     #[source]
-    inner: RenderPassErrorInner,
+    pub(super) inner: RenderPassErrorInner,
 }
 impl PrettyError for RenderPassError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
@@ -1309,13 +1323,18 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
     }
 }
 
-// Common routines between render/compute
-
 impl Global {
-    pub fn render_pass_end<A: HalApi>(&self, pass: &RenderPass) -> Result<(), RenderPassError> {
-        self.render_pass_end_impl::<A>(
-            pass.parent_id(),
-            pass.base.as_ref(),
+    pub fn render_pass_end<A: HalApi>(&self, pass: &mut RenderPass) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::PassEncoder(pass.parent_id);
+        let base = pass
+            .base
+            .take()
+            .ok_or(RenderPassErrorInner::PassEnded)
+            .map_pass_err(scope)?;
+
+        self.render_pass_end_with_unresolved_commands::<A>(
+            pass.parent_id,
+            base,
             &pass.color_targets,
             pass.depth_stencil_target.as_ref(),
             pass.timestamp_writes.as_ref(),
@@ -1324,10 +1343,38 @@ impl Global {
     }
 
     #[doc(hidden)]
+    pub fn render_pass_end_with_unresolved_commands<A: HalApi>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+        base: BasePass<RenderCommand>,
+        color_attachments: &[Option<RenderPassColorAttachment>],
+        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
+        timestamp_writes: Option<&RenderPassTimestampWrites>,
+        occlusion_query_set_id: Option<id::QuerySetId>,
+    ) -> Result<(), RenderPassError> {
+        let commands = RenderCommand::resolve_render_command_ids(A::hub(self), &base.commands)?;
+
+        self.render_pass_end_impl::<A>(
+            encoder_id,
+            BasePass {
+                label: base.label,
+                commands,
+                dynamic_offsets: base.dynamic_offsets,
+                string_data: base.string_data,
+                push_constant_data: base.push_constant_data,
+            },
+            color_attachments,
+            depth_stencil_attachment,
+            timestamp_writes,
+            occlusion_query_set_id,
+        )
+    }
+
+    #[doc(hidden)]
     pub fn render_pass_end_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePassRef<RenderCommand>,
+        base: BasePass<ArcRenderCommand<A>>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
@@ -1342,7 +1389,7 @@ impl Global {
             .instance
             .flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
-        let label = hal_label(base.label, self.instance.flags);
+        let label = hal_label(base.label.as_deref(), self.instance.flags);
 
         let pass_scope = PassErrorScope::PassEncoder(encoder_id);
 
@@ -1360,7 +1407,13 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
-                    base: BasePass::from_ref(base),
+                    base: BasePass {
+                        label: base.label.clone(),
+                        commands: base.commands.iter().map(Into::into).collect(),
+                        dynamic_offsets: base.dynamic_offsets.to_vec(),
+                        string_data: base.string_data.to_vec(),
+                        push_constant_data: base.push_constant_data.to_vec(),
+                    },
                     target_colors: color_attachments.to_vec(),
                     target_depth_stencil: depth_stencil_attachment.cloned(),
                     timestamp_writes: timestamp_writes.cloned(),
@@ -1385,11 +1438,7 @@ impl Global {
             *status = CommandEncoderStatus::Error;
             encoder.open_pass(label).map_pass_err(pass_scope)?;
 
-            let bundle_guard = hub.render_bundles.read();
-            let bind_group_guard = hub.bind_groups.read();
-            let render_pipeline_guard = hub.render_pipelines.read();
             let query_set_guard = hub.query_sets.read();
-            let buffer_guard = hub.buffers.read();
             let view_guard = hub.texture_views.read();
 
             log::trace!(
@@ -1443,12 +1492,13 @@ impl Global {
             let mut active_query = None;
 
             for command in base.commands {
-                match *command {
-                    RenderCommand::SetBindGroup {
+                match command {
+                    ArcRenderCommand::SetBindGroup {
                         index,
                         num_dynamic_offsets,
-                        bind_group_id,
+                        bind_group,
                     } => {
+                        let bind_group_id = bind_group.as_info().id();
                         api_log!("RenderPass::set_bind_group {index} {bind_group_id:?}");
 
                         let scope = PassErrorScope::SetBindGroup(bind_group_id);
@@ -1468,12 +1518,7 @@ impl Global {
                         );
                         dynamic_offset_count += num_dynamic_offsets;
 
-                        let bind_group = bind_group_guard
-                            .get(bind_group_id)
-                            .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))
-                            .map_pass_err(scope)?;
-
-                        tracker.bind_groups.add_single(bind_group);
+                        let bind_group = tracker.bind_groups.insert_single(bind_group);
 
                         bind_group
                             .same_device_as(cmd_buf.as_ref())
@@ -1529,18 +1574,14 @@ impl Global {
                             }
                         }
                     }
-                    RenderCommand::SetPipeline(pipeline_id) => {
+                    ArcRenderCommand::SetPipeline(pipeline) => {
+                        let pipeline_id = pipeline.as_info().id();
                         api_log!("RenderPass::set_pipeline {pipeline_id:?}");
 
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         state.pipeline = Some(pipeline_id);
 
-                        let pipeline = render_pipeline_guard
-                            .get(pipeline_id)
-                            .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
-                            .map_pass_err(scope)?;
-
-                        tracker.render_pipelines.add_single(pipeline);
+                        let pipeline = tracker.render_pipelines.insert_single(pipeline);
 
                         pipeline
                             .same_device_as(cmd_buf.as_ref())
@@ -1654,24 +1695,20 @@ impl Global {
                         // Update vertex buffer limits.
                         state.vertex.update_limits();
                     }
-                    RenderCommand::SetIndexBuffer {
-                        buffer_id,
+                    ArcRenderCommand::SetIndexBuffer {
+                        buffer,
                         index_format,
                         offset,
                         size,
                     } => {
+                        let buffer_id = buffer.as_info().id();
                         api_log!("RenderPass::set_index_buffer {buffer_id:?}");
 
                         let scope = PassErrorScope::SetIndexBuffer(buffer_id);
 
-                        let buffer = buffer_guard
-                            .get(buffer_id)
-                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
-                            .map_pass_err(scope)?;
-
                         info.usage_scope
                             .buffers
-                            .merge_single(buffer, hal::BufferUses::INDEX)
+                            .merge_single(&buffer, hal::BufferUses::INDEX)
                             .map_pass_err(scope)?;
 
                         buffer
@@ -1694,7 +1731,7 @@ impl Global {
 
                         buffer_memory_init_actions.extend(
                             buffer.initialization_status.read().create_action(
-                                buffer,
+                                &buffer,
                                 offset..end,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1709,24 +1746,20 @@ impl Global {
                             raw.set_index_buffer(bb, index_format);
                         }
                     }
-                    RenderCommand::SetVertexBuffer {
+                    ArcRenderCommand::SetVertexBuffer {
                         slot,
-                        buffer_id,
+                        buffer,
                         offset,
                         size,
                     } => {
+                        let buffer_id = buffer.as_info().id();
                         api_log!("RenderPass::set_vertex_buffer {slot} {buffer_id:?}");
 
                         let scope = PassErrorScope::SetVertexBuffer(buffer_id);
 
-                        let buffer = buffer_guard
-                            .get(buffer_id)
-                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
-                            .map_pass_err(scope)?;
-
                         info.usage_scope
                             .buffers
-                            .merge_single(buffer, hal::BufferUses::VERTEX)
+                            .merge_single(&buffer, hal::BufferUses::VERTEX)
                             .map_pass_err(scope)?;
 
                         buffer
@@ -1763,7 +1796,7 @@ impl Global {
 
                         buffer_memory_init_actions.extend(
                             buffer.initialization_status.read().create_action(
-                                buffer,
+                                &buffer,
                                 offset..(offset + vertex_state.total_size),
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1779,7 +1812,7 @@ impl Global {
                         }
                         state.vertex.update_limits();
                     }
-                    RenderCommand::SetBlendConstant(ref color) => {
+                    ArcRenderCommand::SetBlendConstant(ref color) => {
                         api_log!("RenderPass::set_blend_constant");
 
                         state.blend_constant = OptionalState::Set;
@@ -1793,7 +1826,7 @@ impl Global {
                             raw.set_blend_constants(&array);
                         }
                     }
-                    RenderCommand::SetStencilReference(value) => {
+                    ArcRenderCommand::SetStencilReference(value) => {
                         api_log!("RenderPass::set_stencil_reference {value}");
 
                         state.stencil_reference = value;
@@ -1806,7 +1839,7 @@ impl Global {
                             }
                         }
                     }
-                    RenderCommand::SetViewport {
+                    ArcRenderCommand::SetViewport {
                         ref rect,
                         depth_min,
                         depth_max,
@@ -1843,7 +1876,7 @@ impl Global {
                             raw.set_viewport(&r, depth_min..depth_max);
                         }
                     }
-                    RenderCommand::SetPushConstant {
+                    ArcRenderCommand::SetPushConstant {
                         stages,
                         offset,
                         size_bytes,
@@ -1883,7 +1916,7 @@ impl Global {
                             )
                         }
                     }
-                    RenderCommand::SetScissor(ref rect) => {
+                    ArcRenderCommand::SetScissor(ref rect) => {
                         api_log!("RenderPass::set_scissor_rect {rect:?}");
 
                         let scope = PassErrorScope::SetScissorRect;
@@ -1903,7 +1936,7 @@ impl Global {
                             raw.set_scissor_rect(&r);
                         }
                     }
-                    RenderCommand::Draw {
+                    ArcRenderCommand::Draw {
                         vertex_count,
                         instance_count,
                         first_vertex,
@@ -1915,8 +1948,8 @@ impl Global {
 
                         let indexed = false;
                         let scope = PassErrorScope::Draw {
+                            kind: DrawKind::Draw,
                             indexed,
-                            indirect: false,
                             pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
@@ -1953,7 +1986,7 @@ impl Global {
                             }
                         }
                     }
-                    RenderCommand::DrawIndexed {
+                    ArcRenderCommand::DrawIndexed {
                         index_count,
                         instance_count,
                         first_index,
@@ -1964,8 +1997,8 @@ impl Global {
 
                         let indexed = true;
                         let scope = PassErrorScope::Draw {
+                            kind: DrawKind::Draw,
                             indexed,
-                            indirect: false,
                             pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
@@ -2002,17 +2035,18 @@ impl Global {
                             }
                         }
                     }
-                    RenderCommand::MultiDrawIndirect {
-                        buffer_id,
+                    ArcRenderCommand::MultiDrawIndirect {
+                        buffer: indirect_buffer,
                         offset,
                         count,
                         indexed,
                     } => {
-                        api_log!("RenderPass::draw_indirect (indexed:{indexed}) {buffer_id:?} {offset} {count:?}");
+                        let indirect_buffer_id = indirect_buffer.as_info().id();
+                        api_log!("RenderPass::draw_indirect (indexed:{indexed}) {indirect_buffer_id:?} {offset} {count:?}");
 
                         let scope = PassErrorScope::Draw {
+                            kind: DrawKind::MultiDrawIndirect,
                             indexed,
-                            indirect: true,
                             pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
@@ -2031,14 +2065,9 @@ impl Global {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer = buffer_guard
-                            .get(buffer_id)
-                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
-                            .map_pass_err(scope)?;
-
                         info.usage_scope
                             .buffers
-                            .merge_single(indirect_buffer, hal::BufferUses::INDIRECT)
+                            .merge_single(&indirect_buffer, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
 
                         indirect_buffer
@@ -2062,7 +2091,7 @@ impl Global {
 
                         buffer_memory_init_actions.extend(
                             indirect_buffer.initialization_status.read().create_action(
-                                indirect_buffer,
+                                &indirect_buffer,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -2077,19 +2106,21 @@ impl Global {
                             },
                         }
                     }
-                    RenderCommand::MultiDrawIndirectCount {
-                        buffer_id,
+                    ArcRenderCommand::MultiDrawIndirectCount {
+                        buffer: indirect_buffer,
                         offset,
-                        count_buffer_id,
+                        count_buffer,
                         count_buffer_offset,
                         max_count,
                         indexed,
                     } => {
-                        api_log!("RenderPass::multi_draw_indirect_count (indexed:{indexed}) {buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset:?} {max_count:?}");
+                        let indirect_buffer_id = indirect_buffer.as_info().id();
+                        let count_buffer_id = count_buffer.as_info().id();
+                        api_log!("RenderPass::multi_draw_indirect_count (indexed:{indexed}) {indirect_buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset:?} {max_count:?}");
 
                         let scope = PassErrorScope::Draw {
+                            kind: DrawKind::MultiDrawIndirectCount,
                             indexed,
-                            indirect: true,
                             pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
@@ -2106,14 +2137,9 @@ impl Global {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer = buffer_guard
-                            .get(buffer_id)
-                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
-                            .map_pass_err(scope)?;
-
                         info.usage_scope
                             .buffers
-                            .merge_single(indirect_buffer, hal::BufferUses::INDIRECT)
+                            .merge_single(&indirect_buffer, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
 
                         indirect_buffer
@@ -2122,14 +2148,9 @@ impl Global {
                         let indirect_raw =
                             indirect_buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
-                        let count_buffer = buffer_guard
-                            .get(count_buffer_id)
-                            .map_err(|_| RenderCommandError::InvalidBufferId(count_buffer_id))
-                            .map_pass_err(scope)?;
-
                         info.usage_scope
                             .buffers
-                            .merge_single(count_buffer, hal::BufferUses::INDIRECT)
+                            .merge_single(&count_buffer, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
 
                         count_buffer
@@ -2149,7 +2170,7 @@ impl Global {
                         }
                         buffer_memory_init_actions.extend(
                             indirect_buffer.initialization_status.read().create_action(
-                                indirect_buffer,
+                                &indirect_buffer,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -2167,7 +2188,7 @@ impl Global {
                         }
                         buffer_memory_init_actions.extend(
                             count_buffer.initialization_status.read().create_action(
-                                count_buffer,
+                                &count_buffer,
                                 count_buffer_offset..end_count_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -2194,7 +2215,7 @@ impl Global {
                             },
                         }
                     }
-                    RenderCommand::PushDebugGroup { color: _, len } => {
+                    ArcRenderCommand::PushDebugGroup { color: _, len } => {
                         state.debug_scope_depth += 1;
                         if !discard_hal_labels {
                             let label = str::from_utf8(
@@ -2209,7 +2230,7 @@ impl Global {
                         }
                         string_offset += len;
                     }
-                    RenderCommand::PopDebugGroup => {
+                    ArcRenderCommand::PopDebugGroup => {
                         api_log!("RenderPass::pop_debug_group");
 
                         let scope = PassErrorScope::PopDebugGroup;
@@ -2224,7 +2245,7 @@ impl Global {
                             }
                         }
                     }
-                    RenderCommand::InsertDebugMarker { color: _, len } => {
+                    ArcRenderCommand::InsertDebugMarker { color: _, len } => {
                         if !discard_hal_labels {
                             let label = str::from_utf8(
                                 &base.string_data[string_offset..string_offset + len],
@@ -2237,10 +2258,11 @@ impl Global {
                         }
                         string_offset += len;
                     }
-                    RenderCommand::WriteTimestamp {
-                        query_set_id,
+                    ArcRenderCommand::WriteTimestamp {
+                        query_set,
                         query_index,
                     } => {
+                        let query_set_id = query_set.as_info().id();
                         api_log!("RenderPass::write_timestamps {query_set_id:?} {query_index}");
                         let scope = PassErrorScope::WriteTimestamp;
 
@@ -2248,12 +2270,7 @@ impl Global {
                             .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                             .map_pass_err(scope)?;
 
-                        let query_set = query_set_guard
-                            .get(query_set_id)
-                            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
-                            .map_pass_err(scope)?;
-
-                        tracker.query_sets.add_single(query_set);
+                        let query_set = tracker.query_sets.insert_single(query_set);
 
                         query_set
                             .validate_and_write_timestamp(
@@ -2263,7 +2280,7 @@ impl Global {
                             )
                             .map_pass_err(scope)?;
                     }
-                    RenderCommand::BeginOcclusionQuery { query_index } => {
+                    ArcRenderCommand::BeginOcclusionQuery { query_index } => {
                         api_log!("RenderPass::begin_occlusion_query {query_index}");
                         let scope = PassErrorScope::BeginOcclusionQuery;
 
@@ -2287,25 +2304,21 @@ impl Global {
                         )
                         .map_pass_err(scope)?;
                     }
-                    RenderCommand::EndOcclusionQuery => {
+                    ArcRenderCommand::EndOcclusionQuery => {
                         api_log!("RenderPass::end_occlusion_query");
                         let scope = PassErrorScope::EndOcclusionQuery;
 
                         end_occlusion_query(raw, &mut active_query).map_pass_err(scope)?;
                     }
-                    RenderCommand::BeginPipelineStatisticsQuery {
-                        query_set_id,
+                    ArcRenderCommand::BeginPipelineStatisticsQuery {
+                        query_set,
                         query_index,
                     } => {
+                        let query_set_id = query_set.as_info().id();
                         api_log!("RenderPass::begin_pipeline_statistics_query {query_set_id:?} {query_index}");
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set = query_set_guard
-                            .get(query_set_id)
-                            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
-                            .map_pass_err(scope)?;
-
-                        tracker.query_sets.add_single(query_set);
+                        let query_set = tracker.query_sets.insert_single(query_set);
 
                         validate_and_begin_pipeline_statistics_query(
                             query_set.clone(),
@@ -2316,23 +2329,21 @@ impl Global {
                         )
                         .map_pass_err(scope)?;
                     }
-                    RenderCommand::EndPipelineStatisticsQuery => {
+                    ArcRenderCommand::EndPipelineStatisticsQuery => {
                         api_log!("RenderPass::end_pipeline_statistics_query");
                         let scope = PassErrorScope::EndPipelineStatisticsQuery;
 
                         end_pipeline_statistics_query(raw, &mut active_query)
                             .map_pass_err(scope)?;
                     }
-                    RenderCommand::ExecuteBundle(bundle_id) => {
+                    ArcRenderCommand::ExecuteBundle(bundle) => {
+                        let bundle_id = bundle.as_info().id();
                         api_log!("RenderPass::execute_bundle {bundle_id:?}");
                         let scope = PassErrorScope::ExecuteBundle;
 
-                        let bundle = bundle_guard
-                            .get(bundle_id)
-                            .map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
-                            .map_pass_err(scope)?;
-
-                        tracker.bundles.add_single(bundle);
+                        // Have to clone the bundle arc, otherwise we keep a mutable reference to the bundle
+                        // while later trying to add the bundle's resources to the tracker.
+                        let bundle = tracker.bundles.insert_single(bundle).clone();
 
                         bundle
                             .same_device_as(cmd_buf.as_ref())
@@ -2449,87 +2460,131 @@ impl Global {
     }
 }
 
-pub mod render_commands {
-    use super::{
-        super::{Rect, RenderCommand},
-        RenderPass,
-    };
-    use crate::id;
-    use std::{convert::TryInto, num::NonZeroU32};
-    use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
-
-    pub fn wgpu_render_pass_set_bind_group(
+impl Global {
+    pub fn render_pass_set_bind_group(
+        &self,
         pass: &mut RenderPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: &[DynamicOffset],
-    ) {
-        let redundant = pass.current_bind_groups.set_and_check_redundant(
+        offsets: &[wgt::DynamicOffset],
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetBindGroup(bind_group_id);
+        let base = pass
+            .base
+            .as_mut()
+            .ok_or(RenderPassErrorInner::PassEnded)
+            .map_pass_err(scope)?;
+
+        if pass.current_bind_groups.set_and_check_redundant(
             bind_group_id,
             index,
-            &mut pass.base.dynamic_offsets,
+            &mut base.dynamic_offsets,
             offsets,
-        );
-
-        if redundant {
-            return;
+        ) {
+            // Do redundant early-out **after** checking whether the pass is ended or not.
+            return Ok(());
         }
 
-        pass.base.commands.push(RenderCommand::SetBindGroup {
+        base.commands.push(RenderCommand::SetBindGroup {
             index,
             num_dynamic_offsets: offsets.len(),
             bind_group_id,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_set_pipeline(pass: &mut RenderPass, pipeline_id: id::RenderPipelineId) {
-        if pass.current_pipeline.set_and_check_redundant(pipeline_id) {
-            return;
+    pub fn render_pass_set_pipeline(
+        &self,
+        pass: &mut RenderPass,
+        pipeline_id: id::RenderPipelineId,
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetPipelineRender(pipeline_id);
+
+        let redundant = pass.current_pipeline.set_and_check_redundant(pipeline_id);
+        let base = pass.base_mut(scope)?;
+
+        if redundant {
+            // Do redundant early-out **after** checking whether the pass is ended or not.
+            return Ok(());
         }
 
-        pass.base
-            .commands
-            .push(RenderCommand::SetPipeline(pipeline_id));
+        base.commands.push(RenderCommand::SetPipeline(pipeline_id));
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_set_vertex_buffer(
+    pub fn render_pass_set_index_buffer(
+        &self,
+        pass: &mut RenderPass,
+        buffer_id: id::BufferId,
+        index_format: IndexFormat,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetIndexBuffer(buffer_id);
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::SetIndexBuffer {
+            buffer_id,
+            index_format,
+            offset,
+            size,
+        });
+
+        Ok(())
+    }
+
+    pub fn render_pass_set_vertex_buffer(
+        &self,
         pass: &mut RenderPass,
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    ) {
-        pass.base.commands.push(RenderCommand::SetVertexBuffer {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetVertexBuffer(buffer_id);
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer_id,
             offset,
             size,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_set_index_buffer(
+    pub fn render_pass_set_blend_constant(
+        &self,
         pass: &mut RenderPass,
-        buffer: id::BufferId,
-        index_format: IndexFormat,
-        offset: BufferAddress,
-        size: Option<BufferSize>,
-    ) {
-        pass.set_index_buffer(buffer, index_format, offset, size);
+        color: &Color,
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetBlendConstant;
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::SetBlendConstant(*color));
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_set_blend_constant(pass: &mut RenderPass, color: &Color) {
-        pass.base
-            .commands
-            .push(RenderCommand::SetBlendConstant(*color));
-    }
+    pub fn render_pass_set_stencil_reference(
+        &self,
+        pass: &mut RenderPass,
+        value: u32,
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetStencilReference;
+        let base = pass.base_mut(scope)?;
 
-    pub fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
-        pass.base
-            .commands
+        base.commands
             .push(RenderCommand::SetStencilReference(value));
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_set_viewport(
+    pub fn render_pass_set_viewport(
+        &self,
         pass: &mut RenderPass,
         x: f32,
         y: f32,
@@ -2537,259 +2592,414 @@ pub mod render_commands {
         h: f32,
         depth_min: f32,
         depth_max: f32,
-    ) {
-        pass.base.commands.push(RenderCommand::SetViewport {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetViewport;
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::SetViewport {
             rect: Rect { x, y, w, h },
             depth_min,
             depth_max,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_set_scissor_rect(
+    pub fn render_pass_set_scissor_rect(
+        &self,
         pass: &mut RenderPass,
         x: u32,
         y: u32,
         w: u32,
         h: u32,
-    ) {
-        pass.base
-            .commands
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetScissorRect;
+        let base = pass.base_mut(scope)?;
+
+        base.commands
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_set_push_constants(
+    pub fn render_pass_set_push_constants(
+        &self,
         pass: &mut RenderPass,
         stages: wgt::ShaderStages,
         offset: u32,
         data: &[u8],
-    ) {
-        assert_eq!(
-            offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
-            0,
-            "Push constant offset must be aligned to 4 bytes."
-        );
-        assert_eq!(
-            data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
-            0,
-            "Push constant size must be aligned to 4 bytes."
-        );
-        let value_offset = pass.base.push_constant_data.len().try_into().expect(
-            "Ran out of push constant space. Don't set 4gb of push constants per RenderPass.",
-        );
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::SetPushConstant;
+        let base = pass.base_mut(scope)?;
 
-        pass.base.push_constant_data.extend(
+        if offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+            return Err(RenderPassErrorInner::PushConstantOffsetAlignment).map_pass_err(scope);
+        }
+        if data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+            return Err(RenderPassErrorInner::PushConstantSizeAlignment).map_pass_err(scope);
+        }
+
+        let value_offset = base
+            .push_constant_data
+            .len()
+            .try_into()
+            .map_err(|_| RenderPassErrorInner::PushConstantOutOfMemory)
+            .map_pass_err(scope)?;
+
+        base.push_constant_data.extend(
             data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
-        pass.base.commands.push(RenderCommand::SetPushConstant {
+        base.commands.push(RenderCommand::SetPushConstant {
             stages,
             offset,
             size_bytes: data.len() as u32,
             values_offset: Some(value_offset),
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_draw(
+    pub fn render_pass_draw(
+        &self,
         pass: &mut RenderPass,
         vertex_count: u32,
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
-    ) {
-        pass.base.commands.push(RenderCommand::Draw {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::Draw,
+            indexed: false,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
             first_vertex,
             first_instance,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_draw_indexed(
+    pub fn render_pass_draw_indexed(
+        &self,
         pass: &mut RenderPass,
         index_count: u32,
         instance_count: u32,
         first_index: u32,
         base_vertex: i32,
         first_instance: u32,
-    ) {
-        pass.base.commands.push(RenderCommand::DrawIndexed {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::Draw,
+            indexed: true,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
             first_index,
             base_vertex,
             first_instance,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_draw_indirect(
+    pub fn render_pass_draw_indirect(
+        &self,
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-    ) {
-        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::DrawIndirect,
+            indexed: false,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
             count: None,
             indexed: false,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_draw_indexed_indirect(
+    pub fn render_pass_draw_indexed_indirect(
+        &self,
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-    ) {
-        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::DrawIndirect,
+            indexed: true,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
             count: None,
             indexed: true,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_multi_draw_indirect(
+    pub fn render_pass_multi_draw_indirect(
+        &self,
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         count: u32,
-    ) {
-        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::MultiDrawIndirect,
+            indexed: false,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
             count: NonZeroU32::new(count),
             indexed: false,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_multi_draw_indexed_indirect(
+    pub fn render_pass_multi_draw_indexed_indirect(
+        &self,
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         count: u32,
-    ) {
-        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::MultiDrawIndirect,
+            indexed: true,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
             count: NonZeroU32::new(count),
             indexed: true,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_multi_draw_indirect_count(
+    pub fn render_pass_multi_draw_indirect_count(
+        &self,
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         count_buffer_id: id::BufferId,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    ) {
-        pass.base
-            .commands
-            .push(RenderCommand::MultiDrawIndirectCount {
-                buffer_id,
-                offset,
-                count_buffer_id,
-                count_buffer_offset,
-                max_count,
-                indexed: false,
-            });
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::MultiDrawIndirectCount,
+            indexed: false,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::MultiDrawIndirectCount {
+            buffer_id,
+            offset,
+            count_buffer_id,
+            count_buffer_offset,
+            max_count,
+            indexed: false,
+        });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_multi_draw_indexed_indirect_count(
+    pub fn render_pass_multi_draw_indexed_indirect_count(
+        &self,
         pass: &mut RenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         count_buffer_id: id::BufferId,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    ) {
-        pass.base
-            .commands
-            .push(RenderCommand::MultiDrawIndirectCount {
-                buffer_id,
-                offset,
-                count_buffer_id,
-                count_buffer_offset,
-                max_count,
-                indexed: true,
-            });
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::MultiDrawIndirectCount,
+            indexed: true,
+            pipeline: pass.current_pipeline.last_state,
+        };
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::MultiDrawIndirectCount {
+            buffer_id,
+            offset,
+            count_buffer_id,
+            count_buffer_offset,
+            max_count,
+            indexed: true,
+        });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_push_debug_group(pass: &mut RenderPass, label: &str, color: u32) {
-        let bytes = label.as_bytes();
-        pass.base.string_data.extend_from_slice(bytes);
+    pub fn render_pass_push_debug_group(
+        &self,
+        pass: &mut RenderPass,
+        label: &str,
+        color: u32,
+    ) -> Result<(), RenderPassError> {
+        let base = pass.base_mut(PassErrorScope::PushDebugGroup)?;
 
-        pass.base.commands.push(RenderCommand::PushDebugGroup {
+        let bytes = label.as_bytes();
+        base.string_data.extend_from_slice(bytes);
+
+        base.commands.push(RenderCommand::PushDebugGroup {
             color,
             len: bytes.len(),
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
-        pass.base.commands.push(RenderCommand::PopDebugGroup);
+    pub fn render_pass_pop_debug_group(
+        &self,
+        pass: &mut RenderPass,
+    ) -> Result<(), RenderPassError> {
+        let base = pass.base_mut(PassErrorScope::PopDebugGroup)?;
+
+        base.commands.push(RenderCommand::PopDebugGroup);
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_insert_debug_marker(pass: &mut RenderPass, label: &str, color: u32) {
+    pub fn render_pass_insert_debug_marker(
+        &self,
+        pass: &mut RenderPass,
+        label: &str,
+        color: u32,
+    ) -> Result<(), RenderPassError> {
+        let base = pass.base_mut(PassErrorScope::InsertDebugMarker)?;
+
         let bytes = label.as_bytes();
-        pass.base.string_data.extend_from_slice(bytes);
+        base.string_data.extend_from_slice(bytes);
 
-        pass.base.commands.push(RenderCommand::InsertDebugMarker {
+        base.commands.push(RenderCommand::InsertDebugMarker {
             color,
             len: bytes.len(),
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_write_timestamp(
+    pub fn render_pass_write_timestamp(
+        &self,
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
-    ) {
-        pass.base.commands.push(RenderCommand::WriteTimestamp {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::WriteTimestamp;
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::WriteTimestamp {
             query_set_id,
             query_index,
         });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_begin_occlusion_query(pass: &mut RenderPass, query_index: u32) {
-        pass.base
-            .commands
+    pub fn render_pass_begin_occlusion_query(
+        &self,
+        pass: &mut RenderPass,
+        query_index: u32,
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::BeginOcclusionQuery;
+        let base = pass.base_mut(scope)?;
+
+        base.commands
             .push(RenderCommand::BeginOcclusionQuery { query_index });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_end_occlusion_query(pass: &mut RenderPass) {
-        pass.base.commands.push(RenderCommand::EndOcclusionQuery);
+    pub fn render_pass_end_occlusion_query(
+        &self,
+        pass: &mut RenderPass,
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::EndOcclusionQuery;
+        let base = pass.base_mut(scope)?;
+
+        base.commands.push(RenderCommand::EndOcclusionQuery);
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_begin_pipeline_statistics_query(
+    pub fn render_pass_begin_pipeline_statistics_query(
+        &self,
         pass: &mut RenderPass,
         query_set_id: id::QuerySetId,
         query_index: u32,
-    ) {
-        pass.base
-            .commands
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+        let base = pass.base_mut(scope)?;
+
+        base.commands
             .push(RenderCommand::BeginPipelineStatisticsQuery {
                 query_set_id,
                 query_index,
             });
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
-        pass.base
-            .commands
+    pub fn render_pass_end_pipeline_statistics_query(
+        &self,
+        pass: &mut RenderPass,
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::EndPipelineStatisticsQuery;
+        let base = pass.base_mut(scope)?;
+
+        base.commands
             .push(RenderCommand::EndPipelineStatisticsQuery);
+
+        Ok(())
     }
 
-    pub fn wgpu_render_pass_execute_bundles(
+    pub fn render_pass_execute_bundles(
+        &self,
         pass: &mut RenderPass,
         render_bundle_ids: &[id::RenderBundleId],
-    ) {
+    ) -> Result<(), RenderPassError> {
+        let scope = PassErrorScope::ExecuteBundle;
+        let base = pass.base_mut(scope)?;
+
         for &bundle_id in render_bundle_ids {
-            pass.base
-                .commands
-                .push(RenderCommand::ExecuteBundle(bundle_id));
+            base.commands.push(RenderCommand::ExecuteBundle(bundle_id));
         }
         pass.current_pipeline.reset();
         pass.current_bind_groups.reset();
+
+        Ok(())
     }
 }
