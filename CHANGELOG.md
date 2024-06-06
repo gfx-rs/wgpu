@@ -117,6 +117,7 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 - Ensure render pipelines have at least 1 target. By @ErichDonGubler in [#5715](https://github.com/gfx-rs/wgpu/pull/5715)
 - `wgpu::ComputePass` now internally takes ownership of `QuerySet` for both `wgpu::ComputePassTimestampWrites` as well as timestamp writes and statistics query, fixing crashes when destroying `QuerySet` before ending the pass. By @wumpf in [#5671](https://github.com/gfx-rs/wgpu/pull/5671)
+- Validate resources passed during compute pass recording for mismatching device. By @wumpf in [#5779](https://github.com/gfx-rs/wgpu/pull/5779)
 
 #### Metal
 
