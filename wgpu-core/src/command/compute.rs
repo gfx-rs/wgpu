@@ -68,6 +68,10 @@ impl<A: HalApi> ComputePass<A> {
             timestamp_writes,
         } = desc;
 
+        let device_id = parent
+            .as_ref()
+            .map_or(id::DeviceId::dummy(0), |p| p.device.as_info().id());
+
         Self {
             base: Some(BasePass::new(label)),
             parent,
@@ -75,6 +79,8 @@ impl<A: HalApi> ComputePass<A> {
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
+
+            device_id,
         }
     }
 
@@ -354,6 +360,13 @@ impl Global {
                             Some(CommandEncoderError::InvalidTimestampWritesQuerySetId),
                         );
                     };
+
+                    if query_set.device.as_info().id() != cmd_buf.device.as_info().id() {
+                        return (
+                            ComputePass::new(None, arc_desc),
+                            Some(CommandEncoderError::WrongDeviceForTimestampWritesQuerySet),
+                        );
+                    }
 
                     Some(ArcComputePassTimestampWrites {
                         query_set,
