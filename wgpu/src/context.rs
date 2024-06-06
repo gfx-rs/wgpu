@@ -78,7 +78,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type SurfaceData: ContextData;
 
     type SurfaceOutputDetail: WasmNotSendSync + 'static;
-    type SubmissionIndex: ContextId + Clone + Copy + WasmNotSendSync;
     type SubmissionIndexData: ContextData + Copy;
 
     type RequestAdapterFuture: Future<Output = Option<(Self::AdapterId, Self::AdapterData)>>
@@ -597,7 +596,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> (Self::SubmissionIndex, Self::SubmissionIndexData);
+    ) -> Self::SubmissionIndexData;
     fn queue_get_timestamp_period(
         &self,
         queue: &Self::QueueId,
@@ -1593,7 +1592,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         queue: &ObjectId,
         queue_data: &crate::Data,
         command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
-    ) -> (ObjectId, Arc<crate::Data>);
+    ) -> Arc<crate::Data>;
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32;
     fn queue_on_submitted_work_done(
         &self,
@@ -3039,16 +3038,15 @@ where
         queue: &ObjectId,
         queue_data: &crate::Data,
         command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
-    ) -> (ObjectId, Arc<crate::Data>) {
+    ) -> Arc<crate::Data> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         let command_buffers = command_buffers.map(|(id, data)| {
             let command_buffer_data: <T as Context>::CommandBufferData = *data.downcast().unwrap();
             (<T::CommandBufferId>::from(id), command_buffer_data)
         });
-        let (submission_index, data) =
-            Context::queue_submit(self, &queue, queue_data, command_buffers);
-        (submission_index.into(), Arc::new(data) as _)
+        let data = Context::queue_submit(self, &queue, queue_data, command_buffers);
+        Arc::new(data) as _
     }
 
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32 {
