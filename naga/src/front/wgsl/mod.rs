@@ -18,7 +18,7 @@ use thiserror::Error;
 
 pub use crate::front::wgsl::error::ParseError;
 use crate::front::wgsl::lower::Lowerer;
-use crate::{Arena, FastHashMap, Scalar};
+use crate::Scalar;
 
 use self::parse::ast::TranslationUnit;
 
@@ -34,54 +34,38 @@ impl Frontend {
     }
 
     pub fn parse(&mut self, source: &str) -> Result<crate::Module, ParseError> {
-        self.inner_to_ast(source)
-            .map_err(|x| x.as_parse_error(source))
-            .and_then(|v| v.to_module())
+        self.parse_to_ast(source).and_then(|v| v.to_module(None))
     }
 
     /// Two-step module conversion, can be used to modify the intermediate structure before it becomes a module.
     pub fn parse_to_ast<'a>(&mut self, source: &'a str) -> Result<ParsedWgsl<'a>, ParseError> {
-        self.inner_to_ast(source)
-            .map_err(|x| x.as_parse_error(source))
-    }
-
-    fn inner_to_ast<'a>(&mut self, source: &'a str) -> Result<ParsedWgsl<'a>, Error<'a>> {
-        let mut result = ParsedWgsl {
+        let translation_unit = self
+            .parser
+            .parse(source)
+            .map_err(|x| x.as_parse_error(source))?;
+        let index =
+            index::Index::generate(&translation_unit).map_err(|x| x.as_parse_error(source))?;
+        Ok(ParsedWgsl {
             source,
-            translation_unit: self.parser.parse(source)?,
-            index: index::Index::empty(),
-            globals: Default::default(),
-        };
-        result.index = index::Index::generate(&result.translation_unit)?;
-        Ok(result)
+            translation_unit,
+            index,
+        })
     }
-}
-
-pub enum ProvidedGlobalDecl {
-    Function(crate::Function),
-    Var(crate::GlobalVariable),
-    Const(crate::Constant),
-    Override(crate::Override),
-    Type(crate::Type),
-    EntryPoint(crate::EntryPoint),
 }
 
 pub struct ParsedWgsl<'a> {
     source: &'a str,
     translation_unit: TranslationUnit<'a>,
     index: index::Index<'a>,
-    // global_names: Arena<String>,
-    globals: FastHashMap<String, ProvidedGlobalDecl>,
 }
 impl<'a> ParsedWgsl<'a> {
-    pub fn to_module(&self) -> Result<crate::Module, ParseError> {
+    pub fn to_module(
+        &self,
+        base_module: Option<&crate::Module>,
+    ) -> Result<crate::Module, ParseError> {
         Lowerer::new(&self.index)
-            .lower(&self.translation_unit, &self.globals)
+            .lower(&self.translation_unit, base_module)
             .map_err(|x| x.as_parse_error(self.source))
-    }
-
-    pub fn add_global(&mut self, name: String, value: ProvidedGlobalDecl) {
-        self.globals.insert(name, value);
     }
 }
 /// <div class="warning">

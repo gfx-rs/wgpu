@@ -913,8 +913,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     pub fn lower(
         &mut self,
         tu: &'temp ast::TranslationUnit<'source>,
+        base_module: Option<&'source crate::Module>,
     ) -> Result<crate::Module, Error<'source>> {
-        let mut module = crate::Module::default();
+        let mut module = base_module.map(|v| v.to_owned()).unwrap_or_default();
 
         let mut ctx = GlobalContext {
             ast_expressions: &tu.expressions,
@@ -924,6 +925,43 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             const_typifier: &mut Typifier::new(),
             global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker::new(),
         };
+
+        if let Some(base_module) = base_module {
+            // The handles for base_module are equal to the handles for ctx.module, because we just cloned the arenas.
+            for (handle, f) in base_module.functions.iter() {
+                if let Some(name) = f.name.as_ref() {
+                    ctx.globals
+                        .insert(name, LoweredGlobalDecl::Function(handle));
+                }
+            }
+            for (handle, v) in base_module.global_variables.iter() {
+                if let Some(name) = v.name.as_ref() {
+                    ctx.globals.insert(name, LoweredGlobalDecl::Var(handle));
+                }
+            }
+            for (handle, c) in base_module.constants.iter() {
+                if let Some(name) = c.name.as_ref() {
+                    ctx.globals.insert(name, LoweredGlobalDecl::Const(handle));
+                }
+            }
+            for (handle, o) in base_module.overrides.iter() {
+                if let Some(name) = o.name.as_ref() {
+                    ctx.globals
+                        .insert(name, LoweredGlobalDecl::Override(handle));
+                }
+            }
+            for (handle, t) in base_module.types.iter() {
+                if let Some(name) = t.name.as_ref() {
+                    ctx.globals.insert(name, LoweredGlobalDecl::Type(handle));
+                }
+            }
+            for entry_point in base_module.entry_points.iter() {
+                ctx.globals
+                    .insert(entry_point.name.as_str(), LoweredGlobalDecl::EntryPoint);
+            }
+            *ctx.global_expression_kind_tracker =
+                crate::proc::ExpressionKindTracker::from_arena(&ctx.module.global_expressions);
+        }
 
         for decl_handle in self.index.visit_ordered() {
             let span = tu.decls.get_span(decl_handle);
