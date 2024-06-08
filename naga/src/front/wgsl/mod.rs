@@ -51,6 +51,13 @@ impl Frontend {
             index,
         })
     }
+
+    fn inner<'a>(&mut self, source: &'a str) -> Result<crate::Module, Error<'a>> {
+        let tu = self.parser.parse(source)?;
+        let index = index::Index::generate(&tu)?;
+        let module = Lowerer::new(&index).lower(&tu, None)?;
+        Ok(module)
+    }
 }
 
 pub struct ParsedWgsl<'a> {
