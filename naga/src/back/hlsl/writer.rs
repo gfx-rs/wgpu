@@ -1919,11 +1919,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                match func_ctx.info[result].ty {
-                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
-                    proc::TypeResolution::Value(ref value) => {
-                        self.write_value_type(module, value)?
+                let res_name = match result {
+                    None => None,
+                    Some(result) => {
+                        let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                        match func_ctx.info[result].ty {
+                            proc::TypeResolution::Handle(handle) => {
+                                self.write_type(module, handle)?
+                            }
+                            proc::TypeResolution::Value(ref value) => {
+                                self.write_value_type(module, value)?
+                            }
+                        };
+                        write!(self.out, " {name}; ")?;
+                        Some((result, name))
                     }
                 };
 
@@ -1934,7 +1943,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     .unwrap();
 
                 let fun_str = fun.to_hlsl_suffix();
-                write!(self.out, " {res_name}; ")?;
                 match pointer_space {
                     crate::AddressSpace::WorkGroup => {
                         write!(self.out, "Interlocked{fun_str}(")?;
@@ -1970,8 +1978,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     _ => {}
                 }
                 self.write_expr(module, value, func_ctx)?;
-                writeln!(self.out, ", {res_name});")?;
-                self.named_expressions.insert(result, res_name);
+
+                // The `original_value` out parameter is optional for all the
+                // `Interlocked` functions we generate other than
+                // `InterlockedExchange`.
+                if let Some((result, name)) = res_name {
+                    write!(self.out, ", {name}")?;
+                    self.named_expressions.insert(result, name);
+                }
+
+                writeln!(self.out, ");")?;
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;

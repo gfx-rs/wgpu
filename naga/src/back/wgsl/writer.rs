@@ -754,9 +754,11 @@ impl<W: Write> Writer<W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                self.start_named_expr(module, result, func_ctx, &res_name)?;
-                self.named_expressions.insert(result, res_name);
+                if let Some(result) = result {
+                    let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                    self.start_named_expr(module, result, func_ctx, &res_name)?;
+                    self.named_expressions.insert(result, res_name);
+                }
 
                 let fun_str = fun.to_wgsl();
                 write!(self.out, "atomic{fun_str}(")?;
