@@ -127,6 +127,18 @@ bitflags::bitflags! {
         const SUBGROUP = 0x10000;
         /// Support for subgroup barriers.
         const SUBGROUP_BARRIER = 0x20000;
+        /// Support for [`AtomicFunction::Min`] and [`AtomicFunction::Max`] on
+        /// 64-bit integers in the [`Storage`] address space, when the return
+        /// value is not used.
+        ///
+        /// This is the only 64-bit atomic functionality available on Metal 3.1.
+        ///
+        /// [`AtomicFunction::Min`]: crate::AtomicFunction::Min
+        /// [`AtomicFunction::Max`]: crate::AtomicFunction::Max
+        /// [`Storage`]: crate::AddressSpace::Storage
+        const SHADER_INT64_ATOMIC_MIN_MAX = 0x40000;
+        /// Support for all atomic operations on 64-bit integers.
+        const SHADER_INT64_ATOMIC_ALL_OPS = 0x80000;
     }
 }
 

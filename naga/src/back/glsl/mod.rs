@@ -2368,11 +2368,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                let res_ty = ctx.resolve_type(result, &self.module.types);
-                self.write_value_type(res_ty)?;
-                write!(self.out, " {res_name} = ")?;
-                self.named_expressions.insert(result, res_name);
+                if let Some(result) = result {
+                    let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                    let res_ty = ctx.resolve_type(result, &self.module.types);
+                    self.write_value_type(res_ty)?;
+                    write!(self.out, " {res_name} = ")?;
+                    self.named_expressions.insert(result, res_name);
+                }
 
                 let fun_str = fun.to_glsl();
                 write!(self.out, "atomic{fun_str}(")?;

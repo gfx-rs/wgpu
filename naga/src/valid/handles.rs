@@ -530,7 +530,9 @@ impl super::Validator {
                     crate::AtomicFunction::Exchange { compare } => validate_expr_opt(compare)?,
                 };
                 validate_expr(value)?;
-                validate_expr(result)?;
+                if let Some(result) = result {
+                    validate_expr(result)?;
+                }
                 Ok(())
             }
             crate::Statement::WorkGroupUniformLoad { pointer, result } => {

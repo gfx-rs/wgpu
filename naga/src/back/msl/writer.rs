@@ -3058,11 +3058,22 @@ impl<W: Write> Writer<W> {
                     value,
                     result,
                 } => {
+                    // This backend supports `SHADER_INT64_ATOMIC_MIN_MAX` but not
+                    // `SHADER_INT64_ATOMIC_ALL_OPS`, so we can assume that if `result` is
+                    // `Some`, we are not operating on a 64-bit value, and that if we are
+                    // operating on a 64-bit value, `result` is `None`.
                     write!(self.out, "{level}")?;
-                    let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                    self.start_baking_expression(result, &context.expression, &res_name)?;
-                    self.named_expressions.insert(result, res_name);
-                    let fun_str = fun.to_msl()?;
+                    let fun_str = if let Some(result) = result {
+                        let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                        self.start_baking_expression(result, &context.expression, &res_name)?;
+                        self.named_expressions.insert(result, res_name);
+                        fun.to_msl()?
+                    } else if context.expression.resolve_type(value).scalar_width() == Some(8) {
+                        fun.to_msl_64_bit()?
+                    } else {
+                        fun.to_msl()?
+                    };
+
                     self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
                     // done
                     writeln!(self.out, ";")?;
@@ -5912,5 +5923,33 @@ fn test_stack_size() {
         if !(15000..=25000).contains(&stack_size) {
             panic!("`put_block` stack size {stack_size} has changed!");
         }
+    }
+}
+
+impl crate::AtomicFunction {
+    fn to_msl(self) -> Result<&'static str, Error> {
+        Ok(match self {
+            Self::Add => "fetch_add",
+            Self::Subtract => "fetch_sub",
+            Self::And => "fetch_and",
+            Self::InclusiveOr => "fetch_or",
+            Self::ExclusiveOr => "fetch_xor",
+            Self::Min => "fetch_min",
+            Self::Max => "fetch_max",
+            Self::Exchange { compare: None } => "exchange",
+            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
+                "atomic CompareExchange".to_string(),
+            ))?,
+        })
+    }
+
+    fn to_msl_64_bit(self) -> Result<&'static str, Error> {
+        Ok(match self {
+            Self::Min => "min",
+            Self::Max => "max",
+            _ => Err(Error::FeatureNotImplemented(
+                "64-bit atomic operation other than min/max".to_string(),
+            ))?,
+        })
     }
 }

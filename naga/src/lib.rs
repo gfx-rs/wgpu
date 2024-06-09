@@ -1612,8 +1612,29 @@ pub enum Expression {
     },
     /// Result of calling another function.
     CallResult(Handle<Function>),
+
     /// Result of an atomic operation.
+    ///
+    /// This expression must be referred to by the [`result`] field of exactly one
+    /// [`Atomic`][stmt] statement somewhere in the same function. Let `T` be the
+    /// scalar type contained by the [`Atomic`][type] value that the statement
+    /// operates on.
+    ///
+    /// If `comparison` is `false`, then `ty` must be the scalar type `T`.
+    ///
+    /// If `comparison` is `true`, then `ty` must be a [`Struct`] with two members:
+    ///
+    /// - A member named `old_value`, whose type is `T`, and
+    ///
+    /// - A member named `exchanged`, of type [`BOOL`].
+    ///
+    /// [`result`]: Statement::Atomic::result
+    /// [stmt]: Statement::Atomic
+    /// [type]: TypeInner::Atomic
+    /// [`Struct`]: TypeInner::Struct
+    /// [`BOOL`]: Scalar::BOOL
     AtomicResult { ty: Handle<Type>, comparison: bool },
+
     /// Result of a [`WorkGroupUniformLoad`] statement.
     ///
     /// [`WorkGroupUniformLoad`]: Statement::WorkGroupUniformLoad
@@ -1890,15 +1911,66 @@ pub enum Statement {
     /// Atomic function.
     Atomic {
         /// Pointer to an atomic value.
+        ///
+        /// This must be a [`Pointer`] to an [`Atomic`] value. The atomic's
+        /// scalar type may be [`I32`] or [`U32`].
+        ///
+        /// If [`SHADER_INT64_ATOMIC_MIN_MAX`] or [`SHADER_INT64_ATOMIC_ALL_OPS`] are
+        /// enabled, this may also be [`I64`] or [`U64`].
+        ///
+        /// [`Pointer`]: TypeInner::Pointer
+        /// [`Atomic`]: TypeInner::Atomic
+        /// [`I32`]: Scalar::I32
+        /// [`U32`]: Scalar::U32
+        /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
+        /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`I64`]: Scalar::I64
+        /// [`U64`]: Scalar::U64
         pointer: Handle<Expression>,
-        /// Function to run on the atomic.
+
+        /// Function to run on the atomic value.
+        ///
+        /// If [`pointer`] refers to a 64-bit atomic value, then:
+        ///
+        /// - The [`SHADER_INT64_ATOMIC_ALL_OPS`] capability allows any [`AtomicFunction`]
+        ///   value here.
+        ///
+        /// - The [`SHADER_INT64_ATOMIC_MIN_MAX`] capability allows
+        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`] here.
+        ///
+        /// - If neither of those capabilities are present, then 64-bit scalar
+        ///   atomics are not allowed.
+        ///
+        /// [`pointer`]: Statement::Atomic::pointer
+        /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
+        /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
         fun: AtomicFunction,
+
         /// Value to use in the function.
+        ///
+        /// This must be a scalar of the same type as [`pointer`]'s atomic's scalar type.
+        ///
+        /// [`pointer`]: Statement::Atomic::pointer
         value: Handle<Expression>,
+
         /// [`AtomicResult`] expression representing this function's result.
         ///
+        /// If [`fun`] is [`Exchange { compare: None }`], this must be `Some`,
+        /// as otherwise that operation would be equivalent to a simple [`Store`]
+        /// to the atomic.
+        ///
+        /// Otherwise, this may be `None` if the return value of the operation is not needed.
+        ///
+        /// If `pointer` refers to a 64-bit atomic value, [`SHADER_INT64_ATOMIC_MIN_MAX`]
+        /// is enabled, and [`SHADER_INT64_ATOMIC_ALL_OPS`] is not, this must be `None`.
+        ///
         /// [`AtomicResult`]: crate::Expression::AtomicResult
-        result: Handle<Expression>,
+        /// [`fun`]: Statement::Atomic::fun
+        /// [`Store`]: Statement::Store
+        /// [`Exchange { compare: None }`]: AtomicFunction::Exchange
+        /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
+        /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        result: Option<Handle<Expression>>,
     },
     /// Load uniformly from a uniform pointer in the workgroup address space.
     ///

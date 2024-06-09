@@ -116,7 +116,7 @@
                             compare: Some(3),
                         ),
                         value: 4,
-                        result: 5,
+                        result: Some(5),
                     ),
                     Return(
                         value: None,

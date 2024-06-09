@@ -63,6 +63,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Int8,
     spirv::Capability::Int16,
     spirv::Capability::Int64,
+    spirv::Capability::Int64Atomics,
     spirv::Capability::Float16,
     spirv::Capability::Float64,
     spirv::Capability::Geometry,
@@ -4028,7 +4029,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         pointer: p_lexp_handle,
                         fun: crate::AtomicFunction::Add,
                         value: one_lexp_handle,
-                        result: r_lexp_handle,
+                        result: Some(r_lexp_handle),
                     };
                     block.push(stmt, span);
                 }

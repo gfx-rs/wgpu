@@ -75,7 +75,7 @@ fn populate_atomic_result() {
                         pointer: ex_global,
                         fun: naga::AtomicFunction::Add,
                         value: ex_42,
-                        result: ex_result,
+                        result: Some(ex_result),
                     },
                     span,
                 );

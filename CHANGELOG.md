@@ -81,8 +81,41 @@ for message in compilation_info
 
 By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
-### New features
+#### 64 bit integer atomic support in shaders.
 
+Add support for 64 bit integer atomic operations in shaders.
+
+Add the following flags to `wgpu_types::Features`:
+
+- `SHADER_INT64_ATOMIC_ALL_OPS` enables all atomic operations on `atomic<i64>` and
+  `atomic<u64>` values.
+
+- `SHADER_INT64_ATOMIC_MIN_MAX` is a subset of the above, enabling only
+  `AtomicFunction::Min` and `AtomicFunction::Max` operations on `atomic<i64>` and
+  `atomic<u64>` values in the `Storage` address space. These are the only 64-bit
+  atomic operations available on Metal as of 3.1.
+
+Add corresponding flags to `naga::valid::Capabilities`. These are supported by the
+WGSL front end, and all Naga backends.
+
+Platform support:
+
+- On Direct3d 12, in `D3D12_FEATURE_DATA_D3D12_OPTIONS9`, if
+  `AtomicInt64OnTypedResourceSupported` and `AtomicInt64OnGroupSharedSupported` are
+  both available, then both wgpu features described above are available.
+
+- On Metal, `SHADER_INT64_ATOMIC_MIN_MAX` is available on Apple9 hardware, and on
+  hardware that advertises both Apple8 and Mac2 support. This also requires Metal
+  Shading Language 2.4 or later. Metal does not yet support the more general
+  `SHADER_INT64_ATOMIC_ALL_OPS`.
+
+- On Vulkan, if the `VK_KHR_shader_atomic_int64` extension is available with both the
+  `shader_buffer_int64_atomics` and `shader_shared_int64_atomics` features, then both
+  wgpu features described above are available.
+
+By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
+
+### New features
 #### Vulkan
 
 - Added a `PipelineCache` resource to allow using Vulkan pipeline caches. By @DJMcNab in [#5319](https://github.com/gfx-rs/wgpu/pull/5319)

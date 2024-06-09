@@ -492,6 +492,16 @@ pub fn create_validator(
         features.contains(wgt::Features::SHADER_INT64),
     );
     caps.set(
+        Caps::SHADER_INT64_ATOMIC_MIN_MAX,
+        features.intersects(
+            wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX | wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS,
+        ),
+    );
+    caps.set(
+        Caps::SHADER_INT64_ATOMIC_ALL_OPS,
+        features.contains(wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS),
+    );
+    caps.set(
         Caps::MULTISAMPLED_SHADING,
         downlevel.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
     );

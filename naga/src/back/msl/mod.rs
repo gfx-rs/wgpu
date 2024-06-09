@@ -1,6 +1,9 @@
 /*!
 Backend for [MSL][msl] (Metal Shading Language).
 
+This backend does not support the [`SHADER_INT64_ATOMIC_ALL_OPS`][all-atom]
+capability.
+
 ## Binding model
 
 Metal's bindings are flat per resource. Since there isn't an obvious mapping
@@ -24,6 +27,8 @@ For the result type, if it's a structure, we re-compose it with a temporary valu
 holding the result.
 
 [msl]: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+[all-atom]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+
 */
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
@@ -660,22 +665,4 @@ pub fn write_string(
 fn test_error_size() {
     use std::mem::size_of;
     assert_eq!(size_of::<Error>(), 32);
-}
-
-impl crate::AtomicFunction {
-    fn to_msl(self) -> Result<&'static str, Error> {
-        Ok(match self {
-            Self::Add => "fetch_add",
-            Self::Subtract => "fetch_sub",
-            Self::And => "fetch_and",
-            Self::InclusiveOr => "fetch_or",
-            Self::ExclusiveOr => "fetch_xor",
-            Self::Min => "fetch_min",
-            Self::Max => "fetch_max",
-            Self::Exchange { compare: None } => "exchange",
-            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
-                "atomic CompareExchange".to_string(),
-            ))?,
-        })
-    }
 }
