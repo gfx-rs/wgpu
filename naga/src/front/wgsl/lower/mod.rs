@@ -963,6 +963,33 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::proc::ExpressionKindTracker::from_arena(&ctx.module.global_expressions);
         }
 
+        // check for redefinitions
+        for (_, decl) in tu.decls.iter() {
+            let ident = match decl.kind {
+                ast::GlobalDeclKind::Fn(ref f) => f.name,
+                ast::GlobalDeclKind::Var(ref v) => v.name,
+                ast::GlobalDeclKind::Const(ref c) => c.name,
+                ast::GlobalDeclKind::Override(ref o) => o.name,
+                ast::GlobalDeclKind::Struct(ref s) => s.name,
+                ast::GlobalDeclKind::Type(ref t) => t.name,
+            };
+            if let Some(old) = ctx.globals.get(ident.name) {
+                let span = match old {
+                    LoweredGlobalDecl::Function(handle) => ctx.module.functions.get_span(*handle),
+                    LoweredGlobalDecl::Var(handle) => ctx.module.global_variables.get_span(*handle),
+                    LoweredGlobalDecl::Const(handle) => ctx.module.constants.get_span(*handle),
+                    LoweredGlobalDecl::Override(handle) => ctx.module.overrides.get_span(*handle),
+                    LoweredGlobalDecl::Type(handle) => ctx.module.types.get_span(*handle),
+                    // We don't have good spans for entry points
+                    LoweredGlobalDecl::EntryPoint => Default::default(),
+                };
+                return Err(Error::Redefinition {
+                    previous: span,
+                    current: ident.span,
+                });
+            }
+        }
+
         for decl_handle in self.index.visit_ordered() {
             let span = tu.decls.get_span(decl_handle);
             let decl = &tu.decls[decl_handle];

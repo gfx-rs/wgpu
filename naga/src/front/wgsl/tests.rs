@@ -822,7 +822,7 @@ fn parse_base_module_const_local() {
     // Const in base module with same name as a local variable in the actual module shouldn't cause conflicts
 
     let base_module = parse_str("const foo: vec3f = vec3f(1.0);").unwrap();
-    let shader = "fn foo() -> f32 { let foo: f32 = 2.0; return foo; }";
+    let shader = "fn bar() -> f32 { let foo: f32 = 2.0; return foo; }";
     Frontend::new()
         .parse_to_ast(shader)
         .unwrap()
