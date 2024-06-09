@@ -650,6 +650,23 @@ fn parse_base_module_constant() {
         .unwrap();
 }
 
+/* Add this test once abstract numerics are supported.
+Although, depending on the implementation, this may not work anyways.
+#[test]
+fn parse_base_module_abstract_numerics() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module =
+        parse_str("const two = 2;")
+            .unwrap();
+    let shader = "const four: u32 = 2 * two; const signed_two: i32 = two;";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+*/
 #[test]
 fn parse_structs_with_base_module_structs() {
     use crate::front::wgsl::Frontend;
@@ -759,7 +776,7 @@ fn parse_base_module_function_predefined_no_leak() {
     // But changing a predefined function in the shader should not affect the base module
     let base_module = parse_str("fn bar(a: f32) -> f32 { return cos(a); }").unwrap();
     let shader =
-        "fn foo(a: f32) -> f32 { return cos(vec3f(1.0)).z; } fn cos(a: vec3f) -> vec3f { return a.xyz; }";
+        "fn foo(a: f32) -> f32 { return cos(vec3f(a)).z + bar(a); } fn cos(a: vec3f) -> vec3f { return a.xyz; }";
     Frontend::new()
         .parse_to_ast(shader)
         .unwrap()
@@ -767,18 +784,115 @@ fn parse_base_module_function_predefined_no_leak() {
         .unwrap();
 }
 
-// Use const as a const and as a runtime value in the actual module. Or use const with different types (abstract number type).
+#[test]
+fn parse_base_module_twice() {
+    use crate::front::wgsl::Frontend;
 
-// Two levels of base modules
+    let base_module_a = parse_str("fn bar(a: f32) -> f32 { return cos(a); }").unwrap();
+    let shader_a = "fn foo(a: f32) -> f32 { return bar(a); }";
+    let base_module_b = Frontend::new()
+        .parse_to_ast(shader_a)
+        .unwrap()
+        .to_module(Some(&base_module_a))
+        .unwrap();
+    let shader_b = "fn foobar(a: f32) -> f32 { return bar(a) + foo(a); }";
+    Frontend::new()
+        .parse_to_ast(shader_b)
+        .unwrap()
+        .to_module(Some(&base_module_b))
+        .unwrap();
+}
 
-// Const in base module with same name as a variable in the actual module
+#[test]
+fn parse_base_module_const_conflict() {
+    use crate::front::wgsl::Frontend;
 
-// Entry point in both
+    let base_module = parse_str("const foo: f32 = 1.0;").unwrap();
+    let shader = "fn foo() -> f32 { return 2.0; }";
+    let result = Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module));
+    assert!(result.is_err());
+}
 
-// Overrides in both
+#[test]
+fn parse_base_module_const_local() {
+    use crate::front::wgsl::Frontend;
+    // Const in base module with same name as a local variable in the actual module shouldn't cause conflicts
 
-// @group(0) @binding(0)
-// var<storage,read_write> foo: array<u32>; in both
+    let base_module = parse_str("const foo: vec3f = vec3f(1.0);").unwrap();
+    let shader = "fn foo() -> f32 { let foo: f32 = 2.0; return foo; }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
 
-// Error: redefining a global in the actual module. What does the message say?
-// Error reusing a group-binding pair in the actual module. What does the message say?
+#[test]
+fn parse_base_module_entry_points() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module =
+        parse_str("@vertex fn vs() -> @builtin(position) vec4f { return vec4<f32>(0.0); }")
+            .unwrap();
+    let shader = "@fragment fn fs() -> @location(0) vec4f { return vec4<f32>(1.0); }";
+    let result = Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+    assert_eq!(result.entry_points.len(), 2);
+}
+
+#[test]
+fn parse_base_module_pipeline_overridable_constants() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module = parse_str("override diffuse_param: f32 = 2.3;").unwrap();
+    let shader = "override specular_param: f32 = 0.1; fn foo() -> f32 { return diffuse_param + specular_param; }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+#[test]
+fn parse_base_module_storage_buffers() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module = parse_str(
+        "@group(0) @binding(0)
+        var<storage,read_write> foo: array<u32>;",
+    )
+    .unwrap();
+    let shader = "@group(0) @binding(1)
+    var<storage,read_write> bar: array<u32>;";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+/* Add this test once https://github.com/gfx-rs/wgpu/issues/5787 is fixed
+#[test]
+fn parse_base_module_storage_buffers_conflict() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module = parse_str(
+        "@group(0) @binding(0)
+        var<storage,read_write> foo: array<u32>;",
+    )
+    .unwrap();
+    let shader = "@group(0) @binding(0)
+    var<storage,read_write> bar: array<u32>;";
+    let result = Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module));
+    assert!(result.is_err());
+}
+ */
