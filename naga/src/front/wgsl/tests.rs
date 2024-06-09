@@ -636,3 +636,149 @@ fn parse_missing_workgroup_size() {
         Error::MissingWorkgroupSize(span) if span == Span::new(1, 8)
     ));
 }
+
+#[test]
+fn parse_base_module_constant() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module = parse_str("const some_constant_value: f32 = 1.0;").unwrap();
+    let shader = "fn foo() -> vec4<f32> { return vec4<f32>(some_constant_value); }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+#[test]
+fn parse_structs_with_base_module_structs() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module = parse_str("struct Bar { a: vec4f, b: Foo }; struct Foo { c: f32 }").unwrap();
+    let shader = "fn foo(foo: Foo) -> Bar { return Bar(vec4(1.0), foo); }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+#[test]
+fn parse_fn_with_base_module() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module =
+        parse_str("fn cat() -> Foo { return Foo(1.0); }; struct Foo { c: f32 }").unwrap();
+    let shader = "fn foo() -> f32 { return cat().c; }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+#[test]
+fn parse_fn_conflict_with_base_module() {
+    use crate::front::wgsl::Frontend;
+
+    // TODO: Error::Redefinition should be triggered
+    let base_module = parse_str("fn cat() -> f32 { return 1.0; }").unwrap();
+    let shader = "fn cat() -> f32 { return 2.0; }";
+    let result = Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module));
+    assert!(result.is_err());
+}
+
+#[test]
+fn parse_base_module_alias() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module =
+        parse_str("alias number = u32; struct Bar { a: number, b: Foo }; alias Foo = i32;")
+            .unwrap();
+    let shader = "fn foo(a: u32) -> Bar { return Bar(a, -1i); }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+#[test]
+fn parse_base_module_alias_usage() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module = parse_str("alias number = u32; struct Bar { a: u32 };").unwrap();
+    let shader = "fn foo(a: number) -> Bar { return Bar(a); }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+/* Add this once https://github.com/gfx-rs/wgpu/issues/5786 is fixed
+#[test]
+fn parse_base_module_alias_predeclared() {
+    use crate::front::wgsl::Frontend;
+
+    let base_module =
+        parse_str("alias vec4f = u32; struct Bar { a: vec4f, b: Foo }; alias Foo = i32;").unwrap();
+    let shader = "fn foo(a: u32) -> Bar { return Bar(a, -1i); }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+ */
+
+#[test]
+fn parse_base_module_function_predefined() {
+    use crate::front::wgsl::Frontend;
+
+    // Changing a predefined function should affect the shader
+    let base_module = parse_str(
+        "fn bar(a: f32) -> f32 { return cos(vec3f(a)).z; } fn cos(a: vec3f) -> vec3f { return a.xyz; }",
+    )
+    .unwrap();
+    let shader = "fn foo(a: f32) -> f32 { return cos(1.0); }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+#[test]
+fn parse_base_module_function_predefined_no_leak() {
+    use crate::front::wgsl::Frontend;
+
+    // But changing a predefined function in the shader should not affect the base module
+    let base_module = parse_str("fn bar(a: f32) -> f32 { return cos(a); }").unwrap();
+    let shader =
+        "fn foo(a: f32) -> f32 { return cos(vec3f(1.0)).z; } fn cos(a: vec3f) -> vec3f { return a.xyz; }";
+    Frontend::new()
+        .parse_to_ast(shader)
+        .unwrap()
+        .to_module(Some(&base_module))
+        .unwrap();
+}
+
+// Use const as a const and as a runtime value in the actual module. Or use const with different types (abstract number type).
+
+// Two levels of base modules
+
+// Const in base module with same name as a variable in the actual module
+
+// Entry point in both
+
+// Overrides in both
+
+// @group(0) @binding(0)
+// var<storage,read_write> foo: array<u32>; in both
+
+// Error: redefining a global in the actual module. What does the message say?
+// Error reusing a group-binding pair in the actual module. What does the message say?
