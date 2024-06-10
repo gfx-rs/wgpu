@@ -470,7 +470,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &RenderPassDescriptor<'_, '_>,
+        desc: &RenderPassDescriptor<'_>,
     ) -> (Self::RenderPassId, Self::RenderPassData);
     fn command_encoder_finish(
         &self,
@@ -1477,7 +1477,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'_, '_>,
+        desc: &RenderPassDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
     fn command_encoder_finish(
         &self,
@@ -2799,7 +2799,7 @@ where
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'_, '_>,
+        desc: &RenderPassDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);

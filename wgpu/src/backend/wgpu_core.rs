@@ -1947,7 +1947,7 @@ impl crate::Context for ContextWgpuCore {
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'_, '_>,
+        desc: &crate::RenderPassDescriptor<'_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
             self.handle_error_fatal(

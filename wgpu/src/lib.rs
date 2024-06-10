@@ -1273,10 +1273,10 @@ impl Drop for CommandEncoder {
 /// Corresponds to [WebGPU `GPURenderPassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#render-pass-encoder).
 #[derive(Debug)]
-pub struct RenderPass<'a> {
+pub struct RenderPass<'encoder> {
     id: ObjectId,
     data: Box<Data>,
-    parent: &'a mut CommandEncoder,
+    parent: &'encoder mut CommandEncoder,
 }
 
 /// In-progress recording of a compute pass.
@@ -1825,28 +1825,25 @@ static_assertions::assert_impl_all!(BindGroupDescriptor<'_>: Send, Sync);
 ///
 /// For use with [`CommandEncoder::begin_render_pass`].
 ///
-/// Note: separate lifetimes are needed because the texture views (`'tex`)
-/// have to live as long as the pass is recorded, while everything else (`'desc`) doesn't.
-///
 /// Corresponds to [WebGPU `GPURenderPassDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
 #[derive(Clone, Debug, Default)]
-pub struct RenderPassDescriptor<'tex, 'desc> {
+pub struct RenderPassDescriptor<'a> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'desc>,
+    pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
+    pub color_attachments: &'a [Option<RenderPassColorAttachment<'a>>],
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
     /// Defines which timestamp values will be written for this pass, and where to write them to.
     ///
     /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
-    pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'a>>,
     /// Defines where the occlusion query results will be stored for this pass.
-    pub occlusion_query_set: Option<&'tex QuerySet>,
+    pub occlusion_query_set: Option<&'a QuerySet>,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(RenderPassDescriptor<'_, '_>: Send, Sync);
+static_assertions::assert_impl_all!(RenderPassDescriptor<'_>: Send, Sync);
 
 /// Describes how the vertex buffer is interpreted.
 ///
@@ -3892,10 +3889,10 @@ impl CommandEncoder {
     // See https://github.com/gfx-rs/wgpu/pull/5768 for details
     // Once this is done, the documentation for `begin_render_pass` and `begin_compute_pass` should
     // be nearly identical.
-    pub fn begin_render_pass<'pass>(
-        &'pass mut self,
-        desc: &RenderPassDescriptor<'pass, '_>,
-    ) -> RenderPass<'pass> {
+    pub fn begin_render_pass<'encoder>(
+        &'encoder mut self,
+        desc: &RenderPassDescriptor<'_>,
+    ) -> RenderPass<'encoder> {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_render_pass(
             &*self.context,
@@ -4177,7 +4174,7 @@ impl CommandEncoder {
     }
 }
 
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when any `draw_*()` method is called must match the layout of
     /// this bind group.
@@ -4190,7 +4187,7 @@ impl<'a> RenderPass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::render_pass_set_bind_group(
@@ -4207,7 +4204,7 @@ impl<'a> RenderPass<'a> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         DynContext::render_pass_set_pipeline(
             &*self.parent.context,
             &mut self.id,
@@ -4235,7 +4232,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         DynContext::render_pass_set_index_buffer(
             &*self.parent.context,
             &mut self.id,
@@ -4258,7 +4255,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         DynContext::render_pass_set_vertex_buffer(
             &*self.parent.context,
             &mut self.id,
@@ -4433,7 +4430,7 @@ impl<'a> RenderPass<'a> {
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
     /// See details on the individual flags for more information.
-    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.parent.context,
             &mut self.id,
@@ -4460,7 +4457,7 @@ impl<'a> RenderPass<'a> {
     /// See details on the individual flags for more information.
     pub fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::render_pass_draw_indexed_indirect(
@@ -4478,7 +4475,10 @@ impl<'a> RenderPass<'a> {
     ///
     /// Commands in the bundle do not inherit this render pass's current render state, and after the
     /// bundle has executed, the state is **cleared** (reset to defaults, not the previous state).
-    pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
+    pub fn execute_bundles<'a, I: IntoIterator<Item = &'a RenderBundle>>(
+        &mut self,
+        render_bundles: I,
+    ) {
         let mut render_bundles = render_bundles
             .into_iter()
             .map(|rb| (&rb.id, rb.data.as_ref()));
@@ -4506,7 +4506,7 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
     ) {
@@ -4534,7 +4534,7 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
     ) {
@@ -4551,7 +4551,7 @@ impl<'a> RenderPass<'a> {
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
@@ -4576,9 +4576,9 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect_count(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-        count_buffer: &'a Buffer,
+        count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
     ) {
@@ -4623,9 +4623,9 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect_count(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-        count_buffer: &'a Buffer,
+        count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
     ) {
@@ -4645,7 +4645,7 @@ impl<'a> RenderPass<'a> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Set push constant data for subsequent draw calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -4699,7 +4699,7 @@ impl<'a> RenderPass<'a> {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
     ///
@@ -4768,7 +4768,7 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-impl<'a> Drop for RenderPass<'a> {
+impl<'encoder> Drop for RenderPass<'encoder> {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.parent

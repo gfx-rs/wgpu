@@ -2570,7 +2570,7 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'_, '_>,
+        desc: &crate::RenderPassDescriptor<'_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         let mapped_color_attachments = desc
             .color_attachments
