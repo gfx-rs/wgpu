@@ -877,23 +877,3 @@ fn parse_base_module_storage_buffers() {
         .to_module(Some(&base_module))
         .unwrap();
 }
-
-/* Add this test once https://github.com/gfx-rs/wgpu/issues/5787 is fixed
-#[test]
-fn parse_base_module_storage_buffers_conflict() {
-    use crate::front::wgsl::Frontend;
-
-    let base_module = parse_str(
-        "@group(0) @binding(0)
-        var<storage,read_write> foo: array<u32>;",
-    )
-    .unwrap();
-    let shader = "@group(0) @binding(0)
-    var<storage,read_write> bar: array<u32>;";
-    let result = Frontend::new()
-        .parse_to_ast(shader)
-        .unwrap()
-        .to_module(Some(&base_module));
-    assert!(result.is_err());
-}
- */
