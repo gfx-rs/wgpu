@@ -37,7 +37,7 @@ impl Frontend {
         self.parse_to_ast(source)?.to_module(None)
     }
 
-    /// Two-step module conversion, can be used to modify the intermediate structure before it becomes a module.
+    /// Two-step module conversion, can be used to compile with a "base module".
     pub fn parse_to_ast<'a>(&mut self, source: &'a str) -> Result<ParsedWgsl<'a>, ParseError> {
         self.inner_to_ast(source)
             .map_err(|x| x.as_parse_error(source))
