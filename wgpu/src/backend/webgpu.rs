@@ -1158,7 +1158,6 @@ impl crate::context::Context for ContextWebGpu {
     type SurfaceData = Sendable<(Canvas, webgpu_sys::GpuCanvasContext)>;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = Unused;
     type SubmissionIndexData = ();
     type PipelineCacheId = Unused;
     type PipelineCacheData = ();
@@ -2950,14 +2949,12 @@ impl crate::context::Context for ContextWebGpu {
         _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
+    ) -> Self::SubmissionIndexData {
         let temp_command_buffers = command_buffers
             .map(|(_, data)| data.0)
             .collect::<js_sys::Array>();
 
         queue_data.0.submit(&temp_command_buffers);
-
-        (Unused, ())
     }
 
     fn queue_get_timestamp_period(
