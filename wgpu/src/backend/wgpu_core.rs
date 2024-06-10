@@ -1913,7 +1913,7 @@ impl crate::Context for ContextWgpuCore {
         let timestamp_writes =
             desc.timestamp_writes
                 .as_ref()
-                .map(|tw| wgc::command::ComputePassTimestampWrites {
+                .map(|tw| wgc::command::PassTimestampWrites {
                     query_set: tw.query_set.id.into(),
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,
@@ -1982,7 +1982,7 @@ impl crate::Context for ContextWgpuCore {
         let timestamp_writes =
             desc.timestamp_writes
                 .as_ref()
-                .map(|tw| wgc::command::RenderPassTimestampWrites {
+                .map(|tw| wgc::command::PassTimestampWrites {
                     query_set: tw.query_set.id.into(),
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,

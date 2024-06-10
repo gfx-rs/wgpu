@@ -7,9 +7,9 @@ use crate::{
         compute_command::{ArcComputeCommand, ComputeCommand},
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        validate_and_begin_pipeline_statistics_query, BasePass, BindGroupStateChange,
-        CommandBuffer, CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope,
-        QueryUseError, StateChange,
+        validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites, BasePass,
+        BindGroupStateChange, CommandBuffer, CommandEncoderError, CommandEncoderStatus, MapPassErr,
+        PassErrorScope, PassTimestampWrites, QueryUseError, StateChange,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     error::{ErrorFormatter, PrettyError},
@@ -28,10 +28,6 @@ use crate::{
 };
 
 use hal::CommandEncoder as _;
-#[cfg(feature = "serde")]
-use serde::Deserialize;
-#[cfg(feature = "serde")]
-use serde::Serialize;
 
 use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
@@ -53,7 +49,7 @@ pub struct ComputePass<A: HalApi> {
     /// If it is none, this pass is invalid and any operation on it will return an error.
     parent: Option<Arc<CommandBuffer<A>>>,
 
-    timestamp_writes: Option<ArcComputePassTimestampWrites<A>>,
+    timestamp_writes: Option<ArcPassTimestampWrites<A>>,
 
     // Resource binding dedupe state.
     current_bind_groups: BindGroupStateChange,
@@ -103,39 +99,17 @@ impl<A: HalApi> fmt::Debug for ComputePass<A> {
     }
 }
 
-/// Describes the writing of timestamp values in a compute pass.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ComputePassTimestampWrites {
-    /// The query set to write the timestamps to.
-    pub query_set: id::QuerySetId,
-    /// The index of the query set at which a start timestamp of this pass is written, if any.
-    pub beginning_of_pass_write_index: Option<u32>,
-    /// The index of the query set at which an end timestamp of this pass is written, if any.
-    pub end_of_pass_write_index: Option<u32>,
-}
-
-/// Describes the writing of timestamp values in a compute pass with the query set resolved.
-struct ArcComputePassTimestampWrites<A: HalApi> {
-    /// The query set to write the timestamps to.
-    pub query_set: Arc<resource::QuerySet<A>>,
-    /// The index of the query set at which a start timestamp of this pass is written, if any.
-    pub beginning_of_pass_write_index: Option<u32>,
-    /// The index of the query set at which an end timestamp of this pass is written, if any.
-    pub end_of_pass_write_index: Option<u32>,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct ComputePassDescriptor<'a> {
     pub label: Label<'a>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<&'a ComputePassTimestampWrites>,
+    pub timestamp_writes: Option<&'a PassTimestampWrites>,
 }
 
 struct ArcComputePassDescriptor<'a, A: HalApi> {
     pub label: &'a Label<'a>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<ArcComputePassTimestampWrites<A>>,
+    pub timestamp_writes: Option<ArcPassTimestampWrites<A>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -378,7 +352,7 @@ impl Global {
                         return (ComputePass::new(None, arc_desc), Some(e.into()));
                     }
 
-                    Some(ArcComputePassTimestampWrites {
+                    Some(ArcPassTimestampWrites {
                         query_set,
                         beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                         end_of_pass_write_index: tw.end_of_pass_write_index,
@@ -433,7 +407,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePass<ComputeCommand>,
-        timestamp_writes: Option<&ComputePassTimestampWrites>,
+        timestamp_writes: Option<&PassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
         let hub = A::hub(self);
         let scope = PassErrorScope::PassEncoder(encoder_id);
@@ -442,7 +416,7 @@ impl Global {
         let commands = ComputeCommand::resolve_compute_command_ids(A::hub(self), &base.commands)?;
 
         let timestamp_writes = if let Some(tw) = timestamp_writes {
-            Some(ArcComputePassTimestampWrites {
+            Some(ArcPassTimestampWrites {
                 query_set: hub
                     .query_sets
                     .read()
@@ -473,7 +447,7 @@ impl Global {
         &self,
         cmd_buf: &CommandBuffer<A>,
         base: BasePass<ArcComputeCommand<A>>,
-        mut timestamp_writes: Option<ArcComputePassTimestampWrites<A>>,
+        mut timestamp_writes: Option<ArcPassTimestampWrites<A>>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
         let pass_scope = PassErrorScope::Pass(Some(cmd_buf.as_info().id()));
@@ -494,13 +468,11 @@ impl Global {
                     string_data: base.string_data.to_vec(),
                     push_constant_data: base.push_constant_data.to_vec(),
                 },
-                timestamp_writes: timestamp_writes
-                    .as_ref()
-                    .map(|tw| ComputePassTimestampWrites {
-                        query_set: tw.query_set.as_info().id(),
-                        beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                        end_of_pass_write_index: tw.end_of_pass_write_index,
-                    }),
+                timestamp_writes: timestamp_writes.as_ref().map(|tw| PassTimestampWrites {
+                    query_set: tw.query_set.as_info().id(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                }),
             });
         }
 

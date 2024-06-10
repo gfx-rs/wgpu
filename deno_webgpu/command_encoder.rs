@@ -186,7 +186,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
             .get::<WebGpuQuerySet>(timestamp_writes.query_set)?;
         let query_set = query_set_resource.1;
 
-        Some(wgpu_core::command::RenderPassTimestampWrites {
+        Some(wgpu_core::command::PassTimestampWrites {
             query_set,
             beginning_of_pass_write_index: timestamp_writes.beginning_of_pass_write_index,
             end_of_pass_write_index: timestamp_writes.end_of_pass_write_index,
@@ -245,7 +245,7 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
             .get::<WebGpuQuerySet>(timestamp_writes.query_set)?;
         let query_set = query_set_resource.1;
 
-        Some(wgpu_core::command::ComputePassTimestampWrites {
+        Some(wgpu_core::command::PassTimestampWrites {
             query_set,
             beginning_of_pass_write_index: timestamp_writes.beginning_of_pass_write_index,
             end_of_pass_write_index: timestamp_writes.end_of_pass_write_index,

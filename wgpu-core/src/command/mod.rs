@@ -10,6 +10,7 @@ mod memory_init;
 mod query;
 mod render;
 mod render_command;
+mod timestamp_writes;
 mod transfer;
 
 use std::sync::Arc;
@@ -21,6 +22,9 @@ pub use self::{
     transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
+
+pub(crate) use timestamp_writes::ArcPassTimestampWrites;
+pub use timestamp_writes::PassTimestampWrites;
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 

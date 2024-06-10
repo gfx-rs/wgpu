@@ -57,7 +57,7 @@ use super::{
     memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
     QueryResetMap,
 };
-use super::{DrawKind, Rect};
+use super::{DrawKind, PassTimestampWrites, Rect};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -186,29 +186,6 @@ impl RenderPassDepthStencilAttachment {
     }
 }
 
-/// Location to write a timestamp to (beginning or end of the pass).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
-pub enum RenderPassTimestampLocation {
-    Beginning = 0,
-    End = 1,
-}
-
-/// Describes the writing of timestamp values in a render pass.
-#[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RenderPassTimestampWrites {
-    /// The query set to write the timestamp to.
-    pub query_set: id::QuerySetId,
-    /// The index of the query set at which a start timestamp of this pass is written, if any.
-    pub beginning_of_pass_write_index: Option<u32>,
-    /// The index of the query set at which an end timestamp of this pass is written, if any.
-    pub end_of_pass_write_index: Option<u32>,
-}
-
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RenderPassDescriptor<'a> {
@@ -218,7 +195,7 @@ pub struct RenderPassDescriptor<'a> {
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<&'a RenderPassTimestampWrites>,
+    pub timestamp_writes: Option<&'a PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
 }
@@ -235,7 +212,7 @@ pub struct RenderPass {
     parent_id: id::CommandEncoderId,
     color_targets: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
-    timestamp_writes: Option<RenderPassTimestampWrites>,
+    timestamp_writes: Option<PassTimestampWrites>,
     occlusion_query_set_id: Option<id::QuerySetId>,
 
     // Resource binding dedupe state.
@@ -829,7 +806,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
         hal_label: Option<&str>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        timestamp_writes: Option<&RenderPassTimestampWrites>,
+        timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set: Option<Arc<QuerySet<A>>>,
         encoder: &mut CommandEncoder<A>,
         trackers: &mut Tracker<A>,
@@ -1359,7 +1336,7 @@ impl Global {
         base: BasePass<RenderCommand>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        timestamp_writes: Option<&RenderPassTimestampWrites>,
+        timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
     ) -> Result<(), RenderPassError> {
         let pass_scope = PassErrorScope::PassEncoder(encoder_id);
@@ -1400,7 +1377,7 @@ impl Global {
         base: BasePass<ArcRenderCommand<A>>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        timestamp_writes: Option<&RenderPassTimestampWrites>,
+        timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set: Option<Arc<QuerySet<A>>>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!(
