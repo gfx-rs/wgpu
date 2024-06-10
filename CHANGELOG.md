@@ -104,7 +104,7 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
       fn main_image(frag_coord: vec2f) -> vec4f {
           return vec4f(sin(frag_coord.x), cos(frag_coord.y), 0.0, 1.0);
       }").unwrap();
-  // For bonus points: Process the base_module to rename all globals except for `main_image`.
+  // A full shadertoy implementation would rename all globals from base_module, except for `main_image`.
   let result = Frontend::new()
       .parse_to_ast("
       @fragment
