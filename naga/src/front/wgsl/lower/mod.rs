@@ -974,12 +974,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ast::GlobalDeclKind::Type(ref t) => t.name,
             };
             if let Some(old) = ctx.globals.get(ident.name) {
-                let span = match old {
-                    LoweredGlobalDecl::Function(handle) => ctx.module.functions.get_span(*handle),
-                    LoweredGlobalDecl::Var(handle) => ctx.module.global_variables.get_span(*handle),
-                    LoweredGlobalDecl::Const(handle) => ctx.module.constants.get_span(*handle),
-                    LoweredGlobalDecl::Override(handle) => ctx.module.overrides.get_span(*handle),
-                    LoweredGlobalDecl::Type(handle) => ctx.module.types.get_span(*handle),
+                let span = match *old {
+                    LoweredGlobalDecl::Function(handle) => ctx.module.functions.get_span(handle),
+                    LoweredGlobalDecl::Var(handle) => ctx.module.global_variables.get_span(handle),
+                    LoweredGlobalDecl::Const(handle) => ctx.module.constants.get_span(handle),
+                    LoweredGlobalDecl::Override(handle) => ctx.module.overrides.get_span(handle),
+                    LoweredGlobalDecl::Type(handle) => ctx.module.types.get_span(handle),
                     // We don't have good spans for entry points
                     LoweredGlobalDecl::EntryPoint => Default::default(),
                 };

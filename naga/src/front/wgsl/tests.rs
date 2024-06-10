@@ -614,7 +614,9 @@ fn parse_repeated_attributes() {
         let span_end = span_start + name_length;
         let expected_span = Span::new(span_start, span_end);
 
-        let result = Frontend::new().inner(&shader);
+        let result = Frontend::new()
+            .inner_to_ast(&shader)
+            .and_then(|v| v.inner_to_module(None));
         assert!(matches!(
             result.unwrap_err(),
             Error::RepeatedAttribute(span) if span == expected_span
@@ -630,7 +632,9 @@ fn parse_missing_workgroup_size() {
     };
 
     let shader = "@compute fn vs() -> vec4<f32> { return vec4<f32>(0.0); }";
-    let result = Frontend::new().inner(shader);
+    let result = Frontend::new()
+        .inner_to_ast(shader)
+        .and_then(|v| v.inner_to_module(None));
     assert!(matches!(
         result.unwrap_err(),
         Error::MissingWorkgroupSize(span) if span == Span::new(1, 8)
@@ -696,16 +700,14 @@ fn parse_fn_with_base_module() {
 
 #[test]
 fn parse_fn_conflict_with_base_module() {
-    use crate::front::wgsl::Frontend;
+    use crate::front::wgsl::{error::Error, Frontend};
 
-    // TODO: Error::Redefinition should be triggered
     let base_module = parse_str("fn cat() -> f32 { return 1.0; }").unwrap();
     let shader = "fn cat() -> f32 { return 2.0; }";
     let result = Frontend::new()
-        .parse_to_ast(shader)
-        .unwrap()
-        .to_module(Some(&base_module));
-    assert!(result.is_err());
+        .inner_to_ast(shader)
+        .and_then(|v| v.inner_to_module(Some(&base_module)));
+    assert!(matches!(result, Err(Error::Redefinition { .. })));
 }
 
 #[test]
@@ -805,15 +807,14 @@ fn parse_base_module_twice() {
 
 #[test]
 fn parse_base_module_const_conflict() {
-    use crate::front::wgsl::Frontend;
+    use crate::front::wgsl::{error::Error, Frontend};
 
     let base_module = parse_str("const foo: f32 = 1.0;").unwrap();
     let shader = "fn foo() -> f32 { return 2.0; }";
     let result = Frontend::new()
-        .parse_to_ast(shader)
-        .unwrap()
-        .to_module(Some(&base_module));
-    assert!(result.is_err());
+        .inner_to_ast(shader)
+        .and_then(|v| v.inner_to_module(Some(&base_module)));
+    assert!(matches!(result, Err(Error::Redefinition { .. })));
 }
 
 #[test]

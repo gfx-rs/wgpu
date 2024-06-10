@@ -34,29 +34,23 @@ impl Frontend {
     }
 
     pub fn parse(&mut self, source: &str) -> Result<crate::Module, ParseError> {
-        self.parse_to_ast(source).and_then(|v| v.to_module(None))
+        self.parse_to_ast(source)?.to_module(None)
     }
 
     /// Two-step module conversion, can be used to modify the intermediate structure before it becomes a module.
     pub fn parse_to_ast<'a>(&mut self, source: &'a str) -> Result<ParsedWgsl<'a>, ParseError> {
-        let translation_unit = self
-            .parser
-            .parse(source)
-            .map_err(|x| x.as_parse_error(source))?;
-        let index =
-            index::Index::generate(&translation_unit).map_err(|x| x.as_parse_error(source))?;
+        self.inner_to_ast(source)
+            .map_err(|x| x.as_parse_error(source))
+    }
+
+    fn inner_to_ast<'a>(&mut self, source: &'a str) -> Result<ParsedWgsl<'a>, Error<'a>> {
+        let translation_unit = self.parser.parse(source)?;
+        let index = index::Index::generate(&translation_unit)?;
         Ok(ParsedWgsl {
             source,
             translation_unit,
             index,
         })
-    }
-
-    fn inner<'a>(&mut self, source: &'a str) -> Result<crate::Module, Error<'a>> {
-        let tu = self.parser.parse(source)?;
-        let index = index::Index::generate(&tu)?;
-        let module = Lowerer::new(&index).lower(&tu, None)?;
-        Ok(module)
     }
 }
 
@@ -70,9 +64,14 @@ impl<'a> ParsedWgsl<'a> {
         &self,
         base_module: Option<&crate::Module>,
     ) -> Result<crate::Module, ParseError> {
-        Lowerer::new(&self.index)
-            .lower(&self.translation_unit, base_module)
+        self.inner_to_module(base_module)
             .map_err(|x| x.as_parse_error(self.source))
+    }
+    fn inner_to_module(
+        &self,
+        base_module: Option<&'a crate::Module>,
+    ) -> Result<crate::Module, Error<'a>> {
+        Lowerer::new(&self.index).lower(&self.translation_unit, base_module)
     }
 }
 /// <div class="warning">
