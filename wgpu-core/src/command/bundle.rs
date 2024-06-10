@@ -48,7 +48,7 @@ To create a render bundle:
 3) Call [`Global::render_bundle_encoder_finish`][Grbef], which analyzes and cleans up
    the command stream and returns a `RenderBundleId`.
 
-4) Then, any number of times, call [`wgpu_render_pass_execute_bundles`][wrpeb] to
+4) Then, any number of times, call [`render_pass_execute_bundles`][wrpeb] to
    execute the bundle as part of some render pass.
 
 ## Implementation
@@ -73,7 +73,7 @@ index format changes.
 
 [Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
 [Grbef]: crate::global::Global::render_bundle_encoder_finish
-[wrpeb]: crate::command::render::render_commands::wgpu_render_pass_execute_bundles
+[wrpeb]: crate::global::Global::render_pass_execute_bundles
 !*/
 
 #![allow(clippy::reversed_empty_ranges)]
