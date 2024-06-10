@@ -95,6 +95,27 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
 - Implement `WGSL`'s `unpack4xI8`,`unpack4xU8`,`pack4xI8` and `pack4xU8`. By @VlaDexa in [#5424](https://github.com/gfx-rs/wgpu/pull/5424)
 - Began work adding support for atomics to the SPIR-V frontend. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5702](https://github.com/gfx-rs/wgpu/pull/5702).
+- Compile shaders with a "base module". This allows for cleanly implementing imports, or shadertoy-like environments. By @stefnotch in [#5791](https://github.com/gfx-rs/wgpu/pull/5791).
+  ```rust
+  use naga::front::wgsl::Frontend;
+
+  let base_module = Frontend::new()
+      .parse("
+      fn main_image(frag_coord: vec2f) -> vec4f {
+          return vec4f(sin(frag_coord.x), cos(frag_coord.y), 0.0, 1.0);
+      }").unwrap();
+  // For bonus points: Process the base_module to rename all globals except for `main_image`.
+  let result = Frontend::new()
+      .parse_to_ast("
+      @fragment
+      fn fs_main(@builtin(position) pos : vec4f, @location(0) uv: vec2f) -> vec4f {
+          return main_image(uv);
+      }")
+      .unwrap()
+      .to_module(Some(&base_module))
+      .unwrap();
+  ```
+
 
 ### Changes
 
