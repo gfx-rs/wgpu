@@ -53,6 +53,11 @@ pub struct ComputePass<A: HalApi> {
     // Resource binding dedupe state.
     current_bind_groups: BindGroupStateChange,
     current_pipeline: StateChange<id::ComputePipelineId>,
+
+    /// The device that this pass is associated with.
+    ///
+    /// Used for quick validation during recording.
+    device_id: id::DeviceId,
 }
 
 impl<A: HalApi> ComputePass<A> {
@@ -63,6 +68,10 @@ impl<A: HalApi> ComputePass<A> {
             timestamp_writes,
         } = desc;
 
+        let device_id = parent
+            .as_ref()
+            .map_or(id::DeviceId::dummy(0), |p| p.device.as_info().id());
+
         Self {
             base: Some(BasePass::new(label)),
             parent,
@@ -70,6 +79,8 @@ impl<A: HalApi> ComputePass<A> {
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
+
+            device_id,
         }
     }
 
@@ -349,6 +360,13 @@ impl Global {
                             Some(CommandEncoderError::InvalidTimestampWritesQuerySetId),
                         );
                     };
+
+                    if query_set.device.as_info().id() != cmd_buf.device.as_info().id() {
+                        return (
+                            ComputePass::new(None, arc_desc),
+                            Some(CommandEncoderError::WrongDeviceForTimestampWritesQuerySet),
+                        );
+                    }
 
                     Some(ArcComputePassTimestampWrites {
                         query_set,
@@ -976,6 +994,10 @@ impl Global {
             .map_err(|_| ComputePassErrorInner::InvalidBindGroup(index))
             .map_pass_err(scope)?;
 
+        if bind_group.device.as_info().id() != pass.device_id {
+            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+        }
+
         base.commands.push(ArcComputeCommand::SetBindGroup {
             index,
             num_dynamic_offsets: offsets.len(),
@@ -993,8 +1015,9 @@ impl Global {
         let redundant = pass.current_pipeline.set_and_check_redundant(pipeline_id);
 
         let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
-        let base = pass.base_mut(scope)?;
 
+        let device_id = pass.device_id;
+        let base = pass.base_mut(scope)?;
         if redundant {
             // Do redundant early-out **after** checking whether the pass is ended or not.
             return Ok(());
@@ -1007,6 +1030,10 @@ impl Global {
             .get_owned(pipeline_id)
             .map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
             .map_pass_err(scope)?;
+
+        if pipeline.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+        }
 
         base.commands.push(ArcComputeCommand::SetPipeline(pipeline));
 
@@ -1081,6 +1108,7 @@ impl Global {
             indirect: true,
             pipeline: pass.current_pipeline.last_state,
         };
+        let device_id = pass.device_id;
         let base = pass.base_mut(scope)?;
 
         let buffer = hub
@@ -1089,6 +1117,10 @@ impl Global {
             .get_owned(buffer_id)
             .map_err(|_| ComputePassErrorInner::InvalidBuffer(buffer_id))
             .map_pass_err(scope)?;
+
+        if buffer.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+        }
 
         base.commands
             .push(ArcComputeCommand::<A>::DispatchIndirect { buffer, offset });
@@ -1153,6 +1185,7 @@ impl Global {
         query_index: u32,
     ) -> Result<(), ComputePassError> {
         let scope = PassErrorScope::WriteTimestamp;
+        let device_id = pass.device_id;
         let base = pass.base_mut(scope)?;
 
         let hub = A::hub(self);
@@ -1162,6 +1195,10 @@ impl Global {
             .get_owned(query_set_id)
             .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
             .map_pass_err(scope)?;
+
+        if query_set.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+        }
 
         base.commands.push(ArcComputeCommand::WriteTimestamp {
             query_set,
@@ -1178,6 +1215,7 @@ impl Global {
         query_index: u32,
     ) -> Result<(), ComputePassError> {
         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+        let device_id = pass.device_id;
         let base = pass.base_mut(scope)?;
 
         let hub = A::hub(self);
@@ -1187,6 +1225,10 @@ impl Global {
             .get_owned(query_set_id)
             .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
             .map_pass_err(scope)?;
+
+        if query_set.device.as_info().id() != device_id {
+            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+        }
 
         base.commands
             .push(ArcComputeCommand::BeginPipelineStatisticsQuery {
