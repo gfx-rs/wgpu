@@ -72,7 +72,7 @@
                     pointer: 2,
                     fun: Add,
                     value: 4,
-                    result: 3,
+                    result: Some(3),
                 ),
                 Return(
                     value: None,

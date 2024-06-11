@@ -106,7 +106,7 @@
                     pointer: 4,
                     fun: Add,
                     value: 6,
-                    result: 5,
+                    result: Some(5),
                 ),
                 Return(
                     value: None,

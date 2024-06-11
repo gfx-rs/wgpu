@@ -186,7 +186,7 @@ static_assertions::assert_impl_all!(Device: Send, Sync);
 /// This type is unique to the Rust API of `wgpu`.
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
-pub struct SubmissionIndex(ObjectId, Arc<crate::Data>);
+pub struct SubmissionIndex(Arc<crate::Data>);
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
@@ -5397,14 +5397,14 @@ impl Queue {
             .into_iter()
             .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap()));
 
-        let (raw, data) = DynContext::queue_submit(
+        let data = DynContext::queue_submit(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             &mut command_buffers,
         );
 
-        SubmissionIndex(raw, data)
+        SubmissionIndex(data)
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
