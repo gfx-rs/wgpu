@@ -1448,7 +1448,7 @@ impl Global {
                             if raw.is_some() {
                                 // Compare the Arcs by pointer as Textures don't implement Eq
                                 submit_surface_textures_owned
-                                    .insert(Arc::as_ptr(&texture), texture.clone());
+                                    .insert(Arc::as_ptr(texture), texture.clone());
                             }
 
                             unsafe {
@@ -1493,7 +1493,7 @@ impl Global {
             let mut submit_surface_textures =
                 SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
 
-            for (_, texture) in &submit_surface_textures_owned {
+            for texture in submit_surface_textures_owned.values() {
                 submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
                     Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
                     _ => None,
