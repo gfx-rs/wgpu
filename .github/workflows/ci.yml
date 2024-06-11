@@ -543,6 +543,7 @@ jobs:
           cargo xtask test --llvm-cov
 
       - name: check naga snapshots
+        # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
       - uses: actions/upload-artifact@v4
