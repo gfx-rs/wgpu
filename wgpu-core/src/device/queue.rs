@@ -1172,7 +1172,9 @@ impl Global {
 
             let mut used_surface_textures = track::TextureUsageScope::default();
 
-            let mut submit_surface_textures_owned = SmallVec::<[_; 2]>::new();
+            // Use a hashmap here to deduplicate the surface textures that are used in the command buffers.
+            // This avoids vulkan deadlocking from the same surface texture being submitted multiple times.
+            let mut submit_surface_textures_owned = FastHashMap::default();
 
             {
                 let mut command_buffer_guard = hub.command_buffers.write();
@@ -1263,7 +1265,9 @@ impl Global {
                                         Some(TextureInner::Native { .. }) => false,
                                         Some(TextureInner::Surface { ref raw, .. }) => {
                                             if raw.is_some() {
-                                                submit_surface_textures_owned.push(texture.clone());
+                                                // Compare the Arcs by pointer as Textures don't implement Eq.
+                                                submit_surface_textures_owned
+                                                    .insert(Arc::as_ptr(&texture), texture.clone());
                                             }
 
                                             true
@@ -1442,7 +1446,9 @@ impl Global {
                         Some(TextureInner::Native { .. }) => {}
                         Some(TextureInner::Surface { ref raw, .. }) => {
                             if raw.is_some() {
-                                submit_surface_textures_owned.push(texture.clone());
+                                // Compare the Arcs by pointer as Textures don't implement Eq
+                                submit_surface_textures_owned
+                                    .insert(Arc::as_ptr(texture), texture.clone());
                             }
 
                             unsafe {
@@ -1487,7 +1493,7 @@ impl Global {
             let mut submit_surface_textures =
                 SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
 
-            for texture in &submit_surface_textures_owned {
+            for texture in submit_surface_textures_owned.values() {
                 submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
                     Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
                     _ => None,
