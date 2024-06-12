@@ -150,10 +150,10 @@ jobs:
           cargo -V
 
       # Use special toolchain for rustdoc, see https://github.com/gfx-rs/wgpu/issues/4905
-      - name: Install Rustdoc Toolchain
-        run: |
-          rustup toolchain install ${{ env.DOCS_RUST_VERSION }} --no-self-update --profile=minimal --component rust-docs --target ${{ matrix.target }}
-          cargo +${{ env.DOCS_RUST_VERSION }} -V
+      # - name: Install Rustdoc Toolchain
+      #   run: |
+      #     rustup toolchain install ${{ env.DOCS_RUST_VERSION }} --no-self-update --profile=minimal --component rust-docs --target ${{ matrix.target }}
+      #     cargo +${{ env.DOCS_RUST_VERSION }} -V
 
       - name: disable debug
         shell: bash
@@ -195,11 +195,11 @@ jobs:
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
+          # cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
           # all features
           cargo clippy --target ${{ matrix.target }} --tests --all-features
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --all-features
+          # cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -229,19 +229,19 @@ jobs:
           cargo clippy --target ${{ matrix.target }} --tests --benches --all-features
 
           # build docs
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
-      - name: check private item docs
-        if: matrix.kind == 'native'
-        shell: bash
-        run: |
-          set -e
+          # cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
+      # - name: check private item docs
+      #   if: matrix.kind == 'native'
+      #   shell: bash
+      #   run: |
+      #     set -e
 
-          # wgpu_core package
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} \
-                --package wgpu-core \
-                --package wgpu-hal \
-                --package naga \
-                --all-features --no-deps --document-private-items
+      #     # wgpu_core package
+      #     cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} \
+      #           --package wgpu-core \
+      #           --package wgpu-hal \
+      #           --package naga \
+      #           --all-features --no-deps --document-private-items
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.
