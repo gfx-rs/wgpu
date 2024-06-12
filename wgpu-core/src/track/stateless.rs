@@ -94,8 +94,6 @@ impl<T: Resource> ResourceTracker for StatelessTracker<T> {
             return false;
         }
 
-        resource_log!("StatelessTracker::remove_abandoned {index:?}");
-
         self.tracker_assert_in_bounds(index);
 
         unsafe {
@@ -104,13 +102,32 @@ impl<T: Resource> ResourceTracker for StatelessTracker<T> {
                 //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
+                    resource_log!(
+                        "StatelessTracker<{}>::remove_abandoned: removing {:?}",
+                        T::TYPE,
+                        self.metadata.get_resource_unchecked(index).as_info().id()
+                    );
+
                     self.metadata.remove(index);
                     return true;
                 }
 
+                resource_log!(
+                    "StatelessTracker<{}>::remove_abandoned: not removing {:?}, ref count {}",
+                    T::TYPE,
+                    self.metadata.get_resource_unchecked(index).as_info().id(),
+                    existing_ref_count
+                );
+
                 return false;
             }
         }
+
+        resource_log!(
+            "StatelessTracker<{}>::remove_abandoned: does not contain index {index:?}",
+            T::TYPE,
+        );
+
         true
     }
 }

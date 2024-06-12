@@ -13,6 +13,7 @@ use crate::{
     id::BufferId,
     lock::{rank, Mutex},
     resource::{Buffer, Resource},
+    resource_log,
     snatch::SnatchGuard,
     storage::Storage,
     track::{
@@ -334,13 +335,27 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
                 //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
+                    resource_log!(
+                        "BufferTracker::remove_abandoned: removing {:?}",
+                        self.metadata.get_resource_unchecked(index).as_info().id()
+                    );
+
                     self.metadata.remove(index);
                     return true;
                 }
 
+                resource_log!(
+                    "BufferTracker::remove_abandoned: not removing {:?}, ref count {}",
+                    self.metadata.get_resource_unchecked(index).as_info().id(),
+                    existing_ref_count
+                );
+
                 return false;
             }
         }
+
+        resource_log!("BufferTracker::remove_abandoned: does not contain index {index:?}",);
+
         true
     }
 }
