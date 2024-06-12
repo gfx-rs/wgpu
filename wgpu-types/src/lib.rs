@@ -4470,7 +4470,7 @@ impl Default for ColorWrites {
 }
 
 /// Passed to `Device::poll` to control how and if it should block.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Maintain<T> {
     /// On wgpu-core based backends, block until the given submission has
     /// completed execution, and any callbacks have been invoked.
