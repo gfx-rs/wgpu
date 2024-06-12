@@ -17,7 +17,15 @@ var<storage, read_write> buffer: array<vec4f>;
 
 #[gpu_test]
 static COMPUTE_PASS_RESOURCE_OWNERSHIP: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            // https://github.com/gfx-rs/wgpu/issues/5800
+            .skip(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::GL,
+                "AMD Radeon Pro WX 3200",
+            )),
+    )
     .run_async(compute_pass_resource_ownership);
 
 async fn compute_pass_resource_ownership(ctx: TestingContext) {
