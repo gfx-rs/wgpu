@@ -26,6 +26,7 @@ use crate::{
     hal_api::HalApi,
     lock::{rank, Mutex},
     resource::{Resource, Texture, TextureInner},
+    resource_log,
     snatch::SnatchGuard,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
@@ -424,15 +425,29 @@ impl<A: HalApi> ResourceTracker for TextureTracker<A> {
                 //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
+                    resource_log!(
+                        "TextureTracker::remove_abandoned: removing {:?}",
+                        self.metadata.get_resource_unchecked(index).as_info().id()
+                    );
+
                     self.start_set.complex.remove(&index);
                     self.end_set.complex.remove(&index);
                     self.metadata.remove(index);
                     return true;
                 }
 
+                resource_log!(
+                    "TextureTracker::remove_abandoned: not removing {:?}, ref count {}",
+                    self.metadata.get_resource_unchecked(index).as_info().id(),
+                    existing_ref_count
+                );
+
                 return false;
             }
         }
+
+        resource_log!("TextureTracker::remove_abandoned: does not contain index {index:?}",);
+
         true
     }
 }

@@ -256,7 +256,15 @@ impl Global {
             };
 
             let (id, resource) = fid.assign(Arc::new(buffer));
-            api_log!("Device::create_buffer({desc:?}) -> {id:?}");
+            api_log!(
+                "Device::create_buffer({:?}{}) -> {id:?}",
+                desc.label.as_deref().unwrap_or(""),
+                if desc.mapped_at_creation {
+                    ", mapped_at_creation"
+                } else {
+                    ""
+                }
+            );
 
             device
                 .trackers
@@ -2120,7 +2128,7 @@ impl Global {
         device_id: DeviceId,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<bool, WaitIdleError> {
-        api_log!("Device::poll");
+        api_log!("Device::poll {maintain:?}");
 
         let hub = A::hub(self);
         let device = hub

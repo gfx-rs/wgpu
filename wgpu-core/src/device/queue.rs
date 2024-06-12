@@ -1533,6 +1533,8 @@ impl Global {
         // the closures should execute with nothing locked!
         callbacks.fire();
 
+        api_log!("Queue::submit to {queue_id:?} returned submit index {submit_index}");
+
         Ok(WrappedSubmissionIndex {
             queue_id,
             index: submit_index,
