@@ -289,7 +289,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let indirect_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("gpu_buffer"),
+            label: Some("indirect_buffer"),
             usage: wgpu::BufferUsages::INDIRECT,
             contents: wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }.as_bytes(),
         });
