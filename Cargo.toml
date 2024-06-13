@@ -45,13 +45,13 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.20.0"
+version = "0.20.1"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.20.0"
+version = "0.21.0"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
@@ -61,7 +61,7 @@ version = "0.20.0"
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.20.0"
+version = "0.21.0"
 
 [workspace.dependencies.naga]
 path = "./naga"
@@ -119,7 +119,7 @@ smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
 wgpu = { version = "0.20.0", path = "./wgpu" }
-wgpu-core = { version = "0.20.0", path = "./wgpu-core" }
+wgpu-core = { version = "0.21.0", path = "./wgpu-core" }
 wgpu-example = { version = "0.20.0", path = "./examples/common" }
 wgpu-macros = { version = "0.20.0", path = "./wgpu-macros" }
 wgpu-test = { version = "0.20.0", path = "./tests" }

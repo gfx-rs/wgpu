@@ -37,9 +37,15 @@ Bottom level categories:
 - Hal
 -->
 
-## Unreleased -- v0.20.1 (2024-04-??)
+## Unreleased 
+
+## v0.20.1 (2024-06-12)
+
+This release included v0.21.0 of `wgpu-core` and `wgpu-hal`, due to breaking changes needed to solve vulkan validation issues.
 
 ### Bug Fixes
+
+This release fixes the validation errors whenever a surface is used with the vulkan backend. By @cwfitzgerald in [#5681](https://github.com/gfx-rs/wgpu/pull/5681).
 
 #### General
 

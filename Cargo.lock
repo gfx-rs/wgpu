@@ -2619,7 +2619,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
 name = "player"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "env_logger",
  "log",
@@ -4052,7 +4052,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "arrayvec 0.7.4",
  "cfg-if",
@@ -4077,7 +4077,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "arrayvec 0.7.4",
  "bit-vec",
@@ -4105,7 +4105,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -4138,7 +4138,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.4",
@@ -4162,7 +4162,7 @@ dependencies = [
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading 0.8.3",
+ "libloading 0.7.4",
  "log",
  "metal",
  "naga",
@@ -4186,7 +4186,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "bitflags 2.5.0",
@@ -4200,7 +4200,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "heck 0.5.0",
  "quote",
@@ -4209,7 +4209,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.4",

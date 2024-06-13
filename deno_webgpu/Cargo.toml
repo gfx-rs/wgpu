@@ -45,7 +45,7 @@ workspace = true
 features = ["dx12"]
 
 [target.'cfg(windows)'.dependencies.wgpu-hal]
-version = "0.20.0"
+version = "0.21.0"
 path = "../wgpu-hal"
 features = ["windows_rs"]
 
