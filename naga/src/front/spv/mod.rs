@@ -151,18 +151,6 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     }
 }
 
-trait LookupMutHelper {
-    type Target;
-    fn lookup_mut(&mut self, key: spirv::Word) -> Result<&mut Self::Target, Error>;
-}
-
-impl<T> LookupMutHelper for FastHashMap<spirv::Word, T> {
-    type Target = T;
-    fn lookup_mut(&mut self, key: spirv::Word) -> Result<&mut T, Error> {
-        self.get_mut(&key).ok_or(Error::InvalidId(key))
-    }
-}
-
 impl crate::ImageDimension {
     const fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
         match *self {

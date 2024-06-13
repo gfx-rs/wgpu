@@ -12,6 +12,8 @@ pub enum Error {
     MissingHandle(crate::arena::BadHandle),
     #[error("no function context")]
     NoFunction,
+    #[error("encountered an unsupported expression")]
+    Unsupported,
 }
 
 impl From<Error> for crate::front::spv::Error {
@@ -230,60 +232,6 @@ impl<'a> UpgradeState<'a> {
         })
     }
 
-    fn upgrade_constant(&mut self, handle: Handle<Constant>) -> Result<Handle<Constant>, Error> {
-        let padding = self.inc_padding();
-        padding.debug("upgrading const: ", handle);
-
-        let constant = self.module.constants.try_get(handle)?.clone();
-        padding.debug("constant: ", &constant);
-
-        let new_constant = Constant {
-            name: constant.name.clone(),
-            ty: self.upgrade_type(constant.ty)?,
-            init: self.upgrade_expression(None, constant.init)?,
-        };
-
-        if constant != new_constant {
-            padding.debug("inserting new constant: ", &new_constant);
-            let new_handle = self
-                .module
-                .constants
-                .append(new_constant, self.module.constants.get_span(handle));
-            padding.debug("new constant handle: ", &new_handle);
-            Ok(new_handle)
-        } else {
-            Ok(handle)
-        }
-    }
-
-    fn upgrade_override(&mut self, handle: Handle<Override>) -> Result<Handle<Override>, Error> {
-        let padding = self.inc_padding();
-        padding.debug("upgrading override: ", handle);
-
-        let o = self.module.overrides.try_get(handle)?.clone();
-        padding.debug("override: ", &o);
-
-        let new_o = Override {
-            name: o.name.clone(),
-            id: o.id,
-            ty: self.upgrade_type(o.ty)?,
-            init: self.upgrade_opt_expression(None, o.init)?,
-        };
-
-        if o != new_o {
-            padding.debug("inserting new override: ", &new_o);
-            let new_handle = self
-                .module
-                .overrides
-                .append(new_o, self.module.overrides.get_span(handle));
-            padding.debug("new override handle: ", &new_handle);
-            Ok(new_handle)
-        } else {
-            Ok(handle)
-        }
-    }
-
-    // Upgrade the expression, recursing int we reach...
     fn upgrade_expression(
         &mut self,
         maybe_fn_handle: Option<Handle<Function>>,
@@ -300,174 +248,19 @@ impl<'a> UpgradeState<'a> {
 
         padding.debug("expr: ", &expr);
         let new_expr = match expr.clone() {
-            l @ Expression::Literal(_) => l,
-            Expression::Constant(h) => Expression::Constant(self.upgrade_constant(h)?),
-            Expression::Override(h) => Expression::Override(self.upgrade_override(h)?),
-            Expression::ZeroValue(ty) => Expression::ZeroValue(self.upgrade_type(ty)?),
-            Expression::Compose { ty, components } => Expression::Compose {
-                ty: self.upgrade_type(ty)?,
-                components: {
-                    let mut new_components = vec![];
-                    for component in components.into_iter() {
-                        new_components.push(self.upgrade_expression(maybe_fn_handle, component)?);
-                    }
-                    new_components
-                },
-            },
-            Expression::Access { base, index } => Expression::Access {
-                base: self.upgrade_expression(maybe_fn_handle, base)?,
-                index: self.upgrade_expression(maybe_fn_handle, index)?,
-            },
             Expression::AccessIndex { base, index } => Expression::AccessIndex {
                 base: self.upgrade_expression(maybe_fn_handle, base)?,
                 index,
             },
-            Expression::Splat { size, value } => Expression::Splat {
-                size,
-                value: self.upgrade_expression(maybe_fn_handle, value)?,
-            },
-            Expression::Swizzle {
-                size,
-                vector,
-                pattern,
-            } => Expression::Swizzle {
-                size,
-                vector: self.upgrade_expression(maybe_fn_handle, vector)?,
-                pattern,
-            },
-            f @ Expression::FunctionArgument(_) => f,
             Expression::GlobalVariable(var) => {
                 Expression::GlobalVariable(self.upgrade_global_variable(var)?)
             }
             Expression::LocalVariable(var) => Expression::LocalVariable(
                 self.upgrade_local_variable(maybe_fn_handle.ok_or(Error::NoFunction)?, var)?,
             ),
-            Expression::Load { pointer } => Expression::Load {
-                pointer: self.upgrade_expression(maybe_fn_handle, pointer)?,
-            },
-            Expression::ImageSample {
-                image,
-                sampler,
-                gather,
-                coordinate,
-                array_index,
-                offset,
-                level,
-                depth_ref,
-            } => Expression::ImageSample {
-                image: self.upgrade_expression(maybe_fn_handle, image)?,
-                sampler: self.upgrade_expression(maybe_fn_handle, sampler)?,
-                gather,
-                coordinate: self.upgrade_expression(maybe_fn_handle, coordinate)?,
-                array_index: self.upgrade_opt_expression(maybe_fn_handle, array_index)?,
-                offset: self.upgrade_opt_expression(maybe_fn_handle, offset)?,
-                level: match level {
-                    crate::SampleLevel::Exact(h) => {
-                        crate::SampleLevel::Exact(self.upgrade_expression(maybe_fn_handle, h)?)
-                    }
-                    crate::SampleLevel::Bias(h) => {
-                        crate::SampleLevel::Bias(self.upgrade_expression(maybe_fn_handle, h)?)
-                    }
-                    crate::SampleLevel::Gradient { x, y } => crate::SampleLevel::Gradient {
-                        x: self.upgrade_expression(maybe_fn_handle, x)?,
-                        y: self.upgrade_expression(maybe_fn_handle, y)?,
-                    },
-                    n => n,
-                },
-                depth_ref: self.upgrade_opt_expression(maybe_fn_handle, depth_ref)?,
-            },
-            Expression::ImageLoad {
-                image,
-                coordinate,
-                array_index,
-                sample,
-                level,
-            } => Expression::ImageLoad {
-                image: self.upgrade_expression(maybe_fn_handle, image)?,
-                coordinate: self.upgrade_expression(maybe_fn_handle, coordinate)?,
-                array_index: self.upgrade_opt_expression(maybe_fn_handle, array_index)?,
-                sample: self.upgrade_opt_expression(maybe_fn_handle, sample)?,
-                level: self.upgrade_opt_expression(maybe_fn_handle, level)?,
-            },
-            Expression::ImageQuery { image, query } => Expression::ImageQuery {
-                image: self.upgrade_expression(maybe_fn_handle, image)?,
-                query: match query {
-                    crate::ImageQuery::Size { level } => crate::ImageQuery::Size {
-                        level: self.upgrade_opt_expression(maybe_fn_handle, level)?,
-                    },
-                    n => n,
-                },
-            },
-            Expression::Unary { op, expr } => Expression::Unary {
-                op,
-                expr: self.upgrade_expression(maybe_fn_handle, expr)?,
-            },
-            Expression::Binary { op, left, right } => Expression::Binary {
-                op,
-                left: self.upgrade_expression(maybe_fn_handle, left)?,
-                right: self.upgrade_expression(maybe_fn_handle, right)?,
-            },
-            Expression::Select {
-                condition,
-                accept,
-                reject,
-            } => Expression::Select {
-                condition: self.upgrade_expression(maybe_fn_handle, condition)?,
-                accept: self.upgrade_expression(maybe_fn_handle, accept)?,
-                reject: self.upgrade_expression(maybe_fn_handle, reject)?,
-            },
-            Expression::Derivative { axis, ctrl, expr } => Expression::Derivative {
-                axis,
-                ctrl,
-                expr: self.upgrade_expression(maybe_fn_handle, expr)?,
-            },
-            Expression::Relational { fun, argument } => Expression::Relational {
-                fun,
-                argument: self.upgrade_expression(maybe_fn_handle, argument)?,
-            },
-            Expression::Math {
-                fun,
-                arg,
-                arg1,
-                arg2,
-                arg3,
-            } => Expression::Math {
-                fun,
-                arg: self.upgrade_expression(maybe_fn_handle, arg)?,
-                arg1: self.upgrade_opt_expression(maybe_fn_handle, arg1)?,
-                arg2: self.upgrade_opt_expression(maybe_fn_handle, arg2)?,
-                arg3: self.upgrade_opt_expression(maybe_fn_handle, arg3)?,
-            },
-            Expression::As {
-                expr,
-                kind,
-                convert,
-            } => Expression::As {
-                expr: self.upgrade_expression(maybe_fn_handle, expr)?,
-                kind,
-                convert,
-            },
-            c @ Expression::CallResult(_) => c,
-            a @ Expression::AtomicResult { .. } => a,
-            Expression::WorkGroupUniformLoadResult { ty } => {
-                Expression::WorkGroupUniformLoadResult {
-                    ty: self.upgrade_type(ty)?,
-                }
+            _ => {
+                return Err(Error::Unsupported);
             }
-            Expression::ArrayLength(h) => {
-                Expression::ArrayLength(self.upgrade_expression(maybe_fn_handle, h)?)
-            }
-            r @ Expression::RayQueryProceedResult => r,
-            Expression::RayQueryGetIntersection { query, committed } => {
-                Expression::RayQueryGetIntersection {
-                    query: self.upgrade_expression(maybe_fn_handle, query)?,
-                    committed,
-                }
-            }
-            s @ Expression::SubgroupBallotResult => s,
-            Expression::SubgroupOperationResult { ty } => Expression::SubgroupOperationResult {
-                ty: self.upgrade_type(ty)?,
-            },
         };
 
         if new_expr != expr {
