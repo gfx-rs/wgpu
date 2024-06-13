@@ -22,11 +22,11 @@ type Pair<T> = (Id<<T as Resource>::Marker>, Arc<T>);
 
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
-pub(crate) struct StatelessBindGroupSate<T: Resource> {
+pub(crate) struct StatelessBindGroupState<T: Resource> {
     resources: Mutex<Vec<Pair<T>>>,
 }
 
-impl<T: Resource> StatelessBindGroupSate<T> {
+impl<T: Resource> StatelessBindGroupState<T> {
     pub fn new() -> Self {
         Self {
             resources: Mutex::new(rank::STATELESS_BIND_GROUP_STATE_RESOURCES, Vec::new()),

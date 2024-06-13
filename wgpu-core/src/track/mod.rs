@@ -115,7 +115,7 @@ use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
-pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
+pub(crate) use stateless::{StatelessBindGroupState, StatelessTracker};
 pub(crate) use texture::{
     TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
 };
@@ -447,8 +447,8 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
     pub textures: TextureBindGroupState<A>,
-    pub views: StatelessBindGroupSate<resource::TextureView<A>>,
-    pub samplers: StatelessBindGroupSate<resource::Sampler<A>>,
+    pub views: StatelessBindGroupState<resource::TextureView<A>>,
+    pub samplers: StatelessBindGroupState<resource::Sampler<A>>,
 }
 
 impl<A: HalApi> BindGroupStates<A> {
@@ -456,8 +456,8 @@ impl<A: HalApi> BindGroupStates<A> {
         Self {
             buffers: BufferBindGroupState::new(),
             textures: TextureBindGroupState::new(),
-            views: StatelessBindGroupSate::new(),
-            samplers: StatelessBindGroupSate::new(),
+            views: StatelessBindGroupState::new(),
+            samplers: StatelessBindGroupState::new(),
         }
     }
 
