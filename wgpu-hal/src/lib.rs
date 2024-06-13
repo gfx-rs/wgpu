@@ -40,12 +40,10 @@
  *   taking objects by reference, returning them by value, and so on,
  *   unlike `wgpu-core`, which refers to objects by ID.
  *
- * - We map buffer contents *persistently*. This means that the buffer
- *   can remain mapped on the CPU while the GPU reads or writes to it.
- *   You must explicitly indicate when data might need to be
- *   transferred between CPU and GPU, if `wgpu-hal` indicates that the
- *   mapping is not coherent (that is, automatically synchronized
- *   between the two devices).
+ * - We map buffer contents *persistently*. This means that the buffer can
+ *   remain mapped on the CPU while the GPU reads or writes to it. You must
+ *   explicitly indicate when data might need to be transferred between CPU and
+ *   GPU, if [`Device::map_buffer`] indicates that this is necessary.
  *
  * - You must record *explicit barriers* between different usages of a
  *   resource. For example, if a buffer is written to by a compute
@@ -662,17 +660,93 @@ pub trait Device: WasmNotSendSync {
         &self,
         desc: &BufferDescriptor,
     ) -> Result<<Self::A as Api>::Buffer, DeviceError>;
+
+    /// Free `buffer` and any GPU resources it owns.
+    ///
+    /// Note that backends are allowed to allocate GPU memory for buffers from
+    /// allocation pools, and this call is permitted to simply return `buffer`'s
+    /// storage to that pool, without making it available to other applications.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must not currently be mapped.
     unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer);
+
+    /// Return a pointer to CPU memory mapping the contents of `buffer`.
+    ///
+    /// Buffer mappings are persistent: the buffer may remain mapped on the CPU
+    /// while the GPU reads or writes to it. (Note that `wgpu_core` does not use
+    /// this feature: when a `wgpu_core::Buffer` is unmapped, the underlying
+    /// `wgpu_hal` buffer is also unmapped.)
+    ///
+    /// If this function returns `Ok(mapping)`, then:
+    ///
+    /// - `mapping.ptr` is the CPU address of the start of the mapped memory.
+    ///
+    /// - If `mapping.is_coherent` is `true`, then CPU writes to the mapped
+    ///   memory are immediately visible on the GPU, and vice versa.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must have been created with the [`MAP_READ`] or
+    ///   [`MAP_WRITE`] flags set in [`BufferDescriptor::usage`].
+    ///
+    /// - The given `range` must fall within the size of `buffer`.
+    ///
+    /// - The caller must avoid data races between the CPU and the GPU. A data
+    ///   race is any pair of accesses to a particular byte, one of which is a
+    ///   write, that are not ordered with respect to each other by some sort of
+    ///   synchronization operation.
+    ///
+    /// - If this function returns `Ok(mapping)` and `mapping.is_coherent` is
+    ///   `false`, then:
+    ///
+    ///   - Every CPU write to a mapped byte followed by a GPU read of that byte
+    ///     must have at least one call to [`Device::flush_mapped_ranges`]
+    ///     covering that byte that occurs between those two accesses.
+    ///
+    ///   - Every GPU write to a mapped byte followed by a CPU read of that byte
+    ///     must have at least one call to [`Device::invalidate_mapped_ranges`]
+    ///     covering that byte that occurs between those two accesses.
+    ///
+    ///   Note that the data race rule above requires that all such access pairs
+    ///   be ordered, so it is meaningful to talk about what must occur
+    ///   "between" them.
+    ///
+    /// [`MAP_READ`]: BufferUses::MAP_READ
+    /// [`MAP_WRITE`]: BufferUses::MAP_WRITE
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
         &self,
         buffer: &<Self::A as Api>::Buffer,
         range: MemoryRange,
     ) -> Result<BufferMapping, DeviceError>;
+
+    /// Remove the mapping established by the last call to [`Device::map_buffer`].
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must be currently mapped.
     unsafe fn unmap_buffer(&self, buffer: &<Self::A as Api>::Buffer) -> Result<(), DeviceError>;
+
+    /// Indicate that CPU writes to mapped buffer memory should be made visible to the GPU.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must be currently mapped.
+    ///
+    /// - All ranges produced by `ranges` must fall within `buffer`'s size.
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &<Self::A as Api>::Buffer, ranges: I)
     where
         I: Iterator<Item = MemoryRange>;
+
+    /// Indicate that GPU writes to mapped buffer memory should be made visible to the CPU.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must be currently mapped.
+    ///
+    /// - All ranges produced by `ranges` must fall within `buffer`'s size.
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &<Self::A as Api>::Buffer, ranges: I)
     where
         I: Iterator<Item = MemoryRange>;
