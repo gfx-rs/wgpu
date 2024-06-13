@@ -173,7 +173,7 @@ impl<'a> UpgradeState<'a> {
         let new_var = GlobalVariable {
             name: var.name.clone(),
             space: var.space,
-            binding: var.binding,
+            binding: var.binding.clone(),
             ty: self.upgrade_type(var.ty)?,
             init: self.upgrade_opt_expression(None, var.init)?,
         };

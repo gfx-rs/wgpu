@@ -9,6 +9,22 @@
         ),
         (
             name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                space: Storage(
+                    access: ("LOAD | STORE"),
+                ),
+            ),
+        ),
+        (
+            name: None,
             inner: Struct(
                 members: [
                     (
@@ -24,7 +40,7 @@
         (
             name: None,
             inner: Pointer(
-                base: 2,
+                base: 4,
                 space: Storage(
                     access: ("LOAD | STORE"),
                 ),
@@ -32,11 +48,32 @@
         ),
         (
             name: None,
+            inner: Atomic((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
             inner: Pointer(
-                base: 1,
+                base: 6,
                 space: Storage(
                     access: ("LOAD | STORE"),
                 ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 6,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
             ),
         ),
     ],
@@ -56,6 +93,26 @@
             ty: 1,
             init: 2,
         ),
+        (
+            name: None,
+            ty: 2,
+            init: 3,
+        ),
+        (
+            name: None,
+            ty: 1,
+            init: 4,
+        ),
+        (
+            name: None,
+            ty: 2,
+            init: 5,
+        ),
+        (
+            name: None,
+            ty: 1,
+            init: 6,
+        ),
     ],
     overrides: [],
     global_variables: [
@@ -68,45 +125,185 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 2,
+            ty: 4,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 4,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 8,
             init: None,
         ),
     ],
     global_expressions: [
         Literal(U32(0)),
         Literal(U32(2)),
+        Literal(Bool(false)),
+        Literal(U32(1)),
+        Literal(Bool(true)),
+        ZeroValue(1),
     ],
     functions: [
         (
             name: None,
             arguments: [],
             result: None,
-            local_variables: [],
+            local_variables: [
+                (
+                    name: Some("phi_23"),
+                    ty: 1,
+                    init: None,
+                ),
+                (
+                    name: Some("phi_24"),
+                    ty: 1,
+                    init: None,
+                ),
+            ],
             expressions: [
                 GlobalVariable(1),
+                GlobalVariable(2),
+                Constant(5),
+                Constant(3),
+                Constant(6),
+                Constant(4),
                 Constant(2),
                 Constant(1),
                 AccessIndex(
                     base: 1,
                     index: 0,
                 ),
+                AccessIndex(
+                    base: 2,
+                    index: 0,
+                ),
+                LocalVariable(1),
+                Load(
+                    pointer: 11,
+                ),
+                Load(
+                    pointer: 10,
+                ),
+                Binary(
+                    op: GreaterEqual,
+                    left: 12,
+                    right: 13,
+                ),
                 AtomicResult(
                     ty: 1,
                     comparison: false,
                 ),
                 Literal(U32(1)),
+                Binary(
+                    op: Add,
+                    left: 12,
+                    right: 6,
+                ),
+                LocalVariable(2),
+                Load(
+                    pointer: 18,
+                ),
+                Select(
+                    condition: 14,
+                    accept: 4,
+                    reject: 3,
+                ),
+                Unary(
+                    op: LogicalNot,
+                    expr: 20,
+                ),
+                LocalVariable(1),
+                LocalVariable(2),
+                GlobalVariable(3),
+                AccessIndex(
+                    base: 24,
+                    index: 0,
+                ),
             ],
             named_expressions: {},
             body: [
                 Emit((
-                    start: 3,
-                    end: 5,
+                    start: 8,
+                    end: 10,
                 )),
-                Atomic(
-                    pointer: 4,
-                    fun: Add,
-                    value: 6,
-                    result: Some(5),
+                Store(
+                    pointer: 22,
+                    value: 8,
+                ),
+                Loop(
+                    body: [
+                        Emit((
+                            start: 11,
+                            end: 12,
+                        )),
+                        Emit((
+                            start: 12,
+                            end: 14,
+                        )),
+                        If(
+                            condition: 14,
+                            accept: [
+                                Store(
+                                    pointer: 23,
+                                    value: 5,
+                                ),
+                            ],
+                            reject: [
+                                Emit((
+                                    start: 14,
+                                    end: 15,
+                                )),
+                                Atomic(
+                                    pointer: 9,
+                                    fun: Add,
+                                    value: 16,
+                                    result: Some(15),
+                                ),
+                                Emit((
+                                    start: 16,
+                                    end: 17,
+                                )),
+                                Store(
+                                    pointer: 23,
+                                    value: 17,
+                                ),
+                            ],
+                        ),
+                        Emit((
+                            start: 18,
+                            end: 20,
+                        )),
+                        Continue,
+                    ],
+                    continuing: [
+                        Emit((
+                            start: 20,
+                            end: 21,
+                        )),
+                        Store(
+                            pointer: 22,
+                            value: 19,
+                        ),
+                    ],
+                    break_if: Some(21),
                 ),
                 Return(
                     value: None,
