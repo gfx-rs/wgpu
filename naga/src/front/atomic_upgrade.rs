@@ -2,8 +2,8 @@
 use std::sync::{atomic::AtomicUsize, Arc};
 
 use crate::{
-    Constant, Expression, Function, GlobalVariable, Handle, LocalVariable, Module, Override,
-    StructMember, Type, TypeInner,
+    Expression, Function, GlobalVariable, Handle, LocalVariable, Module, StructMember, Type,
+    TypeInner,
 };
 
 #[derive(Clone, Debug, thiserror::Error)]
