@@ -2341,9 +2341,7 @@ impl super::DeviceShared {
                 } else {
                     match active.iter().find(|&&(value, _)| value >= wait_value) {
                         Some(&(_, raw)) => {
-                            match unsafe {
-                                self.raw.wait_for_fences(&[raw], true, timeout_ns)
-                            } {
+                            match unsafe { self.raw.wait_for_fences(&[raw], true, timeout_ns) } {
                                 Ok(()) => Ok(true),
                                 Err(vk::Result::TIMEOUT) => Ok(false),
                                 Err(other) => Err(other.into()),

@@ -790,6 +790,10 @@ pub trait Queue: WasmNotSendSync {
     /// [cb]: Api::CommandBuffer
     /// [ce]: Api::CommandEncoder
     /// [st]: Api::SurfaceTexture
+    /// [t]: Api::Texture
+    /// [bg]: Api::BindGroup
+    /// [rp]: Api::RenderPipeline
+    /// [d]: Api::Device
     unsafe fn submit(
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
