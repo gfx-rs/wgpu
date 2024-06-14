@@ -1,3 +1,4 @@
+use std::ffi::CStr;
 use std::ptr;
 
 pub(super) use dxc::{compile_dxc, get_dxc_container, DxcContainer};
@@ -14,7 +15,7 @@ use crate::auxil::dxgi::result::HResult;
 pub(super) fn compile_fxc(
     device: &super::Device,
     source: &str,
-    source_name: &str,
+    source_name: Option<&CStr>,
     raw_ep: &std::ffi::CString,
     stage_bit: wgt::ShaderStages,
     full_stage: String,
@@ -34,11 +35,7 @@ pub(super) fn compile_fxc(
     }
 
     // If no name has been set, D3DCompile wants the null pointer.
-    let source_name = if source_name.is_empty() {
-        ptr::null()
-    } else {
-        source_name.as_ptr()
-    };
+    let source_name = source_name.map(|cstr| cstr.as_ptr()).unwrap_or(ptr::null());
 
     let mut error = d3d12::Blob::null();
     let hr = unsafe {
@@ -86,6 +83,7 @@ pub(super) fn compile_fxc(
 // The Dxc implementation is behind a feature flag so that users who don't want to use dxc can disable the feature.
 #[cfg(feature = "dxc_shader_compiler")]
 mod dxc {
+    use std::ffi::CStr;
     use std::path::PathBuf;
 
     // Destructor order should be fine since _dxil and _dxc don't rely on each other.
@@ -140,7 +138,7 @@ mod dxc {
     pub(crate) fn compile_dxc(
         device: &crate::dx12::Device,
         source: &str,
-        source_name: &str,
+        source_name: Option<&CStr>,
         raw_ep: &str,
         stage_bit: wgt::ShaderStages,
         full_stage: String,
@@ -173,6 +171,10 @@ mod dxc {
             Ok(blob) => blob,
             Err(e) => return (Err(e), log::Level::Error),
         };
+
+        let source_name = source_name
+            .and_then(|cstr| cstr.to_str().ok())
+            .unwrap_or("");
 
         let compiled = dxc_container.compiler.compile(
             &blob,
@@ -271,6 +273,7 @@ mod dxc {
 // These are stubs for when the `dxc_shader_compiler` feature is disabled.
 #[cfg(not(feature = "dxc_shader_compiler"))]
 mod dxc {
+    use std::ffi::CStr;
     use std::path::PathBuf;
 
     pub(crate) struct DxcContainer {}
@@ -288,7 +291,7 @@ mod dxc {
     pub(crate) fn compile_dxc(
         _device: &crate::dx12::Device,
         _source: &str,
-        _source_name: &str,
+        _source_name: Option<&CStr>,
         _raw_ep: &str,
         _stage_bit: wgt::ShaderStages,
         _full_stage: String,

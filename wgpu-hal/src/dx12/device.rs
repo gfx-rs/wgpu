@@ -259,12 +259,7 @@ impl super::Device {
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
 
-        let source_name = stage
-            .module
-            .raw_name
-            .as_ref()
-            .and_then(|cstr| cstr.to_str().ok())
-            .unwrap_or_default();
+        let source_name = stage.module.raw_name.as_deref();
 
         // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
