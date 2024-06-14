@@ -475,7 +475,7 @@ impl Frontend {
                     ty,
                     init,
                 };
-                let handle = ctx.module.constants.fetch_or_append(constant, meta);
+                let handle = ctx.module.constants.append(constant, meta);
 
                 let lookup = GlobalLookup {
                     kind: GlobalLookupKind::Constant(handle, ty),
