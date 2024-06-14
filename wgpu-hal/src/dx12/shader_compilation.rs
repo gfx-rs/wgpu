@@ -32,13 +32,21 @@ pub(super) fn compile_fxc(
     {
         compile_flags |= d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
     }
+
+    // If no name has been set, D3DCompile wants the null pointer.
+    let source_name = if source_name.is_empty() {
+        ptr::null()
+    } else {
+        source_name.as_ptr()
+    };
+
     let mut error = d3d12::Blob::null();
     let hr = unsafe {
         profiling::scope!("d3dcompiler::D3DCompile");
         d3dcompiler::D3DCompile(
             source.as_ptr().cast(),
             source.len(),
-            source_name.as_ptr().cast(),
+            source_name.cast(),
             ptr::null(),
             ptr::null_mut(),
             raw_ep.as_ptr(),
