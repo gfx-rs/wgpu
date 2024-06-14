@@ -178,10 +178,9 @@ impl<'a> UpgradeState<'a> {
         handle: Handle<GlobalVariable>,
     ) -> Result<Handle<GlobalVariable>, Error> {
         let padding = self.inc_padding();
-        padding.debug("upgrading global variable: ", handle);
+        padding.trace("upgrading global variable: ", handle);
 
         let var = self.module.global_variables.try_get(handle)?.clone();
-        padding.debug("global variable:", &var);
 
         let new_var = GlobalVariable {
             name: var.name.clone(),
@@ -191,14 +190,12 @@ impl<'a> UpgradeState<'a> {
             init: self.upgrade_opt_expression(None, var.init)?,
         };
         if new_var != var {
+            padding.debug("handle: ", handle);
+            padding.debug("global variable:     ", &var);
             padding.debug("new global variable: ", &new_var);
-            let span = self.module.global_variables.get_span(handle);
-            let new_handle = self.module.global_variables.append(new_var, span);
-            padding.debug("new global variable handle: ", new_handle);
-            Ok(new_handle)
-        } else {
-            Ok(handle)
+            self.module.global_variables[handle] = new_var;
         }
+        Ok(handle)
     }
 
     fn upgrade_opt_expression(
