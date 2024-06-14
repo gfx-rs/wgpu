@@ -4015,7 +4015,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Store the op for a later pass where we "upgrade" the pointer type
                     let atomic = atomic_upgrade::AtomicOp {
-                        instruction: atomic_upgrade::AtomicOpInst::AtomicIIncrement,
                         pointer_type_handle: p_ty.handle,
                         pointer_handle: p_lexp_handle,
                     };

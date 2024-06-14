@@ -1,10 +1,7 @@
 //! [`Module`] helpers for "upgrading" atomics in the SPIR-V (and eventually GLSL) frontends.
 use std::sync::{atomic::AtomicUsize, Arc};
 
-use crate::{
-    Expression, Function, GlobalVariable, Handle, LocalVariable, Module, StructMember, Type,
-    TypeInner,
-};
+use crate::{Expression, Function, GlobalVariable, Handle, Module, StructMember, Type, TypeInner};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -28,11 +25,6 @@ impl From<crate::arena::BadHandle> for Error {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum AtomicOpInst {
-    AtomicIIncrement,
-}
-
 /// Information about some [`Atomic`][as] statement, for upgrading types.
 ///
 /// SPIR-V doesn't have atomic types like Naga IR's [`Atomic`][at], it
@@ -50,7 +42,6 @@ pub(crate) enum AtomicOpInst {
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AtomicOp {
-    pub instruction: AtomicOpInst,
     /// The type of the [`Atomic`] statement's [`pointer`] operand.
     ///
     /// [`Atomic`]: crate::Statement::Atomic
