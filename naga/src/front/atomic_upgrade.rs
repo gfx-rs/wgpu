@@ -259,7 +259,7 @@ impl Module {
             module: self,
         };
 
-        for op in ops.into_iter() {
+        for op in ops {
             let padding = state.inc_padding();
             padding.debug("op: ", op);
 
