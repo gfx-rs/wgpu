@@ -55,21 +55,17 @@ pub(crate) struct AtomicOp {
     ///
     /// [`Atomic`]: crate::Statement::Atomic
     /// [`pointer`]: crate::Statement::Atomic::pointer
-
     pub pointer_type_handle: Handle<Type>,
     /// Handle to the pointer expression in the module/function
     pub pointer_handle: Handle<Expression>,
 }
 
-#[derive(Default)]
-struct Padding {
-    padding: Arc<AtomicUsize>,
-    current: usize,
-}
+#[derive(Clone, Default)]
+struct Padding(Arc<AtomicUsize>);
 
 impl std::fmt::Display for Padding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for _ in 0..self.current {
+        for _ in 0..self.0.load(std::sync::atomic::Ordering::Relaxed) {
             f.write_str("  ")?;
         }
         Ok(())
@@ -78,27 +74,26 @@ impl std::fmt::Display for Padding {
 
 impl Drop for Padding {
     fn drop(&mut self) {
-        let _ = self
-            .padding
-            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        let _ = self.0.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
 impl Padding {
-    fn debug(&self, msg: impl std::fmt::Display, t: impl std::fmt::Debug) {
+    fn trace(&self, msg: impl std::fmt::Display, t: impl std::fmt::Debug) {
         format!("{msg} {t:#?}")
             .split('\n')
             .for_each(|ln| log::trace!("{self}{ln}"));
     }
 
+    fn debug(&self, msg: impl std::fmt::Display, t: impl std::fmt::Debug) {
+        format!("{msg} {t:#?}")
+            .split('\n')
+            .for_each(|ln| log::debug!("{self}{ln}"));
+    }
+
     fn inc_padding(&self) -> Padding {
-        let current = self
-            .padding
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Padding {
-            padding: self.padding.clone(),
-            current,
-        }
+        let _ = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.clone()
     }
 }
 
@@ -206,38 +201,6 @@ impl<'a> UpgradeState<'a> {
         }
     }
 
-    fn upgrade_local_variable(
-        &mut self,
-        fn_handle: Handle<Function>,
-        handle: Handle<LocalVariable>,
-    ) -> Result<Handle<LocalVariable>, Error> {
-        let padding = self.inc_padding();
-        padding.debug("upgrading local variable: ", handle);
-
-        let (var, span) = {
-            let f = self.module.functions.try_get(fn_handle)?;
-            let var = f.local_variables.try_get(handle)?.clone();
-            let span = f.local_variables.get_span(handle);
-            (var, span)
-        };
-        padding.debug("local variable:", &var);
-
-        let new_var = LocalVariable {
-            name: var.name.clone(),
-            ty: self.upgrade_type(var.ty)?,
-            init: self.upgrade_opt_expression(Some(fn_handle), var.init)?,
-        };
-        if new_var != var {
-            padding.debug("new local variable: ", &new_var);
-            let f = self.module.functions.get_mut(fn_handle);
-            let new_handle = f.local_variables.append(new_var, span);
-            padding.debug("new local variable handle: ", new_handle);
-            Ok(new_handle)
-        } else {
-            Ok(handle)
-        }
-    }
-
     fn upgrade_opt_expression(
         &mut self,
         maybe_fn_handle: Option<Handle<Function>>,
@@ -273,9 +236,7 @@ impl<'a> UpgradeState<'a> {
             Expression::GlobalVariable(var) => {
                 Expression::GlobalVariable(self.upgrade_global_variable(var)?)
             }
-            Expression::LocalVariable(var) => Expression::LocalVariable(
-                self.upgrade_local_variable(maybe_fn_handle.ok_or(Error::NoFunction)?, var)?,
-            ),
+            lv @ Expression::LocalVariable(_) => lv,
             _ => {
                 return Err(Error::Unsupported);
             }
