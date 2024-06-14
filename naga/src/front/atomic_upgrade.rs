@@ -33,11 +33,29 @@ pub(crate) enum AtomicOpInst {
     AtomicIIncrement,
 }
 
+/// Information about some [`Atomic`][as] statement, for upgrading types.
+///
+/// SPIR-V doesn't have atomic types like Naga IR's [`Atomic`][at], it
+/// just has atomic instructions that operate on pointers to ordinary
+/// scalar values, so to build Naga IR from SPIR-V input, we must
+/// observe which variables/arguments/fields the SPIR-V applies atomic
+/// instructions to, and then update their types after the fact.
+///
+/// This type describes some [`Atomic`][as] statement we've generated,
+/// along with enough information for us to find the items whose types
+/// we need to upgrade.
+///
+/// [at]: crate::TypeInner::Atomic
+/// [as]: crate::Statement::Atomic
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AtomicOp {
     pub instruction: AtomicOpInst,
-    /// Handle to the pointer's type in the module
+    /// The type of the [`Atomic`] statement's [`pointer`] operand.
+    ///
+    /// [`Atomic`]: crate::Statement::Atomic
+    /// [`pointer`]: crate::Statement::Atomic::pointer
+
     pub pointer_type_handle: Handle<Type>,
     /// Handle to the pointer expression in the module/function
     pub pointer_handle: Handle<Expression>,

@@ -577,7 +577,9 @@ pub struct Frontend<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
     handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, image::SamplingFlags>,
-    // Used to upgrade types used in atomic ops to atomic types, keyed by pointer id
+
+    /// A table of all the [`Atomic`] statements we've generated, so
+    /// we can upgrade the types of their operands.
     lookup_atomic: FastHashMap<spirv::Word, atomic_upgrade::AtomicOp>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
