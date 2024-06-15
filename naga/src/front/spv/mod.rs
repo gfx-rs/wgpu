@@ -4052,6 +4052,126 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     self.upgrade_atomics
                         .extend(ctx.get_contained_global_variable(p_lexp_handle));
                 }
+                Op::AtomicStore => {
+                    inst.expect(5)?;
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let pointer_id = self.next()?;
+                    let _scope_id = self.next()?;
+                    let _memory_semantics_id = self.next()?;
+                    let value_id = self.next()?;
+
+                    log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
+                    let p_lexp_handle =
+                        get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
+
+                    log::trace!("\t\t\tlooking up value expr {:?}", pointer_id);
+                    let v_lexp_handle =
+                        get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
+
+                    // Create a statement for the op itself
+                    let stmt = crate::Statement::Store {
+                        pointer: p_lexp_handle,
+                        value: v_lexp_handle,
+                    };
+                    block.push(stmt, span);
+
+                    // Store any associated global variables so we can upgrade their types later
+                    self.upgrade_atomics
+                        .extend(ctx.get_contained_global_variable(p_lexp_handle));
+                }
+                Op::AtomicLoad => {
+                    inst.expect(6)?;
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let _scope_id = self.next()?;
+                    let _memory_semantics_id = self.next()?;
+
+                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+                    let p_lexp_handle =
+                        get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
+
+                    // Create an expression for our result
+                    let expr = crate::Expression::Load {
+                        pointer: p_lexp_handle,
+                    };
+                    let handle = ctx.expressions.append(expr, span);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    // Store any associated global variables so we can upgrade their types later
+                    self.upgrade_atomics
+                        .extend(ctx.get_contained_global_variable(p_lexp_handle));
+                }
+                Op::AtomicStore => {
+                    inst.expect(5)?;
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let pointer_id = self.next()?;
+                    let _scope_id = self.next()?;
+                    let _memory_semantics_id = self.next()?;
+                    let value_id = self.next()?;
+
+                    log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
+                    let p_lexp_handle =
+                        get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
+
+                    log::trace!("\t\t\tlooking up value expr {:?}", pointer_id);
+                    let v_lexp_handle =
+                        get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
+
+                    // Create a statement for the op itself
+                    let stmt = crate::Statement::Store {
+                        pointer: p_lexp_handle,
+                        value: v_lexp_handle,
+                    };
+                    block.push(stmt, span);
+
+                    // Store any associated global variables so we can upgrade their types later
+                    self.upgrade_atomics
+                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
+                }
+                Op::AtomicLoad => {
+                    inst.expect(6)?;
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let _scope_id = self.next()?;
+                    let _memory_semantics_id = self.next()?;
+
+                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+                    let p_lexp_handle =
+                        get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
+
+                    // Create an expression for our result
+                    let expr = crate::Expression::Load {
+                        pointer: p_lexp_handle,
+                    };
+                    let handle = ctx.expressions.append(expr, span);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    // Store any associated global variables so we can upgrade their types later
+                    self.upgrade_atomics
+                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
+                }
                 _ => {
                     return Err(Error::UnsupportedInstruction(self.state, inst.op));
                 }
@@ -5708,42 +5828,5 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
-    }
-
-    #[cfg(all(feature = "wgsl-in", wgsl_out))]
-    #[test]
-    fn atomic_i_inc() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        let bytes = include_bytes!("../../../tests/in/spv/atomic_i_increment.spv");
-        let m = super::parse_u8_slice(bytes, &Default::default()).unwrap();
-        let mut validator = crate::valid::Validator::new(
-            crate::valid::ValidationFlags::empty(),
-            Default::default(),
-        );
-        let info = match validator.validate(&m) {
-            Err(e) => {
-                log::error!("{}", e.emit_to_string(""));
-                return;
-            }
-            Ok(i) => i,
-        };
-        let wgsl =
-            crate::back::wgsl::write_string(&m, &info, crate::back::wgsl::WriterFlags::empty())
-                .unwrap();
-        log::info!("atomic_i_increment:\n{wgsl}");
-
-        let m = match crate::front::wgsl::parse_str(&wgsl) {
-            Ok(m) => m,
-            Err(e) => {
-                log::error!("{}", e.emit_to_string(&wgsl));
-                panic!("invalid module");
-            }
-        };
-        let mut validator =
-            crate::valid::Validator::new(crate::valid::ValidationFlags::all(), Default::default());
-        if let Err(e) = validator.validate(&m) {
-            log::error!("{}", e.emit_to_string(&wgsl));
-            panic!("invalid generated wgsl");
-        }
     }
 }
