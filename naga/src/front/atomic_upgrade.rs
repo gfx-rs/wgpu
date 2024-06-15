@@ -5,8 +5,6 @@ use crate::{Expression, Function, GlobalVariable, Handle, Module, StructMember, 
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
-    #[error("no function context")]
-    NoFunction,
     #[error("encountered an unsupported expression")]
     Unsupported,
 }
@@ -15,32 +13,6 @@ impl From<Error> for crate::front::spv::Error {
     fn from(source: Error) -> Self {
         crate::front::spv::Error::AtomicUpgradeError(source)
     }
-}
-
-/// Information about some [`Atomic`][as] statement, for upgrading types.
-///
-/// SPIR-V doesn't have atomic types like Naga IR's [`Atomic`][at], it
-/// just has atomic instructions that operate on pointers to ordinary
-/// scalar values, so to build Naga IR from SPIR-V input, we must
-/// observe which variables/arguments/fields the SPIR-V applies atomic
-/// instructions to, and then update their types after the fact.
-///
-/// This type describes some [`Atomic`][as] statement we've generated,
-/// along with enough information for us to find the items whose types
-/// we need to upgrade.
-///
-/// [at]: crate::TypeInner::Atomic
-/// [as]: crate::Statement::Atomic
-#[allow(dead_code)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct AtomicOp {
-    /// The type of the [`Atomic`] statement's [`pointer`] operand.
-    ///
-    /// [`Atomic`]: crate::Statement::Atomic
-    /// [`pointer`]: crate::Statement::Atomic::pointer
-    pub pointer_type_handle: Handle<Type>,
-    /// Handle to the pointer expression in the module/function
-    pub pointer_handle: Handle<Expression>,
 }
 
 #[derive(Clone, Default)]
@@ -162,10 +134,7 @@ impl<'a> UpgradeState<'a> {
         Ok(new_ty)
     }
 
-    fn upgrade_global_variable(
-        &mut self,
-        handle: Handle<GlobalVariable>,
-    ) -> Result<Handle<GlobalVariable>, Error> {
+    fn upgrade_global_variable(&mut self, handle: Handle<GlobalVariable>) -> Result<(), Error> {
         let padding = self.inc_padding();
         padding.trace("upgrading global variable: ", handle);
 
@@ -184,7 +153,7 @@ impl<'a> UpgradeState<'a> {
             padding.debug("to:       ", &new_var);
             self.module.global_variables[handle] = new_var;
         }
-        Ok(handle)
+        Ok(())
     }
 
     fn upgrade_opt_expression(
@@ -220,7 +189,8 @@ impl<'a> UpgradeState<'a> {
                 index,
             },
             Expression::GlobalVariable(var) => {
-                Expression::GlobalVariable(self.upgrade_global_variable(var)?)
+                self.upgrade_global_variable(var)?;
+                Expression::GlobalVariable(var)
             }
             lv @ Expression::LocalVariable(_) => lv,
             _ => {
@@ -252,23 +222,15 @@ impl Module {
     /// Upgrade all atomics given.
     pub(crate) fn upgrade_atomics(
         &mut self,
-        ops: impl IntoIterator<Item = (Option<Handle<Function>>, AtomicOp)>,
+        global_var_handles: impl IntoIterator<Item = Handle<GlobalVariable>>,
     ) -> Result<(), Error> {
         let mut state = UpgradeState {
             padding: Default::default(),
             module: self,
         };
 
-        for (maybe_fn_handle, op) in ops {
-            let padding = state.inc_padding();
-            padding.debug("op: ", op);
-
-            padding.debug("upgrading the pointer type:", op.pointer_type_handle);
-            let _new_pointer_type_handle = state.upgrade_type(op.pointer_type_handle)?;
-
-            padding.debug("upgrading the pointer expression", op.pointer_handle);
-            let _new_pointer_handle =
-                state.upgrade_expression(maybe_fn_handle, op.pointer_handle)?;
+        for handle in global_var_handles {
+            state.upgrade_global_variable(handle)?;
         }
 
         Ok(())

@@ -36,6 +36,7 @@ mod null;
 use convert::*;
 pub use error::Error;
 use function::*;
+use indexmap::IndexSet;
 
 use crate::{
     arena::{Arena, Handle, UniqueArena},
@@ -561,18 +562,34 @@ struct BlockContext<'function> {
     parameter_sampling: &'function mut [image::SamplingFlags],
 }
 
+impl<'a> BlockContext<'a> {
+    /// Recurse into the expression with the given handle, locating any contained
+    /// global variables.
+    ///
+    /// This is used to track atomic upgrades.
+    fn get_contained_global_variables(
+        &self,
+        lexp_handle: Handle<crate::Expression>,
+    ) -> IndexSet<Handle<crate::GlobalVariable>> {
+        if let Ok(expr) = self.expressions.try_get(lexp_handle) {
+            match expr {
+                &crate::Expression::GlobalVariable(h) => IndexSet::from_iter(Some(h)),
+                &crate::Expression::AccessIndex { base, index: _ } => {
+                    self.get_contained_global_variables(base)
+                }
+                e => {
+                    panic!("{e:#?}");
+                }
+            }
+        } else {
+            IndexSet::default()
+        }
+    }
+}
+
 enum SignAnchor {
     Result,
     Operand,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum AtomicOpKey {
-    /// Key to an atomic op parsed while parsing a function
-    Function {
-        function_id: u32,
-        pointer_lookup_id: spirv::Word,
-    }, // TODO: entry point
 }
 
 pub struct Frontend<I> {
@@ -586,10 +603,10 @@ pub struct Frontend<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
     handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, image::SamplingFlags>,
+    /// An ordered set of any global variables that contain [`Atomic`](crate::Statement::Atomic)
+    /// statements we've generated, so we can upgrade the types of their operands.
+    upgrade_atomics: IndexSet<Handle<crate::GlobalVariable>>,
 
-    /// A table of all the [`Atomic`](crate::Statement::Atomic) statements we've generated, so
-    /// we can upgrade the types of their operands.
-    lookup_atomic: FastHashMap<AtomicOpKey, atomic_upgrade::AtomicOp>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
     lookup_storage_buffer_types: FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
@@ -645,7 +662,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
             lookup_member: FastHashMap::default(),
-            lookup_atomic: FastHashMap::default(),
+            upgrade_atomics: Default::default(),
             lookup_type: FastHashMap::default(),
             lookup_void_type: None,
             lookup_storage_buffer_types: FastHashMap::default(),
@@ -4022,16 +4039,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     };
                     block.push(stmt, span);
 
-                    // Store the op for a later pass where we "upgrade" the pointer type
-                    let atomic = atomic_upgrade::AtomicOp {
-                        pointer_type_handle: p_ty.handle,
-                        pointer_handle: p_lexp_handle,
-                    };
-                    let key = AtomicOpKey::Function {
-                        function_id: ctx.function_id,
-                        pointer_lookup_id: pointer_id,
-                    };
-                    self.lookup_atomic.insert(key, atomic);
+                    // Store any associated global variables so we can upgrade their types later
+                    self.upgrade_atomics
+                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
                 }
                 _ => {
                     return Err(Error::UnsupportedInstruction(self.state, inst.op));
@@ -4314,21 +4324,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }?;
         }
 
-        if !self.lookup_atomic.is_empty() {
+        if !self.upgrade_atomics.is_empty() {
             log::info!("Upgrading atomic pointers...");
-            let atomics = self.lookup_atomic.iter().map(|(key, op)| {
-                let maybe_handle = match *key {
-                    AtomicOpKey::Function {
-                        function_id,
-                        pointer_lookup_id: _,
-                    } => self
-                        .lookup_function
-                        .get(&function_id)
-                        .map(|l_fn| l_fn.handle),
-                };
-                (maybe_handle, *op)
-            });
-            module.upgrade_atomics(atomics)?;
+            module.upgrade_atomics(std::mem::take(&mut self.upgrade_atomics))?;
         }
 
         // Do entry point specific processing after all functions are parsed so that we can
