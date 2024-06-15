@@ -55,15 +55,6 @@
         ),
         (
             name: None,
-            inner: Pointer(
-                base: 6,
-                space: Storage(
-                    access: ("LOAD | STORE"),
-                ),
-            ),
-        ),
-        (
-            name: None,
             inner: Struct(
                 members: [
                     (
@@ -125,7 +116,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 4,
+            ty: 7,
             init: None,
         ),
         (
@@ -138,18 +129,6 @@
                 binding: 1,
             )),
             ty: 4,
-            init: None,
-        ),
-        (
-            name: None,
-            space: Storage(
-                access: ("LOAD | STORE"),
-            ),
-            binding: Some((
-                group: 0,
-                binding: 0,
-            )),
-            ty: 8,
             init: None,
         ),
     ],
@@ -232,11 +211,6 @@
                 ),
                 LocalVariable(1),
                 LocalVariable(2),
-                GlobalVariable(3),
-                AccessIndex(
-                    base: 24,
-                    index: 0,
-                ),
             ],
             named_expressions: {},
             body: [

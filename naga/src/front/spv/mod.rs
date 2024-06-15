@@ -5732,15 +5732,14 @@ mod test {
             Ok(m) => m,
             Err(e) => {
                 log::error!("{}", e.emit_to_string(&wgsl));
-                // at this point we know atomics create invalid modules
-                // so simply bail
-                return;
+                panic!("invalid module");
             }
         };
         let mut validator =
             crate::valid::Validator::new(crate::valid::ValidationFlags::all(), Default::default());
         if let Err(e) = validator.validate(&m) {
             log::error!("{}", e.emit_to_string(&wgsl));
+            panic!("invalid generated wgsl");
         }
     }
 }

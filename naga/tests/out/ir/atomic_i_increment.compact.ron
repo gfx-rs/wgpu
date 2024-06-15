@@ -93,7 +93,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 3,
+            ty: 5,
             init: None,
         ),
         (
@@ -106,18 +106,6 @@
                 binding: 1,
             )),
             ty: 3,
-            init: None,
-        ),
-        (
-            name: None,
-            space: Storage(
-                access: ("LOAD | STORE"),
-            ),
-            binding: Some((
-                group: 0,
-                binding: 0,
-            )),
-            ty: 5,
             init: None,
         ),
     ],
