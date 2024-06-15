@@ -100,18 +100,18 @@ impl<'a> UpgradeState<'a> {
 
     /// Upgrade the type, recursing until we reach the leaves.
     /// At the leaves, replace scalars with atomic scalars.
-    fn upgrade_type(&mut self, type_handle: Handle<Type>) -> Result<Handle<Type>, Error> {
+    fn upgrade_type(&mut self, ty: Handle<Type>) -> Result<Handle<Type>, Error> {
         let padding = self.inc_padding();
-        padding.debug("upgrading type: ", type_handle);
-        let type_ = self
+        padding.trace("upgrading type: ", ty);
+
+        let r#type = self
             .module
             .types
-            .get_handle(type_handle)
+            .get_handle(ty)
             .map_err(Error::MissingHandle)?
             .clone();
-        padding.debug("type: ", &type_);
 
-        let new_inner = match type_.inner {
+        let inner = match r#type.inner.clone() {
             TypeInner::Scalar(scalar) => {
                 log::trace!("{padding}hit the scalar leaf, replacing with an atomic");
                 TypeInner::Atomic(scalar)
@@ -153,15 +153,26 @@ impl<'a> UpgradeState<'a> {
             n => n,
         };
 
-        let new_type_handle = self.module.types.insert(
-            Type {
-                name: type_.name,
-                inner: new_inner,
-            },
-            self.module.types.get_span(type_handle),
-        );
-        padding.debug("new_type: ", new_type_handle);
-        Ok(new_type_handle)
+        let new_type = Type {
+            name: r#type.name.clone(),
+            inner,
+        };
+        let new_ty = if let Some(prev_ty) = self.module.types.get(&new_type) {
+            padding.trace("type exists: ", prev_ty);
+            prev_ty
+        } else {
+            padding.debug("ty: ", ty);
+            padding.debug("from: ", &r#type);
+            padding.debug("to:   ", &new_type);
+
+            let new_ty = self
+                .module
+                .types
+                .insert(new_type, self.module.types.get_span(ty));
+            padding.debug("new ty: ", new_ty);
+            new_ty
+        };
+        Ok(new_ty)
     }
 
     fn upgrade_global_variable(

@@ -5707,7 +5707,7 @@ mod test {
     fn atomic_i_inc() {
         let _ = env_logger::builder()
             .is_test(true)
-            .filter_level(log::LevelFilter::Trace)
+            .filter_level(log::LevelFilter::Debug)
             .try_init();
         let bytes = include_bytes!("../../../tests/in/spv/atomic_i_increment.spv");
         let m = super::parse_u8_slice(bytes, &Default::default()).unwrap();
