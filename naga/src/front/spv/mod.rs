@@ -566,6 +566,15 @@ enum SignAnchor {
     Operand,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum AtomicOpKey {
+    /// Key to an atomic op parsed while parsing a function
+    Function {
+        function_id: u32,
+        pointer_lookup_id: spirv::Word,
+    }, // TODO: entry point
+}
+
 pub struct Frontend<I> {
     data: I,
     data_offset: usize,
@@ -580,7 +589,7 @@ pub struct Frontend<I> {
 
     /// A table of all the [`Atomic`] statements we've generated, so
     /// we can upgrade the types of their operands.
-    lookup_atomic: FastHashMap<spirv::Word, atomic_upgrade::AtomicOp>,
+    lookup_atomic: FastHashMap<AtomicOpKey, atomic_upgrade::AtomicOp>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
     lookup_storage_buffer_types: FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
@@ -4018,7 +4027,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         pointer_type_handle: p_ty.handle,
                         pointer_handle: p_lexp_handle,
                     };
-                    self.lookup_atomic.insert(pointer_id, atomic);
+                    let key = AtomicOpKey::Function {
+                        function_id: ctx.function_id,
+                        pointer_lookup_id: pointer_id,
+                    };
+                    self.lookup_atomic.insert(key, atomic);
                 }
                 _ => {
                     return Err(Error::UnsupportedInstruction(self.state, inst.op));
@@ -4303,7 +4316,19 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         if !self.lookup_atomic.is_empty() {
             log::info!("Upgrading atomic pointers...");
-            module.upgrade_atomics(self.lookup_atomic.values().copied())?;
+            let atomics = self.lookup_atomic.iter().map(|(key, op)| {
+                let maybe_handle = match *key {
+                    AtomicOpKey::Function {
+                        function_id,
+                        pointer_lookup_id: _,
+                    } => self
+                        .lookup_function
+                        .get(&function_id)
+                        .map(|l_fn| l_fn.handle),
+                };
+                (maybe_handle, *op)
+            });
+            module.upgrade_atomics(atomics)?;
         }
 
         // Do entry point specific processing after all functions are parsed so that we can

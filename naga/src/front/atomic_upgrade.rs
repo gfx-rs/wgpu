@@ -252,27 +252,16 @@ impl Module {
     /// Upgrade all atomics given.
     pub(crate) fn upgrade_atomics(
         &mut self,
-        ops: impl IntoIterator<Item = AtomicOp>,
+        ops: impl IntoIterator<Item = (Option<Handle<Function>>, AtomicOp)>,
     ) -> Result<(), Error> {
         let mut state = UpgradeState {
             padding: Default::default(),
             module: self,
         };
 
-        for op in ops {
+        for (maybe_fn_handle, op) in ops {
             let padding = state.inc_padding();
             padding.debug("op: ", op);
-
-            // Find the expression's enclosing function, if any
-            let mut maybe_fn_handle = None;
-            for (fn_handle, function) in state.module.functions.iter() {
-                log::trace!("function: {fn_handle:?}");
-                if function.expressions.try_get(op.pointer_handle).is_ok() {
-                    log::trace!("  is op's function");
-                    maybe_fn_handle = Some(fn_handle);
-                    break;
-                }
-            }
 
             padding.debug("upgrading the pointer type:", op.pointer_type_handle);
             let _new_pointer_type_handle = state.upgrade_type(op.pointer_type_handle)?;
