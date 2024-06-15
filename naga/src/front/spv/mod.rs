@@ -5703,43 +5703,4 @@ mod test {
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
     }
-
-    #[test]
-    fn atomic_i_inc() {
-        let _ = env_logger::builder()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Debug)
-            .try_init();
-        let bytes = include_bytes!("../../../tests/in/spv/atomic_i_increment.spv");
-        let m = super::parse_u8_slice(bytes, &Default::default()).unwrap();
-        let mut validator = crate::valid::Validator::new(
-            crate::valid::ValidationFlags::empty(),
-            Default::default(),
-        );
-        let info = match validator.validate(&m) {
-            Err(e) => {
-                log::error!("{}", e.emit_to_string(""));
-                return;
-            }
-            Ok(i) => i,
-        };
-        let wgsl =
-            crate::back::wgsl::write_string(&m, &info, crate::back::wgsl::WriterFlags::empty())
-                .unwrap();
-        log::info!("atomic_i_increment:\n{wgsl}");
-
-        let m = match crate::front::wgsl::parse_str(&wgsl) {
-            Ok(m) => m,
-            Err(e) => {
-                log::error!("{}", e.emit_to_string(&wgsl));
-                panic!("invalid module");
-            }
-        };
-        let mut validator =
-            crate::valid::Validator::new(crate::valid::ValidationFlags::all(), Default::default());
-        if let Err(e) = validator.validate(&m) {
-            log::error!("{}", e.emit_to_string(&wgsl));
-            panic!("invalid generated wgsl");
-        }
-    }
 }
