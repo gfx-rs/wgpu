@@ -5909,9 +5909,7 @@ pub enum Error {
     },
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(Error: Send);
-#[cfg(send_sync)]
-static_assertions::assert_impl_all!(Error: Sync);
+static_assertions::assert_impl_all!(Error: Send, Sync);
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
