@@ -562,15 +562,6 @@ struct BlockContext<'function> {
 }
 
 impl<'a> BlockContext<'a> {
-    /// Utility function to make recursing through handles easier.
-    fn get_opt_contained_global_variables(
-        &self,
-        maybe_handle: Option<Handle<crate::Expression>>,
-    ) -> IndexSet<Handle<crate::GlobalVariable>> {
-        maybe_handle
-            .map(|h| self.get_contained_global_variables(h))
-            .unwrap_or_default()
-    }
     /// Recurse into the expression with the given handle, locating any contained
     /// global variables.
     ///
@@ -579,144 +570,23 @@ impl<'a> BlockContext<'a> {
         &self,
         handle: Handle<crate::Expression>,
     ) -> IndexSet<Handle<crate::GlobalVariable>> {
+        let mut s = IndexSet::default();
         if let Ok(expr) = self.expressions.try_get(handle) {
+            #[allow(clippy::pattern_type_mismatch)]
             match expr {
-                &crate::Expression::Constant(h) => {
-                    self.get_contained_global_variables(self.const_arena[h].init)
+                crate::Expression::Access { base, index: _ } => {
+                    s.extend(self.get_contained_global_variables(*base));
                 }
-                &crate::Expression::Override(h) => {
-                    self.get_opt_contained_global_variables(self.overrides[h].init)
+                crate::Expression::AccessIndex { base, index: _ } => {
+                    s.extend(self.get_contained_global_variables(*base))
                 }
-                &crate::Expression::Compose {
-                    ty: _,
-                    ref components,
-                } => components.iter().fold(IndexSet::default(), |mut s, h| {
-                    s.extend(self.get_contained_global_variables(*h));
-                    s
-                }),
-                &crate::Expression::Access { base, index: _ } => {
-                    self.get_contained_global_variables(base)
+                crate::Expression::GlobalVariable(h) => {
+                    s.insert(*h);
                 }
-                &crate::Expression::AccessIndex { base, index: _ } => {
-                    self.get_contained_global_variables(base)
-                }
-                &crate::Expression::Splat { size: _, value } => {
-                    self.get_contained_global_variables(value)
-                }
-                &crate::Expression::Swizzle {
-                    size: _,
-                    vector,
-                    pattern: _,
-                } => self.get_contained_global_variables(vector),
-                &crate::Expression::GlobalVariable(h) => IndexSet::from_iter(Some(h)),
-                &crate::Expression::LocalVariable(h) => {
-                    self.get_opt_contained_global_variables(self.local_arena[h].init)
-                }
-                &crate::Expression::Load { pointer } => {
-                    self.get_contained_global_variables(pointer)
-                }
-                &crate::Expression::ImageSample {
-                    image,
-                    sampler,
-                    gather: _,
-                    coordinate,
-                    array_index,
-                    offset,
-                    level,
-                    depth_ref,
-                } => {
-                    let mut s = self.get_contained_global_variables(image);
-                    s.extend(self.get_contained_global_variables(sampler));
-                    s.extend(self.get_contained_global_variables(coordinate));
-                    match level {
-                        crate::SampleLevel::Auto => {}
-                        crate::SampleLevel::Zero => {}
-                        crate::SampleLevel::Exact(h) => {
-                            s.extend(self.get_contained_global_variables(h));
-                        }
-                        crate::SampleLevel::Bias(h) => {
-                            s.extend(self.get_contained_global_variables(h));
-                        }
-                        crate::SampleLevel::Gradient { x, y } => {
-                            s.extend(self.get_contained_global_variables(x));
-                            s.extend(self.get_contained_global_variables(y));
-                        }
-                    };
-                    s.extend(self.get_opt_contained_global_variables(array_index));
-                    s.extend(self.get_opt_contained_global_variables(offset));
-                    s.extend(self.get_opt_contained_global_variables(depth_ref));
-                    s
-                }
-                &crate::Expression::ImageLoad {
-                    image,
-                    coordinate,
-                    array_index,
-                    sample,
-                    level,
-                } => {
-                    let mut s = self.get_contained_global_variables(image);
-                    s.extend(self.get_contained_global_variables(coordinate));
-                    s.extend(self.get_opt_contained_global_variables(array_index));
-                    s.extend(self.get_opt_contained_global_variables(sample));
-                    s.extend(self.get_opt_contained_global_variables(level));
-                    s
-                }
-                &crate::Expression::ImageQuery { image, query } => {
-                    let mut s = self.get_contained_global_variables(image);
-
-                    match query {
-                        crate::ImageQuery::Size { level } => {
-                            s.extend(self.get_opt_contained_global_variables(level));
-                        }
-                        crate::ImageQuery::NumLevels => {}
-                        crate::ImageQuery::NumLayers => {}
-                        crate::ImageQuery::NumSamples => {}
-                    }
-                    s
-                }
-                &crate::Expression::Unary { op: _, expr } => {
-                    self.get_contained_global_variables(expr)
-                }
-                &crate::Expression::Binary { op: _, left, right } => {
-                    let mut s = self.get_contained_global_variables(left);
-                    s.extend(self.get_contained_global_variables(right));
-                    s
-                }
-                &crate::Expression::Select {
-                    condition,
-                    accept,
-                    reject,
-                } => todo!(),
-                &crate::Expression::Derivative { axis, ctrl, expr } => todo!(),
-                &crate::Expression::Relational { fun, argument } => todo!(),
-                &crate::Expression::Math {
-                    fun,
-                    arg,
-                    arg1,
-                    arg2,
-                    arg3,
-                } => todo!(),
-                &crate::Expression::As {
-                    expr,
-                    kind,
-                    convert,
-                } => todo!(),
-                &crate::Expression::CallResult(_) => todo!(),
-                &crate::Expression::AtomicResult { ty, comparison } => todo!(),
-                &crate::Expression::WorkGroupUniformLoadResult { ty } => todo!(),
-                &crate::Expression::ArrayLength(_) => todo!(),
-                &crate::Expression::RayQueryProceedResult => todo!(),
-                &crate::Expression::RayQueryGetIntersection { query, committed } => todo!(),
-                &crate::Expression::SubgroupBallotResult => todo!(),
-                &crate::Expression::SubgroupOperationResult { ty } => todo!(),
-
-                &crate::Expression::Literal(_)
-                | &crate::Expression::ZeroValue(_)
-                | &crate::Expression::FunctionArgument(_) => IndexSet::default(),
+                _ => {}
             }
-        } else {
-            IndexSet::default()
         }
+        s
     }
 }
 
