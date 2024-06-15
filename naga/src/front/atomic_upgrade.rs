@@ -5,8 +5,6 @@ use crate::{Expression, Function, GlobalVariable, Handle, Module, StructMember, 
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
-    #[error("bad handle: {0}")]
-    MissingHandle(crate::arena::BadHandle),
     #[error("no function context")]
     NoFunction,
     #[error("encountered an unsupported expression")]
@@ -16,12 +14,6 @@ pub enum Error {
 impl From<Error> for crate::front::spv::Error {
     fn from(source: Error) -> Self {
         crate::front::spv::Error::AtomicUpgradeError(source)
-    }
-}
-
-impl From<crate::arena::BadHandle> for Error {
-    fn from(value: crate::arena::BadHandle) -> Self {
-        Error::MissingHandle(value)
     }
 }
 
@@ -104,12 +96,7 @@ impl<'a> UpgradeState<'a> {
         let padding = self.inc_padding();
         padding.trace("upgrading type: ", ty);
 
-        let r#type = self
-            .module
-            .types
-            .get_handle(ty)
-            .map_err(Error::MissingHandle)?
-            .clone();
+        let r#type = self.module.types[ty].clone();
 
         let inner = match r#type.inner.clone() {
             TypeInner::Scalar(scalar) => {
@@ -182,7 +169,7 @@ impl<'a> UpgradeState<'a> {
         let padding = self.inc_padding();
         padding.trace("upgrading global variable: ", handle);
 
-        let var = self.module.global_variables.try_get(handle)?.clone();
+        let var = self.module.global_variables[handle].clone();
 
         let new_var = GlobalVariable {
             name: var.name.clone(),
@@ -192,9 +179,9 @@ impl<'a> UpgradeState<'a> {
             init: self.upgrade_opt_expression(None, var.init)?,
         };
         if new_var != var {
-            padding.debug("handle: ", handle);
-            padding.debug("global variable:     ", &var);
-            padding.debug("new global variable: ", &new_var);
+            padding.debug("upgrading global variable: ", handle);
+            padding.debug("from:     ", &var);
+            padding.debug("to:       ", &new_var);
             self.module.global_variables[handle] = new_var;
         }
         Ok(handle)
@@ -218,15 +205,15 @@ impl<'a> UpgradeState<'a> {
         handle: Handle<Expression>,
     ) -> Result<Handle<Expression>, Error> {
         let padding = self.inc_padding();
-        padding.debug("upgrading expr: ", handle);
+        padding.trace("upgrading expr: ", handle);
+
         let expr = if let Some(fh) = maybe_fn_handle {
-            let function = self.module.functions.try_get(fh)?;
-            function.expressions.try_get(handle)?.clone()
+            let function = &self.module.functions[fh];
+            function.expressions[handle].clone()
         } else {
-            self.module.global_expressions.try_get(handle)?.clone()
+            self.module.global_expressions[handle].clone()
         };
 
-        padding.debug("expr: ", &expr);
         let new_expr = match expr.clone() {
             Expression::AccessIndex { base, index } => Expression::AccessIndex {
                 base: self.upgrade_expression(maybe_fn_handle, base)?,
@@ -242,7 +229,9 @@ impl<'a> UpgradeState<'a> {
         };
 
         if new_expr != expr {
-            padding.debug("inserting new expr: ", &new_expr);
+            padding.debug("upgrading expr: ", handle);
+            padding.debug("from: ", &expr);
+            padding.debug("to:   ", &new_expr);
             let arena = if let Some(fh) = maybe_fn_handle {
                 let f = self.module.functions.get_mut(fh);
                 &mut f.expressions
@@ -251,7 +240,7 @@ impl<'a> UpgradeState<'a> {
             };
             let span = arena.get_span(handle);
             let new_handle = arena.append(new_expr, span);
-            padding.debug("new expr handle: ", new_handle);
+            padding.debug("new expr: ", new_handle);
             Ok(new_handle)
         } else {
             Ok(handle)
