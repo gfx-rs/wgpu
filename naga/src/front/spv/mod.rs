@@ -587,7 +587,7 @@ pub struct Frontend<I> {
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
     handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, image::SamplingFlags>,
 
-    /// A table of all the [`Atomic`] statements we've generated, so
+    /// A table of all the [`Atomic`](crate::Statement::Atomic) statements we've generated, so
     /// we can upgrade the types of their operands.
     lookup_atomic: FastHashMap<AtomicOpKey, atomic_upgrade::AtomicOp>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
