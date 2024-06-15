@@ -1,9 +1,5 @@
 //! Tests that compute passes take ownership of resources that are associated with.
 //! I.e. once a resource is passed in to a compute pass, it can be dropped.
-//!
-//! TODO: Also should test resource ownership for:
-//!       * write_timestamp
-//!       * begin_pipeline_statistics_query
 
 use std::num::NonZeroU64;
 
@@ -21,7 +17,15 @@ var<storage, read_write> buffer: array<vec4f>;
 
 #[gpu_test]
 static COMPUTE_PASS_RESOURCE_OWNERSHIP: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            // https://github.com/gfx-rs/wgpu/issues/5800
+            .skip(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::GL,
+                "AMD Radeon Pro WX 3200",
+            )),
+    )
     .run_async(compute_pass_resource_ownership);
 
 async fn compute_pass_resource_ownership(ctx: TestingContext) {
@@ -36,15 +40,10 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("encoder"),
-        });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("compute_pass"),
-            timestamp_writes: None, // TODO: See description above, we should test this as well once we lift the lifetime bound.
-        });
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
@@ -58,18 +57,115 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
             .panic_on_timeout();
     }
 
-    // Ensure that the compute pass still executed normally.
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
-    ctx.queue.submit([encoder.finish()]);
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::Maintain::wait())
-        .await
-        .panic_on_timeout();
+    assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
+}
 
-    let data = cpu_buffer.slice(..).get_mapped_range();
+#[gpu_test]
+static COMPUTE_PASS_QUERY_SET_OWNERSHIP_PIPELINE_STATISTICS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .features(wgpu::Features::PIPELINE_STATISTICS_QUERY),
+        )
+        .run_async(compute_pass_query_set_ownership_pipeline_statistics);
 
-    let floats: &[f32] = bytemuck::cast_slice(&data);
-    assert_eq!(floats, [2.0, 4.0, 6.0, 8.0]);
+async fn compute_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext) {
+    let ResourceSetup {
+        gpu_buffer,
+        cpu_buffer,
+        buffer_size,
+        indirect_buffer: _,
+        bind_group,
+        pipeline,
+    } = resource_setup(&ctx);
+
+    let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("query_set"),
+        ty: wgpu::QueryType::PipelineStatistics(
+            wgpu::PipelineStatisticsTypes::COMPUTE_SHADER_INVOCATIONS,
+        ),
+        count: 1,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        cpass.set_pipeline(&pipeline);
+        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.begin_pipeline_statistics_query(&query_set, 0);
+        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.end_pipeline_statistics_query();
+
+        // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
+        drop(query_set);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
+    }
+
+    assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
+}
+
+#[gpu_test]
+static COMPUTE_PASS_QUERY_TIMESTAMPS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().test_features_limits().features(
+            wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+        ))
+        .run_async(compute_pass_query_timestamps);
+
+async fn compute_pass_query_timestamps(ctx: TestingContext) {
+    let ResourceSetup {
+        gpu_buffer,
+        cpu_buffer,
+        buffer_size,
+        indirect_buffer: _,
+        bind_group,
+        pipeline,
+    } = resource_setup(&ctx);
+
+    let query_set_timestamp_writes = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("query_set_timestamp_writes"),
+        ty: wgpu::QueryType::Timestamp,
+        count: 2,
+    });
+    let query_set_write_timestamp = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("query_set_write_timestamp"),
+        ty: wgpu::QueryType::Timestamp,
+        count: 1,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("compute_pass"),
+            timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                query_set: &query_set_timestamp_writes,
+                beginning_of_pass_write_index: Some(0),
+                end_of_pass_write_index: Some(1),
+            }),
+        });
+        cpass.set_pipeline(&pipeline);
+        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.write_timestamp(&query_set_write_timestamp, 0);
+        cpass.dispatch_workgroups(1, 1, 1);
+
+        // Drop the query sets. Then do a device poll to make sure they're not dropped too early, no matter what.
+        drop(query_set_timestamp_writes);
+        drop(query_set_write_timestamp);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
+    }
+
+    assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
 }
 
 #[gpu_test]
@@ -89,17 +185,18 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("encoder"),
-        });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+    let cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("compute_pass"),
         timestamp_writes: None,
     });
 
     // Now drop the encoder - it is kept alive by the compute pass.
+    // To do so, we have to make the compute pass forget the lifetime constraint first.
+    let mut cpass = cpass.forget_lifetime();
     drop(encoder);
+
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();
@@ -114,6 +211,26 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
     // making this a valid operation.
     // (If instead the encoder was explicitly destroyed or finished, this would be an error.)
     valid(&ctx.device, || drop(cpass));
+}
+
+async fn assert_compute_pass_executed_normally(
+    mut encoder: wgpu::CommandEncoder,
+    gpu_buffer: wgpu::Buffer,
+    cpu_buffer: wgpu::Buffer,
+    buffer_size: u64,
+    ctx: TestingContext,
+) {
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
+    ctx.queue.submit([encoder.finish()]);
+    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    ctx.async_poll(wgpu::Maintain::wait())
+        .await
+        .panic_on_timeout();
+
+    let data = cpu_buffer.slice(..).get_mapped_range();
+
+    let floats: &[f32] = bytemuck::cast_slice(&data);
+    assert_eq!(floats, [2.0, 4.0, 6.0, 8.0]);
 }
 
 // Setup ------------------------------------------------------------
@@ -172,7 +289,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let indirect_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("gpu_buffer"),
+            label: Some("indirect_buffer"),
             usage: wgpu::BufferUsages::INDIRECT,
             contents: wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }.as_bytes(),
         });

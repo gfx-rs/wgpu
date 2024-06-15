@@ -1,18 +1,30 @@
 use naga::{valid, Expression, Function, Scalar};
 
+/// Validation should fail if `AtomicResult` expressions are not
+/// populated by `Atomic` statements.
 #[test]
-fn emit_atomic_result() {
+fn populate_atomic_result() {
     use naga::{Module, Type, TypeInner};
 
-    // We want to ensure that the *only* problem with the code is the
-    // use of an `Emit` statement instead of an `Atomic` statement. So
-    // validate two versions of the module varying only in that
-    // aspect.
-    //
-    // Looking at uses of the `atomic` makes it easy to identify the
-    // differences between the two variants.
-    fn variant(
-        atomic: bool,
+    /// Different variants of the test case that we want to exercise.
+    enum Variant {
+        /// An `AtomicResult` expression with an `Atomic` statement
+        /// that populates it: valid.
+        Atomic,
+
+        /// An `AtomicResult` expression visited by an `Emit`
+        /// statement: invalid.
+        Emit,
+
+        /// An `AtomicResult` expression visited by no statement at
+        /// all: invalid
+        None,
+    }
+
+    // Looking at uses of `variant` should make it easy to identify
+    // the differences between the test cases.
+    fn try_variant(
+        variant: Variant,
     ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
@@ -56,21 +68,25 @@ fn emit_atomic_result() {
             span,
         );
 
-        if atomic {
-            fun.body.push(
-                naga::Statement::Atomic {
-                    pointer: ex_global,
-                    fun: naga::AtomicFunction::Add,
-                    value: ex_42,
-                    result: ex_result,
-                },
-                span,
-            );
-        } else {
-            fun.body.push(
-                naga::Statement::Emit(naga::Range::new_from_bounds(ex_result, ex_result)),
-                span,
-            );
+        match variant {
+            Variant::Atomic => {
+                fun.body.push(
+                    naga::Statement::Atomic {
+                        pointer: ex_global,
+                        fun: naga::AtomicFunction::Add,
+                        value: ex_42,
+                        result: Some(ex_result),
+                    },
+                    span,
+                );
+            }
+            Variant::Emit => {
+                fun.body.push(
+                    naga::Statement::Emit(naga::Range::new_from_bounds(ex_result, ex_result)),
+                    span,
+                );
+            }
+            Variant::None => {}
         }
 
         module.functions.append(fun, span);
@@ -82,23 +98,34 @@ fn emit_atomic_result() {
         .validate(&module)
     }
 
-    variant(true).expect("module should validate");
-    assert!(variant(false).is_err());
+    try_variant(Variant::Atomic).expect("module should validate");
+    assert!(try_variant(Variant::Emit).is_err());
+    assert!(try_variant(Variant::None).is_err());
 }
 
 #[test]
-fn emit_call_result() {
+fn populate_call_result() {
     use naga::{Module, Type, TypeInner};
 
-    // We want to ensure that the *only* problem with the code is the
-    // use of an `Emit` statement instead of a `Call` statement. So
-    // validate two versions of the module varying only in that
-    // aspect.
-    //
-    // Looking at uses of the `call` makes it easy to identify the
-    // differences between the two variants.
-    fn variant(
-        call: bool,
+    /// Different variants of the test case that we want to exercise.
+    enum Variant {
+        /// A `CallResult` expression with an `Call` statement that
+        /// populates it: valid.
+        Call,
+
+        /// A `CallResult` expression visited by an `Emit` statement:
+        /// invalid.
+        Emit,
+
+        /// A `CallResult` expression visited by no statement at all:
+        /// invalid
+        None,
+    }
+
+    // Looking at uses of `variant` should make it easy to identify
+    // the differences between the test cases.
+    fn try_variant(
+        variant: Variant,
     ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
@@ -130,20 +157,24 @@ fn emit_call_result() {
             .expressions
             .append(Expression::CallResult(fun_callee), span);
 
-        if call {
-            fun_caller.body.push(
-                naga::Statement::Call {
-                    function: fun_callee,
-                    arguments: vec![],
-                    result: Some(ex_result),
-                },
-                span,
-            );
-        } else {
-            fun_caller.body.push(
-                naga::Statement::Emit(naga::Range::new_from_bounds(ex_result, ex_result)),
-                span,
-            );
+        match variant {
+            Variant::Call => {
+                fun_caller.body.push(
+                    naga::Statement::Call {
+                        function: fun_callee,
+                        arguments: vec![],
+                        result: Some(ex_result),
+                    },
+                    span,
+                );
+            }
+            Variant::Emit => {
+                fun_caller.body.push(
+                    naga::Statement::Emit(naga::Range::new_from_bounds(ex_result, ex_result)),
+                    span,
+                );
+            }
+            Variant::None => {}
         }
 
         module.functions.append(fun_caller, span);
@@ -155,8 +186,9 @@ fn emit_call_result() {
         .validate(&module)
     }
 
-    variant(true).expect("should validate");
-    assert!(variant(false).is_err());
+    try_variant(Variant::Call).expect("should validate");
+    assert!(try_variant(Variant::Emit).is_err());
+    assert!(try_variant(Variant::None).is_err());
 }
 
 #[test]

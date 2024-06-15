@@ -257,7 +257,9 @@ fn encoder_operations_fail_while_compute_pass_alive(ctx: TestingContext) {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        let pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        let pass = encoder
+            .begin_compute_pass(&wgpu::ComputePassDescriptor::default())
+            .forget_lifetime();
 
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -287,7 +289,9 @@ fn encoder_operations_fail_while_compute_pass_alive(ctx: TestingContext) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        let pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        let pass = encoder
+            .begin_compute_pass(&wgpu::ComputePassDescriptor::default())
+            .forget_lifetime();
         fail(
             &ctx.device,
             || encoder.finish(),

@@ -70,8 +70,10 @@ bitflags::bitflags! {
         /// subsequent statements within the current function (only!)
         /// to be executed in a non-uniform control flow.
         const MAY_RETURN = 0x1;
-        /// Control flow may be killed. Anything after `Statement::Kill` is
+        /// Control flow may be killed. Anything after [`Statement::Kill`] is
         /// considered inside non-uniform context.
+        ///
+        /// [`Statement::Kill`]: crate::Statement::Kill
         const MAY_KILL = 0x2;
     }
 }

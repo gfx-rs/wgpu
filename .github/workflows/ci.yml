@@ -543,7 +543,8 @@ jobs:
           cargo xtask test --llvm-cov
 
       - name: check naga snapshots
-        run: git diff --exit-code -- naga/tests/out
+        # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
+        run: git add . && git diff --exit-code HEAD naga/tests/out
 
       - uses: actions/upload-artifact@v4
         if: always() # We want artifacts even if the tests fail.
@@ -627,7 +628,7 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.21.0
+        uses: crate-ci/typos@v1.22.3
 
   check-cts-runner:
     # runtime is normally 2 minutes

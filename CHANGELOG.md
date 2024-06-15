@@ -47,13 +47,18 @@ TODO(wumpf): This is still work in progress. Should write a bit more about it. A
 
 `wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
 
-Furthermore, `wgpu::ComputePass` no longer has a life time dependency on its parent `wgpu::CommandEncoder`.
+Furthermore, you can now opt out of `wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::forget_lifetime`:  
+```rust
+fn independent_cpass<'enc>(encoder: &'enc mut wgpu::CommandEncoder) -> wgpu::ComputePass<'static> {
+    let cpass: wgpu::ComputePass<'enc> = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+    cpass.forget_lifetime()
+}
+```
 ⚠️ As long as a `wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
-Previously, this was statically enforced by a lifetime constraint.
-TODO(wumpf): There was some discussion on whether to make this life time constraint opt-in or opt-out (entirely on `wgpu` side, no changes to `wgpu-core`).
-Lifting this lifetime dependencies is very useful for library authors, but opens up an easy way for incorrect use.
+This is very useful for library authors, but opens up an easy way for incorrect use, so use with care.
+`forget_lifetime` is zero overhead and has no side effects on pass recording.
 
-By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620).
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768) (together with @kpreid), [#5671](https://github.com/gfx-rs/wgpu/pull/5671).
 
 #### Querying shader compilation errors
 
@@ -76,8 +81,41 @@ for message in compilation_info
 
 By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 
-### New features
+#### 64 bit integer atomic support in shaders.
 
+Add support for 64 bit integer atomic operations in shaders.
+
+Add the following flags to `wgpu_types::Features`:
+
+- `SHADER_INT64_ATOMIC_ALL_OPS` enables all atomic operations on `atomic<i64>` and
+  `atomic<u64>` values.
+
+- `SHADER_INT64_ATOMIC_MIN_MAX` is a subset of the above, enabling only
+  `AtomicFunction::Min` and `AtomicFunction::Max` operations on `atomic<i64>` and
+  `atomic<u64>` values in the `Storage` address space. These are the only 64-bit
+  atomic operations available on Metal as of 3.1.
+
+Add corresponding flags to `naga::valid::Capabilities`. These are supported by the
+WGSL front end, and all Naga backends.
+
+Platform support:
+
+- On Direct3d 12, in `D3D12_FEATURE_DATA_D3D12_OPTIONS9`, if
+  `AtomicInt64OnTypedResourceSupported` and `AtomicInt64OnGroupSharedSupported` are
+  both available, then both wgpu features described above are available.
+
+- On Metal, `SHADER_INT64_ATOMIC_MIN_MAX` is available on Apple9 hardware, and on
+  hardware that advertises both Apple8 and Mac2 support. This also requires Metal
+  Shading Language 2.4 or later. Metal does not yet support the more general
+  `SHADER_INT64_ATOMIC_ALL_OPS`.
+
+- On Vulkan, if the `VK_KHR_shader_atomic_int64` extension is available with both the
+  `shader_buffer_int64_atomics` and `shader_shared_int64_atomics` features, then both
+  wgpu features described above are available.
+
+By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
+
+### New features
 #### Vulkan
 
 - Added a `PipelineCache` resource to allow using Vulkan pipeline caches. By @DJMcNab in [#5319](https://github.com/gfx-rs/wgpu/pull/5319)
@@ -111,6 +149,8 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 #### General
 
 - Ensure render pipelines have at least 1 target. By @ErichDonGubler in [#5715](https://github.com/gfx-rs/wgpu/pull/5715)
+- `wgpu::ComputePass` now internally takes ownership of `QuerySet` for both `wgpu::ComputePassTimestampWrites` as well as timestamp writes and statistics query, fixing crashes when destroying `QuerySet` before ending the pass. By @wumpf in [#5671](https://github.com/gfx-rs/wgpu/pull/5671)
+- Validate resources passed during compute pass recording for mismatching device. By @wumpf in [#5779](https://github.com/gfx-rs/wgpu/pull/5779)
 
 #### Metal
 
@@ -130,6 +170,10 @@ By @stefnotch in [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 #### WebGPU
 
 - Added support for pipeline-overridable constants to the WebGPU backend by @DouglasDwyer in [#5688](https://github.com/gfx-rs/wgpu/pull/5688)
+
+#### Naga
+
+- In spv-out don't decorate a `BindingArray`'s type with `Block` if the type is a struct with a runtime array by @Vecvec in [#5776](https://github.com/gfx-rs/wgpu/pull/5776)
 
 ## v0.20.0 (2024-04-28)
 

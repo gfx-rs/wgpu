@@ -561,7 +561,6 @@ impl crate::Context for ContextWgpuCore {
     type SurfaceId = wgc::id::SurfaceId;
     type SurfaceData = Surface;
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = Unused;
     type SubmissionIndexData = wgc::device::queue::WrappedSubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
@@ -1543,7 +1542,7 @@ impl crate::Context for ContextWgpuCore {
         _device_data: &Self::DeviceData,
         maintain: crate::Maintain,
     ) -> wgt::MaintainResult {
-        let maintain_inner = maintain.map_index(|i| *i.1.as_ref().downcast_ref().unwrap());
+        let maintain_inner = maintain.map_index(|i| *i.0.as_ref().downcast_ref().unwrap());
         match wgc::gfx_select!(device => self.0.device_poll(
             *device,
             maintain_inner
@@ -2340,18 +2339,15 @@ impl crate::Context for ContextWgpuCore {
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
+    ) -> Self::SubmissionIndexData {
         let temp_command_buffers = command_buffers
             .map(|(i, _)| i)
             .collect::<SmallVec<[_; 4]>>();
 
-        let index = match wgc::gfx_select!(*queue => self.0.queue_submit(*queue, &temp_command_buffers))
-        {
+        match wgc::gfx_select!(*queue => self.0.queue_submit(*queue, &temp_command_buffers)) {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
-        };
-
-        (Unused, index)
+        }
     }
 
     fn queue_get_timestamp_period(

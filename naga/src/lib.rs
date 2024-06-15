@@ -986,7 +986,7 @@ pub struct GlobalVariable {
     pub ty: Handle<Type>,
     /// Initial value for this variable.
     ///
-    /// Expression handle lives in global_expressions
+    /// This refers to an [`Expression`] in [`Module::global_expressions`].
     pub init: Option<Handle<Expression>>,
 }
 
@@ -1002,9 +1002,9 @@ pub struct LocalVariable {
     pub ty: Handle<Type>,
     /// Initial value for this variable.
     ///
-    /// This handle refers to this `LocalVariable`'s function's
-    /// [`expressions`] arena, but it is required to be an evaluated
-    /// override expression.
+    /// This handle refers to an expression in this `LocalVariable`'s function's
+    /// [`expressions`] arena, but it is required to be an evaluated override
+    /// expression.
     ///
     /// [`expressions`]: Function::expressions
     pub init: Option<Handle<Expression>>,
@@ -1092,6 +1092,9 @@ pub enum BinaryOperator {
 ///
 /// Note: these do not include load/store, which use the existing
 /// [`Expression::Load`] and [`Statement::Store`].
+///
+/// All `Handle<Expression>` values here refer to an expression in
+/// [`Function::expressions`].
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1233,6 +1236,9 @@ pub enum MathFunction {
 }
 
 /// Sampling modifier to control the level of detail.
+///
+/// All `Handle<Expression>` values here refer to an expression in
+/// [`Function::expressions`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1249,6 +1255,9 @@ pub enum SampleLevel {
 }
 
 /// Type of an image query.
+///
+/// All `Handle<Expression>` values here refer to an expression in
+/// [`Function::expressions`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1283,6 +1292,12 @@ pub enum SwizzleComponent {
     W = 3,
 }
 
+/// The specific behavior of a [`SubgroupGather`] statement.
+///
+/// All `Handle<Expression>` values here refer to an expression in
+/// [`Function::expressions`].
+///
+/// [`SubgroupGather`]: Statement::SubgroupGather
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1335,9 +1350,9 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct Barrier: u32 {
-        /// Barrier affects all `AddressSpace::Storage` accesses.
+        /// Barrier affects all [`AddressSpace::Storage`] accesses.
         const STORAGE = 1 << 0;
-        /// Barrier affects all `AddressSpace::WorkGroup` accesses.
+        /// Barrier affects all [`AddressSpace::WorkGroup`] accesses.
         const WORK_GROUP = 1 << 1;
         /// Barrier synchronizes execution across all invocations within a subgroup that exectue this instruction.
         const SUB_GROUP = 1 << 2;
@@ -1347,6 +1362,15 @@ bitflags::bitflags! {
 /// An expression that can be evaluated to obtain a value.
 ///
 /// This is a Single Static Assignment (SSA) scheme similar to SPIR-V.
+///
+/// When an `Expression` variant holds `Handle<Expression>` fields, they refer
+/// to another expression in the same arena, unless explicitly noted otherwise.
+/// One `Arena<Expression>` may only refer to a different arena indirectly, via
+/// [`Constant`] or [`Override`] expressions, which hold handles for their
+/// respective types.
+///
+/// [`Constant`]: Expression::Constant
+/// [`Override`]: Expression::Override
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1483,7 +1507,7 @@ pub enum Expression {
         gather: Option<SwizzleComponent>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
-        /// Expression handle lives in global_expressions
+        /// This refers to an expression in [`Module::global_expressions`].
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
@@ -1612,8 +1636,29 @@ pub enum Expression {
     },
     /// Result of calling another function.
     CallResult(Handle<Function>),
+
     /// Result of an atomic operation.
+    ///
+    /// This expression must be referred to by the [`result`] field of exactly one
+    /// [`Atomic`][stmt] statement somewhere in the same function. Let `T` be the
+    /// scalar type contained by the [`Atomic`][type] value that the statement
+    /// operates on.
+    ///
+    /// If `comparison` is `false`, then `ty` must be the scalar type `T`.
+    ///
+    /// If `comparison` is `true`, then `ty` must be a [`Struct`] with two members:
+    ///
+    /// - A member named `old_value`, whose type is `T`, and
+    ///
+    /// - A member named `exchanged`, of type [`BOOL`].
+    ///
+    /// [`result`]: Statement::Atomic::result
+    /// [stmt]: Statement::Atomic
+    /// [type]: TypeInner::Atomic
+    /// [`Struct`]: TypeInner::Struct
+    /// [`BOOL`]: Scalar::BOOL
     AtomicResult { ty: Handle<Type>, comparison: bool },
+
     /// Result of a [`WorkGroupUniformLoad`] statement.
     ///
     /// [`WorkGroupUniformLoad`]: Statement::WorkGroupUniformLoad
@@ -1725,6 +1770,9 @@ pub enum RayQueryFunction {
 
 //TODO: consider removing `Clone`. It's not valid to clone `Statement::Emit` anyway.
 /// Instructions which make up an executable block.
+///
+/// `Handle<Expression>` and `Range<Expression>` values in `Statement` variants
+/// refer to expressions in [`Function::expressions`], unless otherwise noted.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1890,15 +1938,66 @@ pub enum Statement {
     /// Atomic function.
     Atomic {
         /// Pointer to an atomic value.
+        ///
+        /// This must be a [`Pointer`] to an [`Atomic`] value. The atomic's
+        /// scalar type may be [`I32`] or [`U32`].
+        ///
+        /// If [`SHADER_INT64_ATOMIC_MIN_MAX`] or [`SHADER_INT64_ATOMIC_ALL_OPS`] are
+        /// enabled, this may also be [`I64`] or [`U64`].
+        ///
+        /// [`Pointer`]: TypeInner::Pointer
+        /// [`Atomic`]: TypeInner::Atomic
+        /// [`I32`]: Scalar::I32
+        /// [`U32`]: Scalar::U32
+        /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
+        /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`I64`]: Scalar::I64
+        /// [`U64`]: Scalar::U64
         pointer: Handle<Expression>,
-        /// Function to run on the atomic.
+
+        /// Function to run on the atomic value.
+        ///
+        /// If [`pointer`] refers to a 64-bit atomic value, then:
+        ///
+        /// - The [`SHADER_INT64_ATOMIC_ALL_OPS`] capability allows any [`AtomicFunction`]
+        ///   value here.
+        ///
+        /// - The [`SHADER_INT64_ATOMIC_MIN_MAX`] capability allows
+        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`] here.
+        ///
+        /// - If neither of those capabilities are present, then 64-bit scalar
+        ///   atomics are not allowed.
+        ///
+        /// [`pointer`]: Statement::Atomic::pointer
+        /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
+        /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
         fun: AtomicFunction,
+
         /// Value to use in the function.
+        ///
+        /// This must be a scalar of the same type as [`pointer`]'s atomic's scalar type.
+        ///
+        /// [`pointer`]: Statement::Atomic::pointer
         value: Handle<Expression>,
+
         /// [`AtomicResult`] expression representing this function's result.
         ///
+        /// If [`fun`] is [`Exchange { compare: None }`], this must be `Some`,
+        /// as otherwise that operation would be equivalent to a simple [`Store`]
+        /// to the atomic.
+        ///
+        /// Otherwise, this may be `None` if the return value of the operation is not needed.
+        ///
+        /// If `pointer` refers to a 64-bit atomic value, [`SHADER_INT64_ATOMIC_MIN_MAX`]
+        /// is enabled, and [`SHADER_INT64_ATOMIC_ALL_OPS`] is not, this must be `None`.
+        ///
         /// [`AtomicResult`]: crate::Expression::AtomicResult
-        result: Handle<Expression>,
+        /// [`fun`]: Statement::Atomic::fun
+        /// [`Store`]: Statement::Store
+        /// [`Exchange { compare: None }`]: AtomicFunction::Exchange
+        /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
+        /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        result: Option<Handle<Expression>>,
     },
     /// Load uniformly from a uniform pointer in the workgroup address space.
     ///
@@ -2013,8 +2112,18 @@ pub struct Function {
     pub local_variables: Arena<LocalVariable>,
     /// Expressions used inside this function.
     ///
-    /// An `Expression` must occur before all other `Expression`s that use its
-    /// value.
+    /// If an [`Expression`] is in this arena, then its subexpressions are in this
+    /// arena too. In other words, every `Handle<Expression>` in this arena
+    /// refers to an [`Expression`] in this arena too. The only way this arena
+    /// can refer to [`Module::global_expressions`] is indirectly, via
+    /// [`Constant`] and [`Override`] expressions, which hold handles for their
+    /// respective types.
+    ///
+    /// An [`Expression`] must occur before all other [`Expression`]s that use
+    /// its value.
+    ///
+    /// [`Constant`]: Expression::Constant
+    /// [`Override`]: Expression::Override
     pub expressions: Arena<Expression>,
     /// Map of expressions that have associated variable names
     pub named_expressions: NamedExpressions,
@@ -2154,6 +2263,10 @@ pub struct Module {
     /// Arena for the global variables defined in this module.
     pub global_variables: Arena<GlobalVariable>,
     /// [Constant expressions] and [override expressions] used by this module.
+    ///
+    /// If an expression is in this arena, then its subexpressions are in this
+    /// arena too. In other words, every `Handle<Expression>` in this arena
+    /// refers to an [`Expression`] in this arena too.
     ///
     /// Each `Expression` must occur in the arena before any
     /// `Expression` that uses its value.

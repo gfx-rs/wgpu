@@ -643,6 +643,11 @@ pub enum CommandEncoderError {
     Device(#[from] DeviceError),
     #[error("Command encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
     Locked,
+
+    #[error("QuerySet provided for pass timestamp writes is invalid.")]
+    InvalidTimestampWritesQuerySetId,
+    #[error("QuerySet provided for pass timestamp writes that was created by a different device.")]
+    WrongDeviceForTimestampWritesQuerySet,
 }
 
 impl Global {

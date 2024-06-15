@@ -244,7 +244,9 @@ impl StatementGraph {
                     value,
                     result,
                 } => {
-                    self.emits.push((id, result));
+                    if let Some(result) = result {
+                        self.emits.push((id, result));
+                    }
                     self.dependencies.push((id, pointer, "pointer"));
                     self.dependencies.push((id, value, "value"));
                     if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {

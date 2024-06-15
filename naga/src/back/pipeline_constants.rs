@@ -617,7 +617,9 @@ fn adjust_stmt(new_pos: &[Handle<Expression>], stmt: &mut Statement) {
         } => {
             adjust(pointer);
             adjust(value);
-            adjust(result);
+            if let Some(ref mut result) = *result {
+                adjust(result);
+            }
             match *fun {
                 crate::AtomicFunction::Exchange {
                     compare: Some(ref mut compare),

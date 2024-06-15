@@ -155,6 +155,12 @@ impl ShaderTest {
         self
     }
 
+    fn output_type(mut self, output_type: String) -> Self {
+        self.output_type = output_type;
+
+        self
+    }
+
     /// Add another set of possible outputs. If any of the given
     /// output values are seen it's considered a success (i.e. this is OR, not AND).
     ///

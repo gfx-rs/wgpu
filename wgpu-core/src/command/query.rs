@@ -13,7 +13,7 @@ use crate::{
     storage::Storage,
     Epoch, FastHashMap, Index,
 };
-use std::{iter, marker::PhantomData};
+use std::{iter, marker::PhantomData, sync::Arc};
 use thiserror::Error;
 use wgt::BufferAddress;
 
@@ -185,15 +185,14 @@ pub enum ResolveError {
 impl<A: HalApi> QuerySet<A> {
     fn validate_query(
         &self,
-        query_set_id: id::QuerySetId,
         query_type: SimplifiedQueryType,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
-    ) -> Result<&A::QuerySet, QueryUseError> {
+    ) -> Result<(), QueryUseError> {
         // We need to defer our resets because we are in a renderpass,
         // add the usage to the reset map.
         if let Some(reset) = reset_state {
-            let used = reset.use_query_set(query_set_id, self, query_index);
+            let used = reset.use_query_set(self.info.id(), self, query_index);
             if used {
                 return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index });
             }
@@ -214,133 +213,110 @@ impl<A: HalApi> QuerySet<A> {
             });
         }
 
-        Ok(self.raw())
+        Ok(())
     }
 
     pub(super) fn validate_and_write_timestamp(
         &self,
         raw_encoder: &mut A::CommandEncoder,
-        query_set_id: id::QuerySetId,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
     ) -> Result<(), QueryUseError> {
         let needs_reset = reset_state.is_none();
-        let query_set = self.validate_query(
-            query_set_id,
-            SimplifiedQueryType::Timestamp,
-            query_index,
-            reset_state,
-        )?;
+        self.validate_query(SimplifiedQueryType::Timestamp, query_index, reset_state)?;
 
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
                 raw_encoder.reset_queries(self.raw(), query_index..(query_index + 1));
             }
-            raw_encoder.write_timestamp(query_set, query_index);
-        }
-
-        Ok(())
-    }
-
-    pub(super) fn validate_and_begin_occlusion_query(
-        &self,
-        raw_encoder: &mut A::CommandEncoder,
-        query_set_id: id::QuerySetId,
-        query_index: u32,
-        reset_state: Option<&mut QueryResetMap<A>>,
-        active_query: &mut Option<(id::QuerySetId, u32)>,
-    ) -> Result<(), QueryUseError> {
-        let needs_reset = reset_state.is_none();
-        let query_set = self.validate_query(
-            query_set_id,
-            SimplifiedQueryType::Occlusion,
-            query_index,
-            reset_state,
-        )?;
-
-        if let Some((_old_id, old_idx)) = active_query.replace((query_set_id, query_index)) {
-            return Err(QueryUseError::AlreadyStarted {
-                active_query_index: old_idx,
-                new_query_index: query_index,
-            });
-        }
-
-        unsafe {
-            // If we don't have a reset state tracker which can defer resets, we must reset now.
-            if needs_reset {
-                raw_encoder
-                    .reset_queries(self.raw.as_ref().unwrap(), query_index..(query_index + 1));
-            }
-            raw_encoder.begin_query(query_set, query_index);
-        }
-
-        Ok(())
-    }
-
-    pub(super) fn validate_and_begin_pipeline_statistics_query(
-        &self,
-        raw_encoder: &mut A::CommandEncoder,
-        query_set_id: id::QuerySetId,
-        query_index: u32,
-        reset_state: Option<&mut QueryResetMap<A>>,
-        active_query: &mut Option<(id::QuerySetId, u32)>,
-    ) -> Result<(), QueryUseError> {
-        let needs_reset = reset_state.is_none();
-        let query_set = self.validate_query(
-            query_set_id,
-            SimplifiedQueryType::PipelineStatistics,
-            query_index,
-            reset_state,
-        )?;
-
-        if let Some((_old_id, old_idx)) = active_query.replace((query_set_id, query_index)) {
-            return Err(QueryUseError::AlreadyStarted {
-                active_query_index: old_idx,
-                new_query_index: query_index,
-            });
-        }
-
-        unsafe {
-            // If we don't have a reset state tracker which can defer resets, we must reset now.
-            if needs_reset {
-                raw_encoder.reset_queries(self.raw(), query_index..(query_index + 1));
-            }
-            raw_encoder.begin_query(query_set, query_index);
+            raw_encoder.write_timestamp(self.raw(), query_index);
         }
 
         Ok(())
     }
 }
 
+pub(super) fn validate_and_begin_occlusion_query<A: HalApi>(
+    query_set: Arc<QuerySet<A>>,
+    raw_encoder: &mut A::CommandEncoder,
+    query_index: u32,
+    reset_state: Option<&mut QueryResetMap<A>>,
+    active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
+) -> Result<(), QueryUseError> {
+    let needs_reset = reset_state.is_none();
+    query_set.validate_query(SimplifiedQueryType::Occlusion, query_index, reset_state)?;
+
+    if let Some((_old, old_idx)) = active_query.take() {
+        return Err(QueryUseError::AlreadyStarted {
+            active_query_index: old_idx,
+            new_query_index: query_index,
+        });
+    }
+    let (query_set, _) = &active_query.insert((query_set, query_index));
+
+    unsafe {
+        // If we don't have a reset state tracker which can defer resets, we must reset now.
+        if needs_reset {
+            raw_encoder.reset_queries(query_set.raw(), query_index..(query_index + 1));
+        }
+        raw_encoder.begin_query(query_set.raw(), query_index);
+    }
+
+    Ok(())
+}
+
 pub(super) fn end_occlusion_query<A: HalApi>(
     raw_encoder: &mut A::CommandEncoder,
-    storage: &Storage<QuerySet<A>>,
-    active_query: &mut Option<(id::QuerySetId, u32)>,
+    active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
-    if let Some((query_set_id, query_index)) = active_query.take() {
-        // We can unwrap here as the validity was validated when the active query was set
-        let query_set = storage.get(query_set_id).unwrap();
-
+    if let Some((query_set, query_index)) = active_query.take() {
         unsafe { raw_encoder.end_query(query_set.raw.as_ref().unwrap(), query_index) };
-
         Ok(())
     } else {
         Err(QueryUseError::AlreadyStopped)
     }
 }
 
+pub(super) fn validate_and_begin_pipeline_statistics_query<A: HalApi>(
+    query_set: Arc<QuerySet<A>>,
+    raw_encoder: &mut A::CommandEncoder,
+    query_index: u32,
+    reset_state: Option<&mut QueryResetMap<A>>,
+    active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
+) -> Result<(), QueryUseError> {
+    let needs_reset = reset_state.is_none();
+    query_set.validate_query(
+        SimplifiedQueryType::PipelineStatistics,
+        query_index,
+        reset_state,
+    )?;
+
+    if let Some((_old, old_idx)) = active_query.take() {
+        return Err(QueryUseError::AlreadyStarted {
+            active_query_index: old_idx,
+            new_query_index: query_index,
+        });
+    }
+    let (query_set, _) = &active_query.insert((query_set, query_index));
+
+    unsafe {
+        // If we don't have a reset state tracker which can defer resets, we must reset now.
+        if needs_reset {
+            raw_encoder.reset_queries(query_set.raw(), query_index..(query_index + 1));
+        }
+        raw_encoder.begin_query(query_set.raw(), query_index);
+    }
+
+    Ok(())
+}
+
 pub(super) fn end_pipeline_statistics_query<A: HalApi>(
     raw_encoder: &mut A::CommandEncoder,
-    storage: &Storage<QuerySet<A>>,
-    active_query: &mut Option<(id::QuerySetId, u32)>,
+    active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
-    if let Some((query_set_id, query_index)) = active_query.take() {
-        // We can unwrap here as the validity was validated when the active query was set
-        let query_set = storage.get(query_set_id).unwrap();
-
+    if let Some((query_set, query_index)) = active_query.take() {
         unsafe { raw_encoder.end_query(query_set.raw(), query_index) };
-
         Ok(())
     } else {
         Err(QueryUseError::AlreadyStopped)
@@ -384,7 +360,7 @@ impl Global {
             .add_single(&*query_set_guard, query_set_id)
             .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
 
-        query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
+        query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
         Ok(())
     }
