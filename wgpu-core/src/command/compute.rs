@@ -634,7 +634,7 @@ impl Global {
                         .acceleration_structures
                         .used_resources()
                         .map(|tlas| {
-                            tracker.tlas_s.insert_single(tlas);
+                            let tlas = tracker.tlas_s.insert_single(tlas);
                             crate::ray_tracing::TlasAction {
                                 id: tlas.as_info().id(),
                                 kind: crate::ray_tracing::TlasActionKind::Use,
