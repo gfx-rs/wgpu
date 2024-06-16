@@ -60,15 +60,6 @@ pub(crate) struct AttachmentData<T> {
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
-impl<T> AttachmentData<T> {
-    pub(crate) fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> AttachmentData<U> {
-        AttachmentData {
-            colors: self.colors.iter().map(|c| c.as_ref().map(&fun)).collect(),
-            resolves: self.resolves.iter().map(&fun).collect(),
-            depth_stencil: self.depth_stencil.as_ref().map(&fun),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]

@@ -344,7 +344,9 @@ impl Global {
                     let Ok(query_set) = hub.query_sets.read().get_owned(tw.query_set) else {
                         return (
                             ComputePass::new(None, arc_desc),
-                            Some(CommandEncoderError::InvalidTimestampWritesQuerySetId),
+                            Some(CommandEncoderError::InvalidTimestampWritesQuerySetId(
+                                tw.query_set,
+                            )),
                         );
                     };
 
