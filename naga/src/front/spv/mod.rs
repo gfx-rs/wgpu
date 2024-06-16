@@ -4076,7 +4076,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Store any associated global variables so we can upgrade their types later
                     self.upgrade_atomics
-                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
+                        .extend(ctx.get_contained_global_variable(p_lexp_handle));
                 }
                 Op::AtomicLoad => {
                     inst.expect(6)?;
@@ -4108,7 +4108,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Store any associated global variables so we can upgrade their types later
                     self.upgrade_atomics
-                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
+                        .extend(ctx.get_contained_global_variable(p_lexp_handle));
                 }
                 _ => {
                     return Err(Error::UnsupportedInstruction(self.state, inst.op));
