@@ -562,31 +562,35 @@ struct BlockContext<'function> {
 }
 
 impl<'a> BlockContext<'a> {
-    /// Recurse into the expression with the given handle, locating any contained
-    /// global variables.
+    /// Descend into the expression with the given handle, locating a contained
+    /// global variable.
     ///
     /// This is used to track atomic upgrades.
-    fn get_contained_global_variables(
+    fn get_contained_global_variable(
         &self,
-        handle: Handle<crate::Expression>,
-    ) -> IndexSet<Handle<crate::GlobalVariable>> {
-        let mut s = IndexSet::default();
-        if let Ok(expr) = self.expressions.try_get(handle) {
-            #[allow(clippy::pattern_type_mismatch)]
-            match expr {
+        mut handle: Handle<crate::Expression>,
+    ) -> Option<Handle<crate::GlobalVariable>> {
+        log::debug!("\t\tlocating global variable in {handle:?}");
+        while let Ok(expr) = self.expressions.try_get(handle) {
+            match *expr {
                 crate::Expression::Access { base, index: _ } => {
-                    s.extend(self.get_contained_global_variables(*base));
+                    handle = base;
+                    log::debug!("\t\t  access {handle:?}");
                 }
                 crate::Expression::AccessIndex { base, index: _ } => {
-                    s.extend(self.get_contained_global_variables(*base))
+                    handle = base;
+                    log::debug!("\t\t  access index {handle:?}");
                 }
                 crate::Expression::GlobalVariable(h) => {
-                    s.insert(*h);
+                    log::debug!("\t\t  found {h:?}");
+                    return Some(h);
                 }
-                _ => {}
+                _ => {
+                    break;
+                }
             }
         }
-        s
+        None
     }
 }
 
@@ -4044,7 +4048,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Store any associated global variables so we can upgrade their types later
                     self.upgrade_atomics
-                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
+                        .extend(ctx.get_contained_global_variable(p_lexp_handle));
                 }
                 _ => {
                     return Err(Error::UnsupportedInstruction(self.state, inst.op));
