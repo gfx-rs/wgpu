@@ -55,6 +55,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         color_attachment_view,
         color_attachment_resolve_view,
         depth_stencil_view,
+        occlusion_query_set,
     } = resource_setup(&ctx);
 
     let mut encoder = ctx
@@ -78,7 +79,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
                 stencil_ops: None,
             }),
             timestamp_writes: None,
-            occlusion_query_set: None,
+            occlusion_query_set: Some(&occlusion_query_set),
         });
 
         // Drop render pass attachments right away.
@@ -90,7 +91,9 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         rpass.set_bind_group(0, &bind_group, &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        rpass.begin_occlusion_query(0);
         rpass.draw_indirect(&indirect_buffer, 0);
+        rpass.end_occlusion_query();
 
         // Now drop all resources we set. Then do a device poll to make sure the resources are really not dropped too early, no matter what.
         drop(pipeline);
@@ -98,6 +101,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         drop(indirect_buffer);
         drop(vertex_buffer);
         drop(index_buffer);
+        drop(occlusion_query_set);
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();
@@ -129,6 +133,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
         color_attachment_view,
         color_attachment_resolve_view: _,
         depth_stencil_view,
+        occlusion_query_set: _,
     } = resource_setup(&ctx);
 
     let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
@@ -219,6 +224,7 @@ struct ResourceSetup {
     color_attachment_view: wgpu::TextureView,
     color_attachment_resolve_view: wgpu::TextureView,
     depth_stencil_view: wgpu::TextureView,
+    occlusion_query_set: wgpu::QuerySet,
 }
 
 fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
@@ -347,6 +353,12 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     });
     let depth_stencil_view = depth_stencil.create_view(&wgpu::TextureViewDescriptor::default());
 
+    let occlusion_query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("occ_query_set"),
+        ty: wgpu::QueryType::Occlusion,
+        count: 1,
+    });
+
     let pipeline = ctx
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -403,5 +415,6 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         color_attachment_view,
         color_attachment_resolve_view,
         depth_stencil_view,
+        occlusion_query_set,
     }
 }
