@@ -5873,7 +5873,7 @@ pub enum Error {
         /// Lower level source of the error.
         #[cfg(send_sync)]
         #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + 'static>,
+        source: Box<dyn error::Error + Send + Sync + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -5884,7 +5884,7 @@ pub enum Error {
         /// Lower level source of the error.
         #[cfg(send_sync)]
         #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + 'static>,
+        source: Box<dyn error::Error + Send + Sync + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -5899,7 +5899,7 @@ pub enum Error {
         /// Lower level source of the error.
         #[cfg(send_sync)]
         #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + 'static>,
+        source: Box<dyn error::Error + Send + Sync + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -5909,7 +5909,7 @@ pub enum Error {
     },
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(Error: Send);
+static_assertions::assert_impl_all!(Error: Send, Sync);
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
