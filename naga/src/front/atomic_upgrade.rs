@@ -273,4 +273,9 @@ mod test {
             "../../tests/in/spv/atomic_compare_exchange.spv"
         ));
     }
+
+    #[test]
+    fn atomic_i_decrement() {
+        atomic_test(include_bytes!("../../tests/in/spv/atomic_i_decrement.spv"));
+    }
 }
