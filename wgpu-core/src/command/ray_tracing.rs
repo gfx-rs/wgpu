@@ -705,7 +705,7 @@ impl Global {
                 size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
                 info: ResourceInfo::new(
                     "Raytracing scratch buffer",
-                    Some(device.tracker_indices.tlas_s.clone()),
+                    Some(device.tracker_indices.staging_buffers.clone()),
                 ),
                 is_coherent: scratch_mapping.is_coherent,
             })));
@@ -1352,7 +1352,7 @@ impl Global {
                     size: instance_buffer_staging_source.len() as u64,
                     info: ResourceInfo::new(
                         "Raytracing scratch buffer",
-                        Some(device.tracker_indices.tlas_s.clone()),
+                        Some(device.tracker_indices.staging_buffers.clone()),
                     ),
                     is_coherent: mapping.is_coherent,
                 };
@@ -1547,7 +1547,7 @@ impl Global {
             size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
             info: ResourceInfo::new(
                 "Raytracing scratch buffer",
-                Some(device.tracker_indices.tlas_s.clone()),
+                Some(device.tracker_indices.staging_buffers.clone()),
             ),
             is_coherent: scratch_mapping.is_coherent,
         };
