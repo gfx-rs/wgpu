@@ -2,8 +2,6 @@
 //! I.e. once a resource is passed in to a render pass, it can be dropped.
 //!
 //! TODO: Methods that take resources that weren't tested here:
-//! * rpass.set_index_buffer(buffer_slice, index_format)
-//! * rpass.set_vertex_buffer(slot, buffer_slice)
 //! * rpass.draw_indexed_indirect(indirect_buffer, indirect_offset)
 //! * rpass.execute_bundles(render_bundles)
 //! * rpass.multi_draw_indirect(indirect_buffer, indirect_offset, count)
@@ -51,6 +49,8 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         cpu_buffer,
         buffer_size,
         indirect_buffer,
+        vertex_buffer,
+        index_buffer,
         bind_group,
         pipeline,
         color_attachment_view,
@@ -89,12 +89,16 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
 
         rpass.set_pipeline(&pipeline);
         rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.draw_indirect(&indirect_buffer, 0);
 
         // Now drop all resources we set. Then do a device poll to make sure the resources are really not dropped too early, no matter what.
         drop(pipeline);
         drop(bind_group);
         drop(indirect_buffer);
+        drop(vertex_buffer);
+        drop(index_buffer);
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();
@@ -134,6 +138,8 @@ struct ResourceSetup {
     buffer_size: u64,
 
     indirect_buffer: wgpu::Buffer,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
 
@@ -183,18 +189,34 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         mapped_at_creation: false,
     });
 
+    let vertex_count = 3;
     let indirect_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("gpu_buffer"),
             usage: wgpu::BufferUsages::INDIRECT,
             contents: wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
+                vertex_count,
                 instance_count: 1,
                 first_vertex: 0,
                 first_instance: 0,
             }
             .as_bytes(),
+        });
+
+    let vertex_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("vertex_buffer"),
+        usage: wgpu::BufferUsages::VERTEX,
+        size: std::mem::size_of::<u32>() as u64 * vertex_count as u64,
+        mapped_at_creation: false,
+    });
+
+    let index_buffer = ctx
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("vertex_buffer"),
+            usage: wgpu::BufferUsages::INDEX,
+            contents: bytemuck::cast_slice(&[0_u32, 1, 2]),
         });
 
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -261,7 +283,11 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 module: &sm,
                 entry_point: "vs_main",
                 compilation_options: Default::default(),
-                buffers: &[],
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: 4,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Uint32],
+                }],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &sm,
@@ -294,7 +320,10 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         gpu_buffer,
         cpu_buffer,
         buffer_size,
+
         indirect_buffer,
+        vertex_buffer,
+        index_buffer,
         bind_group,
         pipeline,
 
