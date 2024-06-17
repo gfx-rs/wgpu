@@ -4389,7 +4389,7 @@ impl<W: Write> Writer<W> {
                 writeln!(
                     self.out,
                     "{}return metal::int2(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
-                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4);",
+                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -4416,7 +4416,7 @@ impl<W: Write> Writer<W> {
                     self.out,
                     "{}return metal::int3(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
                                           as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
-                                          as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8);",
+                                          as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -4448,7 +4448,7 @@ impl<W: Write> Writer<W> {
                     "{}return metal::int4(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
                                           as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
                                           as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8), \
-                                          as_type<int>(b15 << 24 | b14 << 16 | b13 << 8 | b12);",
+                                          as_type<int>(b15 << 24 | b14 << 16 | b13 << 8 | b12));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;

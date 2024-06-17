@@ -80,6 +80,7 @@ For changelogs after v0.14, see [the wgpu changelog](../CHANGELOG.md).
 - Add and fix minimum Metal version checks for optional functionality. ([#2486](https://github.com/gfx-rs/naga/pull/2486)) **@teoxoy**
 - Make varyings' struct members unique. ([#2521](https://github.com/gfx-rs/naga/pull/2521)) **@evahop**
 - Add experimental vertex pulling transform flag. ([#5254](https://github.com/gfx-rs/wgpu/pull/5254)) **@bradwerth**
+- Fixup some generated MSL for vertex buffer unpack functions. ([#5829](https://github.com/gfx-rs/wgpu/pull/5829)) **@bradwerth**
 
 #### GLSL-OUT
 
