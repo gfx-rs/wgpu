@@ -215,7 +215,6 @@ impl Module {
 
 #[cfg(test)]
 mod test {
-
     fn atomic_test(bytes: &[u8]) {
         let _ = env_logger::builder().is_test(true).try_init();
         let m = crate::front::spv::parse_u8_slice(bytes, &Default::default()).unwrap();
@@ -277,5 +276,10 @@ mod test {
     #[test]
     fn atomic_i_decrement() {
         atomic_test(include_bytes!("../../tests/in/spv/atomic_i_decrement.spv"));
+    }
+
+    #[test]
+    fn atomic_i_add_and_sub() {
+        atomic_test(include_bytes!("../../tests/in/spv/atomic_i_add_sub.spv"));
     }
 }
