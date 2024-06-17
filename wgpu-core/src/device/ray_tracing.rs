@@ -344,7 +344,7 @@ impl Global {
                     size,
                     info: ResourceInfo::new(
                         "Raytracing scratch buffer",
-                        Some(device.tracker_indices.tlas_s.clone()),
+                        Some(device.tracker_indices.staging_buffers.clone()),
                     ),
                     is_coherent: mapping.is_coherent,
                 })))
