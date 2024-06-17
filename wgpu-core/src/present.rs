@@ -21,13 +21,13 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     init_tracker::TextureInitTracker,
+    lock::{rank, Mutex, RwLock},
     resource::{self, ResourceInfo},
     snatch::Snatchable,
     track,
 };
 
 use hal::{Queue as _, Surface as _};
-use parking_lot::{Mutex, RwLock};
 use thiserror::Error;
 use wgt::SurfaceStatus as Status;
 
@@ -154,17 +154,20 @@ impl Global {
                 parent_id: surface_id,
             });
         }
-        #[cfg(not(feature = "trace"))]
-        let _ = device;
 
-        let suf = A::get_surface(surface.as_ref());
+        let fence_guard = device.fence.read();
+        let fence = fence_guard.as_ref().unwrap();
+
+        let suf = A::surface_as_hal(surface.as_ref());
         let (texture_id, status) = match unsafe {
-            suf.unwrap()
-                .acquire_texture(Some(std::time::Duration::from_millis(
-                    FRAME_TIMEOUT_MS as u64,
-                )))
+            suf.unwrap().acquire_texture(
+                Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
+                fence,
+            )
         } {
             Ok(Some(ast)) => {
+                drop(fence_guard);
+
                 let texture_desc = wgt::TextureDescriptor {
                     label: (),
                     size: wgt::Extent3d {
@@ -215,7 +218,10 @@ impl Global {
                     desc: texture_desc,
                     hal_usage,
                     format_features,
-                    initialization_status: RwLock::new(TextureInitTracker::new(1, 1)),
+                    initialization_status: RwLock::new(
+                        rank::TEXTURE_INITIALIZATION_STATUS,
+                        TextureInitTracker::new(1, 1),
+                    ),
                     full_range: track::TextureSelector {
                         layers: 0..1,
                         mips: 0..1,
@@ -224,11 +230,14 @@ impl Global {
                         "<Surface Texture>",
                         Some(device.tracker_indices.textures.clone()),
                     ),
-                    clear_mode: RwLock::new(resource::TextureClearMode::Surface {
-                        clear_view: Some(clear_view),
-                    }),
-                    views: Mutex::new(Vec::new()),
-                    bind_groups: Mutex::new(Vec::new()),
+                    clear_mode: RwLock::new(
+                        rank::TEXTURE_CLEAR_MODE,
+                        resource::TextureClearMode::Surface {
+                            clear_view: Some(clear_view),
+                        },
+                    ),
+                    views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
+                    bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
                 };
 
                 let (id, resource) = fid.assign(Arc::new(texture));
@@ -324,7 +333,7 @@ impl Global {
                     .textures
                     .remove(texture.info.tracker_index());
                 let mut exclusive_snatch_guard = device.snatchable_lock.write();
-                let suf = A::get_surface(&surface);
+                let suf = A::surface_as_hal(&surface);
                 let mut inner = texture.inner_mut(&mut exclusive_snatch_guard);
                 let inner = inner.as_mut().unwrap();
 
@@ -418,7 +427,7 @@ impl Global {
                     .lock()
                     .textures
                     .remove(texture.info.tracker_index());
-                let suf = A::get_surface(&surface);
+                let suf = A::surface_as_hal(&surface);
                 let exclusive_snatch_guard = device.snatchable_lock.write();
                 match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
                     resource::TextureInner::Surface { mut raw, parent_id } => {

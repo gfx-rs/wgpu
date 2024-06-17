@@ -5,8 +5,8 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
 
+use crate::lock::{rank, Mutex};
 use crate::{PreHashedKey, PreHashedMap};
 
 type SlotInner<V> = Weak<V>;
@@ -22,13 +22,15 @@ pub struct ResourcePool<K, V> {
 impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(HashMap::default()),
+            inner: Mutex::new(rank::RESOURCE_POOL_INNER, HashMap::default()),
         }
     }
 
-    /// Get a resource from the pool with the given entry map, or create a new one if it doesn't exist using the given constructor.
+    /// Get a resource from the pool with the given entry map, or create a new
+    /// one if it doesn't exist using the given constructor.
     ///
-    /// Behaves such that only one resource will be created for each unique entry map at any one time.
+    /// Behaves such that only one resource will be created for each unique
+    /// entry map at any one time.
     pub fn get_or_init<F, E>(&self, key: K, constructor: F) -> Result<Arc<V>, E>
     where
         F: FnOnce(K) -> Result<Arc<V>, E>,
@@ -96,6 +98,8 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
     /// Remove the given entry map from the pool.
     ///
     /// Must *only* be called in the Drop impl of [`BindGroupLayout`].
+    ///
+    /// [`BindGroupLayout`]: crate::binding_model::BindGroupLayout
     pub fn remove(&self, key: &K) {
         let hashed_key = PreHashedKey::from_key(key);
 

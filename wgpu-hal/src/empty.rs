@@ -30,6 +30,7 @@ impl crate::Api for Api {
     type QuerySet = Resource;
     type Fence = Resource;
     type AccelerationStructure = Resource;
+    type PipelineCache = Resource;
 
     type BindGroupLayout = Resource;
     type BindGroup = Resource;
@@ -74,6 +75,7 @@ impl crate::Surface for Context {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        fence: &Resource,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
@@ -113,7 +115,7 @@ impl crate::Queue for Context {
         &self,
         command_buffers: &[&Resource],
         surface_textures: &[&Resource],
-        signal_fence: Option<(&mut Resource, crate::FenceValue)>,
+        signal_fence: (&mut Resource, crate::FenceValue),
     ) -> DeviceResult<()> {
         Ok(())
     }
@@ -220,6 +222,13 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<Resource, crate::PipelineCacheError> {
+        Ok(Resource)
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: Resource) {}
 
     unsafe fn create_query_set(
         &self,

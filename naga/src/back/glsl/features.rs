@@ -50,6 +50,8 @@ bitflags::bitflags! {
         const INSTANCE_INDEX = 1 << 22;
         /// Sample specific LODs of cube / array shadow textures
         const TEXTURE_SHADOW_LOD = 1 << 23;
+        /// Subgroup operations
+        const SUBGROUP_OPERATIONS = 1 << 24;
     }
 }
 
@@ -117,6 +119,7 @@ impl FeaturesManager {
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(DUAL_SOURCE_BLENDING, 330, 300 /* with extension */);
+        check_feature!(SUBGROUP_OPERATIONS, 430, 310);
         match version {
             Version::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
             _ => check_feature!(MULTI_VIEW, 140, 310),
@@ -259,6 +262,22 @@ impl FeaturesManager {
             writeln!(out, "#extension GL_EXT_texture_shadow_lod : require")?;
         }
 
+        if self.0.contains(Features::SUBGROUP_OPERATIONS) {
+            // https://registry.khronos.org/OpenGL/extensions/KHR/KHR_shader_subgroup.txt
+            writeln!(out, "#extension GL_KHR_shader_subgroup_basic : require")?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_vote : require")?;
+            writeln!(
+                out,
+                "#extension GL_KHR_shader_subgroup_arithmetic : require"
+            )?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_ballot : require")?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_shuffle : require")?;
+            writeln!(
+                out,
+                "#extension GL_KHR_shader_subgroup_shuffle_relative : require"
+            )?;
+        }
+
         Ok(())
     }
 }
@@ -326,7 +345,7 @@ impl<'a, W> Writer<'a, W> {
                             }
 
                             // If the type of this global is a struct
-                            if let crate::TypeInner::Struct { ref members, .. } =
+                            if let TypeInner::Struct { ref members, .. } =
                                 self.module.types[global.ty].inner
                             {
                                 // Check the last element of the struct to see if it's type uses
@@ -453,7 +472,7 @@ impl<'a, W> Writer<'a, W> {
                     // layers queries are also implemented as size queries
                     crate::ImageQuery::Size { .. } | crate::ImageQuery::NumLayers => {
                         if let TypeInner::Image {
-                            class: crate::ImageClass::Storage { .. }, ..
+                            class: ImageClass::Storage { .. }, ..
                         } = *info[image].ty.inner_with(&module.types) {
                             features.request(Features::IMAGE_SIZE)
                         }
@@ -518,6 +537,10 @@ impl<'a, W> Writer<'a, W> {
                         }
                     }
                 }
+                Expression::SubgroupBallotResult |
+                Expression::SubgroupOperationResult { .. } => {
+                    features.request(Features::SUBGROUP_OPERATIONS)
+                }
                 _ => {}
             }
             }
@@ -535,7 +558,7 @@ impl<'a, W> Writer<'a, W> {
 
     fn varying_required_features(&mut self, binding: Option<&Binding>, ty: Handle<Type>) {
         match self.module.types[ty].inner {
-            crate::TypeInner::Struct { ref members, .. } => {
+            TypeInner::Struct { ref members, .. } => {
                 for member in members {
                     self.varying_required_features(member.binding.as_ref(), member.ty);
                 }

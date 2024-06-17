@@ -598,6 +598,7 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::ShiftRight => past(left)?.clone(),
             },
             crate::Expression::AtomicResult { ty, .. } => TypeResolution::Handle(ty),
+            crate::Expression::SubgroupOperationResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::WorkGroupUniformLoadResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::Select { accept, .. } => past(accept)?.clone(),
             crate::Expression::Derivative { expr, .. } => past(expr)?.clone(),
@@ -809,7 +810,9 @@ impl<'a> ResolveContext<'a> {
                     Mf::Pack4x8unorm |
                     Mf::Pack2x16snorm |
                     Mf::Pack2x16unorm |
-                    Mf::Pack2x16float => TypeResolution::Value(Ti::Scalar(crate::Scalar::U32)),
+                    Mf::Pack2x16float |
+                    Mf::Pack4xI8 |
+                    Mf::Pack4xU8 => TypeResolution::Value(Ti::Scalar(crate::Scalar::U32)),
                     // data unpacking
                     Mf::Unpack4x8snorm |
                     Mf::Unpack4x8unorm => TypeResolution::Value(Ti::Vector {
@@ -821,6 +824,14 @@ impl<'a> ResolveContext<'a> {
                     Mf::Unpack2x16float => TypeResolution::Value(Ti::Vector {
                         size: crate::VectorSize::Bi,
                         scalar: crate::Scalar::F32
+                    }),
+                    Mf::Unpack4xI8 => TypeResolution::Value(Ti::Vector {
+                        size: crate::VectorSize::Quad,
+                        scalar: crate::Scalar::I32
+                    }),
+                    Mf::Unpack4xU8 => TypeResolution::Value(Ti::Vector {
+                        size: crate::VectorSize::Quad,
+                        scalar: crate::Scalar::U32
                     }),
                 }
             }
@@ -885,6 +896,10 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::SubgroupBallotResult => TypeResolution::Value(Ti::Vector {
+                scalar: crate::Scalar::U32,
+                size: crate::VectorSize::Quad,
+            }),
         })
     }
 }

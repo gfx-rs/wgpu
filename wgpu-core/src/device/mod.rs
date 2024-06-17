@@ -4,7 +4,6 @@ use crate::{
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
     resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
-    resource_log,
     snatch::SnatchGuard,
     Label, DOWNLEVEL_ERROR_MESSAGE,
 };
@@ -34,7 +33,9 @@ pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;
 // value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
-const CLEANUP_WAIT_MS: u32 = 5000;
+// If a submission is not completed within this time, we go off into UB land.
+// See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
+const CLEANUP_WAIT_MS: u32 = 60000;
 
 const IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL: &str = "Implicit BindGroupLayout in the Error State";
 const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
@@ -378,42 +379,6 @@ fn map_buffer<A: HalApi>(
     Ok(mapping.ptr)
 }
 
-pub(crate) struct CommandAllocator<A: HalApi> {
-    free_encoders: Vec<A::CommandEncoder>,
-}
-
-impl<A: HalApi> CommandAllocator<A> {
-    fn acquire_encoder(
-        &mut self,
-        device: &A::Device,
-        queue: &A::Queue,
-    ) -> Result<A::CommandEncoder, hal::DeviceError> {
-        match self.free_encoders.pop() {
-            Some(encoder) => Ok(encoder),
-            None => unsafe {
-                let hal_desc = hal::CommandEncoderDescriptor { label: None, queue };
-                device.create_command_encoder(&hal_desc)
-            },
-        }
-    }
-
-    fn release_encoder(&mut self, encoder: A::CommandEncoder) {
-        self.free_encoders.push(encoder);
-    }
-
-    fn dispose(self, device: &A::Device) {
-        resource_log!(
-            "CommandAllocator::dispose encoders {}",
-            self.free_encoders.len()
-        );
-        for cmd_encoder in self.free_encoders {
-            unsafe {
-                device.destroy_command_encoder(cmd_encoder);
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 #[error("Device is invalid")]
 pub struct InvalidDevice;
@@ -479,4 +444,107 @@ impl ImplicitPipelineIds<'_> {
                 .collect(),
         }
     }
+}
+
+/// Create a validator with the given validation flags.
+pub fn create_validator(
+    features: wgt::Features,
+    downlevel: wgt::DownlevelFlags,
+    flags: naga::valid::ValidationFlags,
+) -> naga::valid::Validator {
+    use naga::valid::Capabilities as Caps;
+    let mut caps = Caps::empty();
+    caps.set(
+        Caps::PUSH_CONSTANT,
+        features.contains(wgt::Features::PUSH_CONSTANTS),
+    );
+    caps.set(Caps::FLOAT64, features.contains(wgt::Features::SHADER_F64));
+    caps.set(
+        Caps::PRIMITIVE_INDEX,
+        features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
+    );
+    caps.set(
+        Caps::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    // TODO: This needs a proper wgpu feature
+    caps.set(
+        Caps::SAMPLER_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+        features.contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
+    );
+    caps.set(Caps::MULTIVIEW, features.contains(wgt::Features::MULTIVIEW));
+    caps.set(
+        Caps::EARLY_DEPTH_TEST,
+        features.contains(wgt::Features::SHADER_EARLY_DEPTH_TEST),
+    );
+    caps.set(
+        Caps::SHADER_INT64,
+        features.contains(wgt::Features::SHADER_INT64),
+    );
+    caps.set(
+        Caps::SHADER_INT64_ATOMIC_MIN_MAX,
+        features.intersects(
+            wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX | wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS,
+        ),
+    );
+    caps.set(
+        Caps::SHADER_INT64_ATOMIC_ALL_OPS,
+        features.contains(wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS),
+    );
+    caps.set(
+        Caps::MULTISAMPLED_SHADING,
+        downlevel.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
+    );
+    caps.set(
+        Caps::DUAL_SOURCE_BLENDING,
+        features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
+    );
+    caps.set(
+        Caps::CUBE_ARRAY_TEXTURES,
+        downlevel.contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
+    );
+    caps.set(
+        Caps::SUBGROUP,
+        features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX),
+    );
+    caps.set(
+        Caps::SUBGROUP_BARRIER,
+        features.intersects(wgt::Features::SUBGROUP_BARRIER),
+    );
+    caps.set(
+        Caps::RAY_QUERY,
+        features.intersects(wgt::Features::RAY_QUERY),
+    );
+
+    let mut subgroup_stages = naga::valid::ShaderStages::empty();
+    subgroup_stages.set(
+        naga::valid::ShaderStages::COMPUTE | naga::valid::ShaderStages::FRAGMENT,
+        features.contains(wgt::Features::SUBGROUP),
+    );
+    subgroup_stages.set(
+        naga::valid::ShaderStages::VERTEX,
+        features.contains(wgt::Features::SUBGROUP_VERTEX),
+    );
+
+    let subgroup_operations = if caps.contains(Caps::SUBGROUP) {
+        use naga::valid::SubgroupOperationSet as S;
+        S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+    } else {
+        naga::valid::SubgroupOperationSet::empty()
+    };
+    let mut validator = naga::valid::Validator::new(flags, caps);
+    validator.subgroup_stages(subgroup_stages);
+    validator.subgroup_operations(subgroup_operations);
+    validator
 }

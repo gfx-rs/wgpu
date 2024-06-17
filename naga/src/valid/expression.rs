@@ -1,7 +1,4 @@
-use super::{
-    compose::validate_compose, validate_atomic_compare_exchange_struct, FunctionInfo, ModuleInfo,
-    ShaderStages, TypeFlags,
-};
+use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
 
 use crate::{
@@ -12,8 +9,6 @@ use crate::{
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ExpressionError {
-    #[error("Doesn't exist")]
-    DoesntExist,
     #[error("Used by a statement before it was introduced into the scope by any of the dominating blocks")]
     NotInScope,
     #[error("Base type {0:?} is not compatible with this expression")]
@@ -116,8 +111,6 @@ pub enum ExpressionError {
     WrongArgumentCount(crate::MathFunction),
     #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
     InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
-    #[error("Atomic result type can't be {0:?}")]
-    InvalidAtomicResultType(Handle<crate::Type>),
     #[error(
         "workgroupUniformLoad result type can't be {0:?}. It can only be a constructible type."
     )]
@@ -194,7 +187,7 @@ impl super::Validator {
         use crate::Expression as E;
 
         if !global_expr_kind.is_const_or_override(handle) {
-            return Err(super::ConstExpressionError::NonConstOrOverride);
+            return Err(ConstExpressionError::NonConstOrOverride);
         }
 
         match gctx.global_expressions[handle] {
@@ -211,10 +204,10 @@ impl super::Validator {
             }
             E::Splat { value, .. } => match *mod_info[value].inner_with(gctx.types) {
                 crate::TypeInner::Scalar { .. } => {}
-                _ => return Err(super::ConstExpressionError::InvalidSplatType(value)),
+                _ => return Err(ConstExpressionError::InvalidSplatType(value)),
             },
             _ if global_expr_kind.is_const(handle) || !self.allow_overrides => {
-                return Err(super::ConstExpressionError::NonFullyEvaluatedConst)
+                return Err(ConstExpressionError::NonFullyEvaluatedConst)
             }
             // the constant evaluator will report errors about override-expressions
             _ => {}
@@ -1527,11 +1520,30 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
+                    mf @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                        let scalar_kind = match mf {
+                            Mf::Pack4xI8 => Sk::Sint,
+                            Mf::Pack4xU8 => Sk::Uint,
+                            _ => unreachable!(),
+                        };
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Vector {
+                                size: crate::VectorSize::Quad,
+                                scalar: Sc { kind, .. },
+                            } if kind == scalar_kind => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
                     Mf::Unpack2x16float
                     | Mf::Unpack2x16snorm
                     | Mf::Unpack2x16unorm
                     | Mf::Unpack4x8snorm
-                    | Mf::Unpack4x8unorm => {
+                    | Mf::Unpack4x8unorm
+                    | Mf::Unpack4xI8
+                    | Mf::Unpack4xU8 => {
                         if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
@@ -1565,30 +1577,11 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::CallResult(function) => mod_info.functions[function.index()].available_stages,
-            E::AtomicResult { ty, comparison } => {
-                let scalar_predicate = |ty: &crate::TypeInner| match ty {
-                    &crate::TypeInner::Scalar(
-                        scalar @ Sc {
-                            kind: crate::ScalarKind::Uint | crate::ScalarKind::Sint,
-                            ..
-                        },
-                    ) => self.check_width(scalar).is_ok(),
-                    _ => false,
-                };
-                let good = match &module.types[ty].inner {
-                    ty if !comparison => scalar_predicate(ty),
-                    &crate::TypeInner::Struct { ref members, .. } if comparison => {
-                        validate_atomic_compare_exchange_struct(
-                            &module.types,
-                            members,
-                            scalar_predicate,
-                        )
-                    }
-                    _ => false,
-                };
-                if !good {
-                    return Err(ExpressionError::InvalidAtomicResultType(ty));
-                }
+            E::AtomicResult { .. } => {
+                // These expressions are validated when we check the `Atomic` statement
+                // that refers to them, because we have all the information we need at
+                // that point. The checks driven by `Validator::needs_visit` ensure
+                // that this expression is indeed visited by one `Atomic` statement.
                 ShaderStages::all()
             }
             E::WorkGroupUniformLoadResult { ty } => {
@@ -1641,6 +1634,7 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidRayQueryType(query));
                 }
             },
+            E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
         };
         Ok(stages)
     }

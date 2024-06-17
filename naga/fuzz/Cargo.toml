@@ -15,29 +15,33 @@ libfuzzer-sys = "0.4"
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies.naga]
 path = ".."
-version = "0.19.0"
+version = "0.20.0"
 features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in"]
 
 [[bin]]
 name = "spv_parser"
 path = "fuzz_targets/spv_parser.rs"
+bench = false
 test = false
 doc = false
 
 [[bin]]
 name = "wgsl_parser"
 path = "fuzz_targets/wgsl_parser.rs"
+bench = false
 test = false
 doc = false
 
 [[bin]]
 name = "glsl_parser"
 path = "fuzz_targets/glsl_parser.rs"
+bench = false
 test = false
 doc = false
 
 [[bin]]
 name = "ir"
 path = "fuzz_targets/ir.rs"
+bench = false
 test = false
 doc = false

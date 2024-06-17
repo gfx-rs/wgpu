@@ -43,6 +43,24 @@ winapi::STRUCT! {
 }
 
 winapi::ENUM! {
+    enum D3D12_WAVE_MMA_TIER  {
+        D3D12_WAVE_MMA_TIER_NOT_SUPPORTED = 0,
+        D3D12_WAVE_MMA_TIER_1_0 = 10,
+    }
+}
+
+winapi::STRUCT! {
+    struct D3D12_FEATURE_DATA_D3D12_OPTIONS9 {
+        MeshShaderPipelineStatsSupported: winapi::shared::minwindef::BOOL,
+        MeshShaderSupportsFullRangeRenderTargetArrayIndex: winapi::shared::minwindef::BOOL,
+        AtomicInt64OnTypedResourceSupported: winapi::shared::minwindef::BOOL,
+        AtomicInt64OnGroupSharedSupported: winapi::shared::minwindef::BOOL,
+        DerivativesInMeshAndAmplificationShadersSupported: winapi::shared::minwindef::BOOL,
+        WaveMMATier: D3D12_WAVE_MMA_TIER,
+    }
+}
+
+winapi::ENUM! {
     enum D3D_SHADER_MODEL {
         D3D_SHADER_MODEL_NONE = 0,
         D3D_SHADER_MODEL_5_1 = 0x51,

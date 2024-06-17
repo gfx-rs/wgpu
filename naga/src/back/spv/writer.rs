@@ -878,6 +878,9 @@ impl Writer {
             crate::TypeInner::RayQuery => {
                 self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
             }
+            crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
+                self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
+            }
             _ => {}
         }
         Ok(())
@@ -970,6 +973,11 @@ impl Writer {
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
+        // If it's a type that needs SPIR-V capabilities, request them now.
+        // This needs to happen regardless of the LocalType lookup succeeding,
+        // because some types which map to the same LocalType have different
+        // capability requirements. See https://github.com/gfx-rs/wgpu/issues/5569
+        self.request_type_capabilities(&ty.inner)?;
         let id = if let Some(local) = make_local(&ty.inner) {
             // This type can be represented as a `LocalType`, so check if we've
             // already written an instruction for it. If not, do so now, with
@@ -984,10 +992,6 @@ impl Writer {
                     e.insert(id);
 
                     self.write_type_declaration_local(id, local);
-
-                    // If it's a type that needs SPIR-V capabilities, request them now,
-                    // so write_type_declaration_local can stay infallible.
-                    self.request_type_capabilities(&ty.inner)?;
 
                     id
                 }
@@ -1150,7 +1154,7 @@ impl Writer {
     }
 
     pub(super) fn get_constant_scalar(&mut self, value: crate::Literal) -> Word {
-        let scalar = CachedConstant::Literal(value);
+        let scalar = CachedConstant::Literal(value.into());
         if let Some(&id) = self.cached_constants.get(&scalar) {
             return id;
         }
@@ -1310,7 +1314,11 @@ impl Writer {
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
         );
-        let exec_scope_id = self.get_index_constant(spirv::Scope::Workgroup as u32);
+        let exec_scope_id = if flags.contains(crate::Barrier::SUB_GROUP) {
+            self.get_index_constant(spirv::Scope::Subgroup as u32)
+        } else {
+            self.get_index_constant(spirv::Scope::Workgroup as u32)
+        };
         let mem_scope_id = self.get_index_constant(memory_scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
         block.body.push(Instruction::control_barrier(
@@ -1585,6 +1593,41 @@ impl Writer {
                     Bi::WorkGroupId => BuiltIn::WorkgroupId,
                     Bi::WorkGroupSize => BuiltIn::WorkgroupSize,
                     Bi::NumWorkGroups => BuiltIn::NumWorkgroups,
+                    // Subgroup
+                    Bi::NumSubgroups => {
+                        self.require_any(
+                            "`num_subgroups` built-in",
+                            &[spirv::Capability::GroupNonUniform],
+                        )?;
+                        BuiltIn::NumSubgroups
+                    }
+                    Bi::SubgroupId => {
+                        self.require_any(
+                            "`subgroup_id` built-in",
+                            &[spirv::Capability::GroupNonUniform],
+                        )?;
+                        BuiltIn::SubgroupId
+                    }
+                    Bi::SubgroupSize => {
+                        self.require_any(
+                            "`subgroup_size` built-in",
+                            &[
+                                spirv::Capability::GroupNonUniform,
+                                spirv::Capability::SubgroupBallotKHR,
+                            ],
+                        )?;
+                        BuiltIn::SubgroupSize
+                    }
+                    Bi::SubgroupInvocationId => {
+                        self.require_any(
+                            "`subgroup_invocation_id` built-in",
+                            &[
+                                spirv::Capability::GroupNonUniform,
+                                spirv::Capability::SubgroupBallotKHR,
+                            ],
+                        )?;
+                        BuiltIn::SubgroupLocalInvocationId
+                    }
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
@@ -1720,8 +1763,27 @@ impl Writer {
             if let crate::AddressSpace::Storage { .. } = global_variable.space {
                 match ir_module.types[global_variable.ty].inner {
                     crate::TypeInner::BindingArray { base, .. } => {
-                        let decorated_id = self.get_type_id(LookupType::Handle(base));
-                        self.decorate(decorated_id, Decoration::Block, &[]);
+                        let ty = &ir_module.types[base];
+                        let mut should_decorate = true;
+                        // Check if the type has a runtime array.
+                        // A normal runtime array gets validated out,
+                        // so only structs can be with runtime arrays
+                        if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
+                            // only the last member in a struct can be dynamically sized
+                            if let Some(last_member) = members.last() {
+                                if let &crate::TypeInner::Array {
+                                    size: crate::ArraySize::Dynamic,
+                                    ..
+                                } = &ir_module.types[last_member.ty].inner
+                                {
+                                    should_decorate = false;
+                                }
+                            }
+                        }
+                        if should_decorate {
+                            let decorated_id = self.get_type_id(LookupType::Handle(base));
+                            self.decorate(decorated_id, Decoration::Block, &[]);
+                        }
                     }
                     _ => (),
                 };

@@ -1,7 +1,8 @@
 [files]
 extend-exclude = [
     # spirv-asm isn't real source code
-    '*.spvasm'
+    '*.spvasm',
+    'etc/big-picture.xml',
 ]
 
 # Corrections take the form of a key/value pair. The key is the incorrect word
@@ -15,8 +16,12 @@ lod = "lod"
 inout = "inout"
 derivate = "derivate"
 implace = "implace"
-Ded = "Ded" # This shows up in "ANDed"
+Ded = "Ded"           # This shows up in "ANDed"
+pn = "pn"             # used as a normal name in debug-symbol-terrain.wgsl
 
 # Usernames
 Healthire = "Healthire"
 REASY = "REASY"
+
+[type.rust.extend-identifiers]
+D3DCOLORtoUBYTE4 = "D3DCOLORtoUBYTE4"

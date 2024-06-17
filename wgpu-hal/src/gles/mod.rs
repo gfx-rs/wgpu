@@ -154,6 +154,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = ();
+    type PipelineCache = ();
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -602,6 +603,7 @@ struct ProgramStage {
     naga_stage: naga::ShaderStage,
     shader_id: ShaderId,
     entry_point: String,
+    zero_initialize_workgroup_memory: bool,
 }
 
 #[derive(PartialEq, Eq, Hash)]

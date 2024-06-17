@@ -18,11 +18,15 @@ static BUFFER_DESTROY: GpuTestConfiguration =
             .await
             .panic_on_timeout();
 
-        fail(&ctx.device, || {
-            buffer
-                .slice(..)
-                .map_async(wgpu::MapMode::Write, move |_| {});
-        });
+        fail(
+            &ctx.device,
+            || {
+                buffer
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Write, move |_| {});
+            },
+            None,
+        );
 
         buffer.destroy();
 

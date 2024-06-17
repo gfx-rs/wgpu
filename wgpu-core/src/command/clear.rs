@@ -26,8 +26,6 @@ use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, Te
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,
-    #[error("Command encoder {0:?} is invalid")]
-    InvalidCommandEncoder(CommandEncoderId),
     #[error("Device {0:?} is invalid")]
     InvalidDevice(DeviceId),
     #[error("Buffer {0:?} is invalid or destroyed")]
@@ -74,6 +72,8 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     },
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error(transparent)]
+    CommandEncoderError(#[from] super::CommandEncoderError),
 }
 
 impl Global {
@@ -89,8 +89,7 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)
-            .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -104,6 +103,11 @@ impl Global {
             let dst_buffer = buffer_guard
                 .get(dst)
                 .map_err(|_| ClearError::InvalidBuffer(dst))?;
+
+            if dst_buffer.device.as_info().id() != cmd_buf.device.as_info().id() {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             cmd_buf_data
                 .trackers
                 .buffers
@@ -178,8 +182,7 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)
-            .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -199,6 +202,10 @@ impl Global {
             .textures
             .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
+
+        if dst_texture.device.as_info().id() != cmd_buf.device.as_info().id() {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         // Check if subresource aspects are valid.
         let clear_aspects =

@@ -63,6 +63,10 @@ _frexp_result_vec4_f32_ naga_frexp(float4 arg) {
     return result;
 }
 
+int2 ZeroValueint2() {
+    return (int2)0;
+}
+
 void main()
 {
     float4 v = (0.0).xxxx;
@@ -74,7 +78,7 @@ void main()
     float4 g = refract(v, v, 1.0);
     int4 sign_b = int4(-1, -1, -1, -1);
     float4 sign_d = float4(-1.0, -1.0, -1.0, -1.0);
-    int const_dot = dot((int2)0, (int2)0);
+    int const_dot = dot(ZeroValueint2(), ZeroValueint2());
     uint first_leading_bit_abs = firstbithigh(0u);
     int flb_a = asint(firstbithigh(-1));
     int2 flb_b = asint(firstbithigh((-1).xx));

@@ -12,9 +12,12 @@ fn try_copy(
 ) {
     let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR);
     let data = vec![255; size as usize];
-    fail_if(&ctx.device, should_fail, || {
-        ctx.queue.write_buffer(&buffer, offset, &data)
-    });
+    fail_if(
+        &ctx.device,
+        should_fail,
+        || ctx.queue.write_buffer(&buffer, offset, &data),
+        None,
+    );
 }
 
 #[gpu_test]

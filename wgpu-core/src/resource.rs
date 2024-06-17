@@ -13,7 +13,8 @@ use crate::{
         TextureViewId,
     },
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    resource, resource_log,
+    lock::{Mutex, RwLock},
+    resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
     validation::MissingBufferUsageError,
@@ -21,7 +22,6 @@ use crate::{
 };
 
 use hal::CommandEncoder;
-use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
@@ -86,7 +86,8 @@ impl<T: Resource> Drop for ResourceInfo<T> {
 }
 
 impl<T: Resource> ResourceInfo<T> {
-    #[allow(unused_variables)]
+    // Note: Abstractly, this function should take `label: String` to minimize string cloning.
+    // But as actually used, every input is a literal or borrowed `&str`, so this is convenient.
     pub(crate) fn new(
         label: &str,
         tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
@@ -151,9 +152,16 @@ pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Self>;
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self>;
-    fn label(&self) -> String {
-        self.as_info().label.clone()
+
+    /// Returns a string identifying this resource for logging and errors.
+    ///
+    /// It may be a user-provided string or it may be a placeholder from wgpu.
+    ///
+    /// It is non-empty unless the user-provided string was empty.
+    fn label(&self) -> &str {
+        &self.as_info().label
     }
+
     fn ref_count(self: &Arc<Self>) -> usize {
         Arc::strong_count(self)
     }
@@ -444,8 +452,8 @@ impl<A: HalApi> Buffer<A> {
             .ok_or(BufferAccessError::Destroyed)?;
         let buffer_id = self.info.id();
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        match mem::replace(&mut *self.map_state.lock(), resource::BufferMapState::Idle) {
-            resource::BufferMapState::Init {
+        match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
+            BufferMapState::Init {
                 ptr,
                 stage_buffer,
                 needs_flush,
@@ -505,13 +513,13 @@ impl<A: HalApi> Buffer<A> {
                 pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
                 pending_writes.dst_buffers.insert(buffer_id, self.clone());
             }
-            resource::BufferMapState::Idle => {
+            BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
             }
-            resource::BufferMapState::Waiting(pending) => {
+            BufferMapState::Waiting(pending) => {
                 return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
             }
-            resource::BufferMapState::Active { ptr, range, host } => {
+            BufferMapState::Active { ptr, range, host } => {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
@@ -553,13 +561,13 @@ impl<A: HalApi> Buffer<A> {
             let raw = match self.raw.snatch(snatch_guard) {
                 Some(raw) => raw,
                 None => {
-                    return Err(resource::DestroyError::AlreadyDestroyed);
+                    return Err(DestroyError::AlreadyDestroyed);
                 }
             };
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
@@ -720,8 +728,8 @@ impl<A: HalApi> Resource for StagingBuffer<A> {
         &mut self.info
     }
 
-    fn label(&self) -> String {
-        String::from("<StagingBuffer>")
+    fn label(&self) -> &str {
+        "<StagingBuffer>"
     }
 }
 
@@ -884,18 +892,18 @@ impl<A: HalApi> Texture<A> {
                     return Ok(());
                 }
                 None => {
-                    return Err(resource::DestroyError::AlreadyDestroyed);
+                    return Err(DestroyError::AlreadyDestroyed);
                 }
             };
 
             let views = {
                 let mut guard = self.views.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
-                std::mem::take(&mut *guard)
+                mem::take(&mut *guard)
             };
 
             queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {
@@ -926,6 +934,28 @@ impl<A: HalApi> Texture<A> {
 }
 
 impl Global {
+    /// # Safety
+    ///
+    /// - The raw buffer handle must not be manually destroyed
+    pub unsafe fn buffer_as_hal<A: HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+        &self,
+        id: BufferId,
+        hal_buffer_callback: F,
+    ) -> R {
+        profiling::scope!("Buffer::as_hal");
+
+        let hub = A::hub(self);
+        let buffer_opt = { hub.buffers.try_get(id).ok().flatten() };
+        let buffer = buffer_opt.as_ref().unwrap();
+
+        let hal_buffer = {
+            let snatch_guard = buffer.device.snatchable_lock.read();
+            buffer.raw(&snatch_guard)
+        };
+
+        hal_buffer_callback(hal_buffer)
+    }
+
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
@@ -1025,7 +1055,9 @@ impl Global {
         profiling::scope!("Surface::as_hal");
 
         let surface = self.surfaces.get(id).ok();
-        let hal_surface = surface.as_ref().and_then(|surface| A::get_surface(surface));
+        let hal_surface = surface
+            .as_ref()
+            .and_then(|surface| A::surface_as_hal(surface));
 
         hal_surface_callback(hal_surface)
     }

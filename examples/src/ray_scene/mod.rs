@@ -379,13 +379,13 @@ impl crate::framework::Example for Example {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                constants: &Default::default(),
+                compilation_options: Default::default(),
                 targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
@@ -395,6 +395,7 @@ impl crate::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
@@ -556,7 +557,7 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_cube_fragment",
-    image_path: "/examples/ray_cube_fragment/screenshot.png",
+    image_path: "/examples/src/ray_cube_fragment/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),

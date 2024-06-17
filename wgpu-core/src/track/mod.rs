@@ -102,16 +102,20 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv, hal_api::HalApi, id, pipeline, resource, snatch::SnatchGuard,
+    binding_model, command, conv,
+    hal_api::HalApi,
+    id,
+    lock::{rank, Mutex, RwLock},
+    pipeline, resource,
+    snatch::SnatchGuard,
 };
 
-use parking_lot::{Mutex, RwLock};
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
-pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
+pub(crate) use stateless::{StatelessBindGroupState, StatelessTracker};
 pub(crate) use texture::{
     TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
 };
@@ -136,7 +140,8 @@ impl TrackerIndex {
 /// of a certain type. This index is separate from the resource ID for various reasons:
 /// - There can be multiple resource IDs pointing the the same resource.
 /// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
-/// - The plan is to remove IDs in the long run (https://github.com/gfx-rs/wgpu/issues/5121).
+/// - The plan is to remove IDs in the long run
+///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).
 /// In order to produce these tracker indices, there is a shared TrackerIndexAllocator
 /// per resource type. Indices have the same lifetime as the internal resource they
 /// are associated to (alloc happens when creating the resource and free is called when
@@ -175,8 +180,8 @@ impl TrackerIndexAllocator {
     }
 }
 
-impl std::fmt::Debug for TrackerIndexAllocator {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Debug for TrackerIndexAllocator {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         Ok(())
     }
 }
@@ -190,7 +195,10 @@ pub(crate) struct SharedTrackerIndexAllocator {
 impl SharedTrackerIndexAllocator {
     pub fn new() -> Self {
         SharedTrackerIndexAllocator {
-            inner: Mutex::new(TrackerIndexAllocator::new()),
+            inner: Mutex::new(
+                rank::SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+                TrackerIndexAllocator::new(),
+            ),
         }
     }
 
@@ -220,9 +228,10 @@ pub(crate) struct TrackerIndexAllocators {
     pub pipeline_layouts: Arc<SharedTrackerIndexAllocator>,
     pub bundles: Arc<SharedTrackerIndexAllocator>,
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
-    pub tlas_s: Arc<SharedTrackerIndexAllocator>,
     pub tlas_instances: Arc<SharedTrackerIndexAllocator>,
     pub blas_s: Arc<SharedTrackerIndexAllocator>,
+    pub tlas_s: Arc<SharedTrackerIndexAllocator>,
+    pub pipeline_caches: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
@@ -240,9 +249,10 @@ impl TrackerIndexAllocators {
             pipeline_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
-            tlas_s: Arc::new(SharedTrackerIndexAllocator::new()),
             tlas_instances: Arc::new(SharedTrackerIndexAllocator::new()),
+            pipeline_caches: Arc::new(SharedTrackerIndexAllocator::new()),
             blas_s: Arc::new(SharedTrackerIndexAllocator::new()),
+            tlas_s: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
 }
@@ -443,9 +453,9 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
     pub textures: TextureBindGroupState<A>,
-    pub views: StatelessBindGroupSate<resource::TextureView<A>>,
-    pub samplers: StatelessBindGroupSate<resource::Sampler<A>>,
-    pub acceleration_structures: StatelessBindGroupSate<resource::Tlas<A>>,
+    pub views: StatelessBindGroupState<resource::TextureView<A>>,
+    pub samplers: StatelessBindGroupState<resource::Sampler<A>>,
+    pub acceleration_structures: StatelessBindGroupState<resource::Tlas<A>>,
 }
 
 impl<A: HalApi> BindGroupStates<A> {
@@ -453,9 +463,9 @@ impl<A: HalApi> BindGroupStates<A> {
         Self {
             buffers: BufferBindGroupState::new(),
             textures: TextureBindGroupState::new(),
-            views: StatelessBindGroupSate::new(),
-            samplers: StatelessBindGroupSate::new(),
-            acceleration_structures: StatelessBindGroupSate::new(),
+            views: StatelessBindGroupState::new(),
+            samplers: StatelessBindGroupState::new(),
+            acceleration_structures: StatelessBindGroupState::new(),
         }
     }
 
@@ -489,11 +499,26 @@ impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new() -> Self {
         Self {
-            buffers: RwLock::new(BufferUsageScope::default()),
-            textures: RwLock::new(TextureUsageScope::default()),
-            bind_groups: RwLock::new(StatelessTracker::new()),
-            render_pipelines: RwLock::new(StatelessTracker::new()),
-            query_sets: RwLock::new(StatelessTracker::new()),
+            buffers: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_BUFFERS,
+                BufferUsageScope::default(),
+            ),
+            textures: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_TEXTURES,
+                TextureUsageScope::default(),
+            ),
+            bind_groups: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_BIND_GROUPS,
+                StatelessTracker::new(),
+            ),
+            render_pipelines: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_RENDER_PIPELINES,
+                StatelessTracker::new(),
+            ),
+            query_sets: RwLock::new(
+                rank::RENDER_BUNDLE_SCOPE_QUERY_SETS,
+                StatelessTracker::new(),
+            ),
         }
     }
 
@@ -625,9 +650,9 @@ pub(crate) struct Tracker<A: HalApi> {
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
     pub bundles: StatelessTracker<command::RenderBundle<A>>,
     pub query_sets: StatelessTracker<resource::QuerySet<A>>,
+    pub tlas_instances: StatelessTracker<resource::TlasInstance<A>>,
     pub blas_s: StatelessTracker<resource::Blas<A>>,
     pub tlas_s: StatelessTracker<resource::Tlas<A>>,
-    pub tlas_instances: StatelessTracker<resource::TlasInstance<A>>,
 }
 
 impl<A: HalApi> Tracker<A> {
@@ -642,9 +667,9 @@ impl<A: HalApi> Tracker<A> {
             render_pipelines: StatelessTracker::new(),
             bundles: StatelessTracker::new(),
             query_sets: StatelessTracker::new(),
+            tlas_instances: StatelessTracker::new(),
             blas_s: StatelessTracker::new(),
             tlas_s: StatelessTracker::new(),
-            tlas_instances: StatelessTracker::new(),
         }
     }
 
@@ -654,8 +679,8 @@ impl<A: HalApi> Tracker<A> {
     ///
     /// If a transition is needed to get the resources into the needed
     /// state, those transitions are stored within the tracker. A
-    /// subsequent call to [`BufferTracker::drain`] or
-    /// [`TextureTracker::drain`] is needed to get those transitions.
+    /// subsequent call to [`BufferTracker::drain_transitions`] or
+    /// [`TextureTracker::drain_transitions`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate

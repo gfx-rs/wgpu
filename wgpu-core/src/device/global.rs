@@ -11,16 +11,18 @@ use crate::{
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     init_tracker::TextureInitTracker,
     instance::{self, Adapter, Surface},
+    lock::{rank, RwLock},
     pipeline, present,
-    resource::{self, BufferAccessResult},
-    resource::{BufferAccessError, BufferMapOperation, CreateBufferError, Resource},
+    resource::{
+        self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
+        Resource,
+    },
     validation::check_buffer_usage,
     Label, LabelHelpers as _,
 };
 
 use arrayvec::ArrayVec;
 use hal::Device as _;
-use parking_lot::RwLock;
 
 use wgt::{BufferAddress, TextureFormat};
 
@@ -190,7 +192,7 @@ impl Global {
                 // buffer is mappable, so we are just doing that at start
                 let map_size = buffer.size;
                 let ptr = if map_size == 0 {
-                    std::ptr::NonNull::dangling()
+                    ptr::NonNull::dangling()
                 } else {
                     let snatch_guard = device.snatchable_lock.read();
                     match map_buffer(
@@ -643,8 +645,10 @@ impl Global {
                 texture.hal_usage |= hal::TextureUses::COPY_DST;
             }
 
-            texture.initialization_status =
-                RwLock::new(TextureInitTracker::new(desc.mip_level_count, 0));
+            texture.initialization_status = RwLock::new(
+                rank::TEXTURE_INITIALIZATION_STATUS,
+                TextureInitTracker::new(desc.mip_level_count, 0),
+            );
 
             let (id, resource) = fid.assign(Arc::new(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
@@ -1351,9 +1355,6 @@ impl Global {
             };
             let encoder = match device
                 .command_allocator
-                .lock()
-                .as_mut()
-                .unwrap()
                 .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
             {
                 Ok(raw) => raw,
@@ -1364,9 +1365,7 @@ impl Global {
                 &device,
                 #[cfg(feature = "trace")]
                 device.trace.lock().is_some(),
-                desc.label
-                    .to_hal(device.instance_flags)
-                    .map(|s| s.to_string()),
+                desc.label.to_hal(device.instance_flags).map(str::to_owned),
             );
 
             let (id, _) = fid.assign(Arc::new(command_buffer));
@@ -1826,6 +1825,66 @@ impl Global {
         }
     }
 
+    /// # Safety
+    /// The `data` argument of `desc` must have been returned by
+    /// [Self::pipeline_cache_get_data] for the same adapter
+    pub unsafe fn device_create_pipeline_cache<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+        desc: &pipeline::PipelineCacheDescriptor<'_>,
+        id_in: Option<id::PipelineCacheId>,
+    ) -> (
+        id::PipelineCacheId,
+        Option<pipeline::CreatePipelineCacheError>,
+    ) {
+        profiling::scope!("Device::create_pipeline_cache");
+
+        let hub = A::hub(self);
+
+        let fid = hub.pipeline_caches.prepare(id_in);
+        let error: pipeline::CreatePipelineCacheError = 'error: {
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                // TODO: Handle error properly
+                Err(crate::storage::InvalidId) => break 'error DeviceError::Invalid.into(),
+            };
+            if !device.is_valid() {
+                break 'error DeviceError::Lost.into();
+            }
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreatePipelineCache {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                });
+            }
+            let cache = unsafe { device.create_pipeline_cache(desc) };
+            match cache {
+                Ok(cache) => {
+                    let (id, _) = fid.assign(Arc::new(cache));
+                    api_log!("Device::create_pipeline_cache -> {id:?}");
+                    return (id, None);
+                }
+                Err(e) => break 'error e,
+            }
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default());
+
+        (id, Some(error))
+    }
+
+    pub fn pipeline_cache_drop<A: HalApi>(&self, pipeline_cache_id: id::PipelineCacheId) {
+        profiling::scope!("PipelineCache::drop");
+        api_log!("PipelineCache::drop {pipeline_cache_id:?}");
+
+        let hub = A::hub(self);
+
+        if let Some(cache) = hub.pipeline_caches.unregister(pipeline_cache_id) {
+            drop(cache)
+        }
+    }
+
     pub fn surface_configure<A: HalApi>(
         &self,
         surface_id: SurfaceId,
@@ -1972,7 +2031,7 @@ impl Global {
                 };
 
                 let caps = unsafe {
-                    let suf = A::get_surface(surface);
+                    let suf = A::surface_as_hal(surface);
                     let adapter = &device.adapter;
                     match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
                         Some(caps) => caps,
@@ -2034,7 +2093,6 @@ impl Global {
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
-                let fence = fence.as_ref().unwrap();
                 match device.maintain(fence, wgt::Maintain::Wait, snatch_guard) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
@@ -2058,7 +2116,7 @@ impl Global {
                 // https://github.com/gfx-rs/wgpu/issues/4105
 
                 match unsafe {
-                    A::get_surface(surface)
+                    A::surface_as_hal(surface)
                         .unwrap()
                         .configure(device.raw(), &hal_config)
                 } {
@@ -2093,7 +2151,7 @@ impl Global {
     }
 
     #[cfg(feature = "replay")]
-    /// Only triangle suspected resource IDs. This helps us to avoid ID collisions
+    /// Only triage suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.
     pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), InvalidDevice> {
         let hub = A::hub(self);
@@ -2147,7 +2205,6 @@ impl Global {
     ) -> Result<DevicePoll, WaitIdleError> {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
-        let fence = fence.as_ref().unwrap();
         let (closures, queue_empty) = device.maintain(fence, maintain, snatch_guard)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
@@ -2273,6 +2330,37 @@ impl Global {
         let hub = A::hub(self);
         hub.devices
             .force_replace_with_error(device_id, "Made invalid.");
+    }
+
+    pub fn pipeline_cache_get_data<A: HalApi>(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
+        use crate::pipeline_cache;
+        api_log!("PipelineCache::get_data");
+        let hub = A::hub(self);
+
+        if let Ok(cache) = hub.pipeline_caches.get(id) {
+            // TODO: Is this check needed?
+            if !cache.device.is_valid() {
+                return None;
+            }
+            if let Some(raw_cache) = cache.raw.as_ref() {
+                let mut vec = unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) }?;
+                let validation_key = cache.device.raw().pipeline_cache_validation_key()?;
+
+                let mut header_contents = [0; pipeline_cache::HEADER_LENGTH];
+                pipeline_cache::add_cache_header(
+                    &mut header_contents,
+                    &vec,
+                    &cache.device.adapter.raw.info,
+                    validation_key,
+                );
+
+                let deleted = vec.splice(..0, header_contents).collect::<Vec<_>>();
+                debug_assert!(deleted.is_empty());
+
+                return Some(vec);
+            }
+        }
+        None
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {

@@ -255,11 +255,23 @@ impl super::Device {
         };
 
         let mut output = String::new();
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != context.layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            // We use a conditional here, as cloning the naga_options could be expensive
+            // That is, we want to avoid doing that unless we cannot avoid it
+            temp_options = context.layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
+        } else {
+            &context.layout.naga_options
+        };
         let mut writer = glsl::Writer::new(
             &mut output,
             &module,
             &info,
-            &context.layout.naga_options,
+            naga_options,
             &pipeline_options,
             policies,
         )
@@ -305,6 +317,7 @@ impl super::Device {
                 naga_stage: naga_stage.to_owned(),
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
+                zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
             });
         }
         let mut guard = self
@@ -417,7 +430,7 @@ impl super::Device {
             log::warn!("\tLink: {}", msg);
         }
 
-        if !private_caps.contains(super::PrivateCapabilities::SHADER_BINDING_LAYOUT) {
+        if !private_caps.contains(PrivateCapabilities::SHADER_BINDING_LAYOUT) {
             // This remapping is only needed if we aren't able to put the binding layout
             // in the shader. We can't remap storage buffers this way.
             unsafe { gl.use_program(Some(program)) };
@@ -519,7 +532,7 @@ impl crate::Device for super::Device {
             || !self
                 .shared
                 .private_caps
-                .contains(super::PrivateCapabilities::BUFFER_ALLOCATION);
+                .contains(PrivateCapabilities::BUFFER_ALLOCATION);
 
         if emulate_map && desc.usage.intersects(crate::BufferUses::MAP_WRITE) {
             return Ok(super::Buffer {
@@ -564,7 +577,7 @@ impl crate::Device for super::Device {
         if self
             .shared
             .private_caps
-            .contains(super::PrivateCapabilities::BUFFER_ALLOCATION)
+            .contains(PrivateCapabilities::BUFFER_ALLOCATION)
         {
             if is_host_visible {
                 map_flags |= glow::MAP_PERSISTENT_BIT;
@@ -1114,13 +1127,13 @@ impl crate::Device for super::Device {
             glsl::WriterFlags::TEXTURE_SHADOW_LOD,
             self.shared
                 .private_caps
-                .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
+                .contains(PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
         writer_flags.set(
             glsl::WriterFlags::DRAW_PARAMETERS,
             self.shared
                 .private_caps
-                .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING),
+                .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING),
         );
         // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
         // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
@@ -1392,6 +1405,16 @@ impl crate::Device for super::Device {
             unsafe { gl.delete_program(pipeline.inner.program) };
         }
     }
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        _: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<(), crate::PipelineCacheError> {
+        // Even though the cache doesn't do anything, we still return something here
+        // as the least bad option
+        Ok(())
+    }
+    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
 
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     unsafe fn create_query_set(

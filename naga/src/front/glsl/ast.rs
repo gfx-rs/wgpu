@@ -73,9 +73,9 @@ bitflags::bitflags! {
         const STANDARD = 1 << 0;
         /// Request overloads that use the double type
         const DOUBLE = 1 << 1;
-        /// Request overloads that use samplerCubeArray(Shadow)
+        /// Request overloads that use `samplerCubeArray(Shadow)`
         const CUBE_TEXTURES_ARRAY = 1 << 2;
-        /// Request overloads that use sampler2DMSArray
+        /// Request overloads that use `sampler2DMSArray`
         const D2_MULTI_TEXTURES_ARRAY = 1 << 3;
     }
 }

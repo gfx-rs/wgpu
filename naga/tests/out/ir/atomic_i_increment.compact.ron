@@ -1,0 +1,106 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 1,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 2,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [
+        (
+            name: None,
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [
+                GlobalVariable(1),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                AtomicResult(
+                    ty: 1,
+                    comparison: false,
+                ),
+                Literal(U32(1)),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 1,
+                    end: 3,
+                )),
+                Atomic(
+                    pointer: 2,
+                    fun: Add,
+                    value: 4,
+                    result: Some(3),
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            name: "stage::test_atomic_i_increment",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (32, 1, 1),
+            function: (
+                name: Some("stage::test_atomic_i_increment_wrap"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 1,
+                        arguments: [],
+                        result: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)

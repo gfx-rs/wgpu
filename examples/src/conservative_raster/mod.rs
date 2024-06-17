@@ -97,13 +97,13 @@ impl crate::framework::Example for Example {
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
                     entry_point: "vs_main",
-                    constants: &Default::default(),
+                    compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
                     entry_point: "fs_main_red",
-                    constants: &Default::default(),
+                    compilation_options: Default::default(),
                     targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
                 primitive: wgpu::PrimitiveState {
@@ -113,6 +113,7 @@ impl crate::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
         let pipeline_triangle_regular =
@@ -122,19 +123,20 @@ impl crate::framework::Example for Example {
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
                     entry_point: "vs_main",
-                    constants: &Default::default(),
+                    compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
                     entry_point: "fs_main_blue",
-                    constants: &Default::default(),
+                    compilation_options: Default::default(),
                     targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
         let pipeline_lines = if device
@@ -148,13 +150,13 @@ impl crate::framework::Example for Example {
                     vertex: wgpu::VertexState {
                         module: &shader_triangle_and_lines,
                         entry_point: "vs_main",
-                        constants: &Default::default(),
+                        compilation_options: Default::default(),
                         buffers: &[],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_triangle_and_lines,
                         entry_point: "fs_main_white",
-                        constants: &Default::default(),
+                        compilation_options: Default::default(),
                         targets: &[Some(config.view_formats[0].into())],
                     }),
                     primitive: wgpu::PrimitiveState {
@@ -165,6 +167,7 @@ impl crate::framework::Example for Example {
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
                     multiview: None,
+                    cache: None,
                 }),
             )
         } else {
@@ -211,19 +214,20 @@ impl crate::framework::Example for Example {
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: "vs_main",
-                        constants: &Default::default(),
+                        compilation_options: Default::default(),
                         buffers: &[],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: "fs_main",
-                        constants: &Default::default(),
+                        compilation_options: Default::default(),
                         targets: &[Some(config.view_formats[0].into())],
                     }),
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
                     multiview: None,
+                    cache: None,
                 }),
                 bind_group_layout,
             )

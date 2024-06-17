@@ -8,7 +8,7 @@ use std::{mem, sync::Arc};
 impl Drop for super::Instance {
     fn drop(&mut self) {
         if self.flags.contains(wgt::InstanceFlags::VALIDATION) {
-            crate::auxil::dxgi::exception::unregister_exception_handler();
+            auxil::dxgi::exception::unregister_exception_handler();
         }
     }
 }

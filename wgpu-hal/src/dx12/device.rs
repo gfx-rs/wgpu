@@ -149,11 +149,7 @@ impl super::Device {
         // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
         raw.create_render_target_view(
             ComPtr::null(),
-            &d3d12::RenderTargetViewDesc::texture_2d(
-                winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
-                0,
-                0,
-            ),
+            &d3d12::RenderTargetViewDesc::texture_2d(dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM, 0, 0),
             null_rtv_handle.raw,
         );
 
@@ -217,7 +213,7 @@ impl super::Device {
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         use naga::back::hlsl;
 
-        let stage_bit = crate::auxil::map_naga_stage(naga_stage);
+        let stage_bit = auxil::map_naga_stage(naga_stage);
 
         let (module, info) = naga::back::pipeline_constants::process_overrides(
             &stage.module.naga.module,
@@ -226,9 +222,20 @@ impl super::Device {
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
 
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != layout.naga_options.zero_initialize_workgroup_memory;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            temp_options = layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            &temp_options
+        } else {
+            &layout.naga_options
+        };
+
         //TODO: reuse the writer
         let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
+        let mut writer = hlsl::Writer::new(&mut source, naga_options);
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
@@ -239,7 +246,7 @@ impl super::Device {
         let full_stage = format!(
             "{}_{}\0",
             naga_stage.to_hlsl_str(),
-            layout.naga_options.shader_model.to_str()
+            naga_options.shader_model.to_str()
         );
 
         let ep_index = module
@@ -252,16 +259,11 @@ impl super::Device {
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
 
-        let source_name = stage
-            .module
-            .raw_name
-            .as_ref()
-            .and_then(|cstr| cstr.to_str().ok())
-            .unwrap_or_default();
+        let source_name = stage.module.raw_name.as_deref();
 
         // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
-            super::shader_compilation::compile_dxc(
+            shader_compilation::compile_dxc(
                 self,
                 &source,
                 source_name,
@@ -271,7 +273,7 @@ impl super::Device {
                 dxc_container,
             )
         } else {
-            super::shader_compilation::compile_fxc(
+            shader_compilation::compile_fxc(
                 self,
                 &source,
                 source_name,
@@ -1505,6 +1507,14 @@ impl crate::Device for super::Device {
         })
     }
     unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        _desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<(), crate::PipelineCacheError> {
+        Ok(())
+    }
+    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
 
     unsafe fn create_query_set(
         &self,

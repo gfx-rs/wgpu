@@ -526,28 +526,51 @@ impl Inner {
         }
 
         let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
-        egl.bind_api(khronos_egl::OPENGL_ES_API).unwrap();
+
+        let supports_opengl = if version >= (1, 4) {
+            let client_apis = egl
+                .query_string(Some(display), khronos_egl::CLIENT_APIS)
+                .unwrap()
+                .to_string_lossy();
+            client_apis
+                .split(' ')
+                .any(|client_api| client_api == "OpenGL")
+        } else {
+            false
+        };
+        egl.bind_api(if supports_opengl {
+            khronos_egl::OPENGL_API
+        } else {
+            khronos_egl::OPENGL_ES_API
+        })
+        .unwrap();
 
         let needs_robustness = true;
         let mut khr_context_flags = 0;
         let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
 
-        //TODO: make it so `Device` == EGL Context
-        let mut context_attributes = vec![
-            khronos_egl::CONTEXT_MAJOR_VERSION,
-            3, // Request GLES 3.0 or higher
-        ];
-
-        if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+        let mut context_attributes = vec![];
+        if supports_opengl {
+            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+            context_attributes.push(3);
             context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-            context_attributes.push(match force_gles_minor_version {
-                wgt::Gles3MinorVersion::Version0 => 0,
-                wgt::Gles3MinorVersion::Version1 => 1,
-                wgt::Gles3MinorVersion::Version2 => 2,
-                _ => unreachable!(),
-            });
+            context_attributes.push(3);
+            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+                log::warn!("Ignoring specified GLES minor version as OpenGL is used");
+            }
+        } else {
+            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+            context_attributes.push(3); // Request GLES 3.0 or higher
+            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+                context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+                context_attributes.push(match force_gles_minor_version {
+                    wgt::Gles3MinorVersion::Automatic => unreachable!(),
+                    wgt::Gles3MinorVersion::Version0 => 0,
+                    wgt::Gles3MinorVersion::Version1 => 1,
+                    wgt::Gles3MinorVersion::Version2 => 2,
+                });
+            }
         }
-
         if flags.contains(wgt::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
                 log::debug!("\tEGL context: +debug");
@@ -577,8 +600,6 @@ impl Inner {
                 // because it's for desktop GL only, not GLES.
                 log::warn!("\tEGL context: -robust access");
             }
-
-            //TODO do we need `khronos_egl::CONTEXT_OPENGL_NOTIFICATION_STRATEGY_EXT`?
         }
         if khr_context_flags != 0 {
             context_attributes.push(EGL_CONTEXT_FLAGS_KHR);
@@ -977,6 +998,7 @@ impl crate::Instance for Instance {
             srgb_kind: inner.srgb_kind,
         })
     }
+
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
@@ -992,6 +1014,12 @@ impl crate::Instance for Instance {
                     .map_or(ptr::null(), |p| p as *const _)
             })
         };
+
+        // In contrast to OpenGL ES, OpenGL requires explicitly enabling sRGB conversions,
+        // as otherwise the user has to do the sRGB conversion.
+        if !matches!(inner.srgb_kind, SrgbFrameBufferKind::None) {
+            unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
+        }
 
         if self.flags.contains(wgt::InstanceFlags::DEBUG) && gl.supports_debug() {
             log::debug!("Max label length: {}", unsafe {
@@ -1106,6 +1134,13 @@ impl Surface {
 
         unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer)) };
+
+        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+            // Disable sRGB conversions for `glBlitFramebuffer` as behavior does diverge between
+            // drivers and formats otherwise and we want to ensure no sRGB conversions happen.
+            unsafe { gl.disable(glow::FRAMEBUFFER_SRGB) };
+        }
+
         // Note the Y-flipping here. GL's presentation is not flipped,
         // but main rendering is. Therefore, we Y-flip the output positions
         // in the shader, and also this blit.
@@ -1123,6 +1158,11 @@ impl Surface {
                 glow::NEAREST,
             )
         };
+
+        if !matches!(self.srgb_kind, SrgbFrameBufferKind::None) {
+            unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
+        }
+
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
 
         self.egl
@@ -1186,17 +1226,15 @@ impl crate::Surface for Surface {
                 let native_window_ptr = match (self.wsi.kind, self.raw_window_handle) {
                     (WindowKind::Unknown | WindowKind::X11, Rwh::Xlib(handle)) => {
                         temp_xlib_handle = handle.window;
-                        &mut temp_xlib_handle as *mut _ as *mut std::ffi::c_void
+                        &mut temp_xlib_handle as *mut _ as *mut ffi::c_void
                     }
-                    (WindowKind::AngleX11, Rwh::Xlib(handle)) => {
-                        handle.window as *mut std::ffi::c_void
-                    }
+                    (WindowKind::AngleX11, Rwh::Xlib(handle)) => handle.window as *mut ffi::c_void,
                     (WindowKind::Unknown | WindowKind::X11, Rwh::Xcb(handle)) => {
                         temp_xcb_handle = handle.window;
-                        &mut temp_xcb_handle as *mut _ as *mut std::ffi::c_void
+                        &mut temp_xcb_handle as *mut _ as *mut ffi::c_void
                     }
                     (WindowKind::AngleX11, Rwh::Xcb(handle)) => {
-                        handle.window.get() as *mut std::ffi::c_void
+                        handle.window.get() as *mut ffi::c_void
                     }
                     (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => {
                         handle.a_native_window.as_ptr()
@@ -1212,9 +1250,9 @@ impl crate::Surface for Surface {
                         window
                     }
                     #[cfg(Emscripten)]
-                    (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut std::ffi::c_void,
+                    (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut ffi::c_void,
                     (WindowKind::Unknown, Rwh::Win32(handle)) => {
-                        handle.hwnd.get() as *mut std::ffi::c_void
+                        handle.hwnd.get() as *mut ffi::c_void
                     }
                     (WindowKind::Unknown, Rwh::AppKit(handle)) => {
                         #[cfg(not(target_os = "macos"))]
@@ -1394,6 +1432,7 @@ impl crate::Surface for Surface {
     unsafe fn acquire_texture(
         &self,
         _timeout_ms: Option<Duration>, //TODO
+        _fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();

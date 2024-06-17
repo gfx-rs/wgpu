@@ -13,6 +13,7 @@ mod layout;
 mod ray;
 mod recyclable;
 mod selection;
+mod subgroup;
 mod writer;
 
 pub use spirv::Capability;
@@ -247,7 +248,7 @@ impl LocalImageType {
 /// this, by converting everything possible to a `LocalType` before inspecting
 /// it.
 ///
-/// ## `Localtype` equality and SPIR-V `OpType` uniqueness
+/// ## `LocalType` equality and SPIR-V `OpType` uniqueness
 ///
 /// The definition of `Eq` on `LocalType` is carefully chosen to help us follow
 /// certain SPIR-V rules. SPIR-V §2.8 requires some classes of `OpType...`
@@ -456,7 +457,7 @@ impl recyclable::Recyclable for CachedExpressions {
 
 #[derive(Eq, Hash, PartialEq)]
 enum CachedConstant {
-    Literal(crate::Literal),
+    Literal(crate::proc::HashableLiteral),
     Composite {
         ty: LookupType,
         constituent_ids: Vec<Word>,
@@ -681,16 +682,29 @@ bitflags::bitflags! {
     pub struct WriterFlags: u32 {
         /// Include debug labels for everything.
         const DEBUG = 0x1;
-        /// Flip Y coordinate of `BuiltIn::Position` output.
+
+        /// Flip Y coordinate of [`BuiltIn::Position`] output.
+        ///
+        /// [`BuiltIn::Position`]: crate::BuiltIn::Position
         const ADJUST_COORDINATE_SPACE = 0x2;
-        /// Emit `OpName` for input/output locations.
+
+        /// Emit [`OpName`][op] for input/output locations.
+        ///
         /// Contrary to spec, some drivers treat it as semantic, not allowing
         /// any conflicts.
+        ///
+        /// [op]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpName
         const LABEL_VARYINGS = 0x4;
-        /// Emit `PointSize` output builtin to vertex shaders, which is
+
+        /// Emit [`PointSize`] output builtin to vertex shaders, which is
         /// required for drawing with `PointList` topology.
+        ///
+        /// [`PointSize`]: crate::BuiltIn::PointSize
         const FORCE_POINT_SIZE = 0x8;
-        /// Clamp `BuiltIn::FragDepth` output between 0 and 1.
+
+        /// Clamp [`BuiltIn::FragDepth`] output between 0 and 1.
+        ///
+        /// [`BuiltIn::FragDepth`]: crate::BuiltIn::FragDepth
         const CLAMP_FRAG_DEPTH = 0x10;
     }
 }
@@ -755,7 +769,7 @@ impl<'a> Default for Options<'a> {
             flags,
             binding_map: BindingMap::default(),
             capabilities: None,
-            bounds_check_policies: crate::proc::BoundsCheckPolicies::default(),
+            bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             debug_info: None,
         }

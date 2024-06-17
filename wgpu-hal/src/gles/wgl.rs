@@ -507,6 +507,8 @@ impl crate::Instance for Instance {
                 .supported_extensions()
                 .contains("GL_ARB_framebuffer_sRGB");
 
+        // In contrast to OpenGL ES, OpenGL requires explicitly enabling sRGB conversions,
+        // as otherwise the user has to do the sRGB conversion.
         if srgb_capable {
             unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
         }
@@ -796,6 +798,7 @@ impl crate::Surface for Surface {
     unsafe fn acquire_texture(
         &self,
         _timeout_ms: Option<Duration>,
+        _fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();

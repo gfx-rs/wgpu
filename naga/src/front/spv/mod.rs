@@ -63,6 +63,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Int8,
     spirv::Capability::Int16,
     spirv::Capability::Int64,
+    spirv::Capability::Int64Atomics,
     spirv::Capability::Float16,
     spirv::Capability::Float64,
     spirv::Capability::Geometry,
@@ -313,14 +314,14 @@ struct LookupVariable {
     type_id: spirv::Word,
 }
 
-/// Information about SPIR-V result ids, stored in `Parser::lookup_expression`.
+/// Information about SPIR-V result ids, stored in `Frontend::lookup_expression`.
 #[derive(Clone, Debug)]
 struct LookupExpression {
     /// The `Expression` constructed for this result.
     ///
     /// Note that, while a SPIR-V result id can be used in any block dominated
     /// by its definition, a Naga `Expression` is only in scope for the rest of
-    /// its subtree. `Parser::get_expr_handle` takes care of spilling the result
+    /// its subtree. `Frontend::get_expr_handle` takes care of spilling the result
     /// to a `LocalVariable` which can then be used anywhere.
     handle: Handle<crate::Expression>,
 
@@ -564,6 +565,20 @@ enum SignAnchor {
     Operand,
 }
 
+enum AtomicOpInst {
+    AtomicIIncrement,
+}
+
+#[allow(dead_code)]
+struct AtomicOp {
+    instruction: AtomicOpInst,
+    result_type_id: spirv::Word,
+    result_id: spirv::Word,
+    pointer_id: spirv::Word,
+    scope_id: spirv::Word,
+    memory_semantics_id: spirv::Word,
+}
+
 pub struct Frontend<I> {
     data: I,
     data_offset: usize,
@@ -575,10 +590,11 @@ pub struct Frontend<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
     handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, image::SamplingFlags>,
+    // Used to upgrade types used in atomic ops to atomic types, keyed by pointer id
+    lookup_atomic: FastHashMap<spirv::Word, AtomicOp>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
     lookup_storage_buffer_types: FastHashMap<Handle<crate::Type>, crate::StorageAccess>,
-    // Lookup for samplers and sampled images, storing flags on how they are used.
     lookup_constant: FastHashMap<spirv::Word, LookupConstant>,
     lookup_variable: FastHashMap<spirv::Word, LookupVariable>,
     lookup_expression: FastHashMap<spirv::Word, LookupExpression>,
@@ -631,6 +647,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
             lookup_member: FastHashMap::default(),
+            lookup_atomic: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_void_type: None,
             lookup_storage_buffer_types: FastHashMap::default(),
@@ -3700,7 +3717,325 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         },
                     );
                 }
-                _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
+                Op::GroupNonUniformBallot => {
+                    inst.expect(5)?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let predicate_id = self.next()?;
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let predicate = if self
+                        .lookup_constant
+                        .lookup(predicate_id)
+                        .ok()
+                        .filter(|predicate_const| match predicate_const.inner {
+                            Constant::Constant(constant) => matches!(
+                                ctx.gctx().global_expressions[ctx.gctx().constants[constant].init],
+                                crate::Expression::Literal(crate::Literal::Bool(true)),
+                            ),
+                            Constant::Override(_) => false,
+                        })
+                        .is_some()
+                    {
+                        None
+                    } else {
+                        let predicate_lookup = self.lookup_expression.lookup(predicate_id)?;
+                        let predicate_handle = get_expr_handle!(predicate_id, predicate_lookup);
+                        Some(predicate_handle)
+                    };
+
+                    let result_handle = ctx
+                        .expressions
+                        .append(crate::Expression::SubgroupBallotResult, span);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    block.push(
+                        crate::Statement::SubgroupBallot {
+                            result: result_handle,
+                            predicate,
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
+                Op::GroupNonUniformAll
+                | Op::GroupNonUniformAny
+                | Op::GroupNonUniformIAdd
+                | Op::GroupNonUniformFAdd
+                | Op::GroupNonUniformIMul
+                | Op::GroupNonUniformFMul
+                | Op::GroupNonUniformSMax
+                | Op::GroupNonUniformUMax
+                | Op::GroupNonUniformFMax
+                | Op::GroupNonUniformSMin
+                | Op::GroupNonUniformUMin
+                | Op::GroupNonUniformFMin
+                | Op::GroupNonUniformBitwiseAnd
+                | Op::GroupNonUniformBitwiseOr
+                | Op::GroupNonUniformBitwiseXor
+                | Op::GroupNonUniformLogicalAnd
+                | Op::GroupNonUniformLogicalOr
+                | Op::GroupNonUniformLogicalXor => {
+                    block.extend(emitter.finish(ctx.expressions));
+                    inst.expect(
+                        if matches!(inst.op, Op::GroupNonUniformAll | Op::GroupNonUniformAny) {
+                            5
+                        } else {
+                            6
+                        },
+                    )?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let collective_op_id = match inst.op {
+                        Op::GroupNonUniformAll | Op::GroupNonUniformAny => {
+                            crate::CollectiveOperation::Reduce
+                        }
+                        _ => {
+                            let group_op_id = self.next()?;
+                            match spirv::GroupOperation::from_u32(group_op_id) {
+                                Some(spirv::GroupOperation::Reduce) => {
+                                    crate::CollectiveOperation::Reduce
+                                }
+                                Some(spirv::GroupOperation::InclusiveScan) => {
+                                    crate::CollectiveOperation::InclusiveScan
+                                }
+                                Some(spirv::GroupOperation::ExclusiveScan) => {
+                                    crate::CollectiveOperation::ExclusiveScan
+                                }
+                                _ => return Err(Error::UnsupportedGroupOperation(group_op_id)),
+                            }
+                        }
+                    };
+                    let argument_id = self.next()?;
+
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let op_id = match inst.op {
+                        Op::GroupNonUniformAll => crate::SubgroupOperation::All,
+                        Op::GroupNonUniformAny => crate::SubgroupOperation::Any,
+                        Op::GroupNonUniformIAdd | Op::GroupNonUniformFAdd => {
+                            crate::SubgroupOperation::Add
+                        }
+                        Op::GroupNonUniformIMul | Op::GroupNonUniformFMul => {
+                            crate::SubgroupOperation::Mul
+                        }
+                        Op::GroupNonUniformSMax
+                        | Op::GroupNonUniformUMax
+                        | Op::GroupNonUniformFMax => crate::SubgroupOperation::Max,
+                        Op::GroupNonUniformSMin
+                        | Op::GroupNonUniformUMin
+                        | Op::GroupNonUniformFMin => crate::SubgroupOperation::Min,
+                        Op::GroupNonUniformBitwiseAnd | Op::GroupNonUniformLogicalAnd => {
+                            crate::SubgroupOperation::And
+                        }
+                        Op::GroupNonUniformBitwiseOr | Op::GroupNonUniformLogicalOr => {
+                            crate::SubgroupOperation::Or
+                        }
+                        Op::GroupNonUniformBitwiseXor | Op::GroupNonUniformLogicalXor => {
+                            crate::SubgroupOperation::Xor
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    block.push(
+                        crate::Statement::SubgroupCollectiveOperation {
+                            result: result_handle,
+                            op: op_id,
+                            collective_op: collective_op_id,
+                            argument: argument_handle,
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
+                Op::GroupNonUniformBroadcastFirst
+                | Op::GroupNonUniformBroadcast
+                | Op::GroupNonUniformShuffle
+                | Op::GroupNonUniformShuffleDown
+                | Op::GroupNonUniformShuffleUp
+                | Op::GroupNonUniformShuffleXor => {
+                    inst.expect(if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
+                        5
+                    } else {
+                        6
+                    })?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let argument_id = self.next()?;
+
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let mode = if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
+                        crate::GatherMode::BroadcastFirst
+                    } else {
+                        let index_id = self.next()?;
+                        let index_lookup = self.lookup_expression.lookup(index_id)?;
+                        let index_handle = get_expr_handle!(index_id, index_lookup);
+                        match inst.op {
+                            Op::GroupNonUniformBroadcast => {
+                                crate::GatherMode::Broadcast(index_handle)
+                            }
+                            Op::GroupNonUniformShuffle => crate::GatherMode::Shuffle(index_handle),
+                            Op::GroupNonUniformShuffleDown => {
+                                crate::GatherMode::ShuffleDown(index_handle)
+                            }
+                            Op::GroupNonUniformShuffleUp => {
+                                crate::GatherMode::ShuffleUp(index_handle)
+                            }
+                            Op::GroupNonUniformShuffleXor => {
+                                crate::GatherMode::ShuffleXor(index_handle)
+                            }
+                            _ => unreachable!(),
+                        }
+                    };
+
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    block.push(
+                        crate::Statement::SubgroupGather {
+                            result: result_handle,
+                            mode,
+                            argument: argument_handle,
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
+                Op::AtomicIIncrement => {
+                    inst.expect(6)?;
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let scope_id = self.next()?;
+                    let memory_semantics_id = self.next()?;
+                    // Store the op for a later pass where we "upgrade" the pointer type
+                    let atomic = AtomicOp {
+                        instruction: AtomicOpInst::AtomicIIncrement,
+                        result_type_id,
+                        result_id,
+                        pointer_id,
+                        scope_id,
+                        memory_semantics_id,
+                    };
+                    self.lookup_atomic.insert(pointer_id, atomic);
+
+                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+
+                    let (p_lexp_handle, p_lexp_ty_id) = {
+                        let lexp = self.lookup_expression.lookup(pointer_id)?;
+                        let handle = get_expr_handle!(pointer_id, &lexp);
+                        (handle, lexp.type_id)
+                    };
+                    log::trace!("\t\t\tlooking up type {pointer_id:?}");
+                    let p_ty = self.lookup_type.lookup(p_lexp_ty_id)?;
+                    let p_ty_base_id =
+                        p_ty.base_id.ok_or(Error::InvalidAccessType(p_lexp_ty_id))?;
+                    log::trace!("\t\t\tlooking up base type {p_ty_base_id:?} of {p_ty:?}");
+                    let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
+
+                    // Create an expression for our result
+                    let r_lexp_handle = {
+                        let expr = crate::Expression::AtomicResult {
+                            ty: p_base_ty.handle,
+                            comparison: false,
+                        };
+                        let handle = ctx.expressions.append(expr, span);
+                        self.lookup_expression.insert(
+                            result_id,
+                            LookupExpression {
+                                handle,
+                                type_id: result_type_id,
+                                block_id,
+                            },
+                        );
+                        handle
+                    };
+
+                    // Create a literal "1" since WGSL lacks an increment operation
+                    let one_lexp_handle = make_index_literal(
+                        ctx,
+                        1,
+                        &mut block,
+                        &mut emitter,
+                        p_base_ty.handle,
+                        p_lexp_ty_id,
+                        span,
+                    )?;
+
+                    // Create a statement for the op itself
+                    let stmt = crate::Statement::Atomic {
+                        pointer: p_lexp_handle,
+                        fun: crate::AtomicFunction::Add,
+                        value: one_lexp_handle,
+                        result: Some(r_lexp_handle),
+                    };
+                    block.push(stmt, span);
+                }
+                _ => {
+                    return Err(Error::UnsupportedInstruction(self.state, inst.op));
+                }
             }
         };
 
@@ -3824,7 +4159,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Store { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
-                | S::RayQuery { .. } => {}
+                | S::RayQuery { .. }
+                | S::SubgroupBallot { .. }
+                | S::SubgroupCollectiveOperation { .. }
+                | S::SubgroupGather { .. } => {}
                 S::Call {
                     function: ref mut callee,
                     ref arguments,
@@ -3978,7 +4316,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         // Do entry point specific processing after all functions are parsed so that we can
         // cull unused problematic builtins of gl_PerVertex.
-        for (ep, fun_id) in core::mem::take(&mut self.deferred_entry_points) {
+        for (ep, fun_id) in mem::take(&mut self.deferred_entry_points) {
             self.process_entry_point(&mut module, ep, fun_id)?;
         }
 
@@ -4123,8 +4461,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .lookup_entry_point
             .get_mut(&ep_id)
             .ok_or(Error::InvalidId(ep_id))?;
-        let mode = spirv::ExecutionMode::from_u32(mode_id)
-            .ok_or(Error::UnsupportedExecutionMode(mode_id))?;
+        let mode =
+            ExecutionMode::from_u32(mode_id).ok_or(Error::UnsupportedExecutionMode(mode_id))?;
 
         match mode {
             ExecutionMode::EarlyFragmentTests => {
@@ -5346,5 +5684,40 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
+    }
+
+    #[cfg(all(feature = "wgsl-in", feature = "wgsl-out"))]
+    #[test]
+    fn atomic_i_inc() {
+        let _ = env_logger::builder()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Trace)
+            .try_init();
+        let bytes = include_bytes!("../../../tests/in/spv/atomic_i_increment.spv");
+        let m = super::parse_u8_slice(bytes, &Default::default()).unwrap();
+        let mut validator = crate::valid::Validator::new(
+            crate::valid::ValidationFlags::empty(),
+            Default::default(),
+        );
+        let info = validator.validate(&m).unwrap();
+        let wgsl =
+            crate::back::wgsl::write_string(&m, &info, crate::back::wgsl::WriterFlags::empty())
+                .unwrap();
+        log::info!("atomic_i_increment:\n{wgsl}");
+
+        let m = match crate::front::wgsl::parse_str(&wgsl) {
+            Ok(m) => m,
+            Err(e) => {
+                log::error!("{}", e.emit_to_string(&wgsl));
+                // at this point we know atomics create invalid modules
+                // so simply bail
+                return;
+            }
+        };
+        let mut validator =
+            crate::valid::Validator::new(crate::valid::ValidationFlags::all(), Default::default());
+        if let Err(e) = validator.validate(&m) {
+            log::error!("{}", e.emit_to_string(&wgsl));
+        }
     }
 }

@@ -27,10 +27,28 @@ pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
 
 /// Run some code in an error scope and assert that validation fails.
-pub fn fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
+pub fn fail<T>(
+    device: &wgpu::Device,
+    callback: impl FnOnce() -> T,
+    expected_msg_substring: Option<&'static str>,
+) -> T {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();
-    assert!(pollster::block_on(device.pop_error_scope()).is_some());
+    let validation_error = pollster::block_on(device.pop_error_scope())
+        .expect("expected validation error in callback, but no validation error was emitted");
+    if let Some(expected_msg_substring) = expected_msg_substring {
+        let lowered_expected = expected_msg_substring.to_lowercase();
+        let lowered_actual = validation_error.to_string().to_lowercase();
+        assert!(
+            lowered_actual.contains(&lowered_expected),
+            concat!(
+                "expected validation error case-insensitively containing {:?}, ",
+                "but it was not present in actual error message:\n{:?}"
+            ),
+            expected_msg_substring,
+            validation_error
+        );
+    }
 
     result
 }
@@ -46,9 +64,14 @@ pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
 
 /// Run some code in an error scope and assert that validation succeeds or fails depending on the
 /// provided `should_fail` boolean.
-pub fn fail_if<T>(device: &wgpu::Device, should_fail: bool, callback: impl FnOnce() -> T) -> T {
+pub fn fail_if<T>(
+    device: &wgpu::Device,
+    should_fail: bool,
+    callback: impl FnOnce() -> T,
+    expected_msg_substring: Option<&'static str>,
+) -> T {
     if should_fail {
-        fail(device, callback)
+        fail(device, callback, expected_msg_substring)
     } else {
         valid(device, callback)
     }

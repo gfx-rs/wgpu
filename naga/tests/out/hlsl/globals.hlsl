@@ -71,6 +71,10 @@ void test_msl_packed_vec3_as_arg(float3 arg)
     return;
 }
 
+float3x3 ZeroValuefloat3x3() {
+    return (float3x3)0;
+}
+
 FooStruct ConstructFooStruct(float3 arg0, float arg1) {
     FooStruct ret = (FooStruct)0;
     ret.v3_ = arg0;
@@ -91,8 +95,8 @@ void test_msl_packed_vec3_()
     float3 l0_ = data.v3_;
     float2 l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    float3 mvm0_ = mul((float3x3)0, data.v3_);
-    float3 mvm1_ = mul(data.v3_, (float3x3)0);
+    float3 mvm0_ = mul(ZeroValuefloat3x3(), data.v3_);
+    float3 mvm1_ = mul(data.v3_, ZeroValuefloat3x3());
     float3 svm0_ = (data.v3_ * 2.0);
     float3 svm1_ = (2.0 * data.v3_);
 }

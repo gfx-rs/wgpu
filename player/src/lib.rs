@@ -99,9 +99,9 @@ impl GlobalPlay for wgc::global::Global {
                     base,
                     timestamp_writes,
                 } => {
-                    self.command_encoder_run_compute_pass_impl::<A>(
+                    self.compute_pass_end_with_unresolved_commands::<A>(
                         encoder,
-                        base.as_ref(),
+                        base,
                         timestamp_writes.as_ref(),
                     )
                     .unwrap();
@@ -113,7 +113,7 @@ impl GlobalPlay for wgc::global::Global {
                     timestamp_writes,
                     occlusion_query_set_id,
                 } => {
-                    self.command_encoder_run_render_pass_impl::<A>(
+                    self.render_pass_end_impl::<A>(
                         encoder,
                         base.as_ref(),
                         &target_colors,
@@ -389,6 +389,12 @@ impl GlobalPlay for wgc::global::Global {
             }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop::<A>(id);
+            }
+            Action::CreatePipelineCache { id, desc } => {
+                let _ = unsafe { self.device_create_pipeline_cache::<A>(device, &desc, Some(id)) };
+            }
+            Action::DestroyPipelineCache(id) => {
+                self.pipeline_cache_drop::<A>(id);
             }
             Action::CreateRenderBundle { id, desc, base } => {
                 let bundle =

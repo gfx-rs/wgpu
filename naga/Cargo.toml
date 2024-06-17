@@ -1,6 +1,6 @@
 [package]
 name = "naga"
-version = "0.19.2"
+version = "0.20.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Shader translation infrastructure"
@@ -22,22 +22,18 @@ all-features = true
 [features]
 default = []
 dot-out = []
-glsl-in = ["pp-rs"]
+glsl-in = ["dep:pp-rs"]
 glsl-out = []
 msl-out = []
-serialize = ["serde", "bitflags/serde", "indexmap/serde"]
-deserialize = ["serde", "bitflags/serde", "indexmap/serde"]
+serialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
+deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
-spv-in = ["petgraph", "spirv"]
-spv-out = ["spirv"]
-wgsl-in = ["hexf-parse", "unicode-xid", "compact"]
+spv-in = ["dep:petgraph", "dep:spirv"]
+spv-out = ["dep:spirv"]
+wgsl-in = ["dep:hexf-parse", "dep:unicode-xid", "compact"]
 wgsl-out = []
 hlsl-out = []
 compact = []
-
-[[bench]]
-name = "criterion"
-harness = false
 
 [dependencies]
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
@@ -51,21 +47,16 @@ codespan-reporting = { version = "0.11.0" }
 rustc-hash = "1.1.0"
 indexmap = { version = "2", features = ["std"] }
 log = "0.4"
-num-traits = "0.2"
 spirv = { version = "0.3", optional = true }
-thiserror = "1.0.57"
-serde = { version = "1.0.196", features = ["derive"], optional = true }
+thiserror = "1.0.61"
+serde = { version = "1.0.203", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
 arrayvec.workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-criterion = { version = "0.5", features = [] }
-
 [dev-dependencies]
-bincode = "1"
 diff = "0.1"
 env_logger = "0.11"
 # This _cannot_ have a version specified. If it does, crates.io will look

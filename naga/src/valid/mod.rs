@@ -77,12 +77,16 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u16 {
-        /// Support for [`AddressSpace:PushConstant`].
+    pub struct Capabilities: u32 {
+        /// Support for [`AddressSpace::PushConstant`][1].
+        ///
+        /// [1]: crate::AddressSpace::PushConstant
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
         const FLOAT64 = 0x2;
-        /// Support for [`Builtin:PrimitiveIndex`].
+        /// Support for [`BuiltIn::PrimitiveIndex`][1].
+        ///
+        /// [1]: crate::BuiltIn::PrimitiveIndex
         const PRIMITIVE_INDEX = 0x4;
         /// Support for non-uniform indexing of sampled textures and storage buffer arrays.
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x8;
@@ -90,17 +94,26 @@ bitflags::bitflags! {
         const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x10;
         /// Support for non-uniform indexing of samplers.
         const SAMPLER_NON_UNIFORM_INDEXING = 0x20;
-        /// Support for [`Builtin::ClipDistance`].
+        /// Support for [`BuiltIn::ClipDistance`].
+        ///
+        /// [`BuiltIn::ClipDistance`]: crate::BuiltIn::ClipDistance
         const CLIP_DISTANCE = 0x40;
-        /// Support for [`Builtin::CullDistance`].
+        /// Support for [`BuiltIn::CullDistance`].
+        ///
+        /// [`BuiltIn::CullDistance`]: crate::BuiltIn::CullDistance
         const CULL_DISTANCE = 0x80;
         /// Support for 16-bit normalized storage texture formats.
         const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 0x100;
         /// Support for [`BuiltIn::ViewIndex`].
+        ///
+        /// [`BuiltIn::ViewIndex`]: crate::BuiltIn::ViewIndex
         const MULTIVIEW = 0x200;
         /// Support for `early_depth_test`.
         const EARLY_DEPTH_TEST = 0x400;
-        /// Support for [`Builtin::SampleIndex`] and [`Sampling::Sample`].
+        /// Support for [`BuiltIn::SampleIndex`] and [`Sampling::Sample`].
+        ///
+        /// [`BuiltIn::SampleIndex`]: crate::BuiltIn::SampleIndex
+        /// [`Sampling::Sample`]: crate::Sampling::Sample
         const MULTISAMPLED_SHADING = 0x800;
         /// Support for ray queries and acceleration structures.
         const RAY_QUERY = 0x1000;
@@ -110,12 +123,79 @@ bitflags::bitflags! {
         const CUBE_ARRAY_TEXTURES = 0x4000;
         /// Support for 64-bit signed and unsigned integers.
         const SHADER_INT64 = 0x8000;
+        /// Support for subgroup operations.
+        const SUBGROUP = 0x10000;
+        /// Support for subgroup barriers.
+        const SUBGROUP_BARRIER = 0x20000;
+        /// Support for [`AtomicFunction::Min`] and [`AtomicFunction::Max`] on
+        /// 64-bit integers in the [`Storage`] address space, when the return
+        /// value is not used.
+        ///
+        /// This is the only 64-bit atomic functionality available on Metal 3.1.
+        ///
+        /// [`AtomicFunction::Min`]: crate::AtomicFunction::Min
+        /// [`AtomicFunction::Max`]: crate::AtomicFunction::Max
+        /// [`Storage`]: crate::AddressSpace::Storage
+        const SHADER_INT64_ATOMIC_MIN_MAX = 0x40000;
+        /// Support for all atomic operations on 64-bit integers.
+        const SHADER_INT64_ATOMIC_ALL_OPS = 0x80000;
     }
 }
 
 impl Default for Capabilities {
     fn default() -> Self {
         Self::MULTISAMPLED_SHADING | Self::CUBE_ARRAY_TEXTURES
+    }
+}
+
+bitflags::bitflags! {
+    /// Supported subgroup operations
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    pub struct SubgroupOperationSet: u8 {
+        /// Elect, Barrier
+        const BASIC = 1 << 0;
+        /// Any, All
+        const VOTE = 1 << 1;
+        /// reductions, scans
+        const ARITHMETIC = 1 << 2;
+        /// ballot, broadcast
+        const BALLOT = 1 << 3;
+        /// shuffle, shuffle xor
+        const SHUFFLE = 1 << 4;
+        /// shuffle up, down
+        const SHUFFLE_RELATIVE = 1 << 5;
+        // We don't support these operations yet
+        // /// Clustered
+        // const CLUSTERED = 1 << 6;
+        // /// Quad supported
+        // const QUAD_FRAGMENT_COMPUTE = 1 << 7;
+        // /// Quad supported in all stages
+        // const QUAD_ALL_STAGES = 1 << 8;
+    }
+}
+
+impl super::SubgroupOperation {
+    const fn required_operations(&self) -> SubgroupOperationSet {
+        use SubgroupOperationSet as S;
+        match *self {
+            Self::All | Self::Any => S::VOTE,
+            Self::Add | Self::Mul | Self::Min | Self::Max | Self::And | Self::Or | Self::Xor => {
+                S::ARITHMETIC
+            }
+        }
+    }
+}
+
+impl super::GatherMode {
+    const fn required_operations(&self) -> SubgroupOperationSet {
+        use SubgroupOperationSet as S;
+        match *self {
+            Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
+            Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
+            Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
+        }
     }
 }
 
@@ -166,6 +246,8 @@ impl ops::Index<Handle<crate::Expression>> for ModuleInfo {
 pub struct Validator {
     flags: ValidationFlags,
     capabilities: Capabilities,
+    subgroup_stages: ShaderStages,
+    subgroup_operations: SubgroupOperationSet,
     types: Vec<r#type::TypeInfo>,
     layouter: Layouter,
     location_mask: BitSet,
@@ -176,6 +258,26 @@ pub struct Validator {
     valid_expression_set: BitSet,
     override_ids: FastHashSet<u16>,
     allow_overrides: bool,
+
+    /// A checklist of expressions that must be visited by a specific kind of
+    /// statement.
+    ///
+    /// For example:
+    ///
+    /// - [`CallResult`] expressions must be visited by a [`Call`] statement.
+    /// - [`AtomicResult`] expressions must be visited by an [`Atomic`] statement.
+    ///
+    /// Be sure not to remove any [`Expression`] handle from this set unless
+    /// you've explicitly checked that it is the right kind of expression for
+    /// the visiting [`Statement`].
+    ///
+    /// [`CallResult`]: crate::Expression::CallResult
+    /// [`Call`]: crate::Statement::Call
+    /// [`AtomicResult`]: crate::Expression::AtomicResult
+    /// [`Atomic`]: crate::Statement::Atomic
+    /// [`Expression`]: crate::Expression
+    /// [`Statement`]: crate::Statement
+    needs_visit: BitSet,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -317,6 +419,8 @@ impl Validator {
         Validator {
             flags,
             capabilities,
+            subgroup_stages: ShaderStages::empty(),
+            subgroup_operations: SubgroupOperationSet::empty(),
             types: Vec::new(),
             layouter: Layouter::default(),
             location_mask: BitSet::new(),
@@ -326,7 +430,18 @@ impl Validator {
             valid_expression_set: BitSet::new(),
             override_ids: FastHashSet::default(),
             allow_overrides: true,
+            needs_visit: BitSet::new(),
         }
+    }
+
+    pub fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
+        self.subgroup_stages = stages;
+        self
+    }
+
+    pub fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
+        self.subgroup_operations = operations;
+        self
     }
 
     /// Reset the validator internals

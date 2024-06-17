@@ -1,13 +1,9 @@
 use super::conv;
 
-use ash::{extensions::khr, vk};
+use ash::{amd, ext, khr, vk};
 use parking_lot::Mutex;
 
-use std::{
-    collections::BTreeMap,
-    ffi::CStr,
-    sync::{atomic::AtomicIsize, Arc},
-};
+use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
     vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
@@ -35,45 +31,48 @@ fn indexing_features() -> wgt::Features {
 ///   [`PhysicalDeviceFeatures::from_extensions_and_requested_features`]
 ///   constructs an value of this type indicating which Vulkan features to
 ///   enable, based on the `wgpu_types::Features` requested.
+///
+/// [`Instance::expose_adapter`]: super::Instance::expose_adapter
 #[derive(Debug, Default)]
 pub struct PhysicalDeviceFeatures {
     /// Basic Vulkan 1.0 features.
     core: vk::PhysicalDeviceFeatures,
 
     /// Features provided by `VK_EXT_descriptor_indexing`, promoted to Vulkan 1.2.
-    pub(super) descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
+    pub(super) descriptor_indexing:
+        Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT<'static>>,
 
     /// Features provided by `VK_KHR_imageless_framebuffer`, promoted to Vulkan 1.2.
-    imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
+    imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_timeline_semaphore`, promoted to Vulkan 1.2
-    timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
+    timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR<'static>>,
 
     /// Features provided by `VK_EXT_image_robustness`, promoted to Vulkan 1.3
-    image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
+    image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT<'static>>,
 
     /// Features provided by `VK_EXT_robustness2`.
-    robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
+    robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT<'static>>,
 
     /// Features provided by `VK_KHR_multiview`, promoted to Vulkan 1.1.
-    multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
+    multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_sampler_ycbcr_conversion`, promoted to Vulkan 1.1.
-    sampler_ycbcr_conversion: Option<vk::PhysicalDeviceSamplerYcbcrConversionFeatures>,
+    sampler_ycbcr_conversion: Option<vk::PhysicalDeviceSamplerYcbcrConversionFeatures<'static>>,
 
     /// Features provided by `VK_EXT_texture_compression_astc_hdr`, promoted to Vulkan 1.3.
-    astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT>,
+    astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT<'static>>,
 
     /// Features provided by `VK_KHR_shader_float16_int8` (promoted to Vulkan
     /// 1.2) and `VK_KHR_16bit_storage` (promoted to Vulkan 1.1). We use these
     /// features together, or not at all.
     shader_float16: Option<(
-        vk::PhysicalDeviceShaderFloat16Int8Features,
-        vk::PhysicalDevice16BitStorageFeatures,
+        vk::PhysicalDeviceShaderFloat16Int8Features<'static>,
+        vk::PhysicalDevice16BitStorageFeatures<'static>,
     )>,
 
     /// Features provided by `VK_KHR_acceleration_structure`.
-    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
+    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_buffer_device_address`, promoted to Vulkan 1.2.
     ///
@@ -86,7 +85,10 @@ pub struct PhysicalDeviceFeatures {
     ///
     /// However, we do populate this when creating a device if
     /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
-    buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
+    ///
+    /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
+    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+    buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_ray_query`,
     ///
@@ -95,24 +97,28 @@ pub struct PhysicalDeviceFeatures {
     /// this from `vkGetPhysicalDeviceFeatures2`.
     ///
     /// However, we do populate this when creating a device if ray tracing is requested.
-    ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
+    ///
+    /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
+    ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_zero_initialize_workgroup_memory`, promoted
     /// to Vulkan 1.3.
     zero_initialize_workgroup_memory:
-        Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
-}
+        Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures<'static>>,
 
-// This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
-unsafe impl Send for PhysicalDeviceFeatures {}
-unsafe impl Sync for PhysicalDeviceFeatures {}
+    /// Features provided by `VK_KHR_shader_atomic_int64`, promoted to Vulkan 1.2.
+    shader_atomic_int64: Option<vk::PhysicalDeviceShaderAtomicInt64Features<'static>>,
+
+    /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
+    subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
+}
 
 impl PhysicalDeviceFeatures {
     /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
-    pub fn add_to_device_create_builder<'a>(
+    pub fn add_to_device_create<'a>(
         &'a mut self,
-        mut info: vk::DeviceCreateInfoBuilder<'a>,
-    ) -> vk::DeviceCreateInfoBuilder<'a> {
+        mut info: vk::DeviceCreateInfo<'a>,
+    ) -> vk::DeviceCreateInfo<'a> {
         info = info.enabled_features(&self.core);
         if let Some(ref mut feature) = self.descriptor_indexing {
             info = info.push_next(feature);
@@ -148,6 +154,12 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.ray_query {
             info = info.push_next(feature);
         }
+        if let Some(ref mut feature) = self.shader_atomic_int64 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.subgroup_size_control {
+            info = info.push_next(feature);
+        }
         info
     }
 
@@ -157,8 +169,8 @@ impl PhysicalDeviceFeatures {
     /// Return a `PhysicalDeviceFeatures` value capturing all the Vulkan
     /// features needed for the given [`Features`], [`DownlevelFlags`], and
     /// [`PrivateCapabilities`]. You can use the returned value's
-    /// [`add_to_device_create_builder`] method to configure a
-    /// [`DeviceCreateInfoBuilder`] to build a logical device providing those
+    /// [`add_to_device_create`] method to configure a
+    /// [`vk::DeviceCreateInfo`] to build a logical device providing those
     /// features.
     ///
     /// To ensure that the returned value is able to select all the Vulkan
@@ -175,7 +187,7 @@ impl PhysicalDeviceFeatures {
     /// [`Features`]: wgt::Features
     /// [`DownlevelFlags`]: wgt::DownlevelFlags
     /// [`PrivateCapabilities`]: super::PrivateCapabilities
-    /// [`DeviceCreateInfoBuilder`]: vk::DeviceCreateInfoBuilder
+    /// [`add_to_device_create`]: PhysicalDeviceFeatures::add_to_device_create
     /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
         device_api_version: u32,
@@ -208,7 +220,7 @@ impl PhysicalDeviceFeatures {
         Self {
             // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
             // Features is a bitfield so we need to map everything manually
-            core: vk::PhysicalDeviceFeatures::builder()
+            core: vk::PhysicalDeviceFeatures::default()
                 .robust_buffer_access(private_caps.robust_buffer_access)
                 .independent_blend(downlevel_flags.contains(wgt::DownlevelFlags::INDEPENDENT_BLEND))
                 .sample_rate_shading(
@@ -277,11 +289,10 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
-                .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING))
-                .build(),
+                .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING)),
             descriptor_indexing: if requested_features.intersects(indexing_features()) {
                 Some(
-                    vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
+                    vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
                         .shader_sampled_image_array_non_uniform_indexing(
                             needs_sampled_image_non_uniform,
                         )
@@ -294,142 +305,145 @@ impl PhysicalDeviceFeatures {
                         .shader_storage_buffer_array_non_uniform_indexing(
                             needs_storage_buffer_non_uniform,
                         )
-                        .descriptor_binding_partially_bound(needs_partially_bound)
-                        .build(),
+                        .descriptor_binding_partially_bound(needs_partially_bound),
                 )
             } else {
                 None
             },
             imageless_framebuffer: if device_api_version >= vk::API_VERSION_1_2
-                || enabled_extensions.contains(&vk::KhrImagelessFramebufferFn::name())
+                || enabled_extensions.contains(&khr::imageless_framebuffer::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
-                        .imageless_framebuffer(private_caps.imageless_framebuffers)
-                        .build(),
+                    vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::default()
+                        .imageless_framebuffer(private_caps.imageless_framebuffers),
                 )
             } else {
                 None
             },
             timeline_semaphore: if device_api_version >= vk::API_VERSION_1_2
-                || enabled_extensions.contains(&vk::KhrTimelineSemaphoreFn::name())
+                || enabled_extensions.contains(&khr::timeline_semaphore::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder()
-                        .timeline_semaphore(private_caps.timeline_semaphores)
-                        .build(),
+                    vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::default()
+                        .timeline_semaphore(private_caps.timeline_semaphores),
                 )
             } else {
                 None
             },
             image_robustness: if device_api_version >= vk::API_VERSION_1_3
-                || enabled_extensions.contains(&vk::ExtImageRobustnessFn::name())
+                || enabled_extensions.contains(&ext::image_robustness::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder()
-                        .robust_image_access(private_caps.robust_image_access)
-                        .build(),
+                    vk::PhysicalDeviceImageRobustnessFeaturesEXT::default()
+                        .robust_image_access(private_caps.robust_image_access),
                 )
             } else {
                 None
             },
-            robustness2: if enabled_extensions.contains(&vk::ExtRobustness2Fn::name()) {
+            robustness2: if enabled_extensions.contains(&ext::robustness2::NAME) {
                 // Note: enabling `robust_buffer_access2` isn't requires, strictly speaking
                 // since we can enable `robust_buffer_access` all the time. But it improves
                 // program portability, so we opt into it if they are supported.
                 Some(
-                    vk::PhysicalDeviceRobustness2FeaturesEXT::builder()
+                    vk::PhysicalDeviceRobustness2FeaturesEXT::default()
                         .robust_buffer_access2(private_caps.robust_buffer_access2)
-                        .robust_image_access2(private_caps.robust_image_access2)
-                        .build(),
+                        .robust_image_access2(private_caps.robust_image_access2),
                 )
             } else {
                 None
             },
             multiview: if device_api_version >= vk::API_VERSION_1_1
-                || enabled_extensions.contains(&vk::KhrMultiviewFn::name())
+                || enabled_extensions.contains(&khr::multiview::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceMultiviewFeatures::builder()
-                        .multiview(requested_features.contains(wgt::Features::MULTIVIEW))
-                        .build(),
+                    vk::PhysicalDeviceMultiviewFeatures::default()
+                        .multiview(requested_features.contains(wgt::Features::MULTIVIEW)),
                 )
             } else {
                 None
             },
             sampler_ycbcr_conversion: if device_api_version >= vk::API_VERSION_1_1
-                || enabled_extensions.contains(&vk::KhrSamplerYcbcrConversionFn::name())
+                || enabled_extensions.contains(&khr::sampler_ycbcr_conversion::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceSamplerYcbcrConversionFeatures::builder()
-                        // .sampler_ycbcr_conversion(requested_features.contains(wgt::Features::TEXTURE_FORMAT_NV12))
-                        .build(),
+                    vk::PhysicalDeviceSamplerYcbcrConversionFeatures::default(), // .sampler_ycbcr_conversion(requested_features.contains(wgt::Features::TEXTURE_FORMAT_NV12))
                 )
             } else {
                 None
             },
-            astc_hdr: if enabled_extensions.contains(&vk::ExtTextureCompressionAstcHdrFn::name()) {
+            astc_hdr: if enabled_extensions.contains(&ext::texture_compression_astc_hdr::NAME) {
                 Some(
-                    vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::builder()
-                        .texture_compression_astc_hdr(true)
-                        .build(),
+                    vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::default()
+                        .texture_compression_astc_hdr(true),
                 )
             } else {
                 None
             },
             shader_float16: if requested_features.contains(wgt::Features::SHADER_F16) {
                 Some((
-                    vk::PhysicalDeviceShaderFloat16Int8Features::builder()
-                        .shader_float16(true)
-                        .build(),
-                    vk::PhysicalDevice16BitStorageFeatures::builder()
+                    vk::PhysicalDeviceShaderFloat16Int8Features::default().shader_float16(true),
+                    vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
-                        .uniform_and_storage_buffer16_bit_access(true)
-                        .build(),
+                        .uniform_and_storage_buffer16_bit_access(true),
                 ))
             } else {
                 None
             },
             acceleration_structure: if enabled_extensions
-                .contains(&vk::KhrAccelerationStructureFn::name())
+                .contains(&khr::acceleration_structure::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
-                        .acceleration_structure(true)
-                        .build(),
+                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default()
+                        .acceleration_structure(true),
                 )
             } else {
                 None
             },
-            buffer_device_address: if enabled_extensions
-                .contains(&vk::KhrBufferDeviceAddressFn::name())
+            buffer_device_address: if enabled_extensions.contains(&khr::buffer_device_address::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::builder()
-                        .buffer_device_address(true)
-                        .build(),
+                    vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::default()
+                        .buffer_device_address(true),
                 )
             } else {
                 None
             },
-            ray_query: if enabled_extensions.contains(&vk::KhrRayQueryFn::name()) {
-                Some(
-                    vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
-                        .ray_query(true)
-                        .build(),
-                )
+            ray_query: if enabled_extensions.contains(&khr::ray_query::NAME) {
+                Some(vk::PhysicalDeviceRayQueryFeaturesKHR::default().ray_query(true))
             } else {
                 None
             },
             zero_initialize_workgroup_memory: if device_api_version >= vk::API_VERSION_1_3
-                || enabled_extensions.contains(&vk::KhrZeroInitializeWorkgroupMemoryFn::name())
+                || enabled_extensions.contains(&khr::zero_initialize_workgroup_memory::NAME)
             {
                 Some(
-                    vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::builder()
+                    vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::default()
                         .shader_zero_initialize_workgroup_memory(
                             private_caps.zero_initialize_workgroup_memory,
-                        )
-                        .build(),
+                        ),
+                )
+            } else {
+                None
+            },
+            shader_atomic_int64: if device_api_version >= vk::API_VERSION_1_2
+                || enabled_extensions.contains(&khr::shader_atomic_int64::NAME)
+            {
+                Some(
+                    vk::PhysicalDeviceShaderAtomicInt64Features::default()
+                        .shader_buffer_int64_atomics(requested_features.intersects(
+                            wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
+                                | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
+                        )),
+                )
+            } else {
+                None
+            },
+            subgroup_size_control: if device_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&ext::subgroup_size_control::NAME)
+            {
+                Some(
+                    vk::PhysicalDeviceSubgroupSizeControlFeatures::default()
+                        .subgroup_size_control(true),
                 )
             } else {
                 None
@@ -442,6 +456,9 @@ impl PhysicalDeviceFeatures {
     /// Given `self`, together with the instance and physical device it was
     /// built from, and a `caps` also built from those, determine which wgpu
     /// features and downlevel flags the device can support.
+    ///
+    /// [`Features`]: wgt::Features
+    /// [`DownlevelFlags`]: wgt::DownlevelFlags
     fn to_wgpu(
         &self,
         instance: &ash::Instance,
@@ -460,7 +477,8 @@ impl PhysicalDeviceFeatures {
             | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::CLEAR_TEXTURE;
+            | F::CLEAR_TEXTURE
+            | F::PIPELINE_CACHE;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -480,7 +498,7 @@ impl PhysicalDeviceFeatures {
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
-            caps.supports_extension(vk::KhrSwapchainMutableFormatFn::name()),
+            caps.supports_extension(khr::swapchain_mutable_format::NAME),
         );
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
@@ -560,15 +578,23 @@ impl PhysicalDeviceFeatures {
         features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
 
-        //if caps.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
-        //if caps.supports_extension(vk::ExtSamplerFilterMinmaxFn::name()) {
+        if let Some(ref shader_atomic_int64) = self.shader_atomic_int64 {
+            features.set(
+                F::SHADER_INT64_ATOMIC_ALL_OPS | F::SHADER_INT64_ATOMIC_MIN_MAX,
+                shader_atomic_int64.shader_buffer_int64_atomics != 0
+                    && shader_atomic_int64.shader_shared_int64_atomics != 0,
+            );
+        }
+
+        //if caps.supports_extension(khr::sampler_mirror_clamp_to_edge::NAME) {
+        //if caps.supports_extension(ext::sampler_filter_minmax::NAME) {
         features.set(
             F::MULTI_DRAW_INDIRECT_COUNT,
-            caps.supports_extension(vk::KhrDrawIndirectCountFn::name()),
+            caps.supports_extension(khr::draw_indirect_count::NAME),
         );
         features.set(
             F::CONSERVATIVE_RASTERIZATION,
-            caps.supports_extension(vk::ExtConservativeRasterizationFn::name()),
+            caps.supports_extension(ext::conservative_rasterization::NAME),
         );
 
         let intel_windows = caps.properties.vendor_id == db::intel::VENDOR && cfg!(windows);
@@ -638,6 +664,34 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        if let Some(ref subgroup) = caps.subgroup {
+            if (caps.device_api_version >= vk::API_VERSION_1_3
+                || caps.supports_extension(ext::subgroup_size_control::NAME))
+                && subgroup.supported_operations.contains(
+                    vk::SubgroupFeatureFlags::BASIC
+                        | vk::SubgroupFeatureFlags::VOTE
+                        | vk::SubgroupFeatureFlags::ARITHMETIC
+                        | vk::SubgroupFeatureFlags::BALLOT
+                        | vk::SubgroupFeatureFlags::SHUFFLE
+                        | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE,
+                )
+            {
+                features.set(
+                    F::SUBGROUP,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT),
+                );
+                features.set(
+                    F::SUBGROUP_VERTEX,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::VERTEX),
+                );
+                features.insert(F::SUBGROUP_BARRIER);
+            }
+        }
+
         let supports_depth_format = |format| {
             supports_format(
                 instance,
@@ -665,15 +719,12 @@ impl PhysicalDeviceFeatures {
 
         features.set(
             F::RAY_TRACING_ACCELERATION_STRUCTURE,
-            caps.supports_extension(vk::KhrDeferredHostOperationsFn::name())
-                && caps.supports_extension(vk::KhrAccelerationStructureFn::name())
-                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name()),
+            caps.supports_extension(khr::deferred_host_operations::NAME)
+                && caps.supports_extension(khr::acceleration_structure::NAME)
+                && caps.supports_extension(khr::buffer_device_address::NAME),
         );
 
-        features.set(
-            F::RAY_QUERY,
-            caps.supports_extension(vk::KhrRayQueryFn::name()),
-        );
+        features.set(F::RAY_QUERY, caps.supports_extension(khr::ray_query::NAME));
 
         let rg11b10ufloat_renderable = supports_format(
             instance,
@@ -759,19 +810,26 @@ pub struct PhysicalDeviceProperties {
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_maintenance3` extension, promoted to Vulkan 1.1.
-    maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
+    maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_EXT_descriptor_indexing` extension, promoted to Vulkan 1.2.
-    descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
+    descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_acceleration_structure` extension.
-    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>,
+    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_driver_properties` extension, promoted to Vulkan 1.2.
-    driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
+    driver: Option<vk::PhysicalDeviceDriverPropertiesKHR<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from Vulkan 1.1.
+    subgroup: Option<vk::PhysicalDeviceSubgroupProperties<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_subgroup_size_control` extension, promoted to Vulkan 1.3.
+    subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlProperties<'static>>,
 
     /// The device API version.
     ///
@@ -781,20 +839,15 @@ pub struct PhysicalDeviceProperties {
     device_api_version: u32,
 }
 
-// This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
-unsafe impl Send for PhysicalDeviceProperties {}
-unsafe impl Sync for PhysicalDeviceProperties {}
-
 impl PhysicalDeviceProperties {
     pub fn properties(&self) -> vk::PhysicalDeviceProperties {
         self.properties
     }
 
     pub fn supports_extension(&self, extension: &CStr) -> bool {
-        use crate::auxil::cstr_from_bytes_until_nul;
         self.supported_extensions
             .iter()
-            .any(|ep| cstr_from_bytes_until_nul(&ep.extension_name) == Some(extension))
+            .any(|ep| ep.extension_name_as_c_str() == Ok(extension))
     }
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
@@ -805,132 +858,144 @@ impl PhysicalDeviceProperties {
         // We enable `VK_KHR_get_physical_device_properties2` unconditionally (if available).
 
         // Require `VK_KHR_swapchain`
-        extensions.push(vk::KhrSwapchainFn::name());
+        extensions.push(khr::swapchain::NAME);
 
         if self.device_api_version < vk::API_VERSION_1_1 {
             // Require either `VK_KHR_maintenance1` or `VK_AMD_negative_viewport_height`
-            if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
-                extensions.push(vk::KhrMaintenance1Fn::name());
+            if self.supports_extension(khr::maintenance1::NAME) {
+                extensions.push(khr::maintenance1::NAME);
             } else {
                 // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside it
-                extensions.push(vk::AmdNegativeViewportHeightFn::name());
+                extensions.push(amd::negative_viewport_height::NAME);
             }
 
             // Optional `VK_KHR_maintenance2`
-            if self.supports_extension(vk::KhrMaintenance2Fn::name()) {
-                extensions.push(vk::KhrMaintenance2Fn::name());
+            if self.supports_extension(khr::maintenance2::NAME) {
+                extensions.push(khr::maintenance2::NAME);
             }
 
             // Optional `VK_KHR_maintenance3`
-            if self.supports_extension(vk::KhrMaintenance3Fn::name()) {
-                extensions.push(vk::KhrMaintenance3Fn::name());
+            if self.supports_extension(khr::maintenance3::NAME) {
+                extensions.push(khr::maintenance3::NAME);
             }
 
             // Require `VK_KHR_storage_buffer_storage_class`
-            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+            extensions.push(khr::storage_buffer_storage_class::NAME);
 
             // Require `VK_KHR_multiview` if the associated feature was requested
             if requested_features.contains(wgt::Features::MULTIVIEW) {
-                extensions.push(vk::KhrMultiviewFn::name());
+                extensions.push(khr::multiview::NAME);
             }
 
             // Require `VK_KHR_sampler_ycbcr_conversion` if the associated feature was requested
             if requested_features.contains(wgt::Features::TEXTURE_FORMAT_NV12) {
-                extensions.push(vk::KhrSamplerYcbcrConversionFn::name());
+                extensions.push(khr::sampler_ycbcr_conversion::NAME);
             }
         }
 
         if self.device_api_version < vk::API_VERSION_1_2 {
             // Optional `VK_KHR_image_format_list`
-            if self.supports_extension(vk::KhrImageFormatListFn::name()) {
-                extensions.push(vk::KhrImageFormatListFn::name());
+            if self.supports_extension(khr::image_format_list::NAME) {
+                extensions.push(khr::image_format_list::NAME);
             }
 
             // Optional `VK_KHR_imageless_framebuffer`
-            if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
-                extensions.push(vk::KhrImagelessFramebufferFn::name());
+            if self.supports_extension(khr::imageless_framebuffer::NAME) {
+                extensions.push(khr::imageless_framebuffer::NAME);
                 // Require `VK_KHR_maintenance2` due to it being a dependency
                 if self.device_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(vk::KhrMaintenance2Fn::name());
+                    extensions.push(khr::maintenance2::NAME);
                 }
             }
 
             // Optional `VK_KHR_driver_properties`
-            if self.supports_extension(vk::KhrDriverPropertiesFn::name()) {
-                extensions.push(vk::KhrDriverPropertiesFn::name());
+            if self.supports_extension(khr::driver_properties::NAME) {
+                extensions.push(khr::driver_properties::NAME);
             }
 
             // Optional `VK_KHR_timeline_semaphore`
-            if self.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
-                extensions.push(vk::KhrTimelineSemaphoreFn::name());
+            if self.supports_extension(khr::timeline_semaphore::NAME) {
+                extensions.push(khr::timeline_semaphore::NAME);
             }
 
             // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
             if requested_features.intersects(indexing_features()) {
-                extensions.push(vk::ExtDescriptorIndexingFn::name());
+                extensions.push(ext::descriptor_indexing::NAME);
             }
 
             // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
             if requested_features.contains(wgt::Features::SHADER_F16) {
-                extensions.push(vk::KhrShaderFloat16Int8Fn::name());
+                extensions.push(khr::shader_float16_int8::NAME);
                 // `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however we require that one already
                 if self.device_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(vk::Khr16bitStorageFn::name());
+                    extensions.push(khr::_16bit_storage::NAME);
                 }
             }
 
-            //extensions.push(vk::KhrSamplerMirrorClampToEdgeFn::name());
-            //extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
+            //extensions.push(khr::sampler_mirror_clamp_to_edge::NAME);
+            //extensions.push(ext::sampler_filter_minmax::NAME);
         }
 
         if self.device_api_version < vk::API_VERSION_1_3 {
             // Optional `VK_EXT_image_robustness`
-            if self.supports_extension(vk::ExtImageRobustnessFn::name()) {
-                extensions.push(vk::ExtImageRobustnessFn::name());
+            if self.supports_extension(ext::image_robustness::NAME) {
+                extensions.push(ext::image_robustness::NAME);
+            }
+
+            // Require `VK_EXT_subgroup_size_control` if the associated feature was requested
+            if requested_features.contains(wgt::Features::SUBGROUP) {
+                extensions.push(ext::subgroup_size_control::NAME);
             }
         }
 
         // Optional `VK_KHR_swapchain_mutable_format`
-        if self.supports_extension(vk::KhrSwapchainMutableFormatFn::name()) {
-            extensions.push(vk::KhrSwapchainMutableFormatFn::name());
+        if self.supports_extension(khr::swapchain_mutable_format::NAME) {
+            extensions.push(khr::swapchain_mutable_format::NAME);
         }
 
         // Optional `VK_EXT_robustness2`
-        if self.supports_extension(vk::ExtRobustness2Fn::name()) {
-            extensions.push(vk::ExtRobustness2Fn::name());
+        if self.supports_extension(ext::robustness2::NAME) {
+            extensions.push(ext::robustness2::NAME);
         }
 
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
         // Even though Vulkan 1.2 has promoted the extension to core, we must require the extension to avoid
         // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.
         if requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) {
-            extensions.push(vk::KhrDrawIndirectCountFn::name());
+            extensions.push(khr::draw_indirect_count::NAME);
         }
 
         // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
         if requested_features.contains(wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE) {
-            extensions.push(vk::KhrDeferredHostOperationsFn::name());
-            extensions.push(vk::KhrAccelerationStructureFn::name());
-            extensions.push(vk::KhrBufferDeviceAddressFn::name());
+            extensions.push(khr::deferred_host_operations::NAME);
+            extensions.push(khr::acceleration_structure::NAME);
+            extensions.push(khr::buffer_device_address::NAME);
         }
 
         // Require `VK_KHR_ray_query` if the associated feature was requested
         if requested_features.contains(wgt::Features::RAY_QUERY) {
-            extensions.push(vk::KhrRayQueryFn::name());
+            extensions.push(khr::ray_query::NAME);
         }
 
         // Require `VK_EXT_conservative_rasterization` if the associated feature was requested
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
-            extensions.push(vk::ExtConservativeRasterizationFn::name());
+            extensions.push(ext::conservative_rasterization::NAME);
         }
 
         // Require `VK_KHR_portability_subset` on macOS/iOS
         #[cfg(any(target_os = "macos", target_os = "ios"))]
-        extensions.push(vk::KhrPortabilitySubsetFn::name());
+        extensions.push(khr::portability_subset::NAME);
 
         // Require `VK_EXT_texture_compression_astc_hdr` if the associated feature was requested
         if requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
-            extensions.push(vk::ExtTextureCompressionAstcHdrFn::name());
+            extensions.push(ext::texture_compression_astc_hdr::NAME);
+        }
+
+        // Require `VK_KHR_shader_atomic_int64` if the associated feature was requested
+        if requested_features.intersects(
+            wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
+        ) {
+            extensions.push(khr::shader_atomic_int64::NAME);
         }
 
         extensions
@@ -987,6 +1052,14 @@ impl PhysicalDeviceProperties {
                 .min(crate::MAX_VERTEX_BUFFERS as u32),
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
+            min_subgroup_size: self
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.min_subgroup_size)
+                .unwrap_or(0),
+            max_subgroup_size: self
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.max_subgroup_size)
+                .unwrap_or(0),
             max_push_constant_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
@@ -1004,7 +1077,7 @@ impl PhysicalDeviceProperties {
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
             max_buffer_size,
-            max_non_sampler_bindings: std::u32::MAX,
+            max_non_sampler_bindings: u32::MAX,
         }
     }
 
@@ -1035,60 +1108,74 @@ impl super::InstanceShared {
             if let Some(ref get_device_properties) = self.get_physical_device_properties {
                 // Get these now to avoid borrowing conflicts later
                 let supports_maintenance3 = capabilities.device_api_version >= vk::API_VERSION_1_1
-                    || capabilities.supports_extension(vk::KhrMaintenance3Fn::name());
+                    || capabilities.supports_extension(khr::maintenance3::NAME);
                 let supports_descriptor_indexing = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
-                    || capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+                    || capabilities.supports_extension(ext::descriptor_indexing::NAME);
                 let supports_driver_properties = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
-                    || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
+                    || capabilities.supports_extension(khr::driver_properties::NAME);
+                let supports_subgroup_size_control = capabilities.device_api_version
+                    >= vk::API_VERSION_1_3
+                    || capabilities.supports_extension(ext::subgroup_size_control::NAME);
 
                 let supports_acceleration_structure =
-                    capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
+                    capabilities.supports_extension(khr::acceleration_structure::NAME);
 
-                let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
+                let mut properties2 = vk::PhysicalDeviceProperties2KHR::default();
                 if supports_maintenance3 {
                     let next = capabilities
                         .maintenance_3
                         .insert(vk::PhysicalDeviceMaintenance3Properties::default());
-                    builder = builder.push_next(next);
+                    properties2 = properties2.push_next(next);
                 }
 
                 if supports_descriptor_indexing {
                     let next = capabilities
                         .descriptor_indexing
                         .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
-                    builder = builder.push_next(next);
+                    properties2 = properties2.push_next(next);
                 }
 
                 if supports_acceleration_structure {
                     let next = capabilities
                         .acceleration_structure
                         .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
-                    builder = builder.push_next(next);
+                    properties2 = properties2.push_next(next);
                 }
 
                 if supports_driver_properties {
                     let next = capabilities
                         .driver
                         .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
-                    builder = builder.push_next(next);
+                    properties2 = properties2.push_next(next);
                 }
 
-                let mut properties2 = builder.build();
-                unsafe {
-                    get_device_properties.get_physical_device_properties2(phd, &mut properties2);
+                if capabilities.device_api_version >= vk::API_VERSION_1_1 {
+                    let next = capabilities
+                        .subgroup
+                        .insert(vk::PhysicalDeviceSubgroupProperties::default());
+                    properties2 = properties2.push_next(next);
                 }
+
+                if supports_subgroup_size_control {
+                    let next = capabilities
+                        .subgroup_size_control
+                        .insert(vk::PhysicalDeviceSubgroupSizeControlProperties::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                unsafe {
+                    get_device_properties.get_physical_device_properties2(phd, &mut properties2)
+                };
 
                 if is_intel_igpu_outdated_for_robustness2(
                     capabilities.properties,
                     capabilities.driver,
                 ) {
-                    use crate::auxil::cstr_from_bytes_until_nul;
-                    capabilities.supported_extensions.retain(|&x| {
-                        cstr_from_bytes_until_nul(&x.extension_name)
-                            != Some(vk::ExtRobustness2Fn::name())
-                    });
+                    capabilities
+                        .supported_extensions
+                        .retain(|&x| x.extension_name_as_c_str() != Ok(ext::robustness2::NAME));
                 }
             };
             capabilities
@@ -1098,102 +1185,109 @@ impl super::InstanceShared {
         features.core = if let Some(ref get_device_properties) = self.get_physical_device_properties
         {
             let core = vk::PhysicalDeviceFeatures::default();
-            let mut builder = vk::PhysicalDeviceFeatures2KHR::builder().features(core);
+            let mut features2 = vk::PhysicalDeviceFeatures2KHR::default().features(core);
 
             // `VK_KHR_multiview` is promoted to 1.1
             if capabilities.device_api_version >= vk::API_VERSION_1_1
-                || capabilities.supports_extension(vk::KhrMultiviewFn::name())
+                || capabilities.supports_extension(khr::multiview::NAME)
             {
                 let next = features
                     .multiview
                     .insert(vk::PhysicalDeviceMultiviewFeatures::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
 
             // `VK_KHR_sampler_ycbcr_conversion` is promoted to 1.1
             if capabilities.device_api_version >= vk::API_VERSION_1_1
-                || capabilities.supports_extension(vk::KhrSamplerYcbcrConversionFn::name())
+                || capabilities.supports_extension(khr::sampler_ycbcr_conversion::NAME)
             {
                 let next = features
                     .sampler_ycbcr_conversion
                     .insert(vk::PhysicalDeviceSamplerYcbcrConversionFeatures::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
 
-            if capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name()) {
+            if capabilities.supports_extension(ext::descriptor_indexing::NAME) {
                 let next = features
                     .descriptor_indexing
                     .insert(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
 
             // `VK_KHR_imageless_framebuffer` is promoted to 1.2, but has no
             // changes, so we can keep using the extension unconditionally.
-            if capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
+            if capabilities.supports_extension(khr::imageless_framebuffer::NAME) {
                 let next = features
                     .imageless_framebuffer
                     .insert(vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
 
             // `VK_KHR_timeline_semaphore` is promoted to 1.2, but has no
             // changes, so we can keep using the extension unconditionally.
-            if capabilities.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
+            if capabilities.supports_extension(khr::timeline_semaphore::NAME) {
                 let next = features
                     .timeline_semaphore
                     .insert(vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
 
-            if capabilities.supports_extension(vk::ExtImageRobustnessFn::name()) {
+            if capabilities.supports_extension(ext::image_robustness::NAME) {
                 let next = features
                     .image_robustness
                     .insert(vk::PhysicalDeviceImageRobustnessFeaturesEXT::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
-            if capabilities.supports_extension(vk::ExtRobustness2Fn::name()) {
+            if capabilities.supports_extension(ext::robustness2::NAME) {
                 let next = features
                     .robustness2
                     .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
-            if capabilities.supports_extension(vk::ExtTextureCompressionAstcHdrFn::name()) {
+            if capabilities.supports_extension(ext::texture_compression_astc_hdr::NAME) {
                 let next = features
                     .astc_hdr
                     .insert(vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
-            if capabilities.supports_extension(vk::KhrShaderFloat16Int8Fn::name())
-                && capabilities.supports_extension(vk::Khr16bitStorageFn::name())
+            if capabilities.supports_extension(khr::shader_float16_int8::NAME)
+                && capabilities.supports_extension(khr::_16bit_storage::NAME)
             {
                 let next = features.shader_float16.insert((
                     vk::PhysicalDeviceShaderFloat16Int8FeaturesKHR::default(),
                     vk::PhysicalDevice16BitStorageFeaturesKHR::default(),
                 ));
-                builder = builder.push_next(&mut next.0);
-                builder = builder.push_next(&mut next.1);
+                features2 = features2.push_next(&mut next.0);
+                features2 = features2.push_next(&mut next.1);
             }
-            if capabilities.supports_extension(vk::KhrAccelerationStructureFn::name()) {
+            if capabilities.supports_extension(khr::acceleration_structure::NAME) {
                 let next = features
                     .acceleration_structure
                     .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
 
             // `VK_KHR_zero_initialize_workgroup_memory` is promoted to 1.3
             if capabilities.device_api_version >= vk::API_VERSION_1_3
-                || capabilities.supports_extension(vk::KhrZeroInitializeWorkgroupMemoryFn::name())
+                || capabilities.supports_extension(khr::zero_initialize_workgroup_memory::NAME)
             {
                 let next = features
                     .zero_initialize_workgroup_memory
                     .insert(vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::default());
-                builder = builder.push_next(next);
+                features2 = features2.push_next(next);
             }
 
-            let mut features2 = builder.build();
-            unsafe {
-                get_device_properties.get_physical_device_features2(phd, &mut features2);
+            // `VK_EXT_subgroup_size_control` is promoted to 1.3
+            if capabilities.device_api_version >= vk::API_VERSION_1_3
+                || capabilities.supports_extension(ext::subgroup_size_control::NAME)
+            {
+                let next = features
+                    .subgroup_size_control
+                    .insert(vk::PhysicalDeviceSubgroupSizeControlFeatures::default());
+                features2 = features2.push_next(next);
             }
+
+            unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
             unsafe { self.raw.get_physical_device_features(phd) }
@@ -1208,33 +1302,35 @@ impl super::Instance {
         &self,
         phd: vk::PhysicalDevice,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
-        use crate::auxil::cstr_from_bytes_until_nul;
         use crate::auxil::db;
 
         let (phd_capabilities, phd_features) = self.shared.inspect(phd);
 
         let info = wgt::AdapterInfo {
             name: {
-                cstr_from_bytes_until_nul(&phd_capabilities.properties.device_name)
-                    .and_then(|info| info.to_str().ok())
+                phd_capabilities
+                    .properties
+                    .device_name_as_c_str()
+                    .ok()
+                    .and_then(|name| name.to_str().ok())
                     .unwrap_or("?")
                     .to_owned()
             },
             vendor: phd_capabilities.properties.vendor_id,
             device: phd_capabilities.properties.device_id,
             device_type: match phd_capabilities.properties.device_type {
-                ash::vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
-                ash::vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
-                ash::vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
-                ash::vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
-                ash::vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
+                vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
+                vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
+                vk::PhysicalDeviceType::DISCRETE_GPU => wgt::DeviceType::DiscreteGpu,
+                vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
+                vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
             },
             driver: {
                 phd_capabilities
                     .driver
                     .as_ref()
-                    .and_then(|driver| cstr_from_bytes_until_nul(&driver.driver_name))
+                    .and_then(|driver| driver.driver_name_as_c_str().ok())
                     .and_then(|name| name.to_str().ok())
                     .unwrap_or("?")
                     .to_owned()
@@ -1243,7 +1339,7 @@ impl super::Instance {
                 phd_capabilities
                     .driver
                     .as_ref()
-                    .and_then(|driver| cstr_from_bytes_until_nul(&driver.driver_info))
+                    .and_then(|driver| driver.driver_info_as_c_str().ok())
                     .and_then(|name| name.to_str().ok())
                     .unwrap_or("?")
                     .to_owned()
@@ -1269,7 +1365,7 @@ impl super::Instance {
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
-                if driver.driver_id == ash::vk::DriverId::MOLTENVK {
+                if driver.driver_id == vk::DriverId::MOLTENVK {
                     log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
                 } else if self
                     .shared
@@ -1287,7 +1383,7 @@ impl super::Instance {
             }
         }
         if phd_capabilities.device_api_version == vk::API_VERSION_1_0
-            && !phd_capabilities.supports_extension(vk::KhrStorageBufferStorageClassFn::name())
+            && !phd_capabilities.supports_extension(khr::storage_buffer_storage_class::NAME)
         {
             log::warn!(
                 "SPIR-V storage buffer class is not supported, hiding adapter: {}",
@@ -1295,8 +1391,8 @@ impl super::Instance {
             );
             return None;
         }
-        if !phd_capabilities.supports_extension(vk::AmdNegativeViewportHeightFn::name())
-            && !phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name())
+        if !phd_capabilities.supports_extension(amd::negative_viewport_height::NAME)
+            && !phd_capabilities.supports_extension(khr::maintenance1::NAME)
             && phd_capabilities.device_api_version < vk::API_VERSION_1_1
         {
             log::warn!(
@@ -1319,7 +1415,7 @@ impl super::Instance {
 
         let private_caps = super::PrivateCapabilities {
             flip_y_requires_shift: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
-                || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
+                || phd_capabilities.supports_extension(khr::maintenance1::NAME),
             imageless_framebuffers: match phd_features.imageless_framebuffer {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
                 None => phd_features
@@ -1327,7 +1423,7 @@ impl super::Instance {
                     .map_or(false, |ext| ext.imageless_framebuffer != 0),
             },
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
-                || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
+                || phd_capabilities.supports_extension(khr::maintenance2::NAME),
             timeline_semaphores: match phd_features.timeline_semaphore {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
                 None => phd_features
@@ -1381,7 +1477,7 @@ impl super::Instance {
                     ext.shader_zero_initialize_workgroup_memory == vk::TRUE
                 }),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
-                || phd_capabilities.supports_extension(vk::KhrImageFormatListFn::name()),
+                || phd_capabilities.supports_extension(khr::image_format_list::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1419,7 +1515,7 @@ impl super::Instance {
 }
 
 impl super::Adapter {
-    pub fn raw_physical_device(&self) -> ash::vk::PhysicalDevice {
+    pub fn raw_physical_device(&self) -> vk::PhysicalDevice {
         self.raw
     }
 
@@ -1499,8 +1595,7 @@ impl super::Adapter {
                     .get_physical_device_memory_properties(self.raw)
             }
         };
-        let memory_types =
-            &mem_properties.memory_types[..mem_properties.memory_type_count as usize];
+        let memory_types = &mem_properties.memory_types_as_slice();
         let valid_ash_memory_types = memory_types.iter().enumerate().fold(0, |u, (i, mem)| {
             if self.known_memory_flags.contains(mem.property_flags) {
                 u | (1 << i)
@@ -1509,33 +1604,45 @@ impl super::Adapter {
             }
         });
 
-        let swapchain_fn = khr::Swapchain::new(&self.instance.raw, &raw_device);
+        let swapchain_fn = khr::swapchain::Device::new(&self.instance.raw, &raw_device);
 
-        let indirect_count_fn = if enabled_extensions.contains(&khr::DrawIndirectCount::name()) {
-            Some(khr::DrawIndirectCount::new(&self.instance.raw, &raw_device))
+        // Note that VK_EXT_debug_utils is an instance extension (enabled at the instance
+        // level) but contains a few functions that can be loaded directly on the Device for a
+        // dispatch-table-less pointer.
+        let debug_utils_fn = if self.instance.extensions.contains(&ext::debug_utils::NAME) {
+            Some(ext::debug_utils::Device::new(
+                &self.instance.raw,
+                &raw_device,
+            ))
         } else {
             None
         };
-        let timeline_semaphore_fn = if enabled_extensions.contains(&khr::TimelineSemaphore::name())
-        {
-            Some(super::ExtensionFn::Extension(khr::TimelineSemaphore::new(
+        let indirect_count_fn = if enabled_extensions.contains(&khr::draw_indirect_count::NAME) {
+            Some(khr::draw_indirect_count::Device::new(
                 &self.instance.raw,
                 &raw_device,
-            )))
+            ))
+        } else {
+            None
+        };
+        let timeline_semaphore_fn = if enabled_extensions.contains(&khr::timeline_semaphore::NAME) {
+            Some(super::ExtensionFn::Extension(
+                khr::timeline_semaphore::Device::new(&self.instance.raw, &raw_device),
+            ))
         } else if self.phd_capabilities.device_api_version >= vk::API_VERSION_1_2 {
             Some(super::ExtensionFn::Promoted)
         } else {
             None
         };
-        let ray_tracing_fns = if enabled_extensions.contains(&khr::AccelerationStructure::name())
-            && enabled_extensions.contains(&khr::BufferDeviceAddress::name())
+        let ray_tracing_fns = if enabled_extensions.contains(&khr::acceleration_structure::NAME)
+            && enabled_extensions.contains(&khr::buffer_device_address::NAME)
         {
             Some(super::RayTracingDeviceExtensionFunctions {
-                acceleration_structure: khr::AccelerationStructure::new(
+                acceleration_structure: khr::acceleration_structure::Device::new(
                     &self.instance.raw,
                     &raw_device,
                 ),
-                buffer_device_address: khr::BufferDeviceAddress::new(
+                buffer_device_address: khr::buffer_device_address::Device::new(
                     &self.instance.raw,
                     &raw_device,
                 ),
@@ -1581,6 +1688,15 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Geometry);
             }
 
+            if features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX) {
+                capabilities.push(spv::Capability::GroupNonUniform);
+                capabilities.push(spv::Capability::GroupNonUniformVote);
+                capabilities.push(spv::Capability::GroupNonUniformArithmetic);
+                capabilities.push(spv::Capability::GroupNonUniformBallot);
+                capabilities.push(spv::Capability::GroupNonUniformShuffle);
+                capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
+            }
+
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
@@ -1597,6 +1713,13 @@ impl super::Adapter {
 
             if features.contains(wgt::Features::SHADER_INT64) {
                 capabilities.push(spv::Capability::Int64);
+            }
+
+            if features.intersects(
+                wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
+                    | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
+            ) {
+                capabilities.push(spv::Capability::Int64Atomics);
             }
 
             let mut flags = spv::WriterFlags::empty();
@@ -1619,7 +1742,13 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::RayQueryKHR);
             }
             spv::Options {
-                lang_version: (1, 0),
+                lang_version: if features
+                    .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX)
+                {
+                    (1, 3)
+                } else {
+                    (1, 0)
+                },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {
@@ -1657,6 +1786,19 @@ impl super::Adapter {
             unsafe { raw_device.get_device_queue(family_index, queue_index) }
         };
 
+        let driver_version = self
+            .phd_capabilities
+            .properties
+            .driver_version
+            .to_be_bytes();
+        #[rustfmt::skip]
+        let pipeline_cache_validation_key = [
+            driver_version[0], driver_version[1], driver_version[2], driver_version[3],
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+        ];
+
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             family_index,
@@ -1667,32 +1809,29 @@ impl super::Adapter {
             physical_device: self.raw,
             enabled_extensions: enabled_extensions.into(),
             extension_fns: super::DeviceExtensionFunctions {
+                debug_utils: debug_utils_fn,
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
                 ray_tracing: ray_tracing_fns,
             },
+            pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             private_caps: self.private_caps.clone(),
+            features,
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
         });
-        let mut relay_semaphores = [vk::Semaphore::null(); 2];
-        for sem in relay_semaphores.iter_mut() {
-            unsafe {
-                *sem = shared
-                    .raw
-                    .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?
-            };
-        }
+
+        let relay_semaphores = super::RelaySemaphores::new(&shared)?;
+
         let queue = super::Queue {
             raw: raw_queue,
             swapchain_fn,
             device: Arc::clone(&shared),
             family_index,
-            relay_semaphores,
-            relay_index: AtomicIsize::new(-1),
+            relay_semaphores: Mutex::new(relay_semaphores),
         };
 
         let mem_allocator = {
@@ -1702,7 +1841,7 @@ impl super::Adapter {
                 if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
                     maintenance_3.max_memory_allocation_size
                 } else {
-                    u64::max_value()
+                    u64::MAX
                 };
             let properties = gpu_alloc::DeviceProperties {
                 max_memory_allocation_count: limits.max_memory_allocation_count,
@@ -1717,15 +1856,15 @@ impl super::Adapter {
                         heap: memory_type.heap_index,
                     })
                     .collect(),
-                memory_heaps: mem_properties.memory_heaps
-                    [..mem_properties.memory_heap_count as usize]
+                memory_heaps: mem_properties
+                    .memory_heaps_as_slice()
                     .iter()
                     .map(|&memory_heap| gpu_alloc::MemoryHeap {
                         size: memory_heap.size,
                     })
                     .collect(),
                 buffer_device_address: enabled_extensions
-                    .contains(&khr::BufferDeviceAddress::name()),
+                    .contains(&khr::buffer_device_address::NAME),
             };
             gpu_alloc::GpuAllocator::new(config, properties)
         };
@@ -1763,10 +1902,9 @@ impl crate::Adapter for super::Adapter {
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
         let family_index = 0; //TODO
-        let family_info = vk::DeviceQueueCreateInfo::builder()
+        let family_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(family_index)
-            .queue_priorities(&[1.0])
-            .build();
+            .queue_priorities(&[1.0]);
         let family_infos = [family_info];
 
         let str_pointers = enabled_extensions
@@ -1777,12 +1915,10 @@ impl crate::Adapter for super::Adapter {
             })
             .collect::<Vec<_>>();
 
-        let pre_info = vk::DeviceCreateInfo::builder()
+        let pre_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&family_infos)
             .enabled_extension_names(&str_pointers);
-        let info = enabled_phd_features
-            .add_to_device_create_builder(pre_info)
-            .build();
+        let info = enabled_phd_features.add_to_device_create(pre_info);
         let raw_device = {
             profiling::scope!("vkCreateDevice");
             unsafe { self.instance.raw.create_device(self.raw, &info, None)? }
@@ -2123,7 +2259,7 @@ fn supports_bgra8unorm_storage(
 
     unsafe {
         let mut properties3 = vk::FormatProperties3::default();
-        let mut properties2 = vk::FormatProperties2::builder().push_next(&mut properties3);
+        let mut properties2 = vk::FormatProperties2::default().push_next(&mut properties3);
 
         instance.get_physical_device_format_properties2(
             phd,

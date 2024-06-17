@@ -67,7 +67,7 @@ impl<'source> ParsingContext<'source> {
 
         let new_break = || {
             let mut block = Block::new();
-            block.push(Statement::Break, crate::Span::default());
+            block.push(Statement::Break, Span::default());
             block
         };
 
@@ -355,7 +355,7 @@ impl<'source> ParsingContext<'source> {
                             accept: new_break(),
                             reject: Block::new(),
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     );
 
                     meta.subsume(expr_meta);
@@ -410,7 +410,7 @@ impl<'source> ParsingContext<'source> {
                             accept: new_break(),
                             reject: Block::new(),
                         },
-                        crate::Span::default(),
+                        Span::default(),
                     );
 
                     if let Some(idx) = terminator {
@@ -498,7 +498,7 @@ impl<'source> ParsingContext<'source> {
                                 accept: new_break(),
                                 reject: Block::new(),
                             },
-                            crate::Span::default(),
+                            Span::default(),
                         );
 
                         self.expect(frontend, TokenValue::Semicolon)?;
