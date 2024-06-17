@@ -4010,6 +4010,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     log::trace!("\t\t\tlooking up base type {p_ty_base_id:?} of {p_ty:?}");
                     let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
 
+                    block.extend(emitter.finish(ctx.expressions));
                     // Create an expression for our result
                     let r_lexp_handle = {
                         let expr = crate::Expression::AtomicResult {
@@ -4027,6 +4028,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         handle
                     };
+                    emitter.start(ctx.expressions);
 
                     // Create a literal "1" since WGSL lacks an increment operation
                     let one_lexp_handle = make_index_literal(
@@ -4069,12 +4071,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let v_lexp_handle =
                         get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
 
+                    block.extend(emitter.finish(ctx.expressions));
                     // Create a statement for the op itself
                     let stmt = crate::Statement::Store {
                         pointer: p_lexp_handle,
                         value: v_lexp_handle,
                     };
                     block.push(stmt, span);
+                    emitter.start(ctx.expressions);
 
                     // Store any associated global variables so we can upgrade their types later
                     self.upgrade_atomics
@@ -4111,66 +4115,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     // Store any associated global variables so we can upgrade their types later
                     self.upgrade_atomics
                         .extend(ctx.get_contained_global_variable(p_lexp_handle));
-                }
-                Op::AtomicStore => {
-                    inst.expect(5)?;
-                    let start = self.data_offset;
-                    let span = self.span_from_with_op(start);
-                    let pointer_id = self.next()?;
-                    let _scope_id = self.next()?;
-                    let _memory_semantics_id = self.next()?;
-                    let value_id = self.next()?;
-
-                    log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
-                    let p_lexp_handle =
-                        get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
-
-                    log::trace!("\t\t\tlooking up value expr {:?}", pointer_id);
-                    let v_lexp_handle =
-                        get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
-
-                    // Create a statement for the op itself
-                    let stmt = crate::Statement::Store {
-                        pointer: p_lexp_handle,
-                        value: v_lexp_handle,
-                    };
-                    block.push(stmt, span);
-
-                    // Store any associated global variables so we can upgrade their types later
-                    self.upgrade_atomics
-                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
-                }
-                Op::AtomicLoad => {
-                    inst.expect(6)?;
-                    let start = self.data_offset;
-                    let span = self.span_from_with_op(start);
-                    let result_type_id = self.next()?;
-                    let result_id = self.next()?;
-                    let pointer_id = self.next()?;
-                    let _scope_id = self.next()?;
-                    let _memory_semantics_id = self.next()?;
-
-                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
-                    let p_lexp_handle =
-                        get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
-
-                    // Create an expression for our result
-                    let expr = crate::Expression::Load {
-                        pointer: p_lexp_handle,
-                    };
-                    let handle = ctx.expressions.append(expr, span);
-                    self.lookup_expression.insert(
-                        result_id,
-                        LookupExpression {
-                            handle,
-                            type_id: result_type_id,
-                            block_id,
-                        },
-                    );
-
-                    // Store any associated global variables so we can upgrade their types later
-                    self.upgrade_atomics
-                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
                 }
                 Op::AtomicExchange => {
                     inst.expect(7)?;
@@ -4203,6 +4147,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let v_lexp_handle =
                         get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
 
+                    block.extend(emitter.finish(ctx.expressions));
                     // Create an expression for our result
                     let r_lexp_handle = {
                         let expr = crate::Expression::AtomicResult {
@@ -4220,6 +4165,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         handle
                     };
+                    emitter.start(ctx.expressions);
 
                     // Create a statement for the op itself
                     let stmt = crate::Statement::Atomic {
@@ -4232,7 +4178,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     // Store any associated global variables so we can upgrade their types later
                     self.upgrade_atomics
-                        .extend(ctx.get_contained_global_variables(p_lexp_handle));
+                        .extend(ctx.get_contained_global_variable(p_lexp_handle));
                 }
 
                 Op::AtomicCompareExchange => {
@@ -4274,6 +4220,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         self.lookup_expression.lookup(comparator_id)?
                     );
 
+                    block.extend(emitter.finish(ctx.expressions));
                     // Create an expression for our result
                     let r_lexp_handle = {
                         let expr = crate::Expression::AtomicResult {
@@ -4291,6 +4238,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         handle
                     };
+                    emitter.start(ctx.expressions);
 
                     // Create a statement for the op itself
                     let stmt = crate::Statement::Atomic {
@@ -4333,6 +4281,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     log::trace!("\t\t\tlooking up base type {p_ty_base_id:?} of {p_ty:?}");
                     let p_base_ty = self.lookup_type.lookup(p_ty_base_id)?;
 
+                    block.extend(emitter.finish(ctx.expressions));
                     // Create an expression for our result
                     let r_lexp_handle = {
                         let expr = crate::Expression::AtomicResult {
@@ -4350,6 +4299,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         handle
                     };
+                    emitter.start(ctx.expressions);
 
                     // Create a literal "1" since WGSL lacks an decrement operation
                     let one_lexp_handle = make_index_literal(
