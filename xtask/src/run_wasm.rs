@@ -38,7 +38,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgpu {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()
@@ -59,7 +59,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features wgsl,webgl {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgl {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()
@@ -69,12 +69,12 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
     log::info!("running wasm-bindgen on webgl examples");
 
     xshell::cmd!(
-            shell,
-            "wasm-bindgen target/wasm32-unknown-unknown/{output_dir}/wgpu-examples.wasm --target web --no-typescript --out-dir target/generated --out-name webgl2"
-        )
-        .quiet()
-        .run()
-        .context("Failed to run wasm-bindgen")?;
+        shell,
+        "wasm-bindgen target/wasm32-unknown-unknown/{output_dir}/wgpu-examples.wasm --target web --no-typescript --out-dir target/generated --out-name webgl2"
+    )
+    .quiet()
+    .run()
+    .context("Failed to run wasm-bindgen")?;
 
     let static_files = shell
         .read_dir("examples/static")
