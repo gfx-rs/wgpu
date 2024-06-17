@@ -94,9 +94,12 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
     if !no_serve {
         log::info!("serving on port 8000");
 
+        // Explicitly specify the IP address to 127.0.0.1 since otherwise simple-http-server will
+        // print http://0.0.0.0:8000 as url which is not a secure context and thus doesn't allow
+        // running WebGPU!
         xshell::cmd!(
             shell,
-            "simple-http-server target/generated -c wasm,html,js -i --coep --coop"
+            "simple-http-server target/generated -c wasm,html,js -i --coep --coop --ip 127.0.0.1"
         )
         .quiet()
         .run()
