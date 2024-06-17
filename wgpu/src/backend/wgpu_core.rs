@@ -2370,7 +2370,11 @@ impl crate::Context for ContextWgpuCore {
         wgc::gfx_select!(device => self.0.device_stop_capture(*device));
     }
 
-    fn device_get_internal_counters(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) -> wgt::InternalCounters {
+    fn device_get_internal_counters(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> wgt::InternalCounters {
         wgc::gfx_select!(device => self.0.device_get_internal_counters(*device))
     }
 

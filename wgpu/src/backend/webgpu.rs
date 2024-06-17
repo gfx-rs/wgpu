@@ -2978,7 +2978,11 @@ impl crate::context::Context for ContextWebGpu {
     fn device_start_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
     fn device_stop_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
 
-    fn device_get_internal_counters(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) -> wgt::InternalCounters {
+    fn device_get_internal_counters(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> wgt::InternalCounters {
         Default::default()
     }
 
