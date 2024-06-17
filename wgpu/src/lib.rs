@@ -3167,6 +3167,16 @@ impl Device {
         DynContext::device_stop_capture(&*self.context, &self.id, self.data.as_ref())
     }
 
+    /// Query internal counters from the native backend for debugging purposes.
+    ///
+    /// Some backends may not set all counters, or may not set any counter at all.
+    /// The `counters` cargo feature must be enabled for any counter to be set.
+    ///
+    /// If a counter is not set, its contains its default value (zero).
+    pub fn get_internal_counters(&self) -> wgt::InternalCounters {
+        DynContext::device_get_internal_counters(&*self.context, &self.id, self.data.as_ref())
+    }
+
     /// Apply a callback to this `Device`'s underlying backend device.
     ///
     /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
