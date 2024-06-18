@@ -277,6 +277,7 @@ pub mod compact;
 pub mod error;
 pub mod front;
 pub mod keywords;
+mod non_max_u32;
 pub mod proc;
 mod span;
 pub mod valid;

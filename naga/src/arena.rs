@@ -1,9 +1,11 @@
-use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32, ops};
+use std::{cmp::Ordering, fmt, hash, marker::PhantomData, ops};
+
+use crate::non_max_u32::NonMaxU32;
 
 /// An unique index in the arena array that a handle points to.
-/// The "non-zero" part ensures that an `Option<Handle<T>>` has
+/// The "non-max" part ensures that an `Option<Handle<T>>` has
 /// the same size and representation as `Handle<T>`.
-type Index = NonZeroU32;
+type Index = NonMaxU32;
 
 use crate::{FastIndexSet, Span};
 
@@ -89,13 +91,12 @@ impl<T> Handle<T> {
 
     /// Returns the zero-based index of this handle.
     pub const fn index(self) -> usize {
-        let index = self.index.get() - 1;
-        index as usize
+        self.index.get() as usize
     }
 
     /// Convert a `usize` index into a `Handle<T>`.
     fn from_usize(index: usize) -> Self {
-        let handle_index = u32::try_from(index + 1)
+        let handle_index = u32::try_from(index)
             .ok()
             .and_then(Index::new)
             .expect("Failed to insert into arena. Handle overflows");
@@ -104,7 +105,7 @@ impl<T> Handle<T> {
 
     /// Convert a `usize` index into a `Handle<T>`, without range checks.
     const unsafe fn from_usize_unchecked(index: usize) -> Self {
-        Handle::new(Index::new_unchecked((index + 1) as u32))
+        Handle::new(Index::new_unchecked(index as u32))
     }
 }
 
@@ -164,7 +165,7 @@ impl<T> Clone for Range<T> {
 
 impl<T> fmt::Debug for Range<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "[{}..{}]", self.inner.start + 1, self.inner.end)
+        write!(formatter, "[{}..{}]", self.inner.start, self.inner.end - 1)
     }
 }
 
@@ -172,9 +173,10 @@ impl<T> Iterator for Range<T> {
     type Item = Handle<T>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.inner.start < self.inner.end {
+            let next = self.inner.start;
             self.inner.start += 1;
             Some(Handle {
-                index: NonZeroU32::new(self.inner.start).unwrap(),
+                index: NonMaxU32::new(next).unwrap(),
                 marker: self.marker,
             })
         } else {
@@ -199,11 +201,10 @@ impl<T> Range<T> {
     pub fn first_and_last(&self) -> Option<(Handle<T>, Handle<T>)> {
         if self.inner.start < self.inner.end {
             Some((
-                // `Range::new_from_bounds` expects a 1-based, start- and
-                // end-inclusive range, but `self.inner` is a zero-based,
-                // end-exclusive range.
-                Handle::new(Index::new(self.inner.start + 1).unwrap()),
-                Handle::new(Index::new(self.inner.end).unwrap()),
+                // `Range::new_from_bounds` expects a start- and end-inclusive
+                // range, but `self.inner` is an end-exclusive range.
+                Handle::new(Index::new(self.inner.start).unwrap()),
+                Handle::new(Index::new(self.inner.end - 1).unwrap()),
             ))
         } else {
             None
@@ -407,10 +408,7 @@ impl<T> Arena<T> {
             return Ok(());
         }
 
-        // `range.inner` is zero-based, but end-exclusive, so `range.inner.end`
-        // is actually the right one-based index for the last handle within the
-        // range.
-        let last_handle = Handle::new(range.inner.end.try_into().unwrap());
+        let last_handle = Handle::new(Index::new(range.inner.end - 1).unwrap());
         if self.check_contains_handle(last_handle).is_err() {
             return Err(BadRangeError::new(range.clone()));
         }
@@ -426,7 +424,7 @@ impl<T> Arena<T> {
         let mut index = 0;
         let mut retained = 0;
         self.data.retain_mut(|elt| {
-            let handle = Handle::new(Index::new(index as u32 + 1).unwrap());
+            let handle = Handle::from_usize(index);
             let keep = predicate(handle, elt);
 
             // Since `predicate` needs mutable access to each element,
@@ -592,7 +590,7 @@ impl<T> UniqueArena<T> {
         UniqueArenaDrain {
             inner_elts: self.set.drain(..),
             inner_spans: self.span_info.drain(..),
-            index: Index::new(1).unwrap(),
+            index: Index::new(0).unwrap(),
         }
     }
 }
@@ -626,8 +624,7 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
     /// the item's handle and a reference to it.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Handle<T>, &T)> {
         self.set.iter().enumerate().map(|(i, v)| {
-            let position = i + 1;
-            let index = unsafe { Index::new_unchecked(position as u32) };
+            let index = unsafe { Index::new_unchecked(i as u32) };
             (Handle::new(index), v)
         })
     }
