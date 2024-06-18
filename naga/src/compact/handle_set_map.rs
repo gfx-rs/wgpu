@@ -137,7 +137,7 @@ impl<T: 'static> HandleMap<T> {
     ///
     /// Use `compacted_arena` to bounds-check the result.
     pub fn adjust_range(&self, range: &mut Range<T>, compacted_arena: &Arena<T>) {
-        let mut index_range = range.zero_based_index_range();
+        let mut index_range = range.index_range();
         let compacted;
         if let Some(first) = index_range.find_map(|i| self.new_index[i as usize]) {
             // The first call to `find_map` mutated `index_range` to hold the
@@ -155,6 +155,6 @@ impl<T: 'static> HandleMap<T> {
         } else {
             compacted = 0..0;
         };
-        *range = Range::from_zero_based_index_range(compacted, compacted_arena);
+        *range = Range::from_index_range(compacted, compacted_arena);
     }
 }

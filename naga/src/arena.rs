@@ -89,7 +89,7 @@ impl<T> Handle<T> {
         }
     }
 
-    /// Returns the zero-based index of this handle.
+    /// Returns the index of this handle.
     pub const fn index(self) -> usize {
         self.index.get() as usize
     }
@@ -221,13 +221,13 @@ impl<T> Range<T> {
         }
     }
 
-    /// Return the zero-based index range covered by `self`.
-    pub fn zero_based_index_range(&self) -> ops::Range<u32> {
+    /// Return the index range covered by `self`.
+    pub fn index_range(&self) -> ops::Range<u32> {
         self.inner.clone()
     }
 
-    /// Construct a `Range` that covers the zero-based indices in `inner`.
-    pub fn from_zero_based_index_range(inner: ops::Range<u32>, arena: &Arena<T>) -> Self {
+    /// Construct a `Range` that covers the indices in `inner`.
+    pub fn from_index_range(inner: ops::Range<u32>, arena: &Arena<T>) -> Self {
         // Since `inner` is a `Range<u32>`, we only need to check that
         // the start and end are well-ordered, and that the end fits
         // within `arena`.
