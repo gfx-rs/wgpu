@@ -385,14 +385,14 @@ fn map_buffer<A: HalApi>(
 pub struct InvalidDevice;
 
 #[derive(Clone, Debug)]
-pub struct WrongDevice {
+pub struct DeviceMismatch {
     pub(super) res: ResourceErrorIdent,
     pub(super) res_device: ResourceErrorIdent,
     pub(super) target: Option<ResourceErrorIdent>,
     pub(super) target_device: ResourceErrorIdent,
 }
 
-impl std::fmt::Display for WrongDevice {
+impl std::fmt::Display for DeviceMismatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
@@ -406,7 +406,7 @@ impl std::fmt::Display for WrongDevice {
     }
 }
 
-impl std::error::Error for WrongDevice {}
+impl std::error::Error for DeviceMismatch {}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -422,7 +422,7 @@ pub enum DeviceError {
     #[error("QueueId is invalid")]
     InvalidQueueId,
     #[error(transparent)]
-    WrongDevice(#[from] Box<WrongDevice>),
+    DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
 
 impl From<hal::DeviceError> for DeviceError {

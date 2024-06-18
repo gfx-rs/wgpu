@@ -3,8 +3,8 @@ use crate::device::trace;
 use crate::{
     binding_model::BindGroup,
     device::{
-        queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError, HostMap,
-        MissingDownlevelFlags, MissingFeatures, WrongDevice,
+        queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
+        DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
     },
     global::Global,
     hal_api::HalApi,
@@ -162,7 +162,7 @@ pub(crate) trait ParentDevice<A: HalApi>: Resource {
         Arc::ptr_eq(self.device(), other.device())
             .then_some(())
             .ok_or_else(|| {
-                DeviceError::WrongDevice(Box::new(WrongDevice {
+                DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
                     res: self.error_ident(),
                     res_device: self.device().error_ident(),
                     target: Some(other.error_ident()),
@@ -175,7 +175,7 @@ pub(crate) trait ParentDevice<A: HalApi>: Resource {
         Arc::ptr_eq(self.device(), device)
             .then_some(())
             .ok_or_else(|| {
-                DeviceError::WrongDevice(Box::new(WrongDevice {
+                DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
                     res: self.error_ident(),
                     res_device: self.device().error_ident(),
                     target: None,
