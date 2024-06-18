@@ -8,7 +8,6 @@ use std::{num::NonZeroU64, ops::Range};
 use itertools::Itertools;
 use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
-
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 use wgt::RenderBundleDescriptor;
 
@@ -342,7 +341,7 @@ async fn vertex_index_common(ctx: TestingContext) {
 
         let expected = test.expectation(&ctx);
 
-        let buffer_size = 4 * expected.len() as u64;
+        let buffer_size = (std::mem::size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size,
