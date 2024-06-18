@@ -12,7 +12,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label,
-    id::{self, DeviceId, QueueId},
+    id::{self, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
@@ -352,15 +352,6 @@ pub struct InvalidQueue;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueWriteError {
-    #[error(
-        "Device of queue ({:?}) does not match device of write recipient ({:?})",
-        queue_device_id,
-        target_device_id
-    )]
-    DeviceMismatch {
-        queue_device_id: DeviceId,
-        target_device_id: DeviceId,
-    },
     #[error(transparent)]
     Queue(#[from] DeviceError),
     #[error(transparent)]
@@ -405,13 +396,10 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let buffer_device_id = hub
+        let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?
-            .device
-            .as_info()
-            .id();
+            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
 
         let queue = hub
             .queues
@@ -420,15 +408,7 @@ impl Global {
 
         let device = queue.device.as_ref().unwrap();
 
-        {
-            let queue_device_id = device.as_info().id();
-            if buffer_device_id != queue_device_id {
-                return Err(QueueWriteError::DeviceMismatch {
-                    queue_device_id,
-                    target_device_id: buffer_device_id,
-                });
-            }
-        }
+        buffer.device.same_device(device)?;
 
         let data_size = data.len() as wgt::BufferAddress;
 
@@ -607,7 +587,7 @@ impl Global {
 
     fn queue_write_staging_buffer_impl<A: HalApi>(
         &self,
-        device: &Device<A>,
+        device: &Arc<Device<A>>,
         pending_writes: &mut PendingWrites<A>,
         staging_buffer: &StagingBuffer<A>,
         buffer_id: id::BufferId,
@@ -632,9 +612,7 @@ impl Global {
             .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
 
-        if dst.device.as_info().id() != device.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        dst.device.same_device(device)?;
 
         let src_buffer_size = staging_buffer.size;
         self.queue_validate_write_buffer_impl(&dst, buffer_id, buffer_offset, src_buffer_size)?;
@@ -717,9 +695,7 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        if dst.device.as_info().id().into_queue_id() != queue_id {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        dst.device.same_device(device)?;
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
@@ -1200,9 +1176,7 @@ impl Global {
                             Err(_) => continue,
                         };
 
-                        if cmdbuf.device.as_info().id().into_queue_id() != queue_id {
-                            return Err(DeviceError::WrongDevice.into());
-                        }
+                        cmdbuf.device.same_device(device)?;
 
                         #[cfg(feature = "trace")]
                         if let Some(ref mut trace) = *device.trace.lock() {

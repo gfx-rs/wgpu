@@ -313,6 +313,12 @@ impl<A: HalApi> Device<A> {
         self.valid.load(Ordering::Acquire)
     }
 
+    pub fn same_device(self: &Arc<Self>, other: &Arc<Self>) -> Result<(), DeviceError> {
+        Arc::ptr_eq(self, other)
+            .then_some(())
+            .ok_or(DeviceError::WrongDevice)
+    }
+
     pub(crate) fn release_queue(&self, queue: A::Queue) {
         assert!(self.queue_to_drop.set(queue).is_ok());
     }
@@ -1837,6 +1843,7 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn create_buffer_binding<'a>(
+        self: &Arc<Self>,
         bb: &binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -1846,7 +1853,6 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         storage: &'a Storage<Buffer<A>>,
         limits: &wgt::Limits,
-        device_id: id::Id<id::markers::Device>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
@@ -1898,9 +1904,7 @@ impl<A: HalApi> Device<A> {
             .add_single(storage, bb.buffer_id, internal_use)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
 
-        if buffer.device.as_info().id() != device_id {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        buffer.device.same_device(self)?;
 
         check_buffer_usage(bb.buffer_id, buffer.usage, pub_usage)?;
         let raw_buffer = buffer
@@ -1981,10 +1985,10 @@ impl<A: HalApi> Device<A> {
     }
 
     fn create_sampler_binding<'a>(
+        self: &Arc<Self>,
         used: &BindGroupStates<A>,
         storage: &'a Storage<Sampler<A>>,
         id: id::Id<id::markers::Sampler>,
-        device_id: id::Id<id::markers::Device>,
     ) -> Result<&'a Sampler<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -1993,9 +1997,7 @@ impl<A: HalApi> Device<A> {
             .add_single(storage, id)
             .ok_or(Error::InvalidSampler(id))?;
 
-        if sampler.device.as_info().id() != device_id {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        sampler.device.same_device(self)?;
 
         Ok(sampler)
     }
@@ -2017,9 +2019,7 @@ impl<A: HalApi> Device<A> {
             .add_single(storage, id)
             .ok_or(Error::InvalidTextureView(id))?;
 
-        if view.device.as_info().id() != self.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        view.device.same_device(self)?;
 
         let (pub_usage, internal_use) = self.texture_use_parameters(
             binding,
@@ -2038,9 +2038,7 @@ impl<A: HalApi> Device<A> {
                 texture_id,
             ))?;
 
-        if texture.device.as_info().id() != view.device.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        texture.device.same_device(&view.device)?;
 
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
@@ -2113,7 +2111,7 @@ impl<A: HalApi> Device<A> {
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
             let (res_index, count) = match entry.resource {
                 Br::Buffer(ref bb) => {
-                    let bb = Self::create_buffer_binding(
+                    let bb = self.create_buffer_binding(
                         bb,
                         binding,
                         decl,
@@ -2123,7 +2121,6 @@ impl<A: HalApi> Device<A> {
                         &mut used,
                         &*buffer_guard,
                         &self.limits,
-                        self.as_info().id(),
                         &snatch_guard,
                     )?;
 
@@ -2137,7 +2134,7 @@ impl<A: HalApi> Device<A> {
 
                     let res_index = hal_buffers.len();
                     for bb in bindings_array.iter() {
-                        let bb = Self::create_buffer_binding(
+                        let bb = self.create_buffer_binding(
                             bb,
                             binding,
                             decl,
@@ -2147,7 +2144,6 @@ impl<A: HalApi> Device<A> {
                             &mut used,
                             &*buffer_guard,
                             &self.limits,
-                            self.as_info().id(),
                             &snatch_guard,
                         )?;
                         hal_buffers.push(bb);
@@ -2156,12 +2152,7 @@ impl<A: HalApi> Device<A> {
                 }
                 Br::Sampler(id) => match decl.ty {
                     wgt::BindingType::Sampler(ty) => {
-                        let sampler = Self::create_sampler_binding(
-                            &used,
-                            &sampler_guard,
-                            id,
-                            self.as_info().id(),
-                        )?;
+                        let sampler = self.create_sampler_binding(&used, &sampler_guard, id)?;
 
                         let (allowed_filtering, allowed_comparison) = match ty {
                             wgt::SamplerBindingType::Filtering => (None, false),
@@ -2203,12 +2194,7 @@ impl<A: HalApi> Device<A> {
 
                     let res_index = hal_samplers.len();
                     for &id in bindings_array.iter() {
-                        let sampler = Self::create_sampler_binding(
-                            &used,
-                            &sampler_guard,
-                            id,
-                            self.as_info().id(),
-                        )?;
+                        let sampler = self.create_sampler_binding(&used, &sampler_guard, id)?;
 
                         hal_samplers.push(sampler.raw());
                     }
@@ -2537,9 +2523,7 @@ impl<A: HalApi> Device<A> {
 
         // Validate total resource counts and check for a matching device
         for bgl in &bind_group_layouts {
-            if bgl.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
+            bgl.device.same_device(self)?;
 
             count_validator.merge(&bgl.binding_count_validator);
         }
@@ -2647,9 +2631,7 @@ impl<A: HalApi> Device<A> {
             .get(desc.stage.module)
             .map_err(|_| validation::StageError::InvalidModule)?;
 
-        if shader_module.device.as_info().id() != self.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        shader_module.device.same_device(self)?;
 
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
@@ -2659,9 +2641,7 @@ impl<A: HalApi> Device<A> {
                     .get(pipeline_layout_id)
                     .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
 
-                if pipeline_layout.device.as_info().id() != self.as_info().id() {
-                    return Err(DeviceError::WrongDevice.into());
-                }
+                pipeline_layout.device.same_device(self)?;
 
                 Some(pipeline_layout)
             }
@@ -2723,9 +2703,7 @@ impl<A: HalApi> Device<A> {
                 break 'cache None;
             };
 
-            if cache.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
+            cache.device.same_device(self)?;
             Some(cache)
         };
 
@@ -3103,9 +3081,7 @@ impl<A: HalApi> Device<A> {
                     .get(pipeline_layout_id)
                     .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
 
-                if pipeline_layout.device.as_info().id() != self.as_info().id() {
-                    return Err(DeviceError::WrongDevice.into());
-                }
+                pipeline_layout.device.same_device(self)?;
 
                 Some(pipeline_layout)
             }
@@ -3140,9 +3116,7 @@ impl<A: HalApi> Device<A> {
                     error: validation::StageError::InvalidModule,
                 }
             })?;
-            if vertex_shader_module.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
+            vertex_shader_module.device.same_device(self)?;
 
             let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
 
@@ -3334,9 +3308,7 @@ impl<A: HalApi> Device<A> {
                 break 'cache None;
             };
 
-            if cache.device.as_info().id() != self.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
+            cache.device.same_device(self)?;
             Some(cache)
         };
 
