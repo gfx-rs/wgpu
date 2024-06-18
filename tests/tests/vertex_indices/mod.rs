@@ -356,7 +356,12 @@ async fn vertex_index_common(ctx: TestingContext) {
         )
         .create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut tests = Vec::with_capacity(5 * 2 * 2 * 2);
+    let mut tests = Vec::with_capacity(
+        TestCase::ARRAY.len()
+            * IdSource::ARRAY.len()
+            * DrawCallKind::ARRAY.len()
+            * EncoderKind::ARRAY.len(),
+    );
     for case in TestCase::ARRAY {
         for id_source in IdSource::ARRAY {
             for draw_call_kind in DrawCallKind::ARRAY {
