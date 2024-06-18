@@ -360,7 +360,8 @@ async fn vertex_index_common(ctx: TestingContext) {
         TestCase::ARRAY.len()
             * IdSource::ARRAY.len()
             * DrawCallKind::ARRAY.len()
-            * EncoderKind::ARRAY.len(),
+            * EncoderKind::ARRAY.len()
+            * 2, /* vertex pulling transform: on and off */
     );
     for case in TestCase::ARRAY {
         for id_source in IdSource::ARRAY {
