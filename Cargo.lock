@@ -4394,6 +4394,7 @@ dependencies = [
  "profiling",
  "serde",
  "serde_json",
+ "strum",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
