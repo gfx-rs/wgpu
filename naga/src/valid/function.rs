@@ -1474,7 +1474,7 @@ impl super::Validator {
 
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
                 if let Some(unvisited) = self.needs_visit.iter().next() {
-                    let index = std::num::NonZeroU32::new(unvisited as u32 + 1).unwrap();
+                    let index = crate::non_max_u32::NonMaxU32::new(unvisited as u32).unwrap();
                     let handle = Handle::new(index);
                     return Err(FunctionError::UnvisitedExpression(handle)
                         .with_span_handle(handle, &fun.expressions));
