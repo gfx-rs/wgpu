@@ -24,8 +24,8 @@ use crate::{
     pool::ResourcePool,
     registry::Registry,
     resource::{
-        self, Buffer, QuerySet, Resource, ResourceInfo, ResourceType, Sampler, Texture,
-        TextureView, TextureViewNotRenderableReason,
+        self, Buffer, ParentDevice, QuerySet, Resource, ResourceInfo, ResourceType, Sampler,
+        Texture, TextureView, TextureViewNotRenderableReason,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -311,12 +311,6 @@ impl<A: HalApi> Device<A> {
 
     pub fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire)
-    }
-
-    pub fn same_device(self: &Arc<Self>, other: &Arc<Self>) -> Result<(), DeviceError> {
-        Arc::ptr_eq(self, other)
-            .then_some(())
-            .ok_or(DeviceError::WrongDevice)
     }
 
     pub(crate) fn release_queue(&self, queue: A::Queue) {
@@ -1904,7 +1898,7 @@ impl<A: HalApi> Device<A> {
             .add_single(storage, bb.buffer_id, internal_use)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
 
-        buffer.device.same_device(self)?;
+        buffer.same_device(self)?;
 
         check_buffer_usage(bb.buffer_id, buffer.usage, pub_usage)?;
         let raw_buffer = buffer
@@ -1997,7 +1991,7 @@ impl<A: HalApi> Device<A> {
             .add_single(storage, id)
             .ok_or(Error::InvalidSampler(id))?;
 
-        sampler.device.same_device(self)?;
+        sampler.same_device(self)?;
 
         Ok(sampler)
     }
@@ -2019,7 +2013,7 @@ impl<A: HalApi> Device<A> {
             .add_single(storage, id)
             .ok_or(Error::InvalidTextureView(id))?;
 
-        view.device.same_device(self)?;
+        view.same_device(self)?;
 
         let (pub_usage, internal_use) = self.texture_use_parameters(
             binding,
@@ -2038,7 +2032,7 @@ impl<A: HalApi> Device<A> {
                 texture_id,
             ))?;
 
-        texture.device.same_device(&view.device)?;
+        texture.same_device_as(view)?;
 
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
@@ -2523,7 +2517,7 @@ impl<A: HalApi> Device<A> {
 
         // Validate total resource counts and check for a matching device
         for bgl in &bind_group_layouts {
-            bgl.device.same_device(self)?;
+            bgl.same_device(self)?;
 
             count_validator.merge(&bgl.binding_count_validator);
         }
@@ -2631,7 +2625,7 @@ impl<A: HalApi> Device<A> {
             .get(desc.stage.module)
             .map_err(|_| validation::StageError::InvalidModule)?;
 
-        shader_module.device.same_device(self)?;
+        shader_module.same_device(self)?;
 
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
@@ -2641,7 +2635,7 @@ impl<A: HalApi> Device<A> {
                     .get(pipeline_layout_id)
                     .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
 
-                pipeline_layout.device.same_device(self)?;
+                pipeline_layout.same_device(self)?;
 
                 Some(pipeline_layout)
             }
@@ -2703,7 +2697,7 @@ impl<A: HalApi> Device<A> {
                 break 'cache None;
             };
 
-            cache.device.same_device(self)?;
+            cache.same_device(self)?;
             Some(cache)
         };
 
@@ -3081,7 +3075,7 @@ impl<A: HalApi> Device<A> {
                     .get(pipeline_layout_id)
                     .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
 
-                pipeline_layout.device.same_device(self)?;
+                pipeline_layout.same_device(self)?;
 
                 Some(pipeline_layout)
             }
@@ -3116,7 +3110,7 @@ impl<A: HalApi> Device<A> {
                     error: validation::StageError::InvalidModule,
                 }
             })?;
-            vertex_shader_module.device.same_device(self)?;
+            vertex_shader_module.same_device(self)?;
 
             let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
 
@@ -3308,7 +3302,7 @@ impl<A: HalApi> Device<A> {
                 break 'cache None;
             };
 
-            cache.device.same_device(self)?;
+            cache.same_device(self)?;
             Some(cache)
         };
 

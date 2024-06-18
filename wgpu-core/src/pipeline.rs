@@ -7,7 +7,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{Resource, ResourceInfo, ResourceType},
+    resource::{ParentDevice, Resource, ResourceInfo, ResourceType},
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -87,6 +87,12 @@ impl<A: HalApi> Resource for ShaderModule<A> {
 
     fn label(&self) -> &str {
         &self.label
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for ShaderModule<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 
@@ -258,6 +264,12 @@ impl<A: HalApi> Resource for ComputePipeline<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for ComputePipeline<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 impl<A: HalApi> ComputePipeline<A> {
     pub(crate) fn raw(&self) -> &A::ComputePipeline {
         self.raw.as_ref().unwrap()
@@ -323,6 +335,12 @@ impl<A: HalApi> Resource for PipelineCache<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for PipelineCache<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 
@@ -582,6 +600,12 @@ impl<A: HalApi> Resource for RenderPipeline<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for RenderPipeline<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 

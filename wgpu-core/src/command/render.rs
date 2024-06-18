@@ -25,7 +25,7 @@ use crate::{
     hal_label, id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource::{QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
+    resource::{ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
     storage::Storage,
     track::{TextureSelector, Tracker, UsageConflict, UsageScope},
     validation::{
@@ -1476,7 +1476,9 @@ impl Global {
                             .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
 
-                        bind_group.device.same_device(device).map_pass_err(scope)?;
+                        bind_group
+                            .same_device_as(cmd_buf.as_ref())
+                            .map_pass_err(scope)?;
 
                         bind_group
                             .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
@@ -1542,7 +1544,9 @@ impl Global {
                             .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                             .map_pass_err(scope)?;
 
-                        pipeline.device.same_device(device).map_pass_err(scope)?;
+                        pipeline
+                            .same_device_as(cmd_buf.as_ref())
+                            .map_pass_err(scope)?;
 
                         info.context
                             .check_compatible(
@@ -1669,7 +1673,9 @@ impl Global {
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                             .map_pass_err(scope)?;
 
-                        buffer.device.same_device(device).map_pass_err(scope)?;
+                        buffer
+                            .same_device_as(cmd_buf.as_ref())
+                            .map_pass_err(scope)?;
 
                         check_buffer_usage(buffer_id, buffer.usage, BufferUsages::INDEX)
                             .map_pass_err(scope)?;
@@ -1720,7 +1726,9 @@ impl Global {
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                             .map_pass_err(scope)?;
 
-                        buffer.device.same_device(device).map_pass_err(scope)?;
+                        buffer
+                            .same_device_as(cmd_buf.as_ref())
+                            .map_pass_err(scope)?;
 
                         let max_vertex_buffers = device.limits.max_vertex_buffers;
                         if slot >= max_vertex_buffers {
@@ -2325,7 +2333,9 @@ impl Global {
                             .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
                             .map_pass_err(scope)?;
 
-                        bundle.device.same_device(device).map_pass_err(scope)?;
+                        bundle
+                            .same_device_as(cmd_buf.as_ref())
+                            .map_pass_err(scope)?;
 
                         info.context
                             .check_compatible(

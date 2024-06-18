@@ -3,7 +3,9 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
-    resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
+    resource::{
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, ResourceErrorIdent,
+    },
     snatch::SnatchGuard,
     Label, DOWNLEVEL_ERROR_MESSAGE,
 };
@@ -382,6 +384,30 @@ fn map_buffer<A: HalApi>(
 #[error("Device is invalid")]
 pub struct InvalidDevice;
 
+#[derive(Clone, Debug)]
+pub struct WrongDevice {
+    pub(super) res: ResourceErrorIdent,
+    pub(super) res_device: ResourceErrorIdent,
+    pub(super) target: Option<ResourceErrorIdent>,
+    pub(super) target_device: ResourceErrorIdent,
+}
+
+impl std::fmt::Display for WrongDevice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{} of {} doesn't match {}",
+            self.res_device, self.res, self.target_device
+        )?;
+        if let Some(target) = self.target.as_ref() {
+            write!(f, " of {target}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for WrongDevice {}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DeviceError {
@@ -395,8 +421,8 @@ pub enum DeviceError {
     ResourceCreationFailed,
     #[error("QueueId is invalid")]
     InvalidQueueId,
-    #[error("Attempt to use a resource with a different device from the one that created it")]
-    WrongDevice,
+    #[error(transparent)]
+    WrongDevice(#[from] Box<WrongDevice>),
 }
 
 impl From<hal::DeviceError> for DeviceError {

@@ -8,7 +8,7 @@ use crate::{
     hal_api::HalApi,
     id::{BindGroupLayoutId, BufferId, SamplerId, TextureId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    resource::{Resource, ResourceInfo, ResourceType},
+    resource::{ParentDevice, Resource, ResourceInfo, ResourceType},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
     track::{BindGroupStates, UsageConflict},
@@ -518,6 +518,13 @@ impl<A: HalApi> Resource for BindGroupLayout<A> {
         &self.label
     }
 }
+
+impl<A: HalApi> ParentDevice<A> for BindGroupLayout<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &A::BindGroupLayout {
         self.raw.as_ref().unwrap()
@@ -751,6 +758,12 @@ impl<A: HalApi> Resource for PipelineLayout<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for PipelineLayout<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -953,6 +966,12 @@ impl<A: HalApi> Resource for BindGroup<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for BindGroup<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 

@@ -15,6 +15,7 @@ use crate::{
     pipeline, present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
+        ParentDevice,
     },
     validation::check_buffer_usage,
     Label, LabelHelpers as _,
@@ -1124,7 +1125,7 @@ impl Global {
                 Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
             };
 
-            if let Err(e) = bind_group_layout.device.same_device(&device) {
+            if let Err(e) = bind_group_layout.same_device(&device) {
                 break 'error e.into();
             }
 

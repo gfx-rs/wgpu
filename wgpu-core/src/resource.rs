@@ -4,7 +4,7 @@ use crate::{
     binding_model::BindGroup,
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError, HostMap,
-        MissingDownlevelFlags, MissingFeatures,
+        MissingDownlevelFlags, MissingFeatures, WrongDevice,
     },
     global::Global,
     hal_api::HalApi,
@@ -143,6 +143,48 @@ impl<T: Resource> ResourceInfo<T> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ResourceErrorIdent {
+    r#type: ResourceType,
+    label: String,
+}
+
+impl std::fmt::Display for ResourceErrorIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{} with '{}' label", self.r#type, self.label)
+    }
+}
+
+pub(crate) trait ParentDevice<A: HalApi>: Resource {
+    fn device(&self) -> &Arc<Device<A>>;
+
+    fn same_device_as<O: ParentDevice<A>>(&self, other: &O) -> Result<(), DeviceError> {
+        Arc::ptr_eq(self.device(), other.device())
+            .then_some(())
+            .ok_or_else(|| {
+                DeviceError::WrongDevice(Box::new(WrongDevice {
+                    res: self.error_ident(),
+                    res_device: self.device().error_ident(),
+                    target: Some(other.error_ident()),
+                    target_device: other.device().error_ident(),
+                }))
+            })
+    }
+
+    fn same_device(&self, device: &Arc<Device<A>>) -> Result<(), DeviceError> {
+        Arc::ptr_eq(self.device(), device)
+            .then_some(())
+            .ok_or_else(|| {
+                DeviceError::WrongDevice(Box::new(WrongDevice {
+                    res: self.error_ident(),
+                    res_device: self.device().error_ident(),
+                    target: None,
+                    target_device: device.error_ident(),
+                }))
+            })
+    }
+}
+
 pub(crate) type ResourceType = &'static str;
 
 pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
@@ -168,6 +210,12 @@ pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     }
     fn is_equal(&self, other: &Self) -> bool {
         self.as_info().id().unzip() == other.as_info().id().unzip()
+    }
+    fn error_ident(&self) -> ResourceErrorIdent {
+        ResourceErrorIdent {
+            r#type: Self::TYPE,
+            label: self.label().to_owned(),
+        }
     }
 }
 
@@ -627,6 +675,12 @@ impl<A: HalApi> Resource for Buffer<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for Buffer<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 /// A buffer that has been marked as destroyed and is staged for actual deletion soon.
 #[derive(Debug)]
 pub struct DestroyedBuffer<A: HalApi> {
@@ -728,6 +782,12 @@ impl<A: HalApi> Resource for StagingBuffer<A> {
 
     fn label(&self) -> &str {
         "<StagingBuffer>"
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for StagingBuffer<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 
@@ -1245,6 +1305,12 @@ impl<A: HalApi> Resource for Texture<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for Texture<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 impl<A: HalApi> Borrow<TextureSelector> for Texture<A> {
     fn borrow(&self) -> &TextureSelector {
         &self.full_range
@@ -1410,6 +1476,12 @@ impl<A: HalApi> Resource for TextureView<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for TextureView<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1531,6 +1603,12 @@ impl<A: HalApi> Resource for Sampler<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for Sampler<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateQuerySetError {
@@ -1568,6 +1646,12 @@ impl<A: HalApi> Drop for QuerySet<A> {
                 self.device.raw().destroy_query_set(raw);
             }
         }
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for QuerySet<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 

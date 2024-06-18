@@ -11,7 +11,7 @@ use crate::{
     hal_api::HalApi,
     id::{BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
-    resource::{Resource, Texture, TextureClearMode},
+    resource::{ParentDevice, Resource, Texture, TextureClearMode},
     snatch::SnatchGuard,
     track::{TextureSelector, TextureTracker},
 };
@@ -104,7 +104,7 @@ impl Global {
                 .get(dst)
                 .map_err(|_| ClearError::InvalidBuffer(dst))?;
 
-            dst_buffer.device.same_device(&cmd_buf.device)?;
+            dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
             cmd_buf_data
                 .trackers
@@ -201,7 +201,7 @@ impl Global {
             .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
-        dst_texture.device.same_device(&cmd_buf.device)?;
+        dst_texture.same_device_as(cmd_buf.as_ref())?;
 
         // Check if subresource aspects are valid.
         let clear_aspects =
