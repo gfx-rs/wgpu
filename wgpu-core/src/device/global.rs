@@ -15,7 +15,6 @@ use crate::{
     pipeline, present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
-        ParentDevice,
     },
     validation::check_buffer_usage,
     Label, LabelHelpers as _,
@@ -1124,10 +1123,6 @@ impl Global {
                 Ok(layout) => layout,
                 Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
             };
-
-            if let Err(e) = bind_group_layout.same_device(&device) {
-                break 'error e.into();
-            }
 
             let bind_group = match device.create_bind_group(&bind_group_layout, desc, hub) {
                 Ok(bind_group) => bind_group,

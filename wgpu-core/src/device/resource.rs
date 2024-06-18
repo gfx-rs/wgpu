@@ -2065,6 +2065,9 @@ impl<A: HalApi> Device<A> {
         hub: &Hub<A>,
     ) -> Result<BindGroup<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
+
+        layout.same_device(self)?;
+
         {
             // Check that the number of entries in the descriptor matches
             // the number of entries in the layout.
