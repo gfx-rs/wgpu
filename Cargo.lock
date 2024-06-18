@@ -4378,6 +4378,7 @@ dependencies = [
  "env_logger",
  "futures-lite",
  "image",
+ "itertools",
  "js-sys",
  "libtest-mimic",
  "log",

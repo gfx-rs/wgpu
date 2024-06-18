@@ -5,6 +5,7 @@
 
 use std::{num::NonZeroU64, ops::Range};
 
+use itertools::Itertools;
 use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
 
@@ -318,26 +319,17 @@ async fn vertex_index_common(ctx: TestingContext) {
         )
         .create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut tests = Vec::with_capacity(
-        TestCase::iter().count()
-            * IdSource::iter().count()
-            * DrawCallKind::iter().count()
-            * EncoderKind::iter().count(),
-    );
-    for case in TestCase::iter() {
-        for id_source in IdSource::iter() {
-            for draw_call_kind in DrawCallKind::iter() {
-                for encoder_kind in EncoderKind::iter() {
-                    tests.push(Test {
-                        case,
-                        id_source,
-                        draw_call_kind,
-                        encoder_kind,
-                    })
-                }
-            }
-        }
-    }
+    let tests = TestCase::iter()
+        .cartesian_product(IdSource::iter())
+        .cartesian_product(DrawCallKind::iter())
+        .cartesian_product(EncoderKind::iter())
+        .map(|(((case, id_source), draw_call_kind), encoder_kind)| Test {
+            case,
+            id_source,
+            draw_call_kind,
+            encoder_kind,
+        })
+        .collect::<Vec<_>>();
 
     let features = ctx.adapter.features();
 
