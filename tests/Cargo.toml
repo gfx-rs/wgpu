@@ -27,6 +27,7 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
+itertools.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
 parking_lot.workspace = true
