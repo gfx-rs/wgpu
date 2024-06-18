@@ -273,6 +273,7 @@ impl super::Device {
                 dxc_container,
             )
         } else {
+            let full_stage = ffi::CStr::from_bytes_with_nul(full_stage.as_bytes()).unwrap();
             shader_compilation::compile_fxc(
                 self,
                 &source,
