@@ -5,6 +5,7 @@
 
 use std::{num::NonZeroU64, ops::Range};
 
+use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
@@ -79,7 +80,7 @@ impl Draw {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum TestCase {
     /// A single draw call with 6 vertices
     Draw,
@@ -94,14 +95,6 @@ enum TestCase {
 }
 
 impl TestCase {
-    const ARRAY: [Self; 5] = [
-        Self::Draw,
-        Self::DrawNonZeroFirstVertex,
-        Self::DrawBaseVertex,
-        Self::DrawInstanced,
-        Self::DrawNonZeroFirstInstance,
-    ];
-
     // Get the draw calls for this test case
     fn draws(&self) -> &'static [Draw] {
         match self {
@@ -148,7 +141,7 @@ impl TestCase {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum IdSource {
     /// Use buffers to load the vertex and instance index
     Buffers,
@@ -156,28 +149,16 @@ enum IdSource {
     Builtins,
 }
 
-impl IdSource {
-    const ARRAY: [Self; 2] = [Self::Buffers, Self::Builtins];
-}
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum DrawCallKind {
     Direct,
     Indirect,
 }
 
-impl DrawCallKind {
-    const ARRAY: [Self; 2] = [Self::Direct, Self::Indirect];
-}
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum EncoderKind {
     RenderPass,
     RenderBundle,
-}
-
-impl EncoderKind {
-    const ARRAY: [Self; 2] = [Self::RenderPass, Self::RenderBundle];
 }
 
 struct Test {
@@ -338,15 +319,15 @@ async fn vertex_index_common(ctx: TestingContext) {
         .create_view(&wgpu::TextureViewDescriptor::default());
 
     let mut tests = Vec::with_capacity(
-        TestCase::ARRAY.len()
-            * IdSource::ARRAY.len()
-            * DrawCallKind::ARRAY.len()
-            * EncoderKind::ARRAY.len(),
+        TestCase::iter().count()
+            * IdSource::iter().count()
+            * DrawCallKind::iter().count()
+            * EncoderKind::iter().count(),
     );
-    for case in TestCase::ARRAY {
-        for id_source in IdSource::ARRAY {
-            for draw_call_kind in DrawCallKind::ARRAY {
-                for encoder_kind in EncoderKind::ARRAY {
+    for case in TestCase::iter() {
+        for id_source in IdSource::iter() {
+            for draw_call_kind in DrawCallKind::iter() {
+                for encoder_kind in EncoderKind::iter() {
                     tests.push(Test {
                         case,
                         id_source,
