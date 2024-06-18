@@ -361,7 +361,7 @@ impl Global {
                         );
                     };
 
-                    if query_set.device.as_info().id() != cmd_buf.device.as_info().id() {
+                    if query_set.device.same_device(&cmd_buf.device).is_err() {
                         return (
                             ComputePass::new(None, arc_desc),
                             Some(CommandEncoderError::WrongDeviceForTimestampWritesQuerySet),

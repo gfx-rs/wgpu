@@ -104,9 +104,7 @@ impl Global {
                 .get(dst)
                 .map_err(|_| ClearError::InvalidBuffer(dst))?;
 
-            if dst_buffer.device.as_info().id() != cmd_buf.device.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
+            dst_buffer.device.same_device(&cmd_buf.device)?;
 
             cmd_buf_data
                 .trackers
@@ -203,9 +201,7 @@ impl Global {
             .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
-        if dst_texture.device.as_info().id() != cmd_buf.device.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        dst_texture.device.same_device(&cmd_buf.device)?;
 
         // Check if subresource aspects are valid.
         let clear_aspects =
