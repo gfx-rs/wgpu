@@ -15,7 +15,7 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     init_tracker::MemoryInitKind,
-    resource::{self, Resource},
+    resource::{self, ParentDevice, Resource},
     snatch::SnatchGuard,
     track::{Tracker, TrackerIndex, UsageConflict, UsageScope},
     validation::{check_buffer_usage, MissingBufferUsageError},
@@ -350,11 +350,8 @@ impl Global {
                         );
                     };
 
-                    if query_set.device.same_device(&cmd_buf.device).is_err() {
-                        return (
-                            ComputePass::new(None, arc_desc),
-                            Some(CommandEncoderError::WrongDeviceForTimestampWritesQuerySet),
-                        );
+                    if let Err(e) = query_set.same_device_as(cmd_buf.as_ref()) {
+                        return (ComputePass::new(None, arc_desc), Some(e.into()));
                     }
 
                     Some(ArcComputePassTimestampWrites {
@@ -582,7 +579,7 @@ impl Global {
                 } => {
                     let scope = PassErrorScope::SetBindGroup(bind_group.as_info().id());
 
-                    bind_group.device.same_device(device).map_pass_err(scope)?;
+                    bind_group.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     let max_bind_groups = cmd_buf.limits.max_bind_groups;
                     if index >= max_bind_groups {
@@ -649,7 +646,7 @@ impl Global {
                     let pipeline_id = pipeline.as_info().id();
                     let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
 
-                    pipeline.device.same_device(device).map_pass_err(scope)?;
+                    pipeline.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     state.pipeline = Some(pipeline_id);
 
@@ -790,7 +787,7 @@ impl Global {
                         pipeline: state.pipeline,
                     };
 
-                    buffer.device.same_device(device).map_pass_err(scope)?;
+                    buffer.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     state.is_ready().map_pass_err(scope)?;
 
@@ -885,7 +882,7 @@ impl Global {
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
 
-                    query_set.device.same_device(device).map_pass_err(scope)?;
+                    query_set.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     device
                         .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
@@ -903,7 +900,7 @@ impl Global {
                 } => {
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                    query_set.device.same_device(device).map_pass_err(scope)?;
+                    query_set.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     let query_set = tracker.query_sets.insert_single(query_set);
 

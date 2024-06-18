@@ -97,7 +97,7 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, Resource, ResourceInfo, ResourceType},
+    resource::{Buffer, ParentDevice, Resource, ResourceInfo, ResourceType},
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
@@ -1101,6 +1101,12 @@ impl<A: HalApi> Resource for RenderBundle<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for RenderBundle<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 

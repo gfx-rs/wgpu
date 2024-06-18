@@ -16,8 +16,8 @@ use crate::{
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, Resource,
-        ResourceInfo, ResourceType, StagingBuffer, Texture, TextureInner,
+        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, ParentDevice,
+        Resource, ResourceInfo, ResourceType, StagingBuffer, Texture, TextureInner,
     },
     resource_log, track, FastHashMap, SubmissionIndex,
 };
@@ -50,6 +50,12 @@ impl<A: HalApi> Resource for Queue<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for Queue<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        self.device.as_ref().unwrap()
     }
 }
 
@@ -408,7 +414,7 @@ impl Global {
 
         let device = queue.device.as_ref().unwrap();
 
-        buffer.device.same_device(device)?;
+        buffer.same_device_as(queue.as_ref())?;
 
         let data_size = data.len() as wgt::BufferAddress;
 
@@ -449,6 +455,7 @@ impl Global {
         }
 
         let result = self.queue_write_staging_buffer_impl(
+            &queue,
             device,
             pending_writes,
             &staging_buffer,
@@ -523,6 +530,7 @@ impl Global {
         }
 
         let result = self.queue_write_staging_buffer_impl(
+            &queue,
             device,
             pending_writes,
             &staging_buffer,
@@ -587,6 +595,7 @@ impl Global {
 
     fn queue_write_staging_buffer_impl<A: HalApi>(
         &self,
+        queue: &Arc<Queue<A>>,
         device: &Arc<Device<A>>,
         pending_writes: &mut PendingWrites<A>,
         staging_buffer: &StagingBuffer<A>,
@@ -612,7 +621,7 @@ impl Global {
             .get(&snatch_guard)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
 
-        dst.device.same_device(device)?;
+        dst.same_device_as(queue.as_ref())?;
 
         let src_buffer_size = staging_buffer.size;
         self.queue_validate_write_buffer_impl(&dst, buffer_id, buffer_offset, src_buffer_size)?;
@@ -695,7 +704,7 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        dst.device.same_device(device)?;
+        dst.same_device_as(queue.as_ref())?;
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
@@ -1176,7 +1185,7 @@ impl Global {
                             Err(_) => continue,
                         };
 
-                        cmdbuf.device.same_device(device)?;
+                        cmdbuf.same_device_as(queue.as_ref())?;
 
                         #[cfg(feature = "trace")]
                         if let Some(ref mut trace) = *device.trace.lock() {

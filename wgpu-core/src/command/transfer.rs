@@ -13,7 +13,7 @@ use crate::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
-    resource::{Resource, Texture, TextureErrorDimension},
+    resource::{ParentDevice, Resource, Texture, TextureErrorDimension},
     snatch::SnatchGuard,
     track::{TextureSelector, Tracker},
 };
@@ -602,7 +602,7 @@ impl Global {
                 .get(source)
                 .map_err(|_| TransferError::InvalidBuffer(source))?;
 
-            src_buffer.device.same_device(device)?;
+            src_buffer.same_device_as(cmd_buf.as_ref())?;
 
             cmd_buf_data
                 .trackers
@@ -626,7 +626,7 @@ impl Global {
                 .get(destination)
                 .map_err(|_| TransferError::InvalidBuffer(destination))?;
 
-            dst_buffer.device.same_device(device)?;
+            dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
             cmd_buf_data
                 .trackers
@@ -777,7 +777,7 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        dst_texture.device.same_device(device)?;
+        dst_texture.same_device_as(cmd_buf.as_ref())?;
 
         let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
             destination,
@@ -810,7 +810,7 @@ impl Global {
                 .get(source.buffer)
                 .map_err(|_| TransferError::InvalidBuffer(source.buffer))?;
 
-            src_buffer.device.same_device(device)?;
+            src_buffer.same_device_as(cmd_buf.as_ref())?;
 
             tracker
                 .buffers
@@ -943,7 +943,7 @@ impl Global {
             .get(source.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
-        src_texture.device.same_device(device)?;
+        src_texture.same_device_as(cmd_buf.as_ref())?;
 
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
@@ -997,7 +997,7 @@ impl Global {
                 .get(destination.buffer)
                 .map_err(|_| TransferError::InvalidBuffer(destination.buffer))?;
 
-            dst_buffer.device.same_device(device)?;
+            dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
             tracker
                 .buffers
@@ -1127,8 +1127,8 @@ impl Global {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
-        src_texture.device.same_device(device)?;
-        dst_texture.device.same_device(device)?;
+        src_texture.same_device_as(cmd_buf.as_ref())?;
+        dst_texture.same_device_as(cmd_buf.as_ref())?;
 
         // src and dst texture format must be copy-compatible
         // https://gpuweb.github.io/gpuweb/#copy-compatible
