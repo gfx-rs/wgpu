@@ -159,7 +159,8 @@ pub(crate) trait ParentDevice<A: HalApi>: Resource {
     fn device(&self) -> &Arc<Device<A>>;
 
     fn same_device_as<O: ParentDevice<A>>(&self, other: &O) -> Result<(), DeviceError> {
-        Arc::ptr_eq(self.device(), other.device())
+        self.device()
+            .is_equal(other.device())
             .then_some(())
             .ok_or_else(|| {
                 DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
@@ -172,16 +173,14 @@ pub(crate) trait ParentDevice<A: HalApi>: Resource {
     }
 
     fn same_device(&self, device: &Arc<Device<A>>) -> Result<(), DeviceError> {
-        Arc::ptr_eq(self.device(), device)
-            .then_some(())
-            .ok_or_else(|| {
-                DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
-                    res: self.error_ident(),
-                    res_device: self.device().error_ident(),
-                    target: None,
-                    target_device: device.error_ident(),
-                }))
-            })
+        self.device().is_equal(device).then_some(()).ok_or_else(|| {
+            DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
+                res: self.error_ident(),
+                res_device: self.device().error_ident(),
+                target: None,
+                target_device: device.error_ident(),
+            }))
+        })
     }
 }
 
@@ -208,8 +207,8 @@ pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     fn is_unique(self: &Arc<Self>) -> bool {
         self.ref_count() == 1
     }
-    fn is_equal(&self, other: &Self) -> bool {
-        self.as_info().id().unzip() == other.as_info().id().unzip()
+    fn is_equal(self: &Arc<Self>, other: &Arc<Self>) -> bool {
+        Arc::ptr_eq(self, other)
     }
     fn error_ident(&self) -> ResourceErrorIdent {
         ResourceErrorIdent {

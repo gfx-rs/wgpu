@@ -1414,7 +1414,7 @@ impl<A: HalApi> State<A> {
     ) {
         match self.index {
             Some(ref current)
-                if Arc::ptr_eq(&current.buffer, &buffer)
+                if current.buffer.is_equal(&buffer)
                     && current.format == format
                     && current.range == range =>
             {
