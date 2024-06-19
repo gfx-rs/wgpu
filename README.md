@@ -76,17 +76,17 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 | API    | Windows            | Linux/Android      | macOS/iOS          | Web (wasm)         |
 | ------ | ------------------ | ------------------ | ------------------ | ------------------ |
-| Vulkan | :white_check_mark: | :white_check_mark: | :volcano:          |                    |
-| Metal  |                    |                    | :white_check_mark: |                    |
-| DX12   | :white_check_mark: |                    |                    |                    |
-| OpenGL | :ok: (GL 3.3+)     | :ok: (GL ES 3.0+)  | :triangular_ruler: | :ok: (WebGL2)      |
-| WebGPU |                    |                    |                    | :white_check_mark: |
+| Vulkan |         ✅         |         ✅         |         🌋         |                    |
+| Metal  |                    |                    |         ✅         |                    |
+| DX12   |         ✅         |                    |                    |                    |
+| OpenGL |    🆗 (GL 3.3+)    |  🆗 (GL ES 3.0+)   |         📐         |    🆗 (WebGL2)     |
+| WebGPU |                    |                    |                    |         ✅         |
 
-:white_check_mark: = First Class Support  
-:ok: = Downlevel/Best Effort Support  
-:triangular_ruler: = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)  
-:volcano: = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
-:hammer_and_wrench: = Unsupported, though open to contributions
+✅ = First Class Support  
+🆗 = Downlevel/Best Effort Support  
+📐 = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)  
+🌋 = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
+🛠️ = Unsupported, though open to contributions
 
 ### Shader Support
 
