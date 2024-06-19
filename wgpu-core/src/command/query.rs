@@ -406,19 +406,16 @@ impl Global {
 
         query_set.same_device_as(cmd_buf.as_ref())?;
 
-        let (dst_buffer, dst_pending) = {
-            let buffer_guard = hub.buffers.read();
-            let dst_buffer = buffer_guard
-                .get(destination)
-                .map_err(|_| QueryError::InvalidBuffer(destination))?;
+        let dst_buffer = hub
+            .buffers
+            .get(destination)
+            .map_err(|_| QueryError::InvalidBuffer(destination))?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+        dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
-            tracker
-                .buffers
-                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
-                .ok_or(QueryError::InvalidBuffer(destination))?
-        };
+        let dst_pending = tracker
+            .buffers
+            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
 
         let snatch_guard = dst_buffer.device.snatchable_lock.read();
 

@@ -605,17 +605,16 @@ impl Global {
     ) -> Result<(), QueueWriteError> {
         let hub = A::hub(self);
 
-        let (dst, transition) = {
-            let buffer_guard = hub.buffers.read();
-            let dst = buffer_guard
-                .get(buffer_id)
-                .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
+        let dst = hub
+            .buffers
+            .get(buffer_id)
+            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
+
+        let transition = {
             let mut trackers = device.trackers.lock();
-            trackers
-                .buffers
-                .set_single(dst, hal::BufferUses::COPY_DST)
-                .ok_or(TransferError::InvalidBuffer(buffer_id))?
+            trackers.buffers.set_single(&dst, hal::BufferUses::COPY_DST)
         };
+
         let snatch_guard = device.snatchable_lock.read();
         let dst_raw = dst
             .raw
@@ -650,7 +649,7 @@ impl Global {
                 region.into_iter(),
             );
         }
-        let dst = hub.buffers.get(buffer_id).unwrap();
+
         pending_writes.dst_buffers.insert(buffer_id, dst.clone());
 
         // Ensure the overwritten bytes are marked as initialized so

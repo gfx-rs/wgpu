@@ -229,9 +229,7 @@ impl<A: HalApi> BakedCommands<A> {
             // must already know about it.
             let transition = device_tracker
                 .buffers
-                .set_single(&buffer, hal::BufferUses::COPY_DST)
-                .unwrap()
-                .1;
+                .set_single(&buffer, hal::BufferUses::COPY_DST);
 
             let raw_buf = buffer
                 .raw

@@ -286,9 +286,6 @@ impl<A: HalApi> BufferUsageScope<A> {
     }
 }
 
-pub(crate) type SetSingleResult<A> =
-    Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>;
-
 /// Stores all buffer state within a command buffer or device.
 pub(crate) struct BufferTracker<A: HalApi> {
     start: Vec<BufferUses>,
@@ -454,7 +451,11 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_single(&mut self, buffer: &Arc<Buffer<A>>, state: BufferUses) -> SetSingleResult<A> {
+    pub fn set_single(
+        &mut self,
+        buffer: &Arc<Buffer<A>>,
+        state: BufferUses,
+    ) -> Option<PendingTransition<BufferUses>> {
         let index: usize = buffer.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
@@ -478,7 +479,7 @@ impl<A: HalApi> BufferTracker<A> {
 
         strict_assert!(self.temp.len() <= 1);
 
-        Some((buffer.clone(), self.temp.pop()))
+        self.temp.pop()
     }
 
     /// Sets the given state for all buffers in the given tracker.
