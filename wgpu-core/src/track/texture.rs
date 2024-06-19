@@ -575,7 +575,7 @@ impl<A: HalApi> TextureTracker<A> {
         texture: &Arc<Texture<A>>,
         selector: TextureSelector,
         new_state: TextureUses,
-    ) -> Option<Drain<'_, PendingTransition<TextureUses>>> {
+    ) -> Drain<'_, PendingTransition<TextureUses>> {
         let index = texture.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
@@ -601,7 +601,7 @@ impl<A: HalApi> TextureTracker<A> {
             )
         }
 
-        Some(self.temp.drain(..))
+        self.temp.drain(..)
     }
 
     /// Sets the given state for all texture in the given tracker.
