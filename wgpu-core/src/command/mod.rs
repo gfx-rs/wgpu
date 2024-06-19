@@ -243,7 +243,7 @@ pub(crate) struct BakedCommands<A: HalApi> {
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
 }
 
-pub(crate) struct DestroyedBufferError(pub id::BufferId);
+pub(crate) struct DestroyedBufferError(pub ResourceErrorIdent);
 pub(crate) struct DestroyedTextureError(pub ResourceErrorIdent);
 
 /// The mutable state of a [`CommandBuffer`].

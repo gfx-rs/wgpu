@@ -372,8 +372,8 @@ pub enum QueueWriteError {
 pub enum QueueSubmitError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
-    #[error("Buffer {0:?} is destroyed")]
-    DestroyedBuffer(id::BufferId),
+    #[error("{0} has been destroyed")]
+    DestroyedBuffer(ResourceErrorIdent),
     #[error("{0} has been destroyed")]
     DestroyedTexture(ResourceErrorIdent),
     #[error(transparent)]
@@ -1222,7 +1222,7 @@ impl Global {
                                 for buffer in cmd_buf_trackers.buffers.used_resources() {
                                     if buffer.raw.get(&snatch_guard).is_none() {
                                         return Err(QueueSubmitError::DestroyedBuffer(
-                                            buffer.info.id(),
+                                            buffer.error_ident(),
                                         ));
                                     }
                                     buffer.info.use_at(submit_index);
