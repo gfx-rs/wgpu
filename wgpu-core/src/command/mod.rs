@@ -29,7 +29,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::resource::{ParentDevice, Resource, ResourceErrorIdent, ResourceInfo, ResourceType};
+use crate::resource::{ParentDevice, Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
@@ -242,9 +242,6 @@ pub(crate) struct BakedCommands<A: HalApi> {
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
 }
-
-pub(crate) struct DestroyedBufferError(pub ResourceErrorIdent);
-pub(crate) struct DestroyedTextureError(pub ResourceErrorIdent);
 
 /// The mutable state of a [`CommandBuffer`].
 pub struct CommandBufferMutable<A: HalApi> {

@@ -132,7 +132,7 @@ impl ComputeCommand {
                                         indirect: true,
                                         pipeline: None, // TODO: not used right now, but once we do the resolve during recording we can use this again.
                                     },
-                                    inner: ComputePassErrorInner::InvalidBuffer(buffer_id),
+                                    inner: ComputePassErrorInner::InvalidBufferId(buffer_id),
                                 }
                             })?,
                             offset,

@@ -7,7 +7,9 @@ use crate::{
     hal_api::HalApi,
     id,
     pipeline::RenderPipeline,
-    resource::{Buffer, MissingBufferUsageError, MissingTextureUsageError, QuerySet},
+    resource::{
+        Buffer, DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, QuerySet,
+    },
     track::UsageConflict,
 };
 use wgt::{BufferAddress, BufferSize, Color, VertexStepMode};
@@ -90,8 +92,8 @@ pub enum RenderCommandError {
     IncompatiblePipelineRods,
     #[error(transparent)]
     UsageConflict(#[from] UsageConflict),
-    #[error("Buffer {0:?} is destroyed")]
-    DestroyedBuffer(id::BufferId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
@@ -120,8 +122,7 @@ impl crate::error::PrettyError for RenderCommandError {
             Self::UsageConflict(UsageConflict::TextureInvalid { id }) => {
                 fmt.texture_label(&id);
             }
-            Self::UsageConflict(UsageConflict::BufferInvalid { id })
-            | Self::DestroyedBuffer(id) => {
+            Self::UsageConflict(UsageConflict::BufferInvalid { id }) => {
                 fmt.buffer_label(&id);
             }
             _ => {}

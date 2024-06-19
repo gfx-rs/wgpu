@@ -11,7 +11,10 @@ use crate::{
     hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
-    resource::{ParentDevice, Resource, ResourceErrorIdent, Texture, TextureClearMode},
+    resource::{
+        DestroyedResourceError, ParentDevice, Resource, ResourceErrorIdent, Texture,
+        TextureClearMode,
+    },
     snatch::SnatchGuard,
     track::{TextureSelector, TextureTracker},
 };
@@ -26,12 +29,12 @@ use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, Te
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(BufferId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(BufferId),
     #[error("TextureId {0:?} is invalid")]
     InvalidTextureId(TextureId),
-    #[error("{0} has been destroyed")]
-    Destroyed(ResourceErrorIdent),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("{0} can not be cleared")]
     NoValidTextureClearMode(ResourceErrorIdent),
     #[error("Buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
@@ -101,7 +104,7 @@ impl Global {
         let dst_buffer = hub
             .buffers
             .get(dst)
-            .map_err(|_| ClearError::InvalidBuffer(dst))?;
+            .map_err(|_| ClearError::InvalidBufferId(dst))?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -111,10 +114,7 @@ impl Global {
             .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
 
         let snatch_guard = dst_buffer.device.snatchable_lock.read();
-        let dst_raw = dst_buffer
-            .raw
-            .get(&snatch_guard)
-            .ok_or(ClearError::InvalidBuffer(dst))?;
+        let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None));
         }
@@ -264,9 +264,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     zero_buffer: &A::Buffer,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
-    let dst_raw = dst_texture
-        .raw(snatch_guard)
-        .ok_or_else(|| ClearError::Destroyed(dst_texture.error_ident()))?;
+    let dst_raw = dst_texture.try_raw(snatch_guard)?;
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {
