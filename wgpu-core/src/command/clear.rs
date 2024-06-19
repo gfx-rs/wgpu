@@ -11,7 +11,7 @@ use crate::{
     hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
-    resource::{ParentDevice, Resource, Texture, TextureClearMode},
+    resource::{ParentDevice, Resource, ResourceErrorIdent, Texture, TextureClearMode},
     snatch::SnatchGuard,
     track::{TextureSelector, TextureTracker},
 };
@@ -28,10 +28,12 @@ pub enum ClearError {
     MissingClearTextureFeature,
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
-    #[error("Texture {0:?} is invalid or destroyed")]
-    InvalidTexture(TextureId),
-    #[error("Texture {0:?} can not be cleared")]
-    NoValidTextureClearMode(TextureId),
+    #[error("TextureId {0:?} is invalid")]
+    InvalidTextureId(TextureId),
+    #[error("{0} has been destroyed")]
+    Destroyed(ResourceErrorIdent),
+    #[error("{0} can not be cleared")]
+    NoValidTextureClearMode(ResourceErrorIdent),
     #[error("Buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedFillSize(BufferAddress),
     #[error("Buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
@@ -197,7 +199,7 @@ impl Global {
         let dst_texture = hub
             .textures
             .get(dst)
-            .map_err(|_| ClearError::InvalidTexture(dst))?;
+            .map_err(|_| ClearError::InvalidTextureId(dst))?;
 
         dst_texture.same_device_as(cmd_buf.as_ref())?;
 
@@ -266,7 +268,7 @@ pub(crate) fn clear_texture<A: HalApi>(
 ) -> Result<(), ClearError> {
     let dst_raw = dst_texture
         .raw(snatch_guard)
-        .ok_or_else(|| ClearError::InvalidTexture(dst_texture.as_info().id()))?;
+        .ok_or_else(|| ClearError::Destroyed(dst_texture.error_ident()))?;
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {
@@ -279,7 +281,7 @@ pub(crate) fn clear_texture<A: HalApi>(
         }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(
-                dst_texture.as_info().id(),
+                dst_texture.error_ident(),
             ));
         }
     };
@@ -328,7 +330,7 @@ pub(crate) fn clear_texture<A: HalApi>(
         }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(
-                dst_texture.as_info().id(),
+                dst_texture.error_ident(),
             ));
         }
     }

@@ -324,8 +324,8 @@ impl<A: HalApi> BakedCommands<A> {
                 // A Texture can be destroyed between the command recording
                 // and now, this is out of our control so we have to handle
                 // it gracefully.
-                if let Err(ClearError::InvalidTexture(id)) = clear_result {
-                    return Err(DestroyedTextureError(id));
+                if let Err(ClearError::Destroyed(ident)) = clear_result {
+                    return Err(DestroyedTextureError(ident));
                 }
 
                 // Other errors are unexpected.

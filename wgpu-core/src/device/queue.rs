@@ -17,7 +17,8 @@ use crate::{
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, ParentDevice,
-        Resource, ResourceInfo, ResourceType, StagingBuffer, Texture, TextureInner,
+        Resource, ResourceErrorIdent, ResourceInfo, ResourceType, StagingBuffer, Texture,
+        TextureInner,
     },
     resource_log, track, FastHashMap, SubmissionIndex,
 };
@@ -373,8 +374,8 @@ pub enum QueueSubmitError {
     Queue(#[from] DeviceError),
     #[error("Buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
-    #[error("Texture {0:?} is destroyed")]
-    DestroyedTexture(id::TextureId),
+    #[error("{0} has been destroyed")]
+    DestroyedTexture(ResourceErrorIdent),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
     #[error("Buffer {0:?} is still mapped")]
@@ -1242,7 +1243,7 @@ impl Global {
                                     let should_extend = match texture.inner.get(&snatch_guard) {
                                         None => {
                                             return Err(QueueSubmitError::DestroyedTexture(
-                                                texture.info.id(),
+                                                texture.error_ident(),
                                             ));
                                         }
                                         Some(TextureInner::Native { .. }) => false,
@@ -1421,10 +1422,10 @@ impl Global {
 
             {
                 used_surface_textures.set_size(hub.textures.read().len());
-                for (&id, texture) in pending_writes.dst_textures.iter() {
+                for texture in pending_writes.dst_textures.values() {
                     match texture.inner.get(&snatch_guard) {
                         None => {
-                            return Err(QueueSubmitError::DestroyedTexture(id));
+                            return Err(QueueSubmitError::DestroyedTexture(texture.error_ident()));
                         }
                         Some(TextureInner::Native { .. }) => {}
                         Some(TextureInner::Surface { ref raw, .. }) => {
