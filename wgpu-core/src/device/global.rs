@@ -105,9 +105,6 @@ impl Global {
         let hub = A::hub(self);
 
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
 
         Ok(device.features)
     }
@@ -119,9 +116,6 @@ impl Global {
         let hub = A::hub(self);
 
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
 
         Ok(device.limits.clone())
     }
@@ -133,9 +127,6 @@ impl Global {
         let hub = A::hub(self);
 
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
 
         Ok(device.downlevel.clone())
     }
