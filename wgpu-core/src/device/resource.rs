@@ -2016,10 +2016,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<&'a Sampler<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
-        let sampler = used
-            .samplers
-            .add_single(storage, id)
-            .ok_or(Error::InvalidSampler(id))?;
+        let sampler = storage.get(id).map_err(|_| Error::InvalidSampler(id))?;
+        used.samplers.add_single(sampler);
 
         sampler.same_device(self)?;
 
@@ -2038,10 +2036,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<hal::TextureBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
-        let view = used
-            .views
-            .add_single(storage, id)
-            .ok_or(Error::InvalidTextureView(id))?;
+        let view = storage.get(id).map_err(|_| Error::InvalidTextureView(id))?;
+        used.views.add_single(view);
 
         view.same_device(self)?;
 
@@ -2057,7 +2053,7 @@ impl<A: HalApi> Device<A> {
         used.textures
             .add_single(texture, Some(view.selector.clone()), internal_use);
 
-        texture.same_device_as(view)?;
+        texture.same_device_as(view.as_ref())?;
 
         texture.check_usage(pub_usage)?;
 
