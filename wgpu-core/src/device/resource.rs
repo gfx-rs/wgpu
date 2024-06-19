@@ -1923,10 +1923,11 @@ impl<A: HalApi> Device<A> {
             ));
         }
 
-        let buffer = used
-            .buffers
-            .add_single(storage, bb.buffer_id, internal_use)
-            .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
+        let buffer = storage
+            .get(bb.buffer_id)
+            .map_err(|_| Error::InvalidBuffer(bb.buffer_id))?;
+
+        used.buffers.add_single(buffer, internal_use);
 
         buffer.same_device(self)?;
 

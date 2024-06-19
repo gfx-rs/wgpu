@@ -90,18 +90,9 @@ impl<A: HalApi> BufferBindGroupState<A> {
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single<'a>(
-        &self,
-        storage: &'a Storage<Buffer<A>>,
-        id: BufferId,
-        state: BufferUses,
-    ) -> Option<&'a Arc<Buffer<A>>> {
-        let buffer = storage.get(id).ok()?;
-
+    pub fn add_single(&self, buffer: &Arc<Buffer<A>>, state: BufferUses) {
         let mut buffers = self.buffers.lock();
         buffers.push((buffer.clone(), state));
-
-        Some(buffer)
     }
 }
 
