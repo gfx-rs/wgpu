@@ -1,8 +1,4 @@
-use crate::{
-    device::bgl,
-    id::{markers::Buffer, Id},
-    FastHashMap, FastHashSet,
-};
+use crate::{device::bgl, FastHashMap, FastHashSet};
 use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
@@ -135,34 +131,6 @@ pub struct Interface {
     features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
-}
-
-#[derive(Clone, Debug, Error)]
-#[error(
-    "Usage flags {actual:?} for buffer {id:?} do not contain required usage flags {expected:?}"
-)]
-pub struct MissingBufferUsageError {
-    pub(crate) id: Id<Buffer>,
-    pub(crate) actual: wgt::BufferUsages,
-    pub(crate) expected: wgt::BufferUsages,
-}
-
-/// Checks that the given buffer usage contains the required buffer usage,
-/// returns an error otherwise.
-pub fn check_buffer_usage(
-    id: Id<Buffer>,
-    actual: wgt::BufferUsages,
-    expected: wgt::BufferUsages,
-) -> Result<(), MissingBufferUsageError> {
-    if !actual.contains(expected) {
-        Err(MissingBufferUsageError {
-            id,
-            actual,
-            expected,
-        })
-    } else {
-        Ok(())
-    }
 }
 
 #[derive(Clone, Debug, Error)]

@@ -34,9 +34,7 @@ use crate::{
         BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope,
         UsageScopePool,
     },
-    validation::{
-        self, check_buffer_usage, check_texture_usage, validate_color_attachment_bytes_per_sample,
-    },
+    validation::{self, check_texture_usage, validate_color_attachment_bytes_per_sample},
     FastHashMap, LabelHelpers as _, SubmissionIndex,
 };
 
@@ -1932,7 +1930,7 @@ impl<A: HalApi> Device<A> {
 
         buffer.same_device(self)?;
 
-        check_buffer_usage(bb.buffer_id, buffer.usage, pub_usage)?;
+        buffer.check_usage(pub_usage)?;
         let raw_buffer = buffer
             .raw
             .get(snatch_guard)

@@ -17,7 +17,6 @@ use crate::{
     resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
-    validation::MissingBufferUsageError,
     Label, SubmissionIndex,
 };
 
@@ -424,6 +423,14 @@ pub enum BufferAccessError {
     MapAborted,
 }
 
+#[derive(Clone, Debug, Error)]
+#[error("Usage flags {actual:?} of {res} do not contain required usage flags {expected:?}")]
+pub struct MissingBufferUsageError {
+    pub(crate) res: ResourceErrorIdent,
+    pub(crate) actual: wgt::BufferUsages,
+    pub(crate) expected: wgt::BufferUsages,
+}
+
 pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
@@ -476,6 +483,22 @@ impl<A: HalApi> Buffer<A> {
         self.raw.get(guard).is_none()
     }
 
+    /// Checks that the given buffer usage contains the required buffer usage,
+    /// returns an error otherwise.
+    pub(crate) fn check_usage(
+        self: &Arc<Self>,
+        expected: wgt::BufferUsages,
+    ) -> Result<(), MissingBufferUsageError> {
+        self.usage
+            .contains(expected)
+            .then_some(())
+            .ok_or_else(|| MissingBufferUsageError {
+                res: self.error_ident(),
+                actual: self.usage,
+                expected,
+            })
+    }
+
     /// Returns the mapping callback in case of error so that the callback can be fired outside
     /// of the locks that are held in this function.
     pub(crate) fn map_async(
@@ -510,8 +533,7 @@ impl<A: HalApi> Buffer<A> {
             HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
         };
 
-        if let Err(e) = crate::validation::check_buffer_usage(self.info.id(), self.usage, pub_usage)
-        {
+        if let Err(e) = self.check_usage(pub_usage) {
             return Err((op, e.into()));
         }
 
