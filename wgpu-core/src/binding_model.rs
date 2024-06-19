@@ -6,7 +6,7 @@ use crate::{
     },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
-    id::{BindGroupLayoutId, BufferId, SamplerId, TextureId, TextureViewId},
+    id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{ParentDevice, Resource, ResourceInfo, ResourceType},
     resource_log,
@@ -80,8 +80,6 @@ pub enum CreateBindGroupError {
     InvalidBuffer(BufferId),
     #[error("Texture view {0:?} is invalid")]
     InvalidTextureView(TextureViewId),
-    #[error("Texture {0:?} is invalid")]
-    InvalidTexture(TextureId),
     #[error("Sampler {0:?} is invalid")]
     InvalidSampler(SamplerId),
     #[error(
