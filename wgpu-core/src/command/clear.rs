@@ -98,20 +98,18 @@ impl Global {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        let (dst_buffer, dst_pending) = {
-            let buffer_guard = hub.buffers.read();
-            let dst_buffer = buffer_guard
-                .get(dst)
-                .map_err(|_| ClearError::InvalidBuffer(dst))?;
+        let dst_buffer = hub
+            .buffers
+            .get(dst)
+            .map_err(|_| ClearError::InvalidBuffer(dst))?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+        dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
-            cmd_buf_data
-                .trackers
-                .buffers
-                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
-                .ok_or(ClearError::InvalidBuffer(dst))?
-        };
+        let dst_pending = cmd_buf_data
+            .trackers
+            .buffers
+            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
+
         let snatch_guard = dst_buffer.device.snatchable_lock.read();
         let dst_raw = dst_buffer
             .raw

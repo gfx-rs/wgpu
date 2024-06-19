@@ -592,20 +592,18 @@ impl Global {
 
         let snatch_guard = device.snatchable_lock.read();
 
-        let (src_buffer, src_pending) = {
-            let buffer_guard = hub.buffers.read();
-            let src_buffer = buffer_guard
-                .get(source)
-                .map_err(|_| TransferError::InvalidBuffer(source))?;
+        let src_buffer = hub
+            .buffers
+            .get(source)
+            .map_err(|_| TransferError::InvalidBuffer(source))?;
 
-            src_buffer.same_device_as(cmd_buf.as_ref())?;
+        src_buffer.same_device_as(cmd_buf.as_ref())?;
 
-            cmd_buf_data
-                .trackers
-                .buffers
-                .set_single(src_buffer, hal::BufferUses::COPY_SRC)
-                .ok_or(TransferError::InvalidBuffer(source))?
-        };
+        let src_pending = cmd_buf_data
+            .trackers
+            .buffers
+            .set_single(&src_buffer, hal::BufferUses::COPY_SRC);
+
         let src_raw = src_buffer
             .raw
             .get(&snatch_guard)
@@ -616,20 +614,18 @@ impl Global {
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
-        let (dst_buffer, dst_pending) = {
-            let buffer_guard = hub.buffers.read();
-            let dst_buffer = buffer_guard
-                .get(destination)
-                .map_err(|_| TransferError::InvalidBuffer(destination))?;
+        let dst_buffer = hub
+            .buffers
+            .get(destination)
+            .map_err(|_| TransferError::InvalidBuffer(destination))?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+        dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
-            cmd_buf_data
-                .trackers
-                .buffers
-                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
-                .ok_or(TransferError::InvalidBuffer(destination))?
-        };
+        let dst_pending = cmd_buf_data
+            .trackers
+            .buffers
+            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
+
         let dst_raw = dst_buffer
             .raw
             .get(&snatch_guard)
@@ -798,19 +794,17 @@ impl Global {
             &snatch_guard,
         )?;
 
-        let (src_buffer, src_pending) = {
-            let buffer_guard = hub.buffers.read();
-            let src_buffer = buffer_guard
-                .get(source.buffer)
-                .map_err(|_| TransferError::InvalidBuffer(source.buffer))?;
+        let src_buffer = hub
+            .buffers
+            .get(source.buffer)
+            .map_err(|_| TransferError::InvalidBuffer(source.buffer))?;
 
-            src_buffer.same_device_as(cmd_buf.as_ref())?;
+        src_buffer.same_device_as(cmd_buf.as_ref())?;
 
-            tracker
-                .buffers
-                .set_single(src_buffer, hal::BufferUses::COPY_SRC)
-                .ok_or(TransferError::InvalidBuffer(source.buffer))?
-        };
+        let src_pending = tracker
+            .buffers
+            .set_single(&src_buffer, hal::BufferUses::COPY_SRC);
+
         let src_raw = src_buffer
             .raw
             .get(&snatch_guard)
@@ -983,19 +977,17 @@ impl Global {
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_raw));
 
-        let (dst_buffer, dst_pending) = {
-            let buffer_guard = hub.buffers.read();
-            let dst_buffer = buffer_guard
-                .get(destination.buffer)
-                .map_err(|_| TransferError::InvalidBuffer(destination.buffer))?;
+        let dst_buffer = hub
+            .buffers
+            .get(destination.buffer)
+            .map_err(|_| TransferError::InvalidBuffer(destination.buffer))?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+        dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
-            tracker
-                .buffers
-                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
-                .ok_or(TransferError::InvalidBuffer(destination.buffer))?
-        };
+        let dst_pending = tracker
+            .buffers
+            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
+
         let dst_raw = dst_buffer
             .raw
             .get(&snatch_guard)
