@@ -1368,9 +1368,7 @@ impl Global {
                 });
             }
 
-            if !device.is_valid() {
-                return Err(DeviceError::Lost).map_pass_err(pass_scope);
-            }
+            device.check_is_valid().map_pass_err(pass_scope)?;
 
             let encoder = &mut cmd_buf_data.encoder;
             let status = &mut cmd_buf_data.status;

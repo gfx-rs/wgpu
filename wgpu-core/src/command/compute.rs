@@ -161,8 +161,6 @@ pub enum ComputePassErrorInner {
     InvalidParentEncoder,
     #[error("Bind group at index {0:?} is invalid")]
     InvalidBindGroup(u32),
-    #[error("Device {0:?} is invalid")]
-    InvalidDevice(id::DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
@@ -452,12 +450,7 @@ impl Global {
         let pass_scope = PassErrorScope::Pass(Some(cmd_buf.as_info().id()));
 
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(ComputePassErrorInner::InvalidDevice(
-                cmd_buf.device.as_info().id(),
-            ))
-            .map_pass_err(pass_scope);
-        }
+        device.check_is_valid().map_pass_err(pass_scope)?;
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();

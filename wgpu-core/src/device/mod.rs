@@ -380,10 +380,6 @@ fn map_buffer<A: HalApi>(
     Ok(mapping.ptr)
 }
 
-#[derive(Clone, Debug, Error)]
-#[error("Device is invalid")]
-pub struct InvalidDevice;
-
 #[derive(Clone, Debug)]
 pub struct DeviceMismatch {
     pub(super) res: ResourceErrorIdent,
@@ -411,14 +407,16 @@ impl std::error::Error for DeviceMismatch {}
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DeviceError {
-    #[error("Parent device is invalid.")]
-    Invalid,
+    #[error("{0} is invalid.")]
+    Invalid(ResourceErrorIdent),
     #[error("Parent device is lost")]
     Lost,
     #[error("Not enough memory left.")]
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
+    #[error("DeviceId is invalid")]
+    InvalidDeviceId,
     #[error("QueueId is invalid")]
     InvalidQueueId,
     #[error(transparent)]

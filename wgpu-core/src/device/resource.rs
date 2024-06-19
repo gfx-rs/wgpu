@@ -313,6 +313,12 @@ impl<A: HalApi> Device<A> {
         self.valid.load(Ordering::Acquire)
     }
 
+    pub fn check_is_valid(&self) -> Result<(), DeviceError> {
+        self.is_valid()
+            .then_some(())
+            .ok_or_else(|| DeviceError::Invalid(self.error_ident()))
+    }
+
     pub(crate) fn release_queue(&self, queue: A::Queue) {
         assert!(self.queue_to_drop.set(queue).is_ok());
     }
