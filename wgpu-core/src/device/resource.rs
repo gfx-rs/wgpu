@@ -570,6 +570,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<Buffer<A>, resource::CreateBufferError> {
         debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
 
+        self.check_is_valid()?;
+
         if desc.size > self.limits.max_buffer_size {
             return Err(resource::CreateBufferError::MaxBufferSize {
                 requested: desc.size,
@@ -734,6 +736,8 @@ impl<A: HalApi> Device<A> {
         desc: &resource::TextureDescriptor,
     ) -> Result<Texture<A>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
+
+        self.check_is_valid()?;
 
         if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
             return Err(CreateTextureError::InvalidUsage(desc.usage));
@@ -1310,6 +1314,8 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &resource::SamplerDescriptor,
     ) -> Result<Sampler<A>, resource::CreateSamplerError> {
+        self.check_is_valid()?;
+
         if desc
             .address_modes
             .iter()
@@ -1421,6 +1427,8 @@ impl<A: HalApi> Device<A> {
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
+        self.check_is_valid()?;
+
         let (module, source) = match source {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
@@ -1551,6 +1559,8 @@ impl<A: HalApi> Device<A> {
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: &'a [u32],
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
+        self.check_is_valid()?;
+
         self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.to_hal(self.instance_flags),
@@ -2072,6 +2082,7 @@ impl<A: HalApi> Device<A> {
     ) -> Result<BindGroup<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
 
+        self.check_is_valid()?;
         layout.same_device(self)?;
 
         {
@@ -2465,6 +2476,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
+        self.check_is_valid()?;
+
         let bind_group_layouts_count = desc.bind_group_layouts.len();
         let device_max_bind_groups = self.limits.max_bind_groups as usize;
         if bind_group_layouts_count > device_max_bind_groups {
@@ -2616,6 +2629,8 @@ impl<A: HalApi> Device<A> {
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A>,
     ) -> Result<pipeline::ComputePipeline<A>, pipeline::CreateComputePipelineError> {
+        self.check_is_valid()?;
+
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
@@ -2763,6 +2778,8 @@ impl<A: HalApi> Device<A> {
         hub: &Hub<A>,
     ) -> Result<pipeline::RenderPipeline<A>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
+
+        self.check_is_valid()?;
 
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
@@ -3414,6 +3431,9 @@ impl<A: HalApi> Device<A> {
         desc: &pipeline::PipelineCacheDescriptor,
     ) -> Result<pipeline::PipelineCache<A>, pipeline::CreatePipelineCacheError> {
         use crate::pipeline_cache;
+
+        self.check_is_valid()?;
+
         self.require_features(wgt::Features::PIPELINE_CACHE)?;
         let data = if let Some((data, validation_key)) = desc
             .data
@@ -3535,6 +3555,8 @@ impl<A: HalApi> Device<A> {
         desc: &resource::QuerySetDescriptor,
     ) -> Result<QuerySet<A>, resource::CreateQuerySetError> {
         use resource::CreateQuerySetError as Error;
+
+        self.check_is_valid()?;
 
         match desc.ty {
             wgt::QueryType::Occlusion => {}

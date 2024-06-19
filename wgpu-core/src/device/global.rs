@@ -159,9 +159,6 @@ impl Global {
                     break 'error DeviceError::InvalidDeviceId.into();
                 }
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             if desc.usage.is_empty() {
                 // Per spec, `usage` must not be zero.
@@ -556,9 +553,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
@@ -879,9 +873,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -943,13 +934,15 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
+            }
+
+            // this check can't go in the body of `create_bind_group_layout` since the closure might not get called
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let entry_map = match bgl::EntryMap::from_entries(&device.limits, &desc.entries) {
@@ -1042,9 +1035,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1100,9 +1090,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1193,9 +1180,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1271,9 +1255,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1427,9 +1408,6 @@ impl Global {
                     );
                 }
             };
-            if !device.is_valid() {
-                break 'error command::RenderBundleError::from_device_error(DeviceError::Lost);
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1496,10 +1474,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
-
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateQuerySet {
@@ -1573,9 +1547,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateRenderPipeline {
@@ -1709,9 +1680,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1841,9 +1809,6 @@ impl Global {
                 // TODO: Handle error properly
                 Err(crate::storage::InvalidId) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreatePipelineCache {

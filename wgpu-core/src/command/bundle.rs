@@ -349,6 +349,10 @@ impl RenderBundleEncoder {
         device: &Arc<Device<A>>,
         hub: &Hub<A>,
     ) -> Result<RenderBundle<A>, RenderBundleError> {
+        let scope = PassErrorScope::Bundle;
+
+        device.check_is_valid().map_pass_err(scope)?;
+
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.render_pipelines.read();
         let buffer_guard = hub.buffers.read();
