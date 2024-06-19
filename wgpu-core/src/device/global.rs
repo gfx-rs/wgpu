@@ -1313,26 +1313,11 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId,
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost;
-            }
-            let Some(queue) = device.get_queue() else {
-                break 'error DeviceError::InvalidQueueId;
+
+            let command_buffer = match device.create_command_encoder(&desc.label) {
+                Ok(command_buffer) => command_buffer,
+                Err(e) => break 'error e,
             };
-            let encoder = match device
-                .command_allocator
-                .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
-            {
-                Ok(raw) => raw,
-                Err(_) => break 'error DeviceError::OutOfMemory,
-            };
-            let command_buffer = command::CommandBuffer::new(
-                encoder,
-                &device,
-                #[cfg(feature = "trace")]
-                device.trace.lock().is_some(),
-                desc.label.to_hal(device.instance_flags).map(str::to_owned),
-            );
 
             let (id, _) = fid.assign(Arc::new(command_buffer));
             api_log!("Device::create_command_encoder -> {id:?}");
