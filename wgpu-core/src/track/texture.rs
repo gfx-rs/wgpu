@@ -189,19 +189,18 @@ impl<A: HalApi> TextureBindGroupState<A> {
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single<'a>(
+    pub fn add_single(
         &self,
-        texture: &'a Arc<Texture<A>>,
+        texture: &Arc<Texture<A>>,
         selector: Option<TextureSelector>,
         state: TextureUses,
-    ) -> Option<&'a Arc<Texture<A>>> {
+    ) {
         let mut textures = self.textures.lock();
         textures.push(TextureBindGroupStateData {
             selector,
             texture: texture.clone(),
             usage: state,
         });
-        Some(texture)
     }
 }
 

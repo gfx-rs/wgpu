@@ -2054,15 +2054,10 @@ impl<A: HalApi> Device<A> {
             "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
         )?;
         let texture = &view.parent;
-        let texture_id = texture.as_info().id();
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
-        let texture = used
-            .textures
-            .add_single(texture, Some(view.selector.clone()), internal_use)
-            .ok_or(binding_model::CreateBindGroupError::InvalidTexture(
-                texture_id,
-            ))?;
+        used.textures
+            .add_single(texture, Some(view.selector.clone()), internal_use);
 
         texture.same_device_as(view)?;
 
