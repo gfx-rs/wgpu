@@ -1596,6 +1596,27 @@ impl<A: HalApi> Device<A> {
         })
     }
 
+    pub(crate) fn create_command_encoder(
+        self: &Arc<Self>,
+        label: &crate::Label,
+    ) -> Result<command::CommandBuffer<A>, DeviceError> {
+        self.check_is_valid()?;
+
+        let queue = self.get_queue().unwrap();
+
+        let encoder = self
+            .command_allocator
+            .acquire_encoder(self.raw(), queue.raw.as_ref().unwrap())?;
+
+        Ok(command::CommandBuffer::new(
+            encoder,
+            self,
+            #[cfg(feature = "trace")]
+            self.trace.lock().is_some(),
+            label.to_hal(self.instance_flags).map(str::to_owned),
+        ))
+    }
+
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
     pub(crate) fn make_late_sized_buffer_groups(
