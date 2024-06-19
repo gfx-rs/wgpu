@@ -340,9 +340,8 @@ impl BufferMapCallback {
                 let status = match result {
                     Ok(()) => BufferMapAsyncStatus::Success,
                     Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
-                    Err(BufferAccessError::Invalid) | Err(BufferAccessError::Destroyed) => {
-                        BufferMapAsyncStatus::Invalid
-                    }
+                    Err(BufferAccessError::InvalidBufferId(_))
+                    | Err(BufferAccessError::DestroyedResource(_)) => BufferMapAsyncStatus::Invalid,
                     Err(BufferAccessError::AlreadyMapped) => BufferMapAsyncStatus::AlreadyMapped,
                     Err(BufferAccessError::MapAlreadyPending) => {
                         BufferMapAsyncStatus::MapAlreadyPending
@@ -382,10 +381,10 @@ pub enum BufferAccessError {
     Device(#[from] DeviceError),
     #[error("Buffer map failed")]
     Failed,
-    #[error("Buffer is invalid")]
-    Invalid,
-    #[error("Buffer is destroyed")]
-    Destroyed,
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(BufferId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("Buffer is already mapped")]
     AlreadyMapped,
     #[error("Buffer map is pending")]
@@ -439,6 +438,10 @@ pub struct MissingTextureUsageError {
     pub(crate) expected: wgt::TextureUsages,
 }
 
+#[derive(Clone, Debug, Error)]
+#[error("{0} has been destroyed")]
+pub struct DestroyedResourceError(pub ResourceErrorIdent);
+
 pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
@@ -487,8 +490,23 @@ impl<A: HalApi> Buffer<A> {
         self.raw.get(guard)
     }
 
-    pub(crate) fn is_destroyed(&self, guard: &SnatchGuard) -> bool {
-        self.raw.get(guard).is_none()
+    pub(crate) fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&A::Buffer, DestroyedResourceError> {
+        self.raw
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn check_destroyed<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<(), DestroyedResourceError> {
+        self.raw
+            .get(guard)
+            .map(|_| ())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
     /// Checks that the given buffer usage contains the required buffer usage,
@@ -571,8 +589,8 @@ impl<A: HalApi> Buffer<A> {
 
         {
             let snatch_guard = device.snatchable_lock.read();
-            if self.is_destroyed(&snatch_guard) {
-                return Err((op, BufferAccessError::Destroyed));
+            if let Err(e) = self.check_destroyed(&snatch_guard) {
+                return Err((op, e.into()));
             }
         }
 
@@ -623,9 +641,7 @@ impl<A: HalApi> Buffer<A> {
 
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
-        let raw_buf = self
-            .raw(&snatch_guard)
-            .ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = self.try_raw(&snatch_guard)?;
         let buffer_id = self.info.id();
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
@@ -1039,12 +1055,37 @@ impl<A: HalApi> Drop for Texture<A> {
 }
 
 impl<A: HalApi> Texture<A> {
+    pub(crate) fn try_inner<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a TextureInner<A>, DestroyedResourceError> {
+        self.inner
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
+
     pub(crate) fn raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::Texture> {
         self.inner.get(snatch_guard)?.raw()
     }
 
-    pub(crate) fn is_destroyed(&self, guard: &SnatchGuard) -> bool {
-        self.inner.get(guard).is_none()
+    pub(crate) fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a A::Texture, DestroyedResourceError> {
+        self.inner
+            .get(guard)
+            .and_then(|t| t.raw())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn check_destroyed<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<(), DestroyedResourceError> {
+        self.inner
+            .get(guard)
+            .map(|_| ())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
     pub(crate) fn inner_mut<'a>(
@@ -1563,8 +1604,10 @@ impl<A: HalApi> TextureView<A> {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateTextureViewError {
-    #[error("Parent texture is invalid or destroyed")]
-    InvalidTexture,
+    #[error("TextureId {0:?} is invalid")]
+    InvalidTextureId(TextureId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("Not enough memory left to create texture view")]
     OutOfMemory,
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]

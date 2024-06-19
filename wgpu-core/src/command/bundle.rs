@@ -97,7 +97,9 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, ParentDevice, Resource, ResourceInfo, ResourceType},
+    resource::{
+        Buffer, DestroyedResourceError, ParentDevice, Resource, ResourceInfo, ResourceType,
+    },
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
@@ -825,8 +827,8 @@ pub enum CreateRenderBundleError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ExecutionError {
-    #[error("Buffer {0:?} is destroyed")]
-    DestroyedBuffer(id::BufferId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("BindGroup {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
     #[error("Using {0} in a render bundle is not implemented")]
@@ -835,15 +837,9 @@ pub enum ExecutionError {
 impl PrettyError for ExecutionError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        match *self {
-            Self::DestroyedBuffer(id) => {
-                fmt.buffer_label(&id);
-            }
-            Self::InvalidBindGroup(id) => {
-                fmt.bind_group_label(&id);
-            }
-            Self::Unimplemented(_reason) => {}
-        };
+        if let Self::InvalidBindGroup(id) = *self {
+            fmt.bind_group_label(&id);
+        }
     }
 }
 
@@ -939,9 +935,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer: &A::Buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer: &A::Buffer = buffer.try_raw(snatch_guard)?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset: *offset,
@@ -955,9 +949,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer = buffer.try_raw(snatch_guard)?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset: *offset,
@@ -1042,9 +1034,7 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: false,
                 } => {
-                    let buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer = buffer.try_raw(snatch_guard)?;
                     unsafe { raw.draw_indirect(buffer, *offset, 1) };
                 }
                 Cmd::MultiDrawIndirect {
@@ -1053,9 +1043,7 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: true,
                 } => {
-                    let buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer = buffer.try_raw(snatch_guard)?;
                     unsafe { raw.draw_indexed_indirect(buffer, *offset, 1) };
                 }
                 Cmd::MultiDrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {

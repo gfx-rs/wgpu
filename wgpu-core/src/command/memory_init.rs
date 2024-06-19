@@ -6,15 +6,13 @@ use crate::{
     device::Device,
     hal_api::HalApi,
     init_tracker::*,
-    resource::{Resource, Texture},
+    resource::{DestroyedResourceError, Resource, Texture},
     snatch::SnatchGuard,
     track::{TextureTracker, Tracker},
     FastHashMap,
 };
 
-use super::{
-    clear::clear_texture, BakedCommands, ClearError, DestroyedBufferError, DestroyedTextureError,
-};
+use super::{clear::clear_texture, BakedCommands, ClearError};
 
 /// Surface that was discarded by `StoreOp::Discard` of a preceding renderpass.
 /// Any read access to this surface needs to be preceded by a texture initialization.
@@ -171,7 +169,7 @@ impl<A: HalApi> BakedCommands<A> {
         &mut self,
         device_tracker: &mut Tracker<A>,
         snatch_guard: &SnatchGuard<'_>,
-    ) -> Result<(), DestroyedBufferError> {
+    ) -> Result<(), DestroyedResourceError> {
         profiling::scope!("initialize_buffer_memory");
 
         // Gather init ranges for each buffer so we can collapse them.
@@ -231,10 +229,7 @@ impl<A: HalApi> BakedCommands<A> {
                 .buffers
                 .set_single(&buffer, hal::BufferUses::COPY_DST);
 
-            let raw_buf = buffer
-                .raw
-                .get(snatch_guard)
-                .ok_or(DestroyedBufferError(buffer.error_ident()))?;
+            let raw_buf = buffer.try_raw(snatch_guard)?;
 
             unsafe {
                 self.encoder.transition_buffers(
@@ -277,7 +272,7 @@ impl<A: HalApi> BakedCommands<A> {
         device_tracker: &mut Tracker<A>,
         device: &Device<A>,
         snatch_guard: &SnatchGuard<'_>,
-    ) -> Result<(), DestroyedTextureError> {
+    ) -> Result<(), DestroyedResourceError> {
         profiling::scope!("initialize_texture_memory");
 
         let mut ranges: Vec<TextureInitRange> = Vec::new();
@@ -324,8 +319,8 @@ impl<A: HalApi> BakedCommands<A> {
                 // A Texture can be destroyed between the command recording
                 // and now, this is out of our control so we have to handle
                 // it gracefully.
-                if let Err(ClearError::Destroyed(ident)) = clear_result {
-                    return Err(DestroyedTextureError(ident));
+                if let Err(ClearError::DestroyedResource(e)) = clear_result {
+                    return Err(e);
                 }
 
                 // Other errors are unexpected.

@@ -26,8 +26,8 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{
-        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, QuerySet, Texture,
-        TextureView, TextureViewNotRenderableReason,
+        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
+        QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
     },
     storage::Storage,
     track::{TextureSelector, Tracker, UsageConflict, UsageScope},
@@ -666,6 +666,8 @@ pub enum RenderPassErrorInner {
     InvalidQuerySet(id::QuerySetId),
     #[error("missing occlusion query set")]
     MissingOcclusionQuerySet,
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
 }
 
 impl PrettyError for RenderPassErrorInner {
@@ -1678,11 +1680,7 @@ impl Global {
                         buffer
                             .check_usage(BufferUsages::INDEX)
                             .map_pass_err(scope)?;
-                        let buf_raw = buffer
-                            .raw
-                            .get(&snatch_guard)
-                            .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
-                            .map_pass_err(scope)?;
+                        let buf_raw = buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -1741,11 +1739,7 @@ impl Global {
                         buffer
                             .check_usage(BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
-                        let buf_raw = buffer
-                            .raw
-                            .get(&snatch_guard)
-                            .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
-                            .map_pass_err(scope)?;
+                        let buf_raw = buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
                         let empty_slots =
                             (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
@@ -2039,11 +2033,8 @@ impl Global {
                         indirect_buffer
                             .check_usage(BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
-                        let indirect_raw = indirect_buffer
-                            .raw
-                            .get(&snatch_guard)
-                            .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
-                            .map_pass_err(scope)?;
+                        let indirect_raw =
+                            indirect_buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
                         let actual_count = count.map_or(1, |c| c.get());
 
@@ -2112,11 +2103,8 @@ impl Global {
                         indirect_buffer
                             .check_usage(BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
-                        let indirect_raw = indirect_buffer
-                            .raw
-                            .get(&snatch_guard)
-                            .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
-                            .map_pass_err(scope)?;
+                        let indirect_raw =
+                            indirect_buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
                         let count_buffer = info
                             .usage_scope
@@ -2130,11 +2118,7 @@ impl Global {
                         count_buffer
                             .check_usage(BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
-                        let count_raw = count_buffer
-                            .raw
-                            .get(&snatch_guard)
-                            .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))
-                            .map_pass_err(scope)?;
+                        let count_raw = count_buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
                         let end_offset = offset + stride * max_count as u64;
                         if end_offset > indirect_buffer.size {
@@ -2373,8 +2357,8 @@ impl Global {
 
                         unsafe { bundle.execute(raw, &snatch_guard) }
                             .map_err(|e| match e {
-                                ExecutionError::DestroyedBuffer(id) => {
-                                    RenderCommandError::DestroyedBuffer(id)
+                                ExecutionError::DestroyedResource(e) => {
+                                    RenderCommandError::DestroyedResource(e)
                                 }
                                 ExecutionError::InvalidBindGroup(id) => {
                                     RenderCommandError::InvalidBindGroup(id)

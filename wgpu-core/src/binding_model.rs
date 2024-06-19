@@ -9,8 +9,8 @@ use crate::{
     id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{
-        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, Resource, ResourceInfo,
-        ResourceType,
+        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
+        Resource, ResourceInfo, ResourceType,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -78,12 +78,14 @@ pub enum CreateBindGroupError {
     Device(#[from] DeviceError),
     #[error("Bind group layout is invalid")]
     InvalidLayout,
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(BufferId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(BufferId),
     #[error("Texture view {0:?} is invalid")]
     InvalidTextureView(TextureViewId),
     #[error("Sampler {0:?} is invalid")]
     InvalidSampler(SamplerId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error(
         "Binding count declared with at most {expected} items, but {actual} items were provided"
     )]
@@ -197,9 +199,6 @@ impl PrettyError for CreateBindGroupError {
             }
             Self::BindingSizeTooSmall { buffer, .. } => {
                 fmt.buffer_label(&buffer);
-            }
-            Self::InvalidBuffer(id) => {
-                fmt.buffer_label(&id);
             }
             Self::InvalidTextureView(id) => {
                 fmt.texture_view_label(&id);

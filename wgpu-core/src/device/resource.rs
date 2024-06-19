@@ -1008,9 +1008,7 @@ impl<A: HalApi> Device<A> {
     ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
         let snatch_guard = texture.device.snatchable_lock.read();
 
-        let texture_raw = texture
-            .raw(&snatch_guard)
-            .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
+        let texture_raw = texture.try_raw(&snatch_guard)?;
 
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
@@ -1925,17 +1923,14 @@ impl<A: HalApi> Device<A> {
 
         let buffer = storage
             .get(bb.buffer_id)
-            .map_err(|_| Error::InvalidBuffer(bb.buffer_id))?;
+            .map_err(|_| Error::InvalidBufferId(bb.buffer_id))?;
 
         used.buffers.add_single(buffer, internal_use);
 
         buffer.same_device(self)?;
 
         buffer.check_usage(pub_usage)?;
-        let raw_buffer = buffer
-            .raw
-            .get(snatch_guard)
-            .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
+        let raw_buffer = buffer.try_raw(snatch_guard)?;
 
         let (bind_size, bind_end) = match bb.size {
             Some(size) => {

@@ -15,7 +15,7 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     init_tracker::MemoryInitKind,
-    resource::{self, MissingBufferUsageError, ParentDevice, Resource},
+    resource::{self, DestroyedResourceError, MissingBufferUsageError, ParentDevice, Resource},
     snatch::SnatchGuard,
     track::{Tracker, TrackerIndex, UsageConflict, UsageScope},
     Label,
@@ -166,16 +166,16 @@ pub enum ComputePassErrorInner {
     InvalidPipeline(id::ComputePipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
-    #[error("Indirect buffer {0:?} is invalid or destroyed")]
-    InvalidIndirectBuffer(id::BufferId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
     IndirectBufferOverrun {
         offset: u64,
         end_offset: u64,
         buffer_size: u64,
     },
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(id::BufferId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(id::BufferId),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
@@ -210,9 +210,6 @@ impl PrettyError for ComputePassErrorInner {
         match *self {
             Self::InvalidPipeline(id) => {
                 fmt.compute_pipeline_label(&id);
-            }
-            Self::InvalidIndirectBuffer(id) => {
-                fmt.buffer_label(&id);
             }
             Self::Dispatch(DispatchError::IncompatibleBindGroup { ref diff, .. }) => {
                 for d in diff {
@@ -773,7 +770,6 @@ impl Global {
                     }
                 }
                 ArcComputeCommand::DispatchIndirect { buffer, offset } => {
-                    let buffer_id = buffer.as_info().id();
                     let scope = PassErrorScope::Dispatch {
                         indirect: true,
                         pipeline: state.pipeline,
@@ -806,11 +802,7 @@ impl Global {
                         .map_pass_err(scope);
                     }
 
-                    let buf_raw = buffer
-                        .raw
-                        .get(&snatch_guard)
-                        .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
-                        .map_pass_err(scope)?;
+                    let buf_raw = buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
                     let stride = 3 * 4; // 3 integers, x/y/z group size
 
@@ -1092,9 +1084,8 @@ impl Global {
 
         let buffer = hub
             .buffers
-            .read()
-            .get_owned(buffer_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBuffer(buffer_id))
+            .get(buffer_id)
+            .map_err(|_| ComputePassErrorInner::InvalidBufferId(buffer_id))
             .map_pass_err(scope)?;
 
         base.commands

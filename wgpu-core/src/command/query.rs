@@ -9,7 +9,7 @@ use crate::{
     hal_api::HalApi,
     id::{self, Id},
     init_tracker::MemoryInitKind,
-    resource::{ParentDevice, QuerySet},
+    resource::{DestroyedResourceError, ParentDevice, QuerySet},
     storage::Storage,
     Epoch, FastHashMap, Index,
 };
@@ -113,8 +113,10 @@ pub enum QueryError {
     Use(#[from] QueryUseError),
     #[error("Error encountered while trying to resolve a query")]
     Resolve(#[from] ResolveError),
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(id::BufferId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(id::BufferId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("QuerySet {0:?} is invalid or destroyed")]
     InvalidQuerySet(id::QuerySetId),
 }
@@ -122,11 +124,8 @@ pub enum QueryError {
 impl crate::error::PrettyError for QueryError {
     fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
         fmt.error(self);
-        match *self {
-            Self::InvalidBuffer(id) => fmt.buffer_label(&id),
-            Self::InvalidQuerySet(id) => fmt.query_set_label(&id),
-
-            _ => {}
+        if let Self::InvalidQuerySet(id) = *self {
+            fmt.query_set_label(&id)
         }
     }
 }
@@ -409,7 +408,7 @@ impl Global {
         let dst_buffer = hub
             .buffers
             .get(destination)
-            .map_err(|_| QueryError::InvalidBuffer(destination))?;
+            .map_err(|_| QueryError::InvalidBufferId(destination))?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -465,9 +464,7 @@ impl Global {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
-        let raw_dst_buffer = dst_buffer
-            .raw(&snatch_guard)
-            .ok_or(QueryError::InvalidBuffer(destination))?;
+        let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
 
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.into_iter());

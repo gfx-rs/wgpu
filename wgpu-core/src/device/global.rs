@@ -387,7 +387,7 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
         buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
@@ -402,9 +402,7 @@ impl Global {
             });
         }
 
-        let raw_buf = buffer
-            .raw(&snatch_guard)
-            .ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = buffer.try_raw(&snatch_guard)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -448,13 +446,11 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
         buffer.check_usage(wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer
-            .raw(&snatch_guard)
-            .ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = buffer.try_raw(&snatch_guard)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -789,13 +785,15 @@ impl Global {
         let error = 'error: {
             let texture = match hub.textures.get(texture_id) {
                 Ok(texture) => texture,
-                Err(_) => break 'error resource::CreateTextureViewError::InvalidTexture,
+                Err(_) => {
+                    break 'error resource::CreateTextureViewError::InvalidTextureId(texture_id)
+                }
             };
             let device = &texture.device;
             {
                 let snatch_guard = device.snatchable_lock.read();
-                if texture.is_destroyed(&snatch_guard) {
-                    break 'error resource::CreateTextureViewError::InvalidTexture;
+                if let Err(e) = texture.check_destroyed(&snatch_guard) {
+                    break 'error e.into();
                 }
             }
             #[cfg(feature = "trace")]
@@ -2432,7 +2430,7 @@ impl Global {
         let op_and_err = 'error: {
             let buffer = match hub.buffers.get(buffer_id) {
                 Ok(buffer) => buffer,
-                Err(_) => break 'error Some((op, BufferAccessError::Invalid)),
+                Err(_) => break 'error Some((op, BufferAccessError::InvalidBufferId(buffer_id))),
             };
 
             buffer.map_async(offset, size, op).err()
@@ -2466,13 +2464,11 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
 
         {
             let snatch_guard = buffer.device.snatchable_lock.read();
-            if buffer.is_destroyed(&snatch_guard) {
-                return Err(BufferAccessError::Destroyed);
-            }
+            buffer.check_destroyed(&snatch_guard)?;
         }
 
         let range_size = if let Some(size) = size {
@@ -2535,12 +2531,10 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
 
         let snatch_guard = buffer.device.snatchable_lock.read();
-        if buffer.is_destroyed(&snatch_guard) {
-            return Err(BufferAccessError::Destroyed);
-        }
+        buffer.check_destroyed(&snatch_guard)?;
         drop(snatch_guard);
 
         buffer.device.check_is_valid()?;

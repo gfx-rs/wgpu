@@ -16,9 +16,9 @@ use crate::{
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedTexture, ParentDevice,
-        Resource, ResourceErrorIdent, ResourceInfo, ResourceType, StagingBuffer, Texture,
-        TextureInner,
+        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
+        DestroyedTexture, ParentDevice, Resource, ResourceInfo, ResourceType, StagingBuffer,
+        Texture, TextureInner,
     },
     resource_log, track, FastHashMap, SubmissionIndex,
 };
@@ -365,6 +365,8 @@ pub enum QueueWriteError {
     Transfer(#[from] TransferError),
     #[error(transparent)]
     MemoryInitFailure(#[from] ClearError),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -372,10 +374,8 @@ pub enum QueueWriteError {
 pub enum QueueSubmitError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
-    #[error("{0} has been destroyed")]
-    DestroyedBuffer(ResourceErrorIdent),
-    #[error("{0} has been destroyed")]
-    DestroyedTexture(ResourceErrorIdent),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
     #[error("Buffer {0:?} is still mapped")]
@@ -406,7 +406,7 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
+            .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
 
         let queue = hub
             .queues
@@ -513,7 +513,7 @@ impl Global {
 
         let staging_buffer = hub.staging_buffers.unregister(staging_buffer_id);
         if staging_buffer.is_none() {
-            return Err(QueueWriteError::Transfer(TransferError::InvalidBuffer(
+            return Err(QueueWriteError::Transfer(TransferError::InvalidBufferId(
                 buffer_id,
             )));
         }
@@ -556,7 +556,7 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
+            .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
 
         self.queue_validate_write_buffer_impl(&buffer, buffer_id, buffer_offset, buffer_size)?;
 
@@ -608,7 +608,7 @@ impl Global {
         let dst = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
+            .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
 
         let transition = {
             let mut trackers = device.trackers.lock();
@@ -616,10 +616,7 @@ impl Global {
         };
 
         let snatch_guard = device.snatchable_lock.read();
-        let dst_raw = dst
-            .raw
-            .get(&snatch_guard)
-            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
+        let dst_raw = dst.try_raw(&snatch_guard)?;
 
         dst.same_device_as(queue.as_ref())?;
 
@@ -702,7 +699,7 @@ impl Global {
         let dst = hub
             .textures
             .get(destination.texture)
-            .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
+            .map_err(|_| TransferError::InvalidTextureId(destination.texture))?;
 
         dst.same_device_as(queue.as_ref())?;
 
@@ -830,9 +827,7 @@ impl Global {
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let dst_raw = dst
-            .raw(&snatch_guard)
-            .ok_or(TransferError::InvalidTexture(destination.texture))?;
+        let dst_raw = dst.try_raw(&snatch_guard)?;
 
         let bytes_per_row = data_layout
             .bytes_per_row
@@ -1093,9 +1088,7 @@ impl Global {
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let snatch_guard = device.snatchable_lock.read();
-        let dst_raw = dst
-            .raw(&snatch_guard)
-            .ok_or(TransferError::InvalidTexture(destination.texture))?;
+        let dst_raw = dst.try_raw(&snatch_guard)?;
 
         let regions = hal::TextureCopy {
             src_base: hal::TextureCopyBase {
@@ -1219,11 +1212,7 @@ impl Global {
                             {
                                 profiling::scope!("buffers");
                                 for buffer in cmd_buf_trackers.buffers.used_resources() {
-                                    if buffer.raw.get(&snatch_guard).is_none() {
-                                        return Err(QueueSubmitError::DestroyedBuffer(
-                                            buffer.error_ident(),
-                                        ));
-                                    }
+                                    buffer.check_destroyed(&snatch_guard)?;
                                     buffer.info.use_at(submit_index);
 
                                     match *buffer.map_state.lock() {
@@ -1239,14 +1228,9 @@ impl Global {
                             {
                                 profiling::scope!("textures");
                                 for texture in cmd_buf_trackers.textures.used_resources() {
-                                    let should_extend = match texture.inner.get(&snatch_guard) {
-                                        None => {
-                                            return Err(QueueSubmitError::DestroyedTexture(
-                                                texture.error_ident(),
-                                            ));
-                                        }
-                                        Some(TextureInner::Native { .. }) => false,
-                                        Some(TextureInner::Surface { ref raw, .. }) => {
+                                    let should_extend = match texture.try_inner(&snatch_guard)? {
+                                        TextureInner::Native { .. } => false,
+                                        TextureInner::Surface { ref raw, .. } => {
                                             if raw.is_some() {
                                                 // Compare the Arcs by pointer as Textures don't implement Eq.
                                                 submit_surface_textures_owned
@@ -1350,12 +1334,8 @@ impl Global {
 
                         //Note: locking the trackers has to be done after the storages
                         let mut trackers = device.trackers.lock();
-                        baked
-                            .initialize_buffer_memory(&mut *trackers, &snatch_guard)
-                            .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
-                        baked
-                            .initialize_texture_memory(&mut *trackers, device, &snatch_guard)
-                            .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
+                        baked.initialize_buffer_memory(&mut *trackers, &snatch_guard)?;
+                        baked.initialize_texture_memory(&mut *trackers, device, &snatch_guard)?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_tracker(
@@ -1422,12 +1402,9 @@ impl Global {
             {
                 used_surface_textures.set_size(hub.textures.read().len());
                 for texture in pending_writes.dst_textures.values() {
-                    match texture.inner.get(&snatch_guard) {
-                        None => {
-                            return Err(QueueSubmitError::DestroyedTexture(texture.error_ident()));
-                        }
-                        Some(TextureInner::Native { .. }) => {}
-                        Some(TextureInner::Surface { ref raw, .. }) => {
+                    match texture.try_inner(&snatch_guard)? {
+                        TextureInner::Native { .. } => {}
+                        TextureInner::Surface { ref raw, .. } => {
                             if raw.is_some() {
                                 // Compare the Arcs by pointer as Textures don't implement Eq
                                 submit_surface_textures_owned
