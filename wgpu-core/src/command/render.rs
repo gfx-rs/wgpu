@@ -2435,11 +2435,7 @@ impl Global {
 
             cmd_buf_data
                 .pending_query_resets
-                .reset_queries(
-                    transit,
-                    &query_set_guard,
-                    cmd_buf.device.info.id().backend(),
-                )
+                .reset_queries(transit, &query_set_guard)
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 

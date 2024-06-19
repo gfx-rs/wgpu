@@ -569,8 +569,6 @@ impl<A: HalApi> Device<A> {
         desc: &resource::BufferDescriptor,
         transient: bool,
     ) -> Result<Buffer<A>, resource::CreateBufferError> {
-        debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
-
         self.check_is_valid()?;
 
         if desc.size > self.limits.max_buffer_size {
@@ -679,8 +677,6 @@ impl<A: HalApi> Device<A> {
         format_features: wgt::TextureFormatFeatures,
         clear_mode: resource::TextureClearMode<A>,
     ) -> Texture<A> {
-        debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
-
         Texture {
             inner: Snatchable::new(resource::TextureInner::Native { raw: hal_texture }),
             device: self.clone(),
@@ -710,8 +706,6 @@ impl<A: HalApi> Device<A> {
         hal_buffer: A::Buffer,
         desc: &resource::BufferDescriptor,
     ) -> Buffer<A> {
-        debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
-
         Buffer {
             raw: Snatchable::new(hal_buffer),
             device: self.clone(),

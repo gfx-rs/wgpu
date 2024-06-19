@@ -325,9 +325,7 @@ impl<A: HalApi> Binder<A> {
         bind_group: &Arc<BindGroup<A>>,
         offsets: &[wgt::DynamicOffset],
     ) -> &'a [EntryPayload<A>] {
-        let bind_group_id = bind_group.as_info().id();
-        log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
-        debug_assert_eq!(A::VARIANT, bind_group_id.backend());
+        log::trace!("\tBinding [{}] = group {}", index, bind_group.error_ident());
 
         let payload = &mut self.payloads[index];
         payload.group = Some(bind_group.clone());
