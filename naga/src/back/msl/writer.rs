@@ -1,7 +1,7 @@
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
     arena::Handle,
-    back,
+    back::{self, Baked},
     proc::index,
     proc::{self, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
@@ -2854,7 +2854,7 @@ impl<W: Write> Writer<W> {
                                 };
 
                             if bake {
-                                Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
+                                Some(Baked(handle).to_string())
                             } else {
                                 None
                             }
@@ -3009,7 +3009,7 @@ impl<W: Write> Writer<W> {
                 } => {
                     write!(self.out, "{level}")?;
                     if let Some(expr) = result {
-                        let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
+                        let name = Baked(expr).to_string();
                         self.start_baking_expression(expr, &context.expression, &name)?;
                         self.named_expressions.insert(expr, name);
                     }
@@ -3064,7 +3064,7 @@ impl<W: Write> Writer<W> {
                     // operating on a 64-bit value, `result` is `None`.
                     write!(self.out, "{level}")?;
                     let fun_str = if let Some(result) = result {
-                        let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                        let res_name = Baked(result).to_string();
                         self.start_baking_expression(result, &context.expression, &res_name)?;
                         self.named_expressions.insert(result, res_name);
                         fun.to_msl()?
@@ -3170,7 +3170,7 @@ impl<W: Write> Writer<W> {
                         }
                         crate::RayQueryFunction::Proceed { result } => {
                             write!(self.out, "{level}")?;
-                            let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                            let name = Baked(result).to_string();
                             self.start_baking_expression(result, &context.expression, &name)?;
                             self.named_expressions.insert(result, name);
                             self.put_expression(query, &context.expression, true)?;
