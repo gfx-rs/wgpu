@@ -1510,10 +1510,12 @@ pub struct RenderBundleError {
 }
 
 impl RenderBundleError {
-    pub(crate) const INVALID_DEVICE: Self = RenderBundleError {
-        scope: PassErrorScope::Bundle,
-        inner: RenderBundleErrorInner::Device(DeviceError::Invalid),
-    };
+    pub fn from_device_error(e: DeviceError) -> Self {
+        Self {
+            scope: PassErrorScope::Bundle,
+            inner: e.into(),
+        }
+    }
 }
 impl PrettyError for RenderBundleError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {

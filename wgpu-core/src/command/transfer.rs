@@ -8,12 +8,12 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    id::{BufferId, CommandEncoderId, DeviceId, TextureId},
+    id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
-    resource::{ParentDevice, Resource, Texture, TextureErrorDimension},
+    resource::{ParentDevice, Texture, TextureErrorDimension},
     snatch::SnatchGuard,
     track::{TextureSelector, Tracker},
 };
@@ -41,8 +41,6 @@ pub enum CopySide {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TransferError {
-    #[error("Device {0:?} is invalid")]
-    InvalidDevice(DeviceId),
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
     #[error("Texture {0:?} is invalid or destroyed")]
@@ -579,9 +577,7 @@ impl Global {
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+        device.check_is_valid()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -746,9 +742,7 @@ impl Global {
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+        device.check_is_valid()?;
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -913,9 +907,7 @@ impl Global {
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+        device.check_is_valid()?;
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -1092,9 +1084,7 @@ impl Global {
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(TransferError::InvalidDevice(cmd_buf.device.as_info().id()).into());
-        }
+        device.check_is_valid()?;
 
         let snatch_guard = device.snatchable_lock.read();
 

@@ -31,7 +31,7 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 
-use super::{ImplicitPipelineIds, InvalidDevice, UserClosures};
+use super::{ImplicitPipelineIds, UserClosures};
 
 impl Global {
     pub fn adapter_is_surface_supported<A: HalApi>(
@@ -101,10 +101,13 @@ impl Global {
     pub fn device_features<A: HalApi>(
         &self,
         device_id: DeviceId,
-    ) -> Result<wgt::Features, InvalidDevice> {
+    ) -> Result<wgt::Features, DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         Ok(device.features)
     }
@@ -112,10 +115,13 @@ impl Global {
     pub fn device_limits<A: HalApi>(
         &self,
         device_id: DeviceId,
-    ) -> Result<wgt::Limits, InvalidDevice> {
+    ) -> Result<wgt::Limits, DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         Ok(device.limits.clone())
     }
@@ -123,10 +129,13 @@ impl Global {
     pub fn device_downlevel_properties<A: HalApi>(
         &self,
         device_id: DeviceId,
-    ) -> Result<wgt::DownlevelCapabilities, InvalidDevice> {
+    ) -> Result<wgt::DownlevelCapabilities, DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         Ok(device.downlevel.clone())
     }
@@ -147,7 +156,7 @@ impl Global {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => {
-                    break 'error DeviceError::Invalid.into();
+                    break 'error DeviceError::InvalidDeviceId.into();
                 }
             };
             if !device.is_valid() {
@@ -348,7 +357,7 @@ impl Global {
 
         hub.devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?
+            .map_err(|_| DeviceError::InvalidDeviceId)?
             .wait_for_submit(last_submission)
     }
 
@@ -367,11 +376,9 @@ impl Global {
         let device = hub
             .devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
         let snatch_guard = device.snatchable_lock.read();
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+        device.check_is_valid()?;
 
         let buffer = hub
             .buffers
@@ -429,10 +436,8 @@ impl Global {
         let device = hub
             .devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
+        device.check_is_valid()?;
 
         let snatch_guard = device.snatchable_lock.read();
 
@@ -549,7 +554,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -603,7 +608,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
 
             // NB: Any change done through the raw texture handle will not be
@@ -675,7 +680,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
 
             // NB: Any change done through the raw buffer handle will not be
@@ -872,7 +877,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -936,7 +941,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1035,7 +1040,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1093,7 +1098,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1186,7 +1191,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1264,7 +1269,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1325,7 +1330,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid,
+                Err(_) => break 'error DeviceError::InvalidDeviceId,
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost;
@@ -1416,10 +1421,14 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(bundle_encoder.parent()) {
                 Ok(device) => device,
-                Err(_) => break 'error command::RenderBundleError::INVALID_DEVICE,
+                Err(_) => {
+                    break 'error command::RenderBundleError::from_device_error(
+                        DeviceError::InvalidDeviceId,
+                    );
+                }
             };
             if !device.is_valid() {
-                break 'error command::RenderBundleError::INVALID_DEVICE;
+                break 'error command::RenderBundleError::from_device_error(DeviceError::Lost);
             }
 
             #[cfg(feature = "trace")]
@@ -1485,7 +1494,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1562,7 +1571,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1698,7 +1707,7 @@ impl Global {
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break 'error DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -1830,7 +1839,7 @@ impl Global {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 // TODO: Handle error properly
-                Err(crate::storage::InvalidId) => break 'error DeviceError::Invalid.into(),
+                Err(crate::storage::InvalidId) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break 'error DeviceError::Lost.into();
@@ -2000,10 +2009,10 @@ impl Global {
 
                 let device = match device_guard.get(device_id) {
                     Ok(device) => device,
-                    Err(_) => break 'error DeviceError::Invalid.into(),
+                    Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
                 };
-                if !device.is_valid() {
-                    break 'error DeviceError::Lost.into();
+                if let Err(e) = device.check_is_valid() {
+                    break 'error e.into();
                 }
 
                 #[cfg(feature = "trace")]
@@ -2139,13 +2148,16 @@ impl Global {
     #[cfg(feature = "replay")]
     /// Only triage suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.
-    pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), InvalidDevice> {
+    pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
+
+        device.check_is_valid()?;
+
         device.lock_life().triage_suspected(&device.trackers);
         Ok(())
     }
@@ -2164,7 +2176,7 @@ impl Global {
         let device = hub
             .devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
             if submission_index.queue_id != device_id.into_queue_id() {
@@ -2687,10 +2699,7 @@ impl Global {
         }
         drop(snatch_guard);
 
-        if !buffer.device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
-
+        buffer.device.check_is_valid()?;
         buffer.unmap()
     }
 }

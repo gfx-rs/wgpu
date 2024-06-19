@@ -9,7 +9,7 @@ use crate::{
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
-    id::{BufferId, CommandEncoderId, DeviceId, TextureId},
+    id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{ParentDevice, Resource, Texture, TextureClearMode},
     snatch::SnatchGuard,
@@ -26,8 +26,6 @@ use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, Te
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,
-    #[error("Device {0:?} is invalid")]
-    InvalidDevice(DeviceId),
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
     #[error("Texture {0:?} is invalid or destroyed")]
@@ -238,9 +236,7 @@ impl Global {
         }
 
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(ClearError::InvalidDevice(cmd_buf.device.as_info().id()));
-        }
+        device.check_is_valid()?;
         let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
         let snatch_guard = device.snatchable_lock.read();
