@@ -1410,7 +1410,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
                     } else if self.need_bake_expressions.contains(&handle) {
-                        Some(format!("_expr{}", handle.index()))
+                        Some(Baked(handle).to_string())
                     } else {
                         None
                     };
@@ -1992,7 +1992,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 write!(self.out, "{level}")?;
-                let name = format!("_expr{}", result.index());
+                let name = Baked(result).to_string();
                 self.write_named_expr(module, pointer, name, result, func_ctx)?;
 
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;

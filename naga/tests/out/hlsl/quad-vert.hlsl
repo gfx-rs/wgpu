@@ -37,10 +37,10 @@ struct VertexOutput_main {
 
 void main_1()
 {
-    float2 _expr6 = a_uv_1;
-    v_uv = _expr6;
-    float2 _expr7 = a_pos_1;
-    unnamed.gl_Position = float4(_expr7.x, _expr7.y, 0.0, 1.0);
+    float2 _e6 = a_uv_1;
+    v_uv = _e6;
+    float2 _e7 = a_pos_1;
+    unnamed.gl_Position = float4(_e7.x, _e7.y, 0.0, 1.0);
     return;
 }
 
@@ -56,9 +56,9 @@ VertexOutput_main main(float2 a_uv : LOC1, float2 a_pos : LOC0)
     a_uv_1 = a_uv;
     a_pos_1 = a_pos;
     main_1();
-    float2 _expr7 = v_uv;
-    float4 _expr8 = unnamed.gl_Position;
-    const type_4 type_4_ = Constructtype_4(_expr7, _expr8);
+    float2 _e7 = v_uv;
+    float4 _e8 = unnamed.gl_Position;
+    const type_4 type_4_ = Constructtype_4(_e7, _e8);
     const VertexOutput_main type_4_1 = { type_4_.member, type_4_.gl_Position };
     return type_4_1;
 }

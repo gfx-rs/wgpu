@@ -20,8 +20,8 @@ FragmentOutput main(FragmentInput_main fragmentinput_main)
     float4 color = float4(0.4, 0.3, 0.2, 0.1);
     float4 mask = float4(0.9, 0.8, 0.7, 0.6);
 
-    float4 _expr13 = color;
-    float4 _expr14 = mask;
-    const FragmentOutput fragmentoutput = ConstructFragmentOutput(_expr13, _expr14);
+    float4 _e13 = color;
+    float4 _e14 = mask;
+    const FragmentOutput fragmentoutput = ConstructFragmentOutput(_e13, _e14);
     return fragmentoutput;
 }

@@ -7,33 +7,33 @@ uint collatz_iterations(uint n_base)
 
     n = n_base;
     while(true) {
-        uint _expr4 = n;
-        if ((_expr4 > 1u)) {
+        uint _e4 = n;
+        if ((_e4 > 1u)) {
         } else {
             break;
         }
         {
-            uint _expr7 = n;
-            if (((_expr7 % 2u) == 0u)) {
-                uint _expr12 = n;
-                n = (_expr12 / 2u);
+            uint _e7 = n;
+            if (((_e7 % 2u) == 0u)) {
+                uint _e12 = n;
+                n = (_e12 / 2u);
             } else {
-                uint _expr16 = n;
-                n = ((3u * _expr16) + 1u);
+                uint _e16 = n;
+                n = ((3u * _e16) + 1u);
             }
-            uint _expr20 = i;
-            i = (_expr20 + 1u);
+            uint _e20 = i;
+            i = (_e20 + 1u);
         }
     }
-    uint _expr23 = i;
-    return _expr23;
+    uint _e23 = i;
+    return _e23;
 }
 
 [numthreads(1, 1, 1)]
 void main(uint3 global_id : SV_DispatchThreadID)
 {
-    uint _expr9 = asuint(v_indices.Load(global_id.x*4+0));
-    const uint _e10 = collatz_iterations(_expr9);
+    uint _e9 = asuint(v_indices.Load(global_id.x*4+0));
+    const uint _e10 = collatz_iterations(_e9);
     v_indices.Store(global_id.x*4+0, asuint(_e10));
     return;
 }

@@ -3,8 +3,8 @@ void fb1_(inout bool cond)
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            bool _expr1 = cond;
-            if (!(_expr1)) {
+            bool _e1 = cond;
+            if (!(_e1)) {
                 break;
             }
         }
