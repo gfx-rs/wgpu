@@ -321,10 +321,10 @@ pub(crate) fn clear_texture<A: HalApi>(
             dst_raw,
         ),
         TextureClearMode::Surface { .. } => {
-            clear_texture_via_render_passes(dst_texture, range, true, encoder)?
+            clear_texture_via_render_passes(dst_texture, range, true, encoder)
         }
         TextureClearMode::RenderPass { is_color, .. } => {
-            clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
+            clear_texture_via_render_passes(dst_texture, range, is_color, encoder)
         }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(
@@ -434,7 +434,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
     range: TextureInitRange,
     is_color: bool,
     encoder: &mut A::CommandEncoder,
-) -> Result<(), ClearError> {
+) {
     assert_eq!(dst_texture.desc.dimension, wgt::TextureDimension::D2);
 
     let extent_base = wgt::Extent3d {
@@ -498,5 +498,4 @@ fn clear_texture_via_render_passes<A: HalApi>(
             }
         }
     }
-    Ok(())
 }
