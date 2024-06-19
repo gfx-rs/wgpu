@@ -112,6 +112,16 @@ impl<T> Handle<T> {
     const unsafe fn from_usize_unchecked(index: usize) -> Self {
         Handle::new(Index::new_unchecked((index + 1) as u32))
     }
+
+    /// Write this handle's index to `formatter`, preceded by `prefix`.
+    pub fn write_prefixed(
+        &self,
+        formatter: &mut std::fmt::Formatter,
+        prefix: &'static str,
+    ) -> std::fmt::Result {
+        formatter.write_str(prefix)?;
+        <usize as std::fmt::Display>::fmt(&self.index(), formatter)
+    }
 }
 
 /// A strongly typed range of handles.
