@@ -909,10 +909,10 @@ impl Global {
             };
 
             let mut trackers = device.trackers.lock();
-            let transition = trackers
-                .textures
-                .set_single(&dst, selector, hal::TextureUses::COPY_DST)
-                .ok_or(TransferError::InvalidTexture(destination.texture))?;
+            let transition =
+                trackers
+                    .textures
+                    .set_single(&dst, selector, hal::TextureUses::COPY_DST);
             unsafe {
                 encoder.transition_textures(transition.map(|pending| pending.into_hal(dst_raw)));
                 encoder.transition_buffers(iter::once(barrier));
@@ -1110,10 +1110,10 @@ impl Global {
 
         unsafe {
             let mut trackers = device.trackers.lock();
-            let transitions = trackers
-                .textures
-                .set_single(&dst, selector, hal::TextureUses::COPY_DST)
-                .ok_or(TransferError::InvalidTexture(destination.texture))?;
+            let transitions =
+                trackers
+                    .textures
+                    .set_single(&dst, selector, hal::TextureUses::COPY_DST);
             encoder.transition_textures(transitions.map(|pending| pending.into_hal(dst_raw)));
             encoder.copy_external_image_to_texture(
                 source,

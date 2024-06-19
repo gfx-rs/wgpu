@@ -814,10 +814,10 @@ impl Global {
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
-        let dst_pending = tracker
-            .textures
-            .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST)
-            .ok_or(TransferError::InvalidTexture(destination.texture))?;
+        let dst_pending =
+            tracker
+                .textures
+                .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST);
         let dst_raw = dst_texture
             .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
@@ -952,10 +952,10 @@ impl Global {
             &snatch_guard,
         )?;
 
-        let src_pending = tracker
-            .textures
-            .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC)
-            .ok_or(TransferError::InvalidTexture(source.texture))?;
+        let src_pending =
+            tracker
+                .textures
+                .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC);
         let src_raw = src_texture
             .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
@@ -1169,11 +1169,11 @@ impl Global {
             &snatch_guard,
         )?;
 
-        let src_pending = cmd_buf_data
-            .trackers
-            .textures
-            .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC)
-            .ok_or(TransferError::InvalidTexture(source.texture))?;
+        let src_pending = cmd_buf_data.trackers.textures.set_single(
+            &src_texture,
+            src_range,
+            hal::TextureUses::COPY_SRC,
+        );
         let src_raw = src_texture
             .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
@@ -1187,11 +1187,11 @@ impl Global {
             .map(|pending| pending.into_hal(src_raw))
             .collect();
 
-        let dst_pending = cmd_buf_data
-            .trackers
-            .textures
-            .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST)
-            .ok_or(TransferError::InvalidTexture(destination.texture))?;
+        let dst_pending = cmd_buf_data.trackers.textures.set_single(
+            &dst_texture,
+            dst_range,
+            hal::TextureUses::COPY_DST,
+        );
         let dst_raw = dst_texture
             .raw(&snatch_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
