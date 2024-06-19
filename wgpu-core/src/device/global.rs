@@ -2417,143 +2417,30 @@ impl Global {
         size: Option<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
+        profiling::scope!("Buffer::map_async");
         api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 
-        // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
+        let hub = A::hub(self);
+
+        let op_and_err = 'error: {
+            let buffer = match hub.buffers.get(buffer_id) {
+                Ok(buffer) => buffer,
+                Err(_) => break 'error Some((op, BufferAccessError::Invalid)),
+            };
+
+            buffer.map_async(offset, size, op).err()
+        };
+
+        // User callbacks must not be called while holding `buffer.map_async`'s locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
-        if let Err((mut operation, err)) =
-            self.buffer_map_async_inner::<A>(buffer_id, offset, size, op)
-        {
+        if let Some((mut operation, err)) = op_and_err {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
             log::error!("Buffer::map_async error: {err}");
             return Err(err);
         }
-
-        Ok(())
-    }
-
-    // Returns the mapping callback in case of error so that the callback can be fired outside
-    // of the locks that are held in this function.
-    fn buffer_map_async_inner<A: HalApi>(
-        &self,
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        size: Option<BufferAddress>,
-        op: BufferMapOperation,
-    ) -> Result<(), (BufferMapOperation, BufferAccessError)> {
-        profiling::scope!("Buffer::map_async");
-
-        let hub = A::hub(self);
-
-        let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsages::MAP_READ, hal::BufferUses::MAP_READ),
-            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
-        };
-
-        let buffer = {
-            let buffer = hub.buffers.get(buffer_id);
-
-            let buffer = match buffer {
-                Ok(b) => b,
-                Err(_) => {
-                    return Err((op, BufferAccessError::Invalid));
-                }
-            };
-            {
-                let snatch_guard = buffer.device.snatchable_lock.read();
-                if buffer.is_destroyed(&snatch_guard) {
-                    return Err((op, BufferAccessError::Destroyed));
-                }
-            }
-
-            let range_size = if let Some(size) = size {
-                size
-            } else if offset > buffer.size {
-                0
-            } else {
-                buffer.size - offset
-            };
-
-            if offset % wgt::MAP_ALIGNMENT != 0 {
-                return Err((op, BufferAccessError::UnalignedOffset { offset }));
-            }
-            if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-                return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
-            }
-
-            let range = offset..(offset + range_size);
-
-            if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
-            {
-                return Err((op, BufferAccessError::UnalignedRange));
-            }
-
-            let device = &buffer.device;
-            if !device.is_valid() {
-                return Err((op, DeviceError::Lost.into()));
-            }
-
-            if let Err(e) = check_buffer_usage(buffer.info.id(), buffer.usage, pub_usage) {
-                return Err((op, e.into()));
-            }
-
-            if range.start > range.end {
-                return Err((
-                    op,
-                    BufferAccessError::NegativeRange {
-                        start: range.start,
-                        end: range.end,
-                    },
-                ));
-            }
-            if range.end > buffer.size {
-                return Err((
-                    op,
-                    BufferAccessError::OutOfBoundsOverrun {
-                        index: range.end,
-                        max: buffer.size,
-                    },
-                ));
-            }
-
-            {
-                let map_state = &mut *buffer.map_state.lock();
-                *map_state = match *map_state {
-                    resource::BufferMapState::Init { .. }
-                    | resource::BufferMapState::Active { .. } => {
-                        return Err((op, BufferAccessError::AlreadyMapped));
-                    }
-                    resource::BufferMapState::Waiting(_) => {
-                        return Err((op, BufferAccessError::MapAlreadyPending));
-                    }
-                    resource::BufferMapState::Idle => {
-                        resource::BufferMapState::Waiting(resource::BufferPendingMapping {
-                            range,
-                            op,
-                            _parent_buffer: buffer.clone(),
-                        })
-                    }
-                };
-            }
-
-            let snatch_guard = buffer.device.snatchable_lock.read();
-
-            {
-                let mut trackers = buffer.device.as_ref().trackers.lock();
-                trackers.buffers.set_single(&buffer, internal_use);
-                //TODO: Check if draining ALL buffers is correct!
-                let _ = trackers.buffers.drain_transitions(&snatch_guard);
-            }
-
-            drop(snatch_guard);
-
-            buffer
-        };
-
-        buffer.device.lock_life().map(&buffer);
 
         Ok(())
     }
