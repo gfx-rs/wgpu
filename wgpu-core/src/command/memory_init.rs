@@ -85,7 +85,7 @@ impl<A: HalApi> CommandBufferTextureMemoryActions<A> {
         // self.discards is empty!)
         let init_actions = &mut self.init_actions;
         self.discards.retain(|discarded_surface| {
-            if discarded_surface.texture.as_info().id() == action.texture.as_info().id()
+            if discarded_surface.texture.is_equal(&action.texture)
                 && action.range.layer_range.contains(&discarded_surface.layer)
                 && action
                     .range
