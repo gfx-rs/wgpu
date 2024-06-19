@@ -17,13 +17,10 @@ use crate::{
 
 use super::{ResourceTracker, TrackerIndex};
 
-/// Satisfy clippy.
-type Pair<T> = (Id<<T as Resource>::Marker>, Arc<T>);
-
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct StatelessBindGroupState<T: Resource> {
-    resources: Mutex<Vec<Pair<T>>>,
+    resources: Mutex<Vec<Arc<T>>>,
 }
 
 impl<T: Resource> StatelessBindGroupState<T> {
@@ -39,37 +36,25 @@ impl<T: Resource> StatelessBindGroupState<T> {
     /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&self) {
         let mut resources = self.resources.lock();
-        resources.sort_unstable_by_key(|&(id, _)| id.unzip().0);
+        resources.sort_unstable_by_key(|resource| resource.as_info().tracker_index());
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.
     pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
         let resources = self.resources.lock();
-        resources
-            .iter()
-            .map(|(_, resource)| resource.clone())
-            .collect::<Vec<_>>()
-            .into_iter()
+        resources.iter().cloned().collect::<Vec<_>>().into_iter()
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.
     pub fn drain_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
         let mut resources = self.resources.lock();
-        resources
-            .drain(..)
-            .map(|(_, r)| r)
-            .collect::<Vec<_>>()
-            .into_iter()
+        resources.drain(..).collect::<Vec<_>>().into_iter()
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(&self, storage: &'a Storage<T>, id: Id<T::Marker>) -> Option<&'a T> {
-        let resource = storage.get(id).ok()?;
-
+    pub fn add_single(&self, resource: &Arc<T>) {
         let mut resources = self.resources.lock();
-        resources.push((id, resource.clone()));
-
-        Some(resource)
+        resources.push(resource.clone());
     }
 }
 
