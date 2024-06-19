@@ -218,26 +218,41 @@ mod test {
     fn atomic_test(bytes: &[u8]) {
         let _ = env_logger::builder().is_test(true).try_init();
         let m = crate::front::spv::parse_u8_slice(bytes, &Default::default()).unwrap();
-        let mut validator = crate::valid::Validator::new(
+
+        let mut wgsl = String::new();
+        let mut should_panic = false;
+
+        for vflags in [
+            crate::valid::ValidationFlags::all(),
             crate::valid::ValidationFlags::empty(),
-            Default::default(),
-        );
-        let info = match validator.validate(&m) {
-            Err(e) => {
-                log::error!("{}", e.emit_to_string(""));
-                return;
-            }
-            Ok(i) => i,
-        };
-        let wgsl =
-            crate::back::wgsl::write_string(&m, &info, crate::back::wgsl::WriterFlags::empty())
-                .unwrap();
-        log::info!("wgsl-out:\n{wgsl}");
+        ] {
+            let mut validator = crate::valid::Validator::new(vflags, Default::default());
+            match validator.validate(&m) {
+                Err(e) => {
+                    log::error!("SPIR-V validation {}", e.emit_to_string(""));
+                    should_panic = true;
+                }
+                Ok(i) => {
+                    wgsl = crate::back::wgsl::write_string(
+                        &m,
+                        &i,
+                        crate::back::wgsl::WriterFlags::empty(),
+                    )
+                    .unwrap();
+                    log::info!("wgsl-out:\n{wgsl}");
+                    break;
+                }
+            };
+        }
+
+        if should_panic {
+            panic!("validation error");
+        }
 
         let m = match crate::front::wgsl::parse_str(&wgsl) {
             Ok(m) => m,
             Err(e) => {
-                log::error!("{}", e.emit_to_string(&wgsl));
+                log::error!("round trip WGSL validation {}", e.emit_to_string(&wgsl));
                 panic!("invalid module");
             }
         };
