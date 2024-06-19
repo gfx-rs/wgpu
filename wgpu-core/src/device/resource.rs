@@ -1243,8 +1243,8 @@ impl<A: HalApi> Device<A> {
         };
 
         log::debug!(
-            "Create view for texture {:?} filters usages to {:?}",
-            texture.as_info().id(),
+            "Create view for {} filters usages to {:?}",
+            texture.error_ident(),
             usage
         );
 
