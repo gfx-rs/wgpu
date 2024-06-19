@@ -193,7 +193,9 @@ impl<A: HalApi> BakedCommands<A> {
             match buffer_use.kind {
                 MemoryInitKind::ImplicitlyInitialized => {}
                 MemoryInitKind::NeedsInitializedMemory => {
-                    match uninitialized_ranges_per_buffer.entry(buffer_use.buffer.as_info().id()) {
+                    match uninitialized_ranges_per_buffer
+                        .entry(buffer_use.buffer.as_info().tracker_index())
+                    {
                         Entry::Vacant(e) => {
                             e.insert((
                                 buffer_use.buffer.clone(),
