@@ -614,9 +614,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::Invalid.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -689,9 +686,6 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::Invalid.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             // NB: Any change done through the raw buffer handle will not be
             // recorded in the replay
