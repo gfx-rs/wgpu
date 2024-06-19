@@ -208,7 +208,7 @@ impl<A: HalApi> BakedCommands<A> {
             }
         }
 
-        for (buffer_id, (buffer, mut ranges)) in uninitialized_ranges_per_buffer {
+        for (buffer, mut ranges) in uninitialized_ranges_per_buffer.into_values() {
             // Collapse touching ranges.
             ranges.sort_by_key(|r| r.start);
             for i in (1..ranges.len()).rev() {
@@ -234,7 +234,7 @@ impl<A: HalApi> BakedCommands<A> {
             let raw_buf = buffer
                 .raw
                 .get(snatch_guard)
-                .ok_or(DestroyedBufferError(buffer_id))?;
+                .ok_or(DestroyedBufferError(buffer.error_ident()))?;
 
             unsafe {
                 self.encoder.transition_buffers(
