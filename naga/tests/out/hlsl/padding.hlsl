@@ -35,8 +35,8 @@ cbuffer input3_ : register(b2) { Test3_ input3_; }
 
 float4 vertex() : SV_Position
 {
-    float _expr4 = input1_.b;
-    float _expr8 = input2_.b;
-    float _expr12 = input3_.b;
-    return ((((1.0).xxxx * _expr4) * _expr8) * _expr12);
+    float _e4 = input1_.b;
+    float _e8 = input2_.b;
+    float _e12 = input3_.b;
+    return ((((1.0).xxxx * _e4) * _e8) * _e12);
 }

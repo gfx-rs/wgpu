@@ -27,14 +27,14 @@ float2 splat_assignment()
 {
     float2 a = (2.0).xx;
 
-    float2 _expr4 = a;
-    a = (_expr4 + (1.0).xx);
-    float2 _expr8 = a;
-    a = (_expr8 - (3.0).xx);
-    float2 _expr12 = a;
-    a = (_expr12 / (4.0).xx);
-    float2 _expr15 = a;
-    return _expr15;
+    float2 _e4 = a;
+    a = (_e4 + (1.0).xx);
+    float2 _e8 = a;
+    a = (_e8 - (3.0).xx);
+    float2 _e12 = a;
+    a = (_e12 / (4.0).xx);
+    float2 _e15 = a;
+    return _e15;
 }
 
 float3 bool_cast(float3 x)
@@ -221,36 +221,36 @@ void assignment()
     int3 vec0_ = ZeroValueint3();
 
     a_1 = 1;
-    int _expr5 = a_1;
-    a_1 = (_expr5 + 1);
-    int _expr7 = a_1;
-    a_1 = (_expr7 - 1);
-    int _expr9 = a_1;
-    int _expr10 = a_1;
-    a_1 = (_expr10 * _expr9);
-    int _expr12 = a_1;
-    int _expr13 = a_1;
-    a_1 = (_expr13 / _expr12);
-    int _expr15 = a_1;
-    a_1 = (_expr15 % 1);
-    int _expr17 = a_1;
-    a_1 = (_expr17 & 0);
-    int _expr19 = a_1;
-    a_1 = (_expr19 | 0);
-    int _expr21 = a_1;
-    a_1 = (_expr21 ^ 0);
-    int _expr23 = a_1;
-    a_1 = (_expr23 << 2u);
-    int _expr25 = a_1;
-    a_1 = (_expr25 >> 1u);
-    int _expr28 = a_1;
-    a_1 = (_expr28 + 1);
-    int _expr31 = a_1;
-    a_1 = (_expr31 - 1);
-    int _expr37 = vec0_[1];
-    vec0_[1] = (_expr37 + 1);
-    int _expr41 = vec0_[1];
-    vec0_[1] = (_expr41 - 1);
+    int _e5 = a_1;
+    a_1 = (_e5 + 1);
+    int _e7 = a_1;
+    a_1 = (_e7 - 1);
+    int _e9 = a_1;
+    int _e10 = a_1;
+    a_1 = (_e10 * _e9);
+    int _e12 = a_1;
+    int _e13 = a_1;
+    a_1 = (_e13 / _e12);
+    int _e15 = a_1;
+    a_1 = (_e15 % 1);
+    int _e17 = a_1;
+    a_1 = (_e17 & 0);
+    int _e19 = a_1;
+    a_1 = (_e19 | 0);
+    int _e21 = a_1;
+    a_1 = (_e21 ^ 0);
+    int _e23 = a_1;
+    a_1 = (_e23 << 2u);
+    int _e25 = a_1;
+    a_1 = (_e25 >> 1u);
+    int _e28 = a_1;
+    a_1 = (_e28 + 1);
+    int _e31 = a_1;
+    a_1 = (_e31 - 1);
+    int _e37 = vec0_[1];
+    vec0_[1] = (_e37 + 1);
+    int _e41 = vec0_[1];
+    vec0_[1] = (_e41 - 1);
     return;
 }
 
