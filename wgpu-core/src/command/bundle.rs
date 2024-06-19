@@ -101,7 +101,6 @@ use crate::{
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
-    validation::check_buffer_usage,
     Label, LabelHelpers,
 };
 use arrayvec::ArrayVec;
@@ -525,8 +524,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDEX)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::INDEX).map_pass_err(scope)?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
@@ -564,8 +562,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::VERTEX)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::VERTEX).map_pass_err(scope)?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
@@ -691,8 +688,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer,
@@ -730,8 +726,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer,

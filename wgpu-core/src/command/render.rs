@@ -25,12 +25,13 @@ use crate::{
     hal_label, id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource::{ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
+    resource::{
+        MissingBufferUsageError, ParentDevice, QuerySet, Texture, TextureView,
+        TextureViewNotRenderableReason,
+    },
     storage::Storage,
     track::{TextureSelector, Tracker, UsageConflict, UsageScope},
-    validation::{
-        check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
-    },
+    validation::{check_texture_usage, MissingTextureUsageError},
     Label,
 };
 
@@ -1675,7 +1676,8 @@ impl Global {
                             .same_device_as(cmd_buf.as_ref())
                             .map_pass_err(scope)?;
 
-                        check_buffer_usage(buffer_id, buffer.usage, BufferUsages::INDEX)
+                        buffer
+                            .check_usage(BufferUsages::INDEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
@@ -1737,7 +1739,8 @@ impl Global {
                             .map_pass_err(scope);
                         }
 
-                        check_buffer_usage(buffer_id, buffer.usage, BufferUsages::VERTEX)
+                        buffer
+                            .check_usage(BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
@@ -2034,12 +2037,9 @@ impl Global {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
-                        check_buffer_usage(
-                            buffer_id,
-                            indirect_buffer.usage,
-                            BufferUsages::INDIRECT,
-                        )
-                        .map_pass_err(scope)?;
+                        indirect_buffer
+                            .check_usage(BufferUsages::INDIRECT)
+                            .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
                             .get(&snatch_guard)
@@ -2110,12 +2110,9 @@ impl Global {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
-                        check_buffer_usage(
-                            buffer_id,
-                            indirect_buffer.usage,
-                            BufferUsages::INDIRECT,
-                        )
-                        .map_pass_err(scope)?;
+                        indirect_buffer
+                            .check_usage(BufferUsages::INDIRECT)
+                            .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
                             .get(&snatch_guard)
@@ -2131,7 +2128,8 @@ impl Global {
                                 hal::BufferUses::INDIRECT,
                             )
                             .map_pass_err(scope)?;
-                        check_buffer_usage(buffer_id, count_buffer.usage, BufferUsages::INDIRECT)
+                        count_buffer
+                            .check_usage(BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let count_raw = count_buffer
                             .raw

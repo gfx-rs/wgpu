@@ -15,10 +15,9 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     init_tracker::MemoryInitKind,
-    resource::{self, ParentDevice, Resource},
+    resource::{self, MissingBufferUsageError, ParentDevice, Resource},
     snatch::SnatchGuard,
     track::{Tracker, TrackerIndex, UsageConflict, UsageScope},
-    validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
 };
 
@@ -793,7 +792,8 @@ impl Global {
                         .buffers
                         .insert_merge_single(buffer.clone(), hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
+                    buffer
+                        .check_usage(wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
