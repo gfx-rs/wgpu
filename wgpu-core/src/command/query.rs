@@ -49,10 +49,9 @@ impl<A: HalApi> QueryResetMap<A> {
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
         query_set_storage: &Storage<QuerySet<A>>,
-        backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
         for (query_set_id, (state, epoch)) in self.map.drain() {
-            let id = Id::zip(query_set_id, epoch, backend);
+            let id = Id::zip(query_set_id, epoch, A::VARIANT);
             let query_set = query_set_storage.get(id).map_err(|_| id)?;
 
             debug_assert_eq!(state.len(), query_set.desc.count as usize);
