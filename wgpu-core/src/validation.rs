@@ -134,26 +134,6 @@ pub struct Interface {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("Texture usage is {actual:?} which does not contain required usage {expected:?}")]
-pub struct MissingTextureUsageError {
-    pub(crate) actual: wgt::TextureUsages,
-    pub(crate) expected: wgt::TextureUsages,
-}
-
-/// Checks that the given texture usage contains the required texture usage,
-/// returns an error otherwise.
-pub fn check_texture_usage(
-    actual: wgt::TextureUsages,
-    expected: wgt::TextureUsages,
-) -> Result<(), MissingTextureUsageError> {
-    if !actual.contains(expected) {
-        Err(MissingTextureUsageError { actual, expected })
-    } else {
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum BindingError {
     #[error("Binding is missing from the pipeline layout")]

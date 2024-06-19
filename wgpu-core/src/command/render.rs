@@ -26,12 +26,11 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{
-        MissingBufferUsageError, ParentDevice, QuerySet, Texture, TextureView,
-        TextureViewNotRenderableReason,
+        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, QuerySet, Texture,
+        TextureView, TextureViewNotRenderableReason,
     },
     storage::Storage,
     track::{TextureSelector, Tracker, UsageConflict, UsageScope},
-    validation::{check_texture_usage, MissingTextureUsageError},
     Label,
 };
 
@@ -1248,7 +1247,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 
         for ra in self.render_attachments {
             let texture = &ra.texture;
-            check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
+            texture.check_usage(TextureUsages::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             unsafe {

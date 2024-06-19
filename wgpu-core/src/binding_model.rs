@@ -8,11 +8,13 @@ use crate::{
     hal_api::HalApi,
     id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    resource::{MissingBufferUsageError, ParentDevice, Resource, ResourceInfo, ResourceType},
+    resource::{
+        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, Resource, ResourceInfo,
+        ResourceType,
+    },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
     track::{BindGroupStates, UsageConflict},
-    validation::MissingTextureUsageError,
     Label,
 };
 

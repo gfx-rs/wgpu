@@ -431,6 +431,14 @@ pub struct MissingBufferUsageError {
     pub(crate) expected: wgt::BufferUsages,
 }
 
+#[derive(Clone, Debug, Error)]
+#[error("Usage flags {actual:?} of {res} do not contain required usage flags {expected:?}")]
+pub struct MissingTextureUsageError {
+    pub(crate) res: ResourceErrorIdent,
+    pub(crate) actual: wgt::TextureUsages,
+    pub(crate) expected: wgt::TextureUsages,
+}
+
 pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
@@ -965,6 +973,25 @@ pub struct Texture<A: HalApi> {
     pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
     pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
+}
+
+impl<A: HalApi> Texture<A> {
+    /// Checks that the given texture usage contains the required texture usage,
+    /// returns an error otherwise.
+    pub(crate) fn check_usage(
+        &self,
+        expected: wgt::TextureUsages,
+    ) -> Result<(), MissingTextureUsageError> {
+        self.desc
+            .usage
+            .contains(expected)
+            .then_some(())
+            .ok_or_else(|| MissingTextureUsageError {
+                res: self.error_ident(),
+                actual: self.desc.usage,
+                expected,
+            })
+    }
 }
 
 impl<A: HalApi> Drop for Texture<A> {

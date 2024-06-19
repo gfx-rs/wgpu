@@ -34,7 +34,7 @@ use crate::{
         BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope,
         UsageScopePool,
     },
-    validation::{self, check_texture_usage, validate_color_attachment_bytes_per_sample},
+    validation::{self, validate_color_attachment_bytes_per_sample},
     FastHashMap, LabelHelpers as _, SubmissionIndex,
 };
 
@@ -2059,7 +2059,7 @@ impl<A: HalApi> Device<A> {
 
         texture.same_device_as(view)?;
 
-        check_texture_usage(texture.desc.usage, pub_usage)?;
+        texture.check_usage(pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
             texture: texture.clone(),

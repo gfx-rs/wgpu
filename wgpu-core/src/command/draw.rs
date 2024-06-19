@@ -7,9 +7,8 @@ use crate::{
     hal_api::HalApi,
     id,
     pipeline::RenderPipeline,
-    resource::{Buffer, MissingBufferUsageError, QuerySet},
+    resource::{Buffer, MissingBufferUsageError, MissingTextureUsageError, QuerySet},
     track::UsageConflict,
-    validation::MissingTextureUsageError,
 };
 use wgt::{BufferAddress, BufferSize, Color, VertexStepMode};
 
