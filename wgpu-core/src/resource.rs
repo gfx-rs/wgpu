@@ -158,28 +158,29 @@ pub(crate) trait ParentDevice<A: HalApi>: Resource {
     fn device(&self) -> &Arc<Device<A>>;
 
     fn same_device_as<O: ParentDevice<A>>(&self, other: &O) -> Result<(), DeviceError> {
-        self.device()
-            .is_equal(other.device())
-            .then_some(())
-            .ok_or_else(|| {
-                DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
-                    res: self.error_ident(),
-                    res_device: self.device().error_ident(),
-                    target: Some(other.error_ident()),
-                    target_device: other.device().error_ident(),
-                }))
-            })
+        if self.device().is_equal(other.device()) {
+            Ok(())
+        } else {
+            Err(DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
+                res: self.error_ident(),
+                res_device: self.device().error_ident(),
+                target: Some(other.error_ident()),
+                target_device: other.device().error_ident(),
+            })))
+        }
     }
 
     fn same_device(&self, device: &Arc<Device<A>>) -> Result<(), DeviceError> {
-        self.device().is_equal(device).then_some(()).ok_or_else(|| {
-            DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
+        if self.device().is_equal(device) {
+            Ok(())
+        } else {
+            Err(DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
                 res: self.error_ident(),
                 res_device: self.device().error_ident(),
                 target: None,
                 target_device: device.error_ident(),
-            }))
-        })
+            })))
+        }
     }
 }
 
@@ -515,14 +516,15 @@ impl<A: HalApi> Buffer<A> {
         self: &Arc<Self>,
         expected: wgt::BufferUsages,
     ) -> Result<(), MissingBufferUsageError> {
-        self.usage
-            .contains(expected)
-            .then_some(())
-            .ok_or_else(|| MissingBufferUsageError {
+        if self.usage.contains(expected) {
+            Ok(())
+        } else {
+            Err(MissingBufferUsageError {
                 res: self.error_ident(),
                 actual: self.usage,
                 expected,
             })
+        }
     }
 
     /// Returns the mapping callback in case of error so that the callback can be fired outside
@@ -996,15 +998,15 @@ impl<A: HalApi> Texture<A> {
         &self,
         expected: wgt::TextureUsages,
     ) -> Result<(), MissingTextureUsageError> {
-        self.desc
-            .usage
-            .contains(expected)
-            .then_some(())
-            .ok_or_else(|| MissingTextureUsageError {
+        if self.desc.usage.contains(expected) {
+            Ok(())
+        } else {
+            Err(MissingTextureUsageError {
                 res: self.error_ident(),
                 actual: self.desc.usage,
                 expected,
             })
+        }
     }
 }
 
