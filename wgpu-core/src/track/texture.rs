@@ -1064,8 +1064,8 @@ unsafe fn insert<A: HalApi>(
     }
 
     unsafe {
-        let resource = metadata_provider.get_own(index);
-        resource_metadata.insert(index, resource);
+        let resource = metadata_provider.get(index);
+        resource_metadata.insert(index, resource.clone());
     }
 }
 
@@ -1096,7 +1096,7 @@ unsafe fn merge<A: HalApi>(
 
             if invalid_resource_state(merged_state) {
                 return Err(UsageConflict::from_texture(
-                    unsafe { metadata_provider.get_own(index).info.id() },
+                    unsafe { metadata_provider.get(index).info.id() },
                     texture_selector.clone(),
                     *current_simple,
                     new_simple,
@@ -1123,7 +1123,7 @@ unsafe fn merge<A: HalApi>(
 
                 if invalid_resource_state(merged_state) {
                     return Err(UsageConflict::from_texture(
-                        unsafe { metadata_provider.get_own(index).info.id() },
+                        unsafe { metadata_provider.get(index).info.id() },
                         selector,
                         *current_simple,
                         new_state,
@@ -1164,7 +1164,7 @@ unsafe fn merge<A: HalApi>(
 
                     if invalid_resource_state(merged_state) {
                         return Err(UsageConflict::from_texture(
-                            unsafe { metadata_provider.get_own(index).info.id() },
+                            unsafe { metadata_provider.get(index).info.id() },
                             TextureSelector {
                                 mips: mip_id..mip_id + 1,
                                 layers: layers.clone(),
@@ -1205,7 +1205,7 @@ unsafe fn merge<A: HalApi>(
 
                         if invalid_resource_state(merged_state) {
                             return Err(UsageConflict::from_texture(
-                                unsafe { metadata_provider.get_own(index).info.id() },
+                                unsafe { metadata_provider.get(index).info.id() },
                                 TextureSelector {
                                     mips: mip_id..mip_id + 1,
                                     layers: layers.clone(),
