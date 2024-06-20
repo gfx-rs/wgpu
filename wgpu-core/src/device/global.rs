@@ -159,11 +159,6 @@ impl Global {
                 }
             };
 
-            if desc.usage.is_empty() {
-                // Per spec, `usage` must not be zero.
-                break 'error CreateBufferError::InvalidUsage(desc.usage);
-            }
-
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let mut desc = desc.clone();
@@ -172,6 +167,11 @@ impl Global {
                     desc.usage |= wgt::BufferUsages::COPY_DST;
                 }
                 trace.add(trace::Action::CreateBuffer(fid.id(), desc));
+            }
+
+            if desc.usage.is_empty() {
+                // Per spec, `usage` must not be zero.
+                break 'error CreateBufferError::InvalidUsage(desc.usage);
             }
 
             let buffer = match device.create_buffer(desc, false) {
@@ -381,15 +381,11 @@ impl Global {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::InvalidDeviceId)?;
-        let snatch_guard = device.snatchable_lock.read();
-        device.check_is_valid()?;
 
         let buffer = hub
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
-        buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
-        //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
@@ -402,6 +398,11 @@ impl Global {
             });
         }
 
+        device.check_is_valid()?;
+        buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
+        //assert!(buffer isn't used by the GPU);
+
+        let snatch_guard = device.snatchable_lock.read();
         let raw_buf = buffer.try_raw(&snatch_guard)?;
         unsafe {
             let mapping = device
@@ -565,6 +566,7 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
@@ -808,12 +810,7 @@ impl Global {
                 }
             };
             let device = &texture.device;
-            {
-                let snatch_guard = device.snatchable_lock.read();
-                if let Err(e) = texture.check_destroyed(&snatch_guard) {
-                    break 'error e.into();
-                }
-            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateTextureView {
@@ -821,6 +818,13 @@ impl Global {
                     parent_id: texture_id,
                     desc: desc.clone(),
                 });
+            }
+
+            {
+                let snatch_guard = device.snatchable_lock.read();
+                if let Err(e) = texture.check_destroyed(&snatch_guard) {
+                    break 'error e.into();
+                }
             }
 
             let view = match unsafe { device.create_texture_view(&texture, desc) } {
@@ -1519,6 +1523,7 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateQuerySet {
@@ -1592,6 +1597,7 @@ impl Global {
                 Ok(device) => device,
                 Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateRenderPipeline {
@@ -1740,6 +1746,7 @@ impl Global {
                     implicit_context: implicit_context.clone(),
                 });
             }
+
             let pipeline = match device.create_compute_pipeline(desc, implicit_context, hub) {
                 Ok(pair) => pair,
                 Err(e) => break 'error e,
@@ -1866,6 +1873,7 @@ impl Global {
                 // TODO: Handle error properly
                 Err(crate::storage::InvalidId) => break 'error DeviceError::InvalidDeviceId.into(),
             };
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreatePipelineCache {
@@ -1873,6 +1881,7 @@ impl Global {
                     desc: desc.clone(),
                 });
             }
+
             let cache = unsafe { device.create_pipeline_cache(desc) };
             match cache {
                 Ok(cache) => {
@@ -2037,13 +2046,14 @@ impl Global {
                     Ok(device) => device,
                     Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
                 };
-                if let Err(e) = device.check_is_valid() {
-                    break 'error e.into();
-                }
 
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
                     trace.add(trace::Action::ConfigureSurface(surface_id, config.clone()));
+                }
+
+                if let Err(e) = device.check_is_valid() {
+                    break 'error e.into();
                 }
 
                 let surface = match surface_guard.get(surface_id) {

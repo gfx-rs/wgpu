@@ -436,8 +436,6 @@ impl Global {
 
         let device = queue.device.as_ref().unwrap();
 
-        buffer.same_device_as(queue.as_ref())?;
-
         let data_size = data.len() as wgt::BufferAddress;
 
         #[cfg(feature = "trace")]
@@ -450,6 +448,8 @@ impl Global {
                 queued: true,
             });
         }
+
+        buffer.same_device_as(queue.as_ref())?;
 
         if data_size == 0 {
             log::trace!("Ignoring write_buffer of size 0");
@@ -1197,8 +1197,6 @@ impl Global {
                             Err(_) => continue,
                         };
 
-                        cmdbuf.same_device_as(queue.as_ref())?;
-
                         #[cfg(feature = "trace")]
                         if let Some(ref mut trace) = *device.trace.lock() {
                             trace.add(Action::Submit(
@@ -1213,6 +1211,9 @@ impl Global {
                                     .unwrap(),
                             ));
                         }
+
+                        cmdbuf.same_device_as(queue.as_ref())?;
+
                         if !cmdbuf.is_finished() {
                             let cmdbuf = Arc::into_inner(cmdbuf).expect(
                                 "Command buffer cannot be destroyed because is still in use",

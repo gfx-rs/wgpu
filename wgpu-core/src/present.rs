@@ -301,13 +301,14 @@ impl Global {
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
-        device.check_is_valid()?;
-        let queue = device.get_queue().unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
             trace.add(Action::Present(surface_id));
         }
+
+        device.check_is_valid()?;
+        let queue = device.get_queue().unwrap();
 
         let result = {
             let texture_id = present
@@ -393,12 +394,13 @@ impl Global {
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
-        device.check_is_valid()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
             trace.add(Action::DiscardSurfaceTexture(surface_id));
         }
+
+        device.check_is_valid()?;
 
         {
             let texture_id = present
