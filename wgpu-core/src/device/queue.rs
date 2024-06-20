@@ -20,7 +20,9 @@ use crate::{
         DestroyedTexture, ParentDevice, Resource, ResourceErrorIdent, ResourceInfo, ResourceType,
         StagingBuffer, Texture, TextureInner,
     },
-    resource_log, track, FastHashMap, SubmissionIndex,
+    resource_log,
+    track::{self, TrackerIndex},
+    FastHashMap, SubmissionIndex,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
@@ -211,9 +213,9 @@ pub(crate) struct PendingWrites<A: HalApi> {
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     pub is_recording: bool,
 
-    pub temp_resources: Vec<TempResource<A>>,
-    pub dst_buffers: FastHashMap<id::BufferId, Arc<Buffer<A>>>,
-    pub dst_textures: FastHashMap<id::TextureId, Arc<Texture<A>>>,
+    temp_resources: Vec<TempResource<A>>,
+    dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
+    dst_textures: FastHashMap<TrackerIndex, Arc<Texture<A>>>,
 
     /// All command buffers allocated from `command_encoder`.
     pub executing_command_buffers: Vec<A::CommandBuffer>,
@@ -242,6 +244,25 @@ impl<A: HalApi> PendingWrites<A> {
         }
 
         self.temp_resources.clear();
+    }
+
+    pub fn insert_buffer(&mut self, buffer: &Arc<Buffer<A>>) {
+        self.dst_buffers
+            .insert(buffer.info.tracker_index(), buffer.clone());
+    }
+
+    pub fn insert_texture(&mut self, texture: &Arc<Texture<A>>) {
+        self.dst_textures
+            .insert(texture.info.tracker_index(), texture.clone());
+    }
+
+    pub fn contains_buffer(&self, buffer: &Arc<Buffer<A>>) -> bool {
+        self.dst_buffers.contains_key(&buffer.info.tracker_index())
+    }
+
+    pub fn contains_texture(&self, texture: &Arc<Texture<A>>) -> bool {
+        self.dst_textures
+            .contains_key(&texture.info.tracker_index())
     }
 
     pub fn consume_temp(&mut self, resource: TempResource<A>) {
@@ -647,7 +668,7 @@ impl Global {
             );
         }
 
-        pending_writes.dst_buffers.insert(buffer_id, dst.clone());
+        pending_writes.insert_buffer(&dst);
 
         // Ensure the overwritten bytes are marked as initialized so
         // they don't need to be nulled prior to mapping or binding.
@@ -916,9 +937,7 @@ impl Global {
         }
 
         pending_writes.consume(staging_buffer);
-        pending_writes
-            .dst_textures
-            .insert(destination.texture, dst.clone());
+        pending_writes.insert_texture(&dst);
 
         Ok(())
     }

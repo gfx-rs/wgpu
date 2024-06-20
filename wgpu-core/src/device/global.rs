@@ -519,8 +519,7 @@ impl Global {
             .lock()
             .as_ref()
             .unwrap()
-            .dst_buffers
-            .contains_key(&buffer_id)
+            .contains_buffer(&buffer)
         {
             device.lock_life().future_suspected_buffers.push(buffer);
         } else {
@@ -744,8 +743,7 @@ impl Global {
                     .lock()
                     .as_ref()
                     .unwrap()
-                    .dst_textures
-                    .contains_key(&texture_id)
+                    .contains_texture(&texture)
                 {
                     device
                         .lock_life()

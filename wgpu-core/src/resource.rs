@@ -702,9 +702,7 @@ impl<A: HalApi> Buffer<A> {
                     }
                 }
                 pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
-                pending_writes
-                    .dst_buffers
-                    .insert(self.info.id(), self.clone());
+                pending_writes.insert_buffer(self);
             }
             BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
@@ -775,8 +773,8 @@ impl<A: HalApi> Buffer<A> {
 
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
-        if pending_writes.dst_buffers.contains_key(&self.info.id()) {
-            pending_writes.temp_resources.push(temp);
+        if pending_writes.contains_buffer(self) {
+            pending_writes.consume_temp(temp);
         } else {
             let last_submit_index = self.info.submission_index();
             device
@@ -1167,8 +1165,8 @@ impl<A: HalApi> Texture<A> {
 
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
-        if pending_writes.dst_textures.contains_key(&self.info.id()) {
-            pending_writes.temp_resources.push(temp);
+        if pending_writes.contains_texture(self) {
+            pending_writes.consume_temp(temp);
         } else {
             let last_submit_index = self.info.submission_index();
             device
