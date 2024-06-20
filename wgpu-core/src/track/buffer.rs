@@ -10,12 +10,10 @@ use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 use super::{PendingTransition, ResourceTracker, TrackerIndex};
 use crate::{
     hal_api::HalApi,
-    id::BufferId,
     lock::{rank, Mutex},
     resource::{Buffer, Resource},
     resource_log,
     snatch::SnatchGuard,
-    storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUses, UsageConflict,
@@ -227,18 +225,12 @@ impl<A: HalApi> BufferUsageScope<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn merge_single<'a>(
+    pub fn merge_single(
         &mut self,
-        storage: &'a Storage<Buffer<A>>,
-        id: BufferId,
+        buffer: &Arc<Buffer<A>>,
         new_state: BufferUses,
-    ) -> Result<&'a Arc<Buffer<A>>, UsageConflict> {
-        let buffer = storage
-            .get(id)
-            .map_err(|_| UsageConflict::BufferInvalid { id })?;
-
+    ) -> Result<(), UsageConflict> {
         self.insert_merge_single(buffer.clone(), new_state)
-            .map(|_| buffer)
     }
 
     /// Merge a single state into the UsageScope, using an already resolved buffer.
