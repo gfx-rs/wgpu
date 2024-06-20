@@ -17,8 +17,8 @@ use crate::{
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, ParentDevice, Resource, ResourceInfo, ResourceType, StagingBuffer,
-        Texture, TextureInner,
+        DestroyedTexture, ParentDevice, Resource, ResourceErrorIdent, ResourceInfo, ResourceType,
+        StagingBuffer, Texture, TextureInner,
     },
     resource_log, track, FastHashMap, SubmissionIndex,
 };
@@ -378,8 +378,8 @@ pub enum QueueSubmitError {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
-    #[error("Buffer {0:?} is still mapped")]
-    BufferStillMapped(id::BufferId),
+    #[error("{0} is still mapped")]
+    BufferStillMapped(ResourceErrorIdent),
     #[error("Surface output was dropped before the command buffer got submitted")]
     SurfaceOutputDropped,
     #[error("Surface was unconfigured before the command buffer got submitted")]
@@ -1219,7 +1219,7 @@ impl Global {
                                         BufferMapState::Idle => (),
                                         _ => {
                                             return Err(QueueSubmitError::BufferStillMapped(
-                                                buffer.info.id(),
+                                                buffer.error_ident(),
                                             ))
                                         }
                                     }
