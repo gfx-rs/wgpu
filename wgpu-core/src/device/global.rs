@@ -490,6 +490,11 @@ impl Global {
             .get(buffer_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
+        #[cfg(feature = "trace")]
+        if let Some(trace) = buffer.device.trace.lock().as_mut() {
+            trace.add(trace::Action::FreeBuffer(buffer_id));
+        }
+
         let _ = buffer.unmap();
 
         buffer.destroy()
@@ -507,6 +512,11 @@ impl Global {
                 return;
             }
         };
+
+        #[cfg(feature = "trace")]
+        if let Some(t) = buffer.device.trace.lock().as_mut() {
+            t.add(trace::Action::DestroyBuffer(buffer_id));
+        }
 
         let _ = buffer.unmap();
 
@@ -724,6 +734,11 @@ impl Global {
             .get(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
+        #[cfg(feature = "trace")]
+        if let Some(trace) = texture.device.trace.lock().as_mut() {
+            trace.add(trace::Action::FreeTexture(texture_id));
+        }
+
         texture.destroy()
     }
 
@@ -734,6 +749,11 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(texture) = hub.textures.unregister(texture_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = texture.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyTexture(texture_id));
+            }
+
             let last_submit_index = texture.info.submission_index();
 
             let device = &texture.device;
@@ -840,6 +860,11 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(view) = hub.texture_views.unregister(texture_view_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = view.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyTextureView(texture_view_id));
+            }
+
             let last_submit_index = view.info.submission_index();
 
             view.device
@@ -909,6 +934,11 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(sampler) = hub.samplers.unregister(sampler_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = sampler.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroySampler(sampler_id));
+            }
+
             sampler
                 .device
                 .lock_life()
@@ -1010,6 +1040,11 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(layout) = hub.bind_group_layouts.unregister(bind_group_layout_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = layout.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBindGroupLayout(bind_group_layout_id));
+            }
+
             layout
                 .device
                 .lock_life()
@@ -1068,6 +1103,11 @@ impl Global {
 
         let hub = A::hub(self);
         if let Some(layout) = hub.pipeline_layouts.unregister(pipeline_layout_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = layout.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyPipelineLayout(pipeline_layout_id));
+            }
+
             layout
                 .device
                 .lock_life()
@@ -1140,6 +1180,11 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(bind_group) = hub.bind_groups.unregister(bind_group_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = bind_group.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBindGroup(bind_group_id));
+            }
+
             bind_group
                 .device
                 .lock_life()
@@ -1295,7 +1340,14 @@ impl Global {
         api_log!("ShaderModule::drop {shader_module_id:?}");
 
         let hub = A::hub(self);
-        hub.shader_modules.unregister(shader_module_id);
+
+        if let Some(shader_module) = hub.shader_modules.unregister(shader_module_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = shader_module.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyShaderModule(shader_module_id));
+            }
+            drop(shader_module)
+        }
     }
 
     pub fn device_create_command_encoder<A: HalApi>(
@@ -1437,6 +1489,11 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(bundle) = hub.render_bundles.unregister(render_bundle_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = bundle.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyRenderBundle(render_bundle_id));
+            }
+
             bundle
                 .device
                 .lock_life()
@@ -1496,7 +1553,7 @@ impl Global {
             let device = &query_set.device;
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
+            if let Some(trace) = device.trace.lock().as_mut() {
                 trace.add(trace::Action::DestroyQuerySet(query_set_id));
             }
 
@@ -1632,6 +1689,12 @@ impl Global {
 
         if let Some(pipeline) = hub.render_pipelines.unregister(render_pipeline_id) {
             let device = &pipeline.device;
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = pipeline.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyRenderPipeline(render_pipeline_id));
+            }
+
             let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
@@ -1762,6 +1825,12 @@ impl Global {
 
         if let Some(pipeline) = hub.compute_pipelines.unregister(compute_pipeline_id) {
             let device = &pipeline.device;
+
+            #[cfg(feature = "trace")]
+            if let Some(t) = device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyComputePipeline(compute_pipeline_id));
+            }
+
             let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
@@ -1827,6 +1896,10 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(cache) = hub.pipeline_caches.unregister(pipeline_cache_id) {
+            #[cfg(feature = "trace")]
+            if let Some(t) = cache.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyPipelineCache(pipeline_cache_id));
+            }
             drop(cache)
         }
     }

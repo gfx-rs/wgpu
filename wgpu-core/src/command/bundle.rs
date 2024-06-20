@@ -78,8 +78,6 @@ index format changes.
 
 #![allow(clippy::reversed_empty_ranges)]
 
-#[cfg(feature = "trace")]
-use crate::device::trace;
 use crate::{
     binding_model::{buffer_binding_type_alignment, BindGroup, BindGroupLayout, PipelineLayout},
     command::{
@@ -896,11 +894,6 @@ pub struct RenderBundle<A: HalApi> {
 impl<A: HalApi> Drop for RenderBundle<A> {
     fn drop(&mut self) {
         resource_log!("Destroy raw RenderBundle {:?}", self.info.label());
-
-        #[cfg(feature = "trace")]
-        if let Some(t) = self.device.trace.lock().as_mut() {
-            t.add(trace::Action::DestroyRenderBundle(self.info.id()));
-        }
     }
 }
 
