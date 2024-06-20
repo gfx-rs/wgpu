@@ -642,8 +642,7 @@ impl<A: HalApi> Buffer<A> {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
-        let buffer_id = self.info.id();
-        log::debug!("Buffer {:?} map state -> Idle", buffer_id);
+        log::debug!("{} map state -> Idle", self.error_ident());
         match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
             BufferMapState::Init {
                 ptr,
@@ -656,7 +655,7 @@ impl<A: HalApi> Buffer<A> {
                         std::slice::from_raw_parts(ptr.as_ptr(), self.size as usize)
                     });
                     trace.add(trace::Action::WriteBuffer {
-                        id: buffer_id,
+                        id: self.info.id(),
                         data,
                         range: 0..self.size,
                         queued: true,
@@ -703,7 +702,9 @@ impl<A: HalApi> Buffer<A> {
                     }
                 }
                 pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
-                pending_writes.dst_buffers.insert(buffer_id, self.clone());
+                pending_writes
+                    .dst_buffers
+                    .insert(self.info.id(), self.clone());
             }
             BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
@@ -720,7 +721,7 @@ impl<A: HalApi> Buffer<A> {
                             std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
-                            id: buffer_id,
+                            id: self.info.id(),
                             data,
                             range: range.clone(),
                             queued: false,
@@ -741,11 +742,10 @@ impl<A: HalApi> Buffer<A> {
 
     pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
         let device = &self.device;
-        let buffer_id = self.info.id();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::FreeBuffer(buffer_id));
+            trace.add(trace::Action::FreeBuffer(self.info.id()));
         }
 
         let temp = {
@@ -775,7 +775,7 @@ impl<A: HalApi> Buffer<A> {
 
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
-        if pending_writes.dst_buffers.contains_key(&buffer_id) {
+        if pending_writes.dst_buffers.contains_key(&self.info.id()) {
             pending_writes.temp_resources.push(temp);
         } else {
             let last_submit_index = self.info.submission_index();
@@ -1125,11 +1125,10 @@ impl<A: HalApi> Texture<A> {
 
     pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
         let device = &self.device;
-        let texture_id = self.info.id();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::FreeTexture(texture_id));
+            trace.add(trace::Action::FreeTexture(self.info.id()));
         }
 
         let temp = {
@@ -1168,7 +1167,7 @@ impl<A: HalApi> Texture<A> {
 
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
-        if pending_writes.dst_textures.contains_key(&texture_id) {
+        if pending_writes.dst_textures.contains_key(&self.info.id()) {
             pending_writes.temp_resources.push(temp);
         } else {
             let last_submit_index = self.info.submission_index();
