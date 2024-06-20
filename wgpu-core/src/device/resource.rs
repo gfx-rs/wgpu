@@ -346,10 +346,7 @@ impl<A: HalApi> Device<A> {
                     };
 
                     resource_log!("Destroy raw TextureView (destroyed) {:?}", view.label());
-                    #[cfg(feature = "trace")]
-                    if let Some(t) = self.trace.lock().as_mut() {
-                        t.add(trace::Action::DestroyTextureView(view.info.id()));
-                    }
+
                     unsafe {
                         use hal::Device;
                         self.raw().destroy_texture_view(raw_view);
@@ -365,10 +362,7 @@ impl<A: HalApi> Device<A> {
                     };
 
                     resource_log!("Destroy raw BindGroup (destroyed) {:?}", bind_group.label());
-                    #[cfg(feature = "trace")]
-                    if let Some(t) = self.trace.lock().as_mut() {
-                        t.add(trace::Action::DestroyBindGroup(bind_group.info.id()));
-                    }
+
                     unsafe {
                         use hal::Device;
                         self.raw().destroy_bind_group(raw_bind_group);
