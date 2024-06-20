@@ -894,17 +894,24 @@ impl<A: HalApi> Drop for BindGroup<A> {
 }
 
 impl<A: HalApi> BindGroup<A> {
-    pub(crate) fn raw(&self, guard: &SnatchGuard) -> Option<&A::BindGroup> {
+    pub(crate) fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&A::BindGroup, DestroyedResourceError> {
         // Clippy insist on writing it this way. The idea is to return None
         // if any of the raw buffer is not valid anymore.
         for buffer in &self.used_buffer_ranges {
-            let _ = buffer.buffer.raw(guard)?;
+            buffer.buffer.try_raw(guard)?;
         }
         for texture in &self.used_texture_ranges {
-            let _ = texture.texture.raw(guard)?;
+            texture.texture.try_raw(guard)?;
         }
-        self.raw.get(guard)
+
+        self.raw
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
+
     pub(crate) fn validate_dynamic_bindings(
         &self,
         bind_group_index: u32,

@@ -412,7 +412,7 @@ impl RenderBundleEncoder {
 
                     let bind_group = bind_group_guard
                         .get(bind_group_id)
-                        .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                        .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))
                         .map_pass_err(scope)?;
 
                     state
@@ -837,17 +837,12 @@ pub enum CreateRenderBundleError {
 pub enum ExecutionError {
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("BindGroup {0:?} is invalid")]
-    InvalidBindGroup(id::BindGroupId),
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
 }
 impl PrettyError for ExecutionError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        if let Self::InvalidBindGroup(id) = *self {
-            fmt.bind_group_label(&id);
-        }
     }
 }
 
@@ -919,9 +914,7 @@ impl<A: HalApi> RenderBundle<A> {
                     num_dynamic_offsets,
                     bind_group,
                 } => {
-                    let raw_bg = bind_group
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::InvalidBindGroup(bind_group.info.id()))?;
+                    let raw_bg = bind_group.try_raw(snatch_guard)?;
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),

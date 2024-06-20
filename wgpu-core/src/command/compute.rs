@@ -158,8 +158,8 @@ pub enum ComputePassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
-    #[error("Bind group at index {0:?} is invalid")]
-    InvalidBindGroup(u32),
+    #[error("BindGroupId {0:?} is invalid")]
+    InvalidBindGroupId(id::BindGroupId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
@@ -615,10 +615,7 @@ impl Global {
                         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
                             if let Some(group) = e.group.as_ref() {
-                                let raw_bg = group
-                                    .raw(&snatch_guard)
-                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(i as u32))
-                                    .map_pass_err(scope)?;
+                                let raw_bg = group.try_raw(&snatch_guard).map_pass_err(scope)?;
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
@@ -661,10 +658,8 @@ impl Global {
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {
                                 if let Some(group) = e.group.as_ref() {
-                                    let raw_bg = group
-                                        .raw(&snatch_guard)
-                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(i as u32))
-                                        .map_pass_err(scope)?;
+                                    let raw_bg =
+                                        group.try_raw(&snatch_guard).map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(
                                             pipeline.layout.raw(),
@@ -972,7 +967,7 @@ impl Global {
             .bind_groups
             .read()
             .get_owned(bind_group_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBindGroup(index))
+            .map_err(|_| ComputePassErrorInner::InvalidBindGroupId(bind_group_id))
             .map_pass_err(scope)?;
 
         base.commands.push(ArcComputeCommand::SetBindGroup {

@@ -98,7 +98,7 @@ impl ComputeCommand {
                         bind_group: bind_group_guard.get_owned(bind_group_id).map_err(|_| {
                             ComputePassError {
                                 scope: PassErrorScope::SetBindGroup(bind_group_id),
-                                inner: ComputePassErrorInner::InvalidBindGroup(index),
+                                inner: ComputePassErrorInner::InvalidBindGroupId(bind_group_id),
                             }
                         })?,
                     },

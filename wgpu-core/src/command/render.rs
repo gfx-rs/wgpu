@@ -601,8 +601,6 @@ pub enum RenderPassErrorInner {
     SurfaceTextureDropped,
     #[error("Not enough memory left for render pass")]
     OutOfMemory,
-    #[error("The bind group at index {0:?} is invalid")]
-    InvalidBindGroup(usize),
     #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,
     #[error("Unable to clear non-present/read-only stencil")]
@@ -1471,7 +1469,7 @@ impl Global {
 
                         let bind_group = bind_group_guard
                             .get(bind_group_id)
-                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                            .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))
                             .map_pass_err(scope)?;
 
                         tracker.bind_groups.add_single(bind_group);
@@ -1516,10 +1514,8 @@ impl Global {
                             let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {
                                 if let Some(group) = e.group.as_ref() {
-                                    let raw_bg = group
-                                        .raw(&snatch_guard)
-                                        .ok_or(RenderPassErrorInner::InvalidBindGroup(i))
-                                        .map_pass_err(scope)?;
+                                    let raw_bg =
+                                        group.try_raw(&snatch_guard).map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(
                                             pipeline_layout,
@@ -1598,10 +1594,8 @@ impl Global {
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
                                     if let Some(group) = e.group.as_ref() {
-                                        let raw_bg = group
-                                            .raw(&snatch_guard)
-                                            .ok_or(RenderPassErrorInner::InvalidBindGroup(i))
-                                            .map_pass_err(scope)?;
+                                        let raw_bg =
+                                            group.try_raw(&snatch_guard).map_pass_err(scope)?;
                                         unsafe {
                                             raw.set_bind_group(
                                                 pipeline.layout.raw(),
@@ -2365,9 +2359,6 @@ impl Global {
                             .map_err(|e| match e {
                                 ExecutionError::DestroyedResource(e) => {
                                     RenderCommandError::DestroyedResource(e)
-                                }
-                                ExecutionError::InvalidBindGroup(id) => {
-                                    RenderCommandError::InvalidBindGroup(id)
                                 }
                                 ExecutionError::Unimplemented(what) => {
                                     RenderCommandError::Unimplemented(what)
