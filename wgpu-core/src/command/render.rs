@@ -552,10 +552,8 @@ pub enum RenderPassErrorInner {
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
-    #[error("Attachment texture view {0:?} is invalid")]
-    InvalidAttachment(id::TextureViewId),
-    #[error("Attachment texture view {0:?} is invalid")]
-    InvalidResolveTarget(id::TextureViewId),
+    #[error("Attachment texture view Id {0:?} is invalid")]
+    InvalidAttachmentId(id::TextureViewId),
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
@@ -672,7 +670,7 @@ pub enum RenderPassErrorInner {
 impl PrettyError for RenderPassErrorInner {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        if let Self::InvalidAttachment(id) = *self {
+        if let Self::InvalidAttachmentId(id) = *self {
             fmt.texture_view_label_with_key(&id, "attachment");
         };
         if let Self::Draw(DrawError::IncompatibleBindGroup { diff, .. }) = self {
@@ -904,7 +902,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
         if let Some(at) = depth_stencil_attachment {
             let view = view_guard
                 .get(at.view)
-                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+                .map_err(|_| RenderPassErrorInner::InvalidAttachmentId(at.view))?;
 
             trackers.views.add_single(view);
 
@@ -1021,9 +1019,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
-                    view: view
-                        .raw(snatch_guard)
-                        .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(view.info.id()))?,
+                    view: view.try_raw(snatch_guard)?,
                     usage,
                 },
                 depth_ops: at.depth.hal_ops(),
@@ -1042,7 +1038,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 
             let color_view = view_guard
                 .get(at.view)
-                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+                .map_err(|_| RenderPassErrorInner::InvalidAttachmentId(at.view))?;
 
             trackers.views.add_single(color_view);
 
@@ -1078,7 +1074,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
             if let Some(resolve_target) = at.resolve_target {
                 let resolve_view = view_guard
                     .get(resolve_target)
-                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+                    .map_err(|_| RenderPassErrorInner::InvalidAttachmentId(resolve_target))?;
 
                 trackers.views.add_single(resolve_view);
 
@@ -1136,18 +1132,14 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: resolve_view.raw(snatch_guard).ok_or_else(|| {
-                        RenderPassErrorInner::InvalidResolveTarget(resolve_view.info.id())
-                    })?,
+                    view: resolve_view.try_raw(snatch_guard)?,
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
             }
 
             colors.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
-                    view: color_view.raw(snatch_guard).ok_or_else(|| {
-                        RenderPassErrorInner::InvalidAttachment(color_view.info.id())
-                    })?,
+                    view: color_view.try_raw(snatch_guard)?,
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
@@ -1297,9 +1289,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
-                        view: view.raw(snatch_guard).ok_or_else(|| {
-                            RenderPassErrorInner::InvalidAttachment(view.info.id())
-                        })?,
+                        view: view.try_raw(snatch_guard)?,
                         usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,

@@ -1598,6 +1598,15 @@ impl<A: HalApi> TextureView<A> {
     pub(crate) fn raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::TextureView> {
         self.raw.get(snatch_guard)
     }
+
+    pub(crate) fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&A::TextureView, DestroyedResourceError> {
+        self.raw
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
 }
 
 #[derive(Clone, Debug, Error)]
