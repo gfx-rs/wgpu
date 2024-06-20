@@ -30,7 +30,7 @@ use crate::{
     snatch::SnatchGuard,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
-        ResourceUses, UsageConflict,
+        ResourceUsageCompatibilityError, ResourceUses,
     },
 };
 use hal::TextureUses;
@@ -295,7 +295,10 @@ impl<A: HalApi> TextureUsageScope<A> {
     ///
     /// If the given tracker uses IDs higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn merge_usage_scope(&mut self, scope: &Self) -> Result<(), UsageConflict> {
+    pub fn merge_usage_scope(
+        &mut self,
+        scope: &Self,
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.set.simple.len() {
             self.set_size(incoming_size);
@@ -339,7 +342,7 @@ impl<A: HalApi> TextureUsageScope<A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &TextureBindGroupState<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let textures = bind_group.textures.lock();
         for t in &*textures {
             unsafe { self.merge_single(&t.texture, t.selector.clone(), t.usage)? };
@@ -366,7 +369,7 @@ impl<A: HalApi> TextureUsageScope<A> {
         texture: &Arc<Texture<A>>,
         selector: Option<TextureSelector>,
         new_state: TextureUses,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let index = texture.as_info().tracker_index().as_usize();
 
         self.tracker_assert_in_bounds(index);
@@ -883,7 +886,7 @@ unsafe fn insert_or_merge<A: HalApi>(
     index: usize,
     state_provider: TextureStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
-) -> Result<(), UsageConflict> {
+) -> Result<(), ResourceUsageCompatibilityError> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
@@ -1076,7 +1079,7 @@ unsafe fn merge<A: HalApi>(
     index: usize,
     state_provider: TextureStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
-) -> Result<(), UsageConflict> {
+) -> Result<(), ResourceUsageCompatibilityError> {
     let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
     let current_state = if *current_simple == TextureUses::COMPLEX {
         SingleOrManyStates::Many(unsafe {
@@ -1095,7 +1098,7 @@ unsafe fn merge<A: HalApi>(
             log::trace!("\ttex {index}: merge simple {current_simple:?} + {new_simple:?}");
 
             if invalid_resource_state(merged_state) {
-                return Err(UsageConflict::from_texture(
+                return Err(ResourceUsageCompatibilityError::from_texture(
                     unsafe { metadata_provider.get(index) },
                     texture_selector.clone(),
                     *current_simple,
@@ -1122,7 +1125,7 @@ unsafe fn merge<A: HalApi>(
                 log::trace!("\ttex {index}: merge {selector:?} {current_simple:?} + {new_state:?}");
 
                 if invalid_resource_state(merged_state) {
-                    return Err(UsageConflict::from_texture(
+                    return Err(ResourceUsageCompatibilityError::from_texture(
                         unsafe { metadata_provider.get(index) },
                         selector,
                         *current_simple,
@@ -1163,7 +1166,7 @@ unsafe fn merge<A: HalApi>(
                     );
 
                     if invalid_resource_state(merged_state) {
-                        return Err(UsageConflict::from_texture(
+                        return Err(ResourceUsageCompatibilityError::from_texture(
                             unsafe { metadata_provider.get(index) },
                             TextureSelector {
                                 mips: mip_id..mip_id + 1,
@@ -1204,7 +1207,7 @@ unsafe fn merge<A: HalApi>(
                         );
 
                         if invalid_resource_state(merged_state) {
-                            return Err(UsageConflict::from_texture(
+                            return Err(ResourceUsageCompatibilityError::from_texture(
                                 unsafe { metadata_provider.get(index) },
                                 TextureSelector {
                                     mips: mip_id..mip_id + 1,

@@ -17,7 +17,7 @@ use crate::{
     init_tracker::MemoryInitKind,
     resource::{self, DestroyedResourceError, MissingBufferUsageError, ParentDevice, Resource},
     snatch::SnatchGuard,
-    track::{Tracker, TrackerIndex, UsageConflict, UsageScope},
+    track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
     Label,
 };
 
@@ -177,7 +177,7 @@ pub enum ComputePassErrorInner {
     #[error("BufferId {0:?} is invalid")]
     InvalidBufferId(id::BufferId),
     #[error(transparent)]
-    ResourceUsageConflict(#[from] UsageConflict),
+    ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
@@ -285,7 +285,7 @@ impl<'a, A: HalApi> State<'a, A> {
         base_trackers: &mut Tracker<A>,
         indirect_buffer: Option<TrackerIndex>,
         snatch_guard: &SnatchGuard,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         for bind_group in self.binder.list_active() {
             unsafe { self.scope.merge_bind_group(&bind_group.used)? };
             // Note: stateless trackers are not merged: the lifetime reference

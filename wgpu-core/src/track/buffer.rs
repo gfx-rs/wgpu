@@ -16,7 +16,7 @@ use crate::{
     snatch::SnatchGuard,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
-        ResourceUses, UsageConflict,
+        ResourceUsageCompatibilityError, ResourceUses,
     },
 };
 use hal::{BufferBarrier, BufferUses};
@@ -158,7 +158,7 @@ impl<A: HalApi> BufferUsageScope<A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BufferBindGroupState<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let buffers = bind_group.buffers.lock();
         for &(ref resource, state) in &*buffers {
             let index = resource.as_info().tracker_index().as_usize();
@@ -188,7 +188,10 @@ impl<A: HalApi> BufferUsageScope<A> {
     ///
     /// If the given tracker uses IDs higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn merge_usage_scope(&mut self, scope: &Self) -> Result<(), UsageConflict> {
+    pub fn merge_usage_scope(
+        &mut self,
+        scope: &Self,
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let incoming_size = scope.state.len();
         if incoming_size > self.state.len() {
             self.set_size(incoming_size);
@@ -229,7 +232,7 @@ impl<A: HalApi> BufferUsageScope<A> {
         &mut self,
         buffer: &Arc<Buffer<A>>,
         new_state: BufferUses,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let index = buffer.info.tracker_index().as_usize();
 
         self.allow_index(index);
@@ -641,7 +644,7 @@ unsafe fn insert_or_merge<A: HalApi>(
     index: usize,
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
-) -> Result<(), UsageConflict> {
+) -> Result<(), ResourceUsageCompatibilityError> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
@@ -760,14 +763,14 @@ unsafe fn merge<A: HalApi>(
     index: usize,
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
-) -> Result<(), UsageConflict> {
+) -> Result<(), ResourceUsageCompatibilityError> {
     let current_state = unsafe { current_states.get_unchecked_mut(index) };
     let new_state = unsafe { state_provider.get_state(index) };
 
     let merged_state = *current_state | new_state;
 
     if invalid_resource_state(merged_state) {
-        return Err(UsageConflict::from_buffer(
+        return Err(ResourceUsageCompatibilityError::from_buffer(
             unsafe { metadata_provider.get(index) },
             *current_state,
             new_state,

@@ -339,7 +339,7 @@ fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum UsageConflict {
+pub enum ResourceUsageCompatibilityError {
     #[error("Attempted to use {res} with {invalid_use}.")]
     Buffer {
         res: ResourceErrorIdent,
@@ -356,7 +356,7 @@ pub enum UsageConflict {
     },
 }
 
-impl UsageConflict {
+impl ResourceUsageCompatibilityError {
     fn from_buffer<A: HalApi>(
         buffer: &resource::Buffer<A>,
         current_state: hal::BufferUses,
@@ -389,7 +389,7 @@ impl UsageConflict {
     }
 }
 
-impl crate::error::PrettyError for UsageConflict {
+impl crate::error::PrettyError for ResourceUsageCompatibilityError {
     fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
         fmt.error(self);
     }
@@ -509,7 +509,7 @@ impl<A: HalApi> RenderBundleScope<A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe { self.buffers.write().merge_bind_group(&bind_group.buffers)? };
         unsafe {
             self.textures
@@ -579,7 +579,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe {
             self.buffers.merge_bind_group(&bind_group.buffers)?;
             self.textures.merge_bind_group(&bind_group.textures)?;
@@ -600,7 +600,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     pub unsafe fn merge_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         self.buffers
             .merge_usage_scope(&*render_bundle.buffers.read())?;
         self.textures
@@ -691,7 +691,7 @@ impl<A: HalApi> Tracker<A> {
     pub unsafe fn add_from_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         self.bind_groups
             .add_from_tracker(&*render_bundle.bind_groups.read());
         self.render_pipelines
