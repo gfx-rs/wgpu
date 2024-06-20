@@ -7,11 +7,11 @@ use crate::{
     device::{DeviceError, MissingFeatures},
     global::Global,
     hal_api::HalApi,
-    id::{self, Id},
+    id,
     init_tracker::MemoryInitKind,
     resource::{DestroyedResourceError, ParentDevice, QuerySet},
-    storage::Storage,
-    Epoch, FastHashMap, Index,
+    track::TrackerIndex,
+    FastHashMap,
 };
 use std::{iter, marker::PhantomData, sync::Arc};
 use thiserror::Error;
@@ -19,7 +19,7 @@ use wgt::BufferAddress;
 
 #[derive(Debug)]
 pub(crate) struct QueryResetMap<A: HalApi> {
-    map: FastHashMap<Index, (Vec<bool>, Epoch)>,
+    map: FastHashMap<TrackerIndex, (Vec<bool>, Arc<QuerySet<A>>)>,
     _phantom: PhantomData<A>,
 }
 impl<A: HalApi> QueryResetMap<A> {
@@ -30,30 +30,22 @@ impl<A: HalApi> QueryResetMap<A> {
         }
     }
 
-    pub fn use_query_set(
-        &mut self,
-        id: id::QuerySetId,
-        query_set: &QuerySet<A>,
-        query: u32,
-    ) -> bool {
-        let (index, epoch, _) = id.unzip();
+    pub fn use_query_set(&mut self, query_set: &Arc<QuerySet<A>>, query: u32) -> bool {
         let vec_pair = self
             .map
-            .entry(index)
-            .or_insert_with(|| (vec![false; query_set.desc.count as usize], epoch));
+            .entry(query_set.info.tracker_index())
+            .or_insert_with(|| {
+                (
+                    vec![false; query_set.desc.count as usize],
+                    query_set.clone(),
+                )
+            });
 
         std::mem::replace(&mut vec_pair.0[query as usize], true)
     }
 
-    pub fn reset_queries(
-        &mut self,
-        raw_encoder: &mut A::CommandEncoder,
-        query_set_storage: &Storage<QuerySet<A>>,
-    ) -> Result<(), id::QuerySetId> {
-        for (query_set_id, (state, epoch)) in self.map.drain() {
-            let id = Id::zip(query_set_id, epoch, A::VARIANT);
-            let query_set = query_set_storage.get(id).map_err(|_| id)?;
-
+    pub fn reset_queries(&mut self, raw_encoder: &mut A::CommandEncoder) {
+        for (_, (state, query_set)) in self.map.drain() {
             debug_assert_eq!(state.len(), query_set.desc.count as usize);
 
             // Need to find all "runs" of values which need resets. If the state vector is:
@@ -78,8 +70,6 @@ impl<A: HalApi> QueryResetMap<A> {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -182,7 +172,7 @@ pub enum ResolveError {
 
 impl<A: HalApi> QuerySet<A> {
     fn validate_query(
-        &self,
+        self: &Arc<Self>,
         query_type: SimplifiedQueryType,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
@@ -190,7 +180,7 @@ impl<A: HalApi> QuerySet<A> {
         // We need to defer our resets because we are in a renderpass,
         // add the usage to the reset map.
         if let Some(reset) = reset_state {
-            let used = reset.use_query_set(self.info.id(), self, query_index);
+            let used = reset.use_query_set(self, query_index);
             if used {
                 return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index });
             }
@@ -215,7 +205,7 @@ impl<A: HalApi> QuerySet<A> {
     }
 
     pub(super) fn validate_and_write_timestamp(
-        &self,
+        self: &Arc<Self>,
         raw_encoder: &mut A::CommandEncoder,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,

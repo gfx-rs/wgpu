@@ -1195,10 +1195,10 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
             trackers.query_sets.add_single(query_set);
 
             if let Some(index) = tw.beginning_of_pass_write_index {
-                pending_query_resets.use_query_set(tw.query_set, query_set, index);
+                pending_query_resets.use_query_set(query_set, index);
             }
             if let Some(index) = tw.end_of_pass_write_index {
-                pending_query_resets.use_query_set(tw.query_set, query_set, index);
+                pending_query_resets.use_query_set(query_set, index);
             }
 
             Some(hal::RenderPassTimestampWrites {
@@ -2431,8 +2431,6 @@ impl Global {
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
-        let query_set_guard = hub.query_sets.read();
-
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;
         let tracker = &mut cmd_buf_data.trackers;
@@ -2448,11 +2446,7 @@ impl Global {
                 &snatch_guard,
             );
 
-            cmd_buf_data
-                .pending_query_resets
-                .reset_queries(transit, &query_set_guard)
-                .map_err(RenderCommandError::InvalidQuerySet)
-                .map_pass_err(PassErrorScope::QueryReset)?;
+            cmd_buf_data.pending_query_resets.reset_queries(transit);
 
             CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, &snatch_guard);
         }
