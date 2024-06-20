@@ -545,25 +545,10 @@ pub fn create_validator(
         Caps::SUBGROUP_BARRIER,
         features.intersects(wgt::Features::SUBGROUP_BARRIER),
     );
-
-    let mut subgroup_stages = naga::valid::ShaderStages::empty();
-    subgroup_stages.set(
-        naga::valid::ShaderStages::COMPUTE | naga::valid::ShaderStages::FRAGMENT,
-        features.contains(wgt::Features::SUBGROUP),
-    );
-    subgroup_stages.set(
-        naga::valid::ShaderStages::VERTEX,
+    caps.set(
+        Caps::SUBGROUP_VERTEX_STAGE,
         features.contains(wgt::Features::SUBGROUP_VERTEX),
     );
 
-    let subgroup_operations = if caps.contains(Caps::SUBGROUP) {
-        use naga::valid::SubgroupOperationSet as S;
-        S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
-    } else {
-        naga::valid::SubgroupOperationSet::empty()
-    };
-    let mut validator = naga::valid::Validator::new(flags, caps);
-    validator.subgroup_stages(subgroup_stages);
-    validator.subgroup_operations(subgroup_operations);
-    validator
+    naga::valid::Validator::new(flags, caps)
 }
