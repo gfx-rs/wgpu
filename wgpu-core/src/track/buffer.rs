@@ -748,8 +748,8 @@ unsafe fn insert<A: HalApi>(
         }
         *current_states.get_unchecked_mut(index) = new_end_state;
 
-        let resource = metadata_provider.get_own(index);
-        resource_metadata.insert(index, resource);
+        let resource = metadata_provider.get(index);
+        resource_metadata.insert(index, resource.clone());
     }
 }
 
@@ -768,7 +768,7 @@ unsafe fn merge<A: HalApi>(
 
     if invalid_resource_state(merged_state) {
         return Err(UsageConflict::from_buffer(
-            unsafe { metadata_provider.get_own(index).info.id() },
+            unsafe { metadata_provider.get(index).info.id() },
             *current_state,
             new_state,
         ));
