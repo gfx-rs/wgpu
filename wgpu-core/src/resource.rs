@@ -850,11 +850,6 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
 
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBuffer(self.id));
-            }
-
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -1354,11 +1349,6 @@ impl<A: HalApi> Drop for DestroyedTexture<A> {
 
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
-
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTexture(self.id));
-            }
 
             unsafe {
                 use hal::Device;
