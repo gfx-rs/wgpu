@@ -496,7 +496,10 @@ impl Global {
             trace.add(trace::Action::FreeBuffer(buffer_id));
         }
 
-        let _ = buffer.unmap();
+        let _ = buffer.unmap(
+            #[cfg(feature = "trace")]
+            buffer_id,
+        );
 
         buffer.destroy()
     }
@@ -519,7 +522,10 @@ impl Global {
             t.add(trace::Action::DestroyBuffer(buffer_id));
         }
 
-        let _ = buffer.unmap();
+        let _ = buffer.unmap(
+            #[cfg(feature = "trace")]
+            buffer_id,
+        );
 
         let last_submit_index = buffer.info.submission_index();
 
@@ -2634,7 +2640,10 @@ impl Global {
         drop(snatch_guard);
 
         buffer.device.check_is_valid()?;
-        buffer.unmap()
+        buffer.unmap(
+            #[cfg(feature = "trace")]
+            buffer_id,
+        )
     }
 }
 
