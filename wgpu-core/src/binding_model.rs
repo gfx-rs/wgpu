@@ -475,7 +475,6 @@ pub struct BindGroupLayout<A: HalApi> {
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     pub(crate) info: ResourceInfo<BindGroupLayout<A>>,
-    pub(crate) label: String,
 }
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
@@ -504,10 +503,6 @@ impl<A: HalApi> Resource for BindGroupLayout<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
-    }
-
-    fn label(&self) -> &str {
-        &self.label
     }
 }
 

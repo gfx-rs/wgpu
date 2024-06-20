@@ -1537,7 +1537,6 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             interface: Some(interface),
             info: ResourceInfo::new(desc.label.borrow_or_default(), None),
-            label: desc.label.borrow_or_default().to_string(),
         })
     }
 
@@ -1580,7 +1579,6 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             interface: None,
             info: ResourceInfo::new(desc.label.borrow_or_default(), None),
-            label: desc.label.borrow_or_default().to_string(),
         })
     }
 
@@ -1857,7 +1855,6 @@ impl<A: HalApi> Device<A> {
                 label.unwrap_or("<BindGroupLayout>"),
                 Some(self.tracker_indices.bind_group_layouts.clone()),
             ),
-            label: label.unwrap_or_default().to_string(),
         })
     }
 

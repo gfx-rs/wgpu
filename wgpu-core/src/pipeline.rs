@@ -51,7 +51,6 @@ pub struct ShaderModule<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
     pub(crate) info: ResourceInfo<ShaderModule<A>>,
-    pub(crate) label: String,
 }
 
 impl<A: HalApi> Drop for ShaderModule<A> {
@@ -78,10 +77,6 @@ impl<A: HalApi> Resource for ShaderModule<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
-    }
-
-    fn label(&self) -> &str {
-        &self.label
     }
 }
 
