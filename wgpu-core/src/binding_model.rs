@@ -80,8 +80,8 @@ pub enum CreateBindGroupError {
     InvalidLayout,
     #[error("BufferId {0:?} is invalid")]
     InvalidBufferId(BufferId),
-    #[error("Texture view {0:?} is invalid")]
-    InvalidTextureView(TextureViewId),
+    #[error("Texture view Id {0:?} is invalid")]
+    InvalidTextureViewId(TextureViewId),
     #[error("Sampler {0:?} is invalid")]
     InvalidSampler(SamplerId),
     #[error(transparent)]
@@ -200,7 +200,7 @@ impl PrettyError for CreateBindGroupError {
             Self::BindingSizeTooSmall { buffer, .. } => {
                 fmt.buffer_label(&buffer);
             }
-            Self::InvalidTextureView(id) => {
+            Self::InvalidTextureViewId(id) => {
                 fmt.texture_view_label(&id);
             }
             Self::InvalidSampler(id) => {

@@ -2032,7 +2032,9 @@ impl<A: HalApi> Device<A> {
     ) -> Result<hal::TextureBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
-        let view = storage.get(id).map_err(|_| Error::InvalidTextureView(id))?;
+        let view = storage
+            .get(id)
+            .map_err(|_| Error::InvalidTextureViewId(id))?;
         used.views.add_single(view);
 
         view.same_device(self)?;
@@ -2066,9 +2068,7 @@ impl<A: HalApi> Device<A> {
         });
 
         Ok(hal::TextureBinding {
-            view: view
-                .raw(snatch_guard)
-                .ok_or(Error::InvalidTextureView(id))?,
+            view: view.try_raw(snatch_guard)?,
             usage: internal_use,
         })
     }
