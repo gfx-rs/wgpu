@@ -416,6 +416,25 @@ impl Global {
         let scope = PassErrorScope::PassEncoder(encoder_id);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(scope)?;
+
+        #[cfg(feature = "trace")]
+        {
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            if let Some(ref mut list) = cmd_buf_data.commands {
+                list.push(crate::device::trace::Command::RunComputePass {
+                    base: BasePass {
+                        label: base.label.clone(),
+                        commands: base.commands.clone(),
+                        dynamic_offsets: base.dynamic_offsets.clone(),
+                        string_data: base.string_data.clone(),
+                        push_constant_data: base.push_constant_data.clone(),
+                    },
+                    timestamp_writes: timestamp_writes.cloned(),
+                });
+            }
+        }
+
         let commands =
             super::ComputeCommand::resolve_compute_command_ids(A::hub(self), &base.commands)?;
 
@@ -461,24 +480,6 @@ impl Global {
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(crate::device::trace::Command::RunComputePass {
-                base: BasePass {
-                    label: base.label.clone(),
-                    commands: base.commands.iter().map(Into::into).collect(),
-                    dynamic_offsets: base.dynamic_offsets.to_vec(),
-                    string_data: base.string_data.to_vec(),
-                    push_constant_data: base.push_constant_data.to_vec(),
-                },
-                timestamp_writes: timestamp_writes.as_ref().map(|tw| PassTimestampWrites {
-                    query_set: tw.query_set.as_info().id(),
-                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                    end_of_pass_write_index: tw.end_of_pass_write_index,
-                }),
-            });
-        }
 
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;
