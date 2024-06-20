@@ -10,7 +10,7 @@ use crate::{
     resource::{
         Buffer, DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, QuerySet,
     },
-    track::UsageConflict,
+    track::ResourceUsageCompatibilityError,
 };
 use wgt::{BufferAddress, BufferSize, Color, VertexStepMode};
 
@@ -93,7 +93,7 @@ pub enum RenderCommandError {
     #[error("Pipeline writes to depth/stencil, while the pass has read-only depth/stencil")]
     IncompatiblePipelineRods,
     #[error(transparent)]
-    UsageConflict(#[from] UsageConflict),
+    ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]

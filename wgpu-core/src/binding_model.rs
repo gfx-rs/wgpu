@@ -14,7 +14,7 @@ use crate::{
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
-    track::{BindGroupStates, UsageConflict},
+    track::{BindGroupStates, ResourceUsageCompatibilityError},
     Label,
 };
 
@@ -184,7 +184,7 @@ pub enum CreateBindGroupError {
     #[error("The adapter does not support read access for storages texture of format {0:?}")]
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
-    ResourceUsageConflict(#[from] UsageConflict),
+    ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
 }
 
 impl PrettyError for CreateBindGroupError {

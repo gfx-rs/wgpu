@@ -29,7 +29,7 @@ use crate::{
         QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
     },
     storage::Storage,
-    track::{TextureSelector, Tracker, UsageConflict, UsageScope},
+    track::{ResourceUsageCompatibilityError, TextureSelector, Tracker, UsageScope},
     Label,
 };
 
@@ -628,7 +628,7 @@ pub enum RenderPassErrorInner {
     #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
     #[error(transparent)]
-    ResourceUsageConflict(#[from] UsageConflict),
+    ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error("Render bundle has incompatible targets, {0}")]
     IncompatibleBundleTargets(#[from] RenderPassCompatibilityError),
     #[error(
@@ -1252,10 +1252,11 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 
             // the tracker set of the pass is always in "extend" mode
             unsafe {
-                self.usage_scope
-                    .textures
-                    .merge_single(texture, Some(ra.selector.clone()), ra.usage)
-                    .map_err(UsageConflict::from)?
+                self.usage_scope.textures.merge_single(
+                    texture,
+                    Some(ra.selector.clone()),
+                    ra.usage,
+                )?
             };
         }
 

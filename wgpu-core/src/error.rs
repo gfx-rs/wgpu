@@ -138,7 +138,8 @@ pub fn format_pretty_any(
     if let Some(pretty_err) = error.downcast_ref::<crate::command::PassErrorScope>() {
         return pretty_err.fmt_pretty(&mut fmt);
     }
-    if let Some(pretty_err) = error.downcast_ref::<crate::track::UsageConflict>() {
+    if let Some(pretty_err) = error.downcast_ref::<crate::track::ResourceUsageCompatibilityError>()
+    {
         return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::QueryError>() {
