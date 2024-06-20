@@ -423,8 +423,7 @@ impl RenderBundleEncoder {
                         .write()
                         .add_single(bind_group);
 
-                    self.check_valid_to_use(bind_group.device.info.id())
-                        .map_pass_err(scope)?;
+                    bind_group.same_device(device).map_pass_err(scope)?;
 
                     let max_bind_groups = device.limits.max_bind_groups;
                     if index >= max_bind_groups {
@@ -492,8 +491,7 @@ impl RenderBundleEncoder {
                         .write()
                         .add_single(pipeline);
 
-                    self.check_valid_to_use(pipeline.device.info.id())
-                        .map_pass_err(scope)?;
+                    pipeline.same_device(device).map_pass_err(scope)?;
 
                     self.context
                         .check_compatible(&pipeline.pass_context, RenderPassCompatibilityCheckType::RenderPipeline)
@@ -541,8 +539,7 @@ impl RenderBundleEncoder {
                         .merge_single(buffer, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
 
-                    self.check_valid_to_use(buffer.device.info.id())
-                        .map_pass_err(scope)?;
+                    buffer.same_device(device).map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::INDEX).map_pass_err(scope)?;
 
                     let end = match size {
@@ -584,8 +581,7 @@ impl RenderBundleEncoder {
                         .merge_single(buffer, hal::BufferUses::VERTEX)
                         .map_pass_err(scope)?;
 
-                    self.check_valid_to_use(buffer.device.info.id())
-                        .map_pass_err(scope)?;
+                    buffer.same_device(device).map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::VERTEX).map_pass_err(scope)?;
 
                     let end = match size {
@@ -715,8 +711,7 @@ impl RenderBundleEncoder {
                         .merge_single(buffer, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    self.check_valid_to_use(buffer.device.info.id())
-                        .map_pass_err(scope)?;
+                    buffer.same_device(device).map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
@@ -758,8 +753,7 @@ impl RenderBundleEncoder {
                         .merge_single(buffer, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    self.check_valid_to_use(buffer.device.info.id())
-                        .map_pass_err(scope)?;
+                    buffer.same_device(device).map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
@@ -819,14 +813,6 @@ impl RenderBundleEncoder {
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS),
         })
-    }
-
-    fn check_valid_to_use(&self, device_id: id::DeviceId) -> Result<(), RenderBundleErrorInner> {
-        if device_id != self.parent_id {
-            return Err(RenderBundleErrorInner::NotValidToUse);
-        }
-
-        Ok(())
     }
 
     pub fn set_index_buffer(
@@ -1486,8 +1472,6 @@ impl<A: HalApi> State<A> {
 /// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
 pub(super) enum RenderBundleErrorInner {
-    #[error("Resource is not valid to use with this render bundle because the resource and the bundle come from different devices")]
-    NotValidToUse,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
