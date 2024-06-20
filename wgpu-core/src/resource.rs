@@ -623,8 +623,14 @@ impl<A: HalApi> Buffer<A> {
     }
 
     // Note: This must not be called while holding a lock.
-    pub(crate) fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
-        if let Some((mut operation, status)) = self.unmap_inner()? {
+    pub(crate) fn unmap(
+        self: &Arc<Self>,
+        #[cfg(feature = "trace")] buffer_id: BufferId,
+    ) -> Result<(), BufferAccessError> {
+        if let Some((mut operation, status)) = self.unmap_inner(
+            #[cfg(feature = "trace")]
+            buffer_id,
+        )? {
             if let Some(callback) = operation.callback.take() {
                 callback.call(status);
             }
@@ -633,7 +639,10 @@ impl<A: HalApi> Buffer<A> {
         Ok(())
     }
 
-    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    fn unmap_inner(
+        self: &Arc<Self>,
+        #[cfg(feature = "trace")] buffer_id: BufferId,
+    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         use hal::Device;
 
         let device = &self.device;
@@ -652,7 +661,7 @@ impl<A: HalApi> Buffer<A> {
                         std::slice::from_raw_parts(ptr.as_ptr(), self.size as usize)
                     });
                     trace.add(trace::Action::WriteBuffer {
-                        id: self.info.id(),
+                        id: buffer_id,
                         data,
                         range: 0..self.size,
                         queued: true,
@@ -716,7 +725,7 @@ impl<A: HalApi> Buffer<A> {
                             std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
-                            id: self.info.id(),
+                            id: buffer_id,
                             data,
                             range: range.clone(),
                             queued: false,
