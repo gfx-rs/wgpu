@@ -765,7 +765,6 @@ impl<A: HalApi> Buffer<A> {
                 raw: Some(raw),
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
-                id: self.info.id.unwrap(),
                 tracker_index: self.info.tracker_index(),
                 label: self.info.label.clone(),
                 bind_groups,
@@ -832,7 +831,6 @@ pub struct DestroyedBuffer<A: HalApi> {
     raw: Option<A::Buffer>,
     device: Arc<Device<A>>,
     label: String,
-    pub(crate) id: BufferId,
     pub(crate) tracker_index: TrackerIndex,
     pub(crate) submission_index: u64,
     bind_groups: Vec<Weak<BindGroup<A>>>,
@@ -840,11 +838,7 @@ pub struct DestroyedBuffer<A: HalApi> {
 
 impl<A: HalApi> DestroyedBuffer<A> {
     pub fn label(&self) -> &dyn Debug {
-        if !self.label.is_empty() {
-            return &self.label;
-        }
-
-        &self.id
+        &self.label
     }
 }
 
@@ -1144,7 +1138,6 @@ impl<A: HalApi> Texture<A> {
                 device: Arc::clone(&self.device),
                 tracker_index: self.info.tracker_index(),
                 submission_index: self.info.submission_index(),
-                id: self.info.id.unwrap(),
                 label: self.info.label.clone(),
             }))
         };
@@ -1328,18 +1321,13 @@ pub struct DestroyedTexture<A: HalApi> {
     bind_groups: Vec<Weak<BindGroup<A>>>,
     device: Arc<Device<A>>,
     label: String,
-    pub(crate) id: TextureId,
     pub(crate) tracker_index: TrackerIndex,
     pub(crate) submission_index: u64,
 }
 
 impl<A: HalApi> DestroyedTexture<A> {
     pub fn label(&self) -> &dyn Debug {
-        if !self.label.is_empty() {
-            return &self.label;
-        }
-
-        &self.id
+        &self.label
     }
 }
 
