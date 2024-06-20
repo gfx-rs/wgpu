@@ -768,7 +768,7 @@ unsafe fn merge<A: HalApi>(
 
     if invalid_resource_state(merged_state) {
         return Err(UsageConflict::from_buffer(
-            unsafe { metadata_provider.get(index).info.id() },
+            unsafe { metadata_provider.get(index) },
             *current_state,
             new_state,
         ));
