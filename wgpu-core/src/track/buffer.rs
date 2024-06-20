@@ -304,8 +304,8 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
                     resource_log!(
-                        "BufferTracker::remove_abandoned: removing {:?}",
-                        self.metadata.get_resource_unchecked(index).as_info().id()
+                        "BufferTracker::remove_abandoned: removing {}",
+                        self.metadata.get_resource_unchecked(index).error_ident()
                     );
 
                     self.metadata.remove(index);
@@ -313,8 +313,8 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
                 }
 
                 resource_log!(
-                    "BufferTracker::remove_abandoned: not removing {:?}, ref count {}",
-                    self.metadata.get_resource_unchecked(index).as_info().id(),
+                    "BufferTracker::remove_abandoned: not removing {}, ref count {}",
+                    self.metadata.get_resource_unchecked(index).error_ident(),
                     existing_ref_count
                 );
 

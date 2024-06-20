@@ -428,8 +428,8 @@ impl<A: HalApi> ResourceTracker for TextureTracker<A> {
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
                     resource_log!(
-                        "TextureTracker::remove_abandoned: removing {:?}",
-                        self.metadata.get_resource_unchecked(index).as_info().id()
+                        "TextureTracker::remove_abandoned: removing {}",
+                        self.metadata.get_resource_unchecked(index).error_ident()
                     );
 
                     self.start_set.complex.remove(&index);
@@ -439,8 +439,8 @@ impl<A: HalApi> ResourceTracker for TextureTracker<A> {
                 }
 
                 resource_log!(
-                    "TextureTracker::remove_abandoned: not removing {:?}, ref count {}",
-                    self.metadata.get_resource_unchecked(index).as_info().id(),
+                    "TextureTracker::remove_abandoned: not removing {}, ref count {}",
+                    self.metadata.get_resource_unchecked(index).error_ident(),
                     existing_ref_count
                 );
 
