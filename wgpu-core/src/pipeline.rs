@@ -1,5 +1,3 @@
-#[cfg(feature = "trace")]
-use crate::device::trace;
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
@@ -60,10 +58,7 @@ impl<A: HalApi> Drop for ShaderModule<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw ShaderModule {:?}", self.info.label());
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyShaderModule(self.info.id()));
-            }
+
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_shader_module(raw);
@@ -237,11 +232,6 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw ComputePipeline {:?}", self.info.label());
 
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyComputePipeline(self.info.id()));
-            }
-
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_compute_pipeline(raw);
@@ -310,11 +300,6 @@ impl<A: HalApi> Drop for PipelineCache<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw PipelineCache {:?}", self.info.label());
-
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineCache(self.info.id()));
-            }
 
             unsafe {
                 use hal::Device;
@@ -575,11 +560,6 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw RenderPipeline {:?}", self.info.label());
-
-            #[cfg(feature = "trace")]
-            if let Some(t) = self.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRenderPipeline(self.info.id()));
-            }
 
             unsafe {
                 use hal::Device;
