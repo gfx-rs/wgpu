@@ -26,7 +26,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(2),
+                    ty: Handle(1),
                 ),
                 (
                     uniformity: (
@@ -59,7 +59,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Handle(0),
                 ),
                 (
                     uniformity: (
@@ -68,11 +68,68 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Function,
+                    )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(6),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(0),
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Private,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(6),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(1),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(6),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(10),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -84,70 +141,13 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(7),
+                        non_uniform_result: Some(11),
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
                     ty: Value(Pointer(
-                        base: 2,
-                        space: Private,
-                    )),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(7),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(2),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Float,
-                        width: 4,
-                    ))),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(7),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Float,
-                        width: 4,
-                    ))),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(11),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Pointer(
-                        base: 2,
-                        space: Function,
-                    )),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(12),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: Some(2),
-                    ty: Value(Pointer(
-                        base: 2,
+                        base: 1,
                         space: Private,
                     )),
                 ),
@@ -158,7 +158,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(2),
+                    ty: Handle(1),
                 ),
             ],
             sampling: [],
@@ -178,17 +178,17 @@
             kind: Float,
             width: 4,
         ))),
-        Handle(2),
+        Handle(1),
         Value(Scalar((
             kind: Float,
             width: 4,
         ))),
-        Handle(2),
+        Handle(1),
         Value(Scalar((
             kind: Float,
             width: 4,
         ))),
-        Handle(2),
+        Handle(1),
         Value(Scalar((
             kind: Float,
             width: 4,

@@ -13,7 +13,7 @@
                 members: [
                     (
                         name: None,
-                        ty: 1,
+                        ty: 0,
                         binding: None,
                         offset: 0,
                     ),
@@ -39,7 +39,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 2,
+            ty: 1,
             init: None,
         ),
     ],
@@ -51,13 +51,13 @@
             result: None,
             local_variables: [],
             expressions: [
-                GlobalVariable(1),
+                GlobalVariable(0),
                 AccessIndex(
-                    base: 1,
+                    base: 0,
                     index: 0,
                 ),
                 AtomicResult(
-                    ty: 1,
+                    ty: 0,
                     comparison: false,
                 ),
                 Literal(U32(1)),
@@ -69,10 +69,10 @@
                     end: 3,
                 )),
                 Atomic(
-                    pointer: 2,
+                    pointer: 1,
                     fun: Add,
-                    value: 4,
-                    result: Some(3),
+                    value: 3,
+                    result: Some(2),
                 ),
                 Return(
                     value: None,
@@ -95,7 +95,7 @@
                 named_expressions: {},
                 body: [
                     Call(
-                        function: 1,
+                        function: 0,
                         arguments: [],
                         result: None,
                     ),
