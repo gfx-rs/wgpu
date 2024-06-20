@@ -1096,7 +1096,7 @@ unsafe fn merge<A: HalApi>(
 
             if invalid_resource_state(merged_state) {
                 return Err(UsageConflict::from_texture(
-                    unsafe { metadata_provider.get(index).info.id() },
+                    unsafe { metadata_provider.get(index) },
                     texture_selector.clone(),
                     *current_simple,
                     new_simple,
@@ -1123,7 +1123,7 @@ unsafe fn merge<A: HalApi>(
 
                 if invalid_resource_state(merged_state) {
                     return Err(UsageConflict::from_texture(
-                        unsafe { metadata_provider.get(index).info.id() },
+                        unsafe { metadata_provider.get(index) },
                         selector,
                         *current_simple,
                         new_state,
@@ -1164,7 +1164,7 @@ unsafe fn merge<A: HalApi>(
 
                     if invalid_resource_state(merged_state) {
                         return Err(UsageConflict::from_texture(
-                            unsafe { metadata_provider.get(index).info.id() },
+                            unsafe { metadata_provider.get(index) },
                             TextureSelector {
                                 mips: mip_id..mip_id + 1,
                                 layers: layers.clone(),
@@ -1205,7 +1205,7 @@ unsafe fn merge<A: HalApi>(
 
                         if invalid_resource_state(merged_state) {
                             return Err(UsageConflict::from_texture(
-                                unsafe { metadata_provider.get(index).info.id() },
+                                unsafe { metadata_provider.get(index) },
                                 TextureSelector {
                                     mips: mip_id..mip_id + 1,
                                     layers: layers.clone(),

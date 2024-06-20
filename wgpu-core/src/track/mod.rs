@@ -104,9 +104,9 @@ mod texture;
 use crate::{
     binding_model, command, conv,
     hal_api::HalApi,
-    id,
     lock::{rank, Mutex, RwLock},
-    pipeline, resource,
+    pipeline,
+    resource::{self, Resource, ResourceErrorIdent},
     snatch::SnatchGuard,
 };
 
@@ -338,16 +338,18 @@ fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     old_state == new_state && old_state.all_ordered()
 }
 
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[derive(Clone, Debug, Error)]
 pub enum UsageConflict {
-    #[error("Attempted to use buffer with {invalid_use}.")]
+    #[error("Attempted to use {res} with {invalid_use}.")]
     Buffer {
-        id: id::BufferId,
+        res: ResourceErrorIdent,
         invalid_use: InvalidUse<hal::BufferUses>,
     },
-    #[error("Attempted to use a texture (mips {mip_levels:?} layers {array_layers:?}) with {invalid_use}.")]
+    #[error(
+        "Attempted to use {res} (mips {mip_levels:?} layers {array_layers:?}) with {invalid_use}."
+    )]
     Texture {
-        id: id::TextureId,
+        res: ResourceErrorIdent,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
         invalid_use: InvalidUse<hal::TextureUses>,
@@ -355,13 +357,13 @@ pub enum UsageConflict {
 }
 
 impl UsageConflict {
-    fn from_buffer(
-        id: id::BufferId,
+    fn from_buffer<A: HalApi>(
+        buffer: &resource::Buffer<A>,
         current_state: hal::BufferUses,
         new_state: hal::BufferUses,
     ) -> Self {
         Self::Buffer {
-            id,
+            res: buffer.error_ident(),
             invalid_use: InvalidUse {
                 current_state,
                 new_state,
@@ -369,14 +371,14 @@ impl UsageConflict {
         }
     }
 
-    fn from_texture(
-        id: id::TextureId,
+    fn from_texture<A: HalApi>(
+        texture: &resource::Texture<A>,
         selector: TextureSelector,
         current_state: hal::TextureUses,
         new_state: hal::TextureUses,
     ) -> Self {
         Self::Texture {
-            id,
+            res: texture.error_ident(),
             mip_levels: selector.mips,
             array_layers: selector.layers,
             invalid_use: InvalidUse {
@@ -390,14 +392,6 @@ impl UsageConflict {
 impl crate::error::PrettyError for UsageConflict {
     fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
         fmt.error(self);
-        match *self {
-            Self::Buffer { id, .. } => {
-                fmt.buffer_label(&id);
-            }
-            Self::Texture { id, .. } => {
-                fmt.texture_label(&id);
-            }
-        }
     }
 }
 
