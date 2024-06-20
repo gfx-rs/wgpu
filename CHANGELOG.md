@@ -155,6 +155,10 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 - `wgpu::ComputePass` now internally takes ownership of `QuerySet` for both `wgpu::ComputePassTimestampWrites` as well as timestamp writes and statistics query, fixing crashes when destroying `QuerySet` before ending the pass. By @wumpf in [#5671](https://github.com/gfx-rs/wgpu/pull/5671)
 - Validate resources passed during compute pass recording for mismatching device. By @wumpf in [#5779](https://github.com/gfx-rs/wgpu/pull/5779)
 
+#### DX12
+
+- Do not feed `&""` to `D3DCompile`, by @workingjubilee in [#5812](https://github.com/gfx-rs/wgpu/issues/5812).
+
 #### Metal
 
 - Fix unrecognized selector crash on iOS 12. By @vladasz in [#5744](https://github.com/gfx-rs/wgpu/pull/5744).
