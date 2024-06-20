@@ -312,9 +312,11 @@ impl<A: HalApi> Device<A> {
     }
 
     pub fn check_is_valid(&self) -> Result<(), DeviceError> {
-        self.is_valid()
-            .then_some(())
-            .ok_or_else(|| DeviceError::Invalid(self.error_ident()))
+        if self.is_valid() {
+            Ok(())
+        } else {
+            Err(DeviceError::Invalid(self.error_ident()))
+        }
     }
 
     pub(crate) fn release_queue(&self, queue: A::Queue) {
