@@ -781,7 +781,7 @@ impl Global {
                     state
                         .scope
                         .buffers
-                        .insert_merge_single(buffer.clone(), hal::BufferUses::INDIRECT)
+                        .merge_single(&buffer, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     buffer
                         .check_usage(wgt::BufferUsages::INDIRECT)

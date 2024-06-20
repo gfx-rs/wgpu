@@ -230,21 +230,6 @@ impl<A: HalApi> BufferUsageScope<A> {
         buffer: &Arc<Buffer<A>>,
         new_state: BufferUses,
     ) -> Result<(), UsageConflict> {
-        self.insert_merge_single(buffer.clone(), new_state)
-    }
-
-    /// Merge a single state into the UsageScope, using an already resolved buffer.
-    ///
-    /// If the resulting state is invalid, returns a usage
-    /// conflict with the details of the invalid state.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_merge_single(
-        &mut self,
-        buffer: Arc<Buffer<A>>,
-        new_state: BufferUses,
-    ) -> Result<(), UsageConflict> {
         let index = buffer.info.tracker_index().as_usize();
 
         self.allow_index(index);
@@ -260,7 +245,7 @@ impl<A: HalApi> BufferUsageScope<A> {
                 index,
                 BufferStateProvider::Direct { state: new_state },
                 ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(buffer),
+                    resource: Cow::Owned(buffer.clone()),
                 },
             )?;
         }
