@@ -86,9 +86,9 @@ impl<T: Resource> ResourceTracker for StatelessTracker<T> {
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
                     resource_log!(
-                        "StatelessTracker<{}>::remove_abandoned: removing {:?}",
+                        "StatelessTracker<{}>::remove_abandoned: removing {}",
                         T::TYPE,
-                        self.metadata.get_resource_unchecked(index).as_info().id()
+                        self.metadata.get_resource_unchecked(index).error_ident()
                     );
 
                     self.metadata.remove(index);
@@ -96,9 +96,9 @@ impl<T: Resource> ResourceTracker for StatelessTracker<T> {
                 }
 
                 resource_log!(
-                    "StatelessTracker<{}>::remove_abandoned: not removing {:?}, ref count {}",
+                    "StatelessTracker<{}>::remove_abandoned: not removing {}, ref count {}",
                     T::TYPE,
-                    self.metadata.get_resource_unchecked(index).as_info().id(),
+                    self.metadata.get_resource_unchecked(index).error_ident(),
                     existing_ref_count
                 );
 
