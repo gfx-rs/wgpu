@@ -353,10 +353,11 @@ impl Global {
         let raw_encoder = encoder.open()?;
 
         let query_set_guard = hub.query_sets.read();
-        let query_set = tracker
-            .query_sets
-            .add_single(&*query_set_guard, query_set_id)
-            .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
+        let query_set = query_set_guard
+            .get(query_set_id)
+            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
+
+        tracker.query_sets.add_single(query_set);
 
         query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
@@ -397,11 +398,13 @@ impl Global {
         if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
+
         let query_set_guard = hub.query_sets.read();
-        let query_set = tracker
-            .query_sets
-            .add_single(&*query_set_guard, query_set_id)
-            .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
+        let query_set = query_set_guard
+            .get(query_set_id)
+            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
+
+        tracker.query_sets.add_single(query_set);
 
         query_set.same_device_as(cmd_buf.as_ref())?;
 
