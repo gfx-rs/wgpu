@@ -83,7 +83,7 @@ The rest of the examples are for demonstrating specific features that you can co
 ## Running on the Web
 
 To run the examples in a browser, run `cargo xtask run-wasm`.
-Then open to `http://localhost:8000` in your browser, and you can choose an example to run.
+Then open `http://localhost:8000` in your browser, and you can choose an example to run.
 Naturally, in order to display any of the WebGPU based examples, you need to make sure your browser supports it.
 
 Note that many cannot be downleveled to WebGL as WebGL does (among other things) not support storage texture, storage buffers and compute shaders. Running any example using these feature in a browser will require that browser to support WebGPU.
