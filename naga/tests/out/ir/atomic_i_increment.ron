@@ -13,7 +13,7 @@
                 members: [
                     (
                         name: None,
-                        ty: 1,
+                        ty: 0,
                         binding: None,
                         offset: 0,
                     ),
@@ -24,7 +24,7 @@
         (
             name: None,
             inner: Pointer(
-                base: 2,
+                base: 1,
                 space: Storage(
                     access: ("LOAD | STORE"),
                 ),
@@ -33,7 +33,7 @@
         (
             name: None,
             inner: Pointer(
-                base: 1,
+                base: 0,
                 space: Storage(
                     access: ("LOAD | STORE"),
                 ),
@@ -48,13 +48,13 @@
     constants: [
         (
             name: None,
-            ty: 1,
-            init: 1,
+            ty: 0,
+            init: 0,
         ),
         (
             name: None,
-            ty: 1,
-            init: 2,
+            ty: 0,
+            init: 1,
         ),
     ],
     overrides: [],
@@ -68,7 +68,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 2,
+            ty: 1,
             init: None,
         ),
     ],
@@ -83,15 +83,15 @@
             result: None,
             local_variables: [],
             expressions: [
-                GlobalVariable(1),
-                Constant(2),
+                GlobalVariable(0),
                 Constant(1),
+                Constant(0),
                 AccessIndex(
-                    base: 1,
+                    base: 0,
                     index: 0,
                 ),
                 AtomicResult(
-                    ty: 1,
+                    ty: 0,
                     comparison: false,
                 ),
                 Literal(U32(1)),
@@ -103,10 +103,10 @@
                     end: 5,
                 )),
                 Atomic(
-                    pointer: 4,
+                    pointer: 3,
                     fun: Add,
-                    value: 6,
-                    result: Some(5),
+                    value: 5,
+                    result: Some(4),
                 ),
                 Return(
                     value: None,
@@ -129,7 +129,7 @@
                 named_expressions: {},
                 body: [
                     Call(
-                        function: 1,
+                        function: 0,
                         arguments: [],
                         result: None,
                     ),

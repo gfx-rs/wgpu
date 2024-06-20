@@ -34,13 +34,13 @@
                 members: [
                     (
                         name: Some("old_value"),
-                        ty: 3,
+                        ty: 2,
                         binding: None,
                         offset: 0,
                     ),
                     (
                         name: Some("exchanged"),
-                        ty: 4,
+                        ty: 3,
                         binding: None,
                         offset: 4,
                     ),
@@ -56,7 +56,7 @@
             AtomicCompareExchangeWeakResult((
                 kind: Uint,
                 width: 4,
-            )): 5,
+            )): 4,
         },
     ),
     constants: [],
@@ -64,7 +64,7 @@
         (
             name: Some("o"),
             id: None,
-            ty: 1,
+            ty: 0,
             init: None,
         ),
     ],
@@ -73,7 +73,7 @@
             name: Some("a"),
             space: WorkGroup,
             binding: None,
-            ty: 2,
+            ty: 1,
             init: None,
         ),
     ],
@@ -91,16 +91,16 @@
                 result: None,
                 local_variables: [],
                 expressions: [
-                    GlobalVariable(1),
-                    Override(1),
+                    GlobalVariable(0),
+                    Override(0),
                     As(
-                        expr: 2,
+                        expr: 1,
                         kind: Uint,
                         convert: Some(4),
                     ),
                     Literal(U32(1)),
                     AtomicResult(
-                        ty: 5,
+                        ty: 4,
                         comparison: true,
                     ),
                 ],
@@ -111,12 +111,12 @@
                         end: 3,
                     )),
                     Atomic(
-                        pointer: 1,
+                        pointer: 0,
                         fun: Exchange(
-                            compare: Some(3),
+                            compare: Some(2),
                         ),
-                        value: 4,
-                        result: Some(5),
+                        value: 3,
+                        result: Some(4),
                     ),
                     Return(
                         value: None,

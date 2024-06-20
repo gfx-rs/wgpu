@@ -28,23 +28,28 @@ use std::num::NonZeroU32;
 /// Since zero is a very useful value in indexing, `NonMaxU32` is more useful
 /// for representing indices than [`NonZeroU32`].
 ///
+/// `NonMaxU32` values and `Option<NonMaxU32>` values both occupy 32 bits.
+///
+/// # Serialization and Deserialization
+///
+/// When the appropriate Cargo features are enabled, `NonMaxU32` implements
+/// [`serde::Serialize`] and [`serde::Deserialize`] in the natural way, as the
+/// integer value it represents. For example, serializing
+/// `NonMaxU32::new(0).unwrap()` as JSON or RON yields the string `"0"`. This is
+/// the case despite `NonMaxU32`'s implementation, described below.
+///
 /// # Implementation
 ///
-/// A `NonMaxU32` whose value is `n` is a newtype around a [`NonZeroU32`] whose
-/// value is `n + 1`. This way, the range of values `NonMaxU32` can represent,
-/// `0..=u32::MAX - 1`, is mapped to the range `1..=u32::MAX`, which is the
-/// range that [`NonZeroU32`] can represent. (And conversely, since [`u32`]
-/// addition wraps around, the unrepresentable value [`u32::MAX`] becomes the
-/// unrepresentable value `0`.)
+/// Although this should not be observable to its users, a `NonMaxU32` whose
+/// value is `n` is a newtype around a [`NonZeroU32`] whose value is `n + 1`.
+/// This way, the range of values that `NonMaxU32` can represent, `0..=u32::MAX
+/// - 1`, is mapped to the range `1..=u32::MAX`, which is the range that
+/// [`NonZeroU32`] can represent. (And conversely, since [`u32`] addition wraps
+/// around, the value unrepresentable in `NonMaxU32`, [`u32::MAX`], becomes the
+/// value unrepresentable in [`NonZeroU32`], `0`.)
 ///
 /// [`NonZeroU32`]: std::num::NonZeroU32
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[cfg_attr(
-    any(feature = "serialize", feature = "deserialize"),
-    serde(transparent)
-)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct NonMaxU32(NonZeroU32);
 
@@ -101,6 +106,35 @@ impl std::fmt::Debug for NonMaxU32 {
 impl std::fmt::Display for NonMaxU32 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.get().fmt(f)
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl serde::Serialize for NonMaxU32 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_u32(self.get())
+    }
+}
+
+#[cfg(feature = "deserialize")]
+impl<'de> serde::Deserialize<'de> for NonMaxU32 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Defer to `u32`'s `Deserialize` implementation.
+        let n = <u32 as serde::Deserialize>::deserialize(deserializer)?;
+
+        // Constrain the range of the value further.
+        NonMaxU32::new(n).ok_or_else(|| {
+            <D::Error as serde::de::Error>::invalid_value(
+                serde::de::Unexpected::Unsigned(n as u64),
+                &"a value no less than 0 and no greater than 4294967294 (2^32 - 2)",
+            )
+        })
     }
 }
 
