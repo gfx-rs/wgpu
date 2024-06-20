@@ -70,6 +70,8 @@ pub enum DrawError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum RenderCommandError {
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(id::BufferId),
     #[error("BindGroupId {0:?} is invalid")]
     InvalidBindGroupId(id::BindGroupId),
     #[error("Render bundle {0:?} is invalid")]
@@ -118,12 +120,6 @@ impl crate::error::PrettyError for RenderCommandError {
             }
             Self::InvalidPipeline(id) => {
                 fmt.render_pipeline_label(&id);
-            }
-            Self::UsageConflict(UsageConflict::TextureInvalid { id }) => {
-                fmt.texture_label(&id);
-            }
-            Self::UsageConflict(UsageConflict::BufferInvalid { id }) => {
-                fmt.buffer_label(&id);
             }
             _ => {}
         };

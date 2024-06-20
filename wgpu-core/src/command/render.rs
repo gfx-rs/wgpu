@@ -1662,10 +1662,15 @@ impl Global {
                         api_log!("RenderPass::set_index_buffer {buffer_id:?}");
 
                         let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                        let buffer = info
-                            .usage_scope
+
+                        let buffer = buffer_guard
+                            .get(buffer_id)
+                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
+                            .map_pass_err(scope)?;
+
+                        info.usage_scope
                             .buffers
-                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                            .merge_single(buffer, hal::BufferUses::INDEX)
                             .map_pass_err(scope)?;
 
                         buffer
@@ -1712,10 +1717,15 @@ impl Global {
                         api_log!("RenderPass::set_vertex_buffer {slot} {buffer_id:?}");
 
                         let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                        let buffer = info
-                            .usage_scope
+
+                        let buffer = buffer_guard
+                            .get(buffer_id)
+                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
+                            .map_pass_err(scope)?;
+
+                        info.usage_scope
                             .buffers
-                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                            .merge_single(buffer, hal::BufferUses::VERTEX)
                             .map_pass_err(scope)?;
 
                         buffer
@@ -2020,11 +2030,16 @@ impl Global {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer = info
-                            .usage_scope
-                            .buffers
-                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        let indirect_buffer = buffer_guard
+                            .get(buffer_id)
+                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                             .map_pass_err(scope)?;
+
+                        info.usage_scope
+                            .buffers
+                            .merge_single(indirect_buffer, hal::BufferUses::INDIRECT)
+                            .map_pass_err(scope)?;
+
                         indirect_buffer
                             .check_usage(BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
@@ -2090,26 +2105,32 @@ impl Global {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer = info
-                            .usage_scope
-                            .buffers
-                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        let indirect_buffer = buffer_guard
+                            .get(buffer_id)
+                            .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                             .map_pass_err(scope)?;
+
+                        info.usage_scope
+                            .buffers
+                            .merge_single(indirect_buffer, hal::BufferUses::INDIRECT)
+                            .map_pass_err(scope)?;
+
                         indirect_buffer
                             .check_usage(BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let indirect_raw =
                             indirect_buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
-                        let count_buffer = info
-                            .usage_scope
-                            .buffers
-                            .merge_single(
-                                &*buffer_guard,
-                                count_buffer_id,
-                                hal::BufferUses::INDIRECT,
-                            )
+                        let count_buffer = buffer_guard
+                            .get(count_buffer_id)
+                            .map_err(|_| RenderCommandError::InvalidBufferId(count_buffer_id))
                             .map_pass_err(scope)?;
+
+                        info.usage_scope
+                            .buffers
+                            .merge_single(count_buffer, hal::BufferUses::INDIRECT)
+                            .map_pass_err(scope)?;
+
                         count_buffer
                             .check_usage(BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;

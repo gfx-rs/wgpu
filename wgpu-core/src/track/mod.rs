@@ -340,10 +340,6 @@ fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum UsageConflict {
-    #[error("Attempted to use invalid buffer")]
-    BufferInvalid { id: id::BufferId },
-    #[error("Attempted to use invalid texture")]
-    TextureInvalid { id: id::TextureId },
     #[error("Attempted to use buffer with {invalid_use}.")]
     Buffer {
         id: id::BufferId,
@@ -395,12 +391,6 @@ impl crate::error::PrettyError for UsageConflict {
     fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
         fmt.error(self);
         match *self {
-            Self::BufferInvalid { id } => {
-                fmt.buffer_label(&id);
-            }
-            Self::TextureInvalid { id } => {
-                fmt.texture_label(&id);
-            }
             Self::Buffer { id, .. } => {
                 fmt.buffer_label(&id);
             }

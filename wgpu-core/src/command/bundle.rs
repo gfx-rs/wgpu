@@ -526,12 +526,19 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                    let buffer = state
+
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
+                        .map_pass_err(scope)?;
+
+                    state
                         .trackers
                         .buffers
                         .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                        .merge_single(buffer, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::INDEX).map_pass_err(scope)?;
@@ -564,12 +571,17 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                         .map_pass_err(scope)?;
+
+                    state
+                        .trackers
+                        .buffers.write()
+                        .merge_single(buffer, hal::BufferUses::VERTEX)
+                        .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::VERTEX).map_pass_err(scope)?;
@@ -690,12 +702,17 @@ impl RenderBundleEncoder {
                     let pipeline = state.pipeline(scope)?;
                     let used_bind_groups = pipeline.used_bind_groups;
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                         .map_pass_err(scope)?;
+
+                    state
+                        .trackers
+                        .buffers.write()
+                        .merge_single(buffer, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
@@ -728,12 +745,17 @@ impl RenderBundleEncoder {
                     let pipeline = state.pipeline(scope)?;
                     let used_bind_groups = pipeline.used_bind_groups;
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                         .map_pass_err(scope)?;
+
+                    state
+                        .trackers
+                        .buffers.write()
+                        .merge_single(buffer, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
