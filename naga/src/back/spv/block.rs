@@ -213,7 +213,7 @@ impl<'w> BlockContext<'w> {
 
             // The chain rule: if this `Access...`'s `base` operand was
             // previously omitted, then omit this one, too.
-            _ => self.cached.ids[expr_handle.index()] == 0,
+            _ => self.cached.ids[expr_handle] == 0,
         }
     }
 
@@ -237,7 +237,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
             crate::Expression::Constant(handle) => {
                 let init = self.ir_module.constants[handle].init;
-                self.writer.constant_ids[init.index()]
+                self.writer.constant_ids[init]
             }
             crate::Expression::Override(_) => return Err(Error::Override),
             crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
@@ -430,7 +430,7 @@ impl<'w> BlockContext<'w> {
                 }
             }
             crate::Expression::GlobalVariable(handle) => {
-                self.writer.global_variables[handle.index()].access_id
+                self.writer.global_variables[handle].access_id
             }
             crate::Expression::Swizzle {
                 size,
@@ -1830,7 +1830,7 @@ impl<'w> BlockContext<'w> {
                     base
                 }
                 crate::Expression::GlobalVariable(handle) => {
-                    let gv = &self.writer.global_variables[handle.index()];
+                    let gv = &self.writer.global_variables[handle];
                     break gv.access_id;
                 }
                 crate::Expression::LocalVariable(variable) => {
