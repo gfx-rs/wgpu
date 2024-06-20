@@ -7,11 +7,9 @@
 use std::sync::Arc;
 
 use crate::{
-    id::Id,
     lock::{rank, Mutex},
     resource::Resource,
     resource_log,
-    storage::Storage,
     track::ResourceMetadata,
 };
 
@@ -177,13 +175,7 @@ impl<T: Resource> StatelessTracker<T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(
-        &mut self,
-        storage: &'a Storage<T>,
-        id: Id<T::Marker>,
-    ) -> Option<&'a Arc<T>> {
-        let resource = storage.get(id).ok()?;
-
+    pub fn add_single(&mut self, resource: &Arc<T>) {
         let index = resource.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
@@ -193,8 +185,6 @@ impl<T: Resource> StatelessTracker<T> {
         unsafe {
             self.metadata.insert(index, resource.clone());
         }
-
-        Some(resource)
     }
 
     /// Adds the given resources from the given tracker.

@@ -7,7 +7,6 @@ use crate::{
     api_log,
     binding_model::BindError,
     command::{
-        self,
         bind::Binder,
         end_occlusion_query, end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
@@ -903,10 +902,14 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
-            let view: &TextureView<A> = trackers
-                .views
-                .add_single(view_guard, at.view)
-                .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
+            let view = view_guard
+                .get(at.view)
+                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+
+            trackers.views.add_single(view);
+
+            let view = view.as_ref();
+
             check_multiview(view)?;
             add_view(view, AttachmentErrorLocation::Depth)?;
 
@@ -1036,10 +1039,13 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
                 colors.push(None);
                 continue;
             };
-            let color_view: &TextureView<A> = trackers
-                .views
-                .add_single(view_guard, at.view)
-                .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
+
+            let color_view = view_guard
+                .get(at.view)
+                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+
+            trackers.views.add_single(color_view);
+
             check_multiview(color_view)?;
             add_view(
                 color_view,
@@ -1070,10 +1076,11 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 
             let mut hal_resolve_target = None;
             if let Some(resolve_target) = at.resolve_target {
-                let resolve_view: &TextureView<A> = trackers
-                    .views
-                    .add_single(view_guard, resolve_target)
-                    .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+                let resolve_view = view_guard
+                    .get(resolve_target)
+                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+
+                trackers.views.add_single(resolve_view);
 
                 check_multiview(resolve_view)?;
 
@@ -1177,10 +1184,11 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
         };
 
         let timestamp_writes = if let Some(tw) = timestamp_writes {
-            let query_set = trackers
-                .query_sets
-                .add_single(query_set_guard, tw.query_set)
-                .ok_or(RenderPassErrorInner::InvalidQuerySet(tw.query_set))?;
+            let query_set = query_set_guard
+                .get(tw.query_set)
+                .map_err(|_| RenderPassErrorInner::InvalidQuerySet(tw.query_set))?;
+
+            trackers.query_sets.add_single(query_set);
 
             if let Some(index) = tw.beginning_of_pass_write_index {
                 pending_query_resets.use_query_set(tw.query_set, query_set, index);
@@ -1199,10 +1207,11 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
         };
 
         let occlusion_query_set = if let Some(occlusion_query_set) = occlusion_query_set {
-            let query_set = trackers
-                .query_sets
-                .add_single(query_set_guard, occlusion_query_set)
-                .ok_or(RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
+            let query_set = query_set_guard
+                .get(occlusion_query_set)
+                .map_err(|_| RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
+
+            trackers.query_sets.add_single(query_set);
 
             Some(query_set.raw.as_ref().unwrap())
         } else {
@@ -1470,11 +1479,12 @@ impl Global {
                         );
                         dynamic_offset_count += num_dynamic_offsets;
 
-                        let bind_group = tracker
-                            .bind_groups
-                            .add_single(&*bind_group_guard, bind_group_id)
-                            .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
+                        let bind_group = bind_group_guard
+                            .get(bind_group_id)
+                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
+
+                        tracker.bind_groups.add_single(bind_group);
 
                         bind_group
                             .same_device_as(cmd_buf.as_ref())
@@ -1538,11 +1548,12 @@ impl Global {
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         state.pipeline = Some(pipeline_id);
 
-                        let pipeline: &pipeline::RenderPipeline<A> = tracker
-                            .render_pipelines
-                            .add_single(&*render_pipeline_guard, pipeline_id)
-                            .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
+                        let pipeline = render_pipeline_guard
+                            .get(pipeline_id)
+                            .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
                             .map_pass_err(scope)?;
+
+                        tracker.render_pipelines.add_single(pipeline);
 
                         pipeline
                             .same_device_as(cmd_buf.as_ref())
@@ -2231,11 +2242,12 @@ impl Global {
                             .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                             .map_pass_err(scope)?;
 
-                        let query_set = tracker
-                            .query_sets
-                            .add_single(&*query_set_guard, query_set_id)
-                            .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
+                        let query_set = query_set_guard
+                            .get(query_set_id)
+                            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
+
+                        tracker.query_sets.add_single(query_set);
 
                         query_set
                             .validate_and_write_timestamp(
@@ -2253,11 +2265,12 @@ impl Global {
                             .ok_or(RenderPassErrorInner::MissingOcclusionQuerySet)
                             .map_pass_err(scope)?;
 
-                        let query_set = tracker
-                            .query_sets
-                            .add_single(&*query_set_guard, query_set_id)
-                            .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
+                        let query_set = query_set_guard
+                            .get(query_set_id)
+                            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
+
+                        tracker.query_sets.add_single(query_set);
 
                         validate_and_begin_occlusion_query(
                             query_set.clone(),
@@ -2281,11 +2294,12 @@ impl Global {
                         api_log!("RenderPass::begin_pipeline_statistics_query {query_set_id:?} {query_index}");
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set = tracker
-                            .query_sets
-                            .add_single(&*query_set_guard, query_set_id)
-                            .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
+                        let query_set = query_set_guard
+                            .get(query_set_id)
+                            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
+
+                        tracker.query_sets.add_single(query_set);
 
                         validate_and_begin_pipeline_statistics_query(
                             query_set.clone(),
@@ -2306,11 +2320,13 @@ impl Global {
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         api_log!("RenderPass::execute_bundle {bundle_id:?}");
                         let scope = PassErrorScope::ExecuteBundle;
-                        let bundle: &command::RenderBundle<A> = tracker
-                            .bundles
-                            .add_single(&*bundle_guard, bundle_id)
-                            .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
+
+                        let bundle = bundle_guard
+                            .get(bundle_id)
+                            .map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
                             .map_pass_err(scope)?;
+
+                        tracker.bundles.add_single(bundle);
 
                         bundle
                             .same_device_as(cmd_buf.as_ref())

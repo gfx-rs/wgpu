@@ -410,13 +410,17 @@ impl RenderBundleEncoder {
                 } => {
                     let scope = PassErrorScope::SetBindGroup(bind_group_id);
 
-                    let bind_group = state
+                    let bind_group = bind_group_guard
+                        .get(bind_group_id)
+                        .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                        .map_pass_err(scope)?;
+
+                    state
                         .trackers
                         .bind_groups
                         .write()
-                        .add_single(&*bind_group_guard, bind_group_id)
-                        .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
-                        .map_pass_err(scope)?;
+                        .add_single(bind_group);
+
                     self.check_valid_to_use(bind_group.device.info.id())
                         .map_pass_err(scope)?;
 
@@ -475,13 +479,17 @@ impl RenderBundleEncoder {
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let scope = PassErrorScope::SetPipelineRender(pipeline_id);
 
-                    let pipeline = state
+                    let pipeline = pipeline_guard
+                        .get(pipeline_id)
+                        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
+                        .map_pass_err(scope)?;
+
+                    state
                         .trackers
                         .render_pipelines
                         .write()
-                        .add_single(&*pipeline_guard, pipeline_id)
-                        .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
-                        .map_pass_err(scope)?;
+                        .add_single(pipeline);
+
                     self.check_valid_to_use(pipeline.device.info.id())
                         .map_pass_err(scope)?;
 
