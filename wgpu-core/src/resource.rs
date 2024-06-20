@@ -1567,7 +1567,6 @@ pub struct TextureView<A: HalApi> {
     // if it's a surface texture - it's none
     pub(crate) parent: Arc<Texture<A>>,
     pub(crate) device: Arc<Device<A>>,
-    //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     /// This is `Err` only if the texture view is not renderable
