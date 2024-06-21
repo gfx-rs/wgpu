@@ -348,10 +348,7 @@ fn prepare_staging_buffer<A: HalApi>(
         raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(buffer)),
         device: device.clone(),
         size,
-        info: ResourceInfo::new(
-            "<StagingBuffer>",
-            Some(device.tracker_indices.staging_buffers.clone()),
-        ),
+        info: ResourceInfo::new(&None, Some(device.tracker_indices.staging_buffers.clone())),
         is_coherent: mapping.is_coherent,
     };
 

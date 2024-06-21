@@ -9,7 +9,10 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{borrow::Borrow, sync::Arc};
+use std::{
+    borrow::{Borrow, Cow},
+    sync::Arc,
+};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -225,7 +228,7 @@ impl Global {
                         mips: 0..1,
                     },
                     info: ResourceInfo::new(
-                        "<Surface Texture>",
+                        &Some(Cow::Borrowed("<Surface Texture>")),
                         Some(device.tracker_indices.textures.clone()),
                     ),
                     clear_mode: RwLock::new(
