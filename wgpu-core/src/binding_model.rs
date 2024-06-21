@@ -483,7 +483,7 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
             self.device.bgl_pool.remove(&self.entries);
         }
         if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw BindGroupLayout {:?}", self.info.label());
+            resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_bind_group_layout(raw);
@@ -625,8 +625,7 @@ pub struct PipelineLayout<A: HalApi> {
 impl<A: HalApi> Drop for PipelineLayout<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw PipelineLayout {:?}", self.info.label());
-
+            resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_pipeline_layout(raw);
@@ -861,8 +860,7 @@ pub struct BindGroup<A: HalApi> {
 impl<A: HalApi> Drop for BindGroup<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw BindGroup {:?}", self.info.label());
-
+            resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_bind_group(raw);
