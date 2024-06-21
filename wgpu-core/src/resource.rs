@@ -71,7 +71,7 @@ pub(crate) struct ResourceInfo<T: Resource> {
     submission_index: AtomicUsize,
 
     /// The `label` from the descriptor used to create the resource.
-    pub(crate) label: String,
+    label: String,
 }
 
 impl<T: Resource> Drop for ResourceInfo<T> {
@@ -751,7 +751,7 @@ impl<A: HalApi> Buffer<A> {
                 device: Arc::clone(&self.device),
                 submission_index: self.info.submission_index(),
                 tracker_index: self.info.tracker_index(),
-                label: self.info.label.clone(),
+                label: self.label().to_owned(),
                 bind_groups,
             }))
         };
@@ -1119,7 +1119,7 @@ impl<A: HalApi> Texture<A> {
                 device: Arc::clone(&self.device),
                 tracker_index: self.info.tracker_index(),
                 submission_index: self.info.submission_index(),
-                label: self.info.label.clone(),
+                label: self.label().to_owned(),
             }))
         };
 

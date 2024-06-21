@@ -151,7 +151,7 @@ pub(crate) enum DeferredDestroy<A: HalApi> {
 impl<A: HalApi> std::fmt::Debug for Device<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Device")
-            .field("label", &self.info.label)
+            .field("label", &self.label())
             .field("limits", &self.limits)
             .field("features", &self.features)
             .field("downlevel", &self.downlevel)
