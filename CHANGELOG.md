@@ -175,6 +175,7 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 #### Naga
 
 - In spv-out don't decorate a `BindingArray`'s type with `Block` if the type is a struct with a runtime array by @Vecvec in [#5776](https://github.com/gfx-rs/wgpu/pull/5776)
+- Add `packed` as a keyword for GLSL by @kjarosh in [#5855](https://github.com/gfx-rs/wgpu/pull/5855)
 
 ## v0.20.0 (2024-04-28)
 

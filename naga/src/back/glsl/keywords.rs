@@ -473,6 +473,8 @@ pub const RESERVED_KEYWORDS: &[&str] = &[
     "anyInvocation",
     "allInvocations",
     "allInvocationsEqual",
+    // Sometimes "packed" is a keyword, see https://github.com/gfx-rs/wgpu/issues/5853
+    "packed",
     //
     // entry point name (should not be shadowed)
     //
