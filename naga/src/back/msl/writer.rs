@@ -3468,41 +3468,39 @@ impl<W: Write> Writer<W> {
         }
         writeln!(self.out)?;
 
-        {
-            // Make a `Vec` of all the `GlobalVariable`s that contain
-            // runtime-sized arrays.
-            let globals: Vec<Handle<crate::GlobalVariable>> = module
-                .global_variables
-                .iter()
-                .filter(|&(_, var)| needs_array_length(var.ty, &module.types))
-                .map(|(handle, _)| handle)
-                .collect();
+        // Make a `Vec` of all the `GlobalVariable`s that contain
+        // runtime-sized arrays.
+        let globals: Vec<Handle<crate::GlobalVariable>> = module
+            .global_variables
+            .iter()
+            .filter(|&(_, var)| needs_array_length(var.ty, &module.types))
+            .map(|(handle, _)| handle)
+            .collect();
 
-            let mut buffer_indices = vec![];
-            for vbm in &pipeline_options.vertex_buffer_mappings {
-                buffer_indices.push(vbm.id);
+        let mut buffer_indices = vec![];
+        for vbm in &pipeline_options.vertex_buffer_mappings {
+            buffer_indices.push(vbm.id);
+        }
+
+        if !globals.is_empty() || !buffer_indices.is_empty() {
+            writeln!(self.out, "struct _mslBufferSizes {{")?;
+
+            for global in globals {
+                writeln!(
+                    self.out,
+                    "{}uint {};",
+                    back::INDENT,
+                    ArraySizeMember(global)
+                )?;
             }
 
-            if !globals.is_empty() || !buffer_indices.is_empty() {
-                writeln!(self.out, "struct _mslBufferSizes {{")?;
-
-                for global in globals {
-                    writeln!(
-                        self.out,
-                        "{}uint {};",
-                        back::INDENT,
-                        ArraySizeMember(global)
-                    )?;
-                }
-
-                for idx in buffer_indices {
-                    writeln!(self.out, "{}uint buffer_size{};", back::INDENT, idx)?;
-                }
-
-                writeln!(self.out, "}};")?;
-                writeln!(self.out)?;
+            for idx in buffer_indices {
+                writeln!(self.out, "{}uint buffer_size{};", back::INDENT, idx)?;
             }
-        };
+
+            writeln!(self.out, "}};")?;
+            writeln!(self.out)?;
+        }
 
         self.write_type_defs(module)?;
         self.write_global_constants(module, info)?;
