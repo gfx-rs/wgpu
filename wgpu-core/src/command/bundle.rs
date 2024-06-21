@@ -517,11 +517,11 @@ impl RenderBundleEncoder {
                     buffer_id,
                     offset,
                     count: None,
-                    indexed: false,
+                    indexed,
                 } => {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::DrawIndirect,
-                        indexed: false,
+                        indexed,
                         pipeline: state.pipeline_id(),
                     };
                     multi_draw_indirect(
@@ -530,26 +530,7 @@ impl RenderBundleEncoder {
                         &buffer_guard,
                         buffer_id,
                         offset,
-                    )
-                    .map_pass_err(scope)?;
-                }
-                RenderCommand::MultiDrawIndirect {
-                    buffer_id,
-                    offset,
-                    count: None,
-                    indexed: true,
-                } => {
-                    let scope = PassErrorScope::Draw {
-                        kind: DrawKind::DrawIndirect,
-                        indexed: true,
-                        pipeline: state.pipeline_id(),
-                    };
-                    multi_draw_indirect2(
-                        &mut state,
-                        &base.dynamic_offsets,
-                        &buffer_guard,
-                        buffer_id,
-                        offset,
+                        indexed,
                     )
                     .map_pass_err(scope)?;
                 }
@@ -926,6 +907,7 @@ fn multi_draw_indirect<A: HalApi>(
     buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer<A>>>,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
+    indexed: bool,
 ) -> Result<(), RenderBundleErrorInner> {
     state
         .device
@@ -955,65 +937,21 @@ fn multi_draw_indirect<A: HalApi>(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
+    if indexed {
+        let index = match state.index {
+            Some(ref mut index) => index,
+            None => return Err(DrawError::MissingIndexBuffer.into()),
+        };
+        state.commands.extend(index.flush());
+    }
+
     state.flush_vertices();
     state.flush_binds(used_bind_groups, dynamic_offsets);
     state.commands.push(ArcRenderCommand::MultiDrawIndirect {
         buffer: buffer.clone(),
         offset,
         count: None,
-        indexed: false,
-    });
-    Ok(())
-}
-
-fn multi_draw_indirect2<A: HalApi>(
-    state: &mut State<A>,
-    dynamic_offsets: &[u32],
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer<A>>>,
-    buffer_id: id::Id<id::markers::Buffer>,
-    offset: u64,
-) -> Result<(), RenderBundleErrorInner> {
-    state
-        .device
-        .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
-
-    let pipeline = state.pipeline()?;
-    let used_bind_groups = pipeline.used_bind_groups;
-
-    let buffer = buffer_guard
-        .get(buffer_id)
-        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
-
-    state
-        .trackers
-        .buffers
-        .write()
-        .merge_single(buffer, hal::BufferUses::INDIRECT)?;
-
-    buffer.same_device(&state.device)?;
-    buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
-
-    state
-        .buffer_memory_init_actions
-        .extend(buffer.initialization_status.read().create_action(
-            buffer,
-            offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
-            MemoryInitKind::NeedsInitializedMemory,
-        ));
-
-    let index = match state.index {
-        Some(ref mut index) => index,
-        None => return Err(DrawError::MissingIndexBuffer.into()),
-    };
-
-    state.commands.extend(index.flush());
-    state.flush_vertices();
-    state.flush_binds(used_bind_groups, dynamic_offsets);
-    state.commands.push(ArcRenderCommand::MultiDrawIndirect {
-        buffer: buffer.clone(),
-        offset,
-        count: None,
-        indexed: true,
+        indexed,
     });
     Ok(())
 }
