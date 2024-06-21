@@ -73,11 +73,6 @@ impl<A: HalApi> ComputePass<A> {
     }
 
     #[inline]
-    pub fn parent_id(&self) -> Option<id::CommandBufferId> {
-        self.parent.as_ref().map(|cmd_buf| cmd_buf.as_info().id())
-    }
-
-    #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.as_ref().and_then(|base| base.label.as_deref())
     }
@@ -95,7 +90,10 @@ impl<A: HalApi> ComputePass<A> {
 
 impl<A: HalApi> fmt::Debug for ComputePass<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ComputePass {{ parent: {:?} }}", self.parent_id())
+        match self.parent {
+            Some(ref cmd_buf) => write!(f, "ComputePass {{ parent: {} }}", cmd_buf.error_ident()),
+            None => write!(f, "ComputePass {{ parent: None }}"),
+        }
     }
 }
 
@@ -380,19 +378,22 @@ impl Global {
         &self,
         pass: &mut ComputePass<A>,
     ) -> Result<(), ComputePassError> {
-        let scope = PassErrorScope::Pass(pass.parent_id());
-        let Some(parent) = pass.parent.as_ref() else {
-            return Err(ComputePassErrorInner::InvalidParentEncoder).map_pass_err(scope);
-        };
+        let cmd_buf = pass
+            .parent
+            .as_ref()
+            .ok_or(ComputePassErrorInner::InvalidParentEncoder)
+            .map_pass_err(PassErrorScope::Pass(None))?;
 
-        parent.unlock_encoder().map_pass_err(scope)?;
+        let scope = PassErrorScope::Pass(Some(cmd_buf.as_info().id()));
+
+        cmd_buf.unlock_encoder().map_pass_err(scope)?;
 
         let base = pass
             .base
             .take()
             .ok_or(ComputePassErrorInner::PassEnded)
             .map_pass_err(scope)?;
-        self.compute_pass_end_impl(parent, base, pass.timestamp_writes.take())
+        self.compute_pass_end_impl(cmd_buf, base, pass.timestamp_writes.take())
     }
 
     #[doc(hidden)]
