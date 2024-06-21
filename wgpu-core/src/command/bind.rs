@@ -63,28 +63,18 @@ mod compat {
                     bgl::Origin::Derived => "implicit",
                     bgl::Origin::Pool => "explicit",
                 };
-                let expected_label = expected_bgl.label();
                 diff.push(format!(
-                    "Should be compatible an with an {expected_bgl_type} bind group layout {}",
-                    if expected_label.is_empty() {
-                        "without label".to_string()
-                    } else {
-                        format!("with label = `{}`", expected_label)
-                    }
+                    "Should be compatible an with an {expected_bgl_type} {}",
+                    expected_bgl.error_ident()
                 ));
                 if let Some(assigned_bgl) = self.assigned.as_ref() {
                     let assigned_bgl_type = match assigned_bgl.origin {
                         bgl::Origin::Derived => "implicit",
                         bgl::Origin::Pool => "explicit",
                     };
-                    let assigned_label = assigned_bgl.label();
                     diff.push(format!(
-                        "Assigned {assigned_bgl_type} bind group layout {}",
-                        if assigned_label.is_empty() {
-                            "without label".to_string()
-                        } else {
-                            format!("with label = `{}`", assigned_label)
-                        }
+                        "Assigned {assigned_bgl_type} {}",
+                        assigned_bgl.error_ident()
                     ));
                     for (id, e_entry) in expected_bgl.entries.iter() {
                         if let Some(a_entry) = assigned_bgl.entries.get(*id) {

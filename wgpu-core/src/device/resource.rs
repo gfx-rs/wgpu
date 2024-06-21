@@ -345,7 +345,7 @@ impl<A: HalApi> Device<A> {
                         continue;
                     };
 
-                    resource_log!("Destroy raw TextureView (destroyed) {:?}", view.label());
+                    resource_log!("Destroy raw {}", view.error_ident());
 
                     unsafe {
                         use hal::Device;
@@ -361,7 +361,7 @@ impl<A: HalApi> Device<A> {
                         continue;
                     };
 
-                    resource_log!("Destroy raw BindGroup (destroyed) {:?}", bind_group.label());
+                    resource_log!("Destroy raw {}", bind_group.error_ident());
 
                     unsafe {
                         use hal::Device;
