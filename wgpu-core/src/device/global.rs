@@ -795,7 +795,6 @@ impl Global {
         }
     }
 
-    #[allow(unused_unsafe)]
     pub fn texture_create_view<A: HalApi>(
         &self,
         texture_id: id::TextureId,
@@ -833,7 +832,7 @@ impl Global {
                 }
             }
 
-            let view = match unsafe { device.create_texture_view(&texture, desc) } {
+            let view = match device.create_texture_view(&texture, desc) {
                 Ok(view) => view,
                 Err(e) => break 'error e,
             };
