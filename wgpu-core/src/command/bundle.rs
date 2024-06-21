@@ -410,11 +410,27 @@ impl RenderBundleEncoder {
                     bind_group_id,
                 } => {
                     let scope = PassErrorScope::SetBindGroup(bind_group_id);
-                    set_bind_group(&mut state, &bind_group_guard, &base.dynamic_offsets, index, num_dynamic_offsets, bind_group_id).map_pass_err(scope)?;
+                    set_bind_group(
+                        &mut state,
+                        &bind_group_guard,
+                        &base.dynamic_offsets,
+                        index,
+                        num_dynamic_offsets,
+                        bind_group_id,
+                    )
+                    .map_pass_err(scope)?;
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let scope = PassErrorScope::SetPipelineRender(pipeline_id);
-                    set_pipeline(&mut state, &pipeline_guard, &self.context, self.is_depth_read_only, self.is_stencil_read_only, pipeline_id).map_pass_err(scope)?;
+                    set_pipeline(
+                        &mut state,
+                        &pipeline_guard,
+                        &self.context,
+                        self.is_depth_read_only,
+                        self.is_stencil_read_only,
+                        pipeline_id,
+                    )
+                    .map_pass_err(scope)?;
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
@@ -423,7 +439,15 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                    set_index_buffer(&mut state, &buffer_guard, buffer_id, index_format, offset, size).map_pass_err(scope)?;
+                    set_index_buffer(
+                        &mut state,
+                        &buffer_guard,
+                        buffer_id,
+                        index_format,
+                        offset,
+                        size,
+                    )
+                    .map_pass_err(scope)?;
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -432,7 +456,8 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                    set_vertex_buffer(&mut state, &buffer_guard, slot, buffer_id, offset, size).map_pass_err(scope)?;
+                    set_vertex_buffer(&mut state, &buffer_guard, slot, buffer_id, offset, size)
+                        .map_pass_err(scope)?;
                 }
                 RenderCommand::SetPushConstant {
                     stages,
@@ -441,7 +466,8 @@ impl RenderBundleEncoder {
                     values_offset,
                 } => {
                     let scope = PassErrorScope::SetPushConstant;
-                    set_push_constant(&mut state, stages, offset, size_bytes, values_offset).map_pass_err(scope)?;
+                    set_push_constant(&mut state, stages, offset, size_bytes, values_offset)
+                        .map_pass_err(scope)?;
                 }
                 RenderCommand::Draw {
                     vertex_count,
@@ -454,7 +480,15 @@ impl RenderBundleEncoder {
                         indexed: false,
                         pipeline: state.pipeline_id(),
                     };
-                    draw(&mut state, &base.dynamic_offsets, vertex_count, instance_count, first_vertex, first_instance).map_pass_err(scope)?;
+                    draw(
+                        &mut state,
+                        &base.dynamic_offsets,
+                        vertex_count,
+                        instance_count,
+                        first_vertex,
+                        first_instance,
+                    )
+                    .map_pass_err(scope)?;
                 }
                 RenderCommand::DrawIndexed {
                     index_count,
@@ -468,7 +502,16 @@ impl RenderBundleEncoder {
                         indexed: true,
                         pipeline: state.pipeline_id(),
                     };
-                    draw_indexed(&mut state, &base.dynamic_offsets, index_count, instance_count, first_index, base_vertex, first_instance).map_pass_err(scope)?;
+                    draw_indexed(
+                        &mut state,
+                        &base.dynamic_offsets,
+                        index_count,
+                        instance_count,
+                        first_index,
+                        base_vertex,
+                        first_instance,
+                    )
+                    .map_pass_err(scope)?;
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -481,7 +524,14 @@ impl RenderBundleEncoder {
                         indexed: false,
                         pipeline: state.pipeline_id(),
                     };
-                    multi_draw_indirect(&mut state, &base.dynamic_offsets, &buffer_guard, buffer_id, offset).map_pass_err(scope)?;
+                    multi_draw_indirect(
+                        &mut state,
+                        &base.dynamic_offsets,
+                        &buffer_guard,
+                        buffer_id,
+                        offset,
+                    )
+                    .map_pass_err(scope)?;
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -494,14 +544,22 @@ impl RenderBundleEncoder {
                         indexed: true,
                         pipeline: state.pipeline_id(),
                     };
-                    multi_draw_indirect2(&mut state, &base.dynamic_offsets, &buffer_guard, buffer_id, offset).map_pass_err(scope)?;
+                    multi_draw_indirect2(
+                        &mut state,
+                        &base.dynamic_offsets,
+                        &buffer_guard,
+                        buffer_id,
+                        offset,
+                    )
+                    .map_pass_err(scope)?;
                 }
                 RenderCommand::MultiDrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
-                RenderCommand::WriteTimestamp { .. } // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
+                // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
+                RenderCommand::WriteTimestamp { .. }
                 | RenderCommand::BeginOcclusionQuery { .. }
                 | RenderCommand::EndOcclusionQuery
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
