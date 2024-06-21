@@ -415,8 +415,6 @@ pub enum DeviceError {
     ResourceCreationFailed,
     #[error("DeviceId is invalid")]
     InvalidDeviceId,
-    #[error("QueueId is invalid")]
-    InvalidQueueId,
     #[error(transparent)]
     DeviceMismatch(#[from] Box<DeviceMismatch>),
 }

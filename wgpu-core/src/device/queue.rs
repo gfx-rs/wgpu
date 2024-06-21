@@ -378,6 +378,8 @@ pub struct InvalidQueue;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueWriteError {
+    #[error("QueueId is invalid")]
+    InvalidQueueId,
     #[error(transparent)]
     Queue(#[from] DeviceError),
     #[error(transparent)]
@@ -391,6 +393,8 @@ pub enum QueueWriteError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueSubmitError {
+    #[error("QueueId is invalid")]
+    InvalidQueueId,
     #[error(transparent)]
     Queue(#[from] DeviceError),
     #[error(transparent)]
@@ -430,7 +434,7 @@ impl Global {
         let queue = hub
             .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::InvalidQueueId)?;
+            .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
         let device = queue.device.as_ref().unwrap();
 
@@ -499,7 +503,7 @@ impl Global {
         let queue = hub
             .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::InvalidQueueId)?;
+            .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
         let device = queue.device.as_ref().unwrap();
 
@@ -526,7 +530,7 @@ impl Global {
         let queue = hub
             .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::InvalidQueueId)?;
+            .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
         let device = queue.device.as_ref().unwrap();
 
@@ -695,7 +699,7 @@ impl Global {
         let queue = hub
             .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::InvalidQueueId)?;
+            .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
         let device = queue.device.as_ref().unwrap();
 
@@ -955,7 +959,7 @@ impl Global {
         let queue = hub
             .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::InvalidQueueId)?;
+            .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
         let device = queue.device.as_ref().unwrap();
 
@@ -1150,7 +1154,7 @@ impl Global {
             let queue = hub
                 .queues
                 .get(queue_id)
-                .map_err(|_| DeviceError::InvalidQueueId)?;
+                .map_err(|_| QueueSubmitError::InvalidQueueId)?;
 
             let device = queue.device.as_ref().unwrap();
 
