@@ -103,21 +103,6 @@ impl<T: Resource> ResourceInfo<T> {
         }
     }
 
-    pub(crate) fn label(&self) -> &dyn Debug
-    where
-        Id<T::Marker>: Debug,
-    {
-        if !self.label.is_empty() {
-            return &self.label;
-        }
-
-        if let Some(id) = &self.id {
-            return id;
-        }
-
-        &""
-    }
-
     pub(crate) fn id(&self) -> Id<T::Marker> {
         self.id.unwrap()
     }

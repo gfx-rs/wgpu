@@ -506,10 +506,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn extract_baked_commands(&mut self) -> BakedCommands<A> {
-        log::trace!(
-            "Extracting BakedCommands from CommandBuffer {:?}",
-            self.info.label()
-        );
+        log::trace!("Extracting BakedCommands from {}", self.error_ident());
         let data = self.data.lock().take().unwrap();
         BakedCommands {
             encoder: data.encoder.raw,
