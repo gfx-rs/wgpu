@@ -811,7 +811,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
 
     fn start(
         device: &'d Device<A>,
-        label: Option<&str>,
+        hal_label: Option<&str>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
@@ -1223,7 +1223,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
         };
 
         let hal_desc = hal::RenderPassDescriptor {
-            label: hal_label(label, device.instance_flags),
+            label: hal_label,
             extent,
             sample_count,
             color_attachments: &colors,
@@ -1389,7 +1389,7 @@ impl Global {
             .instance
             .flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
-        let label = hal_label(base.label.as_deref(), self.instance.flags);
+        let hal_label = hal_label(base.label.as_deref(), self.instance.flags);
 
         let pass_scope = PassErrorScope::PassEncoder(encoder_id);
 
@@ -1436,7 +1436,7 @@ impl Global {
             encoder.close().map_pass_err(pass_scope)?;
             // We will reset this to `Recording` if we succeed, acts as a fail-safe.
             *status = CommandEncoderStatus::Error;
-            encoder.open_pass(label).map_pass_err(pass_scope)?;
+            encoder.open_pass(hal_label).map_pass_err(pass_scope)?;
 
             let query_set_guard = hub.query_sets.read();
             let view_guard = hub.texture_views.read();
@@ -1448,7 +1448,7 @@ impl Global {
 
             let mut info = RenderPassInfo::start(
                 device,
-                label,
+                hal_label,
                 color_attachments,
                 depth_stencil_attachment,
                 timestamp_writes,

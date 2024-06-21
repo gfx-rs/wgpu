@@ -33,6 +33,7 @@ use crate::snatch::SnatchGuard;
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{ParentDevice, Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
+use crate::LabelHelpers;
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
 use hal::CommandEncoder as _;
@@ -142,7 +143,7 @@ pub(crate) struct CommandEncoder<A: HalApi> {
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     is_open: bool,
 
-    label: Option<String>,
+    hal_label: Option<String>,
 }
 
 //TODO: handle errors better
@@ -218,8 +219,8 @@ impl<A: HalApi> CommandEncoder<A> {
     pub(crate) fn open(&mut self) -> Result<&mut A::CommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
-            let label = self.label.as_deref();
-            unsafe { self.raw.begin_encoding(label)? };
+            let hal_label = self.hal_label.as_deref();
+            unsafe { self.raw.begin_encoding(hal_label)? };
         }
 
         Ok(&mut self.raw)
@@ -229,9 +230,9 @@ impl<A: HalApi> CommandEncoder<A> {
     /// its own label.
     ///
     /// The underlying hal encoder is put in the "recording" state.
-    fn open_pass(&mut self, label: Option<&str>) -> Result<(), DeviceError> {
+    fn open_pass(&mut self, hal_label: Option<&str>) -> Result<(), DeviceError> {
         self.is_open = true;
-        unsafe { self.raw.begin_encoding(label)? };
+        unsafe { self.raw.begin_encoding(hal_label)? };
 
         Ok(())
     }
@@ -339,13 +340,13 @@ impl<A: HalApi> CommandBuffer<A> {
         encoder: A::CommandEncoder,
         device: &Arc<Device<A>>,
         #[cfg(feature = "trace")] enable_tracing: bool,
-        label: Option<String>,
+        label: &Label,
     ) -> Self {
         CommandBuffer {
             device: device.clone(),
             limits: device.limits.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
-            info: ResourceInfo::new(label.as_deref().unwrap_or("<CommandBuffer>"), None),
+            info: ResourceInfo::new(label, None),
             data: Mutex::new(
                 rank::COMMAND_BUFFER_DATA,
                 Some(CommandBufferMutable {
@@ -353,7 +354,7 @@ impl<A: HalApi> CommandBuffer<A> {
                         raw: encoder,
                         is_open: false,
                         list: Vec::new(),
-                        label,
+                        hal_label: label.to_hal(device.instance_flags).map(str::to_owned),
                     },
                     status: CommandEncoderStatus::Recording,
                     trackers: Tracker::new(),

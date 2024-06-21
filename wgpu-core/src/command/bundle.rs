@@ -101,7 +101,7 @@ use crate::{
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
-    Label, LabelHelpers,
+    Label,
 };
 use arrayvec::ArrayVec;
 
@@ -805,10 +805,7 @@ impl RenderBundleEncoder {
             buffer_memory_init_actions,
             texture_memory_init_actions,
             context: self.context,
-            info: ResourceInfo::new(
-                desc.label.borrow_or_default(),
-                Some(device.tracker_indices.bundles.clone()),
-            ),
+            info: ResourceInfo::new(&desc.label, Some(device.tracker_indices.bundles.clone())),
             discard_hal_labels: device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS),

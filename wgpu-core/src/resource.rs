@@ -83,10 +83,8 @@ impl<T: Resource> Drop for ResourceInfo<T> {
 }
 
 impl<T: Resource> ResourceInfo<T> {
-    // Note: Abstractly, this function should take `label: String` to minimize string cloning.
-    // But as actually used, every input is a literal or borrowed `&str`, so this is convenient.
     pub(crate) fn new(
-        label: &str,
+        label: &Label,
         tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
     ) -> Self {
         let tracker_index = tracker_indices
@@ -98,7 +96,10 @@ impl<T: Resource> ResourceInfo<T> {
             tracker_index,
             tracker_indices,
             submission_index: AtomicUsize::new(0),
-            label: label.to_string(),
+            label: label
+                .as_ref()
+                .map(|label| label.to_string())
+                .unwrap_or_default(),
         }
     }
 
@@ -912,10 +913,6 @@ impl<A: HalApi> Resource for StagingBuffer<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
-    }
-
-    fn label(&self) -> &str {
-        "<StagingBuffer>"
     }
 }
 

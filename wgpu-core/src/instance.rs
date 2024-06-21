@@ -158,10 +158,6 @@ impl Resource for Surface {
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
     }
-
-    fn label(&self) -> &str {
-        "<Surface>"
-    }
 }
 
 impl Surface {
@@ -204,7 +200,7 @@ impl<A: HalApi> Adapter<A> {
 
         Self {
             raw,
-            info: ResourceInfo::new("<Adapter>", None),
+            info: ResourceInfo::new(&None, None),
         }
     }
 
@@ -309,7 +305,7 @@ impl<A: HalApi> Adapter<A> {
             let queue = Queue {
                 device: None,
                 raw: Some(hal_device.queue),
-                info: ResourceInfo::new("<Queue>", None),
+                info: ResourceInfo::new(&None, None),
             };
             return Ok((device, queue));
         }
@@ -532,7 +528,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new("<Surface>", None),
+            info: ResourceInfo::new(&None, None),
 
             #[cfg(vulkan)]
             vulkan: init::<hal::api::Vulkan>(
@@ -596,7 +592,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new("<Surface>", None),
+            info: ResourceInfo::new(&None, None),
             metal: Some(self.instance.metal.as_ref().map_or(
                 Err(CreateSurfaceError::BackendNotEnabled(Backend::Metal)),
                 |inst| {
@@ -625,7 +621,7 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new("<Surface>", None),
+            info: ResourceInfo::new(&None, None),
             dx12: Some(create_surface_func(
                 self.instance
                     .dx12
