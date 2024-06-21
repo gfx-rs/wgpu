@@ -876,7 +876,7 @@ pub struct RenderBundle<A: HalApi> {
 
 impl<A: HalApi> Drop for RenderBundle<A> {
     fn drop(&mut self) {
-        resource_log!("Destroy raw RenderBundle {:?}", self.info.label());
+        resource_log!("Drop {}", self.error_ident());
     }
 }
 

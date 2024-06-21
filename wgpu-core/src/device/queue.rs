@@ -64,6 +64,7 @@ impl<A: HalApi> ParentDevice<A> for Queue<A> {
 
 impl<A: HalApi> Drop for Queue<A> {
     fn drop(&mut self) {
+        resource_log!("Drop {}", self.error_ident());
         let queue = self.raw.take().unwrap();
         self.device.as_ref().unwrap().release_queue(queue);
     }

@@ -320,10 +320,10 @@ pub struct CommandBuffer<A: HalApi> {
 
 impl<A: HalApi> Drop for CommandBuffer<A> {
     fn drop(&mut self) {
+        resource_log!("Drop {}", self.error_ident());
         if self.data.lock().is_none() {
             return;
         }
-        resource_log!("resource::CommandBuffer::drop {:?}", self.info.label());
         let mut baked = self.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list.into_iter());
