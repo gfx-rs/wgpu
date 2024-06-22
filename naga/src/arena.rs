@@ -838,7 +838,7 @@ impl<T, U> HandleVec<T, U> {
     /// the end, like [`Vec::push`]. So the index of `handle` must equal
     /// [`self.len()`].
     ///
-    /// [`HashMap]: std::collections::HashMap
+    /// [`HashMap`]: std::collections::HashMap
     /// [`self.len()`]: HandleVec::len
     pub(crate) fn insert(&mut self, handle: Handle<T>, value: U) {
         assert_eq!(handle.index(), self.inner.len());

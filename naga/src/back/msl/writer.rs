@@ -111,6 +111,8 @@ impl Display for ClampedLod {
 /// runtime-sized array, then the value `ArraySize(global)` implements
 /// [`std::fmt::Display`], formatting as the name of the struct member carrying
 /// the number of elements in that runtime-sized array.
+///
+/// [`GlobalVariable`]: crate::GlobalVariable
 struct ArraySizeMember(Handle<crate::GlobalVariable>);
 
 impl Display for ArraySizeMember {

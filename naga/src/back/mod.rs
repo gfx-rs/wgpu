@@ -36,7 +36,7 @@ pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expressio
 ///
 /// Given an [`Expression`] [`Handle`] `h`, `Baked(h)` implements
 /// [`std::fmt::Display`], showing the handle's index prefixed by
-/// [`BAKE_PREFIX`].
+/// `_e`.
 ///
 /// [`Expression`]: crate::Expression
 /// [`Handle`]: crate::Handle
