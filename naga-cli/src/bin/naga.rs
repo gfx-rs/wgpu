@@ -133,7 +133,7 @@ struct Args {
     #[argh(positional)]
     files: Vec<String>,
 
-    /// defines to be passed to the compiler (only glsl is supported)
+    /// defines to be passed to the parser (only glsl is supported)
     #[argh(option, short = 'D')]
     defines: Vec<Defines>,
 }
