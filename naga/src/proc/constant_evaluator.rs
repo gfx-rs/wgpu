@@ -3,7 +3,7 @@ use std::iter;
 use arrayvec::ArrayVec;
 
 use crate::{
-    arena::{Arena, Handle, UniqueArena},
+    arena::{Arena, Handle, HandleVec, UniqueArena},
     ArraySize, BinaryOperator, Constant, Expression, Literal, Override, ScalarKind, Span, Type,
     TypeInner, UnaryOperator,
 };
@@ -352,22 +352,23 @@ pub enum ExpressionKind {
 
 #[derive(Debug)]
 pub struct ExpressionKindTracker {
-    inner: Vec<ExpressionKind>,
+    inner: HandleVec<Expression, ExpressionKind>,
 }
 
 impl ExpressionKindTracker {
     pub const fn new() -> Self {
-        Self { inner: Vec::new() }
+        Self {
+            inner: HandleVec::new(),
+        }
     }
 
     /// Forces the the expression to not be const
     pub fn force_non_const(&mut self, value: Handle<Expression>) {
-        self.inner[value.index()] = ExpressionKind::Runtime;
+        self.inner[value] = ExpressionKind::Runtime;
     }
 
     pub fn insert(&mut self, value: Handle<Expression>, expr_type: ExpressionKind) {
-        assert_eq!(self.inner.len(), value.index());
-        self.inner.push(expr_type);
+        self.inner.insert(value, expr_type);
     }
     pub fn is_const(&self, h: Handle<Expression>) -> bool {
         matches!(self.type_of(h), ExpressionKind::Const)
@@ -381,15 +382,17 @@ impl ExpressionKindTracker {
     }
 
     fn type_of(&self, value: Handle<Expression>) -> ExpressionKind {
-        self.inner[value.index()]
+        self.inner[value]
     }
 
     pub fn from_arena(arena: &Arena<Expression>) -> Self {
         let mut tracker = Self {
-            inner: Vec::with_capacity(arena.len()),
+            inner: HandleVec::with_capacity(arena.len()),
         };
-        for (_, expr) in arena.iter() {
-            tracker.inner.push(tracker.type_of_with_expr(expr));
+        for (handle, expr) in arena.iter() {
+            tracker
+                .inner
+                .insert(handle, tracker.type_of_with_expr(expr));
         }
         tracker
     }
