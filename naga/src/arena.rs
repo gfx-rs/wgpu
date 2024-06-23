@@ -185,10 +185,7 @@ impl<T> Iterator for Range<T> {
         if self.inner.start < self.inner.end {
             let next = self.inner.start;
             self.inner.start += 1;
-            Some(Handle {
-                index: NonMaxU32::new(next).unwrap(),
-                marker: self.marker,
-            })
+            Some(Handle::new(NonMaxU32::new(next).unwrap()))
         } else {
             None
         }
