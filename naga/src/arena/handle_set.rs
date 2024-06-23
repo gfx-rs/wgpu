@@ -3,6 +3,7 @@
 use crate::arena::{Arena, Handle, UniqueArena};
 
 /// A set of `Handle<T>` values.
+#[derive(Debug)]
 pub struct HandleSet<T> {
     /// Bound on indexes of handles stored in this set.
     len: usize,
@@ -15,6 +16,16 @@ pub struct HandleSet<T> {
 }
 
 impl<T> HandleSet<T> {
+    /// Return a new, empty `HandleSet`.
+    pub fn new() -> Self {
+        Self {
+            len: 0,
+            members: bit_set::BitSet::new(),
+            as_keys: std::marker::PhantomData,
+        }
+    }
+
+    /// Return a new, empty `HandleSet`, sized to hold handles from `arena`.
     pub fn for_arena(arena: &impl ArenaType<T>) -> Self {
         let len = arena.len();
         Self {
@@ -22,6 +33,17 @@ impl<T> HandleSet<T> {
             members: bit_set::BitSet::with_capacity(len),
             as_keys: std::marker::PhantomData,
         }
+    }
+
+    /// Remove all members from `self`.
+    pub fn clear(&mut self) {
+        self.members.clear();
+    }
+
+    /// Remove all members from `self`, and reserve space to hold handles from `arena`.
+    pub fn clear_for_arena(&mut self, arena: &impl ArenaType<T>) {
+        self.members.clear();
+        self.members.reserve_len(arena.len());
     }
 
     /// Return an iterator over all handles that could be made members
@@ -35,6 +57,13 @@ impl<T> HandleSet<T> {
     /// Return `true` if `handle` was not already present in the set.
     pub fn insert(&mut self, handle: Handle<T>) -> bool {
         self.members.insert(handle.index())
+    }
+
+    /// Remove `handle` from the set.
+    ///
+    /// Returns `true` if `handle` was present in the set.
+    pub fn remove(&mut self, handle: Handle<T>) -> bool {
+        self.members.remove(handle.index())
     }
 
     /// Add handles from `iter` to the set.
