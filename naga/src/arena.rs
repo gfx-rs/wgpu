@@ -798,6 +798,7 @@ where
 ///
 /// [`insert`]: HandleVec::insert
 /// [`HashMap::insert`]: std::collections::HashMap::insert
+#[derive(Debug)]
 pub(crate) struct HandleVec<T, U> {
     inner: Vec<U>,
     as_keys: PhantomData<T>,
