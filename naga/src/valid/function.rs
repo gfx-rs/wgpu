@@ -323,7 +323,7 @@ impl super::Validator {
                 crate::Expression::CallResult(callee)
                     if fun.result.is_some() && callee == function =>
                 {
-                    if !self.needs_visit.remove(expr.index()) {
+                    if !self.needs_visit.remove(expr) {
                         return Err(CallError::ResultAlreadyPopulated(expr)
                             .with_span_handle(expr, context.expressions));
                     }
@@ -462,7 +462,7 @@ impl super::Validator {
 
                 // Note that this expression has been visited by the proper kind
                 // of statement.
-                if !self.needs_visit.remove(result.index()) {
+                if !self.needs_visit.remove(result) {
                     return Err(AtomicError::ResultAlreadyPopulated(result)
                         .with_span_handle(result, context.expressions)
                         .into_other());
@@ -1429,7 +1429,7 @@ impl super::Validator {
 
         self.valid_expression_set.clear_for_arena(&fun.expressions);
         self.valid_expression_list.clear();
-        self.needs_visit.clear();
+        self.needs_visit.clear_for_arena(&fun.expressions);
         for (handle, expr) in fun.expressions.iter() {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle);
@@ -1440,7 +1440,7 @@ impl super::Validator {
                 if let crate::Expression::CallResult(_) | crate::Expression::AtomicResult { .. } =
                     *expr
                 {
-                    self.needs_visit.insert(handle.index());
+                    self.needs_visit.insert(handle);
                 }
 
                 match self.validate_expression(
@@ -1471,9 +1471,7 @@ impl super::Validator {
             info.available_stages &= stages;
 
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
-                if let Some(unvisited) = self.needs_visit.iter().next() {
-                    let index = crate::non_max_u32::NonMaxU32::new(unvisited as u32).unwrap();
-                    let handle = Handle::new(index);
+                if let Some(handle) = self.needs_visit.iter().next() {
                     return Err(FunctionError::UnvisitedExpression(handle)
                         .with_span_handle(handle, &fun.expressions));
                 }
