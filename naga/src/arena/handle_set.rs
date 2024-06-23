@@ -31,8 +31,10 @@ impl<T> HandleSet<T> {
     }
 
     /// Add `handle` to the set.
-    pub fn insert(&mut self, handle: Handle<T>) {
-        self.members.insert(handle.index());
+    ///
+    /// Return `true` if `handle` was not already present in the set.
+    pub fn insert(&mut self, handle: Handle<T>) -> bool {
+        self.members.insert(handle.index())
     }
 
     /// Add handles from `iter` to the set.
