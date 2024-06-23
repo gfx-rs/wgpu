@@ -47,7 +47,7 @@ TODO(wumpf): This is still work in progress. Should write a bit more about it. A
 
 `wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
 
-Furthermore, you can now opt out of `wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::forget_lifetime`:  
+Furthermore, you can now opt out of `wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::forget_lifetime`:
 ```rust
 fn independent_cpass<'enc>(encoder: &'enc mut wgpu::CommandEncoder) -> wgpu::ComputePass<'static> {
     let cpass: wgpu::ComputePass<'enc> = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
@@ -126,6 +126,7 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 
 #### Naga
 
+- Added -D, --defines option to naga CLI to define preprocessor macros by @theomonnom in [#5859](https://github.com/gfx-rs/wgpu/pull/5859)
 - Added type upgrades to SPIR-V atomic support. Added related infrastructure. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5775](https://github.com/gfx-rs/wgpu/pull/5775).
 - Implement `WGSL`'s `unpack4xI8`,`unpack4xU8`,`pack4xI8` and `pack4xU8`. By @VlaDexa in [#5424](https://github.com/gfx-rs/wgpu/pull/5424)
 - Began work adding support for atomics to the SPIR-V frontend. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5702](https://github.com/gfx-rs/wgpu/pull/5702).
