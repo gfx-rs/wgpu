@@ -1,12 +1,11 @@
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
-    arena::Handle,
+    arena::{Handle, HandleSet},
     back::{self, Baked},
     proc::index,
     proc::{self, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
-use bit_set::BitSet;
 use std::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
@@ -584,11 +583,10 @@ struct ExpressionContext<'a> {
     lang_version: (u8, u8),
     policies: index::BoundsCheckPolicies,
 
-    /// A bitset containing the `Expression` handle indexes of expressions used
-    /// as indices in `ReadZeroSkipWrite`-policy accesses. These may need to be
-    /// cached in temporary variables. See `index::find_checked_indexes` for
-    /// details.
-    guarded_indices: BitSet,
+    /// The set of expressions used as indices in `ReadZeroSkipWrite`-policy
+    /// accesses. These may need to be cached in temporary variables. See
+    /// `index::find_checked_indexes` for details.
+    guarded_indices: HandleSet<crate::Expression>,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -2873,12 +2871,11 @@ impl<W: Write> Writer<W> {
                             // If this expression is an index that we're going to first compare
                             // against a limit, and then actually use as an index, then we may
                             // want to cache it in a temporary, to avoid evaluating it twice.
-                            let bake =
-                                if context.expression.guarded_indices.contains(handle.index()) {
-                                    true
-                                } else {
-                                    self.need_bake_expressions.contains(&handle)
-                                };
+                            let bake = if context.expression.guarded_indices.contains(handle) {
+                                true
+                            } else {
+                                self.need_bake_expressions.contains(&handle)
+                            };
 
                             if bake {
                                 Some(Baked(handle).to_string())
