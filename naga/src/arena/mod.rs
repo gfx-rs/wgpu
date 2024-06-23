@@ -21,11 +21,13 @@ source code span with each element.
 */
 
 mod handle;
+mod handle_set;
 mod handlevec;
 mod range;
 mod unique_arena;
 
 pub use handle::{BadHandle, Handle};
+pub(crate) use handle_set::HandleSet;
 pub(crate) use handlevec::HandleVec;
 pub use range::{BadRangeError, Range};
 pub use unique_arena::UniqueArena;

@@ -94,6 +94,14 @@ impl<T> Range<T> {
         }
     }
 
+    /// Return a range covering all handles with indices from `0` to `size`.
+    pub(super) fn full_range_from_size(size: usize) -> Self {
+        Self {
+            inner: 0..size as u32,
+            marker: Default::default(),
+        }
+    }
+
     /// return the first and last handles included in `self`.
     ///
     /// If `self` is an empty range, there are no handles included, so

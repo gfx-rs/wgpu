@@ -1,61 +1,6 @@
-use crate::arena::{Arena, Handle, Range, UniqueArena};
+use crate::arena::{Arena, Handle, HandleSet, Range};
 
 type Index = crate::non_max_u32::NonMaxU32;
-
-/// A set of `Handle<T>` values.
-pub struct HandleSet<T> {
-    /// Bound on indexes of handles stored in this set.
-    len: usize,
-
-    /// `members[i]` is true if the handle with index `i` is a member.
-    members: bit_set::BitSet,
-
-    /// This type is indexed by values of type `T`.
-    as_keys: std::marker::PhantomData<T>,
-}
-
-impl<T> HandleSet<T> {
-    pub fn for_arena(arena: &impl ArenaType<T>) -> Self {
-        let len = arena.len();
-        Self {
-            len,
-            members: bit_set::BitSet::with_capacity(len),
-            as_keys: std::marker::PhantomData,
-        }
-    }
-
-    /// Add `handle` to the set.
-    pub fn insert(&mut self, handle: Handle<T>) {
-        self.members.insert(handle.index());
-    }
-
-    /// Add handles from `iter` to the set.
-    pub fn insert_iter(&mut self, iter: impl IntoIterator<Item = Handle<T>>) {
-        for handle in iter {
-            self.insert(handle);
-        }
-    }
-
-    pub fn contains(&self, handle: Handle<T>) -> bool {
-        self.members.contains(handle.index())
-    }
-}
-
-pub trait ArenaType<T> {
-    fn len(&self) -> usize;
-}
-
-impl<T> ArenaType<T> for Arena<T> {
-    fn len(&self) -> usize {
-        self.len()
-    }
-}
-
-impl<T: std::hash::Hash + Eq> ArenaType<T> for UniqueArena<T> {
-    fn len(&self) -> usize {
-        self.len()
-    }
-}
 
 /// A map from old handle indices to new, compressed handle indices.
 pub struct HandleMap<T> {
@@ -74,9 +19,10 @@ impl<T: 'static> HandleMap<T> {
     pub fn from_set(set: HandleSet<T>) -> Self {
         let mut next_index = Index::new(0).unwrap();
         Self {
-            new_index: (0..set.len)
-                .map(|index| {
-                    if set.members.contains(index) {
+            new_index: set
+                .all_possible()
+                .map(|handle| {
+                    if set.contains(handle) {
                         // This handle will be retained in the compacted version,
                         // so assign it a new index.
                         let this = next_index;
