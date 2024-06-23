@@ -378,10 +378,8 @@ impl<T> Arena<T> {
 
     /// Get the range of handles from a particular number of elements to the end.
     pub fn range_from(&self, old_length: usize) -> Range<T> {
-        Range {
-            inner: old_length as u32..self.data.len() as u32,
-            marker: PhantomData,
-        }
+        let range = old_length as u32..self.data.len() as u32;
+        Range::from_index_range(range, self)
     }
 
     /// Clears the arena keeping all allocations
