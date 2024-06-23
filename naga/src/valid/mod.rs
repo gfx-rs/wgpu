@@ -11,7 +11,7 @@ mod interface;
 mod r#type;
 
 use crate::{
-    arena::Handle,
+    arena::{Handle, HandleSet},
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
@@ -259,7 +259,7 @@ pub struct Validator {
     #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
-    valid_expression_set: BitSet,
+    valid_expression_set: HandleSet<crate::Expression>,
     override_ids: FastHashSet<u16>,
     allow_overrides: bool,
 
@@ -448,7 +448,7 @@ impl Validator {
             ep_resource_bindings: FastHashSet::default(),
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
-            valid_expression_set: BitSet::new(),
+            valid_expression_set: HandleSet::new(),
             override_ids: FastHashSet::default(),
             allow_overrides: true,
             needs_visit: BitSet::new(),
