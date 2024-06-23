@@ -281,7 +281,7 @@ pub struct Validator {
     /// [`Atomic`]: crate::Statement::Atomic
     /// [`Expression`]: crate::Expression
     /// [`Statement`]: crate::Statement
-    needs_visit: BitSet,
+    needs_visit: HandleSet<crate::Expression>,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -451,7 +451,7 @@ impl Validator {
             valid_expression_set: HandleSet::new(),
             override_ids: FastHashSet::default(),
             allow_overrides: true,
-            needs_visit: BitSet::new(),
+            needs_visit: HandleSet::new(),
         }
     }
 
