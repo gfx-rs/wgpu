@@ -34,25 +34,6 @@ with optional span info, representing a series of statements executed in order. 
 `EntryPoint`s or `Function` is a `Block`, and `Statement` has a
 [`Block`][Statement::Block] variant.
 
-## Arenas
-
-To improve translator performance and reduce memory usage, most structures are
-stored in an [`Arena`]. An `Arena<T>` stores a series of `T` values, indexed by
-[`Handle<T>`](Handle) values, which are just wrappers around integer indexes.
-For example, a `Function`'s expressions are stored in an `Arena<Expression>`,
-and compound expressions refer to their sub-expressions via `Handle<Expression>`
-values. (When examining the serialized form of a `Module`, note that the first
-element of an `Arena` has an index of 1, not 0.)
-
-A [`UniqueArena`] is just like an `Arena`, except that it stores only a single
-instance of each value. The value type must implement `Eq` and `Hash`. Like an
-`Arena`, inserting a value into a `UniqueArena` returns a `Handle` which can be
-used to efficiently access the value, without a hash lookup. Inserting a value
-multiple times returns the same `Handle`.
-
-If the `span` feature is enabled, both `Arena` and `UniqueArena` can associate a
-source code span with each element.
-
 ## Function Calls
 
 Naga's representation of function calls is unusual. Most languages treat
