@@ -76,6 +76,11 @@ impl<T> HandleSet<T> {
     pub fn contains(&self, handle: Handle<T>) -> bool {
         self.members.contains(handle.index())
     }
+
+    /// Return an iterator over all handles in `self`.
+    pub fn iter(&self) -> impl '_ + Iterator<Item = Handle<T>> {
+        self.members.iter().map(Handle::from_usize)
+    }
 }
 
 pub trait ArenaType<T> {
