@@ -45,6 +45,10 @@ This release force-bumps transitive dependencies of `wgpu` on `wgpu-core` and `w
 
 ### Bug Fixes
 
+#### General
+
+* Fix a `CommandBuffer` leak. By @cwfitzgerald and @nical in [#5141](https://github.com/gfx-rs/wgpu/pull/5141)
+
 #### DX12
 
 * Do not feed `&""` to `D3DCompile`, by @workingjubilee in [#5812](https://github.com/gfx-rs/wgpu/issues/5812).
