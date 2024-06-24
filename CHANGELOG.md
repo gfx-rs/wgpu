@@ -39,6 +39,20 @@ Bottom level categories:
 
 ## Unreleased 
 
+## v0.20.2 (2024-06-12)
+
+This release force-bumps transitive dependencies of `wgpu` on `wgpu-core` and `wgpu-hal` to 0.21.1, to resolve some undefined behavior observable in the DX12 backend after upgrading to Rust 1.79 or later.
+
+### Bug Fixes
+
+#### General
+
+* Fix a `CommandBuffer` leak. By @cwfitzgerald and @nical in [#5141](https://github.com/gfx-rs/wgpu/pull/5141)
+
+#### DX12
+
+* Do not feed `&""` to `D3DCompile`, by @workingjubilee in [#5812](https://github.com/gfx-rs/wgpu/issues/5812).
+
 ## v0.20.1 (2024-06-12)
 
 This release included v0.21.0 of `wgpu-core` and `wgpu-hal`, due to breaking changes needed to solve vulkan validation issues.
