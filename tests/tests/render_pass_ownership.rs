@@ -12,7 +12,7 @@
 use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
 
 // Minimal shader with buffer based side effect - only needed to check whether the render pass has executed at all.
 const SHADER_SRC: &str = "
@@ -129,6 +129,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
         bind_group,
         pipeline,
         color_attachment_view,
+        depth_stencil_view,
         ..
     } = resource_setup(&ctx);
 
@@ -151,6 +152,14 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
                 resolve_target: None,
                 ops: wgpu::Operations::default(),
             })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &depth_stencil_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             ..Default::default()
         });
         rpass.set_pipeline(&pipeline);
@@ -247,6 +256,65 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
+}
+
+#[gpu_test]
+static RENDER_PASS_KEEP_ENCODER_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_async(render_pass_keep_encoder_alive);
+
+async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
+    let ResourceSetup {
+        bind_group,
+        vertex_buffer,
+        index_buffer,
+        pipeline,
+        color_attachment_view,
+        depth_stencil_view,
+        ..
+    } = resource_setup(&ctx);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: &color_attachment_view,
+            resolve_target: None,
+            ops: wgpu::Operations::default(),
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: &depth_stencil_view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }),
+        ..Default::default()
+    });
+
+    // Now drop the encoder - it is kept alive by the compute pass.
+    // To do so, we have to make the compute pass forget the lifetime constraint first.
+    let mut rpass = rpass.forget_lifetime();
+    drop(encoder);
+
+    ctx.async_poll(wgpu::Maintain::wait())
+        .await
+        .panic_on_timeout();
+
+    // Record some a draw command.
+    rpass.set_pipeline(&pipeline);
+    rpass.set_bind_group(0, &bind_group, &[]);
+    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+    rpass.draw(0..3, 0..1);
+
+    // Dropping the pass will still execute the pass, even though there's no way to submit it.
+    // Ideally, this would log an error, but the encoder is not dropped until the compute pass is dropped,
+    // making this a valid operation.
+    // (If instead the encoder was explicitly destroyed or finished, this would be an error.)
+    valid(&ctx.device, || drop(rpass));
 }
 
 async fn assert_render_pass_executed_normally(
