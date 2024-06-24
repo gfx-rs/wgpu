@@ -2326,7 +2326,8 @@ impl crate::Context for ContextWgpuCore {
             .map(|(i, _)| i)
             .collect::<SmallVec<[_; 4]>>();
 
-        let index = match wgc::gfx_select!(*queue => self.0.queue_submit(*queue, &temp_command_buffers)) {
+        let index = match wgc::gfx_select!(*queue => self.0.queue_submit(*queue, &temp_command_buffers))
+        {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         };
