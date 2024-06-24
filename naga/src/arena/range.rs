@@ -68,7 +68,7 @@ impl<T> Clone for Range<T> {
 
 impl<T> fmt::Debug for Range<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "[{}..{}]", self.inner.start, self.inner.end - 1)
+        write!(formatter, "[{}..{}]", self.inner.start, self.inner.end)
     }
 }
 
