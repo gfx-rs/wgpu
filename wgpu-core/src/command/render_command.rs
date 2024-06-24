@@ -309,7 +309,11 @@ impl RenderCommand {
                         buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
                             RenderPassError {
                                 scope: PassErrorScope::Draw {
-                                    kind: DrawKind::MultiDrawIndirect,
+                                    kind: if count.is_some() {
+                                        DrawKind::MultiDrawIndirect
+                                    } else {
+                                        DrawKind::DrawIndirect
+                                    },
                                     indexed,
                                     pipeline: None,
                                 },

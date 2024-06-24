@@ -695,7 +695,7 @@ impl RenderBundleEncoder {
                     indexed: false,
                 } => {
                     let scope = PassErrorScope::Draw {
-                        kind: DrawKind::MultiDrawIndirect,
+                        kind: DrawKind::DrawIndirect,
                         indexed: false,
                         pipeline: state.pipeline_id(),
                     };
@@ -738,7 +738,7 @@ impl RenderBundleEncoder {
                     indexed: true,
                 } => {
                     let scope = PassErrorScope::Draw {
-                        kind: DrawKind::MultiDrawIndirect,
+                        kind: DrawKind::DrawIndirect,
                         indexed: true,
                         pipeline: state.pipeline_id(),
                     };

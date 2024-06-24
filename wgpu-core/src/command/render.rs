@@ -2045,7 +2045,11 @@ impl Global {
                         api_log!("RenderPass::draw_indirect (indexed:{indexed}) {indirect_buffer_id:?} {offset} {count:?}");
 
                         let scope = PassErrorScope::Draw {
-                            kind: DrawKind::MultiDrawIndirect,
+                            kind: if count.is_some() {
+                                DrawKind::MultiDrawIndirect
+                            } else {
+                                DrawKind::DrawIndirect
+                            },
                             indexed,
                             pipeline: state.pipeline,
                         };
