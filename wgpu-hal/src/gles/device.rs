@@ -1409,17 +1409,17 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
-        let mut program_cache = self.shared.program_cache.lock();
         // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache`
         // This is safe to assume as long as:
         // - `RenderPipeline` can't be cloned
         // - The only place that we can get a new reference is during `program_cache.lock()`
         if Arc::strong_count(&pipeline.inner) == 2 {
+            let gl = &self.shared.context.lock();
+            let mut program_cache = self.shared.program_cache.lock();
             program_cache.retain(|_, v| match *v {
                 Ok(ref p) => p.program != pipeline.inner.program,
                 Err(_) => false,
             });
-            let gl = &self.shared.context.lock();
             unsafe { gl.delete_program(pipeline.inner.program) };
         }
 
@@ -1441,17 +1441,17 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
-        let mut program_cache = self.shared.program_cache.lock();
         // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache``
         // This is safe to assume as long as:
         // - `ComputePipeline` can't be cloned
         // - The only place that we can get a new reference is during `program_cache.lock()`
         if Arc::strong_count(&pipeline.inner) == 2 {
+            let gl = &self.shared.context.lock();
+            let mut program_cache = self.shared.program_cache.lock();
             program_cache.retain(|_, v| match *v {
                 Ok(ref p) => p.program != pipeline.inner.program,
                 Err(_) => false,
             });
-            let gl = &self.shared.context.lock();
             unsafe { gl.delete_program(pipeline.inner.program) };
         }
 
