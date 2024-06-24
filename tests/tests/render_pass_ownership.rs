@@ -8,8 +8,7 @@
 //! * rpass.multi_draw_indexed_indirect(indirect_buffer, indirect_offset, count)
 //! * rpass.multi_draw_indirect_count
 //! * rpass.multi_draw_indexed_indirect_count
-//! * rpass.write_timestamp
-
+//!
 use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
@@ -125,21 +124,18 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
         gpu_buffer,
         cpu_buffer,
         buffer_size,
-        indirect_buffer: _,
         vertex_buffer,
         index_buffer,
         bind_group,
         pipeline,
         color_attachment_view,
-        color_attachment_resolve_view: _,
-        depth_stencil_view,
-        occlusion_query_set: _,
+        ..
     } = resource_setup(&ctx);
 
     let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
         label: Some("query_set"),
         ty: wgpu::QueryType::PipelineStatistics(
-            wgpu::PipelineStatisticsTypes::COMPUTE_SHADER_INVOCATIONS,
+            wgpu::PipelineStatisticsTypes::VERTEX_SHADER_INVOCATIONS,
         ),
         count: 1,
     });
@@ -150,7 +146,70 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
 
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("render_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &color_attachment_view,
+                resolve_target: None,
+                ops: wgpu::Operations::default(),
+            })],
+            ..Default::default()
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        rpass.begin_pipeline_statistics_query(&query_set, 0);
+        rpass.draw(0..3, 0..1);
+        rpass.end_pipeline_statistics_query();
+
+        // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
+        drop(query_set);
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
+    }
+
+    assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
+}
+
+#[gpu_test]
+static RENDER_PASS_QUERY_SET_OWNERSHIP_TIMESTAMPS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().test_features_limits().features(
+            wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+        ))
+        .run_async(render_pass_query_set_ownership_timestamps);
+
+async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
+    let ResourceSetup {
+        gpu_buffer,
+        cpu_buffer,
+        buffer_size,
+        color_attachment_view,
+        depth_stencil_view,
+        pipeline,
+        bind_group,
+        vertex_buffer,
+        index_buffer,
+        ..
+    } = resource_setup(&ctx);
+
+    let query_set_timestamp_writes = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("query_set_timestamp_writes"),
+        ty: wgpu::QueryType::Timestamp,
+        count: 2,
+    });
+    let query_set_write_timestamp = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("query_set_write_timestamp"),
+        ty: wgpu::QueryType::Timestamp,
+        count: 1,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &color_attachment_view,
                 resolve_target: None,
@@ -164,19 +223,24 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
+            timestamp_writes: Some(wgpu::RenderPassTimestampWrites {
+                query_set: &query_set_timestamp_writes,
+                beginning_of_pass_write_index: Some(0),
+                end_of_pass_write_index: Some(1),
+            }),
+            ..Default::default()
         });
+        rpass.write_timestamp(&query_set_write_timestamp, 0);
+
         rpass.set_pipeline(&pipeline);
         rpass.set_bind_group(0, &bind_group, &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        rpass.begin_pipeline_statistics_query(&query_set, 0);
         rpass.draw(0..3, 0..1);
-        rpass.end_pipeline_statistics_query();
 
-        // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
-        drop(query_set);
+        // Drop the query sets. Then do a device poll to make sure they're not dropped too early, no matter what.
+        drop(query_set_timestamp_writes);
+        drop(query_set_write_timestamp);
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();

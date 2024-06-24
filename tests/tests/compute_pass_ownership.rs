@@ -111,14 +111,14 @@ async fn compute_pass_query_set_ownership_pipeline_statistics(ctx: TestingContex
 }
 
 #[gpu_test]
-static COMPUTE_PASS_QUERY_TIMESTAMPS: GpuTestConfiguration =
+static COMPUTE_PASS_QUERY_SET_OWNERSHIP_TIMESTAMPS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().test_features_limits().features(
             wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
         ))
-        .run_async(compute_pass_query_timestamps);
+        .run_async(compute_pass_query_set_ownership_timestamps);
 
-async fn compute_pass_query_timestamps(ctx: TestingContext) {
+async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
     let ResourceSetup {
         gpu_buffer,
         cpu_buffer,
