@@ -1819,6 +1819,7 @@ impl super::Adapter {
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
+            memory_allocations_counter: Default::default(),
         });
 
         let relay_semaphores = super::RelaySemaphores::new(&shared)?;
@@ -1881,6 +1882,7 @@ impl super::Adapter {
             naga_options,
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
+            counters: Default::default(),
         };
 
         Ok(crate::OpenDevice { device, queue })

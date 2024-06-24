@@ -339,6 +339,7 @@ impl Queue {
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
+    counters: wgt::HalCounters,
 }
 
 pub struct Surface {

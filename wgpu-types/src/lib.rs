@@ -18,7 +18,10 @@ use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
+mod counters;
 pub mod math;
+
+pub use counters::*;
 
 // Use this macro instead of the one provided by the bitflags_serde_shim crate
 // because the latter produces an error when deserializing bits that are not

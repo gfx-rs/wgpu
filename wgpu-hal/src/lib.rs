@@ -884,6 +884,8 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
+
+    fn get_internal_counters(&self) -> wgt::HalCounters;
 }
 
 pub trait Queue: WasmNotSendSync {

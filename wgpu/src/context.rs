@@ -611,6 +611,13 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     fn device_start_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+
+    fn device_get_internal_counters(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> wgt::InternalCounters;
+
     fn pipeline_cache_get_data(
         &self,
         cache: &Self::PipelineCacheId,
@@ -1603,6 +1610,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
 
     fn device_start_capture(&self, device: &ObjectId, data: &crate::Data);
     fn device_stop_capture(&self, device: &ObjectId, data: &crate::Data);
+
+    fn device_get_internal_counters(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> wgt::InternalCounters;
 
     fn pipeline_cache_get_data(
         &self,
@@ -3076,6 +3089,16 @@ where
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_stop_capture(self, &device, device_data)
+    }
+
+    fn device_get_internal_counters(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> wgt::InternalCounters {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_get_internal_counters(self, &device, device_data)
     }
 
     fn pipeline_cache_get_data(
