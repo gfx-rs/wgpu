@@ -1587,28 +1587,9 @@ impl Global {
                         )
                         .map_pass_err(scope)?;
                     }
-                    ArcRenderCommand::SetScissor(ref rect) => {
-                        api_log!("RenderPass::set_scissor_rect {rect:?}");
-
+                    ArcRenderCommand::SetScissor(rect) => {
                         let scope = PassErrorScope::SetScissorRect;
-                        if rect.x + rect.w > state.info.extent.width
-                            || rect.y + rect.h > state.info.extent.height
-                        {
-                            return Err(RenderCommandError::InvalidScissorRect(
-                                *rect,
-                                state.info.extent,
-                            ))
-                            .map_pass_err(scope);
-                        }
-                        let r = hal::Rect {
-                            x: rect.x,
-                            y: rect.y,
-                            w: rect.w,
-                            h: rect.h,
-                        };
-                        unsafe {
-                            state.raw_encoder.set_scissor_rect(&r);
-                        }
+                        set_scissor(&mut state, rect).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::Draw {
                         vertex_count,
@@ -2582,6 +2563,27 @@ fn set_push_constant<A: HalApi>(
         state
             .raw_encoder
             .set_push_constants(pipeline_layout.raw(), stages, offset, data_slice)
+    }
+    Ok(())
+}
+
+fn set_scissor<A: HalApi>(
+    state: &mut State<A>,
+    rect: Rect<u32>,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!("RenderPass::set_scissor_rect {rect:?}");
+
+    if rect.x + rect.w > state.info.extent.width || rect.y + rect.h > state.info.extent.height {
+        return Err(RenderCommandError::InvalidScissorRect(rect, state.info.extent).into());
+    }
+    let r = hal::Rect {
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+    };
+    unsafe {
+        state.raw_encoder.set_scissor_rect(&r);
     }
     Ok(())
 }
