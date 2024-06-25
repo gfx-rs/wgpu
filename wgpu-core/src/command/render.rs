@@ -1,3 +1,4 @@
+use crate::binding_model::BindGroup;
 use crate::command::{
     validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
 };
@@ -38,7 +39,7 @@ use arrayvec::ArrayVec;
 use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsages, Color, IndexFormat, TextureUsages,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, TextureUsages,
     TextureViewDimension, VertexStepMode,
 };
 
@@ -1519,88 +1520,16 @@ impl Global {
                         num_dynamic_offsets,
                         bind_group,
                     } => {
-                        api_log!(
-                            "RenderPass::set_bind_group {index} {}",
-                            bind_group.error_ident()
-                        );
-
                         let scope = PassErrorScope::SetBindGroup(bind_group.as_info().id());
-                        let max_bind_groups = state.device.limits.max_bind_groups;
-                        if index >= max_bind_groups {
-                            return Err(RenderCommandError::BindGroupIndexOutOfRange {
-                                index,
-                                max: max_bind_groups,
-                            })
-                            .map_pass_err(scope);
-                        }
-
-                        state.temp_offsets.clear();
-                        state.temp_offsets.extend_from_slice(
-                            &base.dynamic_offsets[state.dynamic_offset_count
-                                ..state.dynamic_offset_count + num_dynamic_offsets],
-                        );
-                        state.dynamic_offset_count += num_dynamic_offsets;
-
-                        let bind_group = state.tracker.bind_groups.insert_single(bind_group);
-
-                        bind_group
-                            .same_device_as(cmd_buf.as_ref())
-                            .map_pass_err(scope)?;
-
-                        bind_group
-                            .validate_dynamic_bindings(index, &state.temp_offsets)
-                            .map_pass_err(scope)?;
-
-                        // merge the resource tracker in
-                        unsafe {
-                            state
-                                .info
-                                .usage_scope
-                                .merge_bind_group(&bind_group.used)
-                                .map_pass_err(scope)?;
-                        }
-                        //Note: stateless trackers are not merged: the lifetime reference
-                        // is held to the bind group itself.
-
-                        state.buffer_memory_init_actions.extend(
-                            bind_group.used_buffer_ranges.iter().filter_map(|action| {
-                                action
-                                    .buffer
-                                    .initialization_status
-                                    .read()
-                                    .check_action(action)
-                            }),
-                        );
-                        for action in bind_group.used_texture_ranges.iter() {
-                            state
-                                .info
-                                .pending_discard_init_fixups
-                                .extend(state.texture_memory_actions.register_init_action(action));
-                        }
-
-                        let pipeline_layout = state.binder.pipeline_layout.clone();
-                        let entries = state.binder.assign_group(
-                            index as usize,
+                        set_bind_group(
+                            &mut state,
+                            &cmd_buf,
+                            &base.dynamic_offsets,
+                            index,
+                            num_dynamic_offsets,
                             bind_group,
-                            &state.temp_offsets,
-                        );
-                        if !entries.is_empty() && pipeline_layout.is_some() {
-                            let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
-                            for (i, e) in entries.iter().enumerate() {
-                                if let Some(group) = e.group.as_ref() {
-                                    let raw_bg =
-                                        group.try_raw(state.snatch_guard).map_pass_err(scope)?;
-                                    unsafe {
-                                        state.raw_encoder.set_bind_group(
-                                            pipeline_layout,
-                                            index + i as u32,
-                                            raw_bg,
-                                            &e.dynamic_offsets,
-                                        );
-                                    }
-                                }
-                            }
-                        }
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetPipeline(pipeline) => {
                         api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
@@ -2545,13 +2474,94 @@ impl Global {
     }
 }
 
+fn set_bind_group<A: HalApi>(
+    state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
+    dynamic_offsets: &[DynamicOffset],
+    index: u32,
+    num_dynamic_offsets: usize,
+    bind_group: Arc<BindGroup<A>>,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!(
+        "RenderPass::set_bind_group {index} {}",
+        bind_group.error_ident()
+    );
+
+    let max_bind_groups = state.device.limits.max_bind_groups;
+    if index >= max_bind_groups {
+        return Err(RenderCommandError::BindGroupIndexOutOfRange {
+            index,
+            max: max_bind_groups,
+        }
+        .into());
+    }
+
+    state.temp_offsets.clear();
+    state.temp_offsets.extend_from_slice(
+        &dynamic_offsets
+            [state.dynamic_offset_count..state.dynamic_offset_count + num_dynamic_offsets],
+    );
+    state.dynamic_offset_count += num_dynamic_offsets;
+
+    let bind_group = state.tracker.bind_groups.insert_single(bind_group);
+
+    bind_group.same_device_as(cmd_buf.as_ref())?;
+
+    bind_group.validate_dynamic_bindings(index, &state.temp_offsets)?;
+
+    // merge the resource tracker in
+    unsafe {
+        state.info.usage_scope.merge_bind_group(&bind_group.used)?;
+    }
+    //Note: stateless trackers are not merged: the lifetime reference
+    // is held to the bind group itself.
+
+    state
+        .buffer_memory_init_actions
+        .extend(bind_group.used_buffer_ranges.iter().filter_map(|action| {
+            action
+                .buffer
+                .initialization_status
+                .read()
+                .check_action(action)
+        }));
+    for action in bind_group.used_texture_ranges.iter() {
+        state
+            .info
+            .pending_discard_init_fixups
+            .extend(state.texture_memory_actions.register_init_action(action));
+    }
+
+    let pipeline_layout = state.binder.pipeline_layout.clone();
+    let entries = state
+        .binder
+        .assign_group(index as usize, bind_group, &state.temp_offsets);
+    if !entries.is_empty() && pipeline_layout.is_some() {
+        let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
+        for (i, e) in entries.iter().enumerate() {
+            if let Some(group) = e.group.as_ref() {
+                let raw_bg = group.try_raw(state.snatch_guard)?;
+                unsafe {
+                    state.raw_encoder.set_bind_group(
+                        pipeline_layout,
+                        index + i as u32,
+                        raw_bg,
+                        &e.dynamic_offsets,
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 impl Global {
     pub fn render_pass_set_bind_group(
         &self,
         pass: &mut RenderPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: &[wgt::DynamicOffset],
+        offsets: &[DynamicOffset],
     ) -> Result<(), RenderPassError> {
         let scope = PassErrorScope::SetBindGroup(bind_group_id);
         let base = pass
