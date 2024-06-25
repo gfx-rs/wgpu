@@ -1552,69 +1552,9 @@ impl Global {
                         offset,
                         size,
                     } => {
-                        api_log!(
-                            "RenderPass::set_vertex_buffer {slot} {}",
-                            buffer.error_ident()
-                        );
-
                         let scope = PassErrorScope::SetVertexBuffer(buffer.as_info().id());
-
-                        state
-                            .info
-                            .usage_scope
-                            .buffers
-                            .merge_single(&buffer, hal::BufferUses::VERTEX)
+                        set_vertex_buffer(&mut state, &cmd_buf, slot, buffer, offset, size)
                             .map_pass_err(scope)?;
-
-                        buffer
-                            .same_device_as(cmd_buf.as_ref())
-                            .map_pass_err(scope)?;
-
-                        let max_vertex_buffers = state.device.limits.max_vertex_buffers;
-                        if slot >= max_vertex_buffers {
-                            return Err(RenderCommandError::VertexBufferIndexOutOfRange {
-                                index: slot,
-                                max: max_vertex_buffers,
-                            })
-                            .map_pass_err(scope);
-                        }
-
-                        buffer
-                            .check_usage(BufferUsages::VERTEX)
-                            .map_pass_err(scope)?;
-                        let buf_raw = buffer.try_raw(state.snatch_guard).map_pass_err(scope)?;
-
-                        let empty_slots =
-                            (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
-                        state
-                            .vertex
-                            .inputs
-                            .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
-                        let vertex_state = &mut state.vertex.inputs[slot as usize];
-                        //TODO: where are we checking that the offset is in bound?
-                        vertex_state.total_size = match size {
-                            Some(s) => s.get(),
-                            None => buffer.size - offset,
-                        };
-                        vertex_state.bound = true;
-
-                        state.buffer_memory_init_actions.extend(
-                            buffer.initialization_status.read().create_action(
-                                &buffer,
-                                offset..(offset + vertex_state.total_size),
-                                MemoryInitKind::NeedsInitializedMemory,
-                            ),
-                        );
-
-                        let bb = hal::BufferBinding {
-                            buffer: buf_raw,
-                            offset,
-                            size,
-                        };
-                        unsafe {
-                            state.raw_encoder.set_vertex_buffer(slot, bb);
-                        }
-                        state.vertex.update_limits();
                     }
                     ArcRenderCommand::SetBlendConstant(ref color) => {
                         api_log!("RenderPass::set_blend_constant");
@@ -2556,6 +2496,72 @@ fn set_index_buffer<A: HalApi>(
     unsafe {
         state.raw_encoder.set_index_buffer(bb, index_format);
     }
+    Ok(())
+}
+
+fn set_vertex_buffer<A: HalApi>(
+    state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
+    slot: u32,
+    buffer: Arc<crate::resource::Buffer<A>>,
+    offset: u64,
+    size: Option<BufferSize>,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!(
+        "RenderPass::set_vertex_buffer {slot} {}",
+        buffer.error_ident()
+    );
+
+    state
+        .info
+        .usage_scope
+        .buffers
+        .merge_single(&buffer, hal::BufferUses::VERTEX)?;
+
+    buffer.same_device_as(cmd_buf.as_ref())?;
+
+    let max_vertex_buffers = state.device.limits.max_vertex_buffers;
+    if slot >= max_vertex_buffers {
+        return Err(RenderCommandError::VertexBufferIndexOutOfRange {
+            index: slot,
+            max: max_vertex_buffers,
+        }
+        .into());
+    }
+
+    buffer.check_usage(BufferUsages::VERTEX)?;
+    let buf_raw = buffer.try_raw(state.snatch_guard)?;
+
+    let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
+    state
+        .vertex
+        .inputs
+        .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
+    let vertex_state = &mut state.vertex.inputs[slot as usize];
+    //TODO: where are we checking that the offset is in bound?
+    vertex_state.total_size = match size {
+        Some(s) => s.get(),
+        None => buffer.size - offset,
+    };
+    vertex_state.bound = true;
+
+    state
+        .buffer_memory_init_actions
+        .extend(buffer.initialization_status.read().create_action(
+            &buffer,
+            offset..(offset + vertex_state.total_size),
+            MemoryInitKind::NeedsInitializedMemory,
+        ));
+
+    let bb = hal::BufferBinding {
+        buffer: buf_raw,
+        offset,
+        size,
+    };
+    unsafe {
+        state.raw_encoder.set_vertex_buffer(slot, bb);
+    }
+    state.vertex.update_limits();
     Ok(())
 }
 
