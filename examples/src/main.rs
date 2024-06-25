@@ -164,6 +164,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false,  // No Ray-tracing extensions
         webgpu: false, // No Ray-tracing extensions (yet)
     },
+    ExampleDesc {
+        name: "ray_shadows",
+        function: wgpu_examples::ray_shadows::main,
+        webgl: false,  // No Ray-tracing extensions
+        webgpu: false, // No Ray-tracing extensions (yet)
+    },
 ];
 
 fn get_example_name() -> Option<String> {

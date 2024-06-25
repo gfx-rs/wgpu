@@ -163,6 +163,7 @@ define_lock_ranks! {
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
     rank TLAS_INSTANCE_BUFFER "Tlas::instance_buffer" followed by { }
+    rank TLAS_INSTANCE_BLAS "TlasInstance::blas" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

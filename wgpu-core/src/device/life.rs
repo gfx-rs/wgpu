@@ -41,8 +41,6 @@ pub(crate) struct ResourceMaps<A: HalApi> {
     pub tlas_s: FastHashMap<TrackerIndex, Arc<Tlas<A>>>,
     pub destroyed_buffers: FastHashMap<TrackerIndex, Arc<DestroyedBuffer<A>>>,
     pub destroyed_textures: FastHashMap<TrackerIndex, Arc<DestroyedTexture<A>>>,
-    pub blas_s: FastHashMap<TrackerIndex, Arc<Blas<A>>>,
-    pub tlas_s: FastHashMap<TrackerIndex, Arc<Tlas<A>>>,
     pub tlas_instances: FastHashMap<TrackerIndex, Arc<TlasInstance<A>>>,
 }
 

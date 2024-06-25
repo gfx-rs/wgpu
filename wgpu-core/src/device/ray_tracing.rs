@@ -6,7 +6,7 @@ use crate::{
     hal_api::HalApi,
     id::{self, BlasId, TlasId, TlasInstanceId},
     lock::{Mutex, RwLock},
-    ray_tracing::{get_raw_tlas_instance_size, TlasInstanceError CreateBlasError, CreateTlasError},
+    ray_tracing::{get_raw_tlas_instance_size, TlasInstanceError, CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
 use std::sync::Arc;
@@ -262,7 +262,7 @@ impl Global {
         return match hub.blas_s.read().get(blas_id) {
             Ok(blas) => {
                 let tlas_instance = TlasInstance {
-                    blas: RwLock::new(blas.clone()),
+                    blas: RwLock::new(rank::TLAS_INSTANCE_BLAS, blas.clone()),
                     info: ResourceInfo::new(
                         blas.info.label.as_str(),
                         Some(blas.device.tracker_indices.tlas_instances.clone()),

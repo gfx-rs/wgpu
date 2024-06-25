@@ -140,7 +140,6 @@ pub struct Device<A: HalApi> {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool<A>,
-    pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
 
     /// Temporary storage, cleared at the start of every call,
     /// retained only to save allocations.
