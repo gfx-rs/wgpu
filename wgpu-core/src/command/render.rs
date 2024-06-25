@@ -1560,17 +1560,7 @@ impl Global {
                         set_blend_constant(&mut state, color);
                     }
                     ArcRenderCommand::SetStencilReference(value) => {
-                        api_log!("RenderPass::set_stencil_reference {value}");
-
-                        state.stencil_reference = value;
-                        if state
-                            .pipeline_flags
-                            .contains(PipelineFlags::STENCIL_REFERENCE)
-                        {
-                            unsafe {
-                                state.raw_encoder.set_stencil_reference(value);
-                            }
-                        }
+                        set_stencil_reference(&mut state, value);
                     }
                     ArcRenderCommand::SetViewport {
                         ref rect,
@@ -2566,6 +2556,20 @@ fn set_blend_constant<A: HalApi>(state: &mut State<A>, color: &Color) {
     ];
     unsafe {
         state.raw_encoder.set_blend_constants(&array);
+    }
+}
+
+fn set_stencil_reference<A: HalApi>(state: &mut State<A>, value: u32) {
+    api_log!("RenderPass::set_stencil_reference {value}");
+
+    state.stencil_reference = value;
+    if state
+        .pipeline_flags
+        .contains(PipelineFlags::STENCIL_REFERENCE)
+    {
+        unsafe {
+            state.raw_encoder.set_stencil_reference(value);
+        }
     }
 }
 
