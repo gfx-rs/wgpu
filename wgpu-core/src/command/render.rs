@@ -1689,26 +1689,14 @@ impl Global {
                         query_set,
                         query_index,
                     } => {
-                        api_log!(
-                            "RenderPass::write_timestamps {query_index} {}",
-                            query_set.error_ident()
-                        );
                         let scope = PassErrorScope::WriteTimestamp;
-
-                        state
-                            .device
-                            .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
-                            .map_pass_err(scope)?;
-
-                        let query_set = state.tracker.query_sets.insert_single(query_set);
-
-                        query_set
-                            .validate_and_write_timestamp(
-                                state.raw_encoder,
-                                query_index,
-                                Some(&mut cmd_buf_data.pending_query_resets),
-                            )
-                            .map_pass_err(scope)?;
+                        write_timestamp(
+                            &mut state,
+                            &mut cmd_buf_data.pending_query_resets,
+                            query_set,
+                            query_index,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::BeginOcclusionQuery { query_index } => {
                         api_log!("RenderPass::begin_occlusion_query {query_index}");
@@ -2631,6 +2619,31 @@ fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len:
         }
     }
     state.string_offset += len;
+}
+
+fn write_timestamp<A: HalApi>(
+    state: &mut State<A>,
+    pending_query_resets: &mut QueryResetMap<A>,
+    query_set: Arc<QuerySet<A>>,
+    query_index: u32,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!(
+        "RenderPass::write_timestamps {query_index} {}",
+        query_set.error_ident()
+    );
+
+    state
+        .device
+        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)?;
+
+    let query_set = state.tracker.query_sets.insert_single(query_set);
+
+    query_set.validate_and_write_timestamp(
+        state.raw_encoder,
+        query_index,
+        Some(pending_query_resets),
+    )?;
+    Ok(())
 }
 
 impl Global {
