@@ -644,21 +644,7 @@ impl Global {
                 }
                 ArcComputeCommand::PopDebugGroup => {
                     let scope = PassErrorScope::PopDebugGroup;
-
-                    if state.debug_scope_depth == 0 {
-                        return Err(ComputePassErrorInner::InvalidPopDebugGroup)
-                            .map_pass_err(scope);
-                    }
-                    state.debug_scope_depth -= 1;
-                    if !state
-                        .device
-                        .instance_flags
-                        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-                    {
-                        unsafe {
-                            raw.end_debug_marker();
-                        }
-                    }
+                    pop_debug_group(&mut state, raw).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::InsertDebugMarker { color: _, len } => {
                     if !state
@@ -1021,6 +1007,26 @@ fn push_debug_group<A: HalApi>(
         }
     }
     state.string_offset += len;
+}
+
+fn pop_debug_group<A: HalApi>(
+    state: &mut State<A>,
+    raw: &mut A::CommandEncoder,
+) -> Result<(), ComputePassErrorInner> {
+    if state.debug_scope_depth == 0 {
+        return Err(ComputePassErrorInner::InvalidPopDebugGroup);
+    }
+    state.debug_scope_depth -= 1;
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        unsafe {
+            raw.end_debug_marker();
+        }
+    }
+    Ok(())
 }
 
 // Recording a compute pass.
