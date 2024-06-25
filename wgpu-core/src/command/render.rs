@@ -1618,47 +1618,20 @@ impl Global {
                         base_vertex,
                         first_instance,
                     } => {
-                        api_log!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
-
-                        let indexed = true;
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::Draw,
-                            indexed,
+                            indexed: true,
                             pipeline: state.pipeline,
                         };
-                        state.is_ready(indexed).map_pass_err(scope)?;
-
-                        let last_index = first_index as u64 + index_count as u64;
-                        let index_limit = state.index.limit;
-                        if last_index > index_limit {
-                            return Err(DrawError::IndexBeyondLimit {
-                                last_index,
-                                index_limit,
-                            })
-                            .map_pass_err(scope);
-                        }
-                        let last_instance = first_instance as u64 + instance_count as u64;
-                        let instance_limit = state.vertex.instance_limit;
-                        if last_instance > instance_limit {
-                            return Err(DrawError::InstanceBeyondLimit {
-                                last_instance,
-                                instance_limit,
-                                slot: state.vertex.instance_limit_slot,
-                            })
-                            .map_pass_err(scope);
-                        }
-
-                        unsafe {
-                            if instance_count > 0 && index_count > 0 {
-                                state.raw_encoder.draw_indexed(
-                                    first_index,
-                                    index_count,
-                                    base_vertex,
-                                    first_instance,
-                                    instance_count,
-                                );
-                            }
-                        }
+                        draw_indexed(
+                            &mut state,
+                            index_count,
+                            instance_count,
+                            first_index,
+                            base_vertex,
+                            first_instance,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::MultiDrawIndirect {
                         buffer: indirect_buffer,
@@ -2593,6 +2566,50 @@ fn draw<A: HalApi>(
             state
                 .raw_encoder
                 .draw(first_vertex, vertex_count, first_instance, instance_count);
+        }
+    }
+    Ok(())
+}
+
+fn draw_indexed<A: HalApi>(
+    state: &mut State<A>,
+    index_count: u32,
+    instance_count: u32,
+    first_index: u32,
+    base_vertex: i32,
+    first_instance: u32,
+) -> Result<(), DrawError> {
+    api_log!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
+
+    state.is_ready(true)?;
+
+    let last_index = first_index as u64 + index_count as u64;
+    let index_limit = state.index.limit;
+    if last_index > index_limit {
+        return Err(DrawError::IndexBeyondLimit {
+            last_index,
+            index_limit,
+        });
+    }
+    let last_instance = first_instance as u64 + instance_count as u64;
+    let instance_limit = state.vertex.instance_limit;
+    if last_instance > instance_limit {
+        return Err(DrawError::InstanceBeyondLimit {
+            last_instance,
+            instance_limit,
+            slot: state.vertex.instance_limit_slot,
+        });
+    }
+
+    unsafe {
+        if instance_count > 0 && index_count > 0 {
+            state.raw_encoder.draw_indexed(
+                first_index,
+                index_count,
+                base_vertex,
+                first_instance,
+                instance_count,
+            );
         }
     }
     Ok(())
