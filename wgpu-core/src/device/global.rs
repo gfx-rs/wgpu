@@ -841,6 +841,10 @@ impl Global {
 
             {
                 let mut views = texture.views.lock();
+
+                // Remove stale weak references
+                views.retain(|view| view.strong_count() > 0);
+
                 views.push(Arc::downgrade(&resource));
             }
 
@@ -1162,10 +1166,20 @@ impl Global {
 
             let weak_ref = Arc::downgrade(&resource);
             for range in &resource.used_texture_ranges {
-                range.texture.bind_groups.lock().push(weak_ref.clone());
+                let mut bind_groups = range.texture.bind_groups.lock();
+
+                // Remove stale weak references
+                bind_groups.retain(|bg| bg.strong_count() > 0);
+
+                bind_groups.push(weak_ref.clone());
             }
             for range in &resource.used_buffer_ranges {
-                range.buffer.bind_groups.lock().push(weak_ref.clone());
+                let mut bind_groups = range.buffer.bind_groups.lock();
+
+                // Remove stale weak references
+                bind_groups.retain(|bg| bg.strong_count() > 0);
+
+                bind_groups.push(weak_ref.clone());
             }
 
             api_log!("Device::create_bind_group -> {id:?}");
