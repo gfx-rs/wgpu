@@ -323,32 +323,24 @@ impl OptionalState {
 
 #[derive(Debug, Default)]
 struct IndexState {
-    bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
-    format: Option<IndexFormat>,
+    buffer_format: Option<IndexFormat>,
     pipeline_format: Option<IndexFormat>,
     limit: u64,
 }
 
 impl IndexState {
-    fn update_limit(&mut self) {
-        self.limit = match self.bound_buffer_view {
-            Some((_, ref range)) => {
-                let format = self
-                    .format
-                    .expect("IndexState::update_limit must be called after a index buffer is set");
-                let shift = match format {
-                    IndexFormat::Uint16 => 1,
-                    IndexFormat::Uint32 => 2,
-                };
-
-                (range.end - range.start) >> shift
-            }
-            None => 0,
-        }
+    fn update_buffer(&mut self, range: Range<BufferAddress>, format: IndexFormat) {
+        self.buffer_format = Some(format);
+        let shift = match format {
+            IndexFormat::Uint16 => 1,
+            IndexFormat::Uint32 => 2,
+        };
+        self.limit = (range.end - range.start) >> shift;
     }
 
     fn reset(&mut self) {
-        self.bound_buffer_view = None;
+        self.buffer_format = None;
+        self.pipeline_format = None;
         self.limit = 0;
     }
 }
@@ -482,7 +474,10 @@ impl<A: HalApi> State<A> {
             // Pipeline expects an index buffer
             if let Some(pipeline_index_format) = self.index.pipeline_format {
                 // We have a buffer bound
-                let buffer_index_format = self.index.format.ok_or(DrawError::MissingIndexBuffer)?;
+                let buffer_index_format = self
+                    .index
+                    .buffer_format
+                    .ok_or(DrawError::MissingIndexBuffer)?;
 
                 // The buffers are different formats
                 if pipeline_index_format != buffer_index_format {
@@ -1724,10 +1719,7 @@ impl Global {
                             Some(s) => offset + s.get(),
                             None => buffer.size,
                         };
-                        state.index.bound_buffer_view = Some((buffer.as_info().id(), offset..end));
-
-                        state.index.format = Some(index_format);
-                        state.index.update_limit();
+                        state.index.update_buffer(offset..end, index_format);
 
                         buffer_memory_init_actions.extend(
                             buffer.initialization_status.read().create_action(
