@@ -1676,23 +1676,7 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::PushDebugGroup { color: _, len } => {
-                        state.debug_scope_depth += 1;
-                        if !state
-                            .device
-                            .instance_flags
-                            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-                        {
-                            let label = str::from_utf8(
-                                &base.string_data[state.string_offset..state.string_offset + len],
-                            )
-                            .unwrap();
-
-                            api_log!("RenderPass::push_debug_group {label:?}");
-                            unsafe {
-                                state.raw_encoder.begin_debug_marker(label);
-                            }
-                        }
-                        state.string_offset += len;
+                        push_debug_group(&mut state, &base.string_data, len);
                     }
                     ArcRenderCommand::PopDebugGroup => {
                         api_log!("RenderPass::pop_debug_group");
@@ -2623,6 +2607,24 @@ fn multi_draw_indirect_count<A: HalApi>(
         },
     }
     Ok(())
+}
+
+fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: usize) {
+    state.debug_scope_depth += 1;
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        let label =
+            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+
+        api_log!("RenderPass::push_debug_group {label:?}");
+        unsafe {
+            state.raw_encoder.begin_debug_marker(label);
+        }
+    }
+    state.string_offset += len;
 }
 
 impl Global {
