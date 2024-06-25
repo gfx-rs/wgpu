@@ -1506,6 +1506,33 @@ impl Global {
         timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set: Option<id::QuerySetId>,
     ) -> Result<(), RenderPassError> {
+        let pass_scope = PassErrorScope::PassEncoder(encoder_id);
+        #[cfg(feature = "trace")]
+        {
+            let hub = A::hub(self);
+            let cmd_buf: Arc<CommandBuffer<A>> =
+                CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
+
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+
+            if let Some(ref mut list) = cmd_buf_data.commands {
+                list.push(crate::device::trace::Command::RunRenderPass {
+                    base: BasePass {
+                        label: base.label.clone(),
+                        commands: base.commands.clone(),
+                        dynamic_offsets: base.dynamic_offsets.clone(),
+                        string_data: base.string_data.clone(),
+                        push_constant_data: base.push_constant_data.clone(),
+                    },
+                    target_colors: color_attachments.to_vec(),
+                    target_depth_stencil: depth_stencil_attachment.cloned(),
+                    timestamp_writes: timestamp_writes.cloned(),
+                    occlusion_query_set_id: occlusion_query_set,
+                });
+            }
+        }
+
         let BasePass {
             label,
             commands,
@@ -1526,7 +1553,7 @@ impl Global {
         );
         if let Some(err) = encoder_error {
             return Err(RenderPassError {
-                scope: PassErrorScope::PassEncoder(encoder_id),
+                scope: pass_scope,
                 inner: err.into(),
             });
         };
@@ -1582,48 +1609,6 @@ impl Global {
         let (scope, pending_discard_init_fixups) = {
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
-                list.push(crate::device::trace::Command::RunRenderPass {
-                    base: BasePass {
-                        label: base.label.clone(),
-                        commands: base.commands.iter().map(Into::into).collect(),
-                        dynamic_offsets: base.dynamic_offsets.to_vec(),
-                        string_data: base.string_data.to_vec(),
-                        push_constant_data: base.push_constant_data.to_vec(),
-                    },
-                    target_colors: pass
-                        .color_attachments
-                        .iter()
-                        .map(|attachment| {
-                            attachment.as_ref().map(|a| RenderPassColorAttachment {
-                                view: a.view.as_info().id(),
-                                resolve_target: a.resolve_target.as_ref().map(|a| a.as_info().id()),
-                                channel: a.channel.clone(),
-                            })
-                        })
-                        .collect(),
-                    target_depth_stencil: pass.depth_stencil_attachment.as_ref().map(|d| {
-                        RenderPassDepthStencilAttachment {
-                            view: d.view.as_info().id(),
-                            depth: d.depth.clone(),
-                            stencil: d.stencil.clone(),
-                        }
-                    }),
-                    timestamp_writes: pass.timestamp_writes.as_ref().map(|tw| {
-                        PassTimestampWrites {
-                            query_set: tw.query_set.as_info().id(),
-                            beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                            end_of_pass_write_index: tw.end_of_pass_write_index,
-                        }
-                    }),
-                    occlusion_query_set_id: pass
-                        .occlusion_query_set
-                        .as_ref()
-                        .map(|q| q.as_info().id()),
-                });
-            }
 
             device.check_is_valid().map_pass_err(pass_scope)?;
 
