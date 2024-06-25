@@ -1342,7 +1342,7 @@ impl crate::Device for super::Device {
             .iter()
             .find(|&&(value, _)| value >= wait_value)
         {
-            Some(&(_, ref cmd_buf)) => cmd_buf,
+            Some((_, cmd_buf)) => cmd_buf,
             None => {
                 log::error!("No active command buffers for fence value {}", wait_value);
                 return Err(crate::DeviceError::Lost);
