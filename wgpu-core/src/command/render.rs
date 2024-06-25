@@ -1683,21 +1683,7 @@ impl Global {
                         pop_debug_group(&mut state).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::InsertDebugMarker { color: _, len } => {
-                        if !state
-                            .device
-                            .instance_flags
-                            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-                        {
-                            let label = str::from_utf8(
-                                &base.string_data[state.string_offset..state.string_offset + len],
-                            )
-                            .unwrap();
-                            api_log!("RenderPass::insert_debug_marker {label:?}");
-                            unsafe {
-                                state.raw_encoder.insert_debug_marker(label);
-                            }
-                        }
-                        state.string_offset += len;
+                        insert_debug_marker(&mut state, &base.string_data, len);
                     }
                     ArcRenderCommand::WriteTimestamp {
                         query_set,
@@ -2629,6 +2615,22 @@ fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), RenderPassErro
         }
     }
     Ok(())
+}
+
+fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: usize) {
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        let label =
+            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+        api_log!("RenderPass::insert_debug_marker {label:?}");
+        unsafe {
+            state.raw_encoder.insert_debug_marker(label);
+        }
+    }
+    state.string_offset += len;
 }
 
 impl Global {
