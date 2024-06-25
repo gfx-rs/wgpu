@@ -1652,124 +1652,28 @@ impl Global {
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::MultiDrawIndirectCount {
-                        buffer: indirect_buffer,
+                        buffer,
                         offset,
                         count_buffer,
                         count_buffer_offset,
                         max_count,
                         indexed,
                     } => {
-                        api_log!(
-                            "RenderPass::multi_draw_indirect_count (indexed:{indexed}) {} {offset} {} {count_buffer_offset:?} {max_count:?}",
-                            indirect_buffer.error_ident(),
-                            count_buffer.error_ident()
-                        );
-
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::MultiDrawIndirectCount,
                             indexed,
                             pipeline: state.pipeline,
                         };
-                        state.is_ready(indexed).map_pass_err(scope)?;
-
-                        let stride = match indexed {
-                            false => mem::size_of::<wgt::DrawIndirectArgs>(),
-                            true => mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
-                        } as u64;
-
-                        state
-                            .device
-                            .require_features(wgt::Features::MULTI_DRAW_INDIRECT_COUNT)
-                            .map_pass_err(scope)?;
-                        state
-                            .device
-                            .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
-                            .map_pass_err(scope)?;
-
-                        state
-                            .info
-                            .usage_scope
-                            .buffers
-                            .merge_single(&indirect_buffer, hal::BufferUses::INDIRECT)
-                            .map_pass_err(scope)?;
-
-                        indirect_buffer
-                            .check_usage(BufferUsages::INDIRECT)
-                            .map_pass_err(scope)?;
-                        let indirect_raw = indirect_buffer
-                            .try_raw(state.snatch_guard)
-                            .map_pass_err(scope)?;
-
-                        state
-                            .info
-                            .usage_scope
-                            .buffers
-                            .merge_single(&count_buffer, hal::BufferUses::INDIRECT)
-                            .map_pass_err(scope)?;
-
-                        count_buffer
-                            .check_usage(BufferUsages::INDIRECT)
-                            .map_pass_err(scope)?;
-                        let count_raw = count_buffer
-                            .try_raw(state.snatch_guard)
-                            .map_pass_err(scope)?;
-
-                        let end_offset = offset + stride * max_count as u64;
-                        if end_offset > indirect_buffer.size {
-                            return Err(RenderPassErrorInner::IndirectBufferOverrun {
-                                count: None,
-                                offset,
-                                end_offset,
-                                buffer_size: indirect_buffer.size,
-                            })
-                            .map_pass_err(scope);
-                        }
-                        state.buffer_memory_init_actions.extend(
-                            indirect_buffer.initialization_status.read().create_action(
-                                &indirect_buffer,
-                                offset..end_offset,
-                                MemoryInitKind::NeedsInitializedMemory,
-                            ),
-                        );
-
-                        let begin_count_offset = count_buffer_offset;
-                        let end_count_offset = count_buffer_offset + 4;
-                        if end_count_offset > count_buffer.size {
-                            return Err(RenderPassErrorInner::IndirectCountBufferOverrun {
-                                begin_count_offset,
-                                end_count_offset,
-                                count_buffer_size: count_buffer.size,
-                            })
-                            .map_pass_err(scope);
-                        }
-                        state.buffer_memory_init_actions.extend(
-                            count_buffer.initialization_status.read().create_action(
-                                &count_buffer,
-                                count_buffer_offset..end_count_offset,
-                                MemoryInitKind::NeedsInitializedMemory,
-                            ),
-                        );
-
-                        match indexed {
-                            false => unsafe {
-                                state.raw_encoder.draw_indirect_count(
-                                    indirect_raw,
-                                    offset,
-                                    count_raw,
-                                    count_buffer_offset,
-                                    max_count,
-                                );
-                            },
-                            true => unsafe {
-                                state.raw_encoder.draw_indexed_indirect_count(
-                                    indirect_raw,
-                                    offset,
-                                    count_raw,
-                                    count_buffer_offset,
-                                    max_count,
-                                );
-                            },
-                        }
+                        multi_draw_indirect_count(
+                            &mut state,
+                            buffer,
+                            offset,
+                            count_buffer,
+                            count_buffer_offset,
+                            max_count,
+                            indexed,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::PushDebugGroup { color: _, len } => {
                         state.debug_scope_depth += 1;
@@ -2612,6 +2516,110 @@ fn multi_draw_indirect<A: HalApi>(
             state
                 .raw_encoder
                 .draw_indexed_indirect(indirect_raw, offset, actual_count);
+        },
+    }
+    Ok(())
+}
+
+fn multi_draw_indirect_count<A: HalApi>(
+    state: &mut State<A>,
+    indirect_buffer: Arc<crate::resource::Buffer<A>>,
+    offset: u64,
+    count_buffer: Arc<crate::resource::Buffer<A>>,
+    count_buffer_offset: u64,
+    max_count: u32,
+    indexed: bool,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!(
+        "RenderPass::multi_draw_indirect_count (indexed:{indexed}) {} {offset} {} {count_buffer_offset:?} {max_count:?}",
+        indirect_buffer.error_ident(),
+        count_buffer.error_ident()
+    );
+
+    state.is_ready(indexed)?;
+
+    let stride = match indexed {
+        false => mem::size_of::<wgt::DrawIndirectArgs>(),
+        true => mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
+    } as u64;
+
+    state
+        .device
+        .require_features(wgt::Features::MULTI_DRAW_INDIRECT_COUNT)?;
+    state
+        .device
+        .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+
+    state
+        .info
+        .usage_scope
+        .buffers
+        .merge_single(&indirect_buffer, hal::BufferUses::INDIRECT)?;
+
+    indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
+    let indirect_raw = indirect_buffer.try_raw(state.snatch_guard)?;
+
+    state
+        .info
+        .usage_scope
+        .buffers
+        .merge_single(&count_buffer, hal::BufferUses::INDIRECT)?;
+
+    count_buffer.check_usage(BufferUsages::INDIRECT)?;
+    let count_raw = count_buffer.try_raw(state.snatch_guard)?;
+
+    let end_offset = offset + stride * max_count as u64;
+    if end_offset > indirect_buffer.size {
+        return Err(RenderPassErrorInner::IndirectBufferOverrun {
+            count: None,
+            offset,
+            end_offset,
+            buffer_size: indirect_buffer.size,
+        });
+    }
+    state.buffer_memory_init_actions.extend(
+        indirect_buffer.initialization_status.read().create_action(
+            &indirect_buffer,
+            offset..end_offset,
+            MemoryInitKind::NeedsInitializedMemory,
+        ),
+    );
+
+    let begin_count_offset = count_buffer_offset;
+    let end_count_offset = count_buffer_offset + 4;
+    if end_count_offset > count_buffer.size {
+        return Err(RenderPassErrorInner::IndirectCountBufferOverrun {
+            begin_count_offset,
+            end_count_offset,
+            count_buffer_size: count_buffer.size,
+        });
+    }
+    state.buffer_memory_init_actions.extend(
+        count_buffer.initialization_status.read().create_action(
+            &count_buffer,
+            count_buffer_offset..end_count_offset,
+            MemoryInitKind::NeedsInitializedMemory,
+        ),
+    );
+
+    match indexed {
+        false => unsafe {
+            state.raw_encoder.draw_indirect_count(
+                indirect_raw,
+                offset,
+                count_raw,
+                count_buffer_offset,
+                max_count,
+            );
+        },
+        true => unsafe {
+            state.raw_encoder.draw_indexed_indirect_count(
+                indirect_raw,
+                offset,
+                count_raw,
+                count_buffer_offset,
+                max_count,
+            );
         },
     }
     Ok(())
