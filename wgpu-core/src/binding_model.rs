@@ -892,7 +892,6 @@ impl<A: HalApi> BindGroup<A> {
         &self,
         bind_group_index: u32,
         offsets: &[wgt::DynamicOffset],
-        limits: &wgt::Limits,
     ) -> Result<(), BindError> {
         if self.dynamic_binding_info.len() != offsets.len() {
             return Err(BindError::MismatchedDynamicOffsetCount {
@@ -908,7 +907,8 @@ impl<A: HalApi> BindGroup<A> {
             .zip(offsets.iter())
             .enumerate()
         {
-            let (alignment, limit_name) = buffer_binding_type_alignment(limits, info.binding_type);
+            let (alignment, limit_name) =
+                buffer_binding_type_alignment(&self.device.limits, info.binding_type);
             if offset as wgt::BufferAddress % alignment as u64 != 0 {
                 return Err(BindError::UnalignedDynamicBinding {
                     group: bind_group_index,

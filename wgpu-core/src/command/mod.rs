@@ -305,7 +305,6 @@ impl<A: HalApi> CommandBufferMutable<A> {
 ///   whose contents eventually become the property of the submission queue.
 pub struct CommandBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
-    limits: wgt::Limits,
     support_clear_texture: bool,
     pub(crate) info: ResourceInfo<CommandBuffer<A>>,
 
@@ -344,7 +343,6 @@ impl<A: HalApi> CommandBuffer<A> {
     ) -> Self {
         CommandBuffer {
             device: device.clone(),
-            limits: device.limits.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
             info: ResourceInfo::new(label, None),
             data: Mutex::new(

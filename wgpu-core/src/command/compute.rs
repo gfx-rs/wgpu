@@ -592,7 +592,7 @@ impl Global {
 
                     bind_group.same_device_as(cmd_buf).map_pass_err(scope)?;
 
-                    let max_bind_groups = cmd_buf.limits.max_bind_groups;
+                    let max_bind_groups = state.device.limits.max_bind_groups;
                     if index >= max_bind_groups {
                         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
                             index,
@@ -610,7 +610,7 @@ impl Global {
 
                     let bind_group = state.tracker.bind_groups.insert_single(bind_group);
                     bind_group
-                        .validate_dynamic_bindings(index, &state.temp_offsets, &cmd_buf.limits)
+                        .validate_dynamic_bindings(index, &state.temp_offsets)
                         .map_pass_err(scope)?;
 
                     state.buffer_memory_init_actions.extend(
@@ -766,7 +766,8 @@ impl Global {
 
                     state.flush_states(raw, None).map_pass_err(scope)?;
 
-                    let groups_size_limit = cmd_buf.limits.max_compute_workgroups_per_dimension;
+                    let groups_size_limit =
+                        state.device.limits.max_compute_workgroups_per_dimension;
 
                     if groups[0] > groups_size_limit
                         || groups[1] > groups_size_limit
