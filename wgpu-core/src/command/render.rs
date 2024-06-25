@@ -1557,18 +1557,7 @@ impl Global {
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetBlendConstant(ref color) => {
-                        api_log!("RenderPass::set_blend_constant");
-
-                        state.blend_constant = OptionalState::Set;
-                        let array = [
-                            color.r as f32,
-                            color.g as f32,
-                            color.b as f32,
-                            color.a as f32,
-                        ];
-                        unsafe {
-                            state.raw_encoder.set_blend_constants(&array);
-                        }
+                        set_blend_constant(&mut state, color);
                     }
                     ArcRenderCommand::SetStencilReference(value) => {
                         api_log!("RenderPass::set_stencil_reference {value}");
@@ -2563,6 +2552,21 @@ fn set_vertex_buffer<A: HalApi>(
     }
     state.vertex.update_limits();
     Ok(())
+}
+
+fn set_blend_constant<A: HalApi>(state: &mut State<A>, color: &Color) {
+    api_log!("RenderPass::set_blend_constant");
+
+    state.blend_constant = OptionalState::Set;
+    let array = [
+        color.r as f32,
+        color.g as f32,
+        color.b as f32,
+        color.a as f32,
+    ];
+    unsafe {
+        state.raw_encoder.set_blend_constants(&array);
+    }
 }
 
 impl Global {
