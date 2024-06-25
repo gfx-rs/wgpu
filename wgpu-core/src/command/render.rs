@@ -2324,11 +2324,11 @@ impl Global {
                         );
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set = tracker.query_sets.insert_single(query_set);
-
                         validate_and_begin_pipeline_statistics_query(
-                            query_set.clone(),
+                            query_set,
                             raw,
+                            &mut tracker.query_sets,
+                            cmd_buf.as_ref(),
                             query_index,
                             Some(&mut cmd_buf_data.pending_query_resets),
                             &mut active_query,

@@ -662,14 +662,11 @@ impl Global {
                     query_index,
                 } => {
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
-
-                    query_set.same_device_as(cmd_buf).map_pass_err(scope)?;
-
-                    let query_set = state.tracker.query_sets.insert_single(query_set);
-
                     validate_and_begin_pipeline_statistics_query(
-                        query_set.clone(),
+                        query_set,
                         raw,
+                        &mut state.tracker.query_sets,
+                        cmd_buf,
                         query_index,
                         None,
                         &mut state.active_query,
