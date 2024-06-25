@@ -1542,48 +1542,9 @@ impl Global {
                         offset,
                         size,
                     } => {
-                        api_log!("RenderPass::set_index_buffer {}", buffer.error_ident());
-
                         let scope = PassErrorScope::SetIndexBuffer(buffer.as_info().id());
-
-                        state
-                            .info
-                            .usage_scope
-                            .buffers
-                            .merge_single(&buffer, hal::BufferUses::INDEX)
+                        set_index_buffer(&mut state, &cmd_buf, buffer, index_format, offset, size)
                             .map_pass_err(scope)?;
-
-                        buffer
-                            .same_device_as(cmd_buf.as_ref())
-                            .map_pass_err(scope)?;
-
-                        buffer
-                            .check_usage(BufferUsages::INDEX)
-                            .map_pass_err(scope)?;
-                        let buf_raw = buffer.try_raw(state.snatch_guard).map_pass_err(scope)?;
-
-                        let end = match size {
-                            Some(s) => offset + s.get(),
-                            None => buffer.size,
-                        };
-                        state.index.update_buffer(offset..end, index_format);
-
-                        state.buffer_memory_init_actions.extend(
-                            buffer.initialization_status.read().create_action(
-                                &buffer,
-                                offset..end,
-                                MemoryInitKind::NeedsInitializedMemory,
-                            ),
-                        );
-
-                        let bb = hal::BufferBinding {
-                            buffer: buf_raw,
-                            offset,
-                            size,
-                        };
-                        unsafe {
-                            state.raw_encoder.set_index_buffer(bb, index_format);
-                        }
                     }
                     ArcRenderCommand::SetVertexBuffer {
                         slot,
@@ -2549,6 +2510,52 @@ fn set_pipeline<A: HalApi>(
 
     // Update vertex buffer limits.
     state.vertex.update_limits();
+    Ok(())
+}
+
+fn set_index_buffer<A: HalApi>(
+    state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
+    buffer: Arc<crate::resource::Buffer<A>>,
+    index_format: IndexFormat,
+    offset: u64,
+    size: Option<BufferSize>,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!("RenderPass::set_index_buffer {}", buffer.error_ident());
+
+    state
+        .info
+        .usage_scope
+        .buffers
+        .merge_single(&buffer, hal::BufferUses::INDEX)?;
+
+    buffer.same_device_as(cmd_buf.as_ref())?;
+
+    buffer.check_usage(BufferUsages::INDEX)?;
+    let buf_raw = buffer.try_raw(state.snatch_guard)?;
+
+    let end = match size {
+        Some(s) => offset + s.get(),
+        None => buffer.size,
+    };
+    state.index.update_buffer(offset..end, index_format);
+
+    state
+        .buffer_memory_init_actions
+        .extend(buffer.initialization_status.read().create_action(
+            &buffer,
+            offset..end,
+            MemoryInitKind::NeedsInitializedMemory,
+        ));
+
+    let bb = hal::BufferBinding {
+        buffer: buf_raw,
+        offset,
+        size,
+    };
+    unsafe {
+        state.raw_encoder.set_index_buffer(bb, index_format);
+    }
     Ok(())
 }
 
