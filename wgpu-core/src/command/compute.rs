@@ -640,21 +640,7 @@ impl Global {
                         .map_pass_err(scope)?;
                 }
                 ArcComputeCommand::PushDebugGroup { color: _, len } => {
-                    state.debug_scope_depth += 1;
-                    if !state
-                        .device
-                        .instance_flags
-                        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-                    {
-                        let label = str::from_utf8(
-                            &base.string_data[state.string_offset..state.string_offset + len],
-                        )
-                        .unwrap();
-                        unsafe {
-                            raw.begin_debug_marker(label);
-                        }
-                    }
-                    state.string_offset += len;
+                    push_debug_group(&mut state, raw, &base.string_data, len);
                 }
                 ArcComputeCommand::PopDebugGroup => {
                     let scope = PassErrorScope::PopDebugGroup;
@@ -1014,6 +1000,27 @@ fn dispatch_indirect<A: HalApi>(
         raw.dispatch_indirect(buf_raw, offset);
     }
     Ok(())
+}
+
+fn push_debug_group<A: HalApi>(
+    state: &mut State<A>,
+    raw: &mut A::CommandEncoder,
+    string_data: &[u8],
+    len: usize,
+) {
+    state.debug_scope_depth += 1;
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        let label =
+            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+        unsafe {
+            raw.begin_debug_marker(label);
+        }
+    }
+    state.string_offset += len;
 }
 
 // Recording a compute pass.
