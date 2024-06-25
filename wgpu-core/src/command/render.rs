@@ -1498,10 +1498,12 @@ impl Global {
                         num_dynamic_offsets,
                         bind_group,
                     } => {
-                        let bind_group_id = bind_group.as_info().id();
-                        api_log!("RenderPass::set_bind_group {index} {bind_group_id:?}");
+                        api_log!(
+                            "RenderPass::set_bind_group {index} {}",
+                            bind_group.error_ident()
+                        );
 
-                        let scope = PassErrorScope::SetBindGroup(bind_group_id);
+                        let scope = PassErrorScope::SetBindGroup(bind_group.as_info().id());
                         let max_bind_groups = device.limits.max_bind_groups;
                         if index >= max_bind_groups {
                             return Err(RenderCommandError::BindGroupIndexOutOfRange {
@@ -1575,11 +1577,10 @@ impl Global {
                         }
                     }
                     ArcRenderCommand::SetPipeline(pipeline) => {
-                        let pipeline_id = pipeline.as_info().id();
-                        api_log!("RenderPass::set_pipeline {pipeline_id:?}");
+                        api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
 
-                        let scope = PassErrorScope::SetPipelineRender(pipeline_id);
-                        state.pipeline = Some(pipeline_id);
+                        let scope = PassErrorScope::SetPipelineRender(pipeline.as_info().id());
+                        state.pipeline = Some(pipeline.as_info().id());
 
                         let pipeline = tracker.render_pipelines.insert_single(pipeline);
 
@@ -1701,10 +1702,9 @@ impl Global {
                         offset,
                         size,
                     } => {
-                        let buffer_id = buffer.as_info().id();
-                        api_log!("RenderPass::set_index_buffer {buffer_id:?}");
+                        api_log!("RenderPass::set_index_buffer {}", buffer.error_ident());
 
-                        let scope = PassErrorScope::SetIndexBuffer(buffer_id);
+                        let scope = PassErrorScope::SetIndexBuffer(buffer.as_info().id());
 
                         info.usage_scope
                             .buffers
@@ -1724,7 +1724,7 @@ impl Global {
                             Some(s) => offset + s.get(),
                             None => buffer.size,
                         };
-                        state.index.bound_buffer_view = Some((buffer_id, offset..end));
+                        state.index.bound_buffer_view = Some((buffer.as_info().id(), offset..end));
 
                         state.index.format = Some(index_format);
                         state.index.update_limit();
@@ -1752,10 +1752,12 @@ impl Global {
                         offset,
                         size,
                     } => {
-                        let buffer_id = buffer.as_info().id();
-                        api_log!("RenderPass::set_vertex_buffer {slot} {buffer_id:?}");
+                        api_log!(
+                            "RenderPass::set_vertex_buffer {slot} {}",
+                            buffer.error_ident()
+                        );
 
-                        let scope = PassErrorScope::SetVertexBuffer(buffer_id);
+                        let scope = PassErrorScope::SetVertexBuffer(buffer.as_info().id());
 
                         info.usage_scope
                             .buffers
@@ -2041,8 +2043,10 @@ impl Global {
                         count,
                         indexed,
                     } => {
-                        let indirect_buffer_id = indirect_buffer.as_info().id();
-                        api_log!("RenderPass::draw_indirect (indexed:{indexed}) {indirect_buffer_id:?} {offset} {count:?}");
+                        api_log!(
+                            "RenderPass::draw_indirect (indexed:{indexed}) {} {offset} {count:?}",
+                            indirect_buffer.error_ident()
+                        );
 
                         let scope = PassErrorScope::Draw {
                             kind: if count.is_some() {
@@ -2118,9 +2122,11 @@ impl Global {
                         max_count,
                         indexed,
                     } => {
-                        let indirect_buffer_id = indirect_buffer.as_info().id();
-                        let count_buffer_id = count_buffer.as_info().id();
-                        api_log!("RenderPass::multi_draw_indirect_count (indexed:{indexed}) {indirect_buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset:?} {max_count:?}");
+                        api_log!(
+                            "RenderPass::multi_draw_indirect_count (indexed:{indexed}) {} {offset} {} {count_buffer_offset:?} {max_count:?}",
+                            indirect_buffer.error_ident(),
+                            count_buffer.error_ident()
+                        );
 
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::MultiDrawIndirectCount,
@@ -2266,8 +2272,10 @@ impl Global {
                         query_set,
                         query_index,
                     } => {
-                        let query_set_id = query_set.as_info().id();
-                        api_log!("RenderPass::write_timestamps {query_set_id:?} {query_index}");
+                        api_log!(
+                            "RenderPass::write_timestamps {query_index} {}",
+                            query_set.error_ident()
+                        );
                         let scope = PassErrorScope::WriteTimestamp;
 
                         device
@@ -2318,8 +2326,10 @@ impl Global {
                         query_set,
                         query_index,
                     } => {
-                        let query_set_id = query_set.as_info().id();
-                        api_log!("RenderPass::begin_pipeline_statistics_query {query_set_id:?} {query_index}");
+                        api_log!(
+                            "RenderPass::begin_pipeline_statistics_query {query_index} {}",
+                            query_set.error_ident()
+                        );
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
                         let query_set = tracker.query_sets.insert_single(query_set);
@@ -2341,8 +2351,7 @@ impl Global {
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::ExecuteBundle(bundle) => {
-                        let bundle_id = bundle.as_info().id();
-                        api_log!("RenderPass::execute_bundle {bundle_id:?}");
+                        api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
                         let scope = PassErrorScope::ExecuteBundle;
 
                         // Have to clone the bundle arc, otherwise we keep a mutable reference to the bundle
