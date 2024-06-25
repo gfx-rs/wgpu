@@ -630,12 +630,11 @@ impl Global {
                     }
                 }
                 ArcComputeCommand::SetPipeline(pipeline) => {
-                    let pipeline_id = pipeline.as_info().id();
-                    let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
+                    let scope = PassErrorScope::SetPipelineCompute(pipeline.as_info().id());
 
                     pipeline.same_device_as(cmd_buf).map_pass_err(scope)?;
 
-                    state.pipeline = Some(pipeline_id);
+                    state.pipeline = Some(pipeline.as_info().id());
 
                     let pipeline = tracker.compute_pipelines.insert_single(pipeline);
 
