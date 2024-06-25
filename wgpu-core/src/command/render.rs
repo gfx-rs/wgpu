@@ -1679,23 +1679,8 @@ impl Global {
                         push_debug_group(&mut state, &base.string_data, len);
                     }
                     ArcRenderCommand::PopDebugGroup => {
-                        api_log!("RenderPass::pop_debug_group");
-
                         let scope = PassErrorScope::PopDebugGroup;
-                        if state.debug_scope_depth == 0 {
-                            return Err(RenderPassErrorInner::InvalidPopDebugGroup)
-                                .map_pass_err(scope);
-                        }
-                        state.debug_scope_depth -= 1;
-                        if !state
-                            .device
-                            .instance_flags
-                            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-                        {
-                            unsafe {
-                                state.raw_encoder.end_debug_marker();
-                            }
-                        }
+                        pop_debug_group(&mut state).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::InsertDebugMarker { color: _, len } => {
                         if !state
@@ -2625,6 +2610,25 @@ fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: us
         }
     }
     state.string_offset += len;
+}
+
+fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), RenderPassErrorInner> {
+    api_log!("RenderPass::pop_debug_group");
+
+    if state.debug_scope_depth == 0 {
+        return Err(RenderPassErrorInner::InvalidPopDebugGroup);
+    }
+    state.debug_scope_depth -= 1;
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        unsafe {
+            state.raw_encoder.end_debug_marker();
+        }
+    }
+    Ok(())
 }
 
 impl Global {
