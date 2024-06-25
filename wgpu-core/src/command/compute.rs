@@ -654,18 +654,7 @@ impl Global {
                     query_index,
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
-
-                    query_set.same_device_as(cmd_buf).map_pass_err(scope)?;
-
-                    state
-                        .device
-                        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
-                        .map_pass_err(scope)?;
-
-                    let query_set = state.tracker.query_sets.insert_single(query_set);
-
-                    query_set
-                        .validate_and_write_timestamp(raw, query_index, None)
+                    write_timestamp(&mut state, raw, cmd_buf, query_set, query_index)
                         .map_pass_err(scope)?;
                 }
                 ArcComputeCommand::BeginPipelineStatisticsQuery {
@@ -1034,6 +1023,25 @@ fn insert_debug_marker<A: HalApi>(
         unsafe { raw.insert_debug_marker(label) }
     }
     state.string_offset += len;
+}
+
+fn write_timestamp<A: HalApi>(
+    state: &mut State<A>,
+    raw: &mut A::CommandEncoder,
+    cmd_buf: &CommandBuffer<A>,
+    query_set: Arc<resource::QuerySet<A>>,
+    query_index: u32,
+) -> Result<(), ComputePassErrorInner> {
+    query_set.same_device_as(cmd_buf)?;
+
+    state
+        .device
+        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)?;
+
+    let query_set = state.tracker.query_sets.insert_single(query_set);
+
+    query_set.validate_and_write_timestamp(raw, query_index, None)?;
+    Ok(())
 }
 
 // Recording a compute pass.
