@@ -647,18 +647,7 @@ impl Global {
                     pop_debug_group(&mut state, raw).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::InsertDebugMarker { color: _, len } => {
-                    if !state
-                        .device
-                        .instance_flags
-                        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-                    {
-                        let label = str::from_utf8(
-                            &base.string_data[state.string_offset..state.string_offset + len],
-                        )
-                        .unwrap();
-                        unsafe { raw.insert_debug_marker(label) }
-                    }
-                    state.string_offset += len;
+                    insert_debug_marker(&mut state, raw, &base.string_data, len);
                 }
                 ArcComputeCommand::WriteTimestamp {
                     query_set,
@@ -1027,6 +1016,24 @@ fn pop_debug_group<A: HalApi>(
         }
     }
     Ok(())
+}
+
+fn insert_debug_marker<A: HalApi>(
+    state: &mut State<A>,
+    raw: &mut A::CommandEncoder,
+    string_data: &[u8],
+    len: usize,
+) {
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        let label =
+            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+        unsafe { raw.insert_debug_marker(label) }
+    }
+    state.string_offset += len;
 }
 
 // Recording a compute pass.
