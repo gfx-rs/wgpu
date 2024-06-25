@@ -595,7 +595,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     fn triage_suspected_texture_views(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let suspected_texture_views = &mut self.suspected_resources.texture_views;
-        Self::triage_resources(
+        let removed_views = Self::triage_resources(
             suspected_texture_views,
             self.active.as_mut_slice(),
             &mut trackers.views,
@@ -607,6 +607,12 @@ impl<A: HalApi> LifetimeTracker<A> {
         // `LifetimeTracker::suspected_resources` it remains there until it's
         // actually dropped, which for long-lived textures could be at the end
         // of execution.
+        for view in removed_views {
+            view.parent
+                .views
+                .lock()
+                .retain(|view| view.strong_count() > 1);
+        }
         self
     }
 
