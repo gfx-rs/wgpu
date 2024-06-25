@@ -3,6 +3,7 @@ use crate::command::{
     validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
 };
 use crate::init_tracker::BufferInitTrackerAction;
+use crate::pipeline::RenderPipeline;
 use crate::resource::Resource;
 use crate::snatch::SnatchGuard;
 use crate::{
@@ -1532,129 +1533,8 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetPipeline(pipeline) => {
-                        api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
-
                         let scope = PassErrorScope::SetPipelineRender(pipeline.as_info().id());
-                        state.pipeline = Some(pipeline.as_info().id());
-
-                        let pipeline = state.tracker.render_pipelines.insert_single(pipeline);
-
-                        pipeline
-                            .same_device_as(cmd_buf.as_ref())
-                            .map_pass_err(scope)?;
-
-                        state
-                            .info
-                            .context
-                            .check_compatible(
-                                &pipeline.pass_context,
-                                RenderPassCompatibilityCheckType::RenderPipeline,
-                            )
-                            .map_err(RenderCommandError::IncompatiblePipelineTargets)
-                            .map_pass_err(scope)?;
-
-                        state.pipeline_flags = pipeline.flags;
-
-                        if (pipeline.flags.contains(PipelineFlags::WRITES_DEPTH)
-                            && state.info.is_depth_read_only)
-                            || (pipeline.flags.contains(PipelineFlags::WRITES_STENCIL)
-                                && state.info.is_stencil_read_only)
-                        {
-                            return Err(RenderCommandError::IncompatiblePipelineRods)
-                                .map_pass_err(scope);
-                        }
-
-                        state
-                            .blend_constant
-                            .require(pipeline.flags.contains(PipelineFlags::BLEND_CONSTANT));
-
-                        unsafe {
-                            state.raw_encoder.set_render_pipeline(pipeline.raw());
-                        }
-
-                        if pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE) {
-                            unsafe {
-                                state
-                                    .raw_encoder
-                                    .set_stencil_reference(state.stencil_reference);
-                            }
-                        }
-
-                        // Rebind resource
-                        if state.binder.pipeline_layout.is_none()
-                            || !state
-                                .binder
-                                .pipeline_layout
-                                .as_ref()
-                                .unwrap()
-                                .is_equal(&pipeline.layout)
-                        {
-                            let (start_index, entries) = state.binder.change_pipeline_layout(
-                                &pipeline.layout,
-                                &pipeline.late_sized_buffer_groups,
-                            );
-                            if !entries.is_empty() {
-                                for (i, e) in entries.iter().enumerate() {
-                                    if let Some(group) = e.group.as_ref() {
-                                        let raw_bg = group
-                                            .try_raw(state.snatch_guard)
-                                            .map_pass_err(scope)?;
-                                        unsafe {
-                                            state.raw_encoder.set_bind_group(
-                                                pipeline.layout.raw(),
-                                                start_index as u32 + i as u32,
-                                                raw_bg,
-                                                &e.dynamic_offsets,
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Clear push constant ranges
-                            let non_overlapping = super::bind::compute_nonoverlapping_ranges(
-                                &pipeline.layout.push_constant_ranges,
-                            );
-                            for range in non_overlapping {
-                                let offset = range.range.start;
-                                let size_bytes = range.range.end - offset;
-                                super::push_constant_clear(
-                                    offset,
-                                    size_bytes,
-                                    |clear_offset, clear_data| unsafe {
-                                        state.raw_encoder.set_push_constants(
-                                            pipeline.layout.raw(),
-                                            range.stages,
-                                            clear_offset,
-                                            clear_data,
-                                        );
-                                    },
-                                );
-                            }
-                        }
-
-                        state.index.pipeline_format = pipeline.strip_index_format;
-
-                        let vertex_steps_len = pipeline.vertex_steps.len();
-                        state.vertex.buffers_required = vertex_steps_len as u32;
-
-                        // Initialize each `vertex.inputs[i].step` from
-                        // `pipeline.vertex_steps[i]`.  Enlarge `vertex.inputs`
-                        // as necessary to accommodate all slots in the
-                        // pipeline. If `vertex.inputs` is longer, fill the
-                        // extra entries with default `VertexStep`s.
-                        while state.vertex.inputs.len() < vertex_steps_len {
-                            state.vertex.inputs.push(VertexBufferState::EMPTY);
-                        }
-
-                        // This is worse as a `zip`, but it's close.
-                        let mut steps = pipeline.vertex_steps.iter();
-                        for input in state.vertex.inputs.iter_mut() {
-                            input.step = steps.next().cloned().unwrap_or_default();
-                        }
-
-                        // Update vertex buffer limits.
-                        state.vertex.update_limits();
+                        set_pipeline(&mut state, &cmd_buf, pipeline).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetIndexBuffer {
                         buffer,
@@ -2552,6 +2432,123 @@ fn set_bind_group<A: HalApi>(
             }
         }
     }
+    Ok(())
+}
+
+fn set_pipeline<A: HalApi>(
+    state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
+    pipeline: Arc<RenderPipeline<A>>,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
+
+    state.pipeline = Some(pipeline.as_info().id());
+
+    let pipeline = state.tracker.render_pipelines.insert_single(pipeline);
+
+    pipeline.same_device_as(cmd_buf.as_ref())?;
+
+    state
+        .info
+        .context
+        .check_compatible(
+            &pipeline.pass_context,
+            RenderPassCompatibilityCheckType::RenderPipeline,
+        )
+        .map_err(RenderCommandError::IncompatiblePipelineTargets)?;
+
+    state.pipeline_flags = pipeline.flags;
+
+    if (pipeline.flags.contains(PipelineFlags::WRITES_DEPTH) && state.info.is_depth_read_only)
+        || (pipeline.flags.contains(PipelineFlags::WRITES_STENCIL)
+            && state.info.is_stencil_read_only)
+    {
+        return Err(RenderCommandError::IncompatiblePipelineRods.into());
+    }
+
+    state
+        .blend_constant
+        .require(pipeline.flags.contains(PipelineFlags::BLEND_CONSTANT));
+
+    unsafe {
+        state.raw_encoder.set_render_pipeline(pipeline.raw());
+    }
+
+    if pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE) {
+        unsafe {
+            state
+                .raw_encoder
+                .set_stencil_reference(state.stencil_reference);
+        }
+    }
+
+    // Rebind resource
+    if state.binder.pipeline_layout.is_none()
+        || !state
+            .binder
+            .pipeline_layout
+            .as_ref()
+            .unwrap()
+            .is_equal(&pipeline.layout)
+    {
+        let (start_index, entries) = state
+            .binder
+            .change_pipeline_layout(&pipeline.layout, &pipeline.late_sized_buffer_groups);
+        if !entries.is_empty() {
+            for (i, e) in entries.iter().enumerate() {
+                if let Some(group) = e.group.as_ref() {
+                    let raw_bg = group.try_raw(state.snatch_guard)?;
+                    unsafe {
+                        state.raw_encoder.set_bind_group(
+                            pipeline.layout.raw(),
+                            start_index as u32 + i as u32,
+                            raw_bg,
+                            &e.dynamic_offsets,
+                        );
+                    }
+                }
+            }
+        }
+
+        // Clear push constant ranges
+        let non_overlapping =
+            super::bind::compute_nonoverlapping_ranges(&pipeline.layout.push_constant_ranges);
+        for range in non_overlapping {
+            let offset = range.range.start;
+            let size_bytes = range.range.end - offset;
+            super::push_constant_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
+                state.raw_encoder.set_push_constants(
+                    pipeline.layout.raw(),
+                    range.stages,
+                    clear_offset,
+                    clear_data,
+                );
+            });
+        }
+    }
+
+    state.index.pipeline_format = pipeline.strip_index_format;
+
+    let vertex_steps_len = pipeline.vertex_steps.len();
+    state.vertex.buffers_required = vertex_steps_len as u32;
+
+    // Initialize each `vertex.inputs[i].step` from
+    // `pipeline.vertex_steps[i]`.  Enlarge `vertex.inputs`
+    // as necessary to accommodate all slots in the
+    // pipeline. If `vertex.inputs` is longer, fill the
+    // extra entries with default `VertexStep`s.
+    while state.vertex.inputs.len() < vertex_steps_len {
+        state.vertex.inputs.push(VertexBufferState::EMPTY);
+    }
+
+    // This is worse as a `zip`, but it's close.
+    let mut steps = pipeline.vertex_steps.iter();
+    for input in state.vertex.inputs.iter_mut() {
+        input.step = steps.next().cloned().unwrap_or_default();
+    }
+
+    // Update vertex buffer limits.
+    state.vertex.update_limits();
     Ok(())
 }
 
