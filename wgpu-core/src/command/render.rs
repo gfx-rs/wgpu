@@ -1522,7 +1522,7 @@ impl Global {
                             .map_pass_err(scope)?;
 
                         bind_group
-                            .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
+                            .validate_dynamic_bindings(index, &temp_offsets)
                             .map_pass_err(scope)?;
 
                         // merge the resource tracker in
