@@ -72,7 +72,7 @@ pub enum ComputeCommand {
 
 impl ComputeCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
-    ///
+    //
     // TODO: Once resolving is done on-the-fly during recording, this function should be only needed with the replay feature:
     // #[cfg(feature = "replay")]
     pub fn resolve_compute_command_ids<A: HalApi>(

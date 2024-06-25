@@ -48,7 +48,7 @@ To create a render bundle:
 3) Call [`Global::render_bundle_encoder_finish`][Grbef], which analyzes and cleans up
    the command stream and returns a `RenderBundleId`.
 
-4) Then, any number of times, call [`wgpu_render_pass_execute_bundles`][wrpeb] to
+4) Then, any number of times, call [`render_pass_execute_bundles`][wrpeb] to
    execute the bundle as part of some render pass.
 
 ## Implementation
@@ -73,7 +73,7 @@ index format changes.
 
 [Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
 [Grbef]: crate::global::Global::render_bundle_encoder_finish
-[wrpeb]: crate::command::render::render_commands::wgpu_render_pass_execute_bundles
+[wrpeb]: crate::global::Global::render_pass_execute_bundles
 !*/
 
 #![allow(clippy::reversed_empty_ranges)]
@@ -84,7 +84,7 @@ use crate::{
     binding_model::{buffer_binding_type_alignment, BindGroup, BindGroupLayout, PipelineLayout},
     command::{
         BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
-        PassErrorScope, RenderCommand, RenderCommandError, StateChange,
+        PassErrorScope, RenderCommandError, StateChange,
     },
     conv,
     device::{
@@ -112,7 +112,10 @@ use thiserror::Error;
 
 use hal::CommandEncoder as _;
 
-use super::ArcRenderCommand;
+use super::{
+    render_command::{ArcRenderCommand, RenderCommand},
+    DrawKind,
+};
 
 /// <https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw>
 fn validate_draw<A: HalApi>(
@@ -327,7 +330,7 @@ impl RenderBundleEncoder {
 
     #[cfg(feature = "trace")]
     pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
-        BasePass::from_ref(self.base.as_ref())
+        self.base.clone()
     }
 
     pub fn parent(&self) -> id::DeviceId {
@@ -398,10 +401,11 @@ impl RenderBundleEncoder {
         let mut buffer_memory_init_actions = Vec::new();
         let mut texture_memory_init_actions = Vec::new();
 
-        let base = self.base.as_ref();
         let mut next_dynamic_offset = 0;
 
-        for &command in base.commands {
+        let base = &self.base;
+
+        for &command in &base.commands {
             match command {
                 RenderCommand::SetBindGroup {
                     index,
@@ -621,8 +625,8 @@ impl RenderBundleEncoder {
                     first_instance,
                 } => {
                     let scope = PassErrorScope::Draw {
+                        kind: DrawKind::Draw,
                         indexed: false,
-                        indirect: false,
                         pipeline: state.pipeline_id(),
                     };
                     let pipeline = state.pipeline(scope)?;
@@ -639,7 +643,7 @@ impl RenderBundleEncoder {
 
                     if instance_count > 0 && vertex_count > 0 {
                         commands.extend(state.flush_vertices());
-                        commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
+                        commands.extend(state.flush_binds(used_bind_groups, &base.dynamic_offsets));
                         commands.push(ArcRenderCommand::Draw {
                             vertex_count,
                             instance_count,
@@ -656,8 +660,8 @@ impl RenderBundleEncoder {
                     first_instance,
                 } => {
                     let scope = PassErrorScope::Draw {
+                        kind: DrawKind::Draw,
                         indexed: true,
-                        indirect: false,
                         pipeline: state.pipeline_id(),
                     };
                     let pipeline = state.pipeline(scope)?;
@@ -680,7 +684,7 @@ impl RenderBundleEncoder {
                     if instance_count > 0 && index_count > 0 {
                         commands.extend(state.flush_index());
                         commands.extend(state.flush_vertices());
-                        commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
+                        commands.extend(state.flush_binds(used_bind_groups, &base.dynamic_offsets));
                         commands.push(ArcRenderCommand::DrawIndexed { index_count, instance_count, first_index, base_vertex, first_instance });
                     }
                 }
@@ -691,8 +695,8 @@ impl RenderBundleEncoder {
                     indexed: false,
                 } => {
                     let scope = PassErrorScope::Draw {
+                        kind: DrawKind::DrawIndirect,
                         indexed: false,
-                        indirect: true,
                         pipeline: state.pipeline_id(),
                     };
                     device
@@ -724,7 +728,7 @@ impl RenderBundleEncoder {
                     ));
 
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
+                    commands.extend(state.flush_binds(used_bind_groups, &base.dynamic_offsets));
                     commands.push(ArcRenderCommand::MultiDrawIndirect { buffer: buffer.clone(), offset, count: None, indexed: false });
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -734,8 +738,8 @@ impl RenderBundleEncoder {
                     indexed: true,
                 } => {
                     let scope = PassErrorScope::Draw {
+                        kind: DrawKind::DrawIndirect,
                         indexed: true,
-                        indirect: true,
                         pipeline: state.pipeline_id(),
                     };
                     device
@@ -773,7 +777,7 @@ impl RenderBundleEncoder {
 
                     commands.extend(index.flush());
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
+                    commands.extend(state.flush_binds(used_bind_groups, &base.dynamic_offsets));
                     commands.push(ArcRenderCommand::MultiDrawIndirect { buffer: buffer.clone(), offset, count: None, indexed: true });
                 }
                 RenderCommand::MultiDrawIndirect { .. }

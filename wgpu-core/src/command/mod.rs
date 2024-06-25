@@ -9,6 +9,7 @@ mod dyn_compute_pass;
 mod memory_init;
 mod query;
 mod render;
+mod render_command;
 mod transfer;
 
 use std::sync::Arc;
@@ -16,7 +17,8 @@ use std::sync::Arc;
 pub(crate) use self::clear::clear_texture;
 pub use self::{
     bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*,
-    dyn_compute_pass::DynComputePass, query::*, render::*, transfer::*,
+    dyn_compute_pass::DynComputePass, query::*, render::*, render_command::RenderCommand,
+    transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
 
@@ -544,15 +546,6 @@ impl<A: HalApi> ParentDevice<A> for CommandBuffer<A> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct BasePassRef<'a, C> {
-    pub label: Option<&'a str>,
-    pub commands: &'a [C],
-    pub dynamic_offsets: &'a [wgt::DynamicOffset],
-    pub string_data: &'a [u8],
-    pub push_constant_data: &'a [u32],
-}
-
 /// A stream of commands for a render pass or compute pass.
 ///
 /// This also contains side tables referred to by certain commands,
@@ -565,7 +558,7 @@ pub struct BasePassRef<'a, C> {
 /// [`SetBindGroup`]: RenderCommand::SetBindGroup
 /// [`InsertDebugMarker`]: RenderCommand::InsertDebugMarker
 #[doc(hidden)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasePass<C> {
     pub label: Option<String>,
@@ -600,27 +593,6 @@ impl<C: Clone> BasePass<C> {
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
             push_constant_data: Vec::new(),
-        }
-    }
-
-    #[cfg(feature = "trace")]
-    fn from_ref(base: BasePassRef<C>) -> Self {
-        Self {
-            label: base.label.map(str::to_string),
-            commands: base.commands.to_vec(),
-            dynamic_offsets: base.dynamic_offsets.to_vec(),
-            string_data: base.string_data.to_vec(),
-            push_constant_data: base.push_constant_data.to_vec(),
-        }
-    }
-
-    pub fn as_ref(&self) -> BasePassRef<C> {
-        BasePassRef {
-            label: self.label.as_deref(),
-            commands: &self.commands,
-            dynamic_offsets: &self.dynamic_offsets,
-            string_data: &self.string_data,
-            push_constant_data: &self.push_constant_data,
         }
     }
 }
@@ -879,6 +851,14 @@ trait MapPassErr<T, O> {
     fn map_pass_err(self, scope: PassErrorScope) -> Result<T, O>;
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum DrawKind {
+    Draw,
+    DrawIndirect,
+    MultiDrawIndirect,
+    MultiDrawIndirectCount,
+}
+
 #[derive(Clone, Copy, Debug, Error)]
 pub enum PassErrorScope {
     #[error("In a bundle parameter")]
@@ -902,14 +882,18 @@ pub enum PassErrorScope {
     SetVertexBuffer(id::BufferId),
     #[error("In a set_index_buffer command")]
     SetIndexBuffer(id::BufferId),
+    #[error("In a set_blend_constant command")]
+    SetBlendConstant,
+    #[error("In a set_stencil_reference command")]
+    SetStencilReference,
     #[error("In a set_viewport command")]
     SetViewport,
     #[error("In a set_scissor_rect command")]
     SetScissorRect,
-    #[error("In a draw command, indexed:{indexed} indirect:{indirect}")]
+    #[error("In a draw command, kind: {kind:?}")]
     Draw {
+        kind: DrawKind,
         indexed: bool,
-        indirect: bool,
         pipeline: Option<id::RenderPipelineId>,
     },
     #[error("While resetting queries after the renderpass was ran")]
