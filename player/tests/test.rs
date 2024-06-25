@@ -112,6 +112,7 @@ impl Test<'_> {
                 label: None,
                 required_features: self.features,
                 required_limits: wgt::Limits::default(),
+                memory_hints: wgt::MemoryHints::default(),
             },
             None,
             Some(device_id),

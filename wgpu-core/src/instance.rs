@@ -351,9 +351,11 @@ impl<A: HalApi> Adapter<A> {
         }
 
         let open = unsafe {
-            self.raw
-                .adapter
-                .open(desc.required_features, &desc.required_limits)
+            self.raw.adapter.open(
+                desc.required_features,
+                &desc.required_limits,
+                &desc.memory_hints,
+            )
         }
         .map_err(|err| match err {
             hal::DeviceError::Lost => RequestDeviceError::DeviceLost,

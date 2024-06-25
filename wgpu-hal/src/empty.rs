@@ -89,6 +89,7 @@ impl crate::Adapter for Context {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        _memory_hints: &wgt::MemoryHints,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Err(crate::DeviceError::Lost)
     }

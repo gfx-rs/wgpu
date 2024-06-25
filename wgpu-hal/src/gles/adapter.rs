@@ -930,6 +930,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let gl = &self.shared.context.lock();
         unsafe { gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1) };

@@ -53,7 +53,7 @@ pub use wgt::{
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
-    InstanceFlags, Limits, MaintainResult, MultisampleState, Origin2d, Origin3d,
+    InstanceFlags, Limits, MaintainResult, MemoryHints, MultisampleState, Origin2d, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
     PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
     RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,

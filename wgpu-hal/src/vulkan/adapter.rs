@@ -1584,6 +1584,7 @@ impl super::Adapter {
         handle_is_owned: bool,
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
+        memory_hints: &wgt::MemoryHints,
         family_index: u32,
         queue_index: u32,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
@@ -1834,7 +1835,40 @@ impl super::Adapter {
 
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
-            let config = gpu_alloc::Config::i_am_prototyping(); //TODO
+            // TODO: These configuration options should take hardware capabilities
+            // into consideration.
+            let mb = 1024 * 1024;
+            let perf_cfg = gpu_alloc::Config {
+                starting_free_list_chunk: 128 * mb,
+                final_free_list_chunk: 512 * mb,
+                minimal_buddy_size: 1,
+                initial_buddy_dedicated_size: 8 * mb,
+                dedicated_threshold: 32 * mb,
+                preferred_dedicated_threshold: mb,
+                transient_dedicated_threshold: 128 * mb,
+            };
+            let mem_usage_cfg = gpu_alloc::Config {
+                starting_free_list_chunk: 8 * mb,
+                final_free_list_chunk: 64 * mb,
+                minimal_buddy_size: 1,
+                initial_buddy_dedicated_size: 8 * mb,
+                dedicated_threshold: 8 * mb,
+                preferred_dedicated_threshold: mb,
+                transient_dedicated_threshold: 16 * mb,
+            };
+            let config = match memory_hints {
+                wgt::MemoryHints::Performance => perf_cfg,
+                wgt::MemoryHints::MemoryUsage => mem_usage_cfg,
+                wgt::MemoryHints::Manual {
+                    suballocated_device_memory_block_size,
+                } => gpu_alloc::Config {
+                    starting_free_list_chunk: suballocated_device_memory_block_size.start,
+                    final_free_list_chunk: suballocated_device_memory_block_size.end,
+                    initial_buddy_dedicated_size: suballocated_device_memory_block_size.start,
+                    ..perf_cfg
+                },
+            };
+
             let max_memory_allocation_size =
                 if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
                     maintenance_3.max_memory_allocation_size
@@ -1896,6 +1930,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
@@ -1929,6 +1964,7 @@ impl crate::Adapter for super::Adapter {
                 true,
                 &enabled_extensions,
                 features,
+                memory_hints,
                 family_info.queue_family_index,
                 0,
             )
