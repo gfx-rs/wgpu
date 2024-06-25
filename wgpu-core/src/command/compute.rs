@@ -627,29 +627,7 @@ impl Global {
                         indirect: false,
                         pipeline: state.pipeline,
                     };
-                    state.is_ready().map_pass_err(scope)?;
-
-                    state.flush_states(raw, None).map_pass_err(scope)?;
-
-                    let groups_size_limit =
-                        state.device.limits.max_compute_workgroups_per_dimension;
-
-                    if groups[0] > groups_size_limit
-                        || groups[1] > groups_size_limit
-                        || groups[2] > groups_size_limit
-                    {
-                        return Err(ComputePassErrorInner::Dispatch(
-                            DispatchError::InvalidGroupSize {
-                                current: groups,
-                                limit: groups_size_limit,
-                            },
-                        ))
-                        .map_pass_err(scope);
-                    }
-
-                    unsafe {
-                        raw.dispatch(groups);
-                    }
+                    dispatch(&mut state, raw, groups).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::DispatchIndirect { buffer, offset } => {
                     let scope = PassErrorScope::Dispatch {
@@ -999,6 +977,35 @@ fn set_push_constant<A: HalApi>(
             offset,
             data_slice,
         );
+    }
+    Ok(())
+}
+
+fn dispatch<A: HalApi>(
+    state: &mut State<A>,
+    raw: &mut A::CommandEncoder,
+    groups: [u32; 3],
+) -> Result<(), ComputePassErrorInner> {
+    state.is_ready()?;
+
+    state.flush_states(raw, None)?;
+
+    let groups_size_limit = state.device.limits.max_compute_workgroups_per_dimension;
+
+    if groups[0] > groups_size_limit
+        || groups[1] > groups_size_limit
+        || groups[2] > groups_size_limit
+    {
+        return Err(ComputePassErrorInner::Dispatch(
+            DispatchError::InvalidGroupSize {
+                current: groups,
+                limit: groups_size_limit,
+            },
+        ));
+    }
+
+    unsafe {
+        raw.dispatch(groups);
     }
     Ok(())
 }
