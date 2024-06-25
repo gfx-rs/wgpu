@@ -1563,41 +1563,12 @@ impl Global {
                         set_stencil_reference(&mut state, value);
                     }
                     ArcRenderCommand::SetViewport {
-                        ref rect,
+                        rect,
                         depth_min,
                         depth_max,
                     } => {
-                        api_log!("RenderPass::set_viewport {rect:?}");
-
                         let scope = PassErrorScope::SetViewport;
-                        if rect.x < 0.0
-                            || rect.y < 0.0
-                            || rect.w <= 0.0
-                            || rect.h <= 0.0
-                            || rect.x + rect.w > state.info.extent.width as f32
-                            || rect.y + rect.h > state.info.extent.height as f32
-                        {
-                            return Err(RenderCommandError::InvalidViewportRect(
-                                *rect,
-                                state.info.extent,
-                            ))
-                            .map_pass_err(scope);
-                        }
-                        if !(0.0..=1.0).contains(&depth_min) || !(0.0..=1.0).contains(&depth_max) {
-                            return Err(RenderCommandError::InvalidViewportDepth(
-                                depth_min, depth_max,
-                            ))
-                            .map_pass_err(scope);
-                        }
-                        let r = hal::Rect {
-                            x: rect.x,
-                            y: rect.y,
-                            w: rect.w,
-                            h: rect.h,
-                        };
-                        unsafe {
-                            state.raw_encoder.set_viewport(&r, depth_min..depth_max);
-                        }
+                        set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetPushConstant {
                         stages,
@@ -2571,6 +2542,37 @@ fn set_stencil_reference<A: HalApi>(state: &mut State<A>, value: u32) {
             state.raw_encoder.set_stencil_reference(value);
         }
     }
+}
+
+fn set_viewport<A: HalApi>(
+    state: &mut State<A>,
+    rect: Rect<f32>,
+    depth_min: f32,
+    depth_max: f32,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!("RenderPass::set_viewport {rect:?}");
+    if rect.x < 0.0
+        || rect.y < 0.0
+        || rect.w <= 0.0
+        || rect.h <= 0.0
+        || rect.x + rect.w > state.info.extent.width as f32
+        || rect.y + rect.h > state.info.extent.height as f32
+    {
+        return Err(RenderCommandError::InvalidViewportRect(rect, state.info.extent).into());
+    }
+    if !(0.0..=1.0).contains(&depth_min) || !(0.0..=1.0).contains(&depth_max) {
+        return Err(RenderCommandError::InvalidViewportDepth(depth_min, depth_max).into());
+    }
+    let r = hal::Rect {
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+    };
+    unsafe {
+        state.raw_encoder.set_viewport(&r, depth_min..depth_max);
+    }
+    Ok(())
 }
 
 impl Global {
