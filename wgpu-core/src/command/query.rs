@@ -10,7 +10,7 @@ use crate::{
     id,
     init_tracker::MemoryInitKind,
     resource::{DestroyedResourceError, ParentDevice, QuerySet},
-    track::TrackerIndex,
+    track::{StatelessTracker, TrackerIndex},
     FastHashMap,
 };
 use std::{iter, marker::PhantomData, sync::Arc};
@@ -124,6 +124,8 @@ impl crate::error::PrettyError for QueryError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueryUseError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error("Query {query_index} is out of bounds for a query set of size {query_set_size}")]
     OutOfBounds {
         query_index: u32,
@@ -269,16 +271,22 @@ pub(super) fn end_occlusion_query<A: HalApi>(
 pub(super) fn validate_and_begin_pipeline_statistics_query<A: HalApi>(
     query_set: Arc<QuerySet<A>>,
     raw_encoder: &mut A::CommandEncoder,
+    tracker: &mut StatelessTracker<QuerySet<A>>,
+    cmd_buf: &CommandBuffer<A>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap<A>>,
     active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
+    query_set.same_device_as(cmd_buf)?;
+
     let needs_reset = reset_state.is_none();
     query_set.validate_query(
         SimplifiedQueryType::PipelineStatistics,
         query_index,
         reset_state,
     )?;
+
+    tracker.add_single(&query_set);
 
     if let Some((_old, old_idx)) = active_query.take() {
         return Err(QueryUseError::AlreadyStarted {
