@@ -40,8 +40,8 @@ use arrayvec::ArrayVec;
 use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, TextureUsages,
-    TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
+    TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 #[cfg(feature = "serde")]
@@ -1576,39 +1576,16 @@ impl Global {
                         size_bytes,
                         values_offset,
                     } => {
-                        api_log!("RenderPass::set_push_constants");
-
                         let scope = PassErrorScope::SetPushConstant;
-                        let values_offset = values_offset
-                            .ok_or(RenderPassErrorInner::InvalidValuesOffset)
-                            .map_pass_err(scope)?;
-
-                        let end_offset_bytes = offset + size_bytes;
-                        let values_end_offset =
-                            (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                        let data_slice =
-                            &base.push_constant_data[(values_offset as usize)..values_end_offset];
-
-                        let pipeline_layout = state
-                            .binder
-                            .pipeline_layout
-                            .as_ref()
-                            .ok_or(DrawError::MissingPipeline)
-                            .map_pass_err(scope)?;
-
-                        pipeline_layout
-                            .validate_push_constant_ranges(stages, offset, end_offset_bytes)
-                            .map_err(RenderCommandError::from)
-                            .map_pass_err(scope)?;
-
-                        unsafe {
-                            state.raw_encoder.set_push_constants(
-                                pipeline_layout.raw(),
-                                stages,
-                                offset,
-                                data_slice,
-                            )
-                        }
+                        set_push_constant(
+                            &mut state,
+                            &base.push_constant_data,
+                            stages,
+                            offset,
+                            size_bytes,
+                            values_offset,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetScissor(ref rect) => {
                         api_log!("RenderPass::set_scissor_rect {rect:?}");
@@ -2575,6 +2552,40 @@ fn set_viewport<A: HalApi>(
     Ok(())
 }
 
+fn set_push_constant<A: HalApi>(
+    state: &mut State<A>,
+    push_constant_data: &[u32],
+    stages: ShaderStages,
+    offset: u32,
+    size_bytes: u32,
+    values_offset: Option<u32>,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!("RenderPass::set_push_constants");
+
+    let values_offset = values_offset.ok_or(RenderPassErrorInner::InvalidValuesOffset)?;
+
+    let end_offset_bytes = offset + size_bytes;
+    let values_end_offset = (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+    let data_slice = &push_constant_data[(values_offset as usize)..values_end_offset];
+
+    let pipeline_layout = state
+        .binder
+        .pipeline_layout
+        .as_ref()
+        .ok_or(DrawError::MissingPipeline)?;
+
+    pipeline_layout
+        .validate_push_constant_ranges(stages, offset, end_offset_bytes)
+        .map_err(RenderCommandError::from)?;
+
+    unsafe {
+        state
+            .raw_encoder
+            .set_push_constants(pipeline_layout.raw(), stages, offset, data_slice)
+    }
+    Ok(())
+}
+
 impl Global {
     pub fn render_pass_set_bind_group(
         &self,
@@ -2740,7 +2751,7 @@ impl Global {
     pub fn render_pass_set_push_constants(
         &self,
         pass: &mut RenderPass,
-        stages: wgt::ShaderStages,
+        stages: ShaderStages,
         offset: u32,
         data: &[u8],
     ) -> Result<(), RenderPassError> {
