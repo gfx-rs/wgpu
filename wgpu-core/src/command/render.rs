@@ -1597,49 +1597,19 @@ impl Global {
                         first_vertex,
                         first_instance,
                     } => {
-                        api_log!(
-                            "RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}"
-                        );
-
-                        let indexed = false;
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::Draw,
-                            indexed,
+                            indexed: false,
                             pipeline: state.pipeline,
                         };
-                        state.is_ready(indexed).map_pass_err(scope)?;
-
-                        let last_vertex = first_vertex as u64 + vertex_count as u64;
-                        let vertex_limit = state.vertex.vertex_limit;
-                        if last_vertex > vertex_limit {
-                            return Err(DrawError::VertexBeyondLimit {
-                                last_vertex,
-                                vertex_limit,
-                                slot: state.vertex.vertex_limit_slot,
-                            })
-                            .map_pass_err(scope);
-                        }
-                        let last_instance = first_instance as u64 + instance_count as u64;
-                        let instance_limit = state.vertex.instance_limit;
-                        if last_instance > instance_limit {
-                            return Err(DrawError::InstanceBeyondLimit {
-                                last_instance,
-                                instance_limit,
-                                slot: state.vertex.instance_limit_slot,
-                            })
-                            .map_pass_err(scope);
-                        }
-
-                        unsafe {
-                            if instance_count > 0 && vertex_count > 0 {
-                                state.raw_encoder.draw(
-                                    first_vertex,
-                                    vertex_count,
-                                    first_instance,
-                                    instance_count,
-                                );
-                            }
-                        }
+                        draw(
+                            &mut state,
+                            vertex_count,
+                            instance_count,
+                            first_vertex,
+                            first_instance,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::DrawIndexed {
                         index_count,
@@ -2584,6 +2554,46 @@ fn set_scissor<A: HalApi>(
     };
     unsafe {
         state.raw_encoder.set_scissor_rect(&r);
+    }
+    Ok(())
+}
+
+fn draw<A: HalApi>(
+    state: &mut State<A>,
+    vertex_count: u32,
+    instance_count: u32,
+    first_vertex: u32,
+    first_instance: u32,
+) -> Result<(), DrawError> {
+    api_log!("RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}");
+
+    state.is_ready(false)?;
+
+    let last_vertex = first_vertex as u64 + vertex_count as u64;
+    let vertex_limit = state.vertex.vertex_limit;
+    if last_vertex > vertex_limit {
+        return Err(DrawError::VertexBeyondLimit {
+            last_vertex,
+            vertex_limit,
+            slot: state.vertex.vertex_limit_slot,
+        });
+    }
+    let last_instance = first_instance as u64 + instance_count as u64;
+    let instance_limit = state.vertex.instance_limit;
+    if last_instance > instance_limit {
+        return Err(DrawError::InstanceBeyondLimit {
+            last_instance,
+            instance_limit,
+            slot: state.vertex.instance_limit_slot,
+        });
+    }
+
+    unsafe {
+        if instance_count > 0 && vertex_count > 0 {
+            state
+                .raw_encoder
+                .draw(first_vertex, vertex_count, first_instance, instance_count);
+        }
     }
     Ok(())
 }
