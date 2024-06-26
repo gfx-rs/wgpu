@@ -107,7 +107,7 @@ impl ComputeCommand {
                         pipelines_guard
                             .get_owned(pipeline_id)
                             .map_err(|_| ComputePassError {
-                                scope: PassErrorScope::SetPipelineCompute(pipeline_id),
+                                scope: PassErrorScope::SetPipelineCompute,
                                 inner: ComputePassErrorInner::InvalidPipeline(pipeline_id),
                             })?,
                     ),

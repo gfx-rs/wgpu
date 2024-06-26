@@ -871,7 +871,7 @@ pub enum PassErrorScope {
     #[error("In a set_pipeline command")]
     SetPipelineRender(id::RenderPipelineId),
     #[error("In a set_pipeline command")]
-    SetPipelineCompute(id::ComputePipelineId),
+    SetPipelineCompute,
     #[error("In a set_push_constant command")]
     SetPushConstant,
     #[error("In a set_vertex_buffer command")]
@@ -927,9 +927,6 @@ impl PrettyError for PassErrorScope {
             }
             Self::SetPipelineRender(id) => {
                 fmt.render_pipeline_label(&id);
-            }
-            Self::SetPipelineCompute(id) => {
-                fmt.compute_pipeline_label(&id);
             }
             _ => {}
         }
