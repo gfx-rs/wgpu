@@ -1551,7 +1551,7 @@ impl Global {
                         offset,
                         size,
                     } => {
-                        let scope = PassErrorScope::SetIndexBuffer(buffer.as_info().id());
+                        let scope = PassErrorScope::SetIndexBuffer;
                         set_index_buffer(&mut state, &cmd_buf, buffer, index_format, offset, size)
                             .map_pass_err(scope)?;
                     }
@@ -1561,7 +1561,7 @@ impl Global {
                         offset,
                         size,
                     } => {
-                        let scope = PassErrorScope::SetVertexBuffer(buffer.as_info().id());
+                        let scope = PassErrorScope::SetVertexBuffer;
                         set_vertex_buffer(&mut state, &cmd_buf, slot, buffer, offset, size)
                             .map_pass_err(scope)?;
                     }
@@ -2697,7 +2697,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), RenderPassError> {
-        let scope = PassErrorScope::SetIndexBuffer(buffer_id);
+        let scope = PassErrorScope::SetIndexBuffer;
         let base = pass.base_mut(scope)?;
 
         base.commands.push(RenderCommand::SetIndexBuffer {
@@ -2718,7 +2718,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), RenderPassError> {
-        let scope = PassErrorScope::SetVertexBuffer(buffer_id);
+        let scope = PassErrorScope::SetVertexBuffer;
         let base = pass.base_mut(scope)?;
 
         base.commands.push(RenderCommand::SetVertexBuffer {

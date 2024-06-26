@@ -228,7 +228,7 @@ impl RenderCommand {
                     } => ArcRenderCommand::SetIndexBuffer {
                         buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
                             RenderPassError {
-                                scope: PassErrorScope::SetIndexBuffer(buffer_id),
+                                scope: PassErrorScope::SetIndexBuffer,
                                 inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
                             }
                         })?,
@@ -246,7 +246,7 @@ impl RenderCommand {
                         slot,
                         buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
                             RenderPassError {
-                                scope: PassErrorScope::SetVertexBuffer(buffer_id),
+                                scope: PassErrorScope::SetVertexBuffer,
                                 inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
                             }
                         })?,
