@@ -230,12 +230,15 @@ impl<A: HalApi> QuerySet<A> {
 pub(super) fn validate_and_begin_occlusion_query<A: HalApi>(
     query_set: Arc<QuerySet<A>>,
     raw_encoder: &mut A::CommandEncoder,
+    tracker: &mut StatelessTracker<QuerySet<A>>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap<A>>,
     active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
     let needs_reset = reset_state.is_none();
     query_set.validate_query(SimplifiedQueryType::Occlusion, query_index, reset_state)?;
+
+    tracker.add_single(&query_set);
 
     if let Some((_old, old_idx)) = active_query.take() {
         return Err(QueryUseError::AlreadyStarted {
