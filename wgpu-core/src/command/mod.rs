@@ -875,9 +875,9 @@ pub enum PassErrorScope {
     #[error("In a set_push_constant command")]
     SetPushConstant,
     #[error("In a set_vertex_buffer command")]
-    SetVertexBuffer(id::BufferId),
+    SetVertexBuffer,
     #[error("In a set_index_buffer command")]
-    SetIndexBuffer(id::BufferId),
+    SetIndexBuffer,
     #[error("In a set_blend_constant command")]
     SetBlendConstant,
     #[error("In a set_stencil_reference command")]
@@ -930,12 +930,6 @@ impl PrettyError for PassErrorScope {
             }
             Self::SetPipelineCompute(id) => {
                 fmt.compute_pipeline_label(&id);
-            }
-            Self::SetVertexBuffer(id) => {
-                fmt.buffer_label(&id);
-            }
-            Self::SetIndexBuffer(id) => {
-                fmt.buffer_label(&id);
             }
             _ => {}
         }

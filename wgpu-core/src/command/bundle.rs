@@ -438,7 +438,7 @@ impl RenderBundleEncoder {
                     offset,
                     size,
                 } => {
-                    let scope = PassErrorScope::SetIndexBuffer(buffer_id);
+                    let scope = PassErrorScope::SetIndexBuffer;
                     set_index_buffer(
                         &mut state,
                         &buffer_guard,
@@ -455,7 +455,7 @@ impl RenderBundleEncoder {
                     offset,
                     size,
                 } => {
-                    let scope = PassErrorScope::SetVertexBuffer(buffer_id);
+                    let scope = PassErrorScope::SetVertexBuffer;
                     set_vertex_buffer(&mut state, &buffer_guard, slot, buffer_id, offset, size)
                         .map_pass_err(scope)?;
                 }
