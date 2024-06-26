@@ -315,7 +315,6 @@ impl RenderCommand {
                                         DrawKind::DrawIndirect
                                     },
                                     indexed,
-                                    pipeline: None,
                                 },
                                 inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
                             }
@@ -336,7 +335,6 @@ impl RenderCommand {
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::MultiDrawIndirectCount,
                             indexed,
-                            pipeline: None,
                         };
                         ArcRenderCommand::MultiDrawIndirectCount {
                             buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
