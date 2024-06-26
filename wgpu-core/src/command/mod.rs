@@ -907,10 +907,7 @@ pub enum PassErrorScope {
     #[error("In a execute_bundle command")]
     ExecuteBundle,
     #[error("In a dispatch command, indirect:{indirect}")]
-    Dispatch {
-        indirect: bool,
-        pipeline: Option<id::ComputePipelineId>,
-    },
+    Dispatch { indirect: bool },
     #[error("In a push_debug_group command")]
     PushDebugGroup,
     #[error("In a pop_debug_group command")]
@@ -948,11 +945,6 @@ impl PrettyError for PassErrorScope {
                 pipeline: Some(id), ..
             } => {
                 fmt.render_pipeline_label(&id);
-            }
-            Self::Dispatch {
-                pipeline: Some(id), ..
-            } => {
-                fmt.compute_pipeline_label(&id);
             }
             _ => {}
         }

@@ -128,10 +128,7 @@ impl ComputeCommand {
                         ArcComputeCommand::DispatchIndirect {
                             buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
                                 ComputePassError {
-                                    scope: PassErrorScope::Dispatch {
-                                        indirect: true,
-                                        pipeline: None, // TODO: not used right now, but once we do the resolve during recording we can use this again.
-                                    },
+                                    scope: PassErrorScope::Dispatch { indirect: true },
                                     inner: ComputePassErrorInner::InvalidBufferId(buffer_id),
                                 }
                             })?,
