@@ -1763,83 +1763,8 @@ impl Global {
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::ExecuteBundle(bundle) => {
-                        api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
                         let scope = PassErrorScope::ExecuteBundle;
-
-                        // Have to clone the bundle arc, otherwise we keep a mutable reference to the bundle
-                        // while later trying to add the bundle's resources to the tracker.
-                        let bundle = state.tracker.bundles.insert_single(bundle).clone();
-
-                        bundle
-                            .same_device_as(cmd_buf.as_ref())
-                            .map_pass_err(scope)?;
-
-                        state
-                            .info
-                            .context
-                            .check_compatible(
-                                &bundle.context,
-                                RenderPassCompatibilityCheckType::RenderBundle,
-                            )
-                            .map_err(RenderPassErrorInner::IncompatibleBundleTargets)
-                            .map_pass_err(scope)?;
-
-                        if (state.info.is_depth_read_only && !bundle.is_depth_read_only)
-                            || (state.info.is_stencil_read_only && !bundle.is_stencil_read_only)
-                        {
-                            return Err(
-                                RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil {
-                                    pass_depth: state.info.is_depth_read_only,
-                                    pass_stencil: state.info.is_stencil_read_only,
-                                    bundle_depth: bundle.is_depth_read_only,
-                                    bundle_stencil: bundle.is_stencil_read_only,
-                                },
-                            )
-                            .map_pass_err(scope);
-                        }
-
-                        state.buffer_memory_init_actions.extend(
-                            bundle
-                                .buffer_memory_init_actions
-                                .iter()
-                                .filter_map(|action| {
-                                    action
-                                        .buffer
-                                        .initialization_status
-                                        .read()
-                                        .check_action(action)
-                                }),
-                        );
-                        for action in bundle.texture_memory_init_actions.iter() {
-                            state
-                                .info
-                                .pending_discard_init_fixups
-                                .extend(state.texture_memory_actions.register_init_action(action));
-                        }
-
-                        unsafe { bundle.execute(state.raw_encoder, state.snatch_guard) }
-                            .map_err(|e| match e {
-                                ExecutionError::DestroyedResource(e) => {
-                                    RenderCommandError::DestroyedResource(e)
-                                }
-                                ExecutionError::Unimplemented(what) => {
-                                    RenderCommandError::Unimplemented(what)
-                                }
-                            })
-                            .map_pass_err(scope)?;
-
-                        unsafe {
-                            state
-                                .info
-                                .usage_scope
-                                .merge_render_bundle(&bundle.used)
-                                .map_pass_err(scope)?;
-                            state
-                                .tracker
-                                .add_from_render_bundle(&bundle.used)
-                                .map_pass_err(scope)?;
-                        };
-                        state.reset_bundle();
+                        execute_bundle(&mut state, &cmd_buf, bundle).map_pass_err(scope)?;
                     }
                 }
             }
@@ -2648,6 +2573,75 @@ fn write_timestamp<A: HalApi>(
         query_index,
         Some(pending_query_resets),
     )?;
+    Ok(())
+}
+
+fn execute_bundle<A: HalApi>(
+    state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
+    bundle: Arc<super::RenderBundle<A>>,
+) -> Result<(), RenderPassErrorInner> {
+    api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
+
+    // Have to clone the bundle arc, otherwise we keep a mutable reference to the bundle
+    // while later trying to add the bundle's resources to the tracker.
+    let bundle = state.tracker.bundles.insert_single(bundle).clone();
+
+    bundle.same_device_as(cmd_buf.as_ref())?;
+
+    state
+        .info
+        .context
+        .check_compatible(
+            &bundle.context,
+            RenderPassCompatibilityCheckType::RenderBundle,
+        )
+        .map_err(RenderPassErrorInner::IncompatibleBundleTargets)?;
+
+    if (state.info.is_depth_read_only && !bundle.is_depth_read_only)
+        || (state.info.is_stencil_read_only && !bundle.is_stencil_read_only)
+    {
+        return Err(
+            RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil {
+                pass_depth: state.info.is_depth_read_only,
+                pass_stencil: state.info.is_stencil_read_only,
+                bundle_depth: bundle.is_depth_read_only,
+                bundle_stencil: bundle.is_stencil_read_only,
+            },
+        );
+    }
+
+    state
+        .buffer_memory_init_actions
+        .extend(
+            bundle
+                .buffer_memory_init_actions
+                .iter()
+                .filter_map(|action| {
+                    action
+                        .buffer
+                        .initialization_status
+                        .read()
+                        .check_action(action)
+                }),
+        );
+    for action in bundle.texture_memory_init_actions.iter() {
+        state
+            .info
+            .pending_discard_init_fixups
+            .extend(state.texture_memory_actions.register_init_action(action));
+    }
+
+    unsafe { bundle.execute(state.raw_encoder, state.snatch_guard) }.map_err(|e| match e {
+        ExecutionError::DestroyedResource(e) => RenderCommandError::DestroyedResource(e),
+        ExecutionError::Unimplemented(what) => RenderCommandError::Unimplemented(what),
+    })?;
+
+    unsafe {
+        state.info.usage_scope.merge_render_bundle(&bundle.used)?;
+        state.tracker.add_from_render_bundle(&bundle.used)?;
+    };
+    state.reset_bundle();
     Ok(())
 }
 
