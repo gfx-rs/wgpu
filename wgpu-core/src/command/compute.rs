@@ -615,7 +615,7 @@ impl Global {
                     .map_pass_err(scope)?;
                 }
                 ArcComputeCommand::SetPipeline(pipeline) => {
-                    let scope = PassErrorScope::SetPipelineCompute(pipeline.as_info().id());
+                    let scope = PassErrorScope::SetPipelineCompute;
                     set_pipeline(&mut state, cmd_buf, pipeline).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::SetPushConstant {
@@ -1083,7 +1083,7 @@ impl Global {
     ) -> Result<(), ComputePassError> {
         let redundant = pass.current_pipeline.set_and_check_redundant(pipeline_id);
 
-        let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
+        let scope = PassErrorScope::SetPipelineCompute;
 
         let base = pass.base_mut(scope)?;
         if redundant {
