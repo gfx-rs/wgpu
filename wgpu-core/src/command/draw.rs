@@ -2,7 +2,10 @@ use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     error::ErrorFormatter,
     id,
-    resource::{DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError},
+    resource::{
+        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError,
+        ResourceErrorIdent,
+    },
     track::ResourceUsageCompatibilityError,
 };
 use wgt::VertexStepMode;
@@ -10,19 +13,26 @@ use wgt::VertexStepMode;
 use thiserror::Error;
 
 /// Error validating a draw call.
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DrawError {
     #[error("Blend constant needs to be set")]
     MissingBlendConstant,
     #[error("Render pipeline must be set")]
     MissingPipeline,
-    #[error("Vertex buffer {index} must be set")]
-    MissingVertexBuffer { index: u32 },
+    #[error("Currently set {pipeline} requires vertex buffer {index} to be set")]
+    MissingVertexBuffer {
+        pipeline: ResourceErrorIdent,
+        index: u32,
+    },
     #[error("Index buffer must be set")]
     MissingIndexBuffer,
-    #[error("Incompatible bind group at index {index} in the current render pipeline")]
-    IncompatibleBindGroup { index: u32, diff: Vec<String> },
+    #[error("Bind group at index {index} is incompatible with the current set {pipeline}")]
+    IncompatibleBindGroup {
+        index: u32,
+        pipeline: ResourceErrorIdent,
+        diff: Vec<String>,
+    },
     #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {
         last_vertex: u64,
@@ -45,11 +55,12 @@ pub enum DrawError {
     #[error("Index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u64, index_limit: u64 },
     #[error(
-        "Pipeline index format ({pipeline:?}) and buffer index format ({buffer:?}) do not match"
+        "Index buffer format {buffer_format:?} doesn't match {pipeline}'s index format {pipeline_format:?}"
     )]
     UnmatchedIndexFormats {
-        pipeline: wgt::IndexFormat,
-        buffer: wgt::IndexFormat,
+        pipeline: ResourceErrorIdent,
+        pipeline_format: wgt::IndexFormat,
+        buffer_format: wgt::IndexFormat,
     },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),

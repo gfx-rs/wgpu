@@ -478,7 +478,6 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::Draw,
                         indexed: false,
-                        pipeline: state.pipeline_id(),
                     };
                     draw(
                         &mut state,
@@ -500,7 +499,6 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::Draw,
                         indexed: true,
-                        pipeline: state.pipeline_id(),
                     };
                     draw_indexed(
                         &mut state,
@@ -522,7 +520,6 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::DrawIndirect,
                         indexed,
-                        pipeline: state.pipeline_id(),
                     };
                     multi_draw_indirect(
                         &mut state,
@@ -705,7 +702,7 @@ fn set_pipeline<A: HalApi>(
         return Err(RenderCommandError::IncompatiblePipelineRods.into());
     }
 
-    let pipeline_state = PipelineState::new(pipeline, pipeline_id);
+    let pipeline_state = PipelineState::new(pipeline);
 
     state
         .commands
@@ -1337,8 +1334,6 @@ struct PipelineState<A: HalApi> {
     /// The pipeline
     pipeline: Arc<RenderPipeline<A>>,
 
-    pipeline_id: id::RenderPipelineId,
-
     /// How this pipeline's vertex shader traverses each vertex buffer, indexed
     /// by vertex buffer slot number.
     steps: Vec<VertexStep>,
@@ -1352,10 +1347,9 @@ struct PipelineState<A: HalApi> {
 }
 
 impl<A: HalApi> PipelineState<A> {
-    fn new(pipeline: &Arc<RenderPipeline<A>>, pipeline_id: id::RenderPipelineId) -> Self {
+    fn new(pipeline: &Arc<RenderPipeline<A>>) -> Self {
         Self {
             pipeline: pipeline.clone(),
-            pipeline_id,
             steps: pipeline.vertex_steps.to_vec(),
             push_constant_ranges: pipeline
                 .layout
@@ -1433,11 +1427,6 @@ struct State<A: HalApi> {
 }
 
 impl<A: HalApi> State<A> {
-    /// Return the id of the current pipeline, if any.
-    fn pipeline_id(&self) -> Option<id::RenderPipelineId> {
-        self.pipeline.as_ref().map(|p| p.pipeline_id)
-    }
-
     /// Return the current pipeline state. Return an error if none is set.
     fn pipeline(&self) -> Result<&PipelineState<A>, RenderBundleErrorInner> {
         self.pipeline

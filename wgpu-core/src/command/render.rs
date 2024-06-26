@@ -327,7 +327,6 @@ impl OptionalState {
 #[derive(Debug, Default)]
 struct IndexState {
     buffer_format: Option<IndexFormat>,
-    pipeline_format: Option<IndexFormat>,
     limit: u64,
 }
 
@@ -343,7 +342,6 @@ impl IndexState {
 
     fn reset(&mut self) {
         self.buffer_format = None;
-        self.pipeline_format = None;
         self.limit = 0;
     }
 }
@@ -378,8 +376,6 @@ struct VertexState {
     instance_limit: u64,
     /// Buffer slot which the shortest instance rate vertex buffer is bound to
     instance_limit_slot: u32,
-    /// Total amount of buffers required by the pipeline.
-    buffers_required: u32,
 }
 
 impl VertexState {
@@ -440,7 +436,7 @@ struct State<'attachment, 'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalA
     binder: Binder<A>,
     blend_constant: OptionalState,
     stencil_reference: u32,
-    pipeline: Option<id::RenderPipelineId>,
+    pipeline: Option<Arc<RenderPipeline<A>>>,
     index: IndexState,
     vertex: VertexState,
     debug_scope_depth: u32,
@@ -467,52 +463,55 @@ impl<'attachment, 'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi>
     State<'attachment, 'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A>
 {
     fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
-        // Determine how many vertex buffers have already been bound
-        let vertex_buffer_count = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
-        // Compare with the needed quantity
-        if vertex_buffer_count < self.vertex.buffers_required {
-            return Err(DrawError::MissingVertexBuffer {
-                index: vertex_buffer_count,
-            });
-        }
+        if let Some(pipeline) = self.pipeline.as_ref() {
+            let bind_mask = self.binder.invalid_mask();
+            if bind_mask != 0 {
+                return Err(DrawError::IncompatibleBindGroup {
+                    index: bind_mask.trailing_zeros(),
+                    pipeline: pipeline.error_ident(),
+                    diff: self.binder.bgl_diff(),
+                });
+            }
+            self.binder.check_late_buffer_bindings()?;
 
-        let bind_mask = self.binder.invalid_mask();
-        if bind_mask != 0 {
-            //let (expected, provided) = self.binder.entries[index as usize].info();
-            return Err(DrawError::IncompatibleBindGroup {
-                index: bind_mask.trailing_zeros(),
-                diff: self.binder.bgl_diff(),
-            });
-        }
-        if self.pipeline.is_none() {
-            return Err(DrawError::MissingPipeline);
-        }
-        if self.blend_constant == OptionalState::Required {
-            return Err(DrawError::MissingBlendConstant);
-        }
+            if self.blend_constant == OptionalState::Required {
+                return Err(DrawError::MissingBlendConstant);
+            }
 
-        if indexed {
-            // Pipeline expects an index buffer
-            if let Some(pipeline_index_format) = self.index.pipeline_format {
-                // We have a buffer bound
-                let buffer_index_format = self
-                    .index
-                    .buffer_format
-                    .ok_or(DrawError::MissingIndexBuffer)?;
+            // Determine how many vertex buffers have already been bound
+            let vertex_buffer_count =
+                self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
+            // Compare with the needed quantity
+            if vertex_buffer_count < pipeline.vertex_steps.len() as u32 {
+                return Err(DrawError::MissingVertexBuffer {
+                    pipeline: pipeline.error_ident(),
+                    index: vertex_buffer_count,
+                });
+            }
 
-                // The buffers are different formats
-                if pipeline_index_format != buffer_index_format {
-                    return Err(DrawError::UnmatchedIndexFormats {
-                        pipeline: pipeline_index_format,
-                        buffer: buffer_index_format,
-                    });
+            if indexed {
+                // Pipeline expects an index buffer
+                if let Some(pipeline_index_format) = pipeline.strip_index_format {
+                    // We have a buffer bound
+                    let buffer_index_format = self
+                        .index
+                        .buffer_format
+                        .ok_or(DrawError::MissingIndexBuffer)?;
+
+                    // The buffers are different formats
+                    if pipeline_index_format != buffer_index_format {
+                        return Err(DrawError::UnmatchedIndexFormats {
+                            pipeline: pipeline.error_ident(),
+                            pipeline_format: pipeline_index_format,
+                            buffer_format: buffer_index_format,
+                        });
+                    }
                 }
             }
+            Ok(())
+        } else {
+            Err(DrawError::MissingPipeline)
         }
-
-        self.binder.check_late_buffer_bindings()?;
-
-        Ok(())
     }
 
     /// Reset the `RenderBundle`-related states.
@@ -1610,7 +1609,6 @@ impl Global {
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::Draw,
                             indexed: false,
-                            pipeline: state.pipeline,
                         };
                         draw(
                             &mut state,
@@ -1631,7 +1629,6 @@ impl Global {
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::Draw,
                             indexed: true,
-                            pipeline: state.pipeline,
                         };
                         draw_indexed(
                             &mut state,
@@ -1656,7 +1653,6 @@ impl Global {
                                 DrawKind::DrawIndirect
                             },
                             indexed,
-                            pipeline: state.pipeline,
                         };
                         multi_draw_indirect(&mut state, buffer, offset, count, indexed)
                             .map_pass_err(scope)?;
@@ -1672,7 +1668,6 @@ impl Global {
                         let scope = PassErrorScope::Draw {
                             kind: DrawKind::MultiDrawIndirectCount,
                             indexed,
-                            pipeline: state.pipeline,
                         };
                         multi_draw_indirect_count(
                             &mut state,
@@ -1901,7 +1896,7 @@ fn set_pipeline<A: HalApi>(
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
 
-    state.pipeline = Some(pipeline.as_info().id());
+    state.pipeline = Some(pipeline.clone());
 
     let pipeline = state.tracker.render_pipelines.insert_single(pipeline);
 
@@ -1986,17 +1981,12 @@ fn set_pipeline<A: HalApi>(
         }
     }
 
-    state.index.pipeline_format = pipeline.strip_index_format;
-
-    let vertex_steps_len = pipeline.vertex_steps.len();
-    state.vertex.buffers_required = vertex_steps_len as u32;
-
     // Initialize each `vertex.inputs[i].step` from
     // `pipeline.vertex_steps[i]`.  Enlarge `vertex.inputs`
     // as necessary to accommodate all slots in the
     // pipeline. If `vertex.inputs` is longer, fill the
     // extra entries with default `VertexStep`s.
-    while state.vertex.inputs.len() < vertex_steps_len {
+    while state.vertex.inputs.len() < pipeline.vertex_steps.len() {
         state.vertex.inputs.push(VertexBufferState::EMPTY);
     }
 
@@ -2857,7 +2847,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::Draw,
             indexed: false,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 
@@ -2883,7 +2872,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::Draw,
             indexed: true,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 
@@ -2907,7 +2895,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::DrawIndirect,
             indexed: false,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 
@@ -2930,7 +2917,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::DrawIndirect,
             indexed: true,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 
@@ -2954,7 +2940,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::MultiDrawIndirect,
             indexed: false,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 
@@ -2978,7 +2963,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::MultiDrawIndirect,
             indexed: true,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 
@@ -3004,7 +2988,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::MultiDrawIndirectCount,
             indexed: false,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 
@@ -3032,7 +3015,6 @@ impl Global {
         let scope = PassErrorScope::Draw {
             kind: DrawKind::MultiDrawIndirectCount,
             indexed: true,
-            pipeline: pass.current_pipeline.last_state,
         };
         let base = pass.base_mut(scope)?;
 

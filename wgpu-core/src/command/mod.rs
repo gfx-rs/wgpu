@@ -887,11 +887,7 @@ pub enum PassErrorScope {
     #[error("In a set_scissor_rect command")]
     SetScissorRect,
     #[error("In a draw command, kind: {kind:?}")]
-    Draw {
-        kind: DrawKind,
-        indexed: bool,
-        pipeline: Option<id::RenderPipelineId>,
-    },
+    Draw { kind: DrawKind, indexed: bool },
     #[error("While resetting queries after the renderpass was ran")]
     QueryReset,
     #[error("In a write_timestamp command")]
@@ -940,11 +936,6 @@ impl PrettyError for PassErrorScope {
             }
             Self::SetIndexBuffer(id) => {
                 fmt.buffer_label(&id);
-            }
-            Self::Draw {
-                pipeline: Some(id), ..
-            } => {
-                fmt.render_pipeline_label(&id);
             }
             _ => {}
         }
