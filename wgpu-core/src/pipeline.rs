@@ -5,7 +5,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{ParentDevice, Resource, ResourceInfo, ResourceType},
+    resource::{ParentDevice, Resource, ResourceInfo},
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -65,9 +65,9 @@ impl<A: HalApi> Drop for ShaderModule<A> {
     }
 }
 
-impl<A: HalApi> Resource for ShaderModule<A> {
-    const TYPE: ResourceType = "ShaderModule";
+crate::impl_resource_type!(ShaderModule);
 
+impl<A: HalApi> Resource for ShaderModule<A> {
     type Marker = crate::id::markers::ShaderModule;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -229,9 +229,9 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
     }
 }
 
-impl<A: HalApi> Resource for ComputePipeline<A> {
-    const TYPE: ResourceType = "ComputePipeline";
+crate::impl_resource_type!(ComputePipeline);
 
+impl<A: HalApi> Resource for ComputePipeline<A> {
     type Marker = crate::id::markers::ComputePipeline;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -293,9 +293,9 @@ impl<A: HalApi> Drop for PipelineCache<A> {
     }
 }
 
-impl<A: HalApi> Resource for PipelineCache<A> {
-    const TYPE: ResourceType = "PipelineCache";
+crate::impl_resource_type!(PipelineCache);
 
+impl<A: HalApi> Resource for PipelineCache<A> {
     type Marker = crate::id::markers::PipelineCache;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -548,9 +548,9 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
     }
 }
 
-impl<A: HalApi> Resource for RenderPipeline<A> {
-    const TYPE: ResourceType = "RenderPipeline";
+crate::impl_resource_type!(RenderPipeline);
 
+impl<A: HalApi> Resource for RenderPipeline<A> {
     type Marker = crate::id::markers::RenderPipeline;
 
     fn as_info(&self) -> &ResourceInfo {

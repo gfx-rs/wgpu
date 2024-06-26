@@ -120,7 +120,7 @@ impl ResourceInfo {
 
 #[derive(Clone, Debug)]
 pub struct ResourceErrorIdent {
-    r#type: ResourceType,
+    r#type: &'static str,
     label: String,
 }
 
@@ -160,11 +160,22 @@ pub(crate) trait ParentDevice<A: HalApi>: Resource {
     }
 }
 
-pub(crate) type ResourceType = &'static str;
+pub(crate) trait ResourceType {
+    const TYPE: &'static str;
+}
 
-pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
+#[macro_export]
+macro_rules! impl_resource_type {
+    ($ty:ident) => {
+        impl<A: HalApi> $crate::resource::ResourceType for $ty<A> {
+            const TYPE: &'static str = stringify!($ty);
+        }
+    };
+}
+
+pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + ResourceType {
     type Marker: Marker;
-    const TYPE: ResourceType;
+
     fn as_info(&self) -> &ResourceInfo;
 
     /// Returns a string identifying this resource for logging and errors.
@@ -779,9 +790,9 @@ pub enum CreateBufferError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-impl<A: HalApi> Resource for Buffer<A> {
-    const TYPE: ResourceType = "Buffer";
+crate::impl_resource_type!(Buffer);
 
+impl<A: HalApi> Resource for Buffer<A> {
     type Marker = crate::id::markers::Buffer;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -871,9 +882,9 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
     }
 }
 
-impl<A: HalApi> Resource for StagingBuffer<A> {
-    const TYPE: ResourceType = "StagingBuffer";
+crate::impl_resource_type!(StagingBuffer);
 
+impl<A: HalApi> Resource for StagingBuffer<A> {
     type Marker = crate::id::markers::StagingBuffer;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -1407,9 +1418,9 @@ pub enum CreateTextureError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-impl<A: HalApi> Resource for Texture<A> {
-    const TYPE: ResourceType = "Texture";
+crate::impl_resource_type!(Texture);
 
+impl<A: HalApi> Resource for Texture<A> {
     type Marker = crate::id::markers::Texture;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -1578,9 +1589,9 @@ pub enum CreateTextureViewError {
 #[non_exhaustive]
 pub enum TextureViewDestroyError {}
 
-impl<A: HalApi> Resource for TextureView<A> {
-    const TYPE: ResourceType = "TextureView";
+crate::impl_resource_type!(TextureView);
 
+impl<A: HalApi> Resource for TextureView<A> {
     type Marker = crate::id::markers::TextureView;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -1696,9 +1707,9 @@ pub enum CreateSamplerError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
-impl<A: HalApi> Resource for Sampler<A> {
-    const TYPE: ResourceType = "Sampler";
+crate::impl_resource_type!(Sampler);
 
+impl<A: HalApi> Resource for Sampler<A> {
     type Marker = crate::id::markers::Sampler;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -1753,9 +1764,9 @@ impl<A: HalApi> ParentDevice<A> for QuerySet<A> {
     }
 }
 
-impl<A: HalApi> Resource for QuerySet<A> {
-    const TYPE: ResourceType = "QuerySet";
+crate::impl_resource_type!(QuerySet);
 
+impl<A: HalApi> Resource for QuerySet<A> {
     type Marker = crate::id::markers::QuerySet;
 
     fn as_info(&self) -> &ResourceInfo {

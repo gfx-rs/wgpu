@@ -17,8 +17,8 @@ use crate::{
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, ParentDevice, Resource, ResourceErrorIdent, ResourceInfo, ResourceType,
-        StagingBuffer, Texture, TextureInner,
+        DestroyedTexture, ParentDevice, Resource, ResourceErrorIdent, ResourceInfo, StagingBuffer,
+        Texture, TextureInner,
     },
     resource_log,
     track::{self, TrackerIndex},
@@ -42,9 +42,9 @@ pub struct Queue<A: HalApi> {
     pub(crate) info: ResourceInfo,
 }
 
-impl<A: HalApi> Resource for Queue<A> {
-    const TYPE: ResourceType = "Queue";
+crate::impl_resource_type!(Queue);
 
+impl<A: HalApi> Resource for Queue<A> {
     type Marker = id::markers::Queue;
 
     fn as_info(&self) -> &ResourceInfo {

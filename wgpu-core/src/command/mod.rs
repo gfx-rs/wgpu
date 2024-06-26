@@ -36,7 +36,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::resource::{ParentDevice, Resource, ResourceInfo, ResourceType};
+use crate::resource::{ParentDevice, Resource, ResourceInfo};
 use crate::track::{Tracker, UsageScope};
 use crate::LabelHelpers;
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
@@ -527,9 +527,9 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
-impl<A: HalApi> Resource for CommandBuffer<A> {
-    const TYPE: ResourceType = "CommandBuffer";
+crate::impl_resource_type!(CommandBuffer);
 
+impl<A: HalApi> Resource for CommandBuffer<A> {
     type Marker = id::markers::CommandBuffer;
 
     fn as_info(&self) -> &ResourceInfo {

@@ -95,9 +95,7 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{
-        Buffer, DestroyedResourceError, ParentDevice, Resource, ResourceInfo, ResourceType,
-    },
+    resource::{Buffer, DestroyedResourceError, ParentDevice, Resource, ResourceInfo},
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
@@ -1182,9 +1180,9 @@ impl<A: HalApi> RenderBundle<A> {
     }
 }
 
-impl<A: HalApi> Resource for RenderBundle<A> {
-    const TYPE: ResourceType = "RenderBundle";
+crate::impl_resource_type!(RenderBundle);
 
+impl<A: HalApi> Resource for RenderBundle<A> {
     type Marker = id::markers::RenderBundle;
 
     fn as_info(&self) -> &ResourceInfo {
