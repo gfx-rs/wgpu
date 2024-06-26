@@ -83,8 +83,6 @@ pub enum RenderCommandError {
     VertexBufferIndexOutOfRange { index: u32, max: u32 },
     #[error("Dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(u64, &'static str, u32),
-    #[error("Number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
-    InvalidDynamicOffsetCount { actual: usize, expected: usize },
     #[error("Render pipeline {0:?} is invalid")]
     InvalidPipeline(id::RenderPipelineId),
     #[error("QuerySet {0:?} is invalid")]
