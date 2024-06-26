@@ -882,12 +882,12 @@ pub enum DrawKind {
 
 #[derive(Clone, Copy, Debug, Error)]
 pub enum PassErrorScope {
+    // TODO: Extract out the 2 error variants below so that we can always
+    // include the ResourceErrorIdent of the pass around all inner errors
     #[error("In a bundle parameter")]
     Bundle,
     #[error("In a pass parameter")]
-    PassEncoder(id::CommandEncoderId), // Needed only for ending pass via tracing.
-    #[error("In a pass parameter")]
-    Pass(Option<id::CommandBufferId>),
+    Pass,
     #[error("In a set_bind_group command")]
     SetBindGroup,
     #[error("In a set_pipeline command")]
@@ -934,17 +934,4 @@ pub enum PassErrorScope {
     InsertDebugMarker,
 }
 
-impl PrettyError for PassErrorScope {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        // This error is not in the error chain, only notes are needed
-        match *self {
-            Self::PassEncoder(id) => {
-                fmt.command_buffer_label(&id.into_command_buffer_id());
-            }
-            Self::Pass(Some(id)) => {
-                fmt.command_buffer_label(&id);
-            }
-            _ => {}
-        }
-    }
-}
+impl PrettyError for PassErrorScope {}

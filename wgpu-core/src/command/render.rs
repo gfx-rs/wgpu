@@ -282,11 +282,6 @@ impl<A: HalApi> RenderPass<A> {
     }
 
     #[inline]
-    pub fn parent_id(&self) -> Option<id::CommandBufferId> {
-        self.parent.as_ref().map(|cmd_buf| cmd_buf.as_info().id())
-    }
-
-    #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.as_ref().and_then(|base| base.label.as_deref())
     }
@@ -305,7 +300,7 @@ impl<A: HalApi> RenderPass<A> {
 impl<A: HalApi> fmt::Debug for RenderPass<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RenderPass")
-            .field("encoder_id", &self.parent_id())
+            .field("label", &self.label())
             .field("color_attachments", &self.color_attachments)
             .field("depth_stencil_target", &self.depth_stencil_attachment)
             .field(
@@ -1506,7 +1501,8 @@ impl Global {
         timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set: Option<id::QuerySetId>,
     ) -> Result<(), RenderPassError> {
-        let pass_scope = PassErrorScope::PassEncoder(encoder_id);
+        let pass_scope = PassErrorScope::Pass;
+
         #[cfg(feature = "trace")]
         {
             let hub = A::hub(self);
@@ -1569,7 +1565,7 @@ impl Global {
 
         if let Some(err) = encoder_error {
             Err(RenderPassError {
-                scope: PassErrorScope::PassEncoder(encoder_id),
+                scope: pass_scope,
                 inner: err.into(),
             })
         } else {
@@ -1582,7 +1578,7 @@ impl Global {
         &self,
         pass: &mut RenderPass<A>,
     ) -> Result<(), RenderPassError> {
-        let pass_scope = PassErrorScope::Pass(pass.parent_id());
+        let pass_scope = PassErrorScope::Pass;
 
         let base = pass
             .base

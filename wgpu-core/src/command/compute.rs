@@ -386,13 +386,13 @@ impl Global {
         &self,
         pass: &mut ComputePass<A>,
     ) -> Result<(), ComputePassError> {
+        let scope = PassErrorScope::Pass;
+
         let cmd_buf = pass
             .parent
             .as_ref()
             .ok_or(ComputePassErrorInner::InvalidParentEncoder)
-            .map_pass_err(PassErrorScope::Pass(None))?;
-
-        let scope = PassErrorScope::Pass(Some(cmd_buf.as_info().id()));
+            .map_pass_err(scope)?;
 
         cmd_buf.unlock_encoder().map_pass_err(scope)?;
 
@@ -413,7 +413,7 @@ impl Global {
         timestamp_writes: Option<&PassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
         let hub = A::hub(self);
-        let scope = PassErrorScope::PassEncoder(encoder_id);
+        let scope = PassErrorScope::Pass;
 
         let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(scope)?;
 
@@ -473,7 +473,7 @@ impl Global {
         mut timestamp_writes: Option<ArcPassTimestampWrites<A>>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
-        let pass_scope = PassErrorScope::Pass(Some(cmd_buf.as_info().id()));
+        let pass_scope = PassErrorScope::Pass;
 
         let device = &cmd_buf.device;
         device.check_is_valid().map_pass_err(pass_scope)?;
