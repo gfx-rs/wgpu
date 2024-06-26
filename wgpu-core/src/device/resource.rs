@@ -24,8 +24,8 @@ use crate::{
     pool::ResourcePool,
     registry::Registry,
     resource::{
-        self, Buffer, ParentDevice, QuerySet, Resource, ResourceInfo, ResourceType, Sampler,
-        Texture, TextureView, TextureViewNotRenderableReason,
+        self, Buffer, ParentDevice, QuerySet, Resource, ResourceInfo, Sampler, Texture,
+        TextureView, TextureViewNotRenderableReason,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -3667,9 +3667,9 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-impl<A: HalApi> Resource for Device<A> {
-    const TYPE: ResourceType = "Device";
+crate::impl_resource_type!(Device);
 
+impl<A: HalApi> Resource for Device<A> {
     type Marker = id::markers::Device;
 
     fn as_info(&self) -> &ResourceInfo {

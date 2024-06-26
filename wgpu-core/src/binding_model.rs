@@ -8,7 +8,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{
         DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
-        Resource, ResourceErrorIdent, ResourceInfo, ResourceType,
+        Resource, ResourceErrorIdent, ResourceInfo,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -492,9 +492,9 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
     }
 }
 
-impl<A: HalApi> Resource for BindGroupLayout<A> {
-    const TYPE: ResourceType = "BindGroupLayout";
+crate::impl_resource_type!(BindGroupLayout);
 
+impl<A: HalApi> Resource for BindGroupLayout<A> {
     type Marker = crate::id::markers::BindGroupLayout;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -721,9 +721,9 @@ impl<A: HalApi> PipelineLayout<A> {
     }
 }
 
-impl<A: HalApi> Resource for PipelineLayout<A> {
-    const TYPE: ResourceType = "PipelineLayout";
+crate::impl_resource_type!(PipelineLayout);
 
+impl<A: HalApi> Resource for PipelineLayout<A> {
     type Marker = crate::id::markers::PipelineLayout;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -935,9 +935,9 @@ impl<A: HalApi> BindGroup<A> {
     }
 }
 
-impl<A: HalApi> Resource for BindGroup<A> {
-    const TYPE: ResourceType = "BindGroup";
+crate::impl_resource_type!(BindGroup);
 
+impl<A: HalApi> Resource for BindGroup<A> {
     type Marker = crate::id::markers::BindGroup;
 
     fn as_info(&self) -> &ResourceInfo {

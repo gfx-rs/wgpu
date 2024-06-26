@@ -6,8 +6,7 @@ use crate::{
     device::{queue::Queue, resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
-    id::markers,
-    id::{AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
+    id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
     resource::{Resource, ResourceInfo, ResourceType},
@@ -146,9 +145,11 @@ pub struct Surface {
     pub gl: Option<HalSurface<hal::api::Gles>>,
 }
 
-impl Resource for Surface {
-    const TYPE: ResourceType = "Surface";
+impl ResourceType for Surface {
+    const TYPE: &'static str = "Surface";
+}
 
+impl Resource for Surface {
     type Marker = markers::Surface;
 
     fn as_info(&self) -> &ResourceInfo {
@@ -369,9 +370,9 @@ impl<A: HalApi> Adapter<A> {
     }
 }
 
-impl<A: HalApi> Resource for Adapter<A> {
-    const TYPE: ResourceType = "Adapter";
+crate::impl_resource_type!(Adapter);
 
+impl<A: HalApi> Resource for Adapter<A> {
     type Marker = markers::Adapter;
 
     fn as_info(&self) -> &ResourceInfo {

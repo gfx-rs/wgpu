@@ -213,10 +213,12 @@ mod tests {
     struct TestDataId;
     impl Marker for TestDataId {}
 
+    impl ResourceType for TestData {
+        const TYPE: &'static str = "TestData";
+    }
+
     impl Resource for TestData {
         type Marker = TestDataId;
-
-        const TYPE: ResourceType = "Test data";
 
         fn as_info(&self) -> &ResourceInfo {
             &self.info
