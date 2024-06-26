@@ -103,6 +103,7 @@ impl<T: Resource> ResourceInfo<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn id(&self) -> Id<T::Marker> {
         self.id.unwrap()
     }
