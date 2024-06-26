@@ -79,7 +79,7 @@ index format changes.
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    binding_model::{buffer_binding_type_alignment, BindGroup, BindGroupLayout, PipelineLayout},
+    binding_model::{BindError, BindGroup, BindGroupLayout, PipelineLayout},
     command::{
         BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
         PassErrorScope, RenderCommandError, StateChange,
@@ -631,28 +631,7 @@ fn set_bind_group<A: HalApi>(
     state.next_dynamic_offset = offsets_range.end;
     let offsets = &dynamic_offsets[offsets_range.clone()];
 
-    if bind_group.dynamic_binding_info.len() != offsets.len() {
-        return Err(RenderCommandError::InvalidDynamicOffsetCount {
-            actual: offsets.len(),
-            expected: bind_group.dynamic_binding_info.len(),
-        }
-        .into());
-    }
-
-    // Check for misaligned offsets.
-    for (offset, info) in offsets
-        .iter()
-        .map(|offset| *offset as wgt::BufferAddress)
-        .zip(bind_group.dynamic_binding_info.iter())
-    {
-        let (alignment, limit_name) =
-            buffer_binding_type_alignment(&state.device.limits, info.binding_type);
-        if offset % alignment as u64 != 0 {
-            return Err(
-                RenderCommandError::UnalignedBufferOffset(offset, limit_name, alignment).into(),
-            );
-        }
-    }
+    bind_group.validate_dynamic_bindings(index, offsets)?;
 
     state
         .buffer_memory_init_actions
@@ -1601,6 +1580,8 @@ pub(super) enum RenderBundleErrorInner {
     Draw(#[from] DrawError),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error(transparent)]
+    Bind(#[from] BindError),
 }
 
 impl<T> From<T> for RenderBundleErrorInner
