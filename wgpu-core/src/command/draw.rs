@@ -91,8 +91,10 @@ pub enum RenderCommandError {
     InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline targets are incompatible with render pass")]
     IncompatiblePipelineTargets(#[from] crate::device::RenderPassCompatibilityError),
-    #[error("Pipeline writes to depth/stencil, while the pass has read-only depth/stencil")]
-    IncompatiblePipelineRods,
+    #[error("{0} writes to depth, while the pass has read-only depth access")]
+    IncompatibleDepthAccess(ResourceErrorIdent),
+    #[error("{0} writes to stencil, while the pass has read-only stencil access")]
+    IncompatibleStencilAccess(ResourceErrorIdent),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]

@@ -86,8 +86,8 @@ use crate::{
     },
     conv,
     device::{
-        AttachmentData, Device, DeviceError, MissingDownlevelFlags,
-        RenderPassCompatibilityCheckType, RenderPassContext, SHADER_STAGE_COUNT,
+        AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
+        SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
@@ -421,7 +421,7 @@ impl RenderBundleEncoder {
                     .map_pass_err(scope)?;
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let scope = PassErrorScope::SetPipelineRender(pipeline_id);
+                    let scope = PassErrorScope::SetPipelineRender;
                     set_pipeline(
                         &mut state,
                         &pipeline_guard,
@@ -690,16 +690,14 @@ fn set_pipeline<A: HalApi>(
     pipeline.same_device(&state.device)?;
 
     context
-        .check_compatible(
-            &pipeline.pass_context,
-            RenderPassCompatibilityCheckType::RenderPipeline,
-        )
+        .check_compatible(&pipeline.pass_context, pipeline.as_ref())
         .map_err(RenderCommandError::IncompatiblePipelineTargets)?;
 
-    if (pipeline.flags.contains(PipelineFlags::WRITES_DEPTH) && is_depth_read_only)
-        || (pipeline.flags.contains(PipelineFlags::WRITES_STENCIL) && is_stencil_read_only)
-    {
-        return Err(RenderCommandError::IncompatiblePipelineRods.into());
+    if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH) && is_depth_read_only {
+        return Err(RenderCommandError::IncompatibleDepthAccess(pipeline.error_ident()).into());
+    }
+    if pipeline.flags.contains(PipelineFlags::WRITES_STENCIL) && is_stencil_read_only {
+        return Err(RenderCommandError::IncompatibleStencilAccess(pipeline.error_ident()).into());
     }
 
     let pipeline_state = PipelineState::new(pipeline);

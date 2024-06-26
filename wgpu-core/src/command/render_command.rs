@@ -163,7 +163,7 @@ impl RenderCommand {
                         pipelines_guard
                             .get_owned(pipeline_id)
                             .map_err(|_| RenderPassError {
-                                scope: PassErrorScope::SetPipelineRender(pipeline_id),
+                                scope: PassErrorScope::SetPipelineRender,
                                 inner: RenderCommandError::InvalidPipeline(pipeline_id).into(),
                             })?,
                     ),

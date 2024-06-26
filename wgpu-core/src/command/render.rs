@@ -19,7 +19,7 @@ use crate::{
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
-        RenderPassCompatibilityCheckType, RenderPassCompatibilityError, RenderPassContext,
+        RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
     global::Global,
@@ -1542,7 +1542,7 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetPipeline(pipeline) => {
-                        let scope = PassErrorScope::SetPipelineRender(pipeline.as_info().id());
+                        let scope = PassErrorScope::SetPipelineRender;
                         set_pipeline(&mut state, &cmd_buf, pipeline).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetIndexBuffer {
@@ -1905,19 +1905,16 @@ fn set_pipeline<A: HalApi>(
     state
         .info
         .context
-        .check_compatible(
-            &pipeline.pass_context,
-            RenderPassCompatibilityCheckType::RenderPipeline,
-        )
+        .check_compatible(&pipeline.pass_context, pipeline.as_ref())
         .map_err(RenderCommandError::IncompatiblePipelineTargets)?;
 
     state.pipeline_flags = pipeline.flags;
 
-    if (pipeline.flags.contains(PipelineFlags::WRITES_DEPTH) && state.info.is_depth_read_only)
-        || (pipeline.flags.contains(PipelineFlags::WRITES_STENCIL)
-            && state.info.is_stencil_read_only)
-    {
-        return Err(RenderCommandError::IncompatiblePipelineRods.into());
+    if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH) && state.info.is_depth_read_only {
+        return Err(RenderCommandError::IncompatibleDepthAccess(pipeline.error_ident()).into());
+    }
+    if pipeline.flags.contains(PipelineFlags::WRITES_STENCIL) && state.info.is_stencil_read_only {
+        return Err(RenderCommandError::IncompatibleStencilAccess(pipeline.error_ident()).into());
     }
 
     state
@@ -2582,10 +2579,7 @@ fn execute_bundle<A: HalApi>(
     state
         .info
         .context
-        .check_compatible(
-            &bundle.context,
-            RenderPassCompatibilityCheckType::RenderBundle,
-        )
+        .check_compatible(&bundle.context, bundle.as_ref())
         .map_err(RenderPassErrorInner::IncompatibleBundleTargets)?;
 
     if (state.info.is_depth_read_only && !bundle.is_depth_read_only)
@@ -2674,7 +2668,7 @@ impl Global {
         pass: &mut RenderPass,
         pipeline_id: id::RenderPipelineId,
     ) -> Result<(), RenderPassError> {
-        let scope = PassErrorScope::SetPipelineRender(pipeline_id);
+        let scope = PassErrorScope::SetPipelineRender;
 
         let redundant = pass.current_pipeline.set_and_check_redundant(pipeline_id);
         let base = pass.base_mut(scope)?;

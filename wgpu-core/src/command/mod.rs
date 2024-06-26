@@ -869,7 +869,7 @@ pub enum PassErrorScope {
     #[error("In a set_bind_group command")]
     SetBindGroup(id::BindGroupId),
     #[error("In a set_pipeline command")]
-    SetPipelineRender(id::RenderPipelineId),
+    SetPipelineRender,
     #[error("In a set_pipeline command")]
     SetPipelineCompute,
     #[error("In a set_push_constant command")]
@@ -924,9 +924,6 @@ impl PrettyError for PassErrorScope {
             }
             Self::SetBindGroup(id) => {
                 fmt.bind_group_label(&id);
-            }
-            Self::SetPipelineRender(id) => {
-                fmt.render_pipeline_label(&id);
             }
             _ => {}
         }
