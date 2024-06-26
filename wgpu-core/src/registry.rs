@@ -74,25 +74,12 @@ impl<T: Resource> FutureId<'_, T> {
         self.id
     }
 
-    pub fn init(&self, mut value: T) -> Arc<T> {
-        value.as_info_mut().set_id(self.id);
-        Arc::new(value)
-    }
-
-    pub fn init_in_place(&self, mut value: Arc<T>) -> Arc<T> {
-        Arc::get_mut(&mut value)
-            .unwrap()
-            .as_info_mut()
-            .set_id(self.id);
-        value
-    }
-
     /// Assign a new resource to this ID.
     ///
-    /// Registers it with the registry, and fills out the resource info.
+    /// Registers it with the registry.
     pub fn assign(self, value: Arc<T>) -> (Id<T::Marker>, Arc<T>) {
         let mut data = self.data.write();
-        data.insert(self.id, self.init_in_place(value));
+        data.insert(self.id, value);
         (self.id, data.get(self.id).unwrap().clone())
     }
 
@@ -126,12 +113,6 @@ impl<T: Resource> Registry<T> {
         }
     }
 
-    pub(crate) fn request(&self) -> FutureId<T> {
-        FutureId {
-            id: self.identity.process(self.backend),
-            data: &self.storage,
-        }
-    }
     pub(crate) fn try_get(&self, id: Id<T::Marker>) -> Result<Option<Arc<T>>, InvalidId> {
         self.read().try_get(id).map(|o| o.cloned())
     }
@@ -152,9 +133,8 @@ impl<T: Resource> Registry<T> {
         self.identity.free(id);
         storage.remove(id)
     }
-    pub(crate) fn force_replace(&self, id: Id<T::Marker>, mut value: T) {
+    pub(crate) fn force_replace(&self, id: Id<T::Marker>, value: T) {
         let mut storage = self.storage.write();
-        value.as_info_mut().set_id(id);
         storage.force_replace(id, value)
     }
     pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
@@ -228,7 +208,7 @@ mod tests {
 
     use super::Registry;
     struct TestData {
-        info: ResourceInfo<TestData>,
+        info: ResourceInfo,
     }
     struct TestDataId;
     impl Marker for TestDataId {}
@@ -238,12 +218,8 @@ mod tests {
 
         const TYPE: ResourceType = "Test data";
 
-        fn as_info(&self) -> &ResourceInfo<Self> {
+        fn as_info(&self) -> &ResourceInfo {
             &self.info
-        }
-
-        fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-            &mut self.info
         }
     }
 

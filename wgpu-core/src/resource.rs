@@ -9,7 +9,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{
-        AdapterId, BufferId, CommandEncoderId, DeviceId, Id, Marker, SurfaceId, TextureId,
+        AdapterId, BufferId, CommandEncoderId, DeviceId, Marker, SurfaceId, TextureId,
         TextureViewId,
     },
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -57,8 +57,7 @@ use std::{
 /// [`Device`]: crate::device::resource::Device
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
-pub(crate) struct ResourceInfo<T: Resource> {
-    id: Option<Id<T::Marker>>,
+pub(crate) struct ResourceInfo {
     tracker_index: TrackerIndex,
     tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
     /// The index of the last queue submission in which the resource
@@ -74,7 +73,7 @@ pub(crate) struct ResourceInfo<T: Resource> {
     label: String,
 }
 
-impl<T: Resource> Drop for ResourceInfo<T> {
+impl Drop for ResourceInfo {
     fn drop(&mut self) {
         if let Some(indices) = &self.tracker_indices {
             indices.free(self.tracker_index);
@@ -82,7 +81,7 @@ impl<T: Resource> Drop for ResourceInfo<T> {
     }
 }
 
-impl<T: Resource> ResourceInfo<T> {
+impl ResourceInfo {
     pub(crate) fn new(
         label: &Label,
         tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
@@ -92,7 +91,6 @@ impl<T: Resource> ResourceInfo<T> {
             .map(|indices| indices.alloc())
             .unwrap_or(TrackerIndex::INVALID);
         Self {
-            id: None,
             tracker_index,
             tracker_indices,
             submission_index: AtomicUsize::new(0),
@@ -103,18 +101,9 @@ impl<T: Resource> ResourceInfo<T> {
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn id(&self) -> Id<T::Marker> {
-        self.id.unwrap()
-    }
-
     pub(crate) fn tracker_index(&self) -> TrackerIndex {
         debug_assert!(self.tracker_index != TrackerIndex::INVALID);
         self.tracker_index
-    }
-
-    pub(crate) fn set_id(&mut self, id: Id<T::Marker>) {
-        self.id = Some(id);
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -176,8 +165,7 @@ pub(crate) type ResourceType = &'static str;
 pub(crate) trait Resource: 'static + Sized + WasmNotSendSync {
     type Marker: Marker;
     const TYPE: ResourceType;
-    fn as_info(&self) -> &ResourceInfo<Self>;
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self>;
+    fn as_info(&self) -> &ResourceInfo;
 
     /// Returns a string identifying this resource for logging and errors.
     ///
@@ -450,7 +438,7 @@ pub struct Buffer<A: HalApi> {
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: RwLock<BufferInitTracker>,
     pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
-    pub(crate) info: ResourceInfo<Buffer<A>>,
+    pub(crate) info: ResourceInfo,
     pub(crate) map_state: Mutex<BufferMapState<A>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
 }
@@ -796,12 +784,8 @@ impl<A: HalApi> Resource for Buffer<A> {
 
     type Marker = crate::id::markers::Buffer;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -872,7 +856,7 @@ pub struct StagingBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
-    pub(crate) info: ResourceInfo<StagingBuffer<A>>,
+    pub(crate) info: ResourceInfo,
 }
 
 impl<A: HalApi> Drop for StagingBuffer<A> {
@@ -892,12 +876,8 @@ impl<A: HalApi> Resource for StagingBuffer<A> {
 
     type Marker = crate::id::markers::StagingBuffer;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -955,7 +935,7 @@ pub struct Texture<A: HalApi> {
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
-    pub(crate) info: ResourceInfo<Texture<A>>,
+    pub(crate) info: ResourceInfo,
     pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
     pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
@@ -1432,12 +1412,8 @@ impl<A: HalApi> Resource for Texture<A> {
 
     type Marker = crate::id::markers::Texture;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -1519,7 +1495,7 @@ pub struct TextureView<A: HalApi> {
     pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
-    pub(crate) info: ResourceInfo<TextureView<A>>,
+    pub(crate) info: ResourceInfo,
 }
 
 impl<A: HalApi> Drop for TextureView<A> {
@@ -1607,12 +1583,8 @@ impl<A: HalApi> Resource for TextureView<A> {
 
     type Marker = crate::id::markers::TextureView;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -1655,7 +1627,7 @@ pub struct SamplerDescriptor<'a> {
 pub struct Sampler<A: HalApi> {
     pub(crate) raw: Option<A::Sampler>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<Self>,
+    pub(crate) info: ResourceInfo,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
     /// `true` if this is a filtering sampler
@@ -1729,12 +1701,8 @@ impl<A: HalApi> Resource for Sampler<A> {
 
     type Marker = crate::id::markers::Sampler;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -1763,7 +1731,7 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 pub struct QuerySet<A: HalApi> {
     pub(crate) raw: Option<A::QuerySet>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<Self>,
+    pub(crate) info: ResourceInfo,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
@@ -1790,12 +1758,8 @@ impl<A: HalApi> Resource for QuerySet<A> {
 
     type Marker = crate::id::markers::QuerySet;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 

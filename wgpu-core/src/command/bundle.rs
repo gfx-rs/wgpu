@@ -972,7 +972,7 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction<A>>,
     pub(super) context: RenderPassContext,
-    pub(crate) info: ResourceInfo<RenderBundle<A>>,
+    pub(crate) info: ResourceInfo,
     discard_hal_labels: bool,
 }
 
@@ -1187,12 +1187,8 @@ impl<A: HalApi> Resource for RenderBundle<A> {
 
     type Marker = id::markers::RenderBundle;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 

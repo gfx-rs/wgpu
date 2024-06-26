@@ -94,7 +94,7 @@ pub struct Device<A: HalApi> {
     pub(crate) queue: OnceCell<Weak<Queue<A>>>,
     queue_to_drop: OnceCell<A::Queue>,
     pub(crate) zero_buffer: Option<A::Buffer>,
-    pub(crate) info: ResourceInfo<Device<A>>,
+    pub(crate) info: ResourceInfo,
 
     pub(crate) command_allocator: command::CommandAllocator<A>,
     //Note: The submission index here corresponds to the last submission that is done.
@@ -3672,11 +3672,7 @@ impl<A: HalApi> Resource for Device<A> {
 
     type Marker = id::markers::Device;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
