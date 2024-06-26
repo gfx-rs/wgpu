@@ -3668,10 +3668,9 @@ impl<A: HalApi> Device<A> {
 }
 
 crate::impl_resource_type!(Device);
+crate::impl_storage_item!(Device);
 
 impl<A: HalApi> Resource for Device<A> {
-    type Marker = id::markers::Device;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }

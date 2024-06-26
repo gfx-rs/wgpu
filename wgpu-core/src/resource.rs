@@ -8,10 +8,7 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{
-        AdapterId, BufferId, CommandEncoderId, DeviceId, Marker, SurfaceId, TextureId,
-        TextureViewId,
-    },
+    id::{AdapterId, BufferId, CommandEncoderId, DeviceId, SurfaceId, TextureId, TextureViewId},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{Mutex, RwLock},
     resource_log,
@@ -174,8 +171,6 @@ macro_rules! impl_resource_type {
 }
 
 pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + ResourceType {
-    type Marker: Marker;
-
     fn as_info(&self) -> &ResourceInfo;
 
     /// Returns a string identifying this resource for logging and errors.
@@ -791,10 +786,9 @@ pub enum CreateBufferError {
 }
 
 crate::impl_resource_type!(Buffer);
+crate::impl_storage_item!(Buffer);
 
 impl<A: HalApi> Resource for Buffer<A> {
-    type Marker = crate::id::markers::Buffer;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -883,10 +877,9 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
 }
 
 crate::impl_resource_type!(StagingBuffer);
+crate::impl_storage_item!(StagingBuffer);
 
 impl<A: HalApi> Resource for StagingBuffer<A> {
-    type Marker = crate::id::markers::StagingBuffer;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -1419,10 +1412,9 @@ pub enum CreateTextureError {
 }
 
 crate::impl_resource_type!(Texture);
+crate::impl_storage_item!(Texture);
 
 impl<A: HalApi> Resource for Texture<A> {
-    type Marker = crate::id::markers::Texture;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -1590,10 +1582,9 @@ pub enum CreateTextureViewError {
 pub enum TextureViewDestroyError {}
 
 crate::impl_resource_type!(TextureView);
+crate::impl_storage_item!(TextureView);
 
 impl<A: HalApi> Resource for TextureView<A> {
-    type Marker = crate::id::markers::TextureView;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -1708,10 +1699,9 @@ pub enum CreateSamplerError {
 }
 
 crate::impl_resource_type!(Sampler);
+crate::impl_storage_item!(Sampler);
 
 impl<A: HalApi> Resource for Sampler<A> {
-    type Marker = crate::id::markers::Sampler;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -1765,10 +1755,9 @@ impl<A: HalApi> ParentDevice<A> for QuerySet<A> {
 }
 
 crate::impl_resource_type!(QuerySet);
+crate::impl_storage_item!(QuerySet);
 
 impl<A: HalApi> Resource for QuerySet<A> {
-    type Marker = crate::id::markers::QuerySet;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }

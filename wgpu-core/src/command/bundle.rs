@@ -1181,10 +1181,9 @@ impl<A: HalApi> RenderBundle<A> {
 }
 
 crate::impl_resource_type!(RenderBundle);
+crate::impl_storage_item!(RenderBundle);
 
 impl<A: HalApi> Resource for RenderBundle<A> {
-    type Marker = id::markers::RenderBundle;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }

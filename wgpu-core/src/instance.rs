@@ -148,10 +148,11 @@ pub struct Surface {
 impl ResourceType for Surface {
     const TYPE: &'static str = "Surface";
 }
+impl crate::storage::StorageItem for Surface {
+    type Marker = markers::Surface;
+}
 
 impl Resource for Surface {
-    type Marker = markers::Surface;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -371,10 +372,9 @@ impl<A: HalApi> Adapter<A> {
 }
 
 crate::impl_resource_type!(Adapter);
+crate::impl_storage_item!(Adapter);
 
 impl<A: HalApi> Resource for Adapter<A> {
-    type Marker = markers::Adapter;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }

@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use wgt::Backend;
 
-use crate::id::Id;
-use crate::resource::Resource;
+use crate::id::{Id, Marker};
+use crate::resource::{Resource, ResourceType};
 use crate::{Epoch, Index};
 
 /// An entry in a `Storage::map` table.
@@ -27,6 +27,20 @@ pub(crate) enum Element<T> {
 #[derive(Clone, Debug)]
 pub(crate) struct InvalidId;
 
+// The Resource bound is still needed because of label_for_resource
+pub(crate) trait StorageItem: ResourceType + Resource {
+    type Marker: Marker;
+}
+
+#[macro_export]
+macro_rules! impl_storage_item {
+    ($ty:ident) => {
+        impl<A: HalApi> $crate::storage::StorageItem for $ty<A> {
+            type Marker = $crate::id::markers::$ty;
+        }
+    };
+}
+
 /// A table of `T` values indexed by the id type `I`.
 ///
 /// `Storage` implements [`std::ops::Index`], accepting `Id` values as
@@ -38,7 +52,7 @@ pub(crate) struct InvalidId;
 #[derive(Debug)]
 pub(crate) struct Storage<T>
 where
-    T: Resource,
+    T: StorageItem,
 {
     pub(crate) map: Vec<Element<T>>,
     kind: &'static str,
@@ -46,7 +60,7 @@ where
 
 impl<T> ops::Index<Id<T::Marker>> for Storage<T>
 where
-    T: Resource,
+    T: StorageItem,
 {
     type Output = Arc<T>;
     fn index(&self, id: Id<T::Marker>) -> &Arc<T> {
@@ -55,7 +69,7 @@ where
 }
 impl<T> Storage<T>
 where
-    T: Resource,
+    T: StorageItem,
 {
     pub(crate) fn new() -> Self {
         Self {
@@ -67,7 +81,7 @@ where
 
 impl<T> Storage<T>
 where
-    T: Resource,
+    T: StorageItem,
 {
     #[allow(dead_code)]
     pub(crate) fn contains(&self, id: Id<T::Marker>) -> bool {

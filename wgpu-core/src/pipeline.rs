@@ -66,10 +66,9 @@ impl<A: HalApi> Drop for ShaderModule<A> {
 }
 
 crate::impl_resource_type!(ShaderModule);
+crate::impl_storage_item!(ShaderModule);
 
 impl<A: HalApi> Resource for ShaderModule<A> {
-    type Marker = crate::id::markers::ShaderModule;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -230,10 +229,9 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
 }
 
 crate::impl_resource_type!(ComputePipeline);
+crate::impl_storage_item!(ComputePipeline);
 
 impl<A: HalApi> Resource for ComputePipeline<A> {
-    type Marker = crate::id::markers::ComputePipeline;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -294,10 +292,9 @@ impl<A: HalApi> Drop for PipelineCache<A> {
 }
 
 crate::impl_resource_type!(PipelineCache);
+crate::impl_storage_item!(PipelineCache);
 
 impl<A: HalApi> Resource for PipelineCache<A> {
-    type Marker = crate::id::markers::PipelineCache;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -549,10 +546,9 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
 }
 
 crate::impl_resource_type!(RenderPipeline);
+crate::impl_storage_item!(RenderPipeline);
 
 impl<A: HalApi> Resource for RenderPipeline<A> {
-    type Marker = crate::id::markers::RenderPipeline;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }

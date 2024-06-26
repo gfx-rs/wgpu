@@ -528,10 +528,9 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 crate::impl_resource_type!(CommandBuffer);
+crate::impl_storage_item!(CommandBuffer);
 
 impl<A: HalApi> Resource for CommandBuffer<A> {
-    type Marker = id::markers::CommandBuffer;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }

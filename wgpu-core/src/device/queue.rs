@@ -43,10 +43,9 @@ pub struct Queue<A: HalApi> {
 }
 
 crate::impl_resource_type!(Queue);
+crate::impl_storage_item!(Queue);
 
 impl<A: HalApi> Resource for Queue<A> {
-    type Marker = id::markers::Queue;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
