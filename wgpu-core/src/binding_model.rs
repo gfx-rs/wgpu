@@ -8,7 +8,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{
         DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
-        Resource, ResourceInfo, ResourceType,
+        Resource, ResourceErrorIdent, ResourceInfo, ResourceType,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -771,19 +771,21 @@ pub enum BindingResource<'a> {
 #[non_exhaustive]
 pub enum BindError {
     #[error(
-        "Bind group {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} were provided.",
+        "{bind_group} {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} were provided.",
         s0 = if *.expected >= 2 { "s" } else { "" },
         s1 = if *.actual >= 2 { "s" } else { "" },
     )]
     MismatchedDynamicOffsetCount {
+        bind_group: ResourceErrorIdent,
         group: u32,
         actual: usize,
         expected: usize,
     },
     #[error(
-        "Dynamic binding index {idx} (targeting bind group {group}, binding {binding}) with value {offset}, does not respect device's requested `{limit_name}` limit: {alignment}"
+        "Dynamic binding index {idx} (targeting {bind_group} {group}, binding {binding}) with value {offset}, does not respect device's requested `{limit_name}` limit: {alignment}"
     )]
     UnalignedDynamicBinding {
+        bind_group: ResourceErrorIdent,
         idx: usize,
         group: u32,
         binding: u32,
@@ -792,10 +794,11 @@ pub enum BindError {
         limit_name: &'static str,
     },
     #[error(
-        "Dynamic binding offset index {idx} with offset {offset} would overrun the buffer bound to bind group {group} -> binding {binding}. \
+        "Dynamic binding offset index {idx} with offset {offset} would overrun the buffer bound to {bind_group} {group} -> binding {binding}. \
          Buffer size is {buffer_size} bytes, the binding binds bytes {binding_range:?}, meaning the maximum the binding can be offset is {maximum_dynamic_offset} bytes",
     )]
     DynamicBindingOutOfBounds {
+        bind_group: ResourceErrorIdent,
         idx: usize,
         group: u32,
         binding: u32,
@@ -895,6 +898,7 @@ impl<A: HalApi> BindGroup<A> {
     ) -> Result<(), BindError> {
         if self.dynamic_binding_info.len() != offsets.len() {
             return Err(BindError::MismatchedDynamicOffsetCount {
+                bind_group: self.error_ident(),
                 group: bind_group_index,
                 expected: self.dynamic_binding_info.len(),
                 actual: offsets.len(),
@@ -911,6 +915,7 @@ impl<A: HalApi> BindGroup<A> {
                 buffer_binding_type_alignment(&self.device.limits, info.binding_type);
             if offset as wgt::BufferAddress % alignment as u64 != 0 {
                 return Err(BindError::UnalignedDynamicBinding {
+                    bind_group: self.error_ident(),
                     group: bind_group_index,
                     binding: info.binding_idx,
                     idx,
@@ -922,6 +927,7 @@ impl<A: HalApi> BindGroup<A> {
 
             if offset as wgt::BufferAddress > info.maximum_dynamic_offset {
                 return Err(BindError::DynamicBindingOutOfBounds {
+                    bind_group: self.error_ident(),
                     group: bind_group_index,
                     binding: info.binding_idx,
                     idx,

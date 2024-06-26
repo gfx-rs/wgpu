@@ -409,7 +409,7 @@ impl RenderBundleEncoder {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let scope = PassErrorScope::SetBindGroup(bind_group_id);
+                    let scope = PassErrorScope::SetBindGroup;
                     set_bind_group(
                         &mut state,
                         &bind_group_guard,

@@ -153,7 +153,7 @@ impl RenderCommand {
                         num_dynamic_offsets,
                         bind_group: bind_group_guard.get_owned(bind_group_id).map_err(|_| {
                             RenderPassError {
-                                scope: PassErrorScope::SetBindGroup(bind_group_id),
+                                scope: PassErrorScope::SetBindGroup,
                                 inner: RenderPassErrorInner::InvalidBindGroup(index),
                             }
                         })?,
