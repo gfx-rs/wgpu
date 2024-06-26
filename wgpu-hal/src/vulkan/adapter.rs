@@ -1773,7 +1773,6 @@ impl super::Adapter {
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
                     },
-                    image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
