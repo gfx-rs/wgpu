@@ -311,7 +311,7 @@ impl<A: HalApi> CommandBufferMutable<A> {
 pub struct CommandBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     support_clear_texture: bool,
-    pub(crate) info: ResourceInfo<CommandBuffer<A>>,
+    pub(crate) info: ResourceInfo,
 
     /// The mutable state of this command buffer.
     ///
@@ -532,12 +532,8 @@ impl<A: HalApi> Resource for CommandBuffer<A> {
 
     type Marker = id::markers::CommandBuffer;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 

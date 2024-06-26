@@ -134,7 +134,7 @@ impl Instance {
 
 pub struct Surface {
     pub(crate) presentation: Mutex<Option<Presentation>>,
-    pub(crate) info: ResourceInfo<Surface>,
+    pub(crate) info: ResourceInfo,
 
     #[cfg(vulkan)]
     pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
@@ -151,12 +151,8 @@ impl Resource for Surface {
 
     type Marker = markers::Surface;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -181,7 +177,7 @@ impl Surface {
 
 pub struct Adapter<A: HalApi> {
     pub(crate) raw: hal::ExposedAdapter<A>,
-    pub(crate) info: ResourceInfo<Adapter<A>>,
+    pub(crate) info: ResourceInfo,
 }
 
 impl<A: HalApi> Adapter<A> {
@@ -378,12 +374,8 @@ impl<A: HalApi> Resource for Adapter<A> {
 
     type Marker = markers::Adapter;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 

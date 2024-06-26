@@ -474,7 +474,7 @@ pub struct BindGroupLayout<A: HalApi> {
     pub(crate) origin: bgl::Origin,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
-    pub(crate) info: ResourceInfo<BindGroupLayout<A>>,
+    pub(crate) info: ResourceInfo,
 }
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
@@ -497,12 +497,8 @@ impl<A: HalApi> Resource for BindGroupLayout<A> {
 
     type Marker = crate::id::markers::BindGroupLayout;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -617,7 +613,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 pub struct PipelineLayout<A: HalApi> {
     pub(crate) raw: Option<A::PipelineLayout>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<PipelineLayout<A>>,
+    pub(crate) info: ResourceInfo,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
@@ -730,12 +726,8 @@ impl<A: HalApi> Resource for PipelineLayout<A> {
 
     type Marker = crate::id::markers::PipelineLayout;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -850,7 +842,7 @@ pub struct BindGroup<A: HalApi> {
     pub(crate) raw: Snatchable<A::BindGroup>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<BindGroupLayout<A>>,
-    pub(crate) info: ResourceInfo<BindGroup<A>>,
+    pub(crate) info: ResourceInfo,
     pub(crate) used: BindGroupStates<A>,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction<A>>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction<A>>,
@@ -948,12 +940,8 @@ impl<A: HalApi> Resource for BindGroup<A> {
 
     type Marker = crate::id::markers::BindGroup;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 

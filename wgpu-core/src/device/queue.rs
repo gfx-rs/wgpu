@@ -39,7 +39,7 @@ use super::Device;
 pub struct Queue<A: HalApi> {
     pub(crate) device: Option<Arc<Device<A>>>,
     pub(crate) raw: Option<A::Queue>,
-    pub(crate) info: ResourceInfo<Queue<A>>,
+    pub(crate) info: ResourceInfo,
 }
 
 impl<A: HalApi> Resource for Queue<A> {
@@ -47,12 +47,8 @@ impl<A: HalApi> Resource for Queue<A> {
 
     type Marker = id::markers::Queue;
 
-    fn as_info(&self) -> &ResourceInfo<Self> {
+    fn as_info(&self) -> &ResourceInfo {
         &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
     }
 }
 
@@ -466,8 +462,7 @@ impl Global {
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
-        let stage_fid = hub.staging_buffers.request();
-        let staging_buffer = stage_fid.init(staging_buffer);
+        let staging_buffer = Arc::new(staging_buffer);
 
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
@@ -862,8 +857,7 @@ impl Global {
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(device, stage_size, device.instance_flags)?;
 
-        let stage_fid = hub.staging_buffers.request();
-        let staging_buffer = stage_fid.init(staging_buffer);
+        let staging_buffer = Arc::new(staging_buffer);
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
