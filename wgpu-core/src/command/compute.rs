@@ -603,7 +603,7 @@ impl Global {
                     num_dynamic_offsets,
                     bind_group,
                 } => {
-                    let scope = PassErrorScope::SetBindGroup(bind_group.as_info().id());
+                    let scope = PassErrorScope::SetBindGroup;
                     set_bind_group(
                         &mut state,
                         cmd_buf,
@@ -1041,7 +1041,7 @@ impl Global {
         bind_group_id: id::BindGroupId,
         offsets: &[DynamicOffset],
     ) -> Result<(), ComputePassError> {
-        let scope = PassErrorScope::SetBindGroup(bind_group_id);
+        let scope = PassErrorScope::SetBindGroup;
         let base = pass
             .base
             .as_mut()

@@ -867,7 +867,7 @@ pub enum PassErrorScope {
     #[error("In a pass parameter")]
     Pass(Option<id::CommandBufferId>),
     #[error("In a set_bind_group command")]
-    SetBindGroup(id::BindGroupId),
+    SetBindGroup,
     #[error("In a set_pipeline command")]
     SetPipelineRender,
     #[error("In a set_pipeline command")]
@@ -921,9 +921,6 @@ impl PrettyError for PassErrorScope {
             }
             Self::Pass(Some(id)) => {
                 fmt.command_buffer_label(&id);
-            }
-            Self::SetBindGroup(id) => {
-                fmt.bind_group_label(&id);
             }
             _ => {}
         }
