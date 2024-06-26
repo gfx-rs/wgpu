@@ -831,7 +831,7 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
-        occlusion_query_set: Option<id::QuerySetId>,
+        occlusion_query_set: Option<Arc<QuerySet<A>>>,
         encoder: &mut CommandEncoder<A>,
         trackers: &mut Tracker<A>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
@@ -1226,13 +1226,8 @@ impl<'a, 'd, A: HalApi> RenderPassInfo<'a, 'd, A> {
             None
         };
 
-        let occlusion_query_set = if let Some(occlusion_query_set) = occlusion_query_set {
-            let query_set = query_set_guard
-                .get(occlusion_query_set)
-                .map_err(|_| RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
-
-            trackers.query_sets.add_single(query_set);
-
+        let occlusion_query_set = if let Some(query_set) = occlusion_query_set {
+            let query_set = trackers.query_sets.insert_single(query_set);
             Some(query_set.raw.as_ref().unwrap())
         } else {
             None
@@ -1368,7 +1363,20 @@ impl Global {
         timestamp_writes: Option<&RenderPassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
     ) -> Result<(), RenderPassError> {
-        let commands = RenderCommand::resolve_render_command_ids(A::hub(self), &base.commands)?;
+        let pass_scope = PassErrorScope::PassEncoder(encoder_id);
+
+        let hub = A::hub(self);
+
+        let commands = RenderCommand::resolve_render_command_ids(hub, &base.commands)?;
+
+        let occlusion_query_set = occlusion_query_set_id
+            .map(|id| {
+                hub.query_sets
+                    .get(id)
+                    .map_err(|_| RenderPassErrorInner::InvalidQuerySet(id))
+            })
+            .transpose()
+            .map_pass_err(pass_scope)?;
 
         self.render_pass_end_impl::<A>(
             encoder_id,
@@ -1382,7 +1390,7 @@ impl Global {
             color_attachments,
             depth_stencil_attachment,
             timestamp_writes,
-            occlusion_query_set_id,
+            occlusion_query_set,
         )
     }
 
@@ -1394,7 +1402,7 @@ impl Global {
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
-        occlusion_query_set_id: Option<id::QuerySetId>,
+        occlusion_query_set: Option<Arc<QuerySet<A>>>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!(
             "CommandEncoder::run_render_pass {}",
@@ -1429,7 +1437,9 @@ impl Global {
                     target_colors: color_attachments.to_vec(),
                     target_depth_stencil: depth_stencil_attachment.cloned(),
                     timestamp_writes: timestamp_writes.cloned(),
-                    occlusion_query_set_id,
+                    occlusion_query_set_id: occlusion_query_set
+                        .as_ref()
+                        .map(|query_set| query_set.as_info().id()),
                 });
             }
 
@@ -1464,7 +1474,7 @@ impl Global {
                 color_attachments,
                 depth_stencil_attachment,
                 timestamp_writes,
-                occlusion_query_set_id,
+                occlusion_query_set.clone(),
                 encoder,
                 tracker,
                 texture_memory_actions,
@@ -1702,20 +1712,15 @@ impl Global {
                         api_log!("RenderPass::begin_occlusion_query {query_index}");
                         let scope = PassErrorScope::BeginOcclusionQuery;
 
-                        let query_set_id = occlusion_query_set_id
+                        let query_set = occlusion_query_set
+                            .clone()
                             .ok_or(RenderPassErrorInner::MissingOcclusionQuerySet)
                             .map_pass_err(scope)?;
 
-                        let query_set = query_set_guard
-                            .get(query_set_id)
-                            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
-                            .map_pass_err(scope)?;
-
-                        state.tracker.query_sets.add_single(query_set);
-
                         validate_and_begin_occlusion_query(
-                            query_set.clone(),
+                            query_set,
                             state.raw_encoder,
+                            &mut state.tracker.query_sets,
                             query_index,
                             Some(&mut cmd_buf_data.pending_query_resets),
                             &mut state.active_query,
