@@ -6,8 +6,7 @@ use crate::{
     id::Id,
     identity::IdentityManager,
     lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard},
-    resource::Resource,
-    storage::{Element, InvalidId, Storage},
+    storage::{Element, InvalidId, Storage, StorageItem},
 };
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -37,14 +36,14 @@ impl RegistryReport {
 /// any other dependent resource
 ///
 #[derive(Debug)]
-pub(crate) struct Registry<T: Resource> {
+pub(crate) struct Registry<T: StorageItem> {
     // Must only contain an id which has either never been used or has been released from `storage`
     identity: Arc<IdentityManager<T::Marker>>,
     storage: RwLock<Storage<T>>,
     backend: Backend,
 }
 
-impl<T: Resource> Registry<T> {
+impl<T: StorageItem> Registry<T> {
     pub(crate) fn new(backend: Backend) -> Self {
         Self {
             identity: Arc::new(IdentityManager::new()),
@@ -59,12 +58,12 @@ impl<T: Resource> Registry<T> {
 }
 
 #[must_use]
-pub(crate) struct FutureId<'a, T: Resource> {
+pub(crate) struct FutureId<'a, T: StorageItem> {
     id: Id<T::Marker>,
     data: &'a RwLock<Storage<T>>,
 }
 
-impl<T: Resource> FutureId<'_, T> {
+impl<T: StorageItem> FutureId<'_, T> {
     #[allow(dead_code)]
     pub fn id(&self) -> Id<T::Marker> {
         self.id
@@ -99,7 +98,7 @@ impl<T: Resource> FutureId<'_, T> {
     }
 }
 
-impl<T: Resource> Registry<T> {
+impl<T: StorageItem> Registry<T> {
     pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<T> {
         FutureId {
             id: match id_in {
@@ -204,6 +203,7 @@ mod tests {
     use crate::{
         id::Marker,
         resource::{Resource, ResourceInfo, ResourceType},
+        storage::StorageItem,
     };
 
     use super::Registry;
@@ -217,9 +217,11 @@ mod tests {
         const TYPE: &'static str = "TestData";
     }
 
-    impl Resource for TestData {
+    impl StorageItem for TestData {
         type Marker = TestDataId;
+    }
 
+    impl Resource for TestData {
         fn as_info(&self) -> &ResourceInfo {
             &self.info
         }

@@ -493,10 +493,9 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
 }
 
 crate::impl_resource_type!(BindGroupLayout);
+crate::impl_storage_item!(BindGroupLayout);
 
 impl<A: HalApi> Resource for BindGroupLayout<A> {
-    type Marker = crate::id::markers::BindGroupLayout;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -722,10 +721,9 @@ impl<A: HalApi> PipelineLayout<A> {
 }
 
 crate::impl_resource_type!(PipelineLayout);
+crate::impl_storage_item!(PipelineLayout);
 
 impl<A: HalApi> Resource for PipelineLayout<A> {
-    type Marker = crate::id::markers::PipelineLayout;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
@@ -936,10 +934,9 @@ impl<A: HalApi> BindGroup<A> {
 }
 
 crate::impl_resource_type!(BindGroup);
+crate::impl_storage_item!(BindGroup);
 
 impl<A: HalApi> Resource for BindGroup<A> {
-    type Marker = crate::id::markers::BindGroup;
-
     fn as_info(&self) -> &ResourceInfo {
         &self.info
     }
