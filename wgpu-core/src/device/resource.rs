@@ -1919,7 +1919,7 @@ impl<A: HalApi> Device<A> {
                 let end = bb.offset + size.get();
                 if end > buffer.size {
                     return Err(Error::BindingRangeTooLarge {
-                        buffer: bb.buffer_id,
+                        buffer: buffer.error_ident(),
                         range: bb.offset..end,
                         size: buffer.size,
                     });
@@ -1929,7 +1929,7 @@ impl<A: HalApi> Device<A> {
             None => {
                 if buffer.size < bb.offset {
                     return Err(Error::BindingRangeTooLarge {
-                        buffer: bb.buffer_id,
+                        buffer: buffer.error_ident(),
                         range: bb.offset..bb.offset,
                         size: buffer.size,
                     });
@@ -1961,14 +1961,14 @@ impl<A: HalApi> Device<A> {
             let min_size = non_zero.get();
             if min_size > bind_size {
                 return Err(Error::BindingSizeTooSmall {
-                    buffer: bb.buffer_id,
+                    buffer: buffer.error_ident(),
                     actual: bind_size,
                     min: min_size,
                 });
             }
         } else {
-            let late_size =
-                wgt::BufferSize::new(bind_size).ok_or(Error::BindingZeroSize(bb.buffer_id))?;
+            let late_size = wgt::BufferSize::new(bind_size)
+                .ok_or_else(|| Error::BindingZeroSize(buffer.error_ident()))?;
             late_buffer_binding_sizes.insert(binding, late_size);
         }
 

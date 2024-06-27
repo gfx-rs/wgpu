@@ -2,7 +2,7 @@ use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
     },
-    error::{ErrorFormatter, PrettyError},
+    error::PrettyError,
     hal_api::HalApi,
     id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
@@ -94,20 +94,20 @@ pub enum CreateBindGroupError {
     BindingArrayLengthMismatch { actual: usize, expected: usize },
     #[error("Array binding provided zero elements")]
     BindingArrayZeroLength,
-    #[error("Bound buffer range {range:?} does not fit in buffer of size {size}")]
+    #[error("The bound range {range:?} of {buffer} overflows its size ({size})")]
     BindingRangeTooLarge {
-        buffer: BufferId,
+        buffer: ResourceErrorIdent,
         range: Range<wgt::BufferAddress>,
         size: u64,
     },
-    #[error("Buffer binding size {actual} is less than minimum {min}")]
+    #[error("Binding size {actual} of {buffer} is less than minimum {min}")]
     BindingSizeTooSmall {
-        buffer: BufferId,
+        buffer: ResourceErrorIdent,
         actual: u64,
         min: u64,
     },
-    #[error("Buffer binding size is zero")]
-    BindingZeroSize(BufferId),
+    #[error("{0} binding size is zero")]
+    BindingZeroSize(ResourceErrorIdent),
     #[error("Number of bindings in bind group descriptor ({actual}) does not match the number of bindings defined in the bind group layout ({expected})")]
     BindingsNumMismatch { actual: usize, expected: usize },
     #[error("Binding {0} is used at least twice in the descriptor")]
@@ -185,23 +185,7 @@ pub enum CreateBindGroupError {
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
 }
 
-impl PrettyError for CreateBindGroupError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        match *self {
-            Self::BindingZeroSize(id) => {
-                fmt.buffer_label(&id);
-            }
-            Self::BindingRangeTooLarge { buffer, .. } => {
-                fmt.buffer_label(&buffer);
-            }
-            Self::BindingSizeTooSmall { buffer, .. } => {
-                fmt.buffer_label(&buffer);
-            }
-            _ => {}
-        };
-    }
-}
+impl PrettyError for CreateBindGroupError {}
 
 #[derive(Clone, Debug, Error)]
 pub enum BindingZone {
