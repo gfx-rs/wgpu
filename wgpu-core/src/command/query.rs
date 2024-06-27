@@ -9,7 +9,7 @@ use crate::{
     hal_api::HalApi,
     id,
     init_tracker::MemoryInitKind,
-    resource::{DestroyedResourceError, ParentDevice, QuerySet},
+    resource::{DestroyedResourceError, ParentDevice, QuerySet, Trackable},
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
 };
@@ -33,7 +33,7 @@ impl<A: HalApi> QueryResetMap<A> {
     pub fn use_query_set(&mut self, query_set: &Arc<QuerySet<A>>, query: u32) -> bool {
         let vec_pair = self
             .map
-            .entry(query_set.info.tracker_index())
+            .entry(query_set.tracker_index())
             .or_insert_with(|| {
                 (
                     vec![false; query_set.desc.count as usize],

@@ -95,7 +95,7 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, Resource, ResourceInfo},
+    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, Resource, TrackingData},
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
@@ -579,7 +579,7 @@ impl RenderBundleEncoder {
             texture_memory_init_actions,
             context: self.context,
             label: desc.label.to_string(),
-            info: ResourceInfo::new(Some(tracker_indices)),
+            tracking_data: TrackingData::new(tracker_indices),
             discard_hal_labels,
         })
     }
@@ -973,7 +973,7 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) context: RenderPassContext,
     /// The `label` from the descriptor used to create the resource.
     label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
     discard_hal_labels: bool,
 }
 
@@ -1186,12 +1186,9 @@ impl<A: HalApi> RenderBundle<A> {
 crate::impl_resource_type!(RenderBundle);
 crate::impl_labeled!(RenderBundle);
 crate::impl_storage_item!(RenderBundle);
+crate::impl_trackable!(RenderBundle);
 
-impl<A: HalApi> Resource for RenderBundle<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for RenderBundle<A> {}
 
 impl<A: HalApi> ParentDevice<A> for RenderBundle<A> {
     fn device(&self) -> &Arc<Device<A>> {

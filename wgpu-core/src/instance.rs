@@ -9,7 +9,7 @@ use crate::{
     id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
-    resource::{Labeled, Resource, ResourceInfo, ResourceType},
+    resource::{Labeled, Resource, ResourceType},
     resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
@@ -133,7 +133,6 @@ impl Instance {
 
 pub struct Surface {
     pub(crate) presentation: Mutex<Option<Presentation>>,
-    pub(crate) info: ResourceInfo,
 
     #[cfg(vulkan)]
     pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
@@ -158,11 +157,7 @@ impl crate::storage::StorageItem for Surface {
     type Marker = markers::Surface;
 }
 
-impl Resource for Surface {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl Resource for Surface {}
 
 impl Surface {
     pub fn get_capabilities<A: HalApi>(
@@ -185,7 +180,6 @@ impl Surface {
 
 pub struct Adapter<A: HalApi> {
     pub(crate) raw: hal::ExposedAdapter<A>,
-    pub(crate) info: ResourceInfo,
 }
 
 impl<A: HalApi> Adapter<A> {
@@ -202,10 +196,7 @@ impl<A: HalApi> Adapter<A> {
             .min_storage_buffer_offset_alignment
             .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
 
-        Self {
-            raw,
-            info: ResourceInfo::new(None),
-        }
+        Self { raw }
     }
 
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
@@ -309,7 +300,6 @@ impl<A: HalApi> Adapter<A> {
             let queue = Queue {
                 device: None,
                 raw: Some(hal_device.queue),
-                info: ResourceInfo::new(None),
             };
             return Ok((device, queue));
         }
@@ -386,11 +376,7 @@ impl<A: HalApi> Labeled for Adapter<A> {
 }
 crate::impl_storage_item!(Adapter);
 
-impl<A: HalApi> Resource for Adapter<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for Adapter<A> {}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -533,7 +519,6 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new(None),
 
             #[cfg(vulkan)]
             vulkan: init::<hal::api::Vulkan>(
@@ -597,7 +582,6 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new(None),
             metal: Some(self.instance.metal.as_ref().map_or(
                 Err(CreateSurfaceError::BackendNotEnabled(Backend::Metal)),
                 |inst| {
@@ -626,7 +610,6 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new(None),
             dx12: Some(create_surface_func(
                 self.instance
                     .dx12
