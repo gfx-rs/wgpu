@@ -9,7 +9,9 @@ use crate::{
     hal_api::HalApi,
     id,
     init_tracker::MemoryInitKind,
-    resource::{DestroyedResourceError, ParentDevice, QuerySet, Trackable},
+    resource::{
+        DestroyedResourceError, MissingBufferUsageError, ParentDevice, QuerySet, Trackable,
+    },
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
 };
@@ -144,8 +146,8 @@ pub enum QueryUseError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ResolveError {
-    #[error("Queries can only be resolved to buffers that contain the QUERY_RESOLVE usage")]
-    MissingBufferUsage,
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("Resolve buffer offset has to be aligned to `QUERY_RESOLVE_BUFFER_ALIGNMENT")]
     BufferOffsetAlignment,
     #[error("Resolving queries {start_query}..{end_query} would overrun the query set of size {query_set_size}")]
@@ -417,9 +419,9 @@ impl Global {
 
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
-        if !dst_buffer.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
-            return Err(ResolveError::MissingBufferUsage.into());
-        }
+        dst_buffer
+            .check_usage(wgt::BufferUsages::QUERY_RESOLVE)
+            .map_err(ResolveError::MissingBufferUsage)?;
 
         let end_query = start_query + query_count;
         if end_query > query_set.desc.count {
