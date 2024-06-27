@@ -15,7 +15,7 @@ use crate::{
     resource_log,
     snatch::SnatchGuard,
     track::{
-        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
+        invalid_resource_state, skip_barrier, Labeled, ResourceMetadata, ResourceMetadataProvider,
         ResourceUsageCompatibilityError, ResourceUses,
     },
 };

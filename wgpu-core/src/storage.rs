@@ -4,7 +4,7 @@ use std::sync::Arc;
 use wgt::Backend;
 
 use crate::id::{Id, Marker};
-use crate::resource::{Resource, ResourceType};
+use crate::resource::{Labeled, ResourceType};
 use crate::{Epoch, Index};
 
 /// An entry in a `Storage::map` table.
@@ -27,8 +27,8 @@ pub(crate) enum Element<T> {
 #[derive(Clone, Debug)]
 pub(crate) struct InvalidId;
 
-// The Resource bound is still needed because of label_for_resource
-pub(crate) trait StorageItem: ResourceType + Resource {
+// The Labeled bound is still needed because of label_for_resource
+pub(crate) trait StorageItem: ResourceType + Labeled {
     type Marker: Marker;
 }
 

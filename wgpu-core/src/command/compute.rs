@@ -19,8 +19,8 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, DestroyedResourceError, MissingBufferUsageError, ParentDevice, Resource,
-        ResourceErrorIdent,
+        self, Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice,
+        Resource, ResourceErrorIdent,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},

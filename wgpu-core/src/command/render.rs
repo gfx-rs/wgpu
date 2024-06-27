@@ -28,8 +28,8 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{
-        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
-        QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
+        DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
+        ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
     },
     track::{ResourceUsageCompatibilityError, TextureSelector, Tracker, UsageScope},
     Label,

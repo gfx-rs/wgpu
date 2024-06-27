@@ -17,8 +17,8 @@ use crate::{
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, ParentDevice, Resource, ResourceErrorIdent, ResourceInfo, StagingBuffer,
-        Texture, TextureInner,
+        DestroyedTexture, Labeled, ParentDevice, Resource, ResourceErrorIdent, ResourceInfo,
+        StagingBuffer, Texture, TextureInner,
     },
     resource_log,
     track::{self, TrackerIndex},
@@ -43,6 +43,12 @@ pub struct Queue<A: HalApi> {
 }
 
 crate::impl_resource_type!(Queue);
+// TODO: remove once we get rid of Registry.label_for_resource
+impl<A: HalApi> Labeled for Queue<A> {
+    fn label(&self) -> &str {
+        ""
+    }
+}
 crate::impl_storage_item!(Queue);
 
 impl<A: HalApi> Resource for Queue<A> {
@@ -344,7 +350,7 @@ fn prepare_staging_buffer<A: HalApi>(
         raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(buffer)),
         device: device.clone(),
         size,
-        info: ResourceInfo::new(&None, Some(device.tracker_indices.staging_buffers.clone())),
+        info: ResourceInfo::new(Some(device.tracker_indices.staging_buffers.clone())),
         is_coherent: mapping.is_coherent,
     };
 

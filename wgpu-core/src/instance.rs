@@ -9,7 +9,7 @@ use crate::{
     id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
-    resource::{Resource, ResourceInfo, ResourceType},
+    resource::{Labeled, Resource, ResourceInfo, ResourceType},
     resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
@@ -148,6 +148,12 @@ pub struct Surface {
 impl ResourceType for Surface {
     const TYPE: &'static str = "Surface";
 }
+// TODO: remove once we get rid of Registry.label_for_resource
+impl Labeled for Surface {
+    fn label(&self) -> &str {
+        ""
+    }
+}
 impl crate::storage::StorageItem for Surface {
     type Marker = markers::Surface;
 }
@@ -198,7 +204,7 @@ impl<A: HalApi> Adapter<A> {
 
         Self {
             raw,
-            info: ResourceInfo::new(&None, None),
+            info: ResourceInfo::new(None),
         }
     }
 
@@ -303,7 +309,7 @@ impl<A: HalApi> Adapter<A> {
             let queue = Queue {
                 device: None,
                 raw: Some(hal_device.queue),
-                info: ResourceInfo::new(&None, None),
+                info: ResourceInfo::new(None),
             };
             return Ok((device, queue));
         }
@@ -372,6 +378,12 @@ impl<A: HalApi> Adapter<A> {
 }
 
 crate::impl_resource_type!(Adapter);
+// TODO: remove once we get rid of Registry.label_for_resource
+impl<A: HalApi> Labeled for Adapter<A> {
+    fn label(&self) -> &str {
+        ""
+    }
+}
 crate::impl_storage_item!(Adapter);
 
 impl<A: HalApi> Resource for Adapter<A> {
@@ -521,7 +533,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new(&None, None),
+            info: ResourceInfo::new(None),
 
             #[cfg(vulkan)]
             vulkan: init::<hal::api::Vulkan>(
@@ -585,7 +597,7 @@ impl Global {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new(&None, None),
+            info: ResourceInfo::new(None),
             metal: Some(self.instance.metal.as_ref().map_or(
                 Err(CreateSurfaceError::BackendNotEnabled(Backend::Metal)),
                 |inst| {
@@ -614,7 +626,7 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            info: ResourceInfo::new(&None, None),
+            info: ResourceInfo::new(None),
             dx12: Some(create_surface_func(
                 self.instance
                     .dx12

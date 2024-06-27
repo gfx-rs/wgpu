@@ -10,7 +10,7 @@ use crate::{
     lock::Mutex,
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
-        self, Buffer, DestroyedBuffer, DestroyedTexture, QuerySet, Resource, Sampler,
+        self, Buffer, DestroyedBuffer, DestroyedTexture, Labeled, QuerySet, Resource, Sampler,
         StagingBuffer, Texture, TextureView,
     },
     snatch::SnatchGuard,

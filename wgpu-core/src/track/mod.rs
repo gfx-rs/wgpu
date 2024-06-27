@@ -106,7 +106,7 @@ use crate::{
     hal_api::HalApi,
     lock::{rank, Mutex, RwLock},
     pipeline,
-    resource::{self, Resource, ResourceErrorIdent},
+    resource::{self, Labeled, ResourceErrorIdent},
     snatch::SnatchGuard,
 };
 

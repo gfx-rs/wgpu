@@ -25,7 +25,7 @@ use super::{
 use crate::{
     hal_api::HalApi,
     lock::{rank, Mutex},
-    resource::{Resource, Texture, TextureInner},
+    resource::{Labeled, Resource, Texture, TextureInner},
     resource_log,
     snatch::SnatchGuard,
     track::{

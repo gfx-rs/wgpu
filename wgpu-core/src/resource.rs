@@ -65,9 +65,6 @@ pub(crate) struct ResourceInfo {
     /// resources used in that submission and any lower-numbered submissions are
     /// no longer in use by the GPU.
     submission_index: AtomicUsize,
-
-    /// The `label` from the descriptor used to create the resource.
-    label: String,
 }
 
 impl Drop for ResourceInfo {
@@ -79,10 +76,7 @@ impl Drop for ResourceInfo {
 }
 
 impl ResourceInfo {
-    pub(crate) fn new(
-        label: &Label,
-        tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
-    ) -> Self {
+    pub(crate) fn new(tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>) -> Self {
         let tracker_index = tracker_indices
             .as_ref()
             .map(|indices| indices.alloc())
@@ -91,10 +85,6 @@ impl ResourceInfo {
             tracker_index,
             tracker_indices,
             submission_index: AtomicUsize::new(0),
-            label: label
-                .as_ref()
-                .map(|label| label.to_string())
-                .unwrap_or_default(),
         }
     }
 
@@ -127,7 +117,7 @@ impl std::fmt::Display for ResourceErrorIdent {
     }
 }
 
-pub(crate) trait ParentDevice<A: HalApi>: Resource {
+pub(crate) trait ParentDevice<A: HalApi>: Labeled {
     fn device(&self) -> &Arc<Device<A>>;
 
     fn same_device_as<O: ParentDevice<A>>(&self, other: &O) -> Result<(), DeviceError> {
@@ -170,17 +160,35 @@ macro_rules! impl_resource_type {
     };
 }
 
-pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + ResourceType {
-    fn as_info(&self) -> &ResourceInfo;
-
+pub(crate) trait Labeled: ResourceType {
     /// Returns a string identifying this resource for logging and errors.
     ///
     /// It may be a user-provided string or it may be a placeholder from wgpu.
     ///
     /// It is non-empty unless the user-provided string was empty.
-    fn label(&self) -> &str {
-        &self.as_info().label
+    fn label(&self) -> &str;
+
+    fn error_ident(&self) -> ResourceErrorIdent {
+        ResourceErrorIdent {
+            r#type: Self::TYPE,
+            label: self.label().to_owned(),
+        }
     }
+}
+
+#[macro_export]
+macro_rules! impl_labeled {
+    ($ty:ident) => {
+        impl<A: HalApi> $crate::resource::Labeled for $ty<A> {
+            fn label(&self) -> &str {
+                &self.label
+            }
+        }
+    };
+}
+
+pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + Labeled {
+    fn as_info(&self) -> &ResourceInfo;
 
     fn ref_count(self: &Arc<Self>) -> usize {
         Arc::strong_count(self)
@@ -190,12 +198,6 @@ pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + ResourceType {
     }
     fn is_equal(self: &Arc<Self>, other: &Arc<Self>) -> bool {
         Arc::ptr_eq(self, other)
-    }
-    fn error_ident(&self) -> ResourceErrorIdent {
-        ResourceErrorIdent {
-            r#type: Self::TYPE,
-            label: self.label().to_owned(),
-        }
     }
 }
 
@@ -444,6 +446,8 @@ pub struct Buffer<A: HalApi> {
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: RwLock<BufferInitTracker>,
     pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
     pub(crate) map_state: Mutex<BufferMapState<A>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
@@ -786,6 +790,7 @@ pub enum CreateBufferError {
 }
 
 crate::impl_resource_type!(Buffer);
+crate::impl_labeled!(Buffer);
 crate::impl_storage_item!(Buffer);
 
 impl<A: HalApi> Resource for Buffer<A> {
@@ -877,6 +882,12 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
 }
 
 crate::impl_resource_type!(StagingBuffer);
+// TODO: remove once we get rid of Registry.label_for_resource
+impl<A: HalApi> Labeled for StagingBuffer<A> {
+    fn label(&self) -> &str {
+        ""
+    }
+}
 crate::impl_storage_item!(StagingBuffer);
 
 impl<A: HalApi> Resource for StagingBuffer<A> {
@@ -939,6 +950,8 @@ pub struct Texture<A: HalApi> {
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
     pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
     pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
@@ -1412,6 +1425,7 @@ pub enum CreateTextureError {
 }
 
 crate::impl_resource_type!(Texture);
+crate::impl_labeled!(Texture);
 crate::impl_storage_item!(Texture);
 
 impl<A: HalApi> Resource for Texture<A> {
@@ -1498,6 +1512,8 @@ pub struct TextureView<A: HalApi> {
     pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
 }
 
@@ -1582,6 +1598,7 @@ pub enum CreateTextureViewError {
 pub enum TextureViewDestroyError {}
 
 crate::impl_resource_type!(TextureView);
+crate::impl_labeled!(TextureView);
 crate::impl_storage_item!(TextureView);
 
 impl<A: HalApi> Resource for TextureView<A> {
@@ -1629,6 +1646,8 @@ pub struct SamplerDescriptor<'a> {
 pub struct Sampler<A: HalApi> {
     pub(crate) raw: Option<A::Sampler>,
     pub(crate) device: Arc<Device<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
@@ -1699,6 +1718,7 @@ pub enum CreateSamplerError {
 }
 
 crate::impl_resource_type!(Sampler);
+crate::impl_labeled!(Sampler);
 crate::impl_storage_item!(Sampler);
 
 impl<A: HalApi> Resource for Sampler<A> {
@@ -1732,6 +1752,8 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 pub struct QuerySet<A: HalApi> {
     pub(crate) raw: Option<A::QuerySet>,
     pub(crate) device: Arc<Device<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
@@ -1755,6 +1777,7 @@ impl<A: HalApi> ParentDevice<A> for QuerySet<A> {
 }
 
 crate::impl_resource_type!(QuerySet);
+crate::impl_labeled!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 
 impl<A: HalApi> Resource for QuerySet<A> {

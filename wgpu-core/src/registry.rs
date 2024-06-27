@@ -202,7 +202,7 @@ mod tests {
 
     use crate::{
         id::Marker,
-        resource::{Resource, ResourceInfo, ResourceType},
+        resource::{Labeled, Resource, ResourceInfo, ResourceType},
         storage::StorageItem,
     };
 
@@ -216,7 +216,12 @@ mod tests {
     impl ResourceType for TestData {
         const TYPE: &'static str = "TestData";
     }
-
+    // TODO: remove once we get rid of Registry.label_for_resource
+    impl Labeled for TestData {
+        fn label(&self) -> &str {
+            ""
+        }
+    }
     impl StorageItem for TestData {
         type Marker = TestDataId;
     }
@@ -235,7 +240,7 @@ mod tests {
                 s.spawn(|| {
                     for _ in 0..1000 {
                         let value = Arc::new(TestData {
-                            info: ResourceInfo::new(&None, None),
+                            info: ResourceInfo::new(None),
                         });
                         let new_id = registry.prepare(None);
                         let (id, _) = new_id.assign(value);
