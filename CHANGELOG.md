@@ -39,6 +39,9 @@ Bottom level categories:
 
 ## Unreleased
 
+### Examples
+Added Wireframe Vertex Pulling example by @MrFastDie in [#5889](https://github.com/gfx-rs/wgpu/pull/5889)
+
 ### Major Changes
 
 #### Remove lifetime bounds on `wgpu::ComputePass`
