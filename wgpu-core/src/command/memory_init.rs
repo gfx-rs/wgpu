@@ -6,7 +6,7 @@ use crate::{
     device::Device,
     hal_api::HalApi,
     init_tracker::*,
-    resource::{DestroyedResourceError, Resource, Texture, Trackable},
+    resource::{DestroyedResourceError, ParentDevice, Texture, Trackable},
     snatch::SnatchGuard,
     track::{TextureTracker, Tracker},
     FastHashMap,

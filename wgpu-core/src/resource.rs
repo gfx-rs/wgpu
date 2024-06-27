@@ -20,7 +20,6 @@ use crate::{
 use hal::CommandEncoder;
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::WasmNotSendSync;
 
 use std::{
     borrow::Borrow,
@@ -113,8 +112,12 @@ impl std::fmt::Display for ResourceErrorIdent {
 pub(crate) trait ParentDevice<A: HalApi>: Labeled {
     fn device(&self) -> &Arc<Device<A>>;
 
+    fn is_equal(self: &Arc<Self>, other: &Arc<Self>) -> bool {
+        Arc::ptr_eq(self, other)
+    }
+
     fn same_device_as<O: ParentDevice<A>>(&self, other: &O) -> Result<(), DeviceError> {
-        if self.device().is_equal(other.device()) {
+        if Arc::ptr_eq(self.device(), other.device()) {
             Ok(())
         } else {
             Err(DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
@@ -127,7 +130,7 @@ pub(crate) trait ParentDevice<A: HalApi>: Labeled {
     }
 
     fn same_device(&self, device: &Arc<Device<A>>) -> Result<(), DeviceError> {
-        if self.device().is_equal(device) {
+        if Arc::ptr_eq(self.device(), device) {
             Ok(())
         } else {
             Err(DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
@@ -186,6 +189,10 @@ pub(crate) trait Trackable: Labeled {
     /// given index.
     fn use_at(&self, submit_index: SubmissionIndex);
     fn submission_index(&self) -> SubmissionIndex;
+
+    fn is_unique(self: &Arc<Self>) -> bool {
+        Arc::strong_count(self) == 1
+    }
 }
 
 #[macro_export]
@@ -203,18 +210,6 @@ macro_rules! impl_trackable {
             }
         }
     };
-}
-
-pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + Labeled {
-    fn ref_count(self: &Arc<Self>) -> usize {
-        Arc::strong_count(self)
-    }
-    fn is_unique(self: &Arc<Self>) -> bool {
-        self.ref_count() == 1
-    }
-    fn is_equal(self: &Arc<Self>, other: &Arc<Self>) -> bool {
-        Arc::ptr_eq(self, other)
-    }
 }
 
 /// The status code provided to the buffer mapping callback.
@@ -809,8 +804,6 @@ crate::impl_labeled!(Buffer);
 crate::impl_storage_item!(Buffer);
 crate::impl_trackable!(Buffer);
 
-impl<A: HalApi> Resource for Buffer<A> {}
-
 impl<A: HalApi> ParentDevice<A> for Buffer<A> {
     fn device(&self) -> &Arc<Device<A>> {
         &self.device
@@ -902,8 +895,6 @@ impl<A: HalApi> Labeled for StagingBuffer<A> {
 }
 crate::impl_storage_item!(StagingBuffer);
 crate::impl_trackable!(StagingBuffer);
-
-impl<A: HalApi> Resource for StagingBuffer<A> {}
 
 impl<A: HalApi> ParentDevice<A> for StagingBuffer<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -1438,8 +1429,6 @@ crate::impl_labeled!(Texture);
 crate::impl_storage_item!(Texture);
 crate::impl_trackable!(Texture);
 
-impl<A: HalApi> Resource for Texture<A> {}
-
 impl<A: HalApi> ParentDevice<A> for Texture<A> {
     fn device(&self) -> &Arc<Device<A>> {
         &self.device
@@ -1608,8 +1597,6 @@ crate::impl_labeled!(TextureView);
 crate::impl_storage_item!(TextureView);
 crate::impl_trackable!(TextureView);
 
-impl<A: HalApi> Resource for TextureView<A> {}
-
 impl<A: HalApi> ParentDevice<A> for TextureView<A> {
     fn device(&self) -> &Arc<Device<A>> {
         &self.device
@@ -1725,8 +1712,6 @@ crate::impl_labeled!(Sampler);
 crate::impl_storage_item!(Sampler);
 crate::impl_trackable!(Sampler);
 
-impl<A: HalApi> Resource for Sampler<A> {}
-
 impl<A: HalApi> ParentDevice<A> for Sampler<A> {
     fn device(&self) -> &Arc<Device<A>> {
         &self.device
@@ -1780,8 +1765,6 @@ crate::impl_resource_type!(QuerySet);
 crate::impl_labeled!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);
-
-impl<A: HalApi> Resource for QuerySet<A> {}
 
 impl<A: HalApi> QuerySet<A> {
     pub(crate) fn raw(&self) -> &A::QuerySet {

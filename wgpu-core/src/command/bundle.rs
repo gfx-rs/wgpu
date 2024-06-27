@@ -95,7 +95,7 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, Resource, TrackingData},
+    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, TrackingData},
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
@@ -1187,8 +1187,6 @@ crate::impl_resource_type!(RenderBundle);
 crate::impl_labeled!(RenderBundle);
 crate::impl_storage_item!(RenderBundle);
 crate::impl_trackable!(RenderBundle);
-
-impl<A: HalApi> Resource for RenderBundle<A> {}
 
 impl<A: HalApi> ParentDevice<A> for RenderBundle<A> {
     fn device(&self) -> &Arc<Device<A>> {

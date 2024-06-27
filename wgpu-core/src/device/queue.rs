@@ -17,8 +17,8 @@ use crate::{
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, Labeled, ParentDevice, Resource, ResourceErrorIdent, StagingBuffer,
-        Texture, TextureInner, Trackable, TrackingData,
+        DestroyedTexture, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
+        TextureInner, Trackable, TrackingData,
     },
     resource_log,
     track::{self, TrackerIndex},
@@ -49,8 +49,6 @@ impl<A: HalApi> Labeled for Queue<A> {
     }
 }
 crate::impl_storage_item!(Queue);
-
-impl<A: HalApi> Resource for Queue<A> {}
 
 impl<A: HalApi> ParentDevice<A> for Queue<A> {
     fn device(&self) -> &Arc<Device<A>> {

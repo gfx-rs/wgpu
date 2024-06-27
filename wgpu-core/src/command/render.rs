@@ -4,7 +4,6 @@ use crate::command::{
 };
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::RenderPipeline;
-use crate::resource::Resource;
 use crate::snatch::SnatchGuard;
 use crate::{
     api_log,

@@ -20,7 +20,7 @@ use crate::{
     pipeline::ComputePipeline,
     resource::{
         self, Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice,
-        Resource, ResourceErrorIdent, Trackable,
+        ResourceErrorIdent, Trackable,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
