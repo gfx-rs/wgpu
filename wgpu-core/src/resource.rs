@@ -143,6 +143,17 @@ pub(crate) trait ParentDevice<A: HalApi>: Labeled {
     }
 }
 
+#[macro_export]
+macro_rules! impl_parent_device {
+    ($ty:ident) => {
+        impl<A: HalApi> $crate::resource::ParentDevice<A> for $ty<A> {
+            fn device(&self) -> &Arc<Device<A>> {
+                &self.device
+            }
+        }
+    };
+}
+
 pub(crate) trait ResourceType {
     const TYPE: &'static str;
 }
@@ -801,14 +812,9 @@ pub enum CreateBufferError {
 
 crate::impl_resource_type!(Buffer);
 crate::impl_labeled!(Buffer);
+crate::impl_parent_device!(Buffer);
 crate::impl_storage_item!(Buffer);
 crate::impl_trackable!(Buffer);
-
-impl<A: HalApi> ParentDevice<A> for Buffer<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 /// A buffer that has been marked as destroyed and is staged for actual deletion soon.
 #[derive(Debug)]
@@ -893,14 +899,9 @@ impl<A: HalApi> Labeled for StagingBuffer<A> {
         ""
     }
 }
+crate::impl_parent_device!(StagingBuffer);
 crate::impl_storage_item!(StagingBuffer);
 crate::impl_trackable!(StagingBuffer);
-
-impl<A: HalApi> ParentDevice<A> for StagingBuffer<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
@@ -1426,14 +1427,9 @@ pub enum CreateTextureError {
 
 crate::impl_resource_type!(Texture);
 crate::impl_labeled!(Texture);
+crate::impl_parent_device!(Texture);
 crate::impl_storage_item!(Texture);
 crate::impl_trackable!(Texture);
-
-impl<A: HalApi> ParentDevice<A> for Texture<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 impl<A: HalApi> Borrow<TextureSelector> for Texture<A> {
     fn borrow(&self) -> &TextureSelector {
@@ -1594,14 +1590,9 @@ pub enum TextureViewDestroyError {}
 
 crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
+crate::impl_parent_device!(TextureView);
 crate::impl_storage_item!(TextureView);
 crate::impl_trackable!(TextureView);
-
-impl<A: HalApi> ParentDevice<A> for TextureView<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]
@@ -1709,14 +1700,9 @@ pub enum CreateSamplerError {
 
 crate::impl_resource_type!(Sampler);
 crate::impl_labeled!(Sampler);
+crate::impl_parent_device!(Sampler);
 crate::impl_storage_item!(Sampler);
 crate::impl_trackable!(Sampler);
-
-impl<A: HalApi> ParentDevice<A> for Sampler<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -1755,14 +1741,9 @@ impl<A: HalApi> Drop for QuerySet<A> {
     }
 }
 
-impl<A: HalApi> ParentDevice<A> for QuerySet<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
-
 crate::impl_resource_type!(QuerySet);
 crate::impl_labeled!(QuerySet);
+crate::impl_parent_device!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);
 

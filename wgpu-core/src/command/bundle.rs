@@ -1185,14 +1185,9 @@ impl<A: HalApi> RenderBundle<A> {
 
 crate::impl_resource_type!(RenderBundle);
 crate::impl_labeled!(RenderBundle);
+crate::impl_parent_device!(RenderBundle);
 crate::impl_storage_item!(RenderBundle);
 crate::impl_trackable!(RenderBundle);
-
-impl<A: HalApi> ParentDevice<A> for RenderBundle<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 /// A render bundle's current index buffer state.
 ///

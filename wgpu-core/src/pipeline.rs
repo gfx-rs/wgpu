@@ -5,7 +5,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{Labeled, ParentDevice, TrackingData},
+    resource::{Labeled, TrackingData},
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -68,13 +68,8 @@ impl<A: HalApi> Drop for ShaderModule<A> {
 
 crate::impl_resource_type!(ShaderModule);
 crate::impl_labeled!(ShaderModule);
+crate::impl_parent_device!(ShaderModule);
 crate::impl_storage_item!(ShaderModule);
-
-impl<A: HalApi> ParentDevice<A> for ShaderModule<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 impl<A: HalApi> ShaderModule<A> {
     pub(crate) fn raw(&self) -> &A::ShaderModule {
@@ -228,14 +223,9 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
 
 crate::impl_resource_type!(ComputePipeline);
 crate::impl_labeled!(ComputePipeline);
+crate::impl_parent_device!(ComputePipeline);
 crate::impl_storage_item!(ComputePipeline);
 crate::impl_trackable!(ComputePipeline);
-
-impl<A: HalApi> ParentDevice<A> for ComputePipeline<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 impl<A: HalApi> ComputePipeline<A> {
     pub(crate) fn raw(&self) -> &A::ComputePipeline {
@@ -289,14 +279,9 @@ impl<A: HalApi> Drop for PipelineCache<A> {
 
 crate::impl_resource_type!(PipelineCache);
 crate::impl_labeled!(PipelineCache);
+crate::impl_parent_device!(PipelineCache);
 crate::impl_storage_item!(PipelineCache);
 crate::impl_trackable!(PipelineCache);
-
-impl<A: HalApi> ParentDevice<A> for PipelineCache<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 /// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug)]
@@ -541,14 +526,9 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
 
 crate::impl_resource_type!(RenderPipeline);
 crate::impl_labeled!(RenderPipeline);
+crate::impl_parent_device!(RenderPipeline);
 crate::impl_storage_item!(RenderPipeline);
 crate::impl_trackable!(RenderPipeline);
-
-impl<A: HalApi> ParentDevice<A> for RenderPipeline<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 impl<A: HalApi> RenderPipeline<A> {
     pub(crate) fn raw(&self) -> &A::RenderPipeline {

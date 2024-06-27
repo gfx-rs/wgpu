@@ -36,7 +36,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::resource::{Labeled, ParentDevice};
+use crate::resource::Labeled;
 use crate::track::{Tracker, UsageScope};
 use crate::LabelHelpers;
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
@@ -530,13 +530,8 @@ impl<A: HalApi> CommandBuffer<A> {
 
 crate::impl_resource_type!(CommandBuffer);
 crate::impl_labeled!(CommandBuffer);
+crate::impl_parent_device!(CommandBuffer);
 crate::impl_storage_item!(CommandBuffer);
-
-impl<A: HalApi> ParentDevice<A> for CommandBuffer<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 /// A stream of commands for a render pass or compute pass.
 ///
