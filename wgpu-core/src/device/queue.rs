@@ -568,7 +568,7 @@ impl Global {
             .get(buffer_id)
             .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
 
-        self.queue_validate_write_buffer_impl(&buffer, buffer_id, buffer_offset, buffer_size)?;
+        self.queue_validate_write_buffer_impl(&buffer, buffer_offset, buffer_size)?;
 
         Ok(())
     }
@@ -576,16 +576,10 @@ impl Global {
     fn queue_validate_write_buffer_impl<A: HalApi>(
         &self,
         buffer: &Buffer<A>,
-        buffer_id: id::BufferId,
         buffer_offset: u64,
         buffer_size: u64,
     ) -> Result<(), TransferError> {
-        if !buffer.usage.contains(wgt::BufferUsages::COPY_DST) {
-            return Err(TransferError::MissingCopyDstUsageFlag(
-                Some(buffer_id),
-                None,
-            ));
-        }
+        buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
         if buffer_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(buffer_size));
         }
@@ -631,7 +625,7 @@ impl Global {
         dst.same_device_as(queue.as_ref())?;
 
         let src_buffer_size = staging_buffer.size;
-        self.queue_validate_write_buffer_impl(&dst, buffer_id, buffer_offset, src_buffer_size)?;
+        self.queue_validate_write_buffer_impl(&dst, buffer_offset, src_buffer_size)?;
 
         dst.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
@@ -712,11 +706,8 @@ impl Global {
 
         dst.same_device_as(queue.as_ref())?;
 
-        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
-        }
+        dst.check_usage(wgt::TextureUsages::COPY_DST)
+            .map_err(TransferError::MissingTextureUsage)?;
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
@@ -981,11 +972,8 @@ impl Global {
         if dst.desc.dimension != wgt::TextureDimension::D2 {
             return Err(TransferError::InvalidDimensionExternal(destination.texture).into());
         }
-        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
-        }
+        dst.check_usage(wgt::TextureUsages::COPY_DST)
+            .map_err(TransferError::MissingTextureUsage)?;
         if !dst
             .desc
             .usage
