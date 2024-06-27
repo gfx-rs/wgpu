@@ -11,8 +11,6 @@ use crate::{
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
-type BindGroupMask = u8;
-
 mod compat {
     use arrayvec::ArrayVec;
 
@@ -194,23 +192,13 @@ mod compat {
                 .filter_map(|(i, e)| if e.is_active() { Some(i) } else { None })
         }
 
-        pub fn invalid_mask(&self) -> super::BindGroupMask {
-            self.entries.iter().enumerate().fold(0, |mask, (i, entry)| {
-                if entry.is_valid() {
-                    mask
-                } else {
-                    mask | 1u8 << i
-                }
-            })
-        }
-
-        pub fn bgl_diff(&self) -> Vec<String> {
-            for e in &self.entries {
-                if !e.is_valid() {
-                    return e.bgl_diff();
+        pub fn get_invalid(&self) -> Option<(usize, Vec<String>)> {
+            for (index, entry) in self.entries.iter().enumerate() {
+                if !entry.is_valid() {
+                    return Some((index, entry.bgl_diff()));
                 }
             }
-            vec![String::from("No differences detected? (internal error)")]
+            None
         }
     }
 }
@@ -218,7 +206,7 @@ mod compat {
 #[derive(Clone, Debug, Error)]
 #[error("Bind group at index {index} is incompatible with the current set {pipeline}")]
 pub struct IncompatibleBindGroupError {
-    index: u32,
+    index: usize,
     pipeline: ResourceErrorIdent,
     diff: Vec<String>,
 }
@@ -371,15 +359,14 @@ impl<A: HalApi> Binder<A> {
         &self,
         pipeline: &T,
     ) -> Result<(), IncompatibleBindGroupError> {
-        let bind_mask = self.manager.invalid_mask();
-        if bind_mask == 0 {
-            Ok(())
-        } else {
+        if let Some((index, diff)) = self.manager.get_invalid() {
             Err(IncompatibleBindGroupError {
-                index: bind_mask.trailing_zeros(),
+                index,
                 pipeline: pipeline.error_ident(),
-                diff: self.manager.bgl_diff(),
+                diff,
             })
+        } else {
+            Ok(())
         }
     }
 
