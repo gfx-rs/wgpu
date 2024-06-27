@@ -7,8 +7,8 @@ use crate::{
     id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{
-        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
-        Resource, ResourceErrorIdent, ResourceInfo,
+        DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
+        ParentDevice, Resource, ResourceErrorIdent, ResourceInfo,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -474,6 +474,8 @@ pub struct BindGroupLayout<A: HalApi> {
     pub(crate) origin: bgl::Origin,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
 }
 
@@ -493,6 +495,7 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
 }
 
 crate::impl_resource_type!(BindGroupLayout);
+crate::impl_labeled!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
 
 impl<A: HalApi> Resource for BindGroupLayout<A> {
@@ -612,6 +615,8 @@ pub struct PipelineLayoutDescriptor<'a> {
 pub struct PipelineLayout<A: HalApi> {
     pub(crate) raw: Option<A::PipelineLayout>,
     pub(crate) device: Arc<Device<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
@@ -721,6 +726,7 @@ impl<A: HalApi> PipelineLayout<A> {
 }
 
 crate::impl_resource_type!(PipelineLayout);
+crate::impl_labeled!(PipelineLayout);
 crate::impl_storage_item!(PipelineLayout);
 
 impl<A: HalApi> Resource for PipelineLayout<A> {
@@ -840,6 +846,8 @@ pub struct BindGroup<A: HalApi> {
     pub(crate) raw: Snatchable<A::BindGroup>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<BindGroupLayout<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
     pub(crate) used: BindGroupStates<A>,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction<A>>,
@@ -934,6 +942,7 @@ impl<A: HalApi> BindGroup<A> {
 }
 
 crate::impl_resource_type!(BindGroup);
+crate::impl_labeled!(BindGroup);
 crate::impl_storage_item!(BindGroup);
 
 impl<A: HalApi> Resource for BindGroup<A> {

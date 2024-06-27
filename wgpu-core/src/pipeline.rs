@@ -5,7 +5,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{ParentDevice, Resource, ResourceInfo},
+    resource::{Labeled, ParentDevice, Resource, ResourceInfo},
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -50,6 +50,8 @@ pub struct ShaderModule<A: HalApi> {
     pub(crate) raw: Option<A::ShaderModule>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
 }
 
@@ -66,6 +68,7 @@ impl<A: HalApi> Drop for ShaderModule<A> {
 }
 
 crate::impl_resource_type!(ShaderModule);
+crate::impl_labeled!(ShaderModule);
 crate::impl_storage_item!(ShaderModule);
 
 impl<A: HalApi> Resource for ShaderModule<A> {
@@ -213,6 +216,8 @@ pub struct ComputePipeline<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) _shader_module: Arc<ShaderModule<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
 }
 
@@ -229,6 +234,7 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
 }
 
 crate::impl_resource_type!(ComputePipeline);
+crate::impl_labeled!(ComputePipeline);
 crate::impl_storage_item!(ComputePipeline);
 
 impl<A: HalApi> Resource for ComputePipeline<A> {
@@ -276,6 +282,8 @@ impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
 pub struct PipelineCache<A: HalApi> {
     pub(crate) raw: Option<A::PipelineCache>,
     pub(crate) device: Arc<Device<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
 }
 
@@ -292,6 +300,7 @@ impl<A: HalApi> Drop for PipelineCache<A> {
 }
 
 crate::impl_resource_type!(PipelineCache);
+crate::impl_labeled!(PipelineCache);
 crate::impl_storage_item!(PipelineCache);
 
 impl<A: HalApi> Resource for PipelineCache<A> {
@@ -530,6 +539,8 @@ pub struct RenderPipeline<A: HalApi> {
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
     pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
     pub(crate) info: ResourceInfo,
 }
 
@@ -546,6 +557,7 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
 }
 
 crate::impl_resource_type!(RenderPipeline);
+crate::impl_labeled!(RenderPipeline);
 crate::impl_storage_item!(RenderPipeline);
 
 impl<A: HalApi> Resource for RenderPipeline<A> {

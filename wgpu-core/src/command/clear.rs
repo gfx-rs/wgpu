@@ -12,7 +12,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        DestroyedResourceError, ParentDevice, Resource, ResourceErrorIdent, Texture,
+        DestroyedResourceError, Labeled, ParentDevice, ResourceErrorIdent, Texture,
         TextureClearMode,
     },
     snatch::SnatchGuard,

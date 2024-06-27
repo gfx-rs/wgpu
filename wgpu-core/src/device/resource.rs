@@ -24,7 +24,7 @@ use crate::{
     pool::ResourcePool,
     registry::Registry,
     resource::{
-        self, Buffer, ParentDevice, QuerySet, Resource, ResourceInfo, Sampler, Texture,
+        self, Buffer, Labeled, ParentDevice, QuerySet, Resource, ResourceInfo, Sampler, Texture,
         TextureView, TextureViewNotRenderableReason,
     },
     resource_log,
@@ -94,6 +94,8 @@ pub struct Device<A: HalApi> {
     pub(crate) queue: OnceCell<Weak<Queue<A>>>,
     queue_to_drop: OnceCell<A::Queue>,
     pub(crate) zero_buffer: Option<A::Buffer>,
+    /// The `label` from the descriptor used to create the resource.
+    label: String,
     pub(crate) info: ResourceInfo,
 
     pub(crate) command_allocator: command::CommandAllocator<A>,
@@ -268,7 +270,8 @@ impl<A: HalApi> Device<A> {
             queue: OnceCell::new(),
             queue_to_drop: OnceCell::new(),
             zero_buffer: Some(zero_buffer),
-            info: ResourceInfo::new(&desc.label, None),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(None),
             command_allocator,
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(rank::DEVICE_FENCE, Some(fence)),
@@ -656,7 +659,8 @@ impl<A: HalApi> Device<A> {
             ),
             sync_mapped_writes: Mutex::new(rank::BUFFER_SYNC_MAPPED_WRITES, None),
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
-            info: ResourceInfo::new(&desc.label, Some(self.tracker_indices.buffers.clone())),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.buffers.clone())),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
         })
     }
@@ -683,7 +687,8 @@ impl<A: HalApi> Device<A> {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
             },
-            info: ResourceInfo::new(&desc.label, Some(self.tracker_indices.textures.clone())),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.textures.clone())),
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
@@ -706,7 +711,8 @@ impl<A: HalApi> Device<A> {
             ),
             sync_mapped_writes: Mutex::new(rank::BUFFER_SYNC_MAPPED_WRITES, None),
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
-            info: ResourceInfo::new(&desc.label, Some(self.tracker_indices.buffers.clone())),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.buffers.clone())),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
         }
     }
@@ -1282,10 +1288,8 @@ impl<A: HalApi> Device<A> {
             render_extent,
             samples: texture.desc.sample_count,
             selector,
-            info: ResourceInfo::new(
-                &desc.label,
-                Some(self.tracker_indices.texture_views.clone()),
-            ),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.texture_views.clone())),
         })
     }
 
@@ -1391,7 +1395,8 @@ impl<A: HalApi> Device<A> {
         Ok(Sampler {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(&desc.label, Some(self.tracker_indices.samplers.clone())),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.samplers.clone())),
             comparison: desc.compare.is_some(),
             filtering: desc.min_filter == wgt::FilterMode::Linear
                 || desc.mag_filter == wgt::FilterMode::Linear,
@@ -1524,7 +1529,8 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             interface: Some(interface),
-            info: ResourceInfo::new(&desc.label, None),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(None),
         })
     }
 
@@ -1566,7 +1572,8 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             interface: None,
-            info: ResourceInfo::new(&desc.label, None),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(None),
         })
     }
 
@@ -1838,7 +1845,8 @@ impl<A: HalApi> Device<A> {
             entries: entry_map,
             origin,
             binding_count_validator: count_validator,
-            info: ResourceInfo::new(label, Some(self.tracker_indices.bind_group_layouts.clone())),
+            label: label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.bind_group_layouts.clone())),
         })
     }
 
@@ -2267,7 +2275,8 @@ impl<A: HalApi> Device<A> {
             raw: Snatchable::new(raw),
             device: self.clone(),
             layout: layout.clone(),
-            info: ResourceInfo::new(&desc.label, Some(self.tracker_indices.bind_groups.clone())),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.bind_groups.clone())),
             used,
             used_buffer_ranges,
             used_texture_ranges,
@@ -2549,10 +2558,8 @@ impl<A: HalApi> Device<A> {
         Ok(binding_model::PipelineLayout {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(
-                &desc.label,
-                Some(self.tracker_indices.pipeline_layouts.clone()),
-            ),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.pipeline_layouts.clone())),
             bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
         })
@@ -2738,10 +2745,8 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             _shader_module: shader_module,
             late_sized_buffer_groups,
-            info: ResourceInfo::new(
-                &desc.label,
-                Some(self.tracker_indices.compute_pipelines.clone()),
-            ),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.compute_pipelines.clone())),
         };
         Ok(pipeline)
     }
@@ -3392,10 +3397,8 @@ impl<A: HalApi> Device<A> {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
-            info: ResourceInfo::new(
-                &desc.label,
-                Some(self.tracker_indices.render_pipelines.clone()),
-            ),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.render_pipelines.clone())),
         };
         Ok(pipeline)
     }
@@ -3440,10 +3443,8 @@ impl<A: HalApi> Device<A> {
         };
         let cache = pipeline::PipelineCache {
             device: self.clone(),
-            info: ResourceInfo::new(
-                &desc.label,
-                Some(self.tracker_indices.pipeline_caches.clone()),
-            ),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.pipeline_caches.clone())),
             // This would be none in the error condition, which we don't implement yet
             raw: Some(raw),
         };
@@ -3559,7 +3560,8 @@ impl<A: HalApi> Device<A> {
         Ok(QuerySet {
             raw: Some(unsafe { self.raw().create_query_set(&hal_desc).unwrap() }),
             device: self.clone(),
-            info: ResourceInfo::new(&desc.label, Some(self.tracker_indices.query_sets.clone())),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(self.tracker_indices.query_sets.clone())),
             desc: desc.map_label(|_| ()),
         })
     }
@@ -3668,6 +3670,7 @@ impl<A: HalApi> Device<A> {
 }
 
 crate::impl_resource_type!(Device);
+crate::impl_labeled!(Device);
 crate::impl_storage_item!(Device);
 
 impl<A: HalApi> Resource for Device<A> {

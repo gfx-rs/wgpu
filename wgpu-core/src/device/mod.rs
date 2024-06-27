@@ -4,7 +4,7 @@ use crate::{
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
     resource::{
-        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Resource,
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
         ResourceErrorIdent,
     },
     snatch::SnatchGuard,
@@ -106,7 +106,7 @@ pub enum RenderPassCompatibilityError {
 
 impl RenderPassContext {
     // Assumes the renderpass only contains one subpass
-    pub(crate) fn check_compatible<T: Resource>(
+    pub(crate) fn check_compatible<T: Labeled>(
         &self,
         other: &Self,
         res: &T,

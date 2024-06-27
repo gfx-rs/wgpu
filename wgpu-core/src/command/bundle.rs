@@ -95,11 +95,11 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, DestroyedResourceError, ParentDevice, Resource, ResourceInfo},
+    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, Resource, ResourceInfo},
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
-    Label,
+    Label, LabelHelpers,
 };
 use arrayvec::ArrayVec;
 
@@ -578,7 +578,8 @@ impl RenderBundleEncoder {
             buffer_memory_init_actions,
             texture_memory_init_actions,
             context: self.context,
-            info: ResourceInfo::new(&desc.label, Some(tracker_indices)),
+            label: desc.label.to_string(),
+            info: ResourceInfo::new(Some(tracker_indices)),
             discard_hal_labels,
         })
     }
@@ -970,6 +971,8 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction<A>>,
     pub(super) context: RenderPassContext,
+    /// The `label` from the descriptor used to create the resource.
+    label: String,
     pub(crate) info: ResourceInfo,
     discard_hal_labels: bool,
 }
@@ -1181,6 +1184,7 @@ impl<A: HalApi> RenderBundle<A> {
 }
 
 crate::impl_resource_type!(RenderBundle);
+crate::impl_labeled!(RenderBundle);
 crate::impl_storage_item!(RenderBundle);
 
 impl<A: HalApi> Resource for RenderBundle<A> {

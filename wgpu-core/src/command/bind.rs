@@ -5,7 +5,7 @@ use crate::{
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
     pipeline::LateSizedBufferGroup,
-    resource::Resource,
+    resource::Labeled,
 };
 
 use arrayvec::ArrayVec;
@@ -15,7 +15,12 @@ type BindGroupMask = u8;
 mod compat {
     use arrayvec::ArrayVec;
 
-    use crate::{binding_model::BindGroupLayout, device::bgl, hal_api::HalApi, resource::Resource};
+    use crate::{
+        binding_model::BindGroupLayout,
+        device::bgl,
+        hal_api::HalApi,
+        resource::{Labeled, Resource},
+    };
     use std::{ops::Range, sync::Arc};
 
     #[derive(Debug, Clone)]
