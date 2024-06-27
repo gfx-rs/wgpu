@@ -481,14 +481,7 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi>
 {
     fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
         if let Some(pipeline) = self.pipeline.as_ref() {
-            let bind_mask = self.binder.invalid_mask();
-            if bind_mask != 0 {
-                return Err(DrawError::IncompatibleBindGroup {
-                    index: bind_mask.trailing_zeros(),
-                    pipeline: pipeline.error_ident(),
-                    diff: self.binder.bgl_diff(),
-                });
-            }
+            self.binder.check_compatibility(pipeline.as_ref())?;
             self.binder.check_late_buffer_bindings()?;
 
             if self.blend_constant == OptionalState::Required {
@@ -717,16 +710,7 @@ pub enum RenderPassErrorInner {
     PassEnded,
 }
 
-impl PrettyError for RenderPassErrorInner {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        if let Self::Draw(DrawError::IncompatibleBindGroup { diff, .. }) = self {
-            for d in diff {
-                fmt.note(&d);
-            }
-        };
-    }
-}
+impl PrettyError for RenderPassErrorInner {}
 
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
     fn from(error: MissingBufferUsageError) -> Self {

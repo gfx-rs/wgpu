@@ -20,7 +20,7 @@ use crate::{
     pipeline::ComputePipeline,
     resource::{
         self, Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice,
-        ResourceErrorIdent, Trackable,
+        Trackable,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
@@ -35,7 +35,10 @@ use wgt::{BufferAddress, DynamicOffset};
 use std::sync::Arc;
 use std::{fmt, mem, str};
 
-use super::{memory_init::CommandBufferTextureMemoryActions, DynComputePass};
+use super::{
+    bind::IncompatibleBindGroupError, memory_init::CommandBufferTextureMemoryActions,
+    DynComputePass,
+};
 
 pub struct ComputePass<A: HalApi> {
     /// All pass data & records is stored here.
@@ -117,12 +120,8 @@ struct ArcComputePassDescriptor<'a, A: HalApi> {
 pub enum DispatchError {
     #[error("Compute pipeline must be set")]
     MissingPipeline,
-    #[error("Bind group at index {index} is incompatible with the current set {pipeline}")]
-    IncompatibleBindGroup {
-        index: u32,
-        pipeline: ResourceErrorIdent,
-        diff: Vec<String>,
-    },
+    #[error(transparent)]
+    IncompatibleBindGroup(#[from] IncompatibleBindGroupError),
     #[error(
         "Each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
     )]
@@ -186,16 +185,7 @@ pub enum ComputePassErrorInner {
     PassEnded,
 }
 
-impl PrettyError for ComputePassErrorInner {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        if let Self::Dispatch(DispatchError::IncompatibleBindGroup { ref diff, .. }) = *self {
-            for d in diff {
-                fmt.note(&d);
-            }
-        }
-    }
-}
+impl PrettyError for ComputePassErrorInner {}
 
 /// Error encountered when performing a compute pass.
 #[derive(Clone, Debug, Error)]
@@ -259,14 +249,7 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi>
 {
     fn is_ready(&self) -> Result<(), DispatchError> {
         if let Some(pipeline) = self.pipeline.as_ref() {
-            let bind_mask = self.binder.invalid_mask();
-            if bind_mask != 0 {
-                return Err(DispatchError::IncompatibleBindGroup {
-                    index: bind_mask.trailing_zeros(),
-                    pipeline: pipeline.error_ident(),
-                    diff: self.binder.bgl_diff(),
-                });
-            }
+            self.binder.check_compatibility(pipeline.as_ref())?;
             self.binder.check_late_buffer_bindings()?;
             Ok(())
         } else {
