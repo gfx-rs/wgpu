@@ -30,7 +30,7 @@ pub use timestamp_writes::PassTimestampWrites;
 use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::device::{Device, DeviceError};
-use crate::error::{ErrorFormatter, PrettyError};
+use crate::error::PrettyError;
 use crate::hub::Hub;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
@@ -598,26 +598,17 @@ pub enum CommandEncoderError {
 
     #[error("QuerySet {0:?} for pass timestamp writes is invalid.")]
     InvalidTimestampWritesQuerySetId(id::QuerySetId),
-    #[error("Attachment texture view {0:?} is invalid")]
-    InvalidAttachment(id::TextureViewId),
-    #[error("Attachment texture view {0:?} for resolve is invalid")]
-    InvalidResolveTarget(id::TextureViewId),
-    #[error("Depth stencil attachment view {0:?}  is invalid")]
-    InvalidDepthStencilAttachment(id::TextureViewId),
-    #[error("Occlusion query set {0:?} is invalid")]
+    #[error("Attachment TextureViewId {0:?} is invalid")]
+    InvalidAttachmentId(id::TextureViewId),
+    #[error("Resolve attachment TextureViewId {0:?} is invalid")]
+    InvalidResolveTargetId(id::TextureViewId),
+    #[error("Depth stencil attachment TextureViewId {0:?} is invalid")]
+    InvalidDepthStencilAttachmentId(id::TextureViewId),
+    #[error("Occlusion QuerySetId {0:?} is invalid")]
     InvalidOcclusionQuerySetId(id::QuerySetId),
 }
 
-impl PrettyError for CommandEncoderError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        if let Self::InvalidAttachment(id) = *self {
-            fmt.texture_view_label_with_key(&id, "attachment");
-        } else if let Self::InvalidResolveTarget(id) = *self {
-            fmt.texture_view_label_with_key(&id, "resolve target");
-        };
-    }
-}
+impl PrettyError for CommandEncoderError {}
 
 impl Global {
     pub fn command_encoder_finish<A: HalApi>(

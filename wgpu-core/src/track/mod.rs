@@ -385,11 +385,7 @@ impl ResourceUsageCompatibilityError {
     }
 }
 
-impl crate::error::PrettyError for ResourceUsageCompatibilityError {
-    fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
-        fmt.error(self);
-    }
-}
+impl crate::error::PrettyError for ResourceUsageCompatibilityError {}
 
 /// Pretty print helper that shows helpful descriptions of a conflicting usage.
 #[derive(Clone, Debug, Eq, PartialEq)]

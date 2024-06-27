@@ -107,18 +107,11 @@ pub enum QueryError {
     InvalidBufferId(id::BufferId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("QuerySet {0:?} is invalid or destroyed")]
-    InvalidQuerySet(id::QuerySetId),
+    #[error("QuerySetId {0:?} is invalid or destroyed")]
+    InvalidQuerySetId(id::QuerySetId),
 }
 
-impl crate::error::PrettyError for QueryError {
-    fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
-        fmt.error(self);
-        if let Self::InvalidQuerySet(id) = *self {
-            fmt.query_set_label(&id)
-        }
-    }
-}
+impl crate::error::PrettyError for QueryError {}
 
 /// Error encountered while trying to use queries
 #[derive(Clone, Debug, Error)]
@@ -356,7 +349,7 @@ impl Global {
         let query_set_guard = hub.query_sets.read();
         let query_set = query_set_guard
             .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
+            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
 
         tracker.query_sets.add_single(query_set);
 
@@ -403,7 +396,7 @@ impl Global {
         let query_set_guard = hub.query_sets.read();
         let query_set = query_set_guard
             .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
+            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
 
         tracker.query_sets.add_single(query_set);
 

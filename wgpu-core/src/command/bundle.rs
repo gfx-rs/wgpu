@@ -661,7 +661,7 @@ fn set_pipeline<A: HalApi>(
 ) -> Result<(), RenderBundleErrorInner> {
     let pipeline = pipeline_guard
         .get(pipeline_id)
-        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))?;
+        .map_err(|_| RenderCommandError::InvalidPipelineId(pipeline_id))?;
 
     state.trackers.render_pipelines.write().add_single(pipeline);
 
@@ -948,11 +948,7 @@ pub enum ExecutionError {
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
 }
-impl PrettyError for ExecutionError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-    }
-}
+impl PrettyError for ExecutionError {}
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 
