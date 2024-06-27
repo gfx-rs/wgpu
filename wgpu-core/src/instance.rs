@@ -9,7 +9,7 @@ use crate::{
     id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
-    resource::{Labeled, Resource, ResourceType},
+    resource::{Labeled, ResourceType},
     resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
@@ -156,8 +156,6 @@ impl Labeled for Surface {
 impl crate::storage::StorageItem for Surface {
     type Marker = markers::Surface;
 }
-
-impl Resource for Surface {}
 
 impl Surface {
     pub fn get_capabilities<A: HalApi>(
@@ -375,8 +373,6 @@ impl<A: HalApi> Labeled for Adapter<A> {
     }
 }
 crate::impl_storage_item!(Adapter);
-
-impl<A: HalApi> Resource for Adapter<A> {}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

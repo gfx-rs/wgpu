@@ -5,7 +5,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{Labeled, ParentDevice, Resource, TrackingData},
+    resource::{Labeled, ParentDevice, TrackingData},
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -69,8 +69,6 @@ impl<A: HalApi> Drop for ShaderModule<A> {
 crate::impl_resource_type!(ShaderModule);
 crate::impl_labeled!(ShaderModule);
 crate::impl_storage_item!(ShaderModule);
-
-impl<A: HalApi> Resource for ShaderModule<A> {}
 
 impl<A: HalApi> ParentDevice<A> for ShaderModule<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -233,8 +231,6 @@ crate::impl_labeled!(ComputePipeline);
 crate::impl_storage_item!(ComputePipeline);
 crate::impl_trackable!(ComputePipeline);
 
-impl<A: HalApi> Resource for ComputePipeline<A> {}
-
 impl<A: HalApi> ParentDevice<A> for ComputePipeline<A> {
     fn device(&self) -> &Arc<Device<A>> {
         &self.device
@@ -295,8 +291,6 @@ crate::impl_resource_type!(PipelineCache);
 crate::impl_labeled!(PipelineCache);
 crate::impl_storage_item!(PipelineCache);
 crate::impl_trackable!(PipelineCache);
-
-impl<A: HalApi> Resource for PipelineCache<A> {}
 
 impl<A: HalApi> ParentDevice<A> for PipelineCache<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -549,8 +543,6 @@ crate::impl_resource_type!(RenderPipeline);
 crate::impl_labeled!(RenderPipeline);
 crate::impl_storage_item!(RenderPipeline);
 crate::impl_trackable!(RenderPipeline);
-
-impl<A: HalApi> Resource for RenderPipeline<A> {}
 
 impl<A: HalApi> ParentDevice<A> for RenderPipeline<A> {
     fn device(&self) -> &Arc<Device<A>> {

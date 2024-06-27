@@ -19,7 +19,7 @@ mod compat {
         binding_model::BindGroupLayout,
         device::bgl,
         hal_api::HalApi,
-        resource::{Labeled, Resource},
+        resource::{Labeled, ParentDevice},
     };
     use std::{ops::Range, sync::Arc};
 

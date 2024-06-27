@@ -24,7 +24,7 @@ use crate::{
     pool::ResourcePool,
     registry::Registry,
     resource::{
-        self, Buffer, Labeled, ParentDevice, QuerySet, Resource, Sampler, Texture, TextureView,
+        self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, Texture, TextureView,
         TextureViewNotRenderableReason, Trackable, TrackingData,
     },
     resource_log,
@@ -3668,5 +3668,3 @@ impl<A: HalApi> Device<A> {
 crate::impl_resource_type!(Device);
 crate::impl_labeled!(Device);
 crate::impl_storage_item!(Device);
-
-impl<A: HalApi> Resource for Device<A> {}

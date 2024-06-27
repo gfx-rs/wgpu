@@ -8,7 +8,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{
         DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ParentDevice, Resource, ResourceErrorIdent, TrackingData,
+        ParentDevice, ResourceErrorIdent, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -499,8 +499,6 @@ crate::impl_labeled!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
 crate::impl_trackable!(BindGroupLayout);
 
-impl<A: HalApi> Resource for BindGroupLayout<A> {}
-
 impl<A: HalApi> ParentDevice<A> for BindGroupLayout<A> {
     fn device(&self) -> &Arc<Device<A>> {
         &self.device
@@ -727,8 +725,6 @@ crate::impl_labeled!(PipelineLayout);
 crate::impl_storage_item!(PipelineLayout);
 crate::impl_trackable!(PipelineLayout);
 
-impl<A: HalApi> Resource for PipelineLayout<A> {}
-
 impl<A: HalApi> ParentDevice<A> for PipelineLayout<A> {
     fn device(&self) -> &Arc<Device<A>> {
         &self.device
@@ -939,8 +935,6 @@ crate::impl_resource_type!(BindGroup);
 crate::impl_labeled!(BindGroup);
 crate::impl_storage_item!(BindGroup);
 crate::impl_trackable!(BindGroup);
-
-impl<A: HalApi> Resource for BindGroup<A> {}
 
 impl<A: HalApi> ParentDevice<A> for BindGroup<A> {
     fn device(&self) -> &Arc<Device<A>> {
