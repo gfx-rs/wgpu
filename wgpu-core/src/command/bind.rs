@@ -40,17 +40,15 @@ mod compat {
         }
 
         fn is_valid(&self) -> bool {
-            if self.expected.is_none() {
-                return true;
-            }
             if let Some(expected_bgl) = self.expected.as_ref() {
                 if let Some(assigned_bgl) = self.assigned.as_ref() {
-                    if expected_bgl.is_equal(assigned_bgl) {
-                        return true;
-                    }
+                    expected_bgl.is_equal(assigned_bgl)
+                } else {
+                    false
                 }
+            } else {
+                true
             }
-            false
         }
 
         fn is_incompatible(&self) -> bool {
