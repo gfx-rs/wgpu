@@ -146,6 +146,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false, // No RODS
         webgpu: true,
     },
+    ExampleDesc {
+        name: "wireframe_vertex_pulling",
+        function: wgpu_examples::wireframe_vertex_pulling::main,
+        webgl: true,
+        webgpu: true,
+    },
 ];
 
 fn get_example_name() -> Option<String> {

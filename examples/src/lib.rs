@@ -26,6 +26,7 @@ pub mod texture_arrays;
 pub mod timestamp_queries;
 pub mod uniform_values;
 pub mod water;
+pub mod wireframe_vertex_pulling;
 
 #[cfg(test)]
 wgpu_test::gpu_test_main!();
