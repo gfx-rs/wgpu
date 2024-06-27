@@ -144,8 +144,8 @@ pub enum ComputePassErrorInner {
     InvalidBindGroupId(id::BindGroupId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
-    #[error("Compute pipeline {0:?} is invalid")]
-    InvalidPipeline(id::ComputePipelineId),
+    #[error("ComputePipelineId {0:?} is invalid")]
+    InvalidPipelineId(id::ComputePipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
     #[error(transparent)]
@@ -189,17 +189,11 @@ pub enum ComputePassErrorInner {
 impl PrettyError for ComputePassErrorInner {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        match *self {
-            Self::InvalidPipeline(id) => {
-                fmt.compute_pipeline_label(&id);
+        if let Self::Dispatch(DispatchError::IncompatibleBindGroup { ref diff, .. }) = *self {
+            for d in diff {
+                fmt.note(&d);
             }
-            Self::Dispatch(DispatchError::IncompatibleBindGroup { ref diff, .. }) => {
-                for d in diff {
-                    fmt.note(&d);
-                }
-            }
-            _ => {}
-        };
+        }
     }
 }
 
@@ -1073,7 +1067,7 @@ impl Global {
             .compute_pipelines
             .read()
             .get_owned(pipeline_id)
-            .map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
+            .map_err(|_| ComputePassErrorInner::InvalidPipelineId(pipeline_id))
             .map_pass_err(scope)?;
 
         base.commands.push(ArcComputeCommand::SetPipeline(pipeline));

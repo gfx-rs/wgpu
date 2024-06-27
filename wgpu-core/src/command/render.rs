@@ -590,10 +590,6 @@ pub enum RenderPassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
-    #[error("Attachment texture view {0:?} is invalid")]
-    InvalidAttachmentId(id::TextureViewId),
-    #[error("Attachment texture view {0:?} is invalid")]
-    InvalidResolveTargetId(id::TextureViewId),
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("Buffer {0:?} is invalid or destroyed")]
@@ -724,9 +720,6 @@ pub enum RenderPassErrorInner {
 impl PrettyError for RenderPassErrorInner {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        if let Self::InvalidAttachmentId(id) = *self {
-            fmt.texture_view_label_with_key(&id, "attachment");
-        };
         if let Self::Draw(DrawError::IncompatibleBindGroup { diff, .. }) = self {
             for d in diff {
                 fmt.note(&d);
@@ -1381,12 +1374,12 @@ impl Global {
                 {
                     let view = texture_views
                         .get_owned(*view_id)
-                        .map_err(|_| CommandEncoderError::InvalidAttachment(*view_id))?;
+                        .map_err(|_| CommandEncoderError::InvalidAttachmentId(*view_id))?;
                     view.same_device(device)?;
 
                     let resolve_target = if let Some(resolve_target_id) = resolve_target {
                         let rt_arc = texture_views.get_owned(*resolve_target_id).map_err(|_| {
-                            CommandEncoderError::InvalidResolveTarget(*resolve_target_id)
+                            CommandEncoderError::InvalidResolveTargetId(*resolve_target_id)
                         })?;
                         rt_arc.same_device(device)?;
 
@@ -1412,7 +1405,7 @@ impl Global {
                     let view = texture_views
                         .get_owned(depth_stencil_attachment.view)
                         .map_err(|_| {
-                            CommandEncoderError::InvalidDepthStencilAttachment(
+                            CommandEncoderError::InvalidDepthStencilAttachmentId(
                                 depth_stencil_attachment.view,
                             )
                         })?;

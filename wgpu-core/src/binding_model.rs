@@ -78,10 +78,10 @@ pub enum CreateBindGroupError {
     InvalidLayout,
     #[error("BufferId {0:?} is invalid")]
     InvalidBufferId(BufferId),
-    #[error("Texture view Id {0:?} is invalid")]
+    #[error("TextureViewId {0:?} is invalid")]
     InvalidTextureViewId(TextureViewId),
-    #[error("Sampler {0:?} is invalid")]
-    InvalidSampler(SamplerId),
+    #[error("SamplerId {0:?} is invalid")]
+    InvalidSamplerId(SamplerId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(
@@ -197,12 +197,6 @@ impl PrettyError for CreateBindGroupError {
             }
             Self::BindingSizeTooSmall { buffer, .. } => {
                 fmt.buffer_label(&buffer);
-            }
-            Self::InvalidTextureViewId(id) => {
-                fmt.texture_view_label(&id);
-            }
-            Self::InvalidSampler(id) => {
-                fmt.sampler_label(&id);
             }
             _ => {}
         };
@@ -511,8 +505,8 @@ impl<A: HalApi> BindGroupLayout<A> {
 pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Bind group layout {0:?} is invalid")]
-    InvalidBindGroupLayout(BindGroupLayoutId),
+    #[error("BindGroupLayoutId {0:?} is invalid")]
+    InvalidBindGroupLayoutId(BindGroupLayoutId),
     #[error(
         "Push constant at index {index} has range bound {bound} not aligned to {}",
         wgt::PUSH_CONSTANT_ALIGNMENT
@@ -538,14 +532,7 @@ pub enum CreatePipelineLayoutError {
     TooManyGroups { actual: usize, max: usize },
 }
 
-impl PrettyError for CreatePipelineLayoutError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        if let Self::InvalidBindGroupLayout(id) = *self {
-            fmt.bind_group_layout_label(&id);
-        };
-    }
-}
+impl PrettyError for CreatePipelineLayoutError {}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

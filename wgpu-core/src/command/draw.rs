@@ -1,6 +1,5 @@
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
-    error::ErrorFormatter,
     id,
     resource::{
         DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError,
@@ -83,8 +82,8 @@ pub enum RenderCommandError {
     VertexBufferIndexOutOfRange { index: u32, max: u32 },
     #[error("Dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(u64, &'static str, u32),
-    #[error("Render pipeline {0:?} is invalid")]
-    InvalidPipeline(id::RenderPipelineId),
+    #[error("RenderPipelineId {0:?} is invalid")]
+    InvalidPipelineId(id::RenderPipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline targets are incompatible with render pass")]
@@ -112,20 +111,7 @@ pub enum RenderCommandError {
     #[error("Support for {0} is not implemented yet")]
     Unimplemented(&'static str),
 }
-impl crate::error::PrettyError for RenderCommandError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        match *self {
-            Self::InvalidBindGroupId(id) => {
-                fmt.bind_group_label(&id);
-            }
-            Self::InvalidPipeline(id) => {
-                fmt.render_pipeline_label(&id);
-            }
-            _ => {}
-        };
-    }
-}
+impl crate::error::PrettyError for RenderCommandError {}
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

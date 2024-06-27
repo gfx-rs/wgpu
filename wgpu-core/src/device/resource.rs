@@ -1994,7 +1994,7 @@ impl<A: HalApi> Device<A> {
     ) -> Result<&'a Sampler<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
-        let sampler = storage.get(id).map_err(|_| Error::InvalidSampler(id))?;
+        let sampler = storage.get(id).map_err(|_| Error::InvalidSamplerId(id))?;
         used.samplers.add_single(sampler);
 
         sampler.same_device(self)?;
@@ -2512,7 +2512,7 @@ impl<A: HalApi> Device<A> {
         let mut bind_group_layouts = ArrayVec::new();
         for &id in desc.bind_group_layouts.iter() {
             let Ok(bgl) = bgl_registry.get(id) else {
-                return Err(Error::InvalidBindGroupLayout(id));
+                return Err(Error::InvalidBindGroupLayoutId(id));
             };
 
             bind_group_layouts.push(bgl);
