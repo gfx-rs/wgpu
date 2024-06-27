@@ -5,10 +5,11 @@ use crate::{
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
     pipeline::LateSizedBufferGroup,
-    resource::Labeled,
+    resource::{Labeled, ResourceErrorIdent},
 };
 
 use arrayvec::ArrayVec;
+use thiserror::Error;
 
 type BindGroupMask = u8;
 
@@ -214,6 +215,14 @@ mod compat {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+#[error("Bind group at index {index} is incompatible with the current set {pipeline}")]
+pub struct IncompatibleBindGroupError {
+    index: u32,
+    pipeline: ResourceErrorIdent,
+    diff: Vec<String>,
+}
+
 #[derive(Debug)]
 struct LateBufferBinding {
     shader_expect_size: wgt::BufferAddress,
@@ -358,12 +367,20 @@ impl<A: HalApi> Binder<A> {
             .map(move |index| payloads[index].group.as_ref().unwrap())
     }
 
-    pub(super) fn invalid_mask(&self) -> BindGroupMask {
-        self.manager.invalid_mask()
-    }
-
-    pub(super) fn bgl_diff(&self) -> Vec<String> {
-        self.manager.bgl_diff()
+    pub(super) fn check_compatibility<T: Labeled>(
+        &self,
+        pipeline: &T,
+    ) -> Result<(), IncompatibleBindGroupError> {
+        let bind_mask = self.manager.invalid_mask();
+        if bind_mask == 0 {
+            Ok(())
+        } else {
+            Err(IncompatibleBindGroupError {
+                index: bind_mask.trailing_zeros(),
+                pipeline: pipeline.error_ident(),
+                diff: self.manager.bgl_diff(),
+            })
+        }
     }
 
     /// Scan active buffer bindings corresponding to layouts without `min_binding_size` specified.

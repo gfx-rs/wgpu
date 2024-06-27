@@ -11,6 +11,8 @@ use wgt::VertexStepMode;
 
 use thiserror::Error;
 
+use super::bind::IncompatibleBindGroupError;
+
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -26,12 +28,8 @@ pub enum DrawError {
     },
     #[error("Index buffer must be set")]
     MissingIndexBuffer,
-    #[error("Bind group at index {index} is incompatible with the current set {pipeline}")]
-    IncompatibleBindGroup {
-        index: u32,
-        pipeline: ResourceErrorIdent,
-        diff: Vec<String>,
-    },
+    #[error(transparent)]
+    IncompatibleBindGroup(#[from] IncompatibleBindGroupError),
     #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {
         last_vertex: u64,
