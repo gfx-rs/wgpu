@@ -284,7 +284,7 @@ impl<A: HalApi> Adapter<A> {
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
+    ) -> Result<(Arc<Device<A>>, Queue<A>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
         if let Ok(device) = Device::new(
@@ -295,8 +295,9 @@ impl<A: HalApi> Adapter<A> {
             trace_path,
             instance_flags,
         ) {
+            let device = Arc::new(device);
             let queue = Queue {
-                device: None,
+                device: device.clone(),
                 raw: Some(hal_device.queue),
             };
             return Ok((device, queue));
@@ -309,7 +310,7 @@ impl<A: HalApi> Adapter<A> {
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
+    ) -> Result<(Arc<Device<A>>, Queue<A>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -1084,16 +1085,15 @@ impl Global {
                 Ok(adapter) => adapter,
                 Err(_) => break 'error RequestDeviceError::InvalidAdapter,
             };
-            let (device, mut queue) =
+            let (device, queue) =
                 match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
                     Ok((device, queue)) => (device, queue),
                     Err(e) => break 'error e,
                 };
-            let (device_id, _) = device_fid.assign(Arc::new(device));
+            let (device_id, _) = device_fid.assign(device);
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
-            queue.device = Some(device.clone());
 
             let (queue_id, queue) = queue_fid.assign(Arc::new(queue));
             resource_log!("Created Queue {:?}", queue_id);
@@ -1132,7 +1132,7 @@ impl Global {
                 Ok(adapter) => adapter,
                 Err(_) => break 'error RequestDeviceError::InvalidAdapter,
             };
-            let (device, mut queue) = match adapter.create_device_and_queue_from_hal(
+            let (device, queue) = match adapter.create_device_and_queue_from_hal(
                 hal_device,
                 desc,
                 self.instance.flags,
@@ -1141,11 +1141,10 @@ impl Global {
                 Ok(device) => device,
                 Err(e) => break 'error e,
             };
-            let (device_id, _) = devices_fid.assign(Arc::new(device));
+            let (device_id, _) = devices_fid.assign(device);
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
-            queue.device = Some(device.clone());
 
             let (queue_id, queue) = queues_fid.assign(Arc::new(queue));
             resource_log!("Created Queue {:?}", queue_id);

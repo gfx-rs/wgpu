@@ -37,8 +37,8 @@ use thiserror::Error;
 use super::Device;
 
 pub struct Queue<A: HalApi> {
-    pub(crate) device: Option<Arc<Device<A>>>,
     pub(crate) raw: Option<A::Queue>,
+    pub(crate) device: Arc<Device<A>>,
 }
 
 crate::impl_resource_type!(Queue);
@@ -48,19 +48,14 @@ impl<A: HalApi> Labeled for Queue<A> {
         ""
     }
 }
+crate::impl_parent_device!(Queue);
 crate::impl_storage_item!(Queue);
-
-impl<A: HalApi> ParentDevice<A> for Queue<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        self.device.as_ref().unwrap()
-    }
-}
 
 impl<A: HalApi> Drop for Queue<A> {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
         let queue = self.raw.take().unwrap();
-        self.device.as_ref().unwrap().release_queue(queue);
+        self.device.release_queue(queue);
     }
 }
 
@@ -429,7 +424,7 @@ impl Global {
             .get(queue_id)
             .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
-        let device = queue.device.as_ref().unwrap();
+        let device = &queue.device;
 
         let data_size = data.len() as wgt::BufferAddress;
 
@@ -497,7 +492,7 @@ impl Global {
             .get(queue_id)
             .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
-        let device = queue.device.as_ref().unwrap();
+        let device = &queue.device;
 
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(device, buffer_size.get(), device.instance_flags)?;
@@ -524,7 +519,7 @@ impl Global {
             .get(queue_id)
             .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
-        let device = queue.device.as_ref().unwrap();
+        let device = &queue.device;
 
         let staging_buffer = hub.staging_buffers.unregister(staging_buffer_id);
         if staging_buffer.is_none() {
@@ -692,7 +687,7 @@ impl Global {
             .get(queue_id)
             .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
-        let device = queue.device.as_ref().unwrap();
+        let device = &queue.device;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
@@ -950,7 +945,7 @@ impl Global {
             .get(queue_id)
             .map_err(|_| QueueWriteError::InvalidQueueId)?;
 
-        let device = queue.device.as_ref().unwrap();
+        let device = &queue.device;
 
         if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
             log::trace!("Ignoring write_texture of size 0");
@@ -1144,7 +1139,7 @@ impl Global {
                 .get(queue_id)
                 .map_err(|_| QueueSubmitError::InvalidQueueId)?;
 
-            let device = queue.device.as_ref().unwrap();
+            let device = &queue.device;
 
             let snatch_guard = device.snatchable_lock.read();
 
@@ -1551,12 +1546,7 @@ impl Global {
         //TODO: flush pending writes
         let hub = A::hub(self);
         match hub.queues.get(queue_id) {
-            Ok(queue) => queue
-                .device
-                .as_ref()
-                .unwrap()
-                .lock_life()
-                .add_work_done_closure(closure),
+            Ok(queue) => queue.device.lock_life().add_work_done_closure(closure),
             Err(_) => return Err(InvalidQueue),
         }
         Ok(())
