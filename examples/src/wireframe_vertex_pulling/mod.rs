@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow};
+use std::borrow::Cow;
 use std::fmt::Display;
 use wgpu::util::DeviceExt;
 
@@ -17,7 +17,9 @@ impl RenderMode {
             RenderMode::SolidMesh => Cow::Borrowed(include_str!("shader/solid_mesh.wgsl")),
             RenderMode::Points => Cow::Borrowed(include_str!("shader/points.wgsl")),
             RenderMode::Wireframe => Cow::Borrowed(include_str!("shader/wireframe.wgsl")),
-            RenderMode::WireframeThick => Cow::Borrowed(include_str!("shader/wireframe_thick.wgsl")),
+            RenderMode::WireframeThick => {
+                Cow::Borrowed(include_str!("shader/wireframe_thick.wgsl"))
+            }
         };
 
         device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -188,7 +190,7 @@ impl<const RENDER_MODE: u8> crate::framework::Example for Example<RENDER_MODE> {
     ) -> Self {
         let (vertices, index) = create_vertices();
 
-        let render_mode:RenderMode = match RENDER_MODE {
+        let render_mode: RenderMode = match RENDER_MODE {
             0 => RenderMode::SolidMesh,
             1 => RenderMode::Points,
             2 => RenderMode::Wireframe,
@@ -222,13 +224,26 @@ impl<const RENDER_MODE: u8> crate::framework::Example for Example<RENDER_MODE> {
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Cube - Index Buffer"),
             contents: bytemuck::cast_slice(&index),
-            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::INDEX
+                | wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::VERTEX,
         });
 
         let uniforms = Uniforms {
             world: glam::Mat4::IDENTITY.to_cols_array_2d(),
-            view: glam::Mat4::look_at_rh(glam::Vec3::new(0.0, 0.0, 5.0), glam::Vec3::new(0.0, 0.0, 0.0), glam::Vec3::Y).to_cols_array_2d(),
-            proj: glam::Mat4::perspective_rh_gl(45.0_f32.to_radians(), config.width as f32 / config.height as f32, 0.1, 100.0).to_cols_array_2d(),
+            view: glam::Mat4::look_at_rh(
+                glam::Vec3::new(0.0, 0.0, 5.0),
+                glam::Vec3::new(0.0, 0.0, 0.0),
+                glam::Vec3::Y,
+            )
+            .to_cols_array_2d(),
+            proj: glam::Mat4::perspective_rh_gl(
+                45.0_f32.to_radians(),
+                config.width as f32 / config.height as f32,
+                0.1,
+                100.0,
+            )
+            .to_cols_array_2d(),
             screen_width: config.width,
             screen_height: config.height,
             _padding: [0, 0],
@@ -376,8 +391,16 @@ impl<const RENDER_MODE: u8> crate::framework::Example for Example<RENDER_MODE> {
         _device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
-        self.update_matrix(config.width as f32 / config.height as f32, config.width, config.height);
-        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
+        self.update_matrix(
+            config.width as f32 / config.height as f32,
+            config.width,
+            config.height,
+        );
+        queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniforms]),
+        );
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
@@ -434,10 +457,16 @@ pub fn main() {
     match args.nth(1).as_deref() {
         None => crate::framework::run::<Example<2>>("wireframe_vertex_pulling - Wireframe"),
 
-        Some("solid") => crate::framework::run::<Example<0>>("wireframe_vertex_pulling - Solid Mesh"),
+        Some("solid") => {
+            crate::framework::run::<Example<0>>("wireframe_vertex_pulling - Solid Mesh")
+        }
         Some("points") => crate::framework::run::<Example<1>>("wireframe_vertex_pulling - Points"),
-        Some("wireframe") => crate::framework::run::<Example<2>>("wireframe_vertex_pulling - Wireframe"),
-        Some("wireframe-thick") => crate::framework::run::<Example<3>>("wireframe_vertex_pulling - Wireframe Thick"),
+        Some("wireframe") => {
+            crate::framework::run::<Example<2>>("wireframe_vertex_pulling - Wireframe")
+        }
+        Some("wireframe-thick") => {
+            crate::framework::run::<Example<3>>("wireframe_vertex_pulling - Wireframe Thick")
+        }
 
         Some(_) => crate::framework::run::<Example<2>>("wireframe_vertex_pulling - Wireframe"),
     }
@@ -446,8 +475,8 @@ pub fn main() {
 #[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST_WIREFRAME_VERTEX_PULLING_SOLID: crate::framework::ExampleTestParams = {
-    let test_parameter = wgpu_test::TestParameters::default()
-        .limits(wgpu::Limits::downlevel_defaults());
+    let test_parameter =
+        wgpu_test::TestParameters::default().limits(wgpu::Limits::downlevel_defaults());
 
     crate::framework::ExampleTestParams {
         name: "wireframe_vertex_pulling solid",
@@ -457,9 +486,7 @@ static TEST_WIREFRAME_VERTEX_PULLING_SOLID: crate::framework::ExampleTestParams 
         height: 1200,
         optional_features: wgpu::Features::default(),
         base_test_parameters: test_parameter,
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.04),
-        ],
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.04)],
         _phantom: std::marker::PhantomData::<Example<0>>,
     }
 };
@@ -467,8 +494,8 @@ static TEST_WIREFRAME_VERTEX_PULLING_SOLID: crate::framework::ExampleTestParams 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST_WIREFRAME_VERTEX_PULLING_POINTS: crate::framework::ExampleTestParams = {
-    let test_parameter = wgpu_test::TestParameters::default()
-        .limits(wgpu::Limits::downlevel_defaults());
+    let test_parameter =
+        wgpu_test::TestParameters::default().limits(wgpu::Limits::downlevel_defaults());
 
     crate::framework::ExampleTestParams {
         name: "wireframe_vertex_pulling points",
@@ -478,9 +505,7 @@ static TEST_WIREFRAME_VERTEX_PULLING_POINTS: crate::framework::ExampleTestParams
         height: 1200,
         optional_features: wgpu::Features::default(),
         base_test_parameters: test_parameter,
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.04),
-        ],
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.04)],
         _phantom: std::marker::PhantomData::<Example<1>>,
     }
 };
@@ -488,8 +513,8 @@ static TEST_WIREFRAME_VERTEX_PULLING_POINTS: crate::framework::ExampleTestParams
 #[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST_WIREFRAME_VERTEX_PULLING_WIREFRAME: crate::framework::ExampleTestParams = {
-    let test_parameter = wgpu_test::TestParameters::default()
-        .limits(wgpu::Limits::downlevel_defaults());
+    let test_parameter =
+        wgpu_test::TestParameters::default().limits(wgpu::Limits::downlevel_defaults());
 
     crate::framework::ExampleTestParams {
         name: "wireframe_vertex_pulling wireframe",
@@ -499,9 +524,7 @@ static TEST_WIREFRAME_VERTEX_PULLING_WIREFRAME: crate::framework::ExampleTestPar
         height: 1200,
         optional_features: wgpu::Features::default(),
         base_test_parameters: test_parameter,
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.04),
-        ],
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.04)],
         _phantom: std::marker::PhantomData::<Example<2>>,
     }
 };
