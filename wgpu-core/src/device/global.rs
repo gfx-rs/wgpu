@@ -15,6 +15,7 @@ use crate::{
     pipeline, present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
+        Trackable,
     },
     Label, LabelHelpers as _,
 };
@@ -354,7 +355,7 @@ impl Global {
         let last_submission = {
             let buffer_guard = hub.buffers.write();
             match buffer_guard.get(buffer_id) {
-                Ok(buffer) => buffer.info.submission_index(),
+                Ok(buffer) => buffer.submission_index(),
                 Err(_) => return Ok(()),
             }
         };
@@ -527,7 +528,7 @@ impl Global {
             buffer_id,
         );
 
-        let last_submit_index = buffer.info.submission_index();
+        let last_submit_index = buffer.submission_index();
 
         let device = buffer.device.clone();
 
@@ -544,7 +545,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .buffers
-                .insert(buffer.info.tracker_index(), buffer);
+                .insert(buffer.tracker_index(), buffer);
         }
 
         if wait {
@@ -762,7 +763,7 @@ impl Global {
                 t.add(trace::Action::DestroyTexture(texture_id));
             }
 
-            let last_submit_index = texture.info.submission_index();
+            let last_submit_index = texture.submission_index();
 
             let device = &texture.device;
             {
@@ -782,7 +783,7 @@ impl Global {
                         .lock_life()
                         .suspected_resources
                         .textures
-                        .insert(texture.info.tracker_index(), texture.clone());
+                        .insert(texture.tracker_index(), texture.clone());
                 }
             }
 
@@ -878,13 +879,13 @@ impl Global {
                 t.add(trace::Action::DestroyTextureView(texture_view_id));
             }
 
-            let last_submit_index = view.info.submission_index();
+            let last_submit_index = view.submission_index();
 
             view.device
                 .lock_life()
                 .suspected_resources
                 .texture_views
-                .insert(view.info.tracker_index(), view.clone());
+                .insert(view.tracker_index(), view.clone());
 
             if wait {
                 match view.device.wait_for_submit(last_submit_index) {
@@ -957,7 +958,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .samplers
-                .insert(sampler.info.tracker_index(), sampler.clone());
+                .insert(sampler.tracker_index(), sampler.clone());
         }
     }
 
@@ -1063,7 +1064,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .bind_group_layouts
-                .insert(layout.info.tracker_index(), layout.clone());
+                .insert(layout.tracker_index(), layout.clone());
         }
     }
 
@@ -1126,7 +1127,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .pipeline_layouts
-                .insert(layout.info.tracker_index(), layout.clone());
+                .insert(layout.tracker_index(), layout.clone());
         }
     }
 
@@ -1213,7 +1214,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .bind_groups
-                .insert(bind_group.info.tracker_index(), bind_group.clone());
+                .insert(bind_group.tracker_index(), bind_group.clone());
         }
     }
 
@@ -1522,7 +1523,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .render_bundles
-                .insert(bundle.info.tracker_index(), bundle.clone());
+                .insert(bundle.tracker_index(), bundle.clone());
         }
     }
 
@@ -1585,7 +1586,7 @@ impl Global {
                 .lock_life()
                 .suspected_resources
                 .query_sets
-                .insert(query_set.info.tracker_index(), query_set.clone());
+                .insert(query_set.tracker_index(), query_set.clone());
         }
     }
 
@@ -1724,12 +1725,12 @@ impl Global {
             life_lock
                 .suspected_resources
                 .render_pipelines
-                .insert(pipeline.info.tracker_index(), pipeline.clone());
+                .insert(pipeline.tracker_index(), pipeline.clone());
 
-            life_lock.suspected_resources.pipeline_layouts.insert(
-                pipeline.layout.info.tracker_index(),
-                pipeline.layout.clone(),
-            );
+            life_lock
+                .suspected_resources
+                .pipeline_layouts
+                .insert(pipeline.layout.tracker_index(), pipeline.layout.clone());
         }
     }
 
@@ -1861,11 +1862,11 @@ impl Global {
             life_lock
                 .suspected_resources
                 .compute_pipelines
-                .insert(pipeline.info.tracker_index(), pipeline.clone());
-            life_lock.suspected_resources.pipeline_layouts.insert(
-                pipeline.layout.info.tracker_index(),
-                pipeline.layout.clone(),
-            );
+                .insert(pipeline.tracker_index(), pipeline.clone());
+            life_lock
+                .suspected_resources
+                .pipeline_layouts
+                .insert(pipeline.layout.tracker_index(), pipeline.layout.clone());
         }
     }
 

@@ -202,14 +202,12 @@ mod tests {
 
     use crate::{
         id::Marker,
-        resource::{Labeled, Resource, ResourceInfo, ResourceType},
+        resource::{Labeled, ResourceType},
         storage::StorageItem,
     };
 
     use super::Registry;
-    struct TestData {
-        info: ResourceInfo,
-    }
+    struct TestData;
     struct TestDataId;
     impl Marker for TestDataId {}
 
@@ -226,12 +224,6 @@ mod tests {
         type Marker = TestDataId;
     }
 
-    impl Resource for TestData {
-        fn as_info(&self) -> &ResourceInfo {
-            &self.info
-        }
-    }
-
     #[test]
     fn simultaneous_registration() {
         let registry = Registry::without_backend();
@@ -239,9 +231,7 @@ mod tests {
             for _ in 0..5 {
                 s.spawn(|| {
                     for _ in 0..1000 {
-                        let value = Arc::new(TestData {
-                            info: ResourceInfo::new(None),
-                        });
+                        let value = Arc::new(TestData);
                         let new_id = registry.prepare(None);
                         let (id, _) = new_id.assign(value);
                         registry.unregister(id);

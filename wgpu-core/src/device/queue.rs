@@ -17,8 +17,8 @@ use crate::{
     lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, Labeled, ParentDevice, Resource, ResourceErrorIdent, ResourceInfo,
-        StagingBuffer, Texture, TextureInner,
+        DestroyedTexture, Labeled, ParentDevice, Resource, ResourceErrorIdent, StagingBuffer,
+        Texture, TextureInner, Trackable, TrackingData,
     },
     resource_log,
     track::{self, TrackerIndex},
@@ -39,7 +39,6 @@ use super::Device;
 pub struct Queue<A: HalApi> {
     pub(crate) device: Option<Arc<Device<A>>>,
     pub(crate) raw: Option<A::Queue>,
-    pub(crate) info: ResourceInfo,
 }
 
 crate::impl_resource_type!(Queue);
@@ -51,11 +50,7 @@ impl<A: HalApi> Labeled for Queue<A> {
 }
 crate::impl_storage_item!(Queue);
 
-impl<A: HalApi> Resource for Queue<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for Queue<A> {}
 
 impl<A: HalApi> ParentDevice<A> for Queue<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -250,21 +245,20 @@ impl<A: HalApi> PendingWrites<A> {
 
     pub fn insert_buffer(&mut self, buffer: &Arc<Buffer<A>>) {
         self.dst_buffers
-            .insert(buffer.info.tracker_index(), buffer.clone());
+            .insert(buffer.tracker_index(), buffer.clone());
     }
 
     pub fn insert_texture(&mut self, texture: &Arc<Texture<A>>) {
         self.dst_textures
-            .insert(texture.info.tracker_index(), texture.clone());
+            .insert(texture.tracker_index(), texture.clone());
     }
 
     pub fn contains_buffer(&self, buffer: &Arc<Buffer<A>>) -> bool {
-        self.dst_buffers.contains_key(&buffer.info.tracker_index())
+        self.dst_buffers.contains_key(&buffer.tracker_index())
     }
 
     pub fn contains_texture(&self, texture: &Arc<Texture<A>>) -> bool {
-        self.dst_textures
-            .contains_key(&texture.info.tracker_index())
+        self.dst_textures.contains_key(&texture.tracker_index())
     }
 
     pub fn consume_temp(&mut self, resource: TempResource<A>) {
@@ -350,7 +344,7 @@ fn prepare_staging_buffer<A: HalApi>(
         raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(buffer)),
         device: device.clone(),
         size,
-        info: ResourceInfo::new(Some(device.tracker_indices.staging_buffers.clone())),
+        tracking_data: TrackingData::new(device.tracker_indices.staging_buffers.clone()),
         is_coherent: mapping.is_coherent,
     };
 
@@ -646,8 +640,7 @@ impl Global {
         let src_buffer_size = staging_buffer.size;
         self.queue_validate_write_buffer_impl(&dst, buffer_id, buffer_offset, src_buffer_size)?;
 
-        dst.info
-            .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
+        dst.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let region = wgt::BufferSize::new(src_buffer_size).map(|size| hal::BufferCopy {
             src_offset: 0,
@@ -847,8 +840,7 @@ impl Global {
         // call above. Since we've held `texture_guard` the whole time, we know
         // the texture hasn't gone away in the mean time, so we can unwrap.
         let dst = hub.textures.get(destination.texture).unwrap();
-        dst.info
-            .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
+        dst.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let dst_raw = dst.try_raw(&snatch_guard)?;
 
@@ -1104,8 +1096,7 @@ impl Global {
                     .drain(init_layer_range);
             }
         }
-        dst.info
-            .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
+        dst.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let snatch_guard = device.snatchable_lock.read();
         let dst_raw = dst.try_raw(&snatch_guard)?;
@@ -1234,7 +1225,7 @@ impl Global {
                                 profiling::scope!("buffers");
                                 for buffer in cmd_buf_trackers.buffers.used_resources() {
                                     buffer.check_destroyed(&snatch_guard)?;
-                                    buffer.info.use_at(submit_index);
+                                    buffer.use_at(submit_index);
 
                                     match *buffer.map_state.lock() {
                                         BufferMapState::Idle => (),
@@ -1261,7 +1252,7 @@ impl Global {
                                             true
                                         }
                                     };
-                                    texture.info.use_at(submit_index);
+                                    texture.use_at(submit_index);
                                     if should_extend {
                                         unsafe {
                                             used_surface_textures
@@ -1278,21 +1269,21 @@ impl Global {
                             {
                                 profiling::scope!("views");
                                 for texture_view in cmd_buf_trackers.views.used_resources() {
-                                    texture_view.info.use_at(submit_index);
+                                    texture_view.use_at(submit_index);
                                 }
                             }
                             {
                                 profiling::scope!("bind groups (+ referenced views/samplers)");
                                 for bg in cmd_buf_trackers.bind_groups.used_resources() {
-                                    bg.info.use_at(submit_index);
+                                    bg.use_at(submit_index);
                                     // We need to update the submission indices for the contained
                                     // state-less (!) resources as well, so that they don't get
                                     // deleted too early if the parent bind group goes out of scope.
                                     for view in bg.used.views.used_resources() {
-                                        view.info.use_at(submit_index);
+                                        view.use_at(submit_index);
                                     }
                                     for sampler in bg.used.samplers.used_resources() {
-                                        sampler.info.use_at(submit_index);
+                                        sampler.use_at(submit_index);
                                     }
                                 }
                             }
@@ -1301,7 +1292,7 @@ impl Global {
                                 for compute_pipeline in
                                     cmd_buf_trackers.compute_pipelines.used_resources()
                                 {
-                                    compute_pipeline.info.use_at(submit_index);
+                                    compute_pipeline.use_at(submit_index);
                                 }
                             }
                             {
@@ -1309,13 +1300,13 @@ impl Global {
                                 for render_pipeline in
                                     cmd_buf_trackers.render_pipelines.used_resources()
                                 {
-                                    render_pipeline.info.use_at(submit_index);
+                                    render_pipeline.use_at(submit_index);
                                 }
                             }
                             {
                                 profiling::scope!("query sets");
                                 for query_set in cmd_buf_trackers.query_sets.used_resources() {
-                                    query_set.info.use_at(submit_index);
+                                    query_set.use_at(submit_index);
                                 }
                             }
                             {
@@ -1323,18 +1314,18 @@ impl Global {
                                     "render bundles (+ referenced pipelines/query sets)"
                                 );
                                 for bundle in cmd_buf_trackers.bundles.used_resources() {
-                                    bundle.info.use_at(submit_index);
+                                    bundle.use_at(submit_index);
                                     // We need to update the submission indices for the contained
                                     // state-less (!) resources as well, excluding the bind groups.
                                     // They don't get deleted too early if the bundle goes out of scope.
                                     for render_pipeline in
                                         bundle.used.render_pipelines.read().used_resources()
                                     {
-                                        render_pipeline.info.use_at(submit_index);
+                                        render_pipeline.use_at(submit_index);
                                     }
                                     for query_set in bundle.used.query_sets.read().used_resources()
                                     {
-                                        query_set.info.use_at(submit_index);
+                                        query_set.use_at(submit_index);
                                     }
                                 }
                             }

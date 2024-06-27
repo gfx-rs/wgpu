@@ -54,9 +54,9 @@ use std::{
 /// [`Device`]: crate::device::resource::Device
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
-pub(crate) struct ResourceInfo {
+pub(crate) struct TrackingData {
     tracker_index: TrackerIndex,
-    tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>,
+    tracker_indices: Arc<SharedTrackerIndexAllocator>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -67,29 +67,22 @@ pub(crate) struct ResourceInfo {
     submission_index: AtomicUsize,
 }
 
-impl Drop for ResourceInfo {
+impl Drop for TrackingData {
     fn drop(&mut self) {
-        if let Some(indices) = &self.tracker_indices {
-            indices.free(self.tracker_index);
-        }
+        self.tracker_indices.free(self.tracker_index);
     }
 }
 
-impl ResourceInfo {
-    pub(crate) fn new(tracker_indices: Option<Arc<SharedTrackerIndexAllocator>>) -> Self {
-        let tracker_index = tracker_indices
-            .as_ref()
-            .map(|indices| indices.alloc())
-            .unwrap_or(TrackerIndex::INVALID);
+impl TrackingData {
+    pub(crate) fn new(tracker_indices: Arc<SharedTrackerIndexAllocator>) -> Self {
         Self {
-            tracker_index,
+            tracker_index: tracker_indices.alloc(),
             tracker_indices,
             submission_index: AtomicUsize::new(0),
         }
     }
 
     pub(crate) fn tracker_index(&self) -> TrackerIndex {
-        debug_assert!(self.tracker_index != TrackerIndex::INVALID);
         self.tracker_index
     }
 
@@ -187,9 +180,32 @@ macro_rules! impl_labeled {
     };
 }
 
-pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + Labeled {
-    fn as_info(&self) -> &ResourceInfo;
+pub(crate) trait Trackable: Labeled {
+    fn tracker_index(&self) -> TrackerIndex;
+    /// Record that this resource will be used by the queue submission with the
+    /// given index.
+    fn use_at(&self, submit_index: SubmissionIndex);
+    fn submission_index(&self) -> SubmissionIndex;
+}
 
+#[macro_export]
+macro_rules! impl_trackable {
+    ($ty:ident) => {
+        impl<A: HalApi> $crate::resource::Trackable for $ty<A> {
+            fn tracker_index(&self) -> $crate::track::TrackerIndex {
+                self.tracking_data.tracker_index()
+            }
+            fn use_at(&self, submit_index: $crate::SubmissionIndex) {
+                self.tracking_data.use_at(submit_index)
+            }
+            fn submission_index(&self) -> $crate::SubmissionIndex {
+                self.tracking_data.submission_index()
+            }
+        }
+    };
+}
+
+pub(crate) trait Resource: 'static + Sized + WasmNotSendSync + Labeled {
     fn ref_count(self: &Arc<Self>) -> usize {
         Arc::strong_count(self)
     }
@@ -448,7 +464,7 @@ pub struct Buffer<A: HalApi> {
     pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState<A>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
 }
@@ -661,8 +677,7 @@ impl<A: HalApi> Buffer<A> {
                     }
                 }
 
-                self.info
-                    .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
+                self.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
                 let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
                     src_offset: 0,
                     dst_offset: 0,
@@ -748,8 +763,8 @@ impl<A: HalApi> Buffer<A> {
             queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
                 raw: Some(raw),
                 device: Arc::clone(&self.device),
-                submission_index: self.info.submission_index(),
-                tracker_index: self.info.tracker_index(),
+                submission_index: self.submission_index(),
+                tracker_index: self.tracker_index(),
                 label: self.label().to_owned(),
                 bind_groups,
             }))
@@ -760,7 +775,7 @@ impl<A: HalApi> Buffer<A> {
         if pending_writes.contains_buffer(self) {
             pending_writes.consume_temp(temp);
         } else {
-            let last_submit_index = self.info.submission_index();
+            let last_submit_index = self.submission_index();
             device
                 .lock_life()
                 .schedule_resource_destruction(temp, last_submit_index);
@@ -792,12 +807,9 @@ pub enum CreateBufferError {
 crate::impl_resource_type!(Buffer);
 crate::impl_labeled!(Buffer);
 crate::impl_storage_item!(Buffer);
+crate::impl_trackable!(Buffer);
 
-impl<A: HalApi> Resource for Buffer<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for Buffer<A> {}
 
 impl<A: HalApi> ParentDevice<A> for Buffer<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -866,7 +878,7 @@ pub struct StagingBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for StagingBuffer<A> {
@@ -889,12 +901,9 @@ impl<A: HalApi> Labeled for StagingBuffer<A> {
     }
 }
 crate::impl_storage_item!(StagingBuffer);
+crate::impl_trackable!(StagingBuffer);
 
-impl<A: HalApi> Resource for StagingBuffer<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for StagingBuffer<A> {}
 
 impl<A: HalApi> ParentDevice<A> for StagingBuffer<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -952,7 +961,7 @@ pub struct Texture<A: HalApi> {
     pub(crate) full_range: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
     pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
     pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
@@ -1115,8 +1124,8 @@ impl<A: HalApi> Texture<A> {
                 views,
                 bind_groups,
                 device: Arc::clone(&self.device),
-                tracker_index: self.info.tracker_index(),
-                submission_index: self.info.submission_index(),
+                tracker_index: self.tracker_index(),
+                submission_index: self.submission_index(),
                 label: self.label().to_owned(),
             }))
         };
@@ -1126,7 +1135,7 @@ impl<A: HalApi> Texture<A> {
         if pending_writes.contains_texture(self) {
             pending_writes.consume_temp(temp);
         } else {
-            let last_submit_index = self.info.submission_index();
+            let last_submit_index = self.submission_index();
             device
                 .lock_life()
                 .schedule_resource_destruction(temp, last_submit_index);
@@ -1427,12 +1436,9 @@ pub enum CreateTextureError {
 crate::impl_resource_type!(Texture);
 crate::impl_labeled!(Texture);
 crate::impl_storage_item!(Texture);
+crate::impl_trackable!(Texture);
 
-impl<A: HalApi> Resource for Texture<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for Texture<A> {}
 
 impl<A: HalApi> ParentDevice<A> for Texture<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -1514,7 +1520,7 @@ pub struct TextureView<A: HalApi> {
     pub(crate) selector: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for TextureView<A> {
@@ -1600,12 +1606,9 @@ pub enum TextureViewDestroyError {}
 crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_storage_item!(TextureView);
+crate::impl_trackable!(TextureView);
 
-impl<A: HalApi> Resource for TextureView<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for TextureView<A> {}
 
 impl<A: HalApi> ParentDevice<A> for TextureView<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -1648,7 +1651,7 @@ pub struct Sampler<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
     /// `true` if this is a filtering sampler
@@ -1720,12 +1723,9 @@ pub enum CreateSamplerError {
 crate::impl_resource_type!(Sampler);
 crate::impl_labeled!(Sampler);
 crate::impl_storage_item!(Sampler);
+crate::impl_trackable!(Sampler);
 
-impl<A: HalApi> Resource for Sampler<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for Sampler<A> {}
 
 impl<A: HalApi> ParentDevice<A> for Sampler<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -1754,7 +1754,7 @@ pub struct QuerySet<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
@@ -1779,12 +1779,9 @@ impl<A: HalApi> ParentDevice<A> for QuerySet<A> {
 crate::impl_resource_type!(QuerySet);
 crate::impl_labeled!(QuerySet);
 crate::impl_storage_item!(QuerySet);
+crate::impl_trackable!(QuerySet);
 
-impl<A: HalApi> Resource for QuerySet<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for QuerySet<A> {}
 
 impl<A: HalApi> QuerySet<A> {
     pub(crate) fn raw(&self) -> &A::QuerySet {

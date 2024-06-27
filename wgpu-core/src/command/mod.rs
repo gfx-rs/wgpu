@@ -36,7 +36,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::resource::{Labeled, ParentDevice, Resource, ResourceInfo};
+use crate::resource::{Labeled, ParentDevice, Resource};
 use crate::track::{Tracker, UsageScope};
 use crate::LabelHelpers;
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
@@ -313,7 +313,6 @@ pub struct CommandBuffer<A: HalApi> {
     support_clear_texture: bool,
     /// The `label` from the descriptor used to create the resource.
     label: String,
-    pub(crate) info: ResourceInfo,
 
     /// The mutable state of this command buffer.
     ///
@@ -352,7 +351,6 @@ impl<A: HalApi> CommandBuffer<A> {
             device: device.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
             label: label.to_string(),
-            info: ResourceInfo::new(None),
             data: Mutex::new(
                 rank::COMMAND_BUFFER_DATA,
                 Some(CommandBufferMutable {
@@ -534,11 +532,7 @@ crate::impl_resource_type!(CommandBuffer);
 crate::impl_labeled!(CommandBuffer);
 crate::impl_storage_item!(CommandBuffer);
 
-impl<A: HalApi> Resource for CommandBuffer<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for CommandBuffer<A> {}
 
 impl<A: HalApi> ParentDevice<A> for CommandBuffer<A> {
     fn device(&self) -> &Arc<Device<A>> {

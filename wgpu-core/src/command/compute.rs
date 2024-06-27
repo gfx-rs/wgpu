@@ -20,7 +20,7 @@ use crate::{
     pipeline::ComputePipeline,
     resource::{
         self, Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice,
-        Resource, ResourceErrorIdent,
+        Resource, ResourceErrorIdent, Trackable,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
@@ -936,7 +936,7 @@ fn dispatch_indirect<A: HalApi>(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    state.flush_states(Some(buffer.as_info().tracker_index()))?;
+    state.flush_states(Some(buffer.tracker_index()))?;
 
     let buf_raw = buffer.try_raw(&state.snatch_guard)?;
     unsafe {

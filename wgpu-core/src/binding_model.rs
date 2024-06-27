@@ -8,7 +8,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{
         DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ParentDevice, Resource, ResourceErrorIdent, ResourceInfo,
+        ParentDevice, Resource, ResourceErrorIdent, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -476,7 +476,7 @@ pub struct BindGroupLayout<A: HalApi> {
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
@@ -497,12 +497,9 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
 crate::impl_resource_type!(BindGroupLayout);
 crate::impl_labeled!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
+crate::impl_trackable!(BindGroupLayout);
 
-impl<A: HalApi> Resource for BindGroupLayout<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for BindGroupLayout<A> {}
 
 impl<A: HalApi> ParentDevice<A> for BindGroupLayout<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -617,7 +614,7 @@ pub struct PipelineLayout<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
@@ -728,12 +725,9 @@ impl<A: HalApi> PipelineLayout<A> {
 crate::impl_resource_type!(PipelineLayout);
 crate::impl_labeled!(PipelineLayout);
 crate::impl_storage_item!(PipelineLayout);
+crate::impl_trackable!(PipelineLayout);
 
-impl<A: HalApi> Resource for PipelineLayout<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for PipelineLayout<A> {}
 
 impl<A: HalApi> ParentDevice<A> for PipelineLayout<A> {
     fn device(&self) -> &Arc<Device<A>> {
@@ -848,7 +842,7 @@ pub struct BindGroup<A: HalApi> {
     pub(crate) layout: Arc<BindGroupLayout<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) info: ResourceInfo,
+    pub(crate) tracking_data: TrackingData,
     pub(crate) used: BindGroupStates<A>,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction<A>>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction<A>>,
@@ -944,12 +938,9 @@ impl<A: HalApi> BindGroup<A> {
 crate::impl_resource_type!(BindGroup);
 crate::impl_labeled!(BindGroup);
 crate::impl_storage_item!(BindGroup);
+crate::impl_trackable!(BindGroup);
 
-impl<A: HalApi> Resource for BindGroup<A> {
-    fn as_info(&self) -> &ResourceInfo {
-        &self.info
-    }
-}
+impl<A: HalApi> Resource for BindGroup<A> {}
 
 impl<A: HalApi> ParentDevice<A> for BindGroup<A> {
     fn device(&self) -> &Arc<Device<A>> {
