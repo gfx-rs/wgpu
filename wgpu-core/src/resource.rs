@@ -514,7 +514,7 @@ impl<A: HalApi> Buffer<A> {
     /// Checks that the given buffer usage contains the required buffer usage,
     /// returns an error otherwise.
     pub(crate) fn check_usage(
-        self: &Arc<Self>,
+        &self,
         expected: wgt::BufferUsages,
     ) -> Result<(), MissingBufferUsageError> {
         if self.usage.contains(expected) {
