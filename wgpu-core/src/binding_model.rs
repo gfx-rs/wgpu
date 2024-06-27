@@ -8,7 +8,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{
         DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ParentDevice, ResourceErrorIdent, TrackingData,
+        ResourceErrorIdent, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -496,14 +496,9 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
 
 crate::impl_resource_type!(BindGroupLayout);
 crate::impl_labeled!(BindGroupLayout);
+crate::impl_parent_device!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
 crate::impl_trackable!(BindGroupLayout);
-
-impl<A: HalApi> ParentDevice<A> for BindGroupLayout<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &A::BindGroupLayout {
@@ -722,14 +717,9 @@ impl<A: HalApi> PipelineLayout<A> {
 
 crate::impl_resource_type!(PipelineLayout);
 crate::impl_labeled!(PipelineLayout);
+crate::impl_parent_device!(PipelineLayout);
 crate::impl_storage_item!(PipelineLayout);
 crate::impl_trackable!(PipelineLayout);
-
-impl<A: HalApi> ParentDevice<A> for PipelineLayout<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -933,14 +923,9 @@ impl<A: HalApi> BindGroup<A> {
 
 crate::impl_resource_type!(BindGroup);
 crate::impl_labeled!(BindGroup);
+crate::impl_parent_device!(BindGroup);
 crate::impl_storage_item!(BindGroup);
 crate::impl_trackable!(BindGroup);
-
-impl<A: HalApi> ParentDevice<A> for BindGroup<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
