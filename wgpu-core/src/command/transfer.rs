@@ -50,8 +50,6 @@ pub enum TransferError {
     InvalidTextureId(TextureId),
     #[error("Source and destination cannot be the same buffer")]
     SameSourceDestinationBuffer,
-    #[error("Source buffer/texture is missing the `COPY_SRC` usage flag")]
-    MissingCopySrcUsageFlag,
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
@@ -582,9 +580,9 @@ impl Global {
             .set_single(&src_buffer, hal::BufferUses::COPY_SRC);
 
         let src_raw = src_buffer.try_raw(&snatch_guard)?;
-        if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_buffer
+            .check_usage(BufferUsages::COPY_SRC)
+            .map_err(TransferError::MissingBufferUsage)?;
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
@@ -777,9 +775,9 @@ impl Global {
             .set_single(&src_buffer, hal::BufferUses::COPY_SRC);
 
         let src_raw = src_buffer.try_raw(&snatch_guard)?;
-        if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_buffer
+            .check_usage(BufferUsages::COPY_SRC)
+            .map_err(TransferError::MissingBufferUsage)?;
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
         let dst_pending =
@@ -921,9 +919,9 @@ impl Global {
                 .textures
                 .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC);
         let src_raw = src_texture.try_raw(&snatch_guard)?;
-        if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_texture
+            .check_usage(TextureUsages::COPY_SRC)
+            .map_err(TransferError::MissingTextureUsage)?;
         if src_texture.desc.sample_count != 1 {
             return Err(TransferError::InvalidSampleCount {
                 sample_count: src_texture.desc.sample_count,
@@ -1132,9 +1130,9 @@ impl Global {
             hal::TextureUses::COPY_SRC,
         );
         let src_raw = src_texture.try_raw(&snatch_guard)?;
-        if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_texture
+            .check_usage(TextureUsages::COPY_SRC)
+            .map_err(TransferError::MissingTextureUsage)?;
 
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
