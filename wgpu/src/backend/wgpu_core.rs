@@ -29,8 +29,6 @@ use wgc::{
 };
 use wgt::WasmNotSendSync;
 
-const LABEL: &str = "label";
-
 pub struct ContextWgpuCore(wgc::global::Global);
 
 impl Drop for ContextWgpuCore {
@@ -61,10 +59,6 @@ impl ContextWgpuCore {
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
         Self(unsafe { wgc::global::Global::from_instance(core_instance) })
-    }
-
-    pub(crate) fn global(&self) -> &wgc::global::Global {
-        &self.0
     }
 
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
@@ -150,7 +144,6 @@ impl ContextWgpuCore {
             self.handle_error(
                 &device.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_texture_from_hal",
             );
@@ -179,7 +172,6 @@ impl ContextWgpuCore {
             self.handle_error(
                 &device.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_buffer_from_hal",
             );
@@ -273,16 +265,14 @@ impl ContextWgpuCore {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + WasmNotSendSync + 'static,
-        label_key: &'static str,
+        source: impl Error + WasmNotSendSync + 'static,
         label: Label<'_>,
-        string: &'static str,
+        fn_ident: &'static str,
     ) {
         let error = wgc::error::ContextError {
-            string,
-            cause: Box::new(cause),
+            fn_ident,
+            source: Box::new(source),
             label: label.unwrap_or_default().to_string(),
-            label_key,
         };
         let mut sink = sink_mutex.lock();
         let mut source_opt: Option<&(dyn Error + 'static)> = Some(&error);
@@ -307,10 +297,10 @@ impl ContextWgpuCore {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + WasmNotSendSync + 'static,
-        string: &'static str,
+        source: impl Error + WasmNotSendSync + 'static,
+        fn_ident: &'static str,
     ) {
-        self.handle_error(sink_mutex, cause, "", None, string)
+        self.handle_error(sink_mutex, source, None, fn_ident)
     }
 
     #[track_caller]
@@ -323,24 +313,18 @@ impl ContextWgpuCore {
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
-        let global = self.global();
         let mut err_descs = vec![];
         let mut level = 0;
 
-        fn print_tree(
-            err_descs: &mut Vec<String>,
-            level: &mut usize,
-            global: &wgc::global::Global,
-            e: &(dyn Error + 'static),
-        ) {
+        fn print_tree(err_descs: &mut Vec<String>, level: &mut usize, e: &(dyn Error + 'static)) {
             let mut print = |e| {
                 let mut err_str = " ".repeat(*level * 2);
-                wgc::error::format_pretty_any(&mut err_str, global, e);
+                wgc::error::format_pretty_any(&mut err_str, e);
                 err_descs.push(err_str);
 
                 if let Some(e) = e.source() {
                     *level += 1;
-                    print_tree(err_descs, level, global, e);
+                    print_tree(err_descs, level, e);
                     *level -= 1;
                 }
             };
@@ -353,7 +337,7 @@ impl ContextWgpuCore {
             }
         }
 
-        print_tree(&mut err_descs, &mut level, global, err);
+        print_tree(&mut err_descs, &mut level, err);
 
         format!("Validation Error\n\nCaused by:\n{}", err_descs.join(""))
     }
@@ -940,7 +924,6 @@ impl crate::Context for ContextWgpuCore {
                 self.handle_error(
                     &device_data.error_sink,
                     cause.clone(),
-                    LABEL,
                     desc.label,
                     "Device::create_shader_module",
                 );
@@ -972,7 +955,6 @@ impl crate::Context for ContextWgpuCore {
                 self.handle_error(
                     &device_data.error_sink,
                     cause.clone(),
-                    LABEL,
                     desc.label,
                     "Device::create_shader_module_spirv",
                 );
@@ -1000,7 +982,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_bind_group_layout",
             );
@@ -1114,7 +1095,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_bind_group",
             );
@@ -1156,7 +1136,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_pipeline_layout",
             );
@@ -1241,7 +1220,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_render_pipeline",
             );
@@ -1296,7 +1274,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_compute_pipeline",
             );
@@ -1326,7 +1303,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::device_create_pipeline_cache_init",
             );
@@ -1349,7 +1325,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_buffer",
             );
@@ -1377,7 +1352,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_texture",
             );
@@ -1422,7 +1396,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_sampler",
             );
@@ -1460,7 +1433,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_command_encoder",
             );
@@ -1671,7 +1643,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &texture_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Texture::create_view",
             );
@@ -1945,7 +1916,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "CommandEncoder::begin_compute_pass",
             );
@@ -2017,7 +1987,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "CommandEncoder::begin_compute_pass",
             );
@@ -2425,7 +2394,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::set_pipeline",
             );
@@ -2448,7 +2416,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::set_bind_group",
             );
@@ -2466,7 +2433,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::set_push_constant",
             );
@@ -2483,7 +2449,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::insert_debug_marker",
             );
@@ -2500,7 +2465,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::push_debug_group",
             );
@@ -2516,7 +2480,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::pop_debug_group",
             );
@@ -2538,7 +2501,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::write_timestamp",
             );
@@ -2561,7 +2523,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::begin_pipeline_statistics_query",
             );
@@ -2577,7 +2538,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::end_pipeline_statistics_query",
             );
@@ -2596,7 +2556,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::dispatch_workgroups",
             );
@@ -2619,7 +2578,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::dispatch_workgroups_indirect",
             );
@@ -2635,7 +2593,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::end",
             );
@@ -2838,7 +2795,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_pipeline",
             );
@@ -2861,7 +2817,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_bind_group",
             );
@@ -2886,7 +2841,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_index_buffer",
             );
@@ -2910,7 +2864,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_vertex_buffer",
             );
@@ -2932,7 +2885,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_push_constants",
             );
@@ -2956,7 +2908,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::draw",
             );
@@ -2982,7 +2933,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::draw_indexed",
             );
@@ -3004,7 +2954,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::draw_indirect",
             );
@@ -3027,7 +2976,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::draw_indexed_indirect",
             );
@@ -3051,7 +2999,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::multi_draw_indirect",
             );
@@ -3076,7 +3023,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::multi_draw_indexed_indirect",
             );
@@ -3106,7 +3052,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::multi_draw_indirect_count",
             );
@@ -3136,7 +3081,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::multi_draw_indexed_indirect_count",
             );
@@ -3153,7 +3097,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_blend_constant",
             );
@@ -3176,7 +3119,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_scissor_rect",
             );
@@ -3201,7 +3143,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_viewport",
             );
@@ -3218,7 +3159,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::set_stencil_reference",
             );
@@ -3235,7 +3175,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::insert_debug_marker",
             );
@@ -3252,7 +3191,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::push_debug_group",
             );
@@ -3268,7 +3206,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::pop_debug_group",
             );
@@ -3290,7 +3227,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::write_timestamp",
             );
@@ -3307,7 +3243,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::begin_occlusion_query",
             );
@@ -3323,7 +3258,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::end_occlusion_query",
             );
@@ -3346,7 +3280,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::begin_pipeline_statistics_query",
             );
@@ -3362,7 +3295,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::end_pipeline_statistics_query",
             );
@@ -3383,7 +3315,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::execute_bundles",
             );
@@ -3399,7 +3330,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::end",
             );

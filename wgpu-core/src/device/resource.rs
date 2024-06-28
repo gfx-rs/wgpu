@@ -60,7 +60,7 @@ use super::{
     life::ResourceMaps,
     queue::{self, Queue},
     DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, ENTRYPOINT_FAILURE_ERROR,
-    IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL, ZERO_BUFFER_SIZE,
+    ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -2615,10 +2615,10 @@ impl<A: HalApi> Device<A> {
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+            pipeline_layout_guard.insert_error(ids.root_id);
             let mut bgl_guard = hub.bind_group_layouts.write();
             for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+                bgl_guard.insert_error(bgl_id);
             }
         }
 
@@ -2780,9 +2780,9 @@ impl<A: HalApi> Device<A> {
             //TODO: only lock mutable if the layout is derived
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+            pipeline_layout_guard.insert_error(ids.root_id);
             for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+                bgl_guard.insert_error(bgl_id);
             }
         }
 

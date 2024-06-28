@@ -4,7 +4,7 @@ use std::sync::Arc;
 use wgt::Backend;
 
 use crate::id::{Id, Marker};
-use crate::resource::{Labeled, ResourceType};
+use crate::resource::ResourceType;
 use crate::{Epoch, Index};
 
 /// An entry in a `Storage::map` table.
@@ -19,16 +19,13 @@ pub(crate) enum Element<T> {
 
     /// Like `Occupied`, but an error occurred when creating the
     /// resource.
-    ///
-    /// The given `String` is the resource's descriptor label.
-    Error(Epoch, String),
+    Error(Epoch),
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct InvalidId;
 
-// The Labeled bound is still needed because of label_for_resource
-pub(crate) trait StorageItem: ResourceType + Labeled {
+pub(crate) trait StorageItem: ResourceType {
     type Marker: Marker;
 }
 
@@ -88,7 +85,7 @@ where
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
             Some(&Element::Vacant) => false,
-            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => {
+            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch)) => {
                 storage_epoch == epoch
             }
             None => false,
@@ -107,7 +104,7 @@ where
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(Some(v)), epoch),
             Some(&Element::Vacant) => return Ok(None),
-            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            Some(&Element::Error(epoch)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
         };
         assert_eq!(
@@ -125,7 +122,7 @@ where
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
             Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
-            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            Some(&Element::Error(epoch)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
         };
         assert_eq!(
@@ -142,14 +139,6 @@ where
         Ok(Arc::clone(self.get(id)?))
     }
 
-    pub(crate) fn label_for_invalid_id(&self, id: Id<T::Marker>) -> &str {
-        let (index, _, _) = id.unzip();
-        match self.map.get(index as usize) {
-            Some(Element::Error(_, label)) => label,
-            _ => "",
-        }
-    }
-
     fn insert_impl(&mut self, index: usize, epoch: Epoch, element: Element<T>) {
         if index >= self.map.len() {
             self.map.resize_with(index + 1, || Element::Vacant);
@@ -164,7 +153,7 @@ where
                     T::TYPE
                 );
             }
-            Element::Error(storage_epoch, _) => {
+            Element::Error(storage_epoch) => {
                 assert_ne!(
                     epoch,
                     storage_epoch,
@@ -181,22 +170,15 @@ where
         self.insert_impl(index as usize, epoch, Element::Occupied(value, epoch))
     }
 
-    pub(crate) fn insert_error(&mut self, id: Id<T::Marker>, label: &str) {
+    pub(crate) fn insert_error(&mut self, id: Id<T::Marker>) {
         log::trace!("User is inserting as error {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
-        self.insert_impl(
-            index as usize,
-            epoch,
-            Element::Error(epoch, label.to_string()),
-        )
+        self.insert_impl(index as usize, epoch, Element::Error(epoch))
     }
 
     pub(crate) fn replace_with_error(&mut self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        match std::mem::replace(
-            &mut self.map[index as usize],
-            Element::Error(epoch, String::new()),
-        ) {
+        match std::mem::replace(&mut self.map[index as usize], Element::Error(epoch)) {
             Element::Vacant => panic!("Cannot access vacant resource"),
             Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
@@ -220,7 +202,7 @@ where
                 assert_eq!(epoch, storage_epoch);
                 Some(value)
             }
-            Element::Error(..) => None,
+            Element::Error(_) => None,
             Element::Vacant => panic!("Cannot remove a vacant resource"),
         }
     }
@@ -235,10 +217,6 @@ where
                 }
                 _ => None,
             })
-    }
-
-    pub(crate) fn kind(&self) -> &str {
-        self.kind
     }
 
     pub(crate) fn len(&self) -> usize {
