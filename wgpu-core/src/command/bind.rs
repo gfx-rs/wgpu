@@ -18,12 +18,15 @@ mod compat {
 
     use crate::{
         binding_model::BindGroupLayout,
-        device::bgl,
         error::MultiError,
         hal_api::HalApi,
         resource::{Labeled, ParentDevice, ResourceErrorIdent},
     };
-    use std::{num::NonZeroU32, ops::Range, sync::Arc};
+    use std::{
+        num::NonZeroU32,
+        ops::Range,
+        sync::{Arc, Weak},
+    };
 
     pub(crate) enum Error {
         Incompatible {
@@ -74,28 +77,41 @@ mod compat {
                         Ok(())
                     } else {
                         #[derive(Clone, Debug, Error)]
-                        #[error("Expected an {expected_bgl_type} bind group layout, got an {assigned_bgl_type} bind group layout")]
-                        struct IncompatibleTypes {
-                            expected_bgl_type: &'static str,
-                            assigned_bgl_type: &'static str,
+                        #[error(
+                            "Exclusive pipelines don't match: expected {expected}, got {assigned}"
+                        )]
+                        struct IncompatibleExclusivePipelines {
+                            expected: String,
+                            assigned: String,
                         }
 
-                        if expected_bgl.origin != assigned_bgl.origin {
-                            fn get_bgl_type(origin: bgl::Origin) -> &'static str {
-                                match origin {
-                                    bgl::Origin::Derived => "implicit",
-                                    bgl::Origin::Pool => "explicit",
-                                }
+                        use crate::binding_model::ExclusivePipeline;
+                        match (
+                            expected_bgl.exclusive_pipeline.get().unwrap(),
+                            assigned_bgl.exclusive_pipeline.get().unwrap(),
+                        ) {
+                            (ExclusivePipeline::None, ExclusivePipeline::None) => {}
+                            (
+                                ExclusivePipeline::Render(e_pipeline),
+                                ExclusivePipeline::Render(a_pipeline),
+                            ) if Weak::ptr_eq(e_pipeline, a_pipeline) => {}
+                            (
+                                ExclusivePipeline::Compute(e_pipeline),
+                                ExclusivePipeline::Compute(a_pipeline),
+                            ) if Weak::ptr_eq(e_pipeline, a_pipeline) => {}
+                            (expected, assigned) => {
+                                return Err(Error::Incompatible {
+                                    expected_bgl: expected_bgl.error_ident(),
+                                    assigned_bgl: assigned_bgl.error_ident(),
+                                    inner: MultiError::new(core::iter::once(
+                                        IncompatibleExclusivePipelines {
+                                            expected: expected.to_string(),
+                                            assigned: assigned.to_string(),
+                                        },
+                                    ))
+                                    .unwrap(),
+                                });
                             }
-                            return Err(Error::Incompatible {
-                                expected_bgl: expected_bgl.error_ident(),
-                                assigned_bgl: assigned_bgl.error_ident(),
-                                inner: MultiError::new(core::iter::once(IncompatibleTypes {
-                                    expected_bgl_type: get_bgl_type(expected_bgl.origin),
-                                    assigned_bgl_type: get_bgl_type(assigned_bgl.origin),
-                                }))
-                                .unwrap(),
-                            });
                         }
 
                         #[derive(Clone, Debug, Error)]

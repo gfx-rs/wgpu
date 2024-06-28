@@ -1014,6 +1014,9 @@ impl Global {
             let bgl_result = device.bgl_pool.get_or_init(entry_map, |entry_map| {
                 let bgl =
                     device.create_bind_group_layout(&desc.label, entry_map, bgl::Origin::Pool)?;
+                bgl.exclusive_pipeline
+                    .set(binding_model::ExclusivePipeline::None)
+                    .unwrap();
 
                 let (id_inner, arc) = fid.take().unwrap().assign(Arc::new(bgl));
                 id = Some(id_inner);
@@ -1633,7 +1636,7 @@ impl Global {
                     Err(e) => break 'error e,
                 };
 
-            let (id, resource) = fid.assign(Arc::new(pipeline));
+            let (id, resource) = fid.assign(pipeline);
             api_log!("Device::create_render_pipeline -> {id:?}");
 
             device
@@ -1772,7 +1775,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, resource) = fid.assign(Arc::new(pipeline));
+            let (id, resource) = fid.assign(pipeline);
             api_log!("Device::create_compute_pipeline -> {id:?}");
 
             device
