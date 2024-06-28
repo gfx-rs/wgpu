@@ -1,6 +1,8 @@
 use core::fmt;
 use std::{error::Error, sync::Arc};
 
+use thiserror::Error;
+
 pub struct ErrorFormatter<'a> {
     writer: &'a mut dyn fmt::Write,
 }
@@ -71,9 +73,16 @@ pub fn format_pretty_any(writer: &mut dyn fmt::Write, error: &(dyn Error + 'stat
     fmt.error(error)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error(
+    "In {fn_ident}{}{}{}",
+    if self.label.is_empty() { "" } else { ", label = '" },
+    self.label,
+    if self.label.is_empty() { "" } else { "'" }
+)]
 pub struct ContextError {
     pub fn_ident: &'static str,
+    #[source]
     #[cfg(send_sync)]
     pub source: Box<dyn Error + Send + Sync + 'static>,
     #[cfg(not(send_sync))]
@@ -81,27 +90,7 @@ pub struct ContextError {
     pub label: String,
 }
 
-impl PrettyError for ContextError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        writeln!(fmt.writer, "    In {}", self.fn_ident).expect("Error formatting error");
-        if !self.label.is_empty() {
-            writeln!(fmt.writer, "      note: label = `{}`", self.label)
-                .expect("Error formatting error");
-        }
-    }
-}
-
-impl fmt::Display for ContextError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "In {}", self.fn_ident)
-    }
-}
-
-impl Error for ContextError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(self.source.as_ref())
-    }
-}
+impl PrettyError for ContextError {}
 
 /// Don't use this error type with thiserror's #[error(transparent)]
 #[derive(Clone)]
