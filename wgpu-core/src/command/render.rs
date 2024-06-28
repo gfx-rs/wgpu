@@ -20,7 +20,7 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
         RenderPassCompatibilityError, RenderPassContext,
     },
-    error::{ErrorFormatter, PrettyError},
+    error::PrettyError,
     global::Global,
     hal_api::HalApi,
     hal_label, id,
@@ -738,14 +738,7 @@ pub struct RenderPassError {
     #[source]
     pub(super) inner: RenderPassErrorInner,
 }
-impl PrettyError for RenderPassError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        // This error is wrapper for the inner error,
-        // but the scope has useful labels
-        fmt.error(self);
-        self.scope.fmt_pretty(fmt);
-    }
-}
+impl PrettyError for RenderPassError {}
 
 impl<T, E> MapPassErr<T, RenderPassError> for Result<T, E>
 where

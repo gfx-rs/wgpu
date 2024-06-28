@@ -89,7 +89,7 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
         SHADER_STAGE_COUNT,
     },
-    error::{ErrorFormatter, PrettyError},
+    error::PrettyError,
     hal_api::HalApi,
     hub::Hub,
     id,
@@ -1593,14 +1593,7 @@ impl RenderBundleError {
         }
     }
 }
-impl PrettyError for RenderBundleError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        // This error is wrapper for the inner error,
-        // but the scope has useful labels
-        fmt.error(self);
-        self.scope.fmt_pretty(fmt);
-    }
-}
+impl PrettyError for RenderBundleError {}
 
 impl<T, E> MapPassErr<T, RenderBundleError> for Result<T, E>
 where
