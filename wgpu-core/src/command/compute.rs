@@ -35,10 +35,7 @@ use wgt::{BufferAddress, DynamicOffset};
 use std::sync::Arc;
 use std::{fmt, mem, str};
 
-use super::{
-    bind::IncompatibleBindGroupError, memory_init::CommandBufferTextureMemoryActions,
-    DynComputePass,
-};
+use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions, DynComputePass};
 
 pub struct ComputePass<A: HalApi> {
     /// All pass data & records is stored here.
@@ -121,7 +118,7 @@ pub enum DispatchError {
     #[error("Compute pipeline must be set")]
     MissingPipeline,
     #[error(transparent)]
-    IncompatibleBindGroup(#[from] IncompatibleBindGroupError),
+    IncompatibleBindGroup(#[from] Box<BinderError>),
     #[error(
         "Each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
     )]

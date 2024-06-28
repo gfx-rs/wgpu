@@ -1,5 +1,5 @@
 use core::fmt;
-use std::error::Error;
+use std::{error::Error, sync::Arc};
 
 use crate::{gfx_select, global::Global};
 
@@ -177,5 +177,46 @@ impl fmt::Display for ContextError {
 impl Error for ContextError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.cause.as_ref())
+    }
+}
+
+/// Don't use this error type with thiserror's #[error(transparent)]
+#[derive(Clone)]
+pub struct MultiError {
+    inner: Vec<Arc<dyn Error + Send + Sync + 'static>>,
+}
+
+impl MultiError {
+    pub fn new<T: Error + Send + Sync + 'static>(
+        iter: impl ExactSizeIterator<Item = T>,
+    ) -> Option<Self> {
+        if iter.len() == 0 {
+            return None;
+        }
+        Some(Self {
+            inner: iter.map(Box::from).map(Arc::from).collect(),
+        })
+    }
+
+    pub fn errors(&self) -> Box<dyn Iterator<Item = &(dyn Error + Send + Sync + 'static)> + '_> {
+        Box::new(self.inner.iter().map(|e| e.as_ref()))
+    }
+}
+
+impl fmt::Debug for MultiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        fmt::Debug::fmt(&self.inner[0], f)
+    }
+}
+
+impl fmt::Display for MultiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.inner[0], f)
+    }
+}
+
+impl Error for MultiError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.inner[0].source()
     }
 }
