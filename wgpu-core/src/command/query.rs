@@ -113,8 +113,6 @@ pub enum QueryError {
     InvalidQuerySetId(id::QuerySetId),
 }
 
-impl crate::error::PrettyError for QueryError {}
-
 /// Error encountered while trying to use queries
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

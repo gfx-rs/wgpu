@@ -2,7 +2,6 @@ use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
     },
-    error::PrettyError,
     hal_api::HalApi,
     id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
@@ -190,8 +189,6 @@ pub enum CreateBindGroupError {
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
 }
-
-impl PrettyError for CreateBindGroupError {}
 
 #[derive(Clone, Debug, Error)]
 pub enum BindingZone {
@@ -554,8 +551,6 @@ pub enum CreatePipelineLayoutError {
     #[error("Bind group layout count {actual} exceeds device bind group limit {max}")]
     TooManyGroups { actual: usize, max: usize },
 }
-
-impl PrettyError for CreatePipelineLayoutError {}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

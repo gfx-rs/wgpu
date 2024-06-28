@@ -5,7 +5,6 @@ use crate::{
     command::{clear_texture, CommandBuffer, CommandEncoderError},
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags},
-    error::PrettyError,
     global::Global,
     hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId},
@@ -142,8 +141,6 @@ pub enum TransferError {
     #[error("Requested mip level {requested} does no exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
 }
-
-impl PrettyError for TransferError {}
 
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]

@@ -89,7 +89,6 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
         SHADER_STAGE_COUNT,
     },
-    error::PrettyError,
     hal_api::HalApi,
     hub::Hub,
     id,
@@ -948,7 +947,6 @@ pub enum ExecutionError {
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
 }
-impl PrettyError for ExecutionError {}
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 
@@ -1593,7 +1591,6 @@ impl RenderBundleError {
         }
     }
 }
-impl PrettyError for RenderBundleError {}
 
 impl<T, E> MapPassErr<T, RenderBundleError> for Result<T, E>
 where

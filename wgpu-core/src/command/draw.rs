@@ -109,7 +109,6 @@ pub enum RenderCommandError {
     #[error("Support for {0} is not implemented yet")]
     Unimplemented(&'static str),
 }
-impl crate::error::PrettyError for RenderCommandError {}
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

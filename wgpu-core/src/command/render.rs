@@ -20,7 +20,6 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
         RenderPassCompatibilityError, RenderPassContext,
     },
-    error::PrettyError,
     global::Global,
     hal_api::HalApi,
     hal_label, id,
@@ -710,8 +709,6 @@ pub enum RenderPassErrorInner {
     PassEnded,
 }
 
-impl PrettyError for RenderPassErrorInner {}
-
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
     fn from(error: MissingBufferUsageError) -> Self {
         Self::RenderCommand(error.into())
@@ -738,7 +735,6 @@ pub struct RenderPassError {
     #[source]
     pub(super) inner: RenderPassErrorInner,
 }
-impl PrettyError for RenderPassError {}
 
 impl<T, E> MapPassErr<T, RenderPassError> for Result<T, E>
 where

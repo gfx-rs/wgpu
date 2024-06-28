@@ -3,76 +3,6 @@ use std::{error::Error, sync::Arc};
 
 use thiserror::Error;
 
-pub struct ErrorFormatter<'a> {
-    writer: &'a mut dyn fmt::Write,
-}
-
-impl<'a> ErrorFormatter<'a> {
-    pub fn error(&mut self, err: &dyn Error) {
-        writeln!(self.writer, "    {err}").expect("Error formatting error");
-    }
-}
-
-pub trait PrettyError: Error + Sized {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-    }
-}
-
-pub fn format_pretty_any(writer: &mut dyn fmt::Write, error: &(dyn Error + 'static)) {
-    let mut fmt = ErrorFormatter { writer };
-
-    if let Some(pretty_err) = error.downcast_ref::<ContextError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderCommandError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::binding_model::CreateBindGroupError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) =
-        error.downcast_ref::<crate::binding_model::CreatePipelineLayoutError>()
-    {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::ExecutionError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderPassErrorInner>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderPassError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::ComputePassErrorInner>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::ComputePassError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderBundleError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::TransferError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::PassErrorScope>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::track::ResourceUsageCompatibilityError>()
-    {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::QueryError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-
-    // default
-    fmt.error(error)
-}
-
 #[derive(Debug, Error)]
 #[error(
     "In {fn_ident}{}{}{}",
@@ -89,8 +19,6 @@ pub struct ContextError {
     pub source: Box<dyn Error + 'static>,
     pub label: String,
 }
-
-impl PrettyError for ContextError {}
 
 /// Don't use this error type with thiserror's #[error(transparent)]
 #[derive(Clone)]
