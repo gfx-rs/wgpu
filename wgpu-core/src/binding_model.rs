@@ -6,6 +6,7 @@ use crate::{
     hal_api::HalApi,
     id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
+    pipeline::{ComputePipeline, RenderPipeline},
     resource::{
         DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
         ResourceErrorIdent, TrackingData,
@@ -18,12 +19,17 @@ use crate::{
 
 use arrayvec::ArrayVec;
 
+use once_cell::sync::OnceCell;
 #[cfg(feature = "serde")]
 use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
-use std::{borrow::Cow, ops::Range, sync::Arc};
+use std::{
+    borrow::Cow,
+    ops::Range,
+    sync::{Arc, Weak},
+};
 
 use thiserror::Error;
 
@@ -437,6 +443,38 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
+/// Used by [`BindGroupLayout`]. It indicates whether the BGL must be
+/// used with a specific pipeline. This constraint only happens when
+/// the BGLs have been derived from a pipeline without a layout.
+#[derive(Debug)]
+pub(crate) enum ExclusivePipeline<A: HalApi> {
+    None,
+    Render(Weak<RenderPipeline<A>>),
+    Compute(Weak<ComputePipeline<A>>),
+}
+
+impl<A: HalApi> std::fmt::Display for ExclusivePipeline<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExclusivePipeline::None => f.write_str("None"),
+            ExclusivePipeline::Render(p) => {
+                if let Some(p) = p.upgrade() {
+                    p.error_ident().fmt(f)
+                } else {
+                    f.write_str("RenderPipeline")
+                }
+            }
+            ExclusivePipeline::Compute(p) => {
+                if let Some(p) = p.upgrade() {
+                    p.error_ident().fmt(f)
+                } else {
+                    f.write_str("ComputePipeline")
+                }
+            }
+        }
+    }
+}
+
 /// Bind group layout.
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {
@@ -450,6 +488,7 @@ pub struct BindGroupLayout<A: HalApi> {
     /// We cannot unconditionally remove from the pool, as BGLs that don't come from the pool
     /// (derived BGLs) must not be removed.
     pub(crate) origin: bgl::Origin,
+    pub(crate) exclusive_pipeline: OnceCell<ExclusivePipeline<A>>,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     /// The `label` from the descriptor used to create the resource.

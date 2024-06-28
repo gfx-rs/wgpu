@@ -1840,6 +1840,7 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             entries: entry_map,
             origin,
+            exclusive_pipeline: OnceCell::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.bind_group_layouts.clone()),
@@ -2607,7 +2608,7 @@ impl<A: HalApi> Device<A> {
         desc: &pipeline::ComputePipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A>,
-    ) -> Result<pipeline::ComputePipeline<A>, pipeline::CreateComputePipelineError> {
+    ) -> Result<Arc<pipeline::ComputePipeline<A>>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
         // This has to be done first, or otherwise the IDs may be pointing to entries
@@ -2629,6 +2630,8 @@ impl<A: HalApi> Device<A> {
             .map_err(|_| validation::StageError::InvalidModule)?;
 
         shader_module.same_device(self)?;
+
+        let is_auto_layout = desc.layout.is_none();
 
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
@@ -2744,6 +2747,19 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.compute_pipelines.clone()),
         };
+
+        let pipeline = Arc::new(pipeline);
+
+        if is_auto_layout {
+            for bgl in pipeline.layout.bind_group_layouts.iter() {
+                bgl.exclusive_pipeline
+                    .set(binding_model::ExclusivePipeline::Compute(Arc::downgrade(
+                        &pipeline,
+                    )))
+                    .unwrap();
+            }
+        }
+
         Ok(pipeline)
     }
 
@@ -2753,7 +2769,7 @@ impl<A: HalApi> Device<A> {
         desc: &pipeline::RenderPipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A>,
-    ) -> Result<pipeline::RenderPipeline<A>, pipeline::CreateRenderPipelineError> {
+    ) -> Result<Arc<pipeline::RenderPipeline<A>>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
 
         self.check_is_valid()?;
@@ -3069,6 +3085,8 @@ impl<A: HalApi> Device<A> {
         if !target_specified {
             return Err(pipeline::CreateRenderPipelineError::NoTargetSpecified);
         }
+
+        let is_auto_layout = desc.layout.is_none();
 
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
@@ -3396,6 +3414,19 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
         };
+
+        let pipeline = Arc::new(pipeline);
+
+        if is_auto_layout {
+            for bgl in pipeline.layout.bind_group_layouts.iter() {
+                bgl.exclusive_pipeline
+                    .set(binding_model::ExclusivePipeline::Render(Arc::downgrade(
+                        &pipeline,
+                    )))
+                    .unwrap();
+            }
+        }
+
         Ok(pipeline)
     }
 
