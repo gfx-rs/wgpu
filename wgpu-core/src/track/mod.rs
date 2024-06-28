@@ -385,8 +385,6 @@ impl ResourceUsageCompatibilityError {
     }
 }
 
-impl crate::error::PrettyError for ResourceUsageCompatibilityError {}
-
 /// Pretty print helper that shows helpful descriptions of a conflicting usage.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvalidUse<T> {

@@ -313,18 +313,17 @@ impl ContextWgpuCore {
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
-        let mut err_descs = vec![];
-        let mut level = 0;
+        let mut output = String::new();
+        let mut level = 1;
 
-        fn print_tree(err_descs: &mut Vec<String>, level: &mut usize, e: &(dyn Error + 'static)) {
-            let mut print = |e| {
-                let mut err_str = " ".repeat(*level * 2);
-                wgc::error::format_pretty_any(&mut err_str, e);
-                err_descs.push(err_str);
+        fn print_tree(output: &mut String, level: &mut usize, e: &(dyn Error + 'static)) {
+            let mut print = |e: &(dyn Error + 'static)| {
+                use std::fmt::Write;
+                writeln!(output, "{}{}", " ".repeat(*level * 2), e).unwrap();
 
                 if let Some(e) = e.source() {
                     *level += 1;
-                    print_tree(err_descs, level, e);
+                    print_tree(output, level, e);
                     *level -= 1;
                 }
             };
@@ -337,9 +336,9 @@ impl ContextWgpuCore {
             }
         }
 
-        print_tree(&mut err_descs, &mut level, err);
+        print_tree(&mut output, &mut level, err);
 
-        format!("Validation Error\n\nCaused by:\n{}", err_descs.join(""))
+        format!("Validation Error\n\nCaused by:\n{}", output)
     }
 }
 

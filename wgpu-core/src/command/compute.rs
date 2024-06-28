@@ -12,7 +12,6 @@ use crate::{
         PassErrorScope, PassTimestampWrites, QueryUseError, StateChange,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    error::PrettyError,
     global::Global,
     hal_api::HalApi,
     hal_label, id,
@@ -182,8 +181,6 @@ pub enum ComputePassErrorInner {
     PassEnded,
 }
 
-impl PrettyError for ComputePassErrorInner {}
-
 /// Error encountered when performing a compute pass.
 #[derive(Clone, Debug, Error)]
 #[error("{scope}")]
@@ -192,7 +189,6 @@ pub struct ComputePassError {
     #[source]
     pub(super) inner: ComputePassErrorInner,
 }
-impl PrettyError for ComputePassError {}
 
 impl<T, E> MapPassErr<T, ComputePassError> for Result<T, E>
 where

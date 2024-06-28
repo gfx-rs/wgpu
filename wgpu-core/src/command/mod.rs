@@ -30,7 +30,6 @@ pub use timestamp_writes::PassTimestampWrites;
 use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::device::{Device, DeviceError};
-use crate::error::PrettyError;
 use crate::hub::Hub;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
@@ -608,8 +607,6 @@ pub enum CommandEncoderError {
     InvalidOcclusionQuerySetId(id::QuerySetId),
 }
 
-impl PrettyError for CommandEncoderError {}
-
 impl Global {
     pub fn command_encoder_finish<A: HalApi>(
         &self,
@@ -910,5 +907,3 @@ pub enum PassErrorScope {
     #[error("In a insert_debug_marker command")]
     InsertDebugMarker,
 }
-
-impl PrettyError for PassErrorScope {}
