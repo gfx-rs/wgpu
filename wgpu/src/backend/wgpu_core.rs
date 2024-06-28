@@ -325,18 +325,35 @@ impl ContextWgpuCore {
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
         let global = self.global();
         let mut err_descs = vec![];
+        let mut level = 0;
 
-        let mut err_str = String::new();
-        wgc::error::format_pretty_any(&mut err_str, global, err);
-        err_descs.push(err_str);
+        fn print_tree(
+            err_descs: &mut Vec<String>,
+            level: &mut usize,
+            global: &wgc::global::Global,
+            e: &(dyn Error + 'static),
+        ) {
+            let mut print = |e| {
+                let mut err_str = " ".repeat(*level * 2);
+                wgc::error::format_pretty_any(&mut err_str, global, e);
+                err_descs.push(err_str);
 
-        let mut source_opt = err.source();
-        while let Some(source) = source_opt {
-            let mut source_str = String::new();
-            wgc::error::format_pretty_any(&mut source_str, global, source);
-            err_descs.push(source_str);
-            source_opt = source.source();
+                if let Some(e) = e.source() {
+                    *level += 1;
+                    print_tree(err_descs, level, global, e);
+                    *level -= 1;
+                }
+            };
+            if let Some(multi) = e.downcast_ref::<wgc::error::MultiError>() {
+                for e in multi.errors() {
+                    print(e);
+                }
+            } else {
+                print(e);
+            }
         }
+
+        print_tree(&mut err_descs, &mut level, global, err);
 
         format!("Validation Error\n\nCaused by:\n{}", err_descs.join(""))
     }
