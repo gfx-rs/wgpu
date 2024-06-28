@@ -92,8 +92,8 @@ impl<T: StorageItem> FutureId<'_, T> {
         self.id
     }
 
-    pub fn assign_error(self, label: &str) -> Id<T::Marker> {
-        self.data.write().insert_error(self.id, label);
+    pub fn assign_error(self) -> Id<T::Marker> {
+        self.data.write().insert_error(self.id);
         self.id
     }
 }
@@ -136,10 +136,10 @@ impl<T: StorageItem> Registry<T> {
         let mut storage = self.storage.write();
         storage.force_replace(id, value)
     }
-    pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>, label: &str) {
+    pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>) {
         let mut storage = self.storage.write();
         storage.remove(id);
-        storage.insert_error(id, label);
+        storage.insert_error(id);
     }
     pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
         let value = self.storage.write().remove(id);
@@ -149,33 +149,6 @@ impl<T: StorageItem> Registry<T> {
         self.identity.free(id);
         //Returning None is legal if it's an error ID
         value
-    }
-
-    pub(crate) fn label_for_resource(&self, id: Id<T::Marker>) -> String {
-        let guard = self.storage.read();
-
-        let type_name = guard.kind();
-
-        // Using `get` over `try_get` is fine for the most part.
-        // However, there's corner cases where it can happen that a resource still holds an Arc
-        // to another resource that was already dropped explicitly from the registry.
-        // That resource is now in an invalid state, likely causing an error that lead
-        // us here, trying to print its label but failing because the id is now vacant.
-        match guard.try_get(id) {
-            Ok(Some(res)) => {
-                let label = res.label();
-                if label.is_empty() {
-                    format!("<{}-{:?}>", type_name, id.unzip())
-                } else {
-                    label.to_owned()
-                }
-            }
-            _ => format!(
-                "<Invalid-{} label={}>",
-                type_name,
-                guard.label_for_invalid_id(id)
-            ),
-        }
     }
 
     pub(crate) fn generate_report(&self) -> RegistryReport {
@@ -189,7 +162,7 @@ impl<T: StorageItem> Registry<T> {
             match *element {
                 Element::Occupied(..) => report.num_kept_from_user += 1,
                 Element::Vacant => report.num_released_from_user += 1,
-                Element::Error(..) => report.num_error += 1,
+                Element::Error(_) => report.num_error += 1,
             }
         }
         report
@@ -200,11 +173,7 @@ impl<T: StorageItem> Registry<T> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{
-        id::Marker,
-        resource::{Labeled, ResourceType},
-        storage::StorageItem,
-    };
+    use crate::{id::Marker, resource::ResourceType, storage::StorageItem};
 
     use super::Registry;
     struct TestData;
@@ -213,12 +182,6 @@ mod tests {
 
     impl ResourceType for TestData {
         const TYPE: &'static str = "TestData";
-    }
-    // TODO: remove once we get rid of Registry.label_for_resource
-    impl Labeled for TestData {
-        fn label(&self) -> &str {
-            ""
-        }
     }
     impl StorageItem for TestData {
         type Marker = TestDataId;

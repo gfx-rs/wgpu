@@ -9,8 +9,8 @@ use crate::{
     id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
-    resource::{Labeled, ResourceType},
-    resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
+    resource::ResourceType,
+    resource_log, DOWNLEVEL_WARNING_MESSAGE,
 };
 
 use wgt::{Backend, Backends, PowerPreference};
@@ -146,12 +146,6 @@ pub struct Surface {
 
 impl ResourceType for Surface {
     const TYPE: &'static str = "Surface";
-}
-// TODO: remove once we get rid of Registry.label_for_resource
-impl Labeled for Surface {
-    fn label(&self) -> &str {
-        ""
-    }
 }
 impl crate::storage::StorageItem for Surface {
     type Marker = markers::Surface;
@@ -367,12 +361,6 @@ impl<A: HalApi> Adapter<A> {
 }
 
 crate::impl_resource_type!(Adapter);
-// TODO: remove once we get rid of Registry.label_for_resource
-impl<A: HalApi> Labeled for Adapter<A> {
-    fn label(&self) -> &str {
-        ""
-    }
-}
 crate::impl_storage_item!(Adapter);
 
 #[derive(Clone, Debug, Error)]
@@ -1103,8 +1091,8 @@ impl Global {
             return (device_id, queue_id, None);
         };
 
-        let device_id = device_fid.assign_error(desc.label.borrow_or_default());
-        let queue_id = queue_fid.assign_error(desc.label.borrow_or_default());
+        let device_id = device_fid.assign_error();
+        let queue_id = queue_fid.assign_error();
         (device_id, queue_id, Some(error))
     }
 
@@ -1154,8 +1142,8 @@ impl Global {
             return (device_id, queue_id, None);
         };
 
-        let device_id = devices_fid.assign_error(desc.label.borrow_or_default());
-        let queue_id = queues_fid.assign_error(desc.label.borrow_or_default());
+        let device_id = devices_fid.assign_error();
+        let queue_id = queues_fid.assign_error();
         (device_id, queue_id, Some(error))
     }
 }

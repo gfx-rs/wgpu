@@ -893,7 +893,7 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
 }
 
 crate::impl_resource_type!(StagingBuffer);
-// TODO: remove once we get rid of Registry.label_for_resource
+// TODO: add label
 impl<A: HalApi> Labeled for StagingBuffer<A> {
     fn label(&self) -> &str {
         ""

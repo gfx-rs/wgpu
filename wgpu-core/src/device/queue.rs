@@ -42,7 +42,7 @@ pub struct Queue<A: HalApi> {
 }
 
 crate::impl_resource_type!(Queue);
-// TODO: remove once we get rid of Registry.label_for_resource
+// TODO: https://github.com/gfx-rs/wgpu/issues/4014
 impl<A: HalApi> Labeled for Queue<A> {
     fn label(&self) -> &str {
         ""

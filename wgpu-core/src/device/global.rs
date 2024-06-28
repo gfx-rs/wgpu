@@ -4,7 +4,7 @@ use crate::{
     api_log, binding_model, command, conv,
     device::{
         bgl, life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure,
-        DeviceLostReason, HostMap, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
+        DeviceLostReason, HostMap,
     },
     global::Global,
     hal_api::HalApi,
@@ -17,7 +17,7 @@ use crate::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
         Trackable,
     },
-    Label, LabelHelpers as _,
+    Label,
 };
 
 use arrayvec::ArrayVec;
@@ -284,7 +284,7 @@ impl Global {
                 .schedule_resource_destruction(queue::TempResource::Buffer(Arc::new(buffer)), !0);
         }
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
     }
 
@@ -316,32 +316,28 @@ impl Global {
     /// [`device_create_buffer`]: Global::device_create_buffer
     /// [`usage`]: https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-usage
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
-    pub fn create_buffer_error<A: HalApi>(&self, id_in: Option<id::BufferId>, label: Label) {
+    pub fn create_buffer_error<A: HalApi>(&self, id_in: Option<id::BufferId>) {
         let hub = A::hub(self);
         let fid = hub.buffers.prepare(id_in);
 
-        fid.assign_error(label.borrow_or_default());
+        fid.assign_error();
     }
 
-    pub fn create_render_bundle_error<A: HalApi>(
-        &self,
-        id_in: Option<id::RenderBundleId>,
-        label: Label,
-    ) {
+    pub fn create_render_bundle_error<A: HalApi>(&self, id_in: Option<id::RenderBundleId>) {
         let hub = A::hub(self);
         let fid = hub.render_bundles.prepare(id_in);
 
-        fid.assign_error(label.borrow_or_default());
+        fid.assign_error();
     }
 
     /// Assign `id_in` an error with the given `label`.
     ///
     /// See `create_buffer_error` for more context and explanation.
-    pub fn create_texture_error<A: HalApi>(&self, id_in: Option<id::TextureId>, label: Label) {
+    pub fn create_texture_error<A: HalApi>(&self, id_in: Option<id::TextureId>) {
         let hub = A::hub(self);
         let fid = hub.textures.prepare(id_in);
 
-        fid.assign_error(label.borrow_or_default());
+        fid.assign_error();
     }
 
     #[cfg(feature = "replay")]
@@ -474,10 +470,6 @@ impl Global {
         Ok(())
     }
 
-    pub fn buffer_label<A: HalApi>(&self, id: id::BufferId) -> String {
-        A::hub(self).buffers.label_for_resource(id)
-    }
-
     pub fn buffer_destroy<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
@@ -598,7 +590,7 @@ impl Global {
 
         log::error!("Device::create_texture error: {error}");
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
     }
 
@@ -671,7 +663,7 @@ impl Global {
 
         log::error!("Device::create_texture error: {error}");
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
     }
 
@@ -721,12 +713,8 @@ impl Global {
 
         log::error!("Device::create_buffer error: {error}");
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn texture_label<A: HalApi>(&self, id: id::TextureId) -> String {
-        A::hub(self).textures.label_for_resource(id)
     }
 
     pub fn texture_destroy<A: HalApi>(
@@ -855,12 +843,8 @@ impl Global {
         };
 
         log::error!("Texture::create_view({texture_id:?}) error: {error}");
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {
-        A::hub(self).texture_views.label_for_resource(id)
     }
 
     pub fn texture_view_drop<A: HalApi>(
@@ -933,12 +917,8 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn sampler_label<A: HalApi>(&self, id: id::SamplerId) -> String {
-        A::hub(self).samplers.label_for_resource(id)
     }
 
     pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
@@ -1042,12 +1022,8 @@ impl Global {
         };
 
         let fid = hub.bind_group_layouts.prepare(id_in);
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn bind_group_layout_label<A: HalApi>(&self, id: id::BindGroupLayoutId) -> String {
-        A::hub(self).bind_group_layouts.label_for_resource(id)
     }
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
@@ -1106,12 +1082,8 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn pipeline_layout_label<A: HalApi>(&self, id: id::PipelineLayoutId) -> String {
-        A::hub(self).pipeline_layouts.label_for_resource(id)
     }
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
@@ -1192,12 +1164,8 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn bind_group_label<A: HalApi>(&self, id: id::BindGroupId) -> String {
-        A::hub(self).bind_groups.label_for_resource(id)
     }
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
@@ -1300,7 +1268,7 @@ impl Global {
 
         log::error!("Device::create_shader_module error: {error}");
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
     }
 
@@ -1354,12 +1322,8 @@ impl Global {
 
         log::error!("Device::create_shader_module_spirv error: {error}");
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn shader_module_label<A: HalApi>(&self, id: id::ShaderModuleId) -> String {
-        A::hub(self).shader_modules.label_for_resource(id)
     }
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
@@ -1406,12 +1370,8 @@ impl Global {
             return (id.into_command_encoder_id(), None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id.into_command_encoder_id(), Some(error))
-    }
-
-    pub fn command_buffer_label<A: HalApi>(&self, id: id::CommandBufferId) -> String {
-        A::hub(self).command_buffers.label_for_resource(id)
     }
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
@@ -1501,12 +1461,8 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
-    }
-
-    pub fn render_bundle_label<A: HalApi>(&self, id: id::RenderBundleId) -> String {
-        A::hub(self).render_bundles.label_for_resource(id)
     }
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
@@ -1567,7 +1523,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error("");
+        let id = fid.assign_error();
         (id, Some(error))
     }
 
@@ -1591,10 +1547,6 @@ impl Global {
                 .query_sets
                 .insert(query_set.tracker_index(), query_set.clone());
         }
-    }
-
-    pub fn query_set_label<A: HalApi>(&self, id: id::QuerySetId) -> String {
-        A::hub(self).query_sets.label_for_resource(id)
     }
 
     pub fn device_create_render_pipeline<A: HalApi>(
@@ -1648,7 +1600,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
 
         // We also need to assign errors to the implicit pipeline layout and the
         // implicit bind group layout. We have to remove any existing entries first.
@@ -1658,12 +1610,12 @@ impl Global {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+            pipeline_layout_guard.insert_error(ids.root_id);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+                bgl_guard.insert_error(bgl_id);
             }
         }
 
@@ -1699,15 +1651,8 @@ impl Global {
             return (id, None);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(id_in)
-            .assign_error("<derived>");
+        let id = hub.bind_group_layouts.prepare(id_in).assign_error();
         (id, Some(error))
-    }
-
-    pub fn render_pipeline_label<A: HalApi>(&self, id: id::RenderPipelineId) -> String {
-        A::hub(self).render_pipelines.label_for_resource(id)
     }
 
     pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
@@ -1786,7 +1731,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
 
         // We also need to assign errors to the implicit pipeline layout and the
         // implicit bind group layout. We have to remove any existing entries first.
@@ -1796,12 +1741,12 @@ impl Global {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+            pipeline_layout_guard.insert_error(ids.root_id);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
+                bgl_guard.insert_error(bgl_id);
             }
         }
         (id, Some(error))
@@ -1836,15 +1781,8 @@ impl Global {
             return (id, None);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(id_in)
-            .assign_error("<derived>");
+        let id = hub.bind_group_layouts.prepare(id_in).assign_error();
         (id, Some(error))
-    }
-
-    pub fn compute_pipeline_label<A: HalApi>(&self, id: id::ComputePipelineId) -> String {
-        A::hub(self).compute_pipelines.label_for_resource(id)
     }
 
     pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
@@ -1916,7 +1854,7 @@ impl Global {
             }
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
 
         (id, Some(error))
     }
@@ -2350,10 +2288,6 @@ impl Global {
         Ok(all_queue_empty)
     }
 
-    pub fn device_label<A: HalApi>(&self, id: DeviceId) -> String {
-        A::hub(self).devices.label_for_resource(id)
-    }
-
     pub fn device_start_capture<A: HalApi>(&self, id: DeviceId) {
         api_log!("Device::start_capture");
 
@@ -2385,8 +2319,7 @@ impl Global {
     // the registry.
     pub fn device_make_invalid<A: HalApi>(&self, device_id: DeviceId) {
         let hub = A::hub(self);
-        hub.devices
-            .force_replace_with_error(device_id, "Made invalid.");
+        hub.devices.force_replace_with_error(device_id);
     }
 
     pub fn pipeline_cache_get_data<A: HalApi>(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
