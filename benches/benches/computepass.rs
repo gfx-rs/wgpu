@@ -77,7 +77,7 @@ impl ComputepassState {
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::StorageTexture {
                     access: wgpu::StorageTextureAccess::ReadWrite,
-                    format: wgpu::TextureFormat::Rgba32Float,
+                    format: wgpu::TextureFormat::R32Float,
                     view_dimension: wgpu::TextureViewDimension::D2,
                 },
                 count: None,
@@ -144,7 +144,7 @@ impl ComputepassState {
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba32Float,
+                    format: wgpu::TextureFormat::R32Float,
                     usage: wgpu::TextureUsages::STORAGE_BINDING,
                     view_formats: &[],
                 });
@@ -263,7 +263,7 @@ impl ComputepassState {
                                 visibility: wgpu::ShaderStages::COMPUTE,
                                 ty: wgpu::BindingType::StorageTexture {
                                     access: wgpu::StorageTextureAccess::ReadWrite,
-                                    format: wgpu::TextureFormat::Rgba32Float,
+                                    format: wgpu::TextureFormat::R32Float,
                                     view_dimension: wgpu::TextureViewDimension::D2,
                                 },
                                 count: Some(NonZeroU32::new(STORAGE_TEXTURE_COUNT as u32).unwrap()),

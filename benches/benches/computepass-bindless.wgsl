@@ -3,7 +3,7 @@ var tex: binding_array<texture_2d<f32>>;
 
 @group(0) @binding(1)
 // TODO(https://github.com/gfx-rs/wgpu/issues/5765): The extra whitespace between the angle brackets is needed to workaround a parsing bug.
-var images: binding_array<texture_storage_2d<rgba32float, read_write> >;
+var images: binding_array<texture_storage_2d<r32float, read_write> >;
 struct BufferElement {
     element: vec4f,
 }
@@ -21,6 +21,6 @@ fn cs_main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     
     let tex = textureLoad(tex[idx0], vec2u(0), 0) + textureLoad(tex[idx0], vec2u(0), 0);
     let image = textureLoad(images[idx0], vec2u(0)) + textureLoad(images[idx1], vec2u(0));
-    buffers[idx0].element = tex;
-    buffers[idx1].element = image;
+    buffers[idx0].element = tex.rrrr;
+    buffers[idx1].element = image.rrrr;
 }
