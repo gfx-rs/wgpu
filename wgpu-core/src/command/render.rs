@@ -477,7 +477,9 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi> {
     temp_offsets: Vec<u32>,
     dynamic_offset_count: usize,
     string_offset: usize,
-    active_query: Option<(Arc<QuerySet<A>>, u32)>,
+
+    active_occlusion_query: Option<(Arc<QuerySet<A>>, u32)>,
+    active_pipeline_statistics_query: Option<(Arc<QuerySet<A>>, u32)>,
 }
 
 impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi>
@@ -1697,7 +1699,9 @@ impl Global {
                 temp_offsets: Vec::new(),
                 dynamic_offset_count: 0,
                 string_offset: 0,
-                active_query: None,
+
+                active_occlusion_query: None,
+                active_pipeline_statistics_query: None,
             };
 
             for command in base.commands {
@@ -1896,7 +1900,7 @@ impl Global {
                             &mut state.tracker.query_sets,
                             query_index,
                             Some(&mut cmd_buf_data.pending_query_resets),
-                            &mut state.active_query,
+                            &mut state.active_occlusion_query,
                         )
                         .map_pass_err(scope)?;
                     }
@@ -1904,7 +1908,7 @@ impl Global {
                         api_log!("RenderPass::end_occlusion_query");
                         let scope = PassErrorScope::EndOcclusionQuery;
 
-                        end_occlusion_query(state.raw_encoder, &mut state.active_query)
+                        end_occlusion_query(state.raw_encoder, &mut state.active_occlusion_query)
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::BeginPipelineStatisticsQuery {
@@ -1924,7 +1928,7 @@ impl Global {
                             cmd_buf.as_ref(),
                             query_index,
                             Some(&mut cmd_buf_data.pending_query_resets),
-                            &mut state.active_query,
+                            &mut state.active_pipeline_statistics_query,
                         )
                         .map_pass_err(scope)?;
                     }
@@ -1932,8 +1936,11 @@ impl Global {
                         api_log!("RenderPass::end_pipeline_statistics_query");
                         let scope = PassErrorScope::EndPipelineStatisticsQuery;
 
-                        end_pipeline_statistics_query(state.raw_encoder, &mut state.active_query)
-                            .map_pass_err(scope)?;
+                        end_pipeline_statistics_query(
+                            state.raw_encoder,
+                            &mut state.active_pipeline_statistics_query,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::ExecuteBundle(bundle) => {
                         let scope = PassErrorScope::ExecuteBundle;
