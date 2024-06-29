@@ -1076,7 +1076,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn compute_pass_set_push_constant<A: HalApi>(
+    pub fn compute_pass_set_push_constants<A: HalApi>(
         &self,
         pass: &mut ComputePass<A>,
         offset: u32,

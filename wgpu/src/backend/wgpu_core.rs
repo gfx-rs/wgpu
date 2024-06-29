@@ -2438,7 +2438,7 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        if let Err(cause) = pass_data.pass.set_push_constant(&self.0, offset, data) {
+        if let Err(cause) = pass_data.pass.set_push_constants(&self.0, offset, data) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
