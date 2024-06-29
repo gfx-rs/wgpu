@@ -4,7 +4,7 @@ use crate::{
     },
     command::{
         bind::Binder,
-        compute_command::{ArcComputeCommand, ComputeCommand},
+        compute_command::ArcComputeCommand,
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites, BasePass,
@@ -405,17 +405,19 @@ impl Global {
     }
 
     #[doc(hidden)]
+    #[cfg(feature = "replay")]
     pub fn compute_pass_end_with_unresolved_commands<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePass<ComputeCommand>,
+        base: BasePass<super::ComputeCommand>,
         timestamp_writes: Option<&PassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
         let hub = A::hub(self);
         let scope = PassErrorScope::PassEncoder(encoder_id);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(scope)?;
-        let commands = ComputeCommand::resolve_compute_command_ids(A::hub(self), &base.commands)?;
+        let commands =
+            super::ComputeCommand::resolve_compute_command_ids(A::hub(self), &base.commands)?;
 
         let timestamp_writes = if let Some(tw) = timestamp_writes {
             Some(ArcPassTimestampWrites {

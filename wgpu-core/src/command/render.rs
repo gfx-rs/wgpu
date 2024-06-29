@@ -51,7 +51,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use std::{borrow::Cow, fmt, iter, mem, num::NonZeroU32, ops::Range, str};
 
-use super::render_command::{ArcRenderCommand, RenderCommand};
+use super::render_command::ArcRenderCommand;
 use super::{
     memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
     QueryResetMap,
@@ -1496,10 +1496,11 @@ impl Global {
     }
 
     #[doc(hidden)]
+    #[cfg(feature = "replay")]
     pub fn render_pass_end_with_unresolved_commands<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePass<RenderCommand>,
+        base: BasePass<super::RenderCommand>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&PassTimestampWrites>,
@@ -1533,7 +1534,7 @@ impl Global {
         let hub = A::hub(self);
         render_pass.base = Some(BasePass {
             label,
-            commands: RenderCommand::resolve_render_command_ids(hub, &commands)?,
+            commands: super::RenderCommand::resolve_render_command_ids(hub, &commands)?,
             dynamic_offsets,
             string_data,
             push_constant_data,
