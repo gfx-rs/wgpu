@@ -41,24 +41,38 @@ Bottom level categories:
 
 ### Major Changes
 
-#### Remove lifetime bounds on `wgpu::ComputePass`
+#### Lifetime bounds on `wgpu::RenderPass` & `wgpu::ComputePass`
 
-TODO(wumpf): This is still work in progress. Should write a bit more about it. Also will very likely extend to `wgpu::RenderPass` before release.
+`wgpu::RenderPass` & `wgpu::ComputePass` recording methods (e.g. `wgpu::RenderPass:set_render_pipeline`) no longer impose a lifetime constraint to objects passed to a pass (like pipelines/buffers/bindgroups/query-sets etc.).
 
-`wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
+This means the following pattern works now as expected:
+```rust
+let mut pipelines: Vec<wgpu::RenderPipeline> = ...;
+// ...
+let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+cpass.set_pipeline(&pipelines[123]);
+// Change pipeline container - this requires mutable access to `pipelines` while one of the pipelines is in use.
+pipelines.push(/* ... */);
+// Continue pass recording.
+cpass.set_bindgroup(...);
+```
+Previously, a set pipeline (or other resource) had to outlive pass recording which often affected wider systems,
+meaning that users needed to prove to the borrow checker that `Vec<wgpu::RenderPipeline>` (or similar constructs)
+aren't accessed mutably for the duration of pass recording.
 
-Furthermore, you can now opt out of `wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::forget_lifetime`:
+
+Furthermore, you can now opt out of `wgpu::RenderPass`/`wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::RenderPass::forget_lifetime`/`wgpu::ComputePass::forget_lifetime`:
 ```rust
 fn independent_cpass<'enc>(encoder: &'enc mut wgpu::CommandEncoder) -> wgpu::ComputePass<'static> {
     let cpass: wgpu::ComputePass<'enc> = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
     cpass.forget_lifetime()
 }
 ```
-⚠️ As long as a `wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
-This is very useful for library authors, but opens up an easy way for incorrect use, so use with care.
-`forget_lifetime` is zero overhead and has no side effects on pass recording.
+⚠️ As long as a `wgpu::RenderPass`/`wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
+`forget_lifetime` can be very useful for library authors, but opens up an easy way for incorrect use, so use with care.
+This method doesn't add any additional overhead and has no side effects on pass recording.
 
-By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768) (together with @kpreid), [#5671](https://github.com/gfx-rs/wgpu/pull/5671).
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768) (together with @kpreid), [#5671](https://github.com/gfx-rs/wgpu/pull/5671), [#5794](https://github.com/gfx-rs/wgpu/pull/5794), [#5884](https://github.com/gfx-rs/wgpu/pull/5884).
 
 #### Querying shader compilation errors
 
