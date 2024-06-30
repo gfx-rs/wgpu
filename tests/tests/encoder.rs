@@ -77,18 +77,16 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
         drop(encoder);
     });
 
-// TODO: This should also apply to render passes once the lifetime bound is lifted.
 #[gpu_test]
-static ENCODER_OPERATIONS_FAIL_WHILE_COMPUTE_PASS_ALIVE: GpuTestConfiguration =
-    GpuTestConfiguration::new()
-        .parameters(TestParameters::default().features(
-            wgpu::Features::CLEAR_TEXTURE
-                | wgpu::Features::TIMESTAMP_QUERY
-                | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-        ))
-        .run_sync(encoder_operations_fail_while_compute_pass_alive);
+static ENCODER_OPERATIONS_FAIL_WHILE_PASS_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(
+        wgpu::Features::CLEAR_TEXTURE
+            | wgpu::Features::TIMESTAMP_QUERY
+            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+    ))
+    .run_sync(encoder_operations_fail_while_pass_alive);
 
-fn encoder_operations_fail_while_compute_pass_alive(ctx: TestingContext) {
+fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
     let buffer_source = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -128,6 +126,23 @@ fn encoder_operations_fail_while_compute_pass_alive(ctx: TestingContext) {
         ty: wgpu::QueryType::Timestamp,
         label: None,
     });
+
+    let target_desc = wgpu::TextureDescriptor {
+        label: Some("target_tex"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[wgpu::TextureFormat::Bgra8UnormSrgb],
+    };
+    let target_tex = ctx.device.create_texture(&target_desc);
+    let color_attachment_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
     #[allow(clippy::type_complexity)]
     let recording_ops: Vec<(_, Box<dyn Fn(&mut CommandEncoder)>)> = vec![
@@ -252,55 +267,81 @@ fn encoder_operations_fail_while_compute_pass_alive(ctx: TestingContext) {
         ),
     ];
 
-    for (op_name, op) in recording_ops.iter() {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-        let pass = encoder
-            .begin_compute_pass(&wgpu::ComputePassDescriptor::default())
-            .forget_lifetime();
-
-        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
-        log::info!("Testing operation {} on a locked command encoder", op_name);
-        fail(
-            &ctx.device,
-            || op(&mut encoder),
-            Some("Command encoder is locked"),
-        );
-
-        // Drop the pass - this also fails now since the encoder is invalid:
-        fail(
-            &ctx.device,
-            || drop(pass),
-            Some("Command encoder is invalid"),
-        );
-        // Also, it's not possible to create a new pass on the encoder:
-        fail(
-            &ctx.device,
-            || encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()),
-            Some("Command encoder is invalid"),
-        );
+    #[derive(Clone, Copy, Debug)]
+    enum PassType {
+        Compute,
+        Render,
     }
 
-    // Test encoder finishing separately since it consumes the encoder and doesn't fit above pattern.
-    {
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        let pass = encoder
-            .begin_compute_pass(&wgpu::ComputePassDescriptor::default())
-            .forget_lifetime();
-        fail(
-            &ctx.device,
-            || encoder.finish(),
-            Some("Command encoder is locked"),
-        );
-        fail(
-            &ctx.device,
-            || drop(pass),
-            Some("Command encoder is invalid"),
-        );
+    let create_pass = |encoder: &mut wgpu::CommandEncoder, pass_type| -> Box<dyn std::any::Any> {
+        match pass_type {
+            PassType::Compute => Box::new(
+                encoder
+                    .begin_compute_pass(&wgpu::ComputePassDescriptor::default())
+                    .forget_lifetime(),
+            ),
+            PassType::Render => Box::new(
+                encoder
+                    .begin_render_pass(&wgpu::RenderPassDescriptor {
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &color_attachment_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations::default(),
+                        })],
+                        ..Default::default()
+                    })
+                    .forget_lifetime(),
+            ),
+        }
+    };
+
+    for &pass_type in [PassType::Compute, PassType::Render].iter() {
+        for (op_name, op) in recording_ops.iter() {
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            let pass = create_pass(&mut encoder, pass_type);
+
+            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+
+            log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
+            fail(
+                &ctx.device,
+                || op(&mut encoder),
+                Some("Command encoder is locked"),
+            );
+
+            // Drop the pass - this also fails now since the encoder is invalid:
+            fail(
+                &ctx.device,
+                || drop(pass),
+                Some("Command encoder is invalid"),
+            );
+            // Also, it's not possible to create a new pass on the encoder:
+            fail(
+                &ctx.device,
+                || encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()),
+                Some("Command encoder is invalid"),
+            );
+        }
+
+        // Test encoder finishing separately since it consumes the encoder and doesn't fit above pattern.
+        {
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            let pass = create_pass(&mut encoder, pass_type);
+            fail(
+                &ctx.device,
+                || encoder.finish(),
+                Some("Command encoder is locked"),
+            );
+            fail(
+                &ctx.device,
+                || drop(pass),
+                Some("Command encoder is invalid"),
+            );
+        }
     }
 }
