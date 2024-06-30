@@ -10,7 +10,12 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::DeviceState;
 
+#[cfg(test)]
+const DRAW_COUNT: usize = 8; // Running with up to 8 threads.
+
+#[cfg(not(test))]
 const DRAW_COUNT: usize = 10_000;
+
 // Must match the number of textures in the renderpass.wgsl shader
 const TEXTURES_PER_DRAW: usize = 7;
 const VERTEX_BUFFERS_PER_DRAW: usize = 2;
