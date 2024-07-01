@@ -147,10 +147,10 @@ pub enum BindingError {
         binding: naga::AddressSpace,
         shader: naga::AddressSpace,
     },
-    #[error("Buffer structure size {shader}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`, which is {binding}")]
+    #[error("Buffer structure size {buffer_size}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`, which is {min_binding_size}")]
     WrongBufferSize {
-        binding: wgt::BufferSize,
-        shader: wgt::BufferSize,
+        buffer_size: wgt::BufferSize,
+        min_binding_size: wgt::BufferSize,
     },
     #[error("View dimension {dim:?} (is array: {is_array}) doesn't match the binding {binding:?}")]
     WrongTextureViewDimension {
@@ -389,8 +389,8 @@ impl Resource {
                 match min_size {
                     Some(non_zero) if non_zero < size => {
                         return Err(BindingError::WrongBufferSize {
-                            binding: non_zero,
-                            shader: size,
+                            buffer_size: size,
+                            min_binding_size: non_zero,
                         })
                     }
                     _ => (),
