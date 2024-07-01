@@ -2453,8 +2453,7 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
-        desc: &binding_model::PipelineLayoutDescriptor,
-        bgl_registry: &Registry<BindGroupLayout<A>>,
+        desc: &binding_model::ResolvedPipelineLayoutDescriptor<A>,
     ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
@@ -2509,20 +2508,8 @@ impl<A: HalApi> Device<A> {
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
 
-        // Collect references to the BGLs
-        let mut bind_group_layouts = ArrayVec::new();
-        for &id in desc.bind_group_layouts.iter() {
-            let Ok(bgl) = bgl_registry.get(id) else {
-                return Err(Error::InvalidBindGroupLayoutId(id));
-            };
-
-            bind_group_layouts.push(bgl);
-        }
-
-        // Validate total resource counts and check for a matching device
-        for bgl in &bind_group_layouts {
+        for bgl in desc.bind_group_layouts.iter() {
             bgl.same_device(self)?;
-
             count_validator.merge(&bgl.binding_count_validator);
         }
 
@@ -2530,7 +2517,14 @@ impl<A: HalApi> Device<A> {
             .validate(&self.limits)
             .map_err(Error::TooManyBindings)?;
 
-        let raw_bind_group_layouts = bind_group_layouts
+        let bind_group_layouts = desc
+            .bind_group_layouts
+            .iter()
+            .cloned()
+            .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
+
+        let raw_bind_group_layouts = desc
+            .bind_group_layouts
             .iter()
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
@@ -2588,17 +2582,21 @@ impl<A: HalApi> Device<A> {
             return Err(pipeline::ImplicitLayoutError::MissingIds(group_count as _));
         }
 
+        let mut bind_group_layouts = Vec::with_capacity(group_count);
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
             let bgl = self.create_bind_group_layout(&None, map, bgl::Origin::Derived)?;
-            bgl_registry.force_replace(*bgl_id, Arc::new(bgl));
+            let bgl = Arc::new(bgl);
+            bgl_registry.force_replace(*bgl_id, bgl.clone());
+            bind_group_layouts.push(bgl);
         }
 
-        let layout_desc = binding_model::PipelineLayoutDescriptor {
+        let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: Cow::Borrowed(&ids.group_ids[..group_count]),
+            bind_group_layouts: Cow::Owned(bind_group_layouts),
             push_constant_ranges: Cow::Borrowed(&[]), //TODO?
         };
-        let layout = self.create_pipeline_layout(&layout_desc, bgl_registry)?;
+
+        let layout = self.create_pipeline_layout(&layout_desc)?;
         let layout = Arc::new(layout);
         pipeline_layout_registry.force_replace(ids.root_id, layout.clone());
         Ok(layout)

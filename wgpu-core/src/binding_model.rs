@@ -606,6 +606,28 @@ pub struct PipelineLayoutDescriptor<'a> {
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 
+/// Describes a pipeline layout.
+///
+/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
+#[derive(Debug)]
+pub struct ResolvedPipelineLayoutDescriptor<'a, A: HalApi> {
+    /// Debug label of the pipeline layout.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
+    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
+    pub bind_group_layouts: Cow<'a, [Arc<BindGroupLayout<A>>]>,
+    /// Set of push constant ranges this pipeline uses. Each shader stage that
+    /// uses push constants must define the range in push constant memory that
+    /// corresponds to its single `layout(push_constant)` uniform block.
+    ///
+    /// If this array is non-empty, the
+    /// [`Features::PUSH_CONSTANTS`](wgt::Features::PUSH_CONSTANTS) feature must
+    /// be enabled.
+    pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
+}
+
 #[derive(Debug)]
 pub struct PipelineLayout<A: HalApi> {
     pub(crate) raw: Option<A::PipelineLayout>,
