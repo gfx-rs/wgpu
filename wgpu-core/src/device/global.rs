@@ -2388,7 +2388,7 @@ impl Global {
     ) {
         let hub = A::hub(self);
 
-        if let Ok(Some(device)) = hub.devices.try_get(device_id) {
+        if let Ok(device) = hub.devices.get(device_id) {
             let mut life_tracker = device.lock_life();
             if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
                 // It's important to not hold the lock while calling the closure.
