@@ -250,6 +250,14 @@ pub const RESERVED_KEYWORDS: &[&str] = &[
     "namespace",
     "using",
     "sampler3DRect",
+    // Reserved keywords that were unreserved in GLSL 4.2
+    "image1DArrayShadow",
+    "image1DShadow",
+    "image2DArrayShadow",
+    "image2DShadow",
+    // Reserved keywords that were unreserved in GLSL 4.4
+    "packed",
+    "row_major",
     //
     // GLSL 4.6 Built-In Functions, from https://github.com/KhronosGroup/OpenGL-Registry/blob/d00e11dc1a1ffba581d633f21f70202051248d5c/specs/gl/GLSLangSpec.4.60.html#L13314
     //

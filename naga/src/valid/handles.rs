@@ -5,11 +5,12 @@ use crate::{
     Handle,
 };
 
+use crate::non_max_u32::NonMaxU32;
 use crate::{Arena, UniqueArena};
 
 use super::ValidationError;
 
-use std::{convert::TryInto, hash::Hash, num::NonZeroU32};
+use std::{convert::TryInto, hash::Hash};
 
 impl super::Validator {
     /// Validates that all handles within `module` are:
@@ -688,7 +689,7 @@ impl<T> Handle<T> {
             Ok(self)
         } else {
             let erase_handle_type = |handle: Handle<_>| {
-                Handle::new(NonZeroU32::new((handle.index() + 1).try_into().unwrap()).unwrap())
+                Handle::new(NonMaxU32::new((handle.index()).try_into().unwrap()).unwrap())
             };
             Err(FwdDepError {
                 subject: erase_handle_type(self),

@@ -18,7 +18,7 @@ mod writer;
 
 pub use spirv::Capability;
 
-use crate::arena::Handle;
+use crate::arena::{Handle, HandleVec};
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
 use spirv::Word;
@@ -420,7 +420,7 @@ enum Dimension {
 /// [emit]: index.html#expression-evaluation-time-and-scope
 #[derive(Default)]
 struct CachedExpressions {
-    ids: Vec<Word>,
+    ids: HandleVec<crate::Expression, Word>,
 }
 impl CachedExpressions {
     fn reset(&mut self, length: usize) {
@@ -431,7 +431,7 @@ impl CachedExpressions {
 impl ops::Index<Handle<crate::Expression>> for CachedExpressions {
     type Output = Word;
     fn index(&self, h: Handle<crate::Expression>) -> &Word {
-        let id = &self.ids[h.index()];
+        let id = &self.ids[h];
         if *id == 0 {
             unreachable!("Expression {:?} is not cached!", h);
         }
@@ -440,7 +440,7 @@ impl ops::Index<Handle<crate::Expression>> for CachedExpressions {
 }
 impl ops::IndexMut<Handle<crate::Expression>> for CachedExpressions {
     fn index_mut(&mut self, h: Handle<crate::Expression>) -> &mut Word {
-        let id = &mut self.ids[h.index()];
+        let id = &mut self.ids[h];
         if *id != 0 {
             unreachable!("Expression {:?} is already cached!", h);
         }
@@ -662,9 +662,9 @@ pub struct Writer {
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
     /// Indexed by const-expression handle indexes
-    constant_ids: Vec<Word>,
+    constant_ids: HandleVec<crate::Expression, Word>,
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
-    global_variables: Vec<GlobalVariable>,
+    global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
     binding_map: BindingMap,
 
     // Cached expressions are only meaningful within a BlockContext, but we

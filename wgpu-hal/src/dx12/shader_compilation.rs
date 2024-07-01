@@ -18,7 +18,7 @@ pub(super) fn compile_fxc(
     source_name: Option<&CStr>,
     raw_ep: &std::ffi::CString,
     stage_bit: wgt::ShaderStages,
-    full_stage: String,
+    full_stage: &CStr,
 ) -> (
     Result<super::CompiledShader, crate::PipelineError>,
     log::Level,

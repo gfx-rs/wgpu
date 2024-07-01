@@ -97,11 +97,12 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, Resource, ResourceInfo, ResourceType},
+    resource::{
+        Buffer, DestroyedResourceError, ParentDevice, Resource, ResourceInfo, ResourceType,
+    },
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
-    validation::check_buffer_usage,
     Label, LabelHelpers,
 };
 use arrayvec::ArrayVec;
@@ -349,6 +350,10 @@ impl RenderBundleEncoder {
         device: &Arc<Device<A>>,
         hub: &Hub<A>,
     ) -> Result<RenderBundle<A>, RenderBundleError> {
+        let scope = PassErrorScope::Bundle;
+
+        device.check_is_valid().map_pass_err(scope)?;
+
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.render_pipelines.read();
         let buffer_guard = hub.buffers.read();
@@ -405,13 +410,17 @@ impl RenderBundleEncoder {
                 } => {
                     let scope = PassErrorScope::SetBindGroup(bind_group_id);
 
-                    let bind_group = state
+                    let bind_group = bind_group_guard
+                        .get(bind_group_id)
+                        .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))
+                        .map_pass_err(scope)?;
+
+                    state
                         .trackers
                         .bind_groups
                         .write()
-                        .add_single(&*bind_group_guard, bind_group_id)
-                        .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
-                        .map_pass_err(scope)?;
+                        .add_single(bind_group);
+
                     self.check_valid_to_use(bind_group.device.info.id())
                         .map_pass_err(scope)?;
 
@@ -470,13 +479,17 @@ impl RenderBundleEncoder {
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let scope = PassErrorScope::SetPipelineRender(pipeline_id);
 
-                    let pipeline = state
+                    let pipeline = pipeline_guard
+                        .get(pipeline_id)
+                        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
+                        .map_pass_err(scope)?;
+
+                    state
                         .trackers
                         .render_pipelines
                         .write()
-                        .add_single(&*pipeline_guard, pipeline_id)
-                        .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
-                        .map_pass_err(scope)?;
+                        .add_single(pipeline);
+
                     self.check_valid_to_use(pipeline.device.info.id())
                         .map_pass_err(scope)?;
 
@@ -513,16 +526,22 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                    let buffer = state
+
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
+                        .map_pass_err(scope)?;
+
+                    state
                         .trackers
                         .buffers
                         .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                        .merge_single(buffer, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDEX)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::INDEX).map_pass_err(scope)?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
@@ -552,16 +571,20 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                         .map_pass_err(scope)?;
+
+                    state
+                        .trackers
+                        .buffers.write()
+                        .merge_single(buffer, hal::BufferUses::VERTEX)
+                        .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::VERTEX)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::VERTEX).map_pass_err(scope)?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
@@ -679,16 +702,20 @@ impl RenderBundleEncoder {
                     let pipeline = state.pipeline(scope)?;
                     let used_bind_groups = pipeline.used_bind_groups;
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                         .map_pass_err(scope)?;
+
+                    state
+                        .trackers
+                        .buffers.write()
+                        .merge_single(buffer, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer,
@@ -718,16 +745,20 @@ impl RenderBundleEncoder {
                     let pipeline = state.pipeline(scope)?;
                     let used_bind_groups = pipeline.used_bind_groups;
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .write()
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                    let buffer = buffer_guard
+                        .get(buffer_id)
+                        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))
                         .map_pass_err(scope)?;
+
+                    state
+                        .trackers
+                        .buffers.write()
+                        .merge_single(buffer, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
+
                     self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
-                        .map_pass_err(scope)?;
+                    buffer.check_usage(wgt::BufferUsages::INDIRECT).map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer,
@@ -826,25 +857,14 @@ pub enum CreateRenderBundleError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ExecutionError {
-    #[error("Buffer {0:?} is destroyed")]
-    DestroyedBuffer(id::BufferId),
-    #[error("BindGroup {0:?} is invalid")]
-    InvalidBindGroup(id::BindGroupId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
 }
 impl PrettyError for ExecutionError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        match *self {
-            Self::DestroyedBuffer(id) => {
-                fmt.buffer_label(&id);
-            }
-            Self::InvalidBindGroup(id) => {
-                fmt.bind_group_label(&id);
-            }
-            Self::Unimplemented(_reason) => {}
-        };
     }
 }
 
@@ -916,9 +936,7 @@ impl<A: HalApi> RenderBundle<A> {
                     num_dynamic_offsets,
                     bind_group,
                 } => {
-                    let raw_bg = bind_group
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::InvalidBindGroup(bind_group.info.id()))?;
+                    let raw_bg = bind_group.try_raw(snatch_guard)?;
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
@@ -940,9 +958,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer: &A::Buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer: &A::Buffer = buffer.try_raw(snatch_guard)?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset: *offset,
@@ -956,9 +972,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer = buffer.try_raw(snatch_guard)?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset: *offset,
@@ -1043,9 +1057,7 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: false,
                 } => {
-                    let buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer = buffer.try_raw(snatch_guard)?;
                     unsafe { raw.draw_indirect(buffer, *offset, 1) };
                 }
                 Cmd::MultiDrawIndirect {
@@ -1054,9 +1066,7 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: true,
                 } => {
-                    let buffer = buffer
-                        .raw(snatch_guard)
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer.info.id()))?;
+                    let buffer = buffer.try_raw(snatch_guard)?;
                     unsafe { raw.draw_indexed_indirect(buffer, *offset, 1) };
                 }
                 Cmd::MultiDrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
@@ -1101,6 +1111,12 @@ impl<A: HalApi> Resource for RenderBundle<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for RenderBundle<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 
@@ -1404,7 +1420,7 @@ impl<A: HalApi> State<A> {
     ) {
         match self.index {
             Some(ref current)
-                if Arc::ptr_eq(&current.buffer, &buffer)
+                if current.buffer.is_equal(&buffer)
                     && current.format == format
                     && current.range == range =>
             {
@@ -1504,10 +1520,12 @@ pub struct RenderBundleError {
 }
 
 impl RenderBundleError {
-    pub(crate) const INVALID_DEVICE: Self = RenderBundleError {
-        scope: PassErrorScope::Bundle,
-        inner: RenderBundleErrorInner::Device(DeviceError::Invalid),
-    };
+    pub fn from_device_error(e: DeviceError) -> Self {
+        Self {
+            scope: PassErrorScope::Bundle,
+            inner: e.into(),
+        }
+    }
 }
 impl PrettyError for RenderBundleError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {

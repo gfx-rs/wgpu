@@ -6,13 +6,15 @@ use crate::{
     },
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
-    id::{BindGroupLayoutId, BufferId, SamplerId, TextureId, TextureViewId, TlasId},
+    id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    resource::{Resource, ResourceInfo, ResourceType},
+    resource::{
+        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
+        Resource, ResourceInfo, ResourceType,
+    },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
-    track::{BindGroupStates, UsageConflict},
-    validation::{MissingBufferUsageError, MissingTextureUsageError},
+    track::{BindGroupStates, ResourceUsageCompatibilityError},
     Label,
 };
 
@@ -76,14 +78,14 @@ pub enum CreateBindGroupError {
     Device(#[from] DeviceError),
     #[error("Bind group layout is invalid")]
     InvalidLayout,
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(BufferId),
-    #[error("Texture view {0:?} is invalid")]
-    InvalidTextureView(TextureViewId),
-    #[error("Texture {0:?} is invalid")]
-    InvalidTexture(TextureId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(BufferId),
+    #[error("Texture view Id {0:?} is invalid")]
+    InvalidTextureViewId(TextureViewId),
     #[error("Sampler {0:?} is invalid")]
     InvalidSampler(SamplerId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error(
         "Binding count declared with at most {expected} items, but {actual} items were provided"
     )]
@@ -182,7 +184,7 @@ pub enum CreateBindGroupError {
     #[error("The adapter does not support read access for storages texture of format {0:?}")]
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
-    ResourceUsageConflict(#[from] UsageConflict),
+    ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(TlasId),
 }
@@ -200,10 +202,7 @@ impl PrettyError for CreateBindGroupError {
             Self::BindingSizeTooSmall { buffer, .. } => {
                 fmt.buffer_label(&buffer);
             }
-            Self::InvalidBuffer(id) => {
-                fmt.buffer_label(&id);
-            }
-            Self::InvalidTextureView(id) => {
+            Self::InvalidTextureViewId(id) => {
                 fmt.texture_view_label(&id);
             }
             Self::InvalidSampler(id) => {
@@ -523,6 +522,13 @@ impl<A: HalApi> Resource for BindGroupLayout<A> {
         &self.label
     }
 }
+
+impl<A: HalApi> ParentDevice<A> for BindGroupLayout<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &A::BindGroupLayout {
         self.raw.as_ref().unwrap()
@@ -756,6 +762,12 @@ impl<A: HalApi> Resource for PipelineLayout<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for PipelineLayout<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -888,17 +900,24 @@ impl<A: HalApi> Drop for BindGroup<A> {
 }
 
 impl<A: HalApi> BindGroup<A> {
-    pub(crate) fn raw(&self, guard: &SnatchGuard) -> Option<&A::BindGroup> {
+    pub(crate) fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&A::BindGroup, DestroyedResourceError> {
         // Clippy insist on writing it this way. The idea is to return None
         // if any of the raw buffer is not valid anymore.
         for buffer in &self.used_buffer_ranges {
-            let _ = buffer.buffer.raw(guard)?;
+            buffer.buffer.try_raw(guard)?;
         }
         for texture in &self.used_texture_ranges {
-            let _ = texture.texture.raw(guard)?;
+            texture.texture.try_raw(guard)?;
         }
-        self.raw.get(guard)
+
+        self.raw
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
+
     pub(crate) fn validate_dynamic_bindings(
         &self,
         bind_group_index: u32,
@@ -959,6 +978,12 @@ impl<A: HalApi> Resource for BindGroup<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
         &mut self.info
+    }
+}
+
+impl<A: HalApi> ParentDevice<A> for BindGroup<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
     }
 }
 

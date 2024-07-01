@@ -47,7 +47,7 @@ TODO(wumpf): This is still work in progress. Should write a bit more about it. A
 
 `wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
 
-Furthermore, you can now opt out of `wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::forget_lifetime`:  
+Furthermore, you can now opt out of `wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::forget_lifetime`:
 ```rust
 fn independent_cpass<'enc>(encoder: &'enc mut wgpu::CommandEncoder) -> wgpu::ComputePass<'static> {
     let cpass: wgpu::ComputePass<'enc> = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
@@ -126,14 +126,21 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 
 #### Naga
 
+- Added -D, --defines option to naga CLI to define preprocessor macros by @theomonnom in [#5859](https://github.com/gfx-rs/wgpu/pull/5859)
+- Added type upgrades to SPIR-V atomic support. Added related infrastructure. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5775](https://github.com/gfx-rs/wgpu/pull/5775).
 - Implement `WGSL`'s `unpack4xI8`,`unpack4xU8`,`pack4xI8` and `pack4xU8`. By @VlaDexa in [#5424](https://github.com/gfx-rs/wgpu/pull/5424)
 - Began work adding support for atomics to the SPIR-V frontend. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5702](https://github.com/gfx-rs/wgpu/pull/5702).
+
+#### WebGPU
+
+- `include_wgsl!` is now callable in const contexts by @9SMTM6 in [#5872](https://github.com/gfx-rs/wgpu/pull/5872)
 
 ### Changes
 
 #### General
 
 - Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
+- `wgpu::Error` is now `Sync`, making it possible to be wrapped in `anyhow::Error` or `eyre::Report`. By @nolanderc in [#5820](https://github.com/gfx-rs/wgpu/pull/5820)
 
 #### Metal
 - Removed the `link` Cargo feature.
@@ -151,6 +158,11 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 - Ensure render pipelines have at least 1 target. By @ErichDonGubler in [#5715](https://github.com/gfx-rs/wgpu/pull/5715)
 - `wgpu::ComputePass` now internally takes ownership of `QuerySet` for both `wgpu::ComputePassTimestampWrites` as well as timestamp writes and statistics query, fixing crashes when destroying `QuerySet` before ending the pass. By @wumpf in [#5671](https://github.com/gfx-rs/wgpu/pull/5671)
 - Validate resources passed during compute pass recording for mismatching device. By @wumpf in [#5779](https://github.com/gfx-rs/wgpu/pull/5779)
+- Fix a `CommandBuffer` leak. By @cwfitzgerald and @nical in [#5141](https://github.com/gfx-rs/wgpu/pull/5141)
+
+#### DX12
+
+- Do not feed `&""` to `D3DCompile`, by @workingjubilee in [#5812](https://github.com/gfx-rs/wgpu/issues/5812).
 
 #### Metal
 
@@ -174,6 +186,7 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 #### Naga
 
 - In spv-out don't decorate a `BindingArray`'s type with `Block` if the type is a struct with a runtime array by @Vecvec in [#5776](https://github.com/gfx-rs/wgpu/pull/5776)
+- Add `packed` as a keyword for GLSL by @kjarosh in [#5855](https://github.com/gfx-rs/wgpu/pull/5855)
 
 ## v0.20.0 (2024-04-28)
 

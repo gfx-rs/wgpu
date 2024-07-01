@@ -9,7 +9,7 @@ use crate::{
     hal_api::HalApi,
     id::{self, Id},
     init_tracker::MemoryInitKind,
-    resource::{QuerySet, Resource},
+    resource::{DestroyedResourceError, ParentDevice, QuerySet},
     storage::Storage,
     Epoch, FastHashMap, Index,
 };
@@ -49,10 +49,9 @@ impl<A: HalApi> QueryResetMap<A> {
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
         query_set_storage: &Storage<QuerySet<A>>,
-        backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
         for (query_set_id, (state, epoch)) in self.map.drain() {
-            let id = Id::zip(query_set_id, epoch, backend);
+            let id = Id::zip(query_set_id, epoch, A::VARIANT);
             let query_set = query_set_storage.get(id).map_err(|_| id)?;
 
             debug_assert_eq!(state.len(), query_set.desc.count as usize);
@@ -114,8 +113,10 @@ pub enum QueryError {
     Use(#[from] QueryUseError),
     #[error("Error encountered while trying to resolve a query")]
     Resolve(#[from] ResolveError),
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(id::BufferId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(id::BufferId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("QuerySet {0:?} is invalid or destroyed")]
     InvalidQuerySet(id::QuerySetId),
 }
@@ -123,11 +124,8 @@ pub enum QueryError {
 impl crate::error::PrettyError for QueryError {
     fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
         fmt.error(self);
-        match *self {
-            Self::InvalidBuffer(id) => fmt.buffer_label(&id),
-            Self::InvalidQuerySet(id) => fmt.query_set_label(&id),
-
-            _ => {}
+        if let Self::InvalidQuerySet(id) = *self {
+            fmt.query_set_label(&id)
         }
     }
 }
@@ -355,10 +353,11 @@ impl Global {
         let raw_encoder = encoder.open()?;
 
         let query_set_guard = hub.query_sets.read();
-        let query_set = tracker
-            .query_sets
-            .add_single(&*query_set_guard, query_set_id)
-            .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
+        let query_set = query_set_guard
+            .get(query_set_id)
+            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
+
+        tracker.query_sets.add_single(query_set);
 
         query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
@@ -399,31 +398,26 @@ impl Global {
         if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
+
         let query_set_guard = hub.query_sets.read();
-        let query_set = tracker
-            .query_sets
-            .add_single(&*query_set_guard, query_set_id)
-            .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
+        let query_set = query_set_guard
+            .get(query_set_id)
+            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
 
-        if query_set.device.as_info().id() != cmd_buf.device.as_info().id() {
-            return Err(DeviceError::WrongDevice.into());
-        }
+        tracker.query_sets.add_single(query_set);
 
-        let (dst_buffer, dst_pending) = {
-            let buffer_guard = hub.buffers.read();
-            let dst_buffer = buffer_guard
-                .get(destination)
-                .map_err(|_| QueryError::InvalidBuffer(destination))?;
+        query_set.same_device_as(cmd_buf.as_ref())?;
 
-            if dst_buffer.device.as_info().id() != cmd_buf.device.as_info().id() {
-                return Err(DeviceError::WrongDevice.into());
-            }
+        let dst_buffer = hub
+            .buffers
+            .get(destination)
+            .map_err(|_| QueryError::InvalidBufferId(destination))?;
 
-            tracker
-                .buffers
-                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
-                .ok_or(QueryError::InvalidBuffer(destination))?
-        };
+        dst_buffer.same_device_as(cmd_buf.as_ref())?;
+
+        let dst_pending = tracker
+            .buffers
+            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
 
         let snatch_guard = dst_buffer.device.snatchable_lock.read();
 
@@ -473,9 +467,7 @@ impl Global {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
-        let raw_dst_buffer = dst_buffer
-            .raw(&snatch_guard)
-            .ok_or(QueryError::InvalidBuffer(destination))?;
+        let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
 
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.into_iter());

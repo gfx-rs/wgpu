@@ -15,10 +15,9 @@ use crate::{
     hal_api::HalApi,
     hal_label, id,
     init_tracker::MemoryInitKind,
-    resource::{self, Resource},
+    resource::{self, DestroyedResourceError, MissingBufferUsageError, ParentDevice, Resource},
     snatch::SnatchGuard,
-    track::{Tracker, TrackerIndex, UsageConflict, UsageScope},
-    validation::{check_buffer_usage, MissingBufferUsageError},
+    track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
     Label,
 };
 
@@ -53,11 +52,6 @@ pub struct ComputePass<A: HalApi> {
     // Resource binding dedupe state.
     current_bind_groups: BindGroupStateChange,
     current_pipeline: StateChange<id::ComputePipelineId>,
-
-    /// The device that this pass is associated with.
-    ///
-    /// Used for quick validation during recording.
-    device_id: id::DeviceId,
 }
 
 impl<A: HalApi> ComputePass<A> {
@@ -68,10 +62,6 @@ impl<A: HalApi> ComputePass<A> {
             timestamp_writes,
         } = desc;
 
-        let device_id = parent
-            .as_ref()
-            .map_or(id::DeviceId::dummy(0), |p| p.device.as_info().id());
-
         Self {
             base: Some(BasePass::new(label)),
             parent,
@@ -79,8 +69,6 @@ impl<A: HalApi> ComputePass<A> {
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
-
-            device_id,
         }
     }
 
@@ -170,28 +158,26 @@ pub enum ComputePassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
-    #[error("Bind group at index {0:?} is invalid")]
-    InvalidBindGroup(u32),
-    #[error("Device {0:?} is invalid")]
-    InvalidDevice(id::DeviceId),
+    #[error("BindGroupId {0:?} is invalid")]
+    InvalidBindGroupId(id::BindGroupId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
     InvalidPipeline(id::ComputePipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
-    #[error("Indirect buffer {0:?} is invalid or destroyed")]
-    InvalidIndirectBuffer(id::BufferId),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
     IndirectBufferOverrun {
         offset: u64,
         end_offset: u64,
         buffer_size: u64,
     },
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(id::BufferId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(id::BufferId),
     #[error(transparent)]
-    ResourceUsageConflict(#[from] UsageConflict),
+    ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
@@ -224,9 +210,6 @@ impl PrettyError for ComputePassErrorInner {
         match *self {
             Self::InvalidPipeline(id) => {
                 fmt.compute_pipeline_label(&id);
-            }
-            Self::InvalidIndirectBuffer(id) => {
-                fmt.buffer_label(&id);
             }
             Self::Dispatch(DispatchError::IncompatibleBindGroup { ref diff, .. }) => {
                 for d in diff {
@@ -302,7 +285,7 @@ impl<'a, A: HalApi> State<'a, A> {
         base_trackers: &mut Tracker<A>,
         indirect_buffer: Option<TrackerIndex>,
         snatch_guard: &SnatchGuard,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         for bind_group in self.binder.list_active() {
             unsafe { self.scope.merge_bind_group(&bind_group.used)? };
             // Note: stateless trackers are not merged: the lifetime reference
@@ -361,11 +344,8 @@ impl Global {
                         );
                     };
 
-                    if query_set.device.as_info().id() != cmd_buf.device.as_info().id() {
-                        return (
-                            ComputePass::new(None, arc_desc),
-                            Some(CommandEncoderError::WrongDeviceForTimestampWritesQuerySet),
-                        );
+                    if let Err(e) = query_set.same_device_as(cmd_buf.as_ref()) {
+                        return (ComputePass::new(None, arc_desc), Some(e.into()));
                     }
 
                     Some(ArcComputePassTimestampWrites {
@@ -466,12 +446,7 @@ impl Global {
         let pass_scope = PassErrorScope::Pass(Some(cmd_buf.as_info().id()));
 
         let device = &cmd_buf.device;
-        if !device.is_valid() {
-            return Err(ComputePassErrorInner::InvalidDevice(
-                cmd_buf.device.as_info().id(),
-            ))
-            .map_pass_err(pass_scope);
-        }
+        device.check_is_valid().map_pass_err(pass_scope)?;
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -593,6 +568,8 @@ impl Global {
                 } => {
                     let scope = PassErrorScope::SetBindGroup(bind_group.as_info().id());
 
+                    bind_group.same_device_as(cmd_buf).map_pass_err(scope)?;
+
                     let max_bind_groups = cmd_buf.limits.max_bind_groups;
                     if index >= max_bind_groups {
                         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
@@ -652,10 +629,7 @@ impl Global {
                         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
                             if let Some(group) = e.group.as_ref() {
-                                let raw_bg = group
-                                    .raw(&snatch_guard)
-                                    .ok_or(ComputePassErrorInner::InvalidBindGroup(i as u32))
-                                    .map_pass_err(scope)?;
+                                let raw_bg = group.try_raw(&snatch_guard).map_pass_err(scope)?;
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
@@ -671,6 +645,8 @@ impl Global {
                 ArcComputeCommand::SetPipeline(pipeline) => {
                     let pipeline_id = pipeline.as_info().id();
                     let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
+
+                    pipeline.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     state.pipeline = Some(pipeline_id);
 
@@ -696,10 +672,8 @@ impl Global {
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {
                                 if let Some(group) = e.group.as_ref() {
-                                    let raw_bg = group
-                                        .raw(&snatch_guard)
-                                        .ok_or(ComputePassErrorInner::InvalidBindGroup(i as u32))
-                                        .map_pass_err(scope)?;
+                                    let raw_bg =
+                                        group.try_raw(&snatch_guard).map_pass_err(scope)?;
                                     unsafe {
                                         raw.set_bind_group(
                                             pipeline.layout.raw(),
@@ -805,11 +779,12 @@ impl Global {
                     }
                 }
                 ArcComputeCommand::DispatchIndirect { buffer, offset } => {
-                    let buffer_id = buffer.as_info().id();
                     let scope = PassErrorScope::Dispatch {
                         indirect: true,
                         pipeline: state.pipeline,
                     };
+
+                    buffer.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     state.is_ready().map_pass_err(scope)?;
 
@@ -820,9 +795,10 @@ impl Global {
                     state
                         .scope
                         .buffers
-                        .insert_merge_single(buffer.clone(), hal::BufferUses::INDIRECT)
+                        .merge_single(&buffer, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::INDIRECT)
+                    buffer
+                        .check_usage(wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
@@ -835,11 +811,7 @@ impl Global {
                         .map_pass_err(scope);
                     }
 
-                    let buf_raw = buffer
-                        .raw
-                        .get(&snatch_guard)
-                        .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
-                        .map_pass_err(scope)?;
+                    let buf_raw = buffer.try_raw(&snatch_guard).map_pass_err(scope)?;
 
                     let stride = 3 * 4; // 3 integers, x/y/z group size
 
@@ -904,6 +876,8 @@ impl Global {
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
 
+                    query_set.same_device_as(cmd_buf).map_pass_err(scope)?;
+
                     device
                         .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                         .map_pass_err(scope)?;
@@ -919,6 +893,8 @@ impl Global {
                     query_index,
                 } => {
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+
+                    query_set.same_device_as(cmd_buf).map_pass_err(scope)?;
 
                     let query_set = tracker.query_sets.insert_single(query_set);
 
@@ -1005,12 +981,8 @@ impl Global {
             .bind_groups
             .read()
             .get_owned(bind_group_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBindGroup(index))
+            .map_err(|_| ComputePassErrorInner::InvalidBindGroupId(bind_group_id))
             .map_pass_err(scope)?;
-
-        if bind_group.device.as_info().id() != pass.device_id {
-            return Err(DeviceError::WrongDevice).map_pass_err(scope);
-        }
 
         base.commands.push(ArcComputeCommand::SetBindGroup {
             index,
@@ -1030,7 +1002,6 @@ impl Global {
 
         let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
 
-        let device_id = pass.device_id;
         let base = pass.base_mut(scope)?;
         if redundant {
             // Do redundant early-out **after** checking whether the pass is ended or not.
@@ -1044,10 +1015,6 @@ impl Global {
             .get_owned(pipeline_id)
             .map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
             .map_pass_err(scope)?;
-
-        if pipeline.device.as_info().id() != device_id {
-            return Err(DeviceError::WrongDevice).map_pass_err(scope);
-        }
 
         base.commands.push(ArcComputeCommand::SetPipeline(pipeline));
 
@@ -1122,19 +1089,13 @@ impl Global {
             indirect: true,
             pipeline: pass.current_pipeline.last_state,
         };
-        let device_id = pass.device_id;
         let base = pass.base_mut(scope)?;
 
         let buffer = hub
             .buffers
-            .read()
-            .get_owned(buffer_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBuffer(buffer_id))
+            .get(buffer_id)
+            .map_err(|_| ComputePassErrorInner::InvalidBufferId(buffer_id))
             .map_pass_err(scope)?;
-
-        if buffer.device.as_info().id() != device_id {
-            return Err(DeviceError::WrongDevice).map_pass_err(scope);
-        }
 
         base.commands
             .push(ArcComputeCommand::<A>::DispatchIndirect { buffer, offset });
@@ -1199,7 +1160,6 @@ impl Global {
         query_index: u32,
     ) -> Result<(), ComputePassError> {
         let scope = PassErrorScope::WriteTimestamp;
-        let device_id = pass.device_id;
         let base = pass.base_mut(scope)?;
 
         let hub = A::hub(self);
@@ -1209,10 +1169,6 @@ impl Global {
             .get_owned(query_set_id)
             .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
             .map_pass_err(scope)?;
-
-        if query_set.device.as_info().id() != device_id {
-            return Err(DeviceError::WrongDevice).map_pass_err(scope);
-        }
 
         base.commands.push(ArcComputeCommand::WriteTimestamp {
             query_set,
@@ -1229,7 +1185,6 @@ impl Global {
         query_index: u32,
     ) -> Result<(), ComputePassError> {
         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
-        let device_id = pass.device_id;
         let base = pass.base_mut(scope)?;
 
         let hub = A::hub(self);
@@ -1239,10 +1194,6 @@ impl Global {
             .get_owned(query_set_id)
             .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
             .map_pass_err(scope)?;
-
-        if query_set.device.as_info().id() != device_id {
-            return Err(DeviceError::WrongDevice).map_pass_err(scope);
-        }
 
         base.commands
             .push(ArcComputeCommand::BeginPipelineStatisticsQuery {

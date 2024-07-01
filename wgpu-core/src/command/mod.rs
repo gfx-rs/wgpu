@@ -31,7 +31,7 @@ use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{BlasAction, TlasAction};
-use crate::resource::{Resource, ResourceInfo, ResourceType};
+use crate::resource::{ParentDevice, Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
@@ -246,9 +246,6 @@ pub(crate) struct BakedCommands<A: HalApi> {
     blas_actions: Vec<BlasAction>,
     tlas_actions: Vec<TlasAction>,
 }
-
-pub(crate) struct DestroyedBufferError(pub id::BufferId);
-pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 /// The mutable state of a [`CommandBuffer`].
 pub struct CommandBufferMutable<A: HalApi> {
@@ -551,6 +548,12 @@ impl<A: HalApi> Resource for CommandBuffer<A> {
     }
 }
 
+impl<A: HalApi> ParentDevice<A> for CommandBuffer<A> {
+    fn device(&self) -> &Arc<Device<A>> {
+        &self.device
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct BasePassRef<'a, C> {
     pub label: Option<&'a str>,
@@ -643,11 +646,8 @@ pub enum CommandEncoderError {
     Device(#[from] DeviceError),
     #[error("Command encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
     Locked,
-
     #[error("QuerySet provided for pass timestamp writes is invalid.")]
     InvalidTimestampWritesQuerySetId,
-    #[error("QuerySet provided for pass timestamp writes that was created by a different device.")]
-    WrongDeviceForTimestampWritesQuerySet,
 }
 
 impl Global {

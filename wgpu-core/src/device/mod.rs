@@ -3,7 +3,9 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
-    resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
+    resource::{
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, ResourceErrorIdent,
+    },
     snatch::SnatchGuard,
     Label, DOWNLEVEL_ERROR_MESSAGE,
 };
@@ -322,9 +324,7 @@ fn map_buffer<A: HalApi>(
     kind: HostMap,
     snatch_guard: &SnatchGuard,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
-    let raw_buffer = buffer
-        .raw(snatch_guard)
-        .ok_or(BufferAccessError::Destroyed)?;
+    let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
             .map_err(DeviceError::from)?
@@ -379,25 +379,47 @@ fn map_buffer<A: HalApi>(
     Ok(mapping.ptr)
 }
 
-#[derive(Clone, Debug, Error)]
-#[error("Device is invalid")]
-pub struct InvalidDevice;
+#[derive(Clone, Debug)]
+pub struct DeviceMismatch {
+    pub(super) res: ResourceErrorIdent,
+    pub(super) res_device: ResourceErrorIdent,
+    pub(super) target: Option<ResourceErrorIdent>,
+    pub(super) target_device: ResourceErrorIdent,
+}
+
+impl std::fmt::Display for DeviceMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{} of {} doesn't match {}",
+            self.res_device, self.res, self.target_device
+        )?;
+        if let Some(target) = self.target.as_ref() {
+            write!(f, " of {target}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for DeviceMismatch {}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DeviceError {
-    #[error("Parent device is invalid.")]
-    Invalid,
+    #[error("{0} is invalid.")]
+    Invalid(ResourceErrorIdent),
     #[error("Parent device is lost")]
     Lost,
     #[error("Not enough memory left.")]
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
+    #[error("DeviceId is invalid")]
+    InvalidDeviceId,
     #[error("QueueId is invalid")]
     InvalidQueueId,
-    #[error("Attempt to use a resource with a different device from the one that created it")]
-    WrongDevice,
+    #[error(transparent)]
+    DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
 
 impl From<hal::DeviceError> for DeviceError {
@@ -526,25 +548,10 @@ pub fn create_validator(
         Caps::RAY_QUERY,
         features.intersects(wgt::Features::RAY_QUERY),
     );
-
-    let mut subgroup_stages = naga::valid::ShaderStages::empty();
-    subgroup_stages.set(
-        naga::valid::ShaderStages::COMPUTE | naga::valid::ShaderStages::FRAGMENT,
-        features.contains(wgt::Features::SUBGROUP),
-    );
-    subgroup_stages.set(
-        naga::valid::ShaderStages::VERTEX,
+    caps.set(
+        Caps::SUBGROUP_VERTEX_STAGE,
         features.contains(wgt::Features::SUBGROUP_VERTEX),
     );
 
-    let subgroup_operations = if caps.contains(Caps::SUBGROUP) {
-        use naga::valid::SubgroupOperationSet as S;
-        S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
-    } else {
-        naga::valid::SubgroupOperationSet::empty()
-    };
-    let mut validator = naga::valid::Validator::new(flags, caps);
-    validator.subgroup_stages(subgroup_stages);
-    validator.subgroup_operations(subgroup_operations);
-    validator
+    naga::valid::Validator::new(flags, caps)
 }

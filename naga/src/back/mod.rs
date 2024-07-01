@@ -28,11 +28,25 @@ pub mod pipeline_constants;
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
 pub const INDENT: &str = "    ";
-/// Prefix used for baking.
-pub const BAKE_PREFIX: &str = "_e";
 
 /// Expressions that need baking.
 pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expression>>;
+
+/// A type for displaying expression handles as baking identifiers.
+///
+/// Given an [`Expression`] [`Handle`] `h`, `Baked(h)` implements
+/// [`std::fmt::Display`], showing the handle's index prefixed by
+/// `_e`.
+///
+/// [`Expression`]: crate::Expression
+/// [`Handle`]: crate::Handle
+struct Baked(crate::Handle<crate::Expression>);
+
+impl std::fmt::Display for Baked {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.write_prefixed(f, "_e")
+    }
+}
 
 /// Specifies the values of pipeline-overridable constants in the shader module.
 ///

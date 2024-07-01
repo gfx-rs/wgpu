@@ -7,9 +7,10 @@ use crate::{
     hal_api::HalApi,
     id,
     pipeline::RenderPipeline,
-    resource::{Buffer, QuerySet},
-    track::UsageConflict,
-    validation::{MissingBufferUsageError, MissingTextureUsageError},
+    resource::{
+        Buffer, DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, QuerySet,
+    },
+    track::ResourceUsageCompatibilityError,
 };
 use wgt::{BufferAddress, BufferSize, Color, VertexStepMode};
 
@@ -69,8 +70,10 @@ pub enum DrawError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum RenderCommandError {
-    #[error("Bind group {0:?} is invalid")]
-    InvalidBindGroup(id::BindGroupId),
+    #[error("BufferId {0:?} is invalid")]
+    InvalidBufferId(id::BufferId),
+    #[error("BindGroupId {0:?} is invalid")]
+    InvalidBindGroupId(id::BindGroupId),
     #[error("Render bundle {0:?} is invalid")]
     InvalidRenderBundle(id::RenderBundleId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
@@ -90,9 +93,9 @@ pub enum RenderCommandError {
     #[error("Pipeline writes to depth/stencil, while the pass has read-only depth/stencil")]
     IncompatiblePipelineRods,
     #[error(transparent)]
-    UsageConflict(#[from] UsageConflict),
-    #[error("Buffer {0:?} is destroyed")]
-    DestroyedBuffer(id::BufferId),
+    ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
@@ -112,18 +115,11 @@ impl crate::error::PrettyError for RenderCommandError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
         match *self {
-            Self::InvalidBindGroup(id) => {
+            Self::InvalidBindGroupId(id) => {
                 fmt.bind_group_label(&id);
             }
             Self::InvalidPipeline(id) => {
                 fmt.render_pipeline_label(&id);
-            }
-            Self::UsageConflict(UsageConflict::TextureInvalid { id }) => {
-                fmt.texture_label(&id);
-            }
-            Self::UsageConflict(UsageConflict::BufferInvalid { id })
-            | Self::DestroyedBuffer(id) => {
-                fmt.buffer_label(&id);
             }
             _ => {}
         };

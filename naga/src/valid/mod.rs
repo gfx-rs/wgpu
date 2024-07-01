@@ -124,9 +124,13 @@ bitflags::bitflags! {
         /// Support for 64-bit signed and unsigned integers.
         const SHADER_INT64 = 0x8000;
         /// Support for subgroup operations.
+        /// Implies support for subgroup operations in both fragment and compute stages,
+        /// but not necessarily in the vertex stage, which requires [`Capabilities::SUBGROUP_VERTEX_STAGE`].
         const SUBGROUP = 0x10000;
         /// Support for subgroup barriers.
         const SUBGROUP_BARRIER = 0x20000;
+        /// Support for subgroup operations in the vertex stage.
+        const SUBGROUP_VERTEX_STAGE = 0x40000;
         /// Support for [`AtomicFunction::Min`] and [`AtomicFunction::Max`] on
         /// 64-bit integers in the [`Storage`] address space, when the return
         /// value is not used.
@@ -136,9 +140,9 @@ bitflags::bitflags! {
         /// [`AtomicFunction::Min`]: crate::AtomicFunction::Min
         /// [`AtomicFunction::Max`]: crate::AtomicFunction::Max
         /// [`Storage`]: crate::AddressSpace::Storage
-        const SHADER_INT64_ATOMIC_MIN_MAX = 0x40000;
+        const SHADER_INT64_ATOMIC_MIN_MAX = 0x80000;
         /// Support for all atomic operations on 64-bit integers.
-        const SHADER_INT64_ATOMIC_ALL_OPS = 0x80000;
+        const SHADER_INT64_ATOMIC_ALL_OPS = 0x100000;
     }
 }
 
@@ -416,11 +420,28 @@ impl crate::TypeInner {
 impl Validator {
     /// Construct a new validator instance.
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
+        let subgroup_operations = if capabilities.contains(Capabilities::SUBGROUP) {
+            use SubgroupOperationSet as S;
+            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+        } else {
+            SubgroupOperationSet::empty()
+        };
+        let subgroup_stages = {
+            let mut stages = ShaderStages::empty();
+            if capabilities.contains(Capabilities::SUBGROUP_VERTEX_STAGE) {
+                stages |= ShaderStages::VERTEX;
+            }
+            if capabilities.contains(Capabilities::SUBGROUP) {
+                stages |= ShaderStages::FRAGMENT | ShaderStages::COMPUTE;
+            }
+            stages
+        };
+
         Validator {
             flags,
             capabilities,
-            subgroup_stages: ShaderStages::empty(),
-            subgroup_operations: SubgroupOperationSet::empty(),
+            subgroup_stages,
+            subgroup_operations,
             types: Vec::new(),
             layouter: Layouter::default(),
             location_mask: BitSet::new(),

@@ -261,6 +261,7 @@ pub struct Device {
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    counters: wgt::HalCounters,
 }
 
 unsafe impl Send for Device {}

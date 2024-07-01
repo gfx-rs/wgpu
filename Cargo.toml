@@ -123,7 +123,7 @@ smallvec = "1"
 static_assertions = "1.1.0"
 tracy-client = "0.17"
 thiserror = "1"
-wgpu = { version = "0.20.0", path = "./wgpu" }
+wgpu = { version = "0.20.0", path = "./wgpu", default-features = false }
 wgpu-core = { version = "0.20.0", path = "./wgpu-core" }
 wgpu-example = { version = "0.20.0", path = "./examples/common" }
 wgpu-macros = { version = "0.20.0", path = "./wgpu-macros" }

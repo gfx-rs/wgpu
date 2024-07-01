@@ -367,6 +367,12 @@ impl FrameCounter {
 
 async fn start<E: Example>(title: &str) {
     init_logger();
+
+    log::debug!(
+        "Enabled backends: {:?}",
+        wgpu::Instance::enabled_backend_features()
+    );
+
     let window_loop = EventLoopWrapper::new(title);
     let mut surface = SurfaceWrapper::new();
     let context = ExampleContext::init_async::<E>(&mut surface, window_loop.window.clone()).await;

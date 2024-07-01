@@ -30,6 +30,8 @@ targets = [
 [features]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
+# Enables some internal instrumentation for debugging purposes.
+counters = []
 
 [dependencies]
 bitflags = "2"

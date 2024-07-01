@@ -10,14 +10,13 @@ use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 use super::{PendingTransition, ResourceTracker, TrackerIndex};
 use crate::{
     hal_api::HalApi,
-    id::BufferId,
     lock::{rank, Mutex},
     resource::{Buffer, Resource},
+    resource_log,
     snatch::SnatchGuard,
-    storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
-        ResourceUses, UsageConflict,
+        ResourceUsageCompatibilityError, ResourceUses,
     },
 };
 use hal::{BufferBarrier, BufferUses};
@@ -89,18 +88,9 @@ impl<A: HalApi> BufferBindGroupState<A> {
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single<'a>(
-        &self,
-        storage: &'a Storage<Buffer<A>>,
-        id: BufferId,
-        state: BufferUses,
-    ) -> Option<&'a Arc<Buffer<A>>> {
-        let buffer = storage.get(id).ok()?;
-
+    pub fn add_single(&self, buffer: &Arc<Buffer<A>>, state: BufferUses) {
         let mut buffers = self.buffers.lock();
         buffers.push((buffer.clone(), state));
-
-        Some(buffer)
     }
 }
 
@@ -168,7 +158,7 @@ impl<A: HalApi> BufferUsageScope<A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BufferBindGroupState<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let buffers = bind_group.buffers.lock();
         for &(ref resource, state) in &*buffers {
             let index = resource.as_info().tracker_index().as_usize();
@@ -198,7 +188,10 @@ impl<A: HalApi> BufferUsageScope<A> {
     ///
     /// If the given tracker uses IDs higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn merge_usage_scope(&mut self, scope: &Self) -> Result<(), UsageConflict> {
+    pub fn merge_usage_scope(
+        &mut self,
+        scope: &Self,
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let incoming_size = scope.state.len();
         if incoming_size > self.state.len() {
             self.set_size(incoming_size);
@@ -235,32 +228,11 @@ impl<A: HalApi> BufferUsageScope<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn merge_single<'a>(
+    pub fn merge_single(
         &mut self,
-        storage: &'a Storage<Buffer<A>>,
-        id: BufferId,
+        buffer: &Arc<Buffer<A>>,
         new_state: BufferUses,
-    ) -> Result<&'a Arc<Buffer<A>>, UsageConflict> {
-        let buffer = storage
-            .get(id)
-            .map_err(|_| UsageConflict::BufferInvalid { id })?;
-
-        self.insert_merge_single(buffer.clone(), new_state)
-            .map(|_| buffer)
-    }
-
-    /// Merge a single state into the UsageScope, using an already resolved buffer.
-    ///
-    /// If the resulting state is invalid, returns a usage
-    /// conflict with the details of the invalid state.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_merge_single(
-        &mut self,
-        buffer: Arc<Buffer<A>>,
-        new_state: BufferUses,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         let index = buffer.info.tracker_index().as_usize();
 
         self.allow_index(index);
@@ -276,7 +248,7 @@ impl<A: HalApi> BufferUsageScope<A> {
                 index,
                 BufferStateProvider::Direct { state: new_state },
                 ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(buffer),
+                    resource: Cow::Owned(buffer.clone()),
                 },
             )?;
         }
@@ -284,9 +256,6 @@ impl<A: HalApi> BufferUsageScope<A> {
         Ok(())
     }
 }
-
-pub(crate) type SetSingleResult<A> =
-    Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>;
 
 /// Stores all buffer state within a command buffer or device.
 pub(crate) struct BufferTracker<A: HalApi> {
@@ -334,13 +303,27 @@ impl<A: HalApi> ResourceTracker for BufferTracker<A> {
                 //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
                 //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
+                    resource_log!(
+                        "BufferTracker::remove_abandoned: removing {:?}",
+                        self.metadata.get_resource_unchecked(index).as_info().id()
+                    );
+
                     self.metadata.remove(index);
                     return true;
                 }
 
+                resource_log!(
+                    "BufferTracker::remove_abandoned: not removing {:?}, ref count {}",
+                    self.metadata.get_resource_unchecked(index).as_info().id(),
+                    existing_ref_count
+                );
+
                 return false;
             }
         }
+
+        resource_log!("BufferTracker::remove_abandoned: does not contain index {index:?}",);
+
         true
     }
 }
@@ -439,7 +422,11 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_single(&mut self, buffer: &Arc<Buffer<A>>, state: BufferUses) -> SetSingleResult<A> {
+    pub fn set_single(
+        &mut self,
+        buffer: &Arc<Buffer<A>>,
+        state: BufferUses,
+    ) -> Option<PendingTransition<BufferUses>> {
         let index: usize = buffer.as_info().tracker_index().as_usize();
 
         self.allow_index(index);
@@ -463,7 +450,7 @@ impl<A: HalApi> BufferTracker<A> {
 
         strict_assert!(self.temp.len() <= 1);
 
-        Some((buffer.clone(), self.temp.pop()))
+        self.temp.pop()
     }
 
     /// Sets the given state for all buffers in the given tracker.
@@ -657,7 +644,7 @@ unsafe fn insert_or_merge<A: HalApi>(
     index: usize,
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
-) -> Result<(), UsageConflict> {
+) -> Result<(), ResourceUsageCompatibilityError> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
@@ -764,8 +751,8 @@ unsafe fn insert<A: HalApi>(
         }
         *current_states.get_unchecked_mut(index) = new_end_state;
 
-        let resource = metadata_provider.get_own(index);
-        resource_metadata.insert(index, resource);
+        let resource = metadata_provider.get(index);
+        resource_metadata.insert(index, resource.clone());
     }
 }
 
@@ -776,15 +763,15 @@ unsafe fn merge<A: HalApi>(
     index: usize,
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
-) -> Result<(), UsageConflict> {
+) -> Result<(), ResourceUsageCompatibilityError> {
     let current_state = unsafe { current_states.get_unchecked_mut(index) };
     let new_state = unsafe { state_provider.get_state(index) };
 
     let merged_state = *current_state | new_state;
 
     if invalid_resource_state(merged_state) {
-        return Err(UsageConflict::from_buffer(
-            unsafe { metadata_provider.get_own(index).info.id() },
+        return Err(ResourceUsageCompatibilityError::from_buffer(
+            unsafe { metadata_provider.get(index) },
             *current_state,
             new_state,
         ));

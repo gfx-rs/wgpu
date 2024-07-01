@@ -381,7 +381,7 @@ impl<'w> BlockContext<'w> {
     pub(super) fn get_handle_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
-                self.writer.global_variables[handle.index()].handle_id
+                self.writer.global_variables[handle].handle_id
             }
             crate::Expression::FunctionArgument(i) => {
                 self.function.parameters[i as usize].handle_id
@@ -974,7 +974,7 @@ impl<'w> BlockContext<'w> {
         };
 
         if let Some(offset_const) = offset {
-            let offset_id = self.writer.constant_ids[offset_const.index()];
+            let offset_id = self.writer.constant_ids[offset_const];
             main_instruction.add_operand(offset_id);
         }
 

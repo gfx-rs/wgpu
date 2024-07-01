@@ -15,9 +15,7 @@ use crate::{
     pipeline, present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
-        Resource,
     },
-    validation::check_buffer_usage,
     Label, LabelHelpers as _,
 };
 
@@ -32,7 +30,7 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 
-use super::{ImplicitPipelineIds, InvalidDevice, UserClosures};
+use super::{ImplicitPipelineIds, UserClosures};
 
 impl Global {
     pub fn adapter_is_surface_supported<A: HalApi>(
@@ -102,13 +100,13 @@ impl Global {
     pub fn device_features<A: HalApi>(
         &self,
         device_id: DeviceId,
-    ) -> Result<wgt::Features, InvalidDevice> {
+    ) -> Result<wgt::Features, DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         Ok(device.features)
     }
@@ -116,13 +114,13 @@ impl Global {
     pub fn device_limits<A: HalApi>(
         &self,
         device_id: DeviceId,
-    ) -> Result<wgt::Limits, InvalidDevice> {
+    ) -> Result<wgt::Limits, DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         Ok(device.limits.clone())
     }
@@ -130,13 +128,13 @@ impl Global {
     pub fn device_downlevel_properties<A: HalApi>(
         &self,
         device_id: DeviceId,
-    ) -> Result<wgt::DownlevelCapabilities, InvalidDevice> {
+    ) -> Result<wgt::DownlevelCapabilities, DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         Ok(device.downlevel.clone())
     }
@@ -153,20 +151,17 @@ impl Global {
         let fid = hub.buffers.prepare(id_in);
 
         let mut to_destroy: ArrayVec<resource::Buffer<A>, 2> = ArrayVec::new();
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => {
-                    break DeviceError::Invalid.into();
+                    break 'error DeviceError::InvalidDeviceId.into();
                 }
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             if desc.usage.is_empty() {
                 // Per spec, `usage` must not be zero.
-                break CreateBufferError::InvalidUsage(desc.usage);
+                break 'error CreateBufferError::InvalidUsage(desc.usage);
             }
 
             #[cfg(feature = "trace")]
@@ -182,7 +177,7 @@ impl Global {
             let buffer = match device.create_buffer(desc, false) {
                 Ok(buffer) => buffer,
                 Err(e) => {
-                    break e;
+                    break 'error e;
                 }
             };
 
@@ -206,7 +201,7 @@ impl Global {
                         Ok(ptr) => ptr,
                         Err(e) => {
                             to_destroy.push(buffer);
-                            break e.into();
+                            break 'error e.into();
                         }
                     }
                 };
@@ -230,7 +225,7 @@ impl Global {
                     Ok(stage) => Arc::new(stage),
                     Err(e) => {
                         to_destroy.push(buffer);
-                        break e;
+                        break 'error e;
                     }
                 };
 
@@ -240,7 +235,7 @@ impl Global {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         to_destroy.push(buffer);
-                        break CreateBufferError::Device(e.into());
+                        break 'error CreateBufferError::Device(e.into());
                     }
                 };
 
@@ -260,7 +255,15 @@ impl Global {
             };
 
             let (id, resource) = fid.assign(Arc::new(buffer));
-            api_log!("Device::create_buffer({desc:?}) -> {id:?}");
+            api_log!(
+                "Device::create_buffer({:?}{}) -> {id:?}",
+                desc.label.as_deref().unwrap_or(""),
+                if desc.mapped_at_creation {
+                    ", mapped_at_creation"
+                } else {
+                    ""
+                }
+            );
 
             device
                 .trackers
@@ -358,7 +361,7 @@ impl Global {
 
         hub.devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?
+            .map_err(|_| DeviceError::InvalidDeviceId)?
             .wait_for_submit(last_submission)
     }
 
@@ -377,17 +380,15 @@ impl Global {
         let device = hub
             .devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
         let snatch_guard = device.snatchable_lock.read();
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+        device.check_is_valid()?;
 
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
@@ -401,9 +402,7 @@ impl Global {
             });
         }
 
-        let raw_buf = buffer
-            .raw(&snatch_guard)
-            .ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = buffer.try_raw(&snatch_guard)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -439,23 +438,19 @@ impl Global {
         let device = hub
             .devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
+        device.check_is_valid()?;
 
         let snatch_guard = device.snatchable_lock.read();
 
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer_id, buffer.usage, wgt::BufferUsages::MAP_READ)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        buffer.check_usage(wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer
-            .raw(&snatch_guard)
-            .ok_or(BufferAccessError::Destroyed)?;
+        let raw_buf = buffer.try_raw(&snatch_guard)?;
         unsafe {
             let mapping = device
                 .raw()
@@ -524,8 +519,7 @@ impl Global {
             .lock()
             .as_ref()
             .unwrap()
-            .dst_buffers
-            .contains_key(&buffer_id)
+            .contains_buffer(&buffer)
         {
             device.lock_life().future_suspected_buffers.push(buffer);
         } else {
@@ -556,14 +550,11 @@ impl Global {
 
         let fid = hub.textures.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
@@ -571,7 +562,7 @@ impl Global {
 
             let texture = match device.create_texture(&device.adapter, desc) {
                 Ok(texture) => texture,
-                Err(error) => break error,
+                Err(error) => break 'error error,
             };
 
             let (id, resource) = fid.assign(Arc::new(texture));
@@ -610,14 +601,11 @@ impl Global {
 
         let fid = hub.textures.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -631,7 +619,7 @@ impl Global {
                 .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))
             {
                 Ok(features) => features,
-                Err(error) => break error,
+                Err(error) => break 'error error,
             };
 
             let mut texture = device.create_texture_from_hal(
@@ -685,14 +673,11 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.buffers.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             // NB: Any change done through the raw buffer handle will not be
             // recorded in the replay
@@ -758,8 +743,7 @@ impl Global {
                     .lock()
                     .as_ref()
                     .unwrap()
-                    .dst_textures
-                    .contains_key(&texture_id)
+                    .contains_texture(&texture)
                 {
                     device
                         .lock_life()
@@ -796,16 +780,18 @@ impl Global {
 
         let fid = hub.texture_views.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let texture = match hub.textures.get(texture_id) {
                 Ok(texture) => texture,
-                Err(_) => break resource::CreateTextureViewError::InvalidTexture,
+                Err(_) => {
+                    break 'error resource::CreateTextureViewError::InvalidTextureId(texture_id)
+                }
             };
             let device = &texture.device;
             {
                 let snatch_guard = device.snatchable_lock.read();
-                if texture.is_destroyed(&snatch_guard) {
-                    break resource::CreateTextureViewError::InvalidTexture;
+                if let Err(e) = texture.check_destroyed(&snatch_guard) {
+                    break 'error e.into();
                 }
             }
             #[cfg(feature = "trace")]
@@ -819,7 +805,7 @@ impl Global {
 
             let view = match unsafe { device.create_texture_view(&texture, desc) } {
                 Ok(view) => view,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(view));
@@ -885,14 +871,11 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.samplers.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -901,7 +884,7 @@ impl Global {
 
             let sampler = match device.create_sampler(desc) {
                 Ok(sampler) => sampler,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(sampler));
@@ -949,23 +932,25 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.bind_group_layouts.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
             }
 
+            // this check can't go in the body of `create_bind_group_layout` since the closure might not get called
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
+            }
+
             let entry_map = match bgl::EntryMap::from_entries(&device.limits, &desc.entries) {
                 Ok(map) => map,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             // Currently we make a distinction between fid.assign and fid.assign_existing. This distinction is incorrect,
@@ -994,7 +979,7 @@ impl Global {
 
             let layout = match bgl_result {
                 Ok(layout) => layout,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             // If the ID was not assigned, and we survived the above check,
@@ -1048,14 +1033,11 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.pipeline_layouts.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1064,7 +1046,7 @@ impl Global {
 
             let layout = match device.create_pipeline_layout(desc, &hub.bind_group_layouts) {
                 Ok(layout) => layout,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, _) = fid.assign(Arc::new(layout));
@@ -1106,14 +1088,11 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.bind_groups.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1122,16 +1101,12 @@ impl Global {
 
             let bind_group_layout = match hub.bind_group_layouts.get(desc.layout) {
                 Ok(layout) => layout,
-                Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
+                Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
             };
-
-            if bind_group_layout.device.as_info().id() != device.as_info().id() {
-                break DeviceError::WrongDevice.into();
-            }
 
             let bind_group = match device.create_bind_group(&bind_group_layout, desc, hub) {
                 Ok(bind_group) => bind_group,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(bind_group));
@@ -1203,14 +1178,11 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.shader_modules.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1246,7 +1218,7 @@ impl Global {
 
             let shader = match device.create_shader_module(desc, source) {
                 Ok(shader) => shader,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, _) = fid.assign(Arc::new(shader));
@@ -1281,14 +1253,11 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.shader_modules.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1304,7 +1273,7 @@ impl Global {
 
             let shader = match unsafe { device.create_shader_module_spirv(desc, &source) } {
                 Ok(shader) => shader,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
             let (id, _) = fid.assign(Arc::new(shader));
             api_log!("Device::create_shader_module_spirv -> {id:?}");
@@ -1342,31 +1311,16 @@ impl Global {
             .command_buffers
             .prepare(id_in.map(|id| id.into_command_buffer_id()));
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid,
+                Err(_) => break 'error DeviceError::InvalidDeviceId,
             };
-            if !device.is_valid() {
-                break DeviceError::Lost;
-            }
-            let Some(queue) = device.get_queue() else {
-                break DeviceError::InvalidQueueId;
+
+            let command_buffer = match device.create_command_encoder(&desc.label) {
+                Ok(command_buffer) => command_buffer,
+                Err(e) => break 'error e,
             };
-            let encoder = match device
-                .command_allocator
-                .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
-            {
-                Ok(raw) => raw,
-                Err(_) => break DeviceError::OutOfMemory,
-            };
-            let command_buffer = command::CommandBuffer::new(
-                encoder,
-                &device,
-                #[cfg(feature = "trace")]
-                device.trace.lock().is_some(),
-                desc.label.to_hal(device.instance_flags).map(str::to_owned),
-            );
 
             let (id, _) = fid.assign(Arc::new(command_buffer));
             api_log!("Device::create_command_encoder -> {id:?}");
@@ -1433,14 +1387,15 @@ impl Global {
 
         let fid = hub.render_bundles.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(bundle_encoder.parent()) {
                 Ok(device) => device,
-                Err(_) => break command::RenderBundleError::INVALID_DEVICE,
+                Err(_) => {
+                    break 'error command::RenderBundleError::from_device_error(
+                        DeviceError::InvalidDeviceId,
+                    );
+                }
             };
-            if !device.is_valid() {
-                break command::RenderBundleError::INVALID_DEVICE;
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1458,7 +1413,7 @@ impl Global {
 
             let render_bundle = match bundle_encoder.finish(desc, &device, hub) {
                 Ok(bundle) => bundle,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(render_bundle));
@@ -1502,15 +1457,11 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.query_sets.prepare(id_in);
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
-
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateQuerySet {
@@ -1521,7 +1472,7 @@ impl Global {
 
             let query_set = match device.create_query_set(desc) {
                 Ok(query_set) => query_set,
-                Err(err) => break err,
+                Err(err) => break 'error err,
             };
 
             let (id, resource) = fid.assign(Arc::new(query_set));
@@ -1579,14 +1530,11 @@ impl Global {
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
         let implicit_error_context = implicit_context.clone();
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateRenderPipeline {
@@ -1599,7 +1547,7 @@ impl Global {
             let pipeline =
                 match device.create_render_pipeline(&device.adapter, desc, implicit_context, hub) {
                     Ok(pair) => pair,
-                    Err(e) => break e,
+                    Err(e) => break 'error e,
                 };
 
             let (id, resource) = fid.assign(Arc::new(pipeline));
@@ -1651,14 +1599,16 @@ impl Global {
     ) {
         let hub = A::hub(self);
 
-        let error = loop {
+        let error = 'error: {
             let pipeline = match hub.render_pipelines.get(pipeline_id) {
                 Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
                 Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                None => {
+                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
+                }
             };
             return (id, None);
         };
@@ -1713,14 +1663,11 @@ impl Global {
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
         let implicit_error_context = implicit_context.clone();
 
-        let error = loop {
+        let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1732,7 +1679,7 @@ impl Global {
             }
             let pipeline = match device.create_compute_pipeline(desc, implicit_context, hub) {
                 Ok(pair) => pair,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(pipeline));
@@ -1780,15 +1727,17 @@ impl Global {
     ) {
         let hub = A::hub(self);
 
-        let error = loop {
+        let error = 'error: {
             let pipeline = match hub.compute_pipelines.get(pipeline_id) {
                 Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
 
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
                 Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                None => {
+                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
+                }
             };
 
             return (id, None);
@@ -1846,11 +1795,8 @@ impl Global {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 // TODO: Handle error properly
-                Err(crate::storage::InvalidId) => break 'error DeviceError::Invalid.into(),
+                Err(crate::storage::InvalidId) => break 'error DeviceError::InvalidDeviceId.into(),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreatePipelineCache {
@@ -1912,36 +1858,38 @@ impl Global {
             }
 
             if !caps.present_modes.contains(&config.present_mode) {
-                let new_mode = 'b: loop {
-                    // Automatic present mode checks.
-                    //
-                    // The "Automatic" modes are never supported by the backends.
-                    let fallbacks = match config.present_mode {
-                        wgt::PresentMode::AutoVsync => {
-                            &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
-                        }
-                        // Always end in FIFO to make sure it's always supported
-                        wgt::PresentMode::AutoNoVsync => &[
-                            wgt::PresentMode::Immediate,
-                            wgt::PresentMode::Mailbox,
-                            wgt::PresentMode::Fifo,
-                        ][..],
-                        _ => {
-                            return Err(E::UnsupportedPresentMode {
-                                requested: config.present_mode,
-                                available: caps.present_modes.clone(),
-                            });
-                        }
-                    };
-
-                    for &fallback in fallbacks {
-                        if caps.present_modes.contains(&fallback) {
-                            break 'b fallback;
-                        }
+                // Automatic present mode checks.
+                //
+                // The "Automatic" modes are never supported by the backends.
+                let fallbacks = match config.present_mode {
+                    wgt::PresentMode::AutoVsync => {
+                        &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
                     }
-
-                    unreachable!("Fallback system failed to choose present mode. This is a bug. Mode: {:?}, Options: {:?}", config.present_mode, &caps.present_modes);
+                    // Always end in FIFO to make sure it's always supported
+                    wgt::PresentMode::AutoNoVsync => &[
+                        wgt::PresentMode::Immediate,
+                        wgt::PresentMode::Mailbox,
+                        wgt::PresentMode::Fifo,
+                    ][..],
+                    _ => {
+                        return Err(E::UnsupportedPresentMode {
+                            requested: config.present_mode,
+                            available: caps.present_modes.clone(),
+                        });
+                    }
                 };
+
+                let new_mode = fallbacks
+                    .iter()
+                    .copied()
+                    .find(|fallback| caps.present_modes.contains(fallback))
+                    .unwrap_or_else(|| {
+                        unreachable!(
+                            "Fallback system failed to choose present mode. \
+                            This is a bug. Mode: {:?}, Options: {:?}",
+                            config.present_mode, &caps.present_modes
+                        );
+                    });
 
                 api_log!(
                     "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
@@ -1959,7 +1907,7 @@ impl Global {
                 .composite_alpha_modes
                 .contains(&config.composite_alpha_mode)
             {
-                let new_alpha_mode = 'alpha: loop {
+                let new_alpha_mode = 'alpha: {
                     // Automatic alpha mode checks.
                     let fallbacks = match config.composite_alpha_mode {
                         wgt::CompositeAlphaMode::Auto => &[
@@ -2004,7 +1952,7 @@ impl Global {
 
         log::debug!("configuring surface with {:?}", config);
 
-        let error = 'outer: loop {
+        let error = 'error: {
             // User callbacks must not be called while we are holding locks.
             let user_callbacks;
             {
@@ -2014,10 +1962,10 @@ impl Global {
 
                 let device = match device_guard.get(device_id) {
                     Ok(device) => device,
-                    Err(_) => break DeviceError::Invalid.into(),
+                    Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
                 };
-                if !device.is_valid() {
-                    break DeviceError::Lost.into();
+                if let Err(e) = device.check_is_valid() {
+                    break 'error e.into();
                 }
 
                 #[cfg(feature = "trace")]
@@ -2027,7 +1975,7 @@ impl Global {
 
                 let surface = match surface_guard.get(surface_id) {
                     Ok(surface) => surface,
-                    Err(_) => break E::InvalidSurface,
+                    Err(_) => break 'error E::InvalidSurface,
                 };
 
                 let caps = unsafe {
@@ -2035,7 +1983,7 @@ impl Global {
                     let adapter = &device.adapter;
                     match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
                         Some(caps) => caps,
-                        None => break E::UnsupportedQueueFamily,
+                        None => break 'error E::UnsupportedQueueFamily,
                     }
                 };
 
@@ -2045,13 +1993,13 @@ impl Global {
                         continue;
                     }
                     if !caps.formats.contains(&config.format) {
-                        break 'outer E::UnsupportedFormat {
+                        break 'error E::UnsupportedFormat {
                             requested: config.format,
                             available: caps.formats,
                         };
                     }
                     if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                        break 'outer E::InvalidViewFormat(*format, config.format);
+                        break 'error E::InvalidViewFormat(*format, config.format);
                     }
                     hal_view_formats.push(*format);
                 }
@@ -2060,7 +2008,7 @@ impl Global {
                     if let Err(missing_flag) =
                         device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
                     {
-                        break 'outer E::MissingDownlevelFlags(missing_flag);
+                        break 'error E::MissingDownlevelFlags(missing_flag);
                     }
                 }
 
@@ -2087,7 +2035,7 @@ impl Global {
                     &caps,
                     device.limits.max_texture_dimension_2d,
                 ) {
-                    break error;
+                    break 'error error;
                 }
 
                 // Wait for all work to finish before configuring the surface.
@@ -2098,14 +2046,14 @@ impl Global {
                         user_callbacks = closures;
                     }
                     Err(e) => {
-                        break e.into();
+                        break 'error e.into();
                     }
                 }
 
                 // All textures must be destroyed before the surface can be re-configured.
                 if let Some(present) = surface.presentation.lock().take() {
                     if present.acquired_texture.is_some() {
-                        break E::PreviousOutputExists;
+                        break 'error E::PreviousOutputExists;
                     }
                 }
 
@@ -2122,7 +2070,7 @@ impl Global {
                 } {
                     Ok(()) => (),
                     Err(error) => {
-                        break match error {
+                        break 'error match error {
                             hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
                                 E::InvalidSurface
                             }
@@ -2153,13 +2101,16 @@ impl Global {
     #[cfg(feature = "replay")]
     /// Only triage suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.
-    pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), InvalidDevice> {
+    pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), DeviceError> {
         let hub = A::hub(self);
 
-        let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
-        if !device.is_valid() {
-            return Err(InvalidDevice);
-        }
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
+
+        device.check_is_valid()?;
+
         device.lock_life().triage_suspected(&device.trackers);
         Ok(())
     }
@@ -2172,13 +2123,13 @@ impl Global {
         device_id: DeviceId,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<bool, WaitIdleError> {
-        api_log!("Device::poll");
+        api_log!("Device::poll {maintain:?}");
 
         let hub = A::hub(self);
         let device = hub
             .devices
             .get(device_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
             if submission_index.queue_id != device_id.into_queue_id() {
@@ -2452,6 +2403,21 @@ impl Global {
         }
     }
 
+    pub fn device_get_internal_counters<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+    ) -> wgt::InternalCounters {
+        let hub = A::hub(self);
+        if let Ok(device) = hub.devices.get(device_id) {
+            wgt::InternalCounters {
+                hal: device.get_hal_counters(),
+                core: wgt::CoreCounters {},
+            }
+        } else {
+            Default::default()
+        }
+    }
+
     pub fn queue_drop<A: HalApi>(&self, queue_id: QueueId) {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {queue_id:?}");
@@ -2469,143 +2435,30 @@ impl Global {
         size: Option<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
+        profiling::scope!("Buffer::map_async");
         api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 
-        // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
+        let hub = A::hub(self);
+
+        let op_and_err = 'error: {
+            let buffer = match hub.buffers.get(buffer_id) {
+                Ok(buffer) => buffer,
+                Err(_) => break 'error Some((op, BufferAccessError::InvalidBufferId(buffer_id))),
+            };
+
+            buffer.map_async(offset, size, op).err()
+        };
+
+        // User callbacks must not be called while holding `buffer.map_async`'s locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
-        if let Err((mut operation, err)) =
-            self.buffer_map_async_inner::<A>(buffer_id, offset, size, op)
-        {
+        if let Some((mut operation, err)) = op_and_err {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
             log::error!("Buffer::map_async error: {err}");
             return Err(err);
         }
-
-        Ok(())
-    }
-
-    // Returns the mapping callback in case of error so that the callback can be fired outside
-    // of the locks that are held in this function.
-    fn buffer_map_async_inner<A: HalApi>(
-        &self,
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        size: Option<BufferAddress>,
-        op: BufferMapOperation,
-    ) -> Result<(), (BufferMapOperation, BufferAccessError)> {
-        profiling::scope!("Buffer::map_async");
-
-        let hub = A::hub(self);
-
-        let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsages::MAP_READ, hal::BufferUses::MAP_READ),
-            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
-        };
-
-        let buffer = {
-            let buffer = hub.buffers.get(buffer_id);
-
-            let buffer = match buffer {
-                Ok(b) => b,
-                Err(_) => {
-                    return Err((op, BufferAccessError::Invalid));
-                }
-            };
-            {
-                let snatch_guard = buffer.device.snatchable_lock.read();
-                if buffer.is_destroyed(&snatch_guard) {
-                    return Err((op, BufferAccessError::Destroyed));
-                }
-            }
-
-            let range_size = if let Some(size) = size {
-                size
-            } else if offset > buffer.size {
-                0
-            } else {
-                buffer.size - offset
-            };
-
-            if offset % wgt::MAP_ALIGNMENT != 0 {
-                return Err((op, BufferAccessError::UnalignedOffset { offset }));
-            }
-            if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-                return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
-            }
-
-            let range = offset..(offset + range_size);
-
-            if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
-            {
-                return Err((op, BufferAccessError::UnalignedRange));
-            }
-
-            let device = &buffer.device;
-            if !device.is_valid() {
-                return Err((op, DeviceError::Lost.into()));
-            }
-
-            if let Err(e) = check_buffer_usage(buffer.info.id(), buffer.usage, pub_usage) {
-                return Err((op, e.into()));
-            }
-
-            if range.start > range.end {
-                return Err((
-                    op,
-                    BufferAccessError::NegativeRange {
-                        start: range.start,
-                        end: range.end,
-                    },
-                ));
-            }
-            if range.end > buffer.size {
-                return Err((
-                    op,
-                    BufferAccessError::OutOfBoundsOverrun {
-                        index: range.end,
-                        max: buffer.size,
-                    },
-                ));
-            }
-
-            {
-                let map_state = &mut *buffer.map_state.lock();
-                *map_state = match *map_state {
-                    resource::BufferMapState::Init { .. }
-                    | resource::BufferMapState::Active { .. } => {
-                        return Err((op, BufferAccessError::AlreadyMapped));
-                    }
-                    resource::BufferMapState::Waiting(_) => {
-                        return Err((op, BufferAccessError::MapAlreadyPending));
-                    }
-                    resource::BufferMapState::Idle => {
-                        resource::BufferMapState::Waiting(resource::BufferPendingMapping {
-                            range,
-                            op,
-                            _parent_buffer: buffer.clone(),
-                        })
-                    }
-                };
-            }
-
-            let snatch_guard = buffer.device.snatchable_lock.read();
-
-            {
-                let mut trackers = buffer.device.as_ref().trackers.lock();
-                trackers.buffers.set_single(&buffer, internal_use);
-                //TODO: Check if draining ALL buffers is correct!
-                let _ = trackers.buffers.drain_transitions(&snatch_guard);
-            }
-
-            drop(snatch_guard);
-
-            buffer
-        };
-
-        buffer.device.lock_life().map(&buffer);
 
         Ok(())
     }
@@ -2624,13 +2477,11 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
 
         {
             let snatch_guard = buffer.device.snatchable_lock.read();
-            if buffer.is_destroyed(&snatch_guard) {
-                return Err(BufferAccessError::Destroyed);
-            }
+            buffer.check_destroyed(&snatch_guard)?;
         }
 
         let range_size = if let Some(size) = size {
@@ -2693,18 +2544,13 @@ impl Global {
         let buffer = hub
             .buffers
             .get(buffer_id)
-            .map_err(|_| BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
 
         let snatch_guard = buffer.device.snatchable_lock.read();
-        if buffer.is_destroyed(&snatch_guard) {
-            return Err(BufferAccessError::Destroyed);
-        }
+        buffer.check_destroyed(&snatch_guard)?;
         drop(snatch_guard);
 
-        if !buffer.device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
-
+        buffer.device.check_is_valid()?;
         buffer.unmap()
     }
 }

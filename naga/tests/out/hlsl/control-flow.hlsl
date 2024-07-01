@@ -48,8 +48,8 @@ void main(uint3 global_id : SV_DispatchThreadID)
             break;
         }
     }
-    int _expr4 = pos;
-    switch(_expr4) {
+    int _e4 = pos;
+    switch(_e4) {
         case 1: {
             pos = 0;
             break;
@@ -81,8 +81,8 @@ void main(uint3 global_id : SV_DispatchThreadID)
             break;
         }
     }
-    int _expr11 = pos;
-    switch(_expr11) {
+    int _e11 = pos;
+    switch(_e11) {
         case 1: {
             pos = 0;
             break;

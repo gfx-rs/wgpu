@@ -104,9 +104,9 @@ mod texture;
 use crate::{
     binding_model, command, conv,
     hal_api::HalApi,
-    id,
     lock::{rank, Mutex, RwLock},
-    pipeline, resource,
+    pipeline,
+    resource::{self, Resource, ResourceErrorIdent},
     snatch::SnatchGuard,
 };
 
@@ -274,7 +274,7 @@ impl PendingTransition<hal::BufferUses> {
         buf: &'a resource::Buffer<A>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> hal::BufferBarrier<'a, A> {
-        let buffer = buf.raw.get(snatch_guard).expect("Buffer is destroyed");
+        let buffer = buf.raw(snatch_guard).expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
             usage: self.usage,
@@ -342,34 +342,32 @@ fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     old_state == new_state && old_state.all_ordered()
 }
 
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
-pub enum UsageConflict {
-    #[error("Attempted to use invalid buffer")]
-    BufferInvalid { id: id::BufferId },
-    #[error("Attempted to use invalid texture")]
-    TextureInvalid { id: id::TextureId },
-    #[error("Attempted to use buffer with {invalid_use}.")]
+#[derive(Clone, Debug, Error)]
+pub enum ResourceUsageCompatibilityError {
+    #[error("Attempted to use {res} with {invalid_use}.")]
     Buffer {
-        id: id::BufferId,
+        res: ResourceErrorIdent,
         invalid_use: InvalidUse<hal::BufferUses>,
     },
-    #[error("Attempted to use a texture (mips {mip_levels:?} layers {array_layers:?}) with {invalid_use}.")]
+    #[error(
+        "Attempted to use {res} (mips {mip_levels:?} layers {array_layers:?}) with {invalid_use}."
+    )]
     Texture {
-        id: id::TextureId,
+        res: ResourceErrorIdent,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
         invalid_use: InvalidUse<hal::TextureUses>,
     },
 }
 
-impl UsageConflict {
-    fn from_buffer(
-        id: id::BufferId,
+impl ResourceUsageCompatibilityError {
+    fn from_buffer<A: HalApi>(
+        buffer: &resource::Buffer<A>,
         current_state: hal::BufferUses,
         new_state: hal::BufferUses,
     ) -> Self {
         Self::Buffer {
-            id,
+            res: buffer.error_ident(),
             invalid_use: InvalidUse {
                 current_state,
                 new_state,
@@ -377,14 +375,14 @@ impl UsageConflict {
         }
     }
 
-    fn from_texture(
-        id: id::TextureId,
+    fn from_texture<A: HalApi>(
+        texture: &resource::Texture<A>,
         selector: TextureSelector,
         current_state: hal::TextureUses,
         new_state: hal::TextureUses,
     ) -> Self {
         Self::Texture {
-            id,
+            res: texture.error_ident(),
             mip_levels: selector.mips,
             array_layers: selector.layers,
             invalid_use: InvalidUse {
@@ -395,23 +393,9 @@ impl UsageConflict {
     }
 }
 
-impl crate::error::PrettyError for UsageConflict {
+impl crate::error::PrettyError for ResourceUsageCompatibilityError {
     fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
         fmt.error(self);
-        match *self {
-            Self::BufferInvalid { id } => {
-                fmt.buffer_label(&id);
-            }
-            Self::TextureInvalid { id } => {
-                fmt.texture_label(&id);
-            }
-            Self::Buffer { id, .. } => {
-                fmt.buffer_label(&id);
-            }
-            Self::Texture { id, .. } => {
-                fmt.texture_label(&id);
-            }
-        }
     }
 }
 
@@ -532,7 +516,7 @@ impl<A: HalApi> RenderBundleScope<A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe { self.buffers.write().merge_bind_group(&bind_group.buffers)? };
         unsafe {
             self.textures
@@ -602,7 +586,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe {
             self.buffers.merge_bind_group(&bind_group.buffers)?;
             self.textures.merge_bind_group(&bind_group.textures)?;
@@ -623,7 +607,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     pub unsafe fn merge_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         self.buffers
             .merge_usage_scope(&*render_bundle.buffers.read())?;
         self.textures
@@ -718,7 +702,7 @@ impl<A: HalApi> Tracker<A> {
     pub unsafe fn add_from_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         self.bind_groups
             .add_from_tracker(&*render_bundle.bind_groups.read());
         self.render_pipelines

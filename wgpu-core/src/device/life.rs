@@ -895,8 +895,8 @@ impl<A: HalApi> LifetimeTracker<A> {
         for buffer in self.mapped.drain(..) {
             let submit_index = buffer.info.submission_index();
             log::trace!(
-                "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
-                buffer.info.id(),
+                "Mapping of {} at submission {:?} gets assigned to active {:?}",
+                buffer.error_ident(),
                 submit_index,
                 self.active.iter().position(|a| a.index == submit_index)
             );

@@ -2344,10 +2344,17 @@ impl crate::Context for ContextWgpuCore {
             .map(|(i, _)| i)
             .collect::<SmallVec<[_; 4]>>();
 
-        match wgc::gfx_select!(*queue => self.0.queue_submit(*queue, &temp_command_buffers)) {
+        let index = match wgc::gfx_select!(*queue => self.0.queue_submit(*queue, &temp_command_buffers))
+        {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
+        };
+
+        for cmdbuf in &temp_command_buffers {
+            wgc::gfx_select!(*queue => self.0.command_buffer_drop(*cmdbuf));
         }
+
+        index
     }
 
     fn queue_get_timestamp_period(
@@ -2386,6 +2393,14 @@ impl crate::Context for ContextWgpuCore {
 
     fn device_stop_capture(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         wgc::gfx_select!(device => self.0.device_stop_capture(*device));
+    }
+
+    fn device_get_internal_counters(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> wgt::InternalCounters {
+        wgc::gfx_select!(device => self.0.device_get_internal_counters(*device))
     }
 
     fn pipeline_cache_get_data(

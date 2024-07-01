@@ -136,9 +136,7 @@ impl Global {
         let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
             match present.device.downcast_clone::<A>() {
                 Some(device) => {
-                    if !device.is_valid() {
-                        return Err(DeviceError::Lost.into());
-                    }
+                    device.check_is_valid()?;
                     (device, present.config.clone())
                 }
                 None => return Err(SurfaceError::NotConfigured),
@@ -303,9 +301,7 @@ impl Global {
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+        device.check_is_valid()?;
         let queue = device.get_queue().unwrap();
 
         #[cfg(feature = "trace")]
@@ -397,9 +393,7 @@ impl Global {
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
-        if !device.is_valid() {
-            return Err(DeviceError::Lost.into());
-        }
+        device.check_is_valid()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {

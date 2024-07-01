@@ -32,6 +32,11 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
+## Internally count resources and events for debugging purposes. If the counters
+## feature is disabled, the counting infrastructure is removed from the build and
+## the exposed counters always return 0.
+counters = ["wgt/counters"]
+
 ## Log all API entry points at info instead of trace level.
 api_log_info = []
 

@@ -97,6 +97,11 @@ replay = ["serde", "wgc/replay"]
 #! ### Other
 # --------------------------------------------------------------------
 
+## Internally count resources and events for debugging purposes. If the counters
+## feature is disabled, the counting infrastructure is removed from the build and
+## the exposed counters always return 0.
+counters = ["wgc/counters"]
+
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
 ## WebGL/WebGPU objects can not be shared between threads.
