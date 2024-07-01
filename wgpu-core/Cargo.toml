@@ -101,7 +101,7 @@ dx12 = ["hal/dx12"]
 
 [dependencies]
 arrayvec = "0.7"
-bit-vec = "0.6"
+bit-vec = "0.7"
 bitflags = "2"
 bytemuck = { version = "1.16", optional = true }
 document-features.workspace = true
