@@ -22,7 +22,6 @@ use crate::{
     lock::{rank, Mutex, MutexGuard, RwLock},
     pipeline,
     pool::ResourcePool,
-    registry::Registry,
     resource::{
         self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, Texture, TextureView,
         TextureViewNotRenderableReason, Trackable, TrackingData,
@@ -59,8 +58,7 @@ use std::{
 use super::{
     life::ResourceMaps,
     queue::{self, Queue},
-    DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, ENTRYPOINT_FAILURE_ERROR,
-    ZERO_BUFFER_SIZE,
+    DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -2556,14 +2554,9 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    //TODO: refactor this. It's the only method of `Device` that registers new objects
-    // (the pipeline layout).
     pub(crate) fn derive_pipeline_layout(
         self: &Arc<Self>,
-        implicit_context: Option<ImplicitPipelineContext>,
         mut derived_group_layouts: ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>,
-        bgl_registry: &Registry<BindGroupLayout<A>>,
-        pipeline_layout_registry: &Registry<binding_model::PipelineLayout<A>>,
     ) -> Result<Arc<binding_model::PipelineLayout<A>>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
@@ -2571,24 +2564,14 @@ impl<A: HalApi> Device<A> {
         {
             derived_group_layouts.pop();
         }
-        let mut ids = implicit_context.ok_or(pipeline::ImplicitLayoutError::MissingIds(0))?;
-        let group_count = derived_group_layouts.len();
-        if ids.group_ids.len() < group_count {
-            log::error!(
-                "Not enough bind group IDs ({}) specified for the implicit layout ({})",
-                ids.group_ids.len(),
-                derived_group_layouts.len()
-            );
-            return Err(pipeline::ImplicitLayoutError::MissingIds(group_count as _));
-        }
 
-        let mut bind_group_layouts = Vec::with_capacity(group_count);
-        for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
-            let bgl = self.create_bind_group_layout(&None, map, bgl::Origin::Derived)?;
-            let bgl = Arc::new(bgl);
-            bgl_registry.force_replace(*bgl_id, bgl.clone());
-            bind_group_layouts.push(bgl);
-        }
+        let bind_group_layouts = derived_group_layouts
+            .into_iter()
+            .map(|bgl_entry_map| {
+                self.create_bind_group_layout(&None, bgl_entry_map, bgl::Origin::Derived)
+                    .map(Arc::new)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
@@ -2598,28 +2581,15 @@ impl<A: HalApi> Device<A> {
 
         let layout = self.create_pipeline_layout(&layout_desc)?;
         let layout = Arc::new(layout);
-        pipeline_layout_registry.force_replace(ids.root_id, layout.clone());
         Ok(layout)
     }
 
     pub(crate) fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: &pipeline::ComputePipelineDescriptor,
-        implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A>,
     ) -> Result<Arc<pipeline::ComputePipeline<A>>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
-
-        // This has to be done first, or otherwise the IDs may be pointing to entries
-        // that are not even in the storage.
-        if let Some(ref ids) = implicit_context {
-            let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id);
-            let mut bgl_guard = hub.bind_group_layouts.write();
-            for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id);
-            }
-        }
 
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
@@ -2683,12 +2653,9 @@ impl<A: HalApi> Device<A> {
                 drop(binding_layout_source);
                 pipeline_layout.unwrap()
             }
-            validation::BindingLayoutSource::Derived(entries) => self.derive_pipeline_layout(
-                implicit_context,
-                entries,
-                &hub.bind_group_layouts,
-                &hub.pipeline_layouts,
-            )?,
+            validation::BindingLayoutSource::Derived(entries) => {
+                self.derive_pipeline_layout(entries)?
+            }
         };
 
         let late_sized_buffer_groups =
@@ -2766,24 +2733,11 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         adapter: &Adapter<A>,
         desc: &pipeline::RenderPipelineDescriptor,
-        implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A>,
     ) -> Result<Arc<pipeline::RenderPipeline<A>>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
 
         self.check_is_valid()?;
-
-        // This has to be done first, or otherwise the IDs may be pointing to entries
-        // that are not even in the storage.
-        if let Some(ref ids) = implicit_context {
-            //TODO: only lock mutable if the layout is derived
-            let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-            let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id);
-            for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id);
-            }
-        }
 
         let mut shader_binding_sizes = FastHashMap::default();
 
@@ -3282,12 +3236,9 @@ impl<A: HalApi> Device<A> {
                 drop(binding_layout_source);
                 pipeline_layout.unwrap()
             }
-            validation::BindingLayoutSource::Derived(entries) => self.derive_pipeline_layout(
-                implicit_context,
-                entries,
-                &hub.bind_group_layouts,
-                &hub.pipeline_layouts,
-            )?,
+            validation::BindingLayoutSource::Derived(entries) => {
+                self.derive_pipeline_layout(entries)?
+            }
         };
 
         // Multiview is only supported if the feature is enabled

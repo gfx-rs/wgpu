@@ -129,10 +129,6 @@ impl<T: StorageItem> Registry<T> {
         self.identity.free(id);
         storage.remove(id)
     }
-    pub(crate) fn force_replace(&self, id: Id<T::Marker>, value: Arc<T>) {
-        let mut storage = self.storage.write();
-        storage.force_replace(id, value)
-    }
     pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>) {
         let mut storage = self.storage.write();
         storage.remove(id);

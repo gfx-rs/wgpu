@@ -1590,7 +1590,6 @@ impl Global {
 
         let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
-        let implicit_error_context = implicit_context.clone();
 
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
@@ -1607,11 +1606,40 @@ impl Global {
                 });
             }
 
-            let pipeline =
-                match device.create_render_pipeline(&device.adapter, desc, implicit_context, hub) {
-                    Ok(pair) => pair,
-                    Err(e) => break 'error e,
+            let pipeline = match device.create_render_pipeline(&device.adapter, desc, hub) {
+                Ok(pair) => pair,
+                Err(e) => break 'error e,
+            };
+
+            if desc.layout.is_none() {
+                // TODO: categorize the errors below as API misuse
+                let ids = if let Some(ids) = implicit_context.as_ref() {
+                    let group_count = pipeline.layout.bind_group_layouts.len();
+                    if ids.group_ids.len() < group_count {
+                        log::error!(
+                            "Not enough bind group IDs ({}) specified for the implicit layout ({})",
+                            ids.group_ids.len(),
+                            group_count
+                        );
+                        break 'error pipeline::ImplicitLayoutError::MissingIds(group_count as _)
+                            .into();
+                    }
+                    ids
+                } else {
+                    break 'error pipeline::ImplicitLayoutError::MissingIds(0).into();
                 };
+
+                let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+                let mut bgl_guard = hub.bind_group_layouts.write();
+                pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
+                let group_ids = &mut ids.group_ids.iter();
+                for (bgl_id, bgl) in group_ids.zip(pipeline.layout.bind_group_layouts.iter()) {
+                    bgl_guard.insert(*bgl_id, bgl.clone());
+                }
+                for bgl_id in group_ids {
+                    bgl_guard.insert_error(*bgl_id);
+                }
+            }
 
             let (id, resource) = fid.assign(pipeline);
             api_log!("Device::create_render_pipeline -> {id:?}");
@@ -1627,20 +1655,16 @@ impl Global {
 
         let id = fid.assign_error();
 
-        // We also need to assign errors to the implicit pipeline layout and the
-        // implicit bind group layout. We have to remove any existing entries first.
-        let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-        let mut bgl_guard = hub.bind_group_layouts.write();
-        if let Some(ref ids) = implicit_error_context {
-            if pipeline_layout_guard.contains(ids.root_id) {
-                pipeline_layout_guard.remove(ids.root_id);
-            }
-            pipeline_layout_guard.insert_error(ids.root_id);
-            for &bgl_id in ids.group_ids.iter() {
-                if bgl_guard.contains(bgl_id) {
-                    bgl_guard.remove(bgl_id);
+        if desc.layout.is_none() {
+            // We also need to assign errors to the implicit pipeline layout and the
+            // implicit bind group layouts.
+            if let Some(ids) = implicit_context {
+                let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+                let mut bgl_guard = hub.bind_group_layouts.write();
+                pipeline_layout_guard.insert_error(ids.root_id);
+                for bgl_id in ids.group_ids {
+                    bgl_guard.insert_error(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id);
             }
         }
 
@@ -1723,7 +1747,6 @@ impl Global {
 
         let fid = hub.compute_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
-        let implicit_error_context = implicit_context.clone();
 
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
@@ -1740,10 +1763,40 @@ impl Global {
                 });
             }
 
-            let pipeline = match device.create_compute_pipeline(desc, implicit_context, hub) {
+            let pipeline = match device.create_compute_pipeline(desc, hub) {
                 Ok(pair) => pair,
                 Err(e) => break 'error e,
             };
+
+            if desc.layout.is_none() {
+                // TODO: categorize the errors below as API misuse
+                let ids = if let Some(ids) = implicit_context.as_ref() {
+                    let group_count = pipeline.layout.bind_group_layouts.len();
+                    if ids.group_ids.len() < group_count {
+                        log::error!(
+                            "Not enough bind group IDs ({}) specified for the implicit layout ({})",
+                            ids.group_ids.len(),
+                            group_count
+                        );
+                        break 'error pipeline::ImplicitLayoutError::MissingIds(group_count as _)
+                            .into();
+                    }
+                    ids
+                } else {
+                    break 'error pipeline::ImplicitLayoutError::MissingIds(0).into();
+                };
+
+                let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+                let mut bgl_guard = hub.bind_group_layouts.write();
+                pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
+                let group_ids = &mut ids.group_ids.iter();
+                for (bgl_id, bgl) in group_ids.zip(pipeline.layout.bind_group_layouts.iter()) {
+                    bgl_guard.insert(*bgl_id, bgl.clone());
+                }
+                for bgl_id in group_ids {
+                    bgl_guard.insert_error(*bgl_id);
+                }
+            }
 
             let (id, resource) = fid.assign(pipeline);
             api_log!("Device::create_compute_pipeline -> {id:?}");
@@ -1758,22 +1811,19 @@ impl Global {
 
         let id = fid.assign_error();
 
-        // We also need to assign errors to the implicit pipeline layout and the
-        // implicit bind group layout. We have to remove any existing entries first.
-        let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-        let mut bgl_guard = hub.bind_group_layouts.write();
-        if let Some(ref ids) = implicit_error_context {
-            if pipeline_layout_guard.contains(ids.root_id) {
-                pipeline_layout_guard.remove(ids.root_id);
-            }
-            pipeline_layout_guard.insert_error(ids.root_id);
-            for &bgl_id in ids.group_ids.iter() {
-                if bgl_guard.contains(bgl_id) {
-                    bgl_guard.remove(bgl_id);
+        if desc.layout.is_none() {
+            // We also need to assign errors to the implicit pipeline layout and the
+            // implicit bind group layouts.
+            if let Some(ids) = implicit_context {
+                let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+                let mut bgl_guard = hub.bind_group_layouts.write();
+                pipeline_layout_guard.insert_error(ids.root_id);
+                for bgl_id in ids.group_ids {
+                    bgl_guard.insert_error(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id);
             }
         }
+
         (id, Some(error))
     }
 

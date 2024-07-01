@@ -164,12 +164,6 @@ where
         }
     }
 
-    pub(crate) fn force_replace(&mut self, id: Id<T::Marker>, value: Arc<T>) {
-        log::trace!("User is replacing {}{:?}", T::TYPE, id);
-        let (index, epoch, _) = id.unzip();
-        self.map[index as usize] = Element::Occupied(value, epoch);
-    }
-
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> Option<Arc<T>> {
         log::trace!("User is removing {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
