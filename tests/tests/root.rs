@@ -29,6 +29,7 @@ mod poll;
 mod push_constants;
 mod query_set;
 mod queue_transfer;
+mod render_pass_ownership;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod scissor_tests;

@@ -9,10 +9,7 @@ use wgt::{BufferAddress, BufferSize, Color};
 
 use std::{num::NonZeroU32, sync::Arc};
 
-use super::{
-    DrawKind, PassErrorScope, Rect, RenderBundle, RenderCommandError, RenderPassError,
-    RenderPassErrorInner,
-};
+use super::{Rect, RenderBundle};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -128,13 +125,15 @@ pub enum RenderCommand {
 
 impl RenderCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
-    //
-    // TODO: Once resolving is done on-the-fly during recording, this function should be only needed with the replay feature:
-    // #[cfg(feature = "replay")]
+    #[cfg(feature = "replay")]
     pub fn resolve_render_command_ids<A: HalApi>(
         hub: &crate::hub::Hub<A>,
         commands: &[RenderCommand],
-    ) -> Result<Vec<ArcRenderCommand<A>>, RenderPassError> {
+    ) -> Result<Vec<ArcRenderCommand<A>>, super::RenderPassError> {
+        use super::{
+            DrawKind, PassErrorScope, RenderCommandError, RenderPassError, RenderPassErrorInner,
+        };
+
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
         let query_set_guard = hub.query_sets.read();

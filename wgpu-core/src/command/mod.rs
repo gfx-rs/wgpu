@@ -6,10 +6,12 @@ mod compute;
 mod compute_command;
 mod draw;
 mod dyn_compute_pass;
+mod dyn_render_pass;
 mod memory_init;
 mod query;
 mod render;
 mod render_command;
+mod timestamp_writes;
 mod transfer;
 
 use std::sync::Arc;
@@ -17,10 +19,13 @@ use std::sync::Arc;
 pub(crate) use self::clear::clear_texture;
 pub use self::{
     bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*,
-    dyn_compute_pass::DynComputePass, query::*, render::*, render_command::RenderCommand,
-    transfer::*,
+    dyn_compute_pass::DynComputePass, dyn_render_pass::DynRenderPass, query::*, render::*,
+    render_command::RenderCommand, transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
+
+pub(crate) use timestamp_writes::ArcPassTimestampWrites;
+pub use timestamp_writes::PassTimestampWrites;
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
@@ -604,8 +609,28 @@ pub enum CommandEncoderError {
     Device(#[from] DeviceError),
     #[error("Command encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
     Locked,
-    #[error("QuerySet provided for pass timestamp writes is invalid.")]
-    InvalidTimestampWritesQuerySetId,
+
+    #[error("QuerySet {0:?} for pass timestamp writes is invalid.")]
+    InvalidTimestampWritesQuerySetId(id::QuerySetId),
+    #[error("Attachment texture view {0:?} is invalid")]
+    InvalidAttachment(id::TextureViewId),
+    #[error("Attachment texture view {0:?} for resolve is invalid")]
+    InvalidResolveTarget(id::TextureViewId),
+    #[error("Depth stencil attachment view {0:?}  is invalid")]
+    InvalidDepthStencilAttachment(id::TextureViewId),
+    #[error("Occlusion query set {0:?} is invalid")]
+    InvalidOcclusionQuerySetId(id::QuerySetId),
+}
+
+impl PrettyError for CommandEncoderError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        if let Self::InvalidAttachment(id) = *self {
+            fmt.texture_view_label_with_key(&id, "attachment");
+        } else if let Self::InvalidResolveTarget(id) = *self {
+            fmt.texture_view_label_with_key(&id, "resolve target");
+        };
+    }
 }
 
 impl Global {
@@ -860,10 +885,7 @@ pub enum PassErrorScope {
     #[error("In a bundle parameter")]
     Bundle,
     #[error("In a pass parameter")]
-    // TODO: To be removed in favor of `Pass`.
-    // ComputePass is already operating on command buffer instead,
-    // same should apply to RenderPass in the future.
-    PassEncoder(id::CommandEncoderId),
+    PassEncoder(id::CommandEncoderId), // Needed only for ending pass via tracing.
     #[error("In a pass parameter")]
     Pass(Option<id::CommandBufferId>),
     #[error("In a set_bind_group command")]

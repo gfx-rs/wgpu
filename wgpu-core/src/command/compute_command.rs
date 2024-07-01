@@ -8,8 +8,6 @@ use crate::{
     resource::{Buffer, QuerySet},
 };
 
-use super::{ComputePassError, ComputePassErrorInner, PassErrorScope};
-
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ComputeCommand {
@@ -72,13 +70,13 @@ pub enum ComputeCommand {
 
 impl ComputeCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
-    //
-    // TODO: Once resolving is done on-the-fly during recording, this function should be only needed with the replay feature:
-    // #[cfg(feature = "replay")]
+    #[cfg(feature = "replay")]
     pub fn resolve_compute_command_ids<A: HalApi>(
         hub: &crate::hub::Hub<A>,
         commands: &[ComputeCommand],
-    ) -> Result<Vec<ArcComputeCommand<A>>, ComputePassError> {
+    ) -> Result<Vec<ArcComputeCommand<A>>, super::ComputePassError> {
+        use super::{ComputePassError, ComputePassErrorInner, PassErrorScope};
+
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
         let query_set_guard = hub.query_sets.read();
