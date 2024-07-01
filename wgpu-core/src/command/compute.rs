@@ -304,7 +304,7 @@ impl Global {
         match CommandBuffer::lock_encoder(hub, encoder_id) {
             Ok(cmd_buf) => {
                 arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                    let Ok(query_set) = hub.query_sets.read().get_owned(tw.query_set) else {
+                    let Ok(query_set) = hub.query_sets.get(tw.query_set) else {
                         return (
                             ComputePass::new(None, arc_desc),
                             Some(CommandEncoderError::InvalidTimestampWritesQuerySetId(
@@ -405,8 +405,7 @@ impl Global {
             Some(ArcPassTimestampWrites {
                 query_set: hub
                     .query_sets
-                    .read()
-                    .get_owned(tw.query_set)
+                    .get(tw.query_set)
                     .map_err(|_| ComputePassErrorInner::InvalidQuerySet(tw.query_set))
                     .map_pass_err(scope)?,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
@@ -1002,8 +1001,7 @@ impl Global {
         let hub = A::hub(self);
         let bind_group = hub
             .bind_groups
-            .read()
-            .get_owned(bind_group_id)
+            .get(bind_group_id)
             .map_err(|_| ComputePassErrorInner::InvalidBindGroupId(bind_group_id))
             .map_pass_err(scope)?;
 
@@ -1034,8 +1032,7 @@ impl Global {
         let hub = A::hub(self);
         let pipeline = hub
             .compute_pipelines
-            .read()
-            .get_owned(pipeline_id)
+            .get(pipeline_id)
             .map_err(|_| ComputePassErrorInner::InvalidPipelineId(pipeline_id))
             .map_pass_err(scope)?;
 
@@ -1182,8 +1179,7 @@ impl Global {
         let hub = A::hub(self);
         let query_set = hub
             .query_sets
-            .read()
-            .get_owned(query_set_id)
+            .get(query_set_id)
             .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
             .map_pass_err(scope)?;
 
@@ -1207,8 +1203,7 @@ impl Global {
         let hub = A::hub(self);
         let query_set = hub
             .query_sets
-            .read()
-            .get_owned(query_set_id)
+            .get(query_set_id)
             .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
             .map_pass_err(scope)?;
 
