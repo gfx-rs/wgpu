@@ -37,8 +37,8 @@ compact = []
 
 [dependencies]
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
-bitflags = "2.5"
-bit-set = "0.5"
+bitflags = "2.6"
+bit-set = "0.6"
 termcolor = { version = "1.4.1" }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in

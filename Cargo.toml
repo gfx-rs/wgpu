@@ -73,7 +73,7 @@ version = "0.20.0"
 anyhow = "1.0.86"
 arrayvec = "0.7"
 bincode = "1"
-bit-vec = "0.6"
+bit-vec = "0.7"
 bitflags = "2"
 bytemuck = { version = "1.16", features = ["derive"] }
 cfg_aliases = "0.1"
@@ -118,7 +118,7 @@ renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.116"
+serde_json = "1.0.119"
 smallvec = "1"
 static_assertions = "1.1.0"
 tracy-client = "0.17"
@@ -144,7 +144,7 @@ gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
 # DX dependencies
-bit-set = "0.5"
+bit-set = "0.6"
 gpu-allocator = { version = "0.26", default-features = false, features = [
     "d3d12",
     "public-winapi",
