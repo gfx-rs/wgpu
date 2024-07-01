@@ -92,29 +92,6 @@ where
         }
     }
 
-    /// Attempts to get a reference to an item behind a potentially invalid ID.
-    ///
-    /// Returns [`None`] if there is an epoch mismatch, or the entry is empty.
-    ///
-    /// This function is primarily intended for the `as_hal` family of functions
-    /// where you may need to fallibly get a object backed by an id that could
-    /// be in a different hub.
-    pub(crate) fn try_get(&self, id: Id<T::Marker>) -> Result<Option<&Arc<T>>, InvalidId> {
-        let (index, epoch, _) = id.unzip();
-        let (result, storage_epoch) = match self.map.get(index as usize) {
-            Some(&Element::Occupied(ref v, epoch)) => (Ok(Some(v)), epoch),
-            Some(&Element::Vacant) => return Ok(None),
-            Some(&Element::Error(epoch)) => (Err(InvalidId), epoch),
-            None => return Err(InvalidId),
-        };
-        assert_eq!(
-            epoch, storage_epoch,
-            "{}[{:?}] is no longer alive",
-            self.kind, id
-        );
-        result
-    }
-
     /// Get a reference to an item behind a potentially invalid ID.
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<&Arc<T>, InvalidId> {

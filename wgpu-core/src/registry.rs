@@ -112,9 +112,6 @@ impl<T: StorageItem> Registry<T> {
         }
     }
 
-    pub(crate) fn try_get(&self, id: Id<T::Marker>) -> Result<Option<Arc<T>>, InvalidId> {
-        self.read().try_get(id).map(|o| o.cloned())
-    }
     pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
         self.read().get_owned(id)
     }

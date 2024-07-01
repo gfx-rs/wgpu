@@ -1149,13 +1149,14 @@ impl Global {
         profiling::scope!("Buffer::as_hal");
 
         let hub = A::hub(self);
-        let buffer_opt = { hub.buffers.try_get(id).ok().flatten() };
-        let buffer = buffer_opt.as_ref().unwrap();
 
-        let snatch_guard = buffer.device.snatchable_lock.read();
-        let hal_buffer = buffer.raw(&snatch_guard);
-
-        hal_buffer_callback(hal_buffer)
+        if let Ok(buffer) = hub.buffers.get(id) {
+            let snatch_guard = buffer.device.snatchable_lock.read();
+            let hal_buffer = buffer.raw(&snatch_guard);
+            hal_buffer_callback(hal_buffer)
+        } else {
+            hal_buffer_callback(None)
+        }
     }
 
     /// # Safety
@@ -1169,12 +1170,14 @@ impl Global {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
-        let texture_opt = { hub.textures.try_get(id).ok().flatten() };
-        let texture = texture_opt.as_ref().unwrap();
-        let snatch_guard = texture.device.snatchable_lock.read();
-        let hal_texture = texture.raw(&snatch_guard);
 
-        hal_texture_callback(hal_texture)
+        if let Ok(texture) = hub.textures.get(id) {
+            let snatch_guard = texture.device.snatchable_lock.read();
+            let hal_texture = texture.raw(&snatch_guard);
+            hal_texture_callback(hal_texture)
+        } else {
+            hal_texture_callback(None)
+        }
     }
 
     /// # Safety
@@ -1188,12 +1191,14 @@ impl Global {
         profiling::scope!("TextureView::as_hal");
 
         let hub = A::hub(self);
-        let texture_view_opt = { hub.texture_views.try_get(id).ok().flatten() };
-        let texture_view = texture_view_opt.as_ref().unwrap();
-        let snatch_guard = texture_view.device.snatchable_lock.read();
-        let hal_texture_view = texture_view.raw(&snatch_guard);
 
-        hal_texture_view_callback(hal_texture_view)
+        if let Ok(texture_view) = hub.texture_views.get(id) {
+            let snatch_guard = texture_view.device.snatchable_lock.read();
+            let hal_texture_view = texture_view.raw(&snatch_guard);
+            hal_texture_view_callback(hal_texture_view)
+        } else {
+            hal_texture_view_callback(None)
+        }
     }
 
     /// # Safety
@@ -1207,7 +1212,7 @@ impl Global {
         profiling::scope!("Adapter::as_hal");
 
         let hub = A::hub(self);
-        let adapter = hub.adapters.try_get(id).ok().flatten();
+        let adapter = hub.adapters.get(id).ok();
         let hal_adapter = adapter.as_ref().map(|adapter| &adapter.raw.adapter);
 
         hal_adapter_callback(hal_adapter)
@@ -1224,7 +1229,7 @@ impl Global {
         profiling::scope!("Device::as_hal");
 
         let hub = A::hub(self);
-        let device = hub.devices.try_get(id).ok().flatten();
+        let device = hub.devices.get(id).ok();
         let hal_device = device.as_ref().map(|device| device.raw());
 
         hal_device_callback(hal_device)
@@ -1241,10 +1246,14 @@ impl Global {
         profiling::scope!("Device::fence_as_hal");
 
         let hub = A::hub(self);
-        let device = hub.devices.try_get(id).ok().flatten();
-        let hal_fence = device.as_ref().map(|device| device.fence.read());
 
-        hal_fence_callback(hal_fence.as_deref().unwrap().as_ref())
+        if let Ok(device) = hub.devices.get(id) {
+            let hal_fence = device.fence.read();
+            let hal_fence = hal_fence.as_ref();
+            hal_fence_callback(hal_fence)
+        } else {
+            hal_fence_callback(None)
+        }
     }
 
     /// # Safety
@@ -1279,15 +1288,15 @@ impl Global {
         profiling::scope!("CommandEncoder::as_hal");
 
         let hub = A::hub(self);
-        let cmd_buf = hub
-            .command_buffers
-            .get(id.into_command_buffer_id())
-            .unwrap();
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let cmd_buf_raw = cmd_buf_data.encoder.open().ok();
 
-        hal_command_encoder_callback(cmd_buf_raw)
+        if let Ok(cmd_buf) = hub.command_buffers.get(id.into_command_buffer_id()) {
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            let cmd_buf_raw = cmd_buf_data.encoder.open().ok();
+            hal_command_encoder_callback(cmd_buf_raw)
+        } else {
+            hal_command_encoder_callback(None)
+        }
     }
 }
 
