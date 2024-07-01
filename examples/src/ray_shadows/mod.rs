@@ -5,14 +5,14 @@ use glam::{Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;
-use wgpu::{BindGroupLayoutDescriptor, BufferBindingType, IndexFormat, ray_tracing as rt, ShaderStages, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroupLayoutDescriptor, BufferBindingType, IndexFormat, ray_tracing as rt, ShaderStages, vertex_attr_array, VertexAttribute, VertexBufferLayout};
 
 // from cube
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
     _pos: [f32; 3],
-    _normal: [f32;3],
+    _normal: [f32; 3],
 }
 
 fn vertex(pos: [f32; 3], normal: [f32; 3]) -> Vertex {
@@ -85,6 +85,7 @@ struct Example {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     start_inst: Instant,
+    blas_geo_size_desc: rt::BlasTriangleGeometrySizeDescriptor,
 }
 
 impl crate::framework::Example for Example {
@@ -109,11 +110,11 @@ impl crate::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let uniforms = {
-            let view = Mat4::look_at_rh(Vec3::new(0.0, 1.0, -1.5), Vec3::ZERO, Vec3::Y);
+            let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
             let proj = Mat4::perspective_rh(
                 59.0_f32.to_radians(),
                 config.width as f32 / config.height as f32,
-                0.1,
+                0.001,
                 1000.0,
             );
 
@@ -220,18 +221,7 @@ impl crate::framework::Example for Example {
                 buffers: &[VertexBufferLayout {
                     array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: Default::default(),
-                    attributes: &[
-                        VertexAttribute {
-                            format: wgpu::VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: wgpu::VertexFormat::Float32x3,
-                            offset: mem::size_of::<[f32;3]>() as wgpu::BufferAddress,
-                            shader_location: 1,
-                        },
-                    ],
+                    attributes: &vertex_attr_array![0 => Float32x3, 1 => Float32x3],
                 }],
             },
             fragment: Some(wgpu::FragmentState {
@@ -250,26 +240,11 @@ impl crate::framework::Example for Example {
             cache: None,
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::AccelerationStructure(&tlas),
-                },
-            ],
-        });
-
         let mut tlas_package = rt::TlasPackage::new(tlas, 1);
 
         *tlas_package.get_mut_single(0).unwrap() = Some(rt::TlasInstance::new(
             &blas,
-            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             0,
             0xFF,
         ));
@@ -291,11 +266,31 @@ impl crate::framework::Example for Example {
                     transform_buffer_offset: None,
                 }]),
             }),
-            // iter::empty(),
+            //iter::empty(),
             iter::once(&tlas_package),
         );
+        /*encoder.build_acceleration_structures(
+            iter::empty(),
+            iter::once(&tlas_package),
+        );*/
 
         queue.submit(Some(encoder.finish()));
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: tlas_package.as_binding(),
+                },
+            ],
+        });
+
         let start_inst = Instant::now();
 
         Example {
@@ -308,6 +303,7 @@ impl crate::framework::Example for Example {
             pipeline,
             bind_group,
             start_inst,
+            blas_geo_size_desc,
         }
     }
 
@@ -323,21 +319,24 @@ impl crate::framework::Example for Example {
         let proj = Mat4::perspective_rh(
             59.0_f32.to_radians(),
             config.width as f32 / config.height as f32,
-            0.001,
+            0.1,
             1000.0,
         );
 
         self.uniforms.proj_inverse = proj.inverse().to_cols_array_2d();
         self.uniforms.vertex = (proj * view).to_cols_array_2d();
+        self.uniforms.view_inverse = view.inverse().to_cols_array_2d();
 
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(&[self.uniforms]));
+        queue.submit(None);
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         //device.push_error_scope(wgpu::ErrorFilter::Validation);
-        const LIGHT_DISTANCE: f32 = 1.75;
-        let cos = self.start_inst.elapsed().as_secs_f32().cos() * LIGHT_DISTANCE;
-        let sin = self.start_inst.elapsed().as_secs_f32().sin() * LIGHT_DISTANCE;
+        const LIGHT_DISTANCE: f32 = 5.0;
+        const TIME_SCALE: f32 = 0.2;
+        let cos = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE).cos() * LIGHT_DISTANCE;
+        let sin = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE).sin() * LIGHT_DISTANCE;
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -349,7 +348,12 @@ impl crate::framework::Example for Example {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.1,
+                            b: 0.1,
+                            a: 1.0,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
