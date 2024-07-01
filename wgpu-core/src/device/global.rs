@@ -1072,7 +1072,32 @@ impl Global {
                 trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
             }
 
-            let layout = match device.create_pipeline_layout(desc, &hub.bind_group_layouts) {
+            let bind_group_layouts = {
+                let bind_group_layouts_guard = hub.bind_group_layouts.read();
+                desc.bind_group_layouts
+                    .iter()
+                    .map(|bgl_id| {
+                        bind_group_layouts_guard.get_owned(*bgl_id).map_err(|_| {
+                            binding_model::CreatePipelineLayoutError::InvalidBindGroupLayoutId(
+                                *bgl_id,
+                            )
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            };
+
+            let bind_group_layouts = match bind_group_layouts {
+                Ok(bind_group_layouts) => bind_group_layouts,
+                Err(e) => break 'error e,
+            };
+
+            let desc = binding_model::ResolvedPipelineLayoutDescriptor {
+                label: desc.label.clone(),
+                bind_group_layouts: Cow::Owned(bind_group_layouts),
+                push_constant_ranges: desc.push_constant_ranges.clone(),
+            };
+
+            let layout = match device.create_pipeline_layout(&desc) {
                 Ok(layout) => layout,
                 Err(e) => break 'error e,
             };
