@@ -467,7 +467,7 @@ impl<A: HalApi> Drop for Buffer<A> {
 }
 
 impl<A: HalApi> Buffer<A> {
-    pub(crate) fn raw(&self, guard: &SnatchGuard) -> Option<&A::Buffer> {
+    pub(crate) fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a A::Buffer> {
         self.raw.get(guard)
     }
 
@@ -1054,7 +1054,7 @@ impl<A: HalApi> Texture<A> {
 
     pub(crate) fn inner_mut<'a>(
         &'a self,
-        guard: &mut ExclusiveSnatchGuard,
+        guard: &'a mut ExclusiveSnatchGuard,
     ) -> Option<&'a mut TextureInner<A>> {
         self.inner.get_mut(guard)
     }
@@ -1153,10 +1153,8 @@ impl Global {
         let buffer_opt = { hub.buffers.try_get(id).ok().flatten() };
         let buffer = buffer_opt.as_ref().unwrap();
 
-        let hal_buffer = {
-            let snatch_guard = buffer.device.snatchable_lock.read();
-            buffer.raw(&snatch_guard)
-        };
+        let snatch_guard = buffer.device.snatchable_lock.read();
+        let hal_buffer = buffer.raw(&snatch_guard);
 
         hal_buffer_callback(hal_buffer)
     }
