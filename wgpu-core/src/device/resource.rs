@@ -2590,7 +2590,7 @@ impl<A: HalApi> Device<A> {
 
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
             let bgl = self.create_bind_group_layout(&None, map, bgl::Origin::Derived)?;
-            bgl_registry.force_replace(*bgl_id, bgl);
+            bgl_registry.force_replace(*bgl_id, Arc::new(bgl));
         }
 
         let layout_desc = binding_model::PipelineLayoutDescriptor {
@@ -2599,8 +2599,9 @@ impl<A: HalApi> Device<A> {
             push_constant_ranges: Cow::Borrowed(&[]), //TODO?
         };
         let layout = self.create_pipeline_layout(&layout_desc, bgl_registry)?;
-        pipeline_layout_registry.force_replace(ids.root_id, layout);
-        Ok(pipeline_layout_registry.get(ids.root_id).unwrap())
+        let layout = Arc::new(layout);
+        pipeline_layout_registry.force_replace(ids.root_id, layout.clone());
+        Ok(layout)
     }
 
     pub(crate) fn create_compute_pipeline(
