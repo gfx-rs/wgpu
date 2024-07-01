@@ -98,9 +98,8 @@ where
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
-            Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
+            None | Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
             Some(&Element::Error(epoch)) => (Err(InvalidId), epoch),
-            None => return Err(InvalidId),
         };
         assert_eq!(
             epoch, storage_epoch,
