@@ -1472,23 +1472,25 @@ impl Global {
                 )
                 .collect::<Vec<_>>();
 
-            let mut submit_surface_textures =
-                SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
+            {
+                let mut submit_surface_textures =
+                    SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
 
-            for texture in submit_surface_textures_owned.values() {
-                submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
-                    Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
-                    _ => None,
-                });
-            }
+                for texture in submit_surface_textures_owned.values() {
+                    submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
+                        Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
+                        _ => None,
+                    });
+                }
 
-            unsafe {
-                queue
-                    .raw
-                    .as_ref()
-                    .unwrap()
-                    .submit(&refs, &submit_surface_textures, (fence, submit_index))
-                    .map_err(DeviceError::from)?;
+                unsafe {
+                    queue
+                        .raw
+                        .as_ref()
+                        .unwrap()
+                        .submit(&refs, &submit_surface_textures, (fence, submit_index))
+                        .map_err(DeviceError::from)?;
+                }
             }
 
             profiling::scope!("cleanup");
