@@ -82,16 +82,6 @@ impl<T: StorageItem> FutureId<'_, T> {
         self.id
     }
 
-    /// Assign an existing resource to a new ID.
-    ///
-    /// Registers it with the registry.
-    pub fn assign_existing(self, value: &Arc<T>) -> Id<T::Marker> {
-        let mut data = self.data.write();
-        debug_assert!(!data.contains(self.id));
-        data.insert(self.id, value.clone());
-        self.id
-    }
-
     pub fn assign_error(self) -> Id<T::Marker> {
         self.data.write().insert_error(self.id);
         self.id

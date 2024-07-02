@@ -80,18 +80,6 @@ impl<T> Storage<T>
 where
     T: StorageItem,
 {
-    #[allow(dead_code)]
-    pub(crate) fn contains(&self, id: Id<T::Marker>) -> bool {
-        let (index, epoch, _) = id.unzip();
-        match self.map.get(index as usize) {
-            Some(&Element::Vacant) => false,
-            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch)) => {
-                storage_epoch == epoch
-            }
-            None => false,
-        }
-    }
-
     /// Get a reference to an item behind a potentially invalid ID.
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<&Arc<T>, InvalidId> {
