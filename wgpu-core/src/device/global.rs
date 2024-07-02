@@ -834,20 +834,6 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            // Currently we make a distinction between fid.assign and fid.assign_existing. This distinction is incorrect,
-            // but see https://github.com/gfx-rs/wgpu/issues/4912.
-            //
-            // `assign` also registers the ID with the resource info, so it can be automatically reclaimed. This needs to
-            // happen with a mutable reference, which means it can only happen on creation.
-            //
-            // Because we need to call `assign` inside the closure (to get mut access), we need to "move" the future id into the closure.
-            // Rust cannot figure out at compile time that we only ever consume the ID once, so we need to move the check
-            // to runtime using an Option.
-            let mut fid = Some(fid);
-
-            // The closure might get called, and it might give us an ID. Side channel it out of the closure.
-            let mut id = None;
-
             let bgl_result = device.bgl_pool.get_or_init(entry_map, |entry_map| {
                 let bgl =
                     device.create_bind_group_layout(&desc.label, entry_map, bgl::Origin::Pool)?;
@@ -856,8 +842,6 @@ impl Global {
                     .unwrap();
 
                 let bgl = Arc::new(bgl);
-                let id_inner = fid.take().unwrap().assign(bgl.clone());
-                id = Some(id_inner);
 
                 Ok(bgl)
             });
@@ -867,16 +851,10 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            // If the ID was not assigned, and we survived the above check,
-            // it means that the bind group layout already existed and we need to call `assign_existing`.
-            //
-            // Calling this function _will_ leak the ID. See https://github.com/gfx-rs/wgpu/issues/4912.
-            if id.is_none() {
-                id = Some(fid.take().unwrap().assign_existing(&layout))
-            }
+            let id = fid.assign(layout.clone());
 
             api_log!("Device::create_bind_group_layout -> {id:?}");
-            return (id.unwrap(), None);
+            return (id, None);
         };
 
         let fid = hub.bind_group_layouts.prepare(id_in);
@@ -1705,7 +1683,7 @@ impl Global {
                 Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
+                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign(bg.clone()),
                 None => {
                     break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
                 }
@@ -1906,7 +1884,7 @@ impl Global {
             };
 
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
+                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign(bg.clone()),
                 None => {
                     break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
                 }
