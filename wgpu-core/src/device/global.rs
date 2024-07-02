@@ -259,12 +259,9 @@ impl Global {
     ) -> Result<(), WaitIdleError> {
         let hub = A::hub(self);
 
-        let last_submission = {
-            let buffer_guard = hub.buffers.write();
-            match buffer_guard.get(buffer_id) {
-                Ok(buffer) => buffer.submission_index(),
-                Err(_) => return Ok(()),
-            }
+        let last_submission = match hub.buffers.read().get(buffer_id) {
+            Ok(buffer) => buffer.submission_index(),
+            Err(_) => return Ok(()),
         };
 
         hub.devices
