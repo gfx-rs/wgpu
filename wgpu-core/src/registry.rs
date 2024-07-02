@@ -111,14 +111,6 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub(crate) fn unregister_locked(
-        &self,
-        id: Id<T::Marker>,
-        storage: &mut Storage<T>,
-    ) -> Option<Arc<T>> {
-        self.identity.free(id);
-        storage.remove(id)
-    }
     pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>) {
         let mut storage = self.storage.write();
         storage.remove(id);
