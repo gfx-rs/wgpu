@@ -79,7 +79,7 @@ index format changes.
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    binding_model::{BindError, BindGroup, BindGroupLayout, PipelineLayout},
+    binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
         BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
         PassErrorScope, RenderCommandError, StateChange,
@@ -646,12 +646,7 @@ fn set_bind_group<A: HalApi>(
         .texture_memory_init_actions
         .extend_from_slice(&bind_group.used_texture_ranges);
 
-    state.set_bind_group(
-        index,
-        bind_group_guard.get(bind_group_id).as_ref().unwrap(),
-        &bind_group.layout,
-        offsets_range,
-    );
+    state.set_bind_group(index, &bind_group, offsets_range);
     unsafe { state.trackers.merge_bind_group(&bind_group.used)? };
     state.trackers.bind_groups.write().insert_single(bind_group);
     // Note: stateless trackers are not merged: the lifetime reference
@@ -1288,9 +1283,6 @@ struct BindState<A: HalApi> {
     /// The id of the bind group set at this index.
     bind_group: Arc<BindGroup<A>>,
 
-    /// The layout of `group`.
-    layout: Arc<BindGroupLayout<A>>,
-
     /// The range of dynamic offsets for this bind group, in the original
     /// command stream's `BassPass::dynamic_offsets` array.
     dynamic_offsets: Range<usize>,
@@ -1416,7 +1408,6 @@ impl<A: HalApi> State<A> {
         &mut self,
         slot: u32,
         bind_group: &Arc<BindGroup<A>>,
-        layout: &Arc<BindGroupLayout<A>>,
         dynamic_offsets: Range<usize>,
     ) {
         // If this call wouldn't actually change this index's state, we can
@@ -1433,7 +1424,6 @@ impl<A: HalApi> State<A> {
         // Record the index's new state.
         self.bind[slot as usize] = Some(BindState {
             bind_group: bind_group.clone(),
-            layout: layout.clone(),
             dynamic_offsets,
             is_dirty: true,
         });
@@ -1475,7 +1465,7 @@ impl<A: HalApi> State<A> {
                 } else {
                     let first_changed = self.bind.iter().zip(&layout.bind_group_layouts).position(
                         |(entry, layout)| match *entry {
-                            Some(ref contents) => !contents.layout.is_equal(layout),
+                            Some(ref contents) => !contents.bind_group.layout.is_equal(layout),
                             None => false,
                         },
                     );
