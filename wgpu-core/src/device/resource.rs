@@ -559,7 +559,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
         transient: bool,
-    ) -> Result<Buffer<A>, resource::CreateBufferError> {
+    ) -> Result<Arc<Buffer<A>>, resource::CreateBufferError> {
         self.check_is_valid()?;
 
         if desc.size > self.limits.max_buffer_size {
@@ -641,7 +641,7 @@ impl<A: HalApi> Device<A> {
         };
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
-        Ok(Buffer {
+        let buffer = Buffer {
             raw: Snatchable::new(buffer),
             device: self.clone(),
             usage: desc.usage,
@@ -655,7 +655,9 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
-        })
+        };
+        let buffer = Arc::new(buffer);
+        Ok(buffer)
     }
 
     pub(crate) fn create_texture_from_hal(

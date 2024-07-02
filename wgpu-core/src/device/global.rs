@@ -161,7 +161,7 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.buffers.prepare(id_in);
 
-        let mut to_destroy: ArrayVec<resource::Buffer<A>, 2> = ArrayVec::new();
+        let mut to_destroy: ArrayVec<Arc<resource::Buffer<A>>, 2> = ArrayVec::new();
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
@@ -233,7 +233,7 @@ impl Global {
                     mapped_at_creation: false,
                 };
                 let stage = match device.create_buffer(&stage_desc, true) {
-                    Ok(stage) => Arc::new(stage),
+                    Ok(stage) => stage,
                     Err(e) => {
                         to_destroy.push(buffer);
                         break 'error e;
@@ -265,7 +265,7 @@ impl Global {
                 hal::BufferUses::COPY_DST
             };
 
-            let (id, resource) = fid.assign(Arc::new(buffer));
+            let (id, resource) = fid.assign(buffer);
             api_log!(
                 "Device::create_buffer({:?}{}) -> {id:?}",
                 desc.label.as_deref().unwrap_or(""),
@@ -288,10 +288,11 @@ impl Global {
         // Error path
 
         for buffer in to_destroy {
-            let device = Arc::clone(&buffer.device);
-            device
+            buffer
+                .device
+                .clone()
                 .lock_life()
-                .schedule_resource_destruction(queue::TempResource::Buffer(Arc::new(buffer)), !0);
+                .schedule_resource_destruction(queue::TempResource::Buffer(buffer), !0);
         }
 
         let id = fid.assign_error();
