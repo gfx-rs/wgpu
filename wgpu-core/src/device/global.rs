@@ -1,7 +1,12 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    api_log, binding_model, command, conv,
+    api_log,
+    binding_model::{
+        self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
+        ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
+    },
+    command, conv,
     device::{
         bgl, life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure,
         DeviceLostReason, HostMap,
@@ -21,6 +26,7 @@ use crate::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
         Trackable,
     },
+    storage::Storage,
     Label,
 };
 
@@ -1157,12 +1163,96 @@ impl Global {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let bind_group_layout = match hub.bind_group_layouts.get(desc.layout) {
+            let layout = match hub.bind_group_layouts.get(desc.layout) {
                 Ok(layout) => layout,
                 Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
             };
 
-            let bind_group = match device.create_bind_group(&bind_group_layout, desc, hub) {
+            fn map_entry<'a, A: HalApi>(
+                e: &BindGroupEntry<'a>,
+                buffer_storage: &Storage<resource::Buffer<A>>,
+                sampler_storage: &Storage<resource::Sampler<A>>,
+                texture_view_storage: &Storage<resource::TextureView<A>>,
+            ) -> Result<ResolvedBindGroupEntry<'a, A>, binding_model::CreateBindGroupError>
+            {
+                let map_buffer = |bb: &BufferBinding| {
+                    buffer_storage
+                        .get_owned(bb.buffer_id)
+                        .map(|buffer| ResolvedBufferBinding {
+                            buffer,
+                            offset: bb.offset,
+                            size: bb.size,
+                        })
+                        .map_err(|_| {
+                            binding_model::CreateBindGroupError::InvalidBufferId(bb.buffer_id)
+                        })
+                };
+                let map_sampler = |id: &id::SamplerId| {
+                    sampler_storage
+                        .get_owned(*id)
+                        .map_err(|_| binding_model::CreateBindGroupError::InvalidSamplerId(*id))
+                };
+                let map_view = |id: &id::TextureViewId| {
+                    texture_view_storage
+                        .get_owned(*id)
+                        .map_err(|_| binding_model::CreateBindGroupError::InvalidTextureViewId(*id))
+                };
+                let resource = match e.resource {
+                    BindingResource::Buffer(ref buffer) => {
+                        ResolvedBindingResource::Buffer(map_buffer(buffer)?)
+                    }
+                    BindingResource::BufferArray(ref buffers) => {
+                        let buffers = buffers
+                            .iter()
+                            .map(map_buffer)
+                            .collect::<Result<Vec<_>, _>>()?;
+                        ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
+                    }
+                    BindingResource::Sampler(ref sampler) => {
+                        ResolvedBindingResource::Sampler(map_sampler(sampler)?)
+                    }
+                    BindingResource::SamplerArray(ref samplers) => {
+                        let samplers = samplers
+                            .iter()
+                            .map(map_sampler)
+                            .collect::<Result<Vec<_>, _>>()?;
+                        ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
+                    }
+                    BindingResource::TextureView(ref view) => {
+                        ResolvedBindingResource::TextureView(map_view(view)?)
+                    }
+                    BindingResource::TextureViewArray(ref views) => {
+                        let views = views.iter().map(map_view).collect::<Result<Vec<_>, _>>()?;
+                        ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
+                    }
+                };
+                Ok(ResolvedBindGroupEntry {
+                    binding: e.binding,
+                    resource,
+                })
+            }
+
+            let entries = {
+                let buffer_guard = hub.buffers.read();
+                let texture_view_guard = hub.texture_views.read();
+                let sampler_guard = hub.samplers.read();
+                desc.entries
+                    .iter()
+                    .map(|e| map_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard))
+                    .collect::<Result<Vec<_>, _>>()
+            };
+            let entries = match entries {
+                Ok(entries) => Cow::Owned(entries),
+                Err(e) => break 'error e,
+            };
+
+            let desc = ResolvedBindGroupDescriptor {
+                label: desc.label.clone(),
+                layout,
+                entries,
+            };
+
+            let bind_group = match device.create_bind_group(desc) {
                 Ok(bind_group) => bind_group,
                 Err(e) => break 'error e,
             };

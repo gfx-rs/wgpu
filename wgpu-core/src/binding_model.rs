@@ -7,8 +7,8 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
-        DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ResourceErrorIdent, TrackingData,
+        Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
+        ResourceErrorIdent, Sampler, TextureView, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -414,6 +414,16 @@ pub struct BindGroupEntry<'a> {
     pub resource: BindingResource<'a>,
 }
 
+/// Bindable resource and the slot to bind it to.
+#[derive(Clone, Debug)]
+pub struct ResolvedBindGroupEntry<'a, A: HalApi> {
+    /// Slot for which binding provides resource. Corresponds to an entry of the same
+    /// binding index in the [`BindGroupLayoutDescriptor`].
+    pub binding: u32,
+    /// Resource to attach to the binding
+    pub resource: ResolvedBindingResource<'a, A>,
+}
+
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -426,6 +436,19 @@ pub struct BindGroupDescriptor<'a> {
     pub layout: BindGroupLayoutId,
     /// The resources to bind to this bind group.
     pub entries: Cow<'a, [BindGroupEntry<'a>]>,
+}
+
+/// Describes a group of bindings and the resources to be bound.
+#[derive(Clone, Debug)]
+pub struct ResolvedBindGroupDescriptor<'a, A: HalApi> {
+    /// Debug label of the bind group.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// The [`BindGroupLayout`] that corresponds to this bind group.
+    pub layout: Arc<BindGroupLayout<A>>,
+    /// The resources to bind to this bind group.
+    pub entries: Cow<'a, [ResolvedBindGroupEntry<'a, A>]>,
 }
 
 /// Describes a [`BindGroupLayout`].
@@ -757,6 +780,13 @@ pub struct BufferBinding {
     pub size: Option<wgt::BufferSize>,
 }
 
+#[derive(Clone, Debug)]
+pub struct ResolvedBufferBinding<A: HalApi> {
+    pub buffer: Arc<Buffer<A>>,
+    pub offset: wgt::BufferAddress,
+    pub size: Option<wgt::BufferSize>,
+}
+
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
@@ -768,6 +798,18 @@ pub enum BindingResource<'a> {
     SamplerArray(Cow<'a, [SamplerId]>),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),
+}
+
+// Note: Duplicated in `wgpu-rs` as `BindingResource`
+// They're different enough that it doesn't make sense to share a common type
+#[derive(Debug, Clone)]
+pub enum ResolvedBindingResource<'a, A: HalApi> {
+    Buffer(ResolvedBufferBinding<A>),
+    BufferArray(Cow<'a, [ResolvedBufferBinding<A>]>),
+    Sampler(Arc<Sampler<A>>),
+    SamplerArray(Cow<'a, [Arc<Sampler<A>>]>),
+    TextureView(Arc<TextureView<A>>),
+    TextureViewArray(Cow<'a, [Arc<TextureView<A>>]>),
 }
 
 #[derive(Clone, Debug, Error)]
