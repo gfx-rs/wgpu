@@ -737,7 +737,7 @@ impl<A: HalApi> Device<A> {
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture<A>>, resource::CreateTextureError> {
         let format_features = self
-            .describe_format_features(&self.adapter, desc.format)
+            .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
         let texture = Texture::new(
@@ -793,7 +793,6 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_texture(
         self: &Arc<Self>,
-        adapter: &Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture<A>>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
@@ -885,7 +884,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let format_features = self
-            .describe_format_features(adapter, desc.format)
+            .describe_format_features(desc.format)
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
 
         if desc.sample_count > 1 {
@@ -932,7 +931,7 @@ impl<A: HalApi> Device<A> {
                         .guaranteed_format_features(self.features)
                         .flags
                         .supported_sample_counts(),
-                    adapter
+                    self.adapter
                         .get_texture_format_features(desc.format)
                         .flags
                         .supported_sample_counts(),
@@ -2850,7 +2849,6 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_render_pipeline(
         self: &Arc<Self>,
-        adapter: &Adapter<A>,
         desc: pipeline::ResolvedRenderPipelineDescriptor<A>,
     ) -> Result<Arc<pipeline::RenderPipeline<A>>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
@@ -3019,7 +3017,7 @@ impl<A: HalApi> Device<A> {
                         ));
                     }
 
-                    let format_features = self.describe_format_features(adapter, cs.format)?;
+                    let format_features = self.describe_format_features(cs.format)?;
                     if !format_features
                         .allowed_usages
                         .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
@@ -3058,7 +3056,7 @@ impl<A: HalApi> Device<A> {
                                 .guaranteed_format_features(self.features)
                                 .flags
                                 .supported_sample_counts(),
-                            adapter
+                            self.adapter
                                 .get_texture_format_features(cs.format)
                                 .flags
                                 .supported_sample_counts(),
@@ -3106,7 +3104,7 @@ impl<A: HalApi> Device<A> {
         if let Some(ds) = depth_stencil_state {
             target_specified = true;
             let error = 'error: {
-                let format_features = self.describe_format_features(adapter, ds.format)?;
+                let format_features = self.describe_format_features(ds.format)?;
                 if !format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
@@ -3137,7 +3135,7 @@ impl<A: HalApi> Device<A> {
                             .guaranteed_format_features(self.features)
                             .flags
                             .supported_sample_counts(),
-                        adapter
+                        self.adapter
                             .get_texture_format_features(ds.format)
                             .flags
                             .supported_sample_counts(),
@@ -3530,12 +3528,11 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn get_texture_format_features(
         &self,
-        adapter: &Adapter<A>,
         format: TextureFormat,
     ) -> wgt::TextureFormatFeatures {
         // Variant of adapter.get_texture_format_features that takes device features into account
         use wgt::TextureFormatFeatureFlags as tfsc;
-        let mut format_features = adapter.get_texture_format_features(format);
+        let mut format_features = self.adapter.get_texture_format_features(format);
         if (format == TextureFormat::R32Float
             || format == TextureFormat::Rg32Float
             || format == TextureFormat::Rgba32Float)
@@ -3548,7 +3545,6 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn describe_format_features(
         &self,
-        adapter: &Adapter<A>,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
         self.require_features(format.required_features())?;
@@ -3564,7 +3560,7 @@ impl<A: HalApi> Device<A> {
             .contains(wgt::DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT);
 
         if using_device_features || downlevel {
-            Ok(self.get_texture_format_features(adapter, format))
+            Ok(self.get_texture_format_features(format))
         } else {
             Ok(format.guaranteed_format_features(self.features))
         }
