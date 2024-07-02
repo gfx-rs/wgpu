@@ -347,7 +347,7 @@ impl RenderBundleEncoder {
         desc: &RenderBundleDescriptor,
         device: &Arc<Device<A>>,
         hub: &Hub<A>,
-    ) -> Result<RenderBundle<A>, RenderBundleError> {
+    ) -> Result<Arc<RenderBundle<A>>, RenderBundleError> {
         let scope = PassErrorScope::Bundle;
 
         device.check_is_valid().map_pass_err(scope)?;
@@ -562,7 +562,7 @@ impl RenderBundleEncoder {
             .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
 
-        Ok(RenderBundle {
+        let render_bundle = RenderBundle {
             base: BasePass {
                 label: desc.label.as_ref().map(|cow| cow.to_string()),
                 commands,
@@ -572,7 +572,7 @@ impl RenderBundleEncoder {
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
-            device,
+            device: device.clone(),
             used: trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
@@ -580,7 +580,17 @@ impl RenderBundleEncoder {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(tracker_indices),
             discard_hal_labels,
-        })
+        };
+
+        let render_bundle = Arc::new(render_bundle);
+
+        device
+            .trackers
+            .lock()
+            .bundles
+            .insert_single(render_bundle.clone());
+
+        Ok(render_bundle)
     }
 
     pub fn set_index_buffer(

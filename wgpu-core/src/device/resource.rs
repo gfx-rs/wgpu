@@ -735,7 +735,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         hal_texture: A::Texture,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Texture<A>, resource::CreateTextureError> {
+    ) -> Result<Arc<Texture<A>>, resource::CreateTextureError> {
         let format_features = self
             .describe_format_features(&self.adapter, desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -750,6 +750,13 @@ impl<A: HalApi> Device<A> {
             false,
         );
 
+        let texture = Arc::new(texture);
+
+        self.trackers
+            .lock()
+            .textures
+            .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+
         Ok(texture)
     }
 
@@ -757,8 +764,8 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         hal_buffer: A::Buffer,
         desc: &resource::BufferDescriptor,
-    ) -> Buffer<A> {
-        Buffer {
+    ) -> Arc<Buffer<A>> {
+        let buffer = Buffer {
             raw: Snatchable::new(hal_buffer),
             device: self.clone(),
             usage: desc.usage,
@@ -772,14 +779,23 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
-        }
+        };
+
+        let buffer = Arc::new(buffer);
+
+        self.trackers
+            .lock()
+            .buffers
+            .insert_single(&buffer, hal::BufferUses::empty());
+
+        buffer
     }
 
     pub(crate) fn create_texture(
         self: &Arc<Self>,
         adapter: &Adapter<A>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Texture<A>, resource::CreateTextureError> {
+    ) -> Result<Arc<Texture<A>>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
 
         self.check_is_valid()?;
@@ -1057,6 +1073,13 @@ impl<A: HalApi> Device<A> {
             true,
         );
 
+        let texture = Arc::new(texture);
+
+        self.trackers
+            .lock()
+            .textures
+            .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+
         Ok(texture)
     }
 
@@ -1064,7 +1087,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
-    ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
+    ) -> Result<Arc<TextureView<A>>, resource::CreateTextureViewError> {
         let snatch_guard = texture.device.snatchable_lock.read();
 
         let texture_raw = texture.try_raw(&snatch_guard)?;
@@ -1339,7 +1362,7 @@ impl<A: HalApi> Device<A> {
             layers: desc.range.base_array_layer..array_layer_end,
         };
 
-        Ok(TextureView {
+        let view = TextureView {
             raw: Snatchable::new(raw),
             parent: texture.clone(),
             device: self.clone(),
@@ -1355,13 +1378,28 @@ impl<A: HalApi> Device<A> {
             selector,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.texture_views.clone()),
-        })
+        };
+
+        let view = Arc::new(view);
+
+        {
+            let mut views = texture.views.lock();
+
+            // Remove stale weak references
+            views.retain(|view| view.strong_count() > 0);
+
+            views.push(Arc::downgrade(&view));
+        }
+
+        self.trackers.lock().views.insert_single(view.clone());
+
+        Ok(view)
     }
 
     pub(crate) fn create_sampler(
         self: &Arc<Self>,
         desc: &resource::SamplerDescriptor,
-    ) -> Result<Sampler<A>, resource::CreateSamplerError> {
+    ) -> Result<Arc<Sampler<A>>, resource::CreateSamplerError> {
         self.check_is_valid()?;
 
         if desc
@@ -1457,7 +1495,8 @@ impl<A: HalApi> Device<A> {
                 .create_sampler(&hal_desc)
                 .map_err(DeviceError::from)?
         };
-        Ok(Sampler {
+
+        let sampler = Sampler {
             raw: Some(raw),
             device: self.clone(),
             label: desc.label.to_string(),
@@ -1465,7 +1504,13 @@ impl<A: HalApi> Device<A> {
             comparison: desc.compare.is_some(),
             filtering: desc.min_filter == wgt::FilterMode::Linear
                 || desc.mag_filter == wgt::FilterMode::Linear,
-        })
+        };
+
+        let sampler = Arc::new(sampler);
+
+        self.trackers.lock().samplers.insert_single(sampler.clone());
+
+        Ok(sampler)
     }
 
     pub(crate) fn create_shader_module<'a>(
@@ -2152,7 +2197,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_bind_group(
         self: &Arc<Self>,
         desc: binding_model::ResolvedBindGroupDescriptor<A>,
-    ) -> Result<BindGroup<A>, binding_model::CreateBindGroupError> {
+    ) -> Result<Arc<BindGroup<A>>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
 
         let layout = desc.layout;
@@ -2327,7 +2372,7 @@ impl<A: HalApi> Device<A> {
             .flat_map(|binding| late_buffer_binding_sizes.get(&binding).cloned())
             .collect();
 
-        Ok(BindGroup {
+        let bind_group = BindGroup {
             raw: Snatchable::new(raw),
             device: self.clone(),
             layout,
@@ -2338,7 +2383,34 @@ impl<A: HalApi> Device<A> {
             used_texture_ranges,
             dynamic_binding_info,
             late_buffer_binding_sizes,
-        })
+        };
+
+        let bind_group = Arc::new(bind_group);
+
+        let weak_ref = Arc::downgrade(&bind_group);
+        for range in &bind_group.used_texture_ranges {
+            let mut bind_groups = range.texture.bind_groups.lock();
+
+            // Remove stale weak references
+            bind_groups.retain(|bg| bg.strong_count() > 0);
+
+            bind_groups.push(weak_ref.clone());
+        }
+        for range in &bind_group.used_buffer_ranges {
+            let mut bind_groups = range.buffer.bind_groups.lock();
+
+            // Remove stale weak references
+            bind_groups.retain(|bg| bg.strong_count() > 0);
+
+            bind_groups.push(weak_ref.clone());
+        }
+
+        self.trackers
+            .lock()
+            .bind_groups
+            .insert_single(bind_group.clone());
+
+        Ok(bind_group)
     }
 
     pub(crate) fn check_array_binding(
@@ -2757,6 +2829,11 @@ impl<A: HalApi> Device<A> {
         };
 
         let pipeline = Arc::new(pipeline);
+
+        self.trackers
+            .lock()
+            .compute_pipelines
+            .insert_single(pipeline.clone());
 
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
@@ -3385,6 +3462,11 @@ impl<A: HalApi> Device<A> {
 
         let pipeline = Arc::new(pipeline);
 
+        self.trackers
+            .lock()
+            .render_pipelines
+            .insert_single(pipeline.clone());
+
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
                 bgl.exclusive_pipeline
@@ -3525,7 +3607,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_query_set(
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
-    ) -> Result<QuerySet<A>, resource::CreateQuerySetError> {
+    ) -> Result<Arc<QuerySet<A>>, resource::CreateQuerySetError> {
         use resource::CreateQuerySetError as Error;
 
         self.check_is_valid()?;
@@ -3552,13 +3634,23 @@ impl<A: HalApi> Device<A> {
         }
 
         let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
-        Ok(QuerySet {
+
+        let query_set = QuerySet {
             raw: Some(unsafe { self.raw().create_query_set(&hal_desc).unwrap() }),
             device: self.clone(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),
             desc: desc.map_label(|_| ()),
-        })
+        };
+
+        let query_set = Arc::new(query_set);
+
+        self.trackers
+            .lock()
+            .query_sets
+            .insert_single(query_set.clone());
+
+        Ok(query_set)
     }
 
     pub(crate) fn lose(&self, message: &str) {

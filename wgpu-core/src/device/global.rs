@@ -487,14 +487,8 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let (id, resource) = fid.assign(Arc::new(texture));
+            let (id, _) = fid.assign(texture);
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
-
-            device
-                .trackers
-                .lock()
-                .textures
-                .insert_single(&resource, hal::TextureUses::UNINITIALIZED);
 
             return (id, None);
         };
@@ -541,14 +535,8 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let (id, resource) = fid.assign(Arc::new(texture));
+            let (id, _) = fid.assign(texture);
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
-
-            device
-                .trackers
-                .lock()
-                .textures
-                .insert_single(&resource, hal::TextureUses::UNINITIALIZED);
 
             return (id, None);
         };
@@ -591,14 +579,8 @@ impl Global {
 
             let buffer = device.create_buffer_from_hal(hal_buffer, desc);
 
-            let (id, buffer) = fid.assign(Arc::new(buffer));
+            let (id, _) = fid.assign(buffer);
             api_log!("Device::create_buffer -> {id:?}");
-
-            device
-                .trackers
-                .lock()
-                .buffers
-                .insert_single(&buffer, hal::BufferUses::empty());
 
             return (id, None);
         };
@@ -711,19 +693,10 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, resource) = fid.assign(Arc::new(view));
-
-            {
-                let mut views = texture.views.lock();
-
-                // Remove stale weak references
-                views.retain(|view| view.strong_count() > 0);
-
-                views.push(Arc::downgrade(&resource));
-            }
+            let (id, _) = fid.assign(view);
 
             api_log!("Texture::create_view({texture_id:?}) -> {id:?}");
-            device.trackers.lock().views.insert_single(resource);
+
             return (id, None);
         };
 
@@ -795,9 +768,8 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, resource) = fid.assign(Arc::new(sampler));
+            let (id, _) = fid.assign(sampler);
             api_log!("Device::create_sampler -> {id:?}");
-            device.trackers.lock().samplers.insert_single(resource);
 
             return (id, None);
         };
@@ -1132,29 +1104,10 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, resource) = fid.assign(Arc::new(bind_group));
-
-            let weak_ref = Arc::downgrade(&resource);
-            for range in &resource.used_texture_ranges {
-                let mut bind_groups = range.texture.bind_groups.lock();
-
-                // Remove stale weak references
-                bind_groups.retain(|bg| bg.strong_count() > 0);
-
-                bind_groups.push(weak_ref.clone());
-            }
-            for range in &resource.used_buffer_ranges {
-                let mut bind_groups = range.buffer.bind_groups.lock();
-
-                // Remove stale weak references
-                bind_groups.retain(|bg| bg.strong_count() > 0);
-
-                bind_groups.push(weak_ref.clone());
-            }
+            let (id, _) = fid.assign(bind_group);
 
             api_log!("Device::create_bind_group -> {id:?}");
 
-            device.trackers.lock().bind_groups.insert_single(resource);
             return (id, None);
         };
 
@@ -1449,9 +1402,9 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, resource) = fid.assign(Arc::new(render_bundle));
+            let (id, _) = fid.assign(render_bundle);
             api_log!("RenderBundleEncoder::finish -> {id:?}");
-            device.trackers.lock().bundles.insert_single(resource);
+
             return (id, None);
         };
 
@@ -1510,9 +1463,8 @@ impl Global {
                 Err(err) => break 'error err,
             };
 
-            let (id, resource) = fid.assign(Arc::new(query_set));
+            let (id, _) = fid.assign(query_set);
             api_log!("Device::create_query_set -> {id:?}");
-            device.trackers.lock().query_sets.insert_single(resource);
 
             return (id, None);
         };
@@ -1707,14 +1659,8 @@ impl Global {
                 }
             }
 
-            let (id, resource) = fid.assign(pipeline);
+            let (id, _) = fid.assign(pipeline);
             api_log!("Device::create_render_pipeline -> {id:?}");
-
-            device
-                .trackers
-                .lock()
-                .render_pipelines
-                .insert_single(resource);
 
             return (id, None);
         };
@@ -1915,14 +1861,9 @@ impl Global {
                 }
             }
 
-            let (id, resource) = fid.assign(pipeline);
+            let (id, _) = fid.assign(pipeline);
             api_log!("Device::create_compute_pipeline -> {id:?}");
 
-            device
-                .trackers
-                .lock()
-                .compute_pipelines
-                .insert_single(resource);
             return (id, None);
         };
 
