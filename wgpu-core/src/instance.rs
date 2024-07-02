@@ -272,13 +272,14 @@ impl<A: HalApi> Adapter<A> {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn create_device_and_queue_from_hal(
         self: &Arc<Self>,
         hal_device: OpenDevice<A>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<(Arc<Device<A>>, Queue<A>), RequestDeviceError> {
+    ) -> Result<(Arc<Device<A>>, Arc<Queue<A>>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
         if let Ok(device) = Device::new(
@@ -294,17 +295,20 @@ impl<A: HalApi> Adapter<A> {
                 device: device.clone(),
                 raw: Some(hal_device.queue),
             };
+            let queue = Arc::new(queue);
+            device.set_queue(&queue);
             return Ok((device, queue));
         }
         Err(RequestDeviceError::OutOfMemory)
     }
 
+    #[allow(clippy::type_complexity)]
     fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<(Arc<Device<A>>, Queue<A>), RequestDeviceError> {
+    ) -> Result<(Arc<Device<A>>, Arc<Queue<A>>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -1078,16 +1082,12 @@ impl Global {
                     Ok((device, queue)) => (device, queue),
                     Err(e) => break 'error e,
                 };
+
             let device_id = device_fid.assign(device);
             resource_log!("Created Device {:?}", device_id);
 
-            let device = hub.devices.get(device_id).unwrap();
-
-            let queue = Arc::new(queue);
-            let queue_id = queue_fid.assign(queue.clone());
+            let queue_id = queue_fid.assign(queue);
             resource_log!("Created Queue {:?}", queue_id);
-
-            device.set_queue(queue);
 
             return (device_id, queue_id, None);
         };
@@ -1130,16 +1130,12 @@ impl Global {
                 Ok(device) => device,
                 Err(e) => break 'error e,
             };
+
             let device_id = devices_fid.assign(device);
             resource_log!("Created Device {:?}", device_id);
 
-            let device = hub.devices.get(device_id).unwrap();
-
-            let queue = Arc::new(queue);
-            let queue_id = queues_fid.assign(queue.clone());
+            let queue_id = queues_fid.assign(queue);
             resource_log!("Created Queue {:?}", queue_id);
-
-            device.set_queue(queue);
 
             return (device_id, queue_id, None);
         };
