@@ -1,4 +1,3 @@
-use std::ops;
 use std::sync::Arc;
 
 use wgt::Backend;
@@ -55,15 +54,6 @@ where
     kind: &'static str,
 }
 
-impl<T> ops::Index<Id<T::Marker>> for Storage<T>
-where
-    T: StorageItem,
-{
-    type Output = Arc<T>;
-    fn index(&self, id: Id<T::Marker>) -> &Arc<T> {
-        self.get(id).unwrap()
-    }
-}
 impl<T> Storage<T>
 where
     T: StorageItem,
