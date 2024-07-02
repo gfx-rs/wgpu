@@ -30,7 +30,6 @@ use crate::{
     Label,
 };
 
-use arrayvec::ArrayVec;
 use hal::Device as _;
 
 use wgt::{BufferAddress, TextureFormat};
@@ -161,7 +160,6 @@ impl Global {
         let hub = A::hub(self);
         let fid = hub.buffers.prepare(id_in);
 
-        let mut to_destroy: ArrayVec<Arc<resource::Buffer<A>>, 2> = ArrayVec::new();
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
@@ -206,7 +204,6 @@ impl Global {
                     ) {
                         Ok(ptr) => ptr,
                         Err(e) => {
-                            to_destroy.push(buffer);
                             break 'error e.into();
                         }
                     }
@@ -230,7 +227,6 @@ impl Global {
                 let stage = match device.create_buffer(&stage_desc, true) {
                     Ok(stage) => stage,
                     Err(e) => {
-                        to_destroy.push(buffer);
                         break 'error e;
                     }
                 };
@@ -240,7 +236,6 @@ impl Global {
                 let mapping = match unsafe { device.raw().map_buffer(stage_raw, 0..stage.size) } {
                     Ok(mapping) => mapping,
                     Err(e) => {
-                        to_destroy.push(buffer);
                         break 'error CreateBufferError::Device(e.into());
                     }
                 };
@@ -279,16 +274,6 @@ impl Global {
 
             return (id, None);
         };
-
-        // Error path
-
-        for buffer in to_destroy {
-            buffer
-                .device
-                .clone()
-                .lock_life()
-                .schedule_resource_destruction(queue::TempResource::Buffer(buffer), !0);
-        }
 
         let id = fid.assign_error();
         (id, Some(error))
