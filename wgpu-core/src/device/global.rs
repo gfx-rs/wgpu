@@ -2113,9 +2113,8 @@ impl Global {
             {
                 let hub = A::hub(self);
                 let surface_guard = self.surfaces.read();
-                let device_guard = hub.devices.read();
 
-                let device = match device_guard.get(device_id) {
+                let device = match hub.devices.get(device_id) {
                     Ok(device) => device,
                     Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
                 };
@@ -2241,7 +2240,7 @@ impl Global {
 
                 let mut presentation = surface.presentation.lock();
                 *presentation = Some(present::Presentation {
-                    device: super::any_device::AnyDevice::new(device.clone()),
+                    device: super::any_device::AnyDevice::new(device),
                     config: config.clone(),
                     acquired_texture: None,
                 });

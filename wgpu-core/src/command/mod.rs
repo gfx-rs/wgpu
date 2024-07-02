@@ -430,17 +430,17 @@ impl<A: HalApi> CommandBuffer<A> {
         id: id::CommandEncoderId,
         lock_on_acquire: bool,
     ) -> Result<Arc<Self>, CommandEncoderError> {
-        let storage = hub.command_buffers.read();
-        match storage.get(id.into_command_buffer_id()) {
+        match hub.command_buffers.get(id.into_command_buffer_id()) {
             Ok(cmd_buf) => {
-                let mut cmd_buf_data = cmd_buf.data.lock();
-                let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+                let mut cmd_buf_data_guard = cmd_buf.data.lock();
+                let cmd_buf_data = cmd_buf_data_guard.as_mut().unwrap();
                 match cmd_buf_data.status {
                     CommandEncoderStatus::Recording => {
                         if lock_on_acquire {
                             cmd_buf_data.status = CommandEncoderStatus::Locked;
                         }
-                        Ok(cmd_buf.clone())
+                        drop(cmd_buf_data_guard);
+                        Ok(cmd_buf)
                     }
                     CommandEncoderStatus::Locked => {
                         // Any operation on a locked encoder is required to put it into the invalid/error state.
