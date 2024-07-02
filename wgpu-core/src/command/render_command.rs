@@ -125,7 +125,7 @@ pub enum RenderCommand {
 
 impl RenderCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
-    #[cfg(feature = "replay")]
+    #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn resolve_render_command_ids<A: HalApi>(
         hub: &crate::hub::Hub<A>,
         commands: &[RenderCommand],

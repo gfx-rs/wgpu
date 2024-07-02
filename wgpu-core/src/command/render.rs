@@ -1456,7 +1456,7 @@ impl Global {
     }
 
     #[doc(hidden)]
-    #[cfg(feature = "replay")]
+    #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn render_pass_end_with_unresolved_commands<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,

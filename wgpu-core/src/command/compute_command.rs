@@ -70,7 +70,7 @@ pub enum ComputeCommand {
 
 impl ComputeCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
-    #[cfg(feature = "replay")]
+    #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn resolve_compute_command_ids<A: HalApi>(
         hub: &crate::hub::Hub<A>,
         commands: &[ComputeCommand],
