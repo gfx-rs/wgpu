@@ -10,11 +10,11 @@ use crate::{
     hal_api::HalApi,
     id::{AdapterId, BufferId, CommandEncoderId, DeviceId, SurfaceId, TextureId, TextureViewId},
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    lock::{Mutex, RwLock},
+    lock::{rank, Mutex, RwLock},
     resource_log,
     snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
-    Label, SubmissionIndex,
+    Label, LabelHelpers, SubmissionIndex,
 };
 
 use hal::CommandEncoder;
@@ -960,6 +960,40 @@ pub struct Texture<A: HalApi> {
 }
 
 impl<A: HalApi> Texture<A> {
+    pub(crate) fn new(
+        device: &Arc<Device<A>>,
+        inner: TextureInner<A>,
+        hal_usage: hal::TextureUses,
+        desc: &TextureDescriptor,
+        format_features: wgt::TextureFormatFeatures,
+        clear_mode: TextureClearMode<A>,
+        init: bool,
+    ) -> Self {
+        Texture {
+            inner: Snatchable::new(inner),
+            device: device.clone(),
+            desc: desc.map_label(|_| ()),
+            hal_usage,
+            format_features,
+            initialization_status: RwLock::new(
+                rank::TEXTURE_INITIALIZATION_STATUS,
+                if init {
+                    TextureInitTracker::new(desc.mip_level_count, desc.array_layer_count())
+                } else {
+                    TextureInitTracker::new(0, 0)
+                },
+            ),
+            full_range: TextureSelector {
+                mips: 0..desc.mip_level_count,
+                layers: 0..desc.array_layer_count(),
+            },
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
+            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
+            views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
+        }
+    }
     /// Checks that the given texture usage contains the required texture usage,
     /// returns an error otherwise.
     pub(crate) fn check_usage(

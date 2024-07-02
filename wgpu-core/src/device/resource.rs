@@ -15,7 +15,7 @@ use crate::{
     hal_label,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
-        TextureInitTracker, TextureInitTrackerAction,
+        TextureInitTrackerAction,
     },
     instance::Adapter,
     lock::{rank, Mutex, MutexGuard, RwLock},
@@ -734,31 +734,23 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_texture_from_hal(
         self: &Arc<Self>,
         hal_texture: A::Texture,
-        hal_usage: hal::TextureUses,
         desc: &resource::TextureDescriptor,
-        format_features: wgt::TextureFormatFeatures,
-        clear_mode: resource::TextureClearMode<A>,
-    ) -> Texture<A> {
-        Texture {
-            inner: Snatchable::new(resource::TextureInner::Native { raw: hal_texture }),
-            device: self.clone(),
-            desc: desc.map_label(|_| ()),
-            hal_usage,
+    ) -> Result<Texture<A>, resource::CreateTextureError> {
+        let format_features = self
+            .describe_format_features(&self.adapter, desc.format)
+            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
+
+        let texture = Texture::new(
+            self,
+            resource::TextureInner::Native { raw: hal_texture },
+            conv::map_texture_usage(desc.usage, desc.format.into()),
+            desc,
             format_features,
-            initialization_status: RwLock::new(
-                rank::TEXTURE_INITIALIZATION_STATUS,
-                TextureInitTracker::new(desc.mip_level_count, desc.array_layer_count()),
-            ),
-            full_range: TextureSelector {
-                mips: 0..desc.mip_level_count,
-                layers: 0..desc.array_layer_count(),
-            },
-            label: desc.label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.textures.clone()),
-            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
-            views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
-            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
-        }
+            resource::TextureClearMode::None,
+            false,
+        );
+
+        Ok(texture)
     }
 
     pub fn create_buffer_from_hal(
@@ -1055,9 +1047,16 @@ impl<A: HalApi> Device<A> {
             resource::TextureClearMode::BufferCopy
         };
 
-        let mut texture =
-            self.create_texture_from_hal(raw_texture, hal_usage, desc, format_features, clear_mode);
-        texture.hal_usage = hal_usage;
+        let texture = Texture::new(
+            self,
+            resource::TextureInner::Native { raw: raw_texture },
+            hal_usage,
+            desc,
+            format_features,
+            clear_mode,
+            true,
+        );
+
         Ok(texture)
     }
 
