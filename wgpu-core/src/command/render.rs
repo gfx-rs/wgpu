@@ -1599,7 +1599,6 @@ impl Global {
             return Err(RenderPassErrorInner::InvalidParentEncoder).map_pass_err(pass_scope);
         };
         cmd_buf.unlock_encoder().map_pass_err(pass_scope)?;
-        let cmd_buf_id = cmd_buf.as_info().id();
 
         let hal_label = hal_label(base.label.as_deref(), self.instance.flags);
 
@@ -1627,10 +1626,7 @@ impl Global {
             *status = CommandEncoderStatus::Error;
             encoder.open_pass(hal_label).map_pass_err(pass_scope)?;
 
-            log::trace!(
-                "Encoding render pass begin in command buffer {:?}",
-                cmd_buf_id
-            );
+            log::trace!("Encoding render pass begin in {}", cmd_buf.error_ident());
 
             let info = RenderPassInfo::start(
                 device,
@@ -1935,7 +1931,7 @@ impl Global {
                 }
             }
 
-            log::trace!("Merging renderpass into cmd_buf {:?}", cmd_buf_id);
+            log::trace!("Merging renderpass into {}", cmd_buf.error_ident());
             let (trackers, pending_discard_init_fixups) = state
                 .info
                 .finish(state.raw_encoder, state.snatch_guard)
