@@ -1075,16 +1075,6 @@ impl<A: HalApi> Texture<A> {
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
-    pub(crate) fn check_destroyed<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<(), DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .map(|_| ())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
-    }
-
     pub(crate) fn inner_mut<'a>(
         &'a self,
         guard: &'a mut ExclusiveSnatchGuard,
