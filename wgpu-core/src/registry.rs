@@ -76,10 +76,10 @@ impl<T: StorageItem> FutureId<'_, T> {
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry.
-    pub fn assign(self, value: Arc<T>) -> (Id<T::Marker>, Arc<T>) {
+    pub fn assign(self, value: Arc<T>) -> Id<T::Marker> {
         let mut data = self.data.write();
         data.insert(self.id, value);
-        (self.id, data.get(self.id).unwrap().clone())
+        self.id
     }
 
     /// Assign an existing resource to a new ID.
@@ -189,7 +189,7 @@ mod tests {
                     for _ in 0..1000 {
                         let value = Arc::new(TestData);
                         let new_id = registry.prepare(None);
-                        let (id, _) = new_id.assign(value);
+                        let id = new_id.assign(value);
                         registry.unregister(id);
                     }
                 });

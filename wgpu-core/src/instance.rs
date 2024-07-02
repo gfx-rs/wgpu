@@ -545,7 +545,7 @@ impl Global {
 
         if any_created {
             #[allow(clippy::arc_with_non_send_sync)]
-            let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+            let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
             Ok(id)
         } else {
             Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
@@ -583,7 +583,7 @@ impl Global {
             gl: None,
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
 
@@ -609,7 +609,7 @@ impl Global {
             gl: None,
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
 
@@ -716,7 +716,7 @@ impl Global {
         for raw in hal_adapters {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-            let (id, _) = hub.adapters.prepare(id_backend).assign(Arc::new(adapter));
+            let id = hub.adapters.prepare(id_backend).assign(Arc::new(adapter));
             list.push(id);
         }
     }
@@ -763,7 +763,7 @@ impl Global {
             None => {
                 let adapter = Adapter::new(list.swap_remove(*selected));
                 log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-                let (id, _) = HalApi::hub(self)
+                let id = HalApi::hub(self)
                     .adapters
                     .prepare(new_id)
                     .assign(Arc::new(adapter));
@@ -947,7 +947,7 @@ impl Global {
 
         let fid = A::hub(self).adapters.prepare(input);
 
-        let (id, _adapter): (_, Arc<Adapter<A>>) = match A::VARIANT {
+        let id = match A::VARIANT {
             #[cfg(vulkan)]
             Backend::Vulkan => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(metal)]
@@ -1078,12 +1078,13 @@ impl Global {
                     Ok((device, queue)) => (device, queue),
                     Err(e) => break 'error e,
                 };
-            let (device_id, _) = device_fid.assign(device);
+            let device_id = device_fid.assign(device);
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
 
-            let (queue_id, queue) = queue_fid.assign(Arc::new(queue));
+            let queue = Arc::new(queue);
+            let queue_id = queue_fid.assign(queue.clone());
             resource_log!("Created Queue {:?}", queue_id);
 
             device.set_queue(queue);
@@ -1129,12 +1130,13 @@ impl Global {
                 Ok(device) => device,
                 Err(e) => break 'error e,
             };
-            let (device_id, _) = devices_fid.assign(device);
+            let device_id = devices_fid.assign(device);
             resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
 
-            let (queue_id, queue) = queues_fid.assign(Arc::new(queue));
+            let queue = Arc::new(queue);
+            let queue_id = queues_fid.assign(queue.clone());
             resource_log!("Created Queue {:?}", queue_id);
 
             device.set_queue(queue);

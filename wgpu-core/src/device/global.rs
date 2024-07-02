@@ -180,7 +180,7 @@ impl Global {
                 }
             };
 
-            let (id, _) = fid.assign(buffer);
+            let id = fid.assign(buffer);
 
             api_log!(
                 "Device::create_buffer({:?}{}) -> {id:?}",
@@ -487,7 +487,7 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let (id, _) = fid.assign(texture);
+            let id = fid.assign(texture);
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             return (id, None);
@@ -535,7 +535,7 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let (id, _) = fid.assign(texture);
+            let id = fid.assign(texture);
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             return (id, None);
@@ -579,7 +579,7 @@ impl Global {
 
             let buffer = device.create_buffer_from_hal(hal_buffer, desc);
 
-            let (id, _) = fid.assign(buffer);
+            let id = fid.assign(buffer);
             api_log!("Device::create_buffer -> {id:?}");
 
             return (id, None);
@@ -693,7 +693,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, _) = fid.assign(view);
+            let id = fid.assign(view);
 
             api_log!("Texture::create_view({texture_id:?}) -> {id:?}");
 
@@ -768,7 +768,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, _) = fid.assign(sampler);
+            let id = fid.assign(sampler);
             api_log!("Device::create_sampler -> {id:?}");
 
             return (id, None);
@@ -855,10 +855,11 @@ impl Global {
                     .set(binding_model::ExclusivePipeline::None)
                     .unwrap();
 
-                let (id_inner, arc) = fid.take().unwrap().assign(Arc::new(bgl));
+                let bgl = Arc::new(bgl);
+                let id_inner = fid.take().unwrap().assign(bgl.clone());
                 id = Some(id_inner);
 
-                Ok(arc)
+                Ok(bgl)
             });
 
             let layout = match bgl_result {
@@ -959,7 +960,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, _) = fid.assign(Arc::new(layout));
+            let id = fid.assign(Arc::new(layout));
             api_log!("Device::create_pipeline_layout -> {id:?}");
             return (id, None);
         };
@@ -1104,7 +1105,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, _) = fid.assign(bind_group);
+            let id = fid.assign(bind_group);
 
             api_log!("Device::create_bind_group -> {id:?}");
 
@@ -1208,7 +1209,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, _) = fid.assign(Arc::new(shader));
+            let id = fid.assign(Arc::new(shader));
             api_log!("Device::create_shader_module -> {id:?}");
             return (id, None);
         };
@@ -1262,7 +1263,7 @@ impl Global {
                 Ok(shader) => shader,
                 Err(e) => break 'error e,
             };
-            let (id, _) = fid.assign(Arc::new(shader));
+            let id = fid.assign(Arc::new(shader));
             api_log!("Device::create_shader_module_spirv -> {id:?}");
             return (id, None);
         };
@@ -1312,7 +1313,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, _) = fid.assign(Arc::new(command_buffer));
+            let id = fid.assign(Arc::new(command_buffer));
             api_log!("Device::create_command_encoder -> {id:?}");
             return (id.into_command_encoder_id(), None);
         };
@@ -1402,7 +1403,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, _) = fid.assign(render_bundle);
+            let id = fid.assign(render_bundle);
             api_log!("RenderBundleEncoder::finish -> {id:?}");
 
             return (id, None);
@@ -1463,7 +1464,7 @@ impl Global {
                 Err(err) => break 'error err,
             };
 
-            let (id, _) = fid.assign(query_set);
+            let id = fid.assign(query_set);
             api_log!("Device::create_query_set -> {id:?}");
 
             return (id, None);
@@ -1659,7 +1660,7 @@ impl Global {
                 }
             }
 
-            let (id, _) = fid.assign(pipeline);
+            let id = fid.assign(pipeline);
             api_log!("Device::create_render_pipeline -> {id:?}");
 
             return (id, None);
@@ -1861,7 +1862,7 @@ impl Global {
                 }
             }
 
-            let (id, _) = fid.assign(pipeline);
+            let id = fid.assign(pipeline);
             api_log!("Device::create_compute_pipeline -> {id:?}");
 
             return (id, None);
@@ -1979,7 +1980,7 @@ impl Global {
             let cache = unsafe { device.create_pipeline_cache(desc) };
             match cache {
                 Ok(cache) => {
-                    let (id, _) = fid.assign(Arc::new(cache));
+                    let id = fid.assign(Arc::new(cache));
                     api_log!("Device::create_pipeline_cache -> {id:?}");
                     return (id, None);
                 }
