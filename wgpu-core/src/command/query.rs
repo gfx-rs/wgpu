@@ -231,7 +231,7 @@ pub(super) fn validate_and_begin_occlusion_query<A: HalApi>(
     let needs_reset = reset_state.is_none();
     query_set.validate_query(SimplifiedQueryType::Occlusion, query_index, reset_state)?;
 
-    tracker.add_single(&query_set);
+    tracker.insert_single(query_set.clone());
 
     if let Some((_old, old_idx)) = active_query.take() {
         return Err(QueryUseError::AlreadyStarted {
@@ -282,7 +282,7 @@ pub(super) fn validate_and_begin_pipeline_statistics_query<A: HalApi>(
         reset_state,
     )?;
 
-    tracker.add_single(&query_set);
+    tracker.insert_single(query_set.clone());
 
     if let Some((_old, old_idx)) = active_query.take() {
         return Err(QueryUseError::AlreadyStarted {
@@ -346,12 +346,12 @@ impl Global {
 
         let raw_encoder = encoder.open()?;
 
-        let query_set_guard = hub.query_sets.read();
-        let query_set = query_set_guard
+        let query_set = hub
+            .query_sets
             .get(query_set_id)
             .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
 
-        tracker.query_sets.add_single(query_set);
+        let query_set = tracker.query_sets.insert_single(query_set);
 
         query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
@@ -393,12 +393,12 @@ impl Global {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
-        let query_set_guard = hub.query_sets.read();
-        let query_set = query_set_guard
+        let query_set = hub
+            .query_sets
             .get(query_set_id)
             .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
 
-        tracker.query_sets.add_single(query_set);
+        let query_set = tracker.query_sets.insert_single(query_set);
 
         query_set.same_device_as(cmd_buf.as_ref())?;
 
