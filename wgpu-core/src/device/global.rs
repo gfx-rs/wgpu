@@ -706,13 +706,6 @@ impl Global {
                 });
             }
 
-            {
-                let snatch_guard = device.snatchable_lock.read();
-                if let Err(e) = texture.check_destroyed(&snatch_guard) {
-                    break 'error e.into();
-                }
-            }
-
             let view = match device.create_texture_view(&texture, desc) {
                 Ok(view) => view,
                 Err(e) => break 'error e,
