@@ -40,7 +40,7 @@ use naga::FastHashMap;
 
 use wgt::{strict_assert, strict_assert_eq};
 
-use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
+use std::{iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
 
 /// Specifies a particular set of subresources in a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -382,9 +382,7 @@ impl<A: HalApi> TextureUsageScope<A> {
                 &mut self.metadata,
                 index,
                 TextureStateProvider::from_option(selector, new_state),
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Borrowed(texture),
-                },
+                ResourceMetadataProvider::Direct { resource: texture },
             )?
         };
 
@@ -537,7 +535,7 @@ impl<A: HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, resource: Arc<Texture<A>>, usage: TextureUses) {
+    pub fn insert_single(&mut self, resource: &Arc<Texture<A>>, usage: TextureUses) {
         let index = resource.tracker_index().as_usize();
 
         self.allow_index(index);
@@ -559,9 +557,7 @@ impl<A: HalApi> TextureTracker<A> {
                 index,
                 TextureStateProvider::KnownSingle { state: usage },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(resource),
-                },
+                ResourceMetadataProvider::Direct { resource },
             )
         };
     }
@@ -597,9 +593,7 @@ impl<A: HalApi> TextureTracker<A> {
                     state: new_state,
                 },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(texture.clone()),
-                },
+                ResourceMetadataProvider::Direct { resource: texture },
                 &mut self.temp,
             )
         }

@@ -5,7 +5,7 @@
  * one subresource, they have no selector.
 !*/
 
-use std::{borrow::Cow, marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 use super::{PendingTransition, ResourceTracker, TrackerIndex};
 use crate::{
@@ -171,9 +171,7 @@ impl<A: HalApi> BufferUsageScope<A> {
                     index as _,
                     index,
                     BufferStateProvider::Direct { state },
-                    ResourceMetadataProvider::Direct {
-                        resource: Cow::Borrowed(resource),
-                    },
+                    ResourceMetadataProvider::Direct { resource },
                 )?
             };
         }
@@ -247,9 +245,7 @@ impl<A: HalApi> BufferUsageScope<A> {
                 index as _,
                 index,
                 BufferStateProvider::Direct { state: new_state },
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(buffer.clone()),
-                },
+                ResourceMetadataProvider::Direct { resource: buffer },
             )?;
         }
 
@@ -387,7 +383,7 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, resource: Arc<Buffer<A>>, state: BufferUses) {
+    pub fn insert_single(&mut self, resource: &Arc<Buffer<A>>, state: BufferUses) {
         let index = resource.tracker_index().as_usize();
 
         self.allow_index(index);
@@ -408,9 +404,7 @@ impl<A: HalApi> BufferTracker<A> {
                 index,
                 BufferStateProvider::Direct { state },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(resource),
-                },
+                ResourceMetadataProvider::Direct { resource },
             )
         }
     }
@@ -441,9 +435,7 @@ impl<A: HalApi> BufferTracker<A> {
                 index,
                 BufferStateProvider::Direct { state },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(buffer.clone()),
-                },
+                ResourceMetadataProvider::Direct { resource: buffer },
                 &mut self.temp,
             )
         };
