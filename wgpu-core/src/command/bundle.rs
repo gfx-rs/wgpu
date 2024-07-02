@@ -710,14 +710,14 @@ fn set_index_buffer<A: HalApi>(
     size: Option<std::num::NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let buffer = buffer_guard
-        .get(buffer_id)
+        .get_owned(buffer_id)
         .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
 
     state
         .trackers
         .buffers
         .write()
-        .merge_single(buffer, hal::BufferUses::INDEX)?;
+        .merge_single(&buffer, hal::BufferUses::INDEX)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDEX)?;
@@ -729,11 +729,11 @@ fn set_index_buffer<A: HalApi>(
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
-            buffer,
+            &buffer,
             offset..end,
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.set_index_buffer(buffer.clone(), index_format, offset..end);
+    state.set_index_buffer(buffer, index_format, offset..end);
     Ok(())
 }
 
@@ -755,14 +755,14 @@ fn set_vertex_buffer<A: HalApi>(
     }
 
     let buffer = buffer_guard
-        .get(buffer_id)
+        .get_owned(buffer_id)
         .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
 
     state
         .trackers
         .buffers
         .write()
-        .merge_single(buffer, hal::BufferUses::VERTEX)?;
+        .merge_single(&buffer, hal::BufferUses::VERTEX)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::VERTEX)?;
@@ -774,11 +774,11 @@ fn set_vertex_buffer<A: HalApi>(
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
-            buffer,
+            &buffer,
             offset..end,
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.vertex[slot as usize] = Some(VertexState::new(buffer.clone(), offset..end));
+    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end));
     Ok(())
 }
 
@@ -897,14 +897,14 @@ fn multi_draw_indirect<A: HalApi>(
     let used_bind_groups = pipeline.used_bind_groups;
 
     let buffer = buffer_guard
-        .get(buffer_id)
+        .get_owned(buffer_id)
         .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
 
     state
         .trackers
         .buffers
         .write()
-        .merge_single(buffer, hal::BufferUses::INDIRECT)?;
+        .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
@@ -912,7 +912,7 @@ fn multi_draw_indirect<A: HalApi>(
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
-            buffer,
+            &buffer,
             offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
             MemoryInitKind::NeedsInitializedMemory,
         ));
@@ -928,7 +928,7 @@ fn multi_draw_indirect<A: HalApi>(
     state.flush_vertices();
     state.flush_binds(used_bind_groups, dynamic_offsets);
     state.commands.push(ArcRenderCommand::MultiDrawIndirect {
-        buffer: buffer.clone(),
+        buffer,
         offset,
         count: None,
         indexed,
