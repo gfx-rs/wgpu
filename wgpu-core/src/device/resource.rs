@@ -2586,17 +2586,13 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_compute_pipeline(
         self: &Arc<Self>,
-        desc: &pipeline::ComputePipelineDescriptor,
-        hub: &Hub<A>,
+        desc: pipeline::ResolvedComputePipelineDescriptor<A>,
     ) -> Result<Arc<pipeline::ComputePipeline<A>>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
-        let shader_module = hub
-            .shader_modules
-            .get(desc.stage.module)
-            .map_err(|_| validation::StageError::InvalidModule)?;
+        let shader_module = desc.stage.module;
 
         shader_module.same_device(self)?;
 
@@ -2604,14 +2600,8 @@ impl<A: HalApi> Device<A> {
 
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
-            Some(pipeline_layout_id) => {
-                let pipeline_layout = hub
-                    .pipeline_layouts
-                    .get(pipeline_layout_id)
-                    .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
-
+            Some(pipeline_layout) => {
                 pipeline_layout.same_device(self)?;
-
                 Some(pipeline_layout)
             }
             None => None,
@@ -2661,16 +2651,12 @@ impl<A: HalApi> Device<A> {
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
-        let cache = 'cache: {
-            let Some(cache) = desc.cache else {
-                break 'cache None;
-            };
-            let Ok(cache) = hub.pipeline_caches.get(cache) else {
-                break 'cache None;
-            };
-
-            cache.same_device(self)?;
-            Some(cache)
+        let cache = match desc.cache {
+            Some(cache) => {
+                cache.same_device(self)?;
+                Some(cache)
+            }
+            None => None,
         };
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
@@ -2732,8 +2718,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_render_pipeline(
         self: &Arc<Self>,
         adapter: &Adapter<A>,
-        desc: &pipeline::RenderPipelineDescriptor,
-        hub: &Hub<A>,
+        desc: pipeline::ResolvedRenderPipelineDescriptor<A>,
     ) -> Result<Arc<pipeline::RenderPipeline<A>>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
 
@@ -2758,16 +2743,18 @@ impl<A: HalApi> Device<A> {
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
 
-        let cts: ArrayVec<_, { hal::MAX_COLOR_ATTACHMENTS }> =
-            color_targets.iter().filter_map(|x| x.as_ref()).collect();
-        if !cts.is_empty() && {
-            let first = &cts[0];
-            cts[1..]
-                .iter()
-                .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
-        } {
-            log::debug!("Color targets: {:?}", color_targets);
-            self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLEND)?;
+        {
+            let cts: ArrayVec<_, { hal::MAX_COLOR_ATTACHMENTS }> =
+                color_targets.iter().filter_map(|x| x.as_ref()).collect();
+            if !cts.is_empty() && {
+                let first = &cts[0];
+                cts[1..]
+                    .iter()
+                    .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
+            } {
+                log::debug!("Color targets: {:?}", color_targets);
+                self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLEND)?;
+            }
         }
 
         let mut io = validation::StageIo::default();
@@ -3043,14 +3030,8 @@ impl<A: HalApi> Device<A> {
 
         // Get the pipeline layout from the desc if it is provided.
         let pipeline_layout = match desc.layout {
-            Some(pipeline_layout_id) => {
-                let pipeline_layout = hub
-                    .pipeline_layouts
-                    .get(pipeline_layout_id)
-                    .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
-
+            Some(pipeline_layout) => {
                 pipeline_layout.same_device(self)?;
-
                 Some(pipeline_layout)
             }
             None => None,
@@ -3071,19 +3052,12 @@ impl<A: HalApi> Device<A> {
             sc
         };
 
-        let vertex_shader_module;
         let vertex_entry_point_name;
-
         let vertex_stage = {
             let stage_desc = &desc.vertex.stage;
             let stage = wgt::ShaderStages::VERTEX;
 
-            vertex_shader_module = hub.shader_modules.get(stage_desc.module).map_err(|_| {
-                pipeline::CreateRenderPipelineError::Stage {
-                    stage,
-                    error: validation::StageError::InvalidModule,
-                }
-            })?;
+            let vertex_shader_module = &stage_desc.module;
             vertex_shader_module.same_device(self)?;
 
             let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
@@ -3118,20 +3092,12 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        let mut fragment_shader_module = None;
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
                 let stage = wgt::ShaderStages::FRAGMENT;
 
-                let shader_module = fragment_shader_module.insert(
-                    hub.shader_modules
-                        .get(fragment_state.stage.module)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
-                            stage,
-                            error: validation::StageError::InvalidModule,
-                        })?,
-                );
+                let shader_module = &fragment_state.stage.module;
 
                 let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
 
@@ -3227,7 +3193,7 @@ impl<A: HalApi> Device<A> {
             Some(_) => wgt::ShaderStages::FRAGMENT,
             None => wgt::ShaderStages::VERTEX,
         };
-        if desc.layout.is_none() && !validated_stages.contains(last_stage) {
+        if is_auto_layout && !validated_stages.contains(last_stage) {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
         }
 
@@ -3265,16 +3231,12 @@ impl<A: HalApi> Device<A> {
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
-        let pipeline_cache = 'cache: {
-            let Some(cache) = desc.cache else {
-                break 'cache None;
-            };
-            let Ok(cache) = hub.pipeline_caches.get(cache) else {
-                break 'cache None;
-            };
-
-            cache.same_device(self)?;
-            Some(cache)
+        let cache = match desc.cache {
+            Some(cache) => {
+                cache.same_device(self)?;
+                Some(cache)
+            }
+            None => None,
         };
 
         let pipeline_desc = hal::RenderPipelineDescriptor {
@@ -3288,7 +3250,7 @@ impl<A: HalApi> Device<A> {
             fragment_stage,
             color_targets,
             multiview: desc.multiview,
-            cache: pipeline_cache.as_ref().and_then(|it| it.raw.as_ref()),
+            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
         };
         let raw = unsafe {
             self.raw
@@ -3346,8 +3308,8 @@ impl<A: HalApi> Device<A> {
 
         let shader_modules = {
             let mut shader_modules = ArrayVec::new();
-            shader_modules.push(vertex_shader_module);
-            shader_modules.extend(fragment_shader_module);
+            shader_modules.push(desc.vertex.stage.module);
+            shader_modules.extend(desc.fragment.map(|f| f.stage.module));
             shader_modules
         };
 

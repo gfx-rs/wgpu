@@ -12,7 +12,11 @@ use crate::{
     init_tracker::TextureInitTracker,
     instance::{self, Adapter, Surface},
     lock::{rank, RwLock},
-    pipeline, present,
+    pipeline::{
+        self, ResolvedComputePipelineDescriptor, ResolvedFragmentState,
+        ResolvedProgrammableStageDescriptor, ResolvedRenderPipelineDescriptor, ResolvedVertexState,
+    },
+    present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
         Trackable,
@@ -1591,6 +1595,8 @@ impl Global {
         let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
+        let is_auto_layout = desc.layout.is_none();
+
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
@@ -1606,12 +1612,107 @@ impl Global {
                 });
             }
 
-            let pipeline = match device.create_render_pipeline(&device.adapter, desc, hub) {
+            let layout = desc
+                .layout
+                .map(|layout| {
+                    hub.pipeline_layouts
+                        .get(layout)
+                        .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)
+                })
+                .transpose();
+            let layout = match layout {
+                Ok(layout) => layout,
+                Err(e) => break 'error e,
+            };
+
+            let cache = desc
+                .cache
+                .map(|cache| {
+                    hub.pipeline_caches
+                        .get(cache)
+                        .map_err(|_| pipeline::CreateRenderPipelineError::InvalidCache)
+                })
+                .transpose();
+            let cache = match cache {
+                Ok(cache) => cache,
+                Err(e) => break 'error e,
+            };
+
+            let vertex = {
+                let module = hub
+                    .shader_modules
+                    .get(desc.vertex.stage.module)
+                    .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
+                        stage: wgt::ShaderStages::VERTEX,
+                        error: crate::validation::StageError::InvalidModule,
+                    });
+                let module = match module {
+                    Ok(module) => module,
+                    Err(e) => break 'error e,
+                };
+                let stage = ResolvedProgrammableStageDescriptor {
+                    module,
+                    entry_point: desc.vertex.stage.entry_point.clone(),
+                    constants: desc.vertex.stage.constants.clone(),
+                    zero_initialize_workgroup_memory: desc
+                        .vertex
+                        .stage
+                        .zero_initialize_workgroup_memory,
+                    vertex_pulling_transform: desc.vertex.stage.vertex_pulling_transform,
+                };
+                ResolvedVertexState {
+                    stage,
+                    buffers: desc.vertex.buffers.clone(),
+                }
+            };
+
+            let fragment = if let Some(ref state) = desc.fragment {
+                let module = hub.shader_modules.get(state.stage.module).map_err(|_| {
+                    pipeline::CreateRenderPipelineError::Stage {
+                        stage: wgt::ShaderStages::FRAGMENT,
+                        error: crate::validation::StageError::InvalidModule,
+                    }
+                });
+                let module = match module {
+                    Ok(module) => module,
+                    Err(e) => break 'error e,
+                };
+                let stage = ResolvedProgrammableStageDescriptor {
+                    module,
+                    entry_point: state.stage.entry_point.clone(),
+                    constants: state.stage.constants.clone(),
+                    zero_initialize_workgroup_memory: desc
+                        .vertex
+                        .stage
+                        .zero_initialize_workgroup_memory,
+                    vertex_pulling_transform: state.stage.vertex_pulling_transform,
+                };
+                Some(ResolvedFragmentState {
+                    stage,
+                    targets: state.targets.clone(),
+                })
+            } else {
+                None
+            };
+
+            let desc = ResolvedRenderPipelineDescriptor {
+                label: desc.label.clone(),
+                layout,
+                vertex,
+                primitive: desc.primitive,
+                depth_stencil: desc.depth_stencil.clone(),
+                multisample: desc.multisample,
+                fragment,
+                multiview: desc.multiview,
+                cache,
+            };
+
+            let pipeline = match device.create_render_pipeline(&device.adapter, desc) {
                 Ok(pair) => pair,
                 Err(e) => break 'error e,
             };
 
-            if desc.layout.is_none() {
+            if is_auto_layout {
                 // TODO: categorize the errors below as API misuse
                 let ids = if let Some(ids) = implicit_context.as_ref() {
                     let group_count = pipeline.layout.bind_group_layouts.len();
@@ -1655,7 +1756,7 @@ impl Global {
 
         let id = fid.assign_error();
 
-        if desc.layout.is_none() {
+        if is_auto_layout {
             // We also need to assign errors to the implicit pipeline layout and the
             // implicit bind group layouts.
             if let Some(ids) = implicit_context {
@@ -1748,6 +1849,8 @@ impl Global {
         let fid = hub.compute_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
+        let is_auto_layout = desc.layout.is_none();
+
         let error = 'error: {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
@@ -1763,12 +1866,61 @@ impl Global {
                 });
             }
 
-            let pipeline = match device.create_compute_pipeline(desc, hub) {
+            let layout = desc
+                .layout
+                .map(|layout| {
+                    hub.pipeline_layouts
+                        .get(layout)
+                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)
+                })
+                .transpose();
+            let layout = match layout {
+                Ok(layout) => layout,
+                Err(e) => break 'error e,
+            };
+
+            let cache = desc
+                .cache
+                .map(|cache| {
+                    hub.pipeline_caches
+                        .get(cache)
+                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidCache)
+                })
+                .transpose();
+            let cache = match cache {
+                Ok(cache) => cache,
+                Err(e) => break 'error e,
+            };
+
+            let module = hub
+                .shader_modules
+                .get(desc.stage.module)
+                .map_err(|_| crate::validation::StageError::InvalidModule);
+            let module = match module {
+                Ok(module) => module,
+                Err(e) => break 'error e.into(),
+            };
+            let stage = ResolvedProgrammableStageDescriptor {
+                module,
+                entry_point: desc.stage.entry_point.clone(),
+                constants: desc.stage.constants.clone(),
+                zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+                vertex_pulling_transform: desc.stage.vertex_pulling_transform,
+            };
+
+            let desc = ResolvedComputePipelineDescriptor {
+                label: desc.label.clone(),
+                layout,
+                stage,
+                cache,
+            };
+
+            let pipeline = match device.create_compute_pipeline(desc) {
                 Ok(pair) => pair,
                 Err(e) => break 'error e,
             };
 
-            if desc.layout.is_none() {
+            if is_auto_layout {
                 // TODO: categorize the errors below as API misuse
                 let ids = if let Some(ids) = implicit_context.as_ref() {
                     let group_count = pipeline.layout.bind_group_layouts.len();
@@ -1811,7 +1963,7 @@ impl Global {
 
         let id = fid.assign_error();
 
-        if desc.layout.is_none() {
+        if is_auto_layout {
             // We also need to assign errors to the implicit pipeline layout and the
             // implicit bind group layouts.
             if let Some(ids) = implicit_context {
