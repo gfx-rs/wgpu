@@ -20,11 +20,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label, id,
-    init_tracker::TextureInitTracker,
-    lock::{rank, Mutex, RwLock},
-    resource::{self, Trackable, TrackingData},
-    snatch::Snatchable,
-    track,
+    resource::{self, Trackable},
 };
 
 use hal::{Queue as _, Surface as _};
@@ -167,7 +163,7 @@ impl Global {
                 drop(fence_guard);
 
                 let texture_desc = wgt::TextureDescriptor {
-                    label: (),
+                    label: Some(std::borrow::Cow::Borrowed("<Surface Texture>")),
                     size: wgt::Extent3d {
                         width: config.width,
                         height: config.height,
@@ -207,34 +203,20 @@ impl Global {
 
                 let mut presentation = surface.presentation.lock();
                 let present = presentation.as_mut().unwrap();
-                let texture = resource::Texture {
-                    inner: Snatchable::new(resource::TextureInner::Surface {
+                let texture = resource::Texture::new(
+                    &device,
+                    resource::TextureInner::Surface {
                         raw: Some(ast.texture),
                         parent_id: surface_id,
-                    }),
-                    device: device.clone(),
-                    desc: texture_desc,
-                    hal_usage,
-                    format_features,
-                    initialization_status: RwLock::new(
-                        rank::TEXTURE_INITIALIZATION_STATUS,
-                        TextureInitTracker::new(1, 1),
-                    ),
-                    full_range: track::TextureSelector {
-                        layers: 0..1,
-                        mips: 0..1,
                     },
-                    label: String::from("<Surface Texture>"),
-                    tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
-                    clear_mode: RwLock::new(
-                        rank::TEXTURE_CLEAR_MODE,
-                        resource::TextureClearMode::Surface {
-                            clear_view: Some(clear_view),
-                        },
-                    ),
-                    views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
-                    bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
-                };
+                    hal_usage,
+                    &texture_desc,
+                    format_features,
+                    resource::TextureClearMode::Surface {
+                        clear_view: Some(clear_view),
+                    },
+                    true,
+                );
 
                 let (id, resource) = fid.assign(Arc::new(texture));
                 log::debug!("Created CURRENT Surface Texture {:?}", id);

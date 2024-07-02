@@ -11,9 +11,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
-    init_tracker::TextureInitTracker,
     instance::{self, Adapter, Surface},
-    lock::{rank, RwLock},
     pipeline::{
         self, ResolvedComputePipelineDescriptor, ResolvedFragmentState,
         ResolvedProgrammableStageDescriptor, ResolvedRenderPipelineDescriptor, ResolvedVertexState,
@@ -538,29 +536,10 @@ impl Global {
                 trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
             }
 
-            let format_features = match device
-                .describe_format_features(&device.adapter, desc.format)
-                .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))
-            {
-                Ok(features) => features,
+            let texture = match device.create_texture_from_hal(hal_texture, desc) {
+                Ok(texture) => texture,
                 Err(error) => break 'error error,
             };
-
-            let mut texture = device.create_texture_from_hal(
-                hal_texture,
-                conv::map_texture_usage(desc.usage, desc.format.into()),
-                desc,
-                format_features,
-                resource::TextureClearMode::None,
-            );
-            if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-                texture.hal_usage |= hal::TextureUses::COPY_DST;
-            }
-
-            texture.initialization_status = RwLock::new(
-                rank::TEXTURE_INITIALIZATION_STATUS,
-                TextureInitTracker::new(desc.mip_level_count, 0),
-            );
 
             let (id, resource) = fid.assign(Arc::new(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
