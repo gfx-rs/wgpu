@@ -2762,8 +2762,7 @@ impl Global {
         let hub = A::hub(self);
         let buffer = hub
             .buffers
-            .read()
-            .get_owned(buffer_id)
+            .get(buffer_id)
             .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
             .map_pass_err(scope)?;
 
@@ -2778,8 +2777,7 @@ impl Global {
         let hub = A::hub(self);
         let query_set = hub
             .query_sets
-            .read()
-            .get_owned(query_set_id)
+            .get(query_set_id)
             .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
             .map_pass_err(scope)?;
 
@@ -2813,8 +2811,7 @@ impl Global {
         let hub = A::hub(self);
         let bind_group = hub
             .bind_groups
-            .read()
-            .get_owned(bind_group_id)
+            .get(bind_group_id)
             .map_err(|_| RenderPassErrorInner::InvalidBindGroup(index))
             .map_pass_err(scope)?;
 
@@ -2845,8 +2842,7 @@ impl Global {
         let hub = A::hub(self);
         let pipeline = hub
             .render_pipelines
-            .read()
-            .get_owned(pipeline_id)
+            .get(pipeline_id)
             .map_err(|_| RenderPassErrorInner::InvalidPipeline(pipeline_id))
             .map_pass_err(scope)?;
 
