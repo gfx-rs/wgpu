@@ -6,8 +6,9 @@ use crate::{
     device::{
         bgl, create_validator,
         life::{LifetimeTracker, WaitIdleError},
+        map_buffer,
         queue::PendingWrites,
-        AttachmentData, DeviceLostInvocation, MissingDownlevelFlags, MissingFeatures,
+        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
         RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
@@ -556,6 +557,76 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn create_buffer(
+        self: &Arc<Self>,
+        desc: &resource::BufferDescriptor,
+    ) -> Result<Arc<Buffer<A>>, resource::CreateBufferError> {
+        let buffer = self.create_buffer_impl(desc, false)?;
+
+        let buffer_use = if !desc.mapped_at_creation {
+            hal::BufferUses::empty()
+        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+            // buffer is mappable, so we are just doing that at start
+            let map_size = buffer.size;
+            let ptr = if map_size == 0 {
+                std::ptr::NonNull::dangling()
+            } else {
+                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
+                map_buffer(
+                    self.raw(),
+                    &buffer,
+                    0,
+                    map_size,
+                    HostMap::Write,
+                    &snatch_guard,
+                )?
+            };
+            *buffer.map_state.lock() = resource::BufferMapState::Active {
+                ptr,
+                range: 0..map_size,
+                host: HostMap::Write,
+            };
+            hal::BufferUses::MAP_WRITE
+        } else {
+            // buffer needs staging area for initialization only
+            let stage_desc = wgt::BufferDescriptor {
+                label: Some(Cow::Borrowed(
+                    "(wgpu internal) initializing unmappable buffer",
+                )),
+                size: desc.size,
+                usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            };
+            let stage = self.create_buffer_impl(&stage_desc, true)?;
+
+            let snatch_guard = self.snatchable_lock.read();
+            let stage_raw = stage.raw(&snatch_guard).unwrap();
+            let mapping = unsafe { self.raw().map_buffer(stage_raw, 0..stage.size) }
+                .map_err(DeviceError::from)?;
+
+            assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
+            // Zero initialize memory and then mark both staging and buffer as initialized
+            // (it's guaranteed that this is the case by the time the buffer is usable)
+            unsafe { std::ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
+            buffer.initialization_status.write().drain(0..buffer.size);
+            stage.initialization_status.write().drain(0..buffer.size);
+
+            *buffer.map_state.lock() = resource::BufferMapState::Init {
+                ptr: mapping.ptr,
+                needs_flush: !mapping.is_coherent,
+                stage_buffer: stage,
+            };
+            hal::BufferUses::COPY_DST
+        };
+
+        self.trackers
+            .lock()
+            .buffers
+            .insert_single(&buffer, buffer_use);
+
+        Ok(buffer)
+    }
+
+    fn create_buffer_impl(
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
         transient: bool,

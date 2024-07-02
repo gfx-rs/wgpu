@@ -7,10 +7,7 @@ use crate::{
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
     command, conv,
-    device::{
-        bgl, life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure,
-        DeviceLostReason, HostMap,
-    },
+    device::{bgl, life::WaitIdleError, queue, DeviceError, DeviceLostClosure, DeviceLostReason},
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -178,84 +175,15 @@ impl Global {
                 trace.add(trace::Action::CreateBuffer(fid.id(), desc));
             }
 
-            let buffer = match device.create_buffer(desc, false) {
+            let buffer = match device.create_buffer(desc) {
                 Ok(buffer) => buffer,
                 Err(e) => {
                     break 'error e;
                 }
             };
 
-            let buffer_use = if !desc.mapped_at_creation {
-                hal::BufferUses::empty()
-            } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-                // buffer is mappable, so we are just doing that at start
-                let map_size = buffer.size;
-                let ptr = if map_size == 0 {
-                    ptr::NonNull::dangling()
-                } else {
-                    let snatch_guard = device.snatchable_lock.read();
-                    match map_buffer(
-                        device.raw(),
-                        &buffer,
-                        0,
-                        map_size,
-                        HostMap::Write,
-                        &snatch_guard,
-                    ) {
-                        Ok(ptr) => ptr,
-                        Err(e) => {
-                            break 'error e.into();
-                        }
-                    }
-                };
-                *buffer.map_state.lock() = resource::BufferMapState::Active {
-                    ptr,
-                    range: 0..map_size,
-                    host: HostMap::Write,
-                };
-                hal::BufferUses::MAP_WRITE
-            } else {
-                // buffer needs staging area for initialization only
-                let stage_desc = wgt::BufferDescriptor {
-                    label: Some(Cow::Borrowed(
-                        "(wgpu internal) initializing unmappable buffer",
-                    )),
-                    size: desc.size,
-                    usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
-                    mapped_at_creation: false,
-                };
-                let stage = match device.create_buffer(&stage_desc, true) {
-                    Ok(stage) => stage,
-                    Err(e) => {
-                        break 'error e;
-                    }
-                };
+            let (id, _) = fid.assign(buffer);
 
-                let snatch_guard = device.snatchable_lock.read();
-                let stage_raw = stage.raw(&snatch_guard).unwrap();
-                let mapping = match unsafe { device.raw().map_buffer(stage_raw, 0..stage.size) } {
-                    Ok(mapping) => mapping,
-                    Err(e) => {
-                        break 'error CreateBufferError::Device(e.into());
-                    }
-                };
-
-                assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
-                // Zero initialize memory and then mark both staging and buffer as initialized
-                // (it's guaranteed that this is the case by the time the buffer is usable)
-                unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
-                buffer.initialization_status.write().drain(0..buffer.size);
-                stage.initialization_status.write().drain(0..buffer.size);
-
-                *buffer.map_state.lock() = resource::BufferMapState::Init {
-                    ptr: mapping.ptr,
-                    needs_flush: !mapping.is_coherent,
-                    stage_buffer: stage,
-                };
-                hal::BufferUses::COPY_DST
-            };
-
-            let (id, resource) = fid.assign(buffer);
             api_log!(
                 "Device::create_buffer({:?}{}) -> {id:?}",
                 desc.label.as_deref().unwrap_or(""),
@@ -265,12 +193,6 @@ impl Global {
                     ""
                 }
             );
-
-            device
-                .trackers
-                .lock()
-                .buffers
-                .insert_single(&resource, buffer_use);
 
             return (id, None);
         };
