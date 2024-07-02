@@ -580,8 +580,6 @@ impl<A: HalApi> Device<A> {
             self.require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)?;
         }
 
-        let mut usage = conv::map_buffer_usage(desc.usage);
-
         if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
             return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
         }
@@ -599,6 +597,8 @@ impl<A: HalApi> Device<A> {
                 return Err(resource::CreateBufferError::UsageMismatch(desc.usage));
             }
         }
+
+        let mut usage = conv::map_buffer_usage(desc.usage);
 
         if desc.mapped_at_creation {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
