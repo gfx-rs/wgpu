@@ -138,6 +138,7 @@ impl RenderCommand {
         let bind_group_guard = hub.bind_groups.read();
         let query_set_guard = hub.query_sets.read();
         let pipelines_guard = hub.render_pipelines.read();
+        let render_bundles_guard = hub.render_bundles.read();
 
         let resolved_commands: Vec<ArcRenderCommand<A>> = commands
             .iter()
@@ -363,12 +364,12 @@ impl RenderCommand {
                     RenderCommand::EndOcclusionQuery => ArcRenderCommand::EndOcclusionQuery,
 
                     RenderCommand::ExecuteBundle(bundle) => ArcRenderCommand::ExecuteBundle(
-                        hub.render_bundles.read().get_owned(bundle).map_err(|_| {
-                            RenderPassError {
+                        render_bundles_guard
+                            .get_owned(bundle)
+                            .map_err(|_| RenderPassError {
                                 scope: PassErrorScope::ExecuteBundle,
                                 inner: RenderCommandError::InvalidRenderBundle(bundle).into(),
-                            }
-                        })?,
+                            })?,
                     ),
                 })
             })
