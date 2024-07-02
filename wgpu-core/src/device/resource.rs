@@ -373,8 +373,8 @@ impl<A: HalApi> Device<A> {
         self.queue.get().as_ref()?.upgrade()
     }
 
-    pub fn set_queue(&self, queue: Arc<Queue<A>>) {
-        assert!(self.queue.set(Arc::downgrade(&queue)).is_ok());
+    pub fn set_queue(&self, queue: &Arc<Queue<A>>) {
+        assert!(self.queue.set(Arc::downgrade(queue)).is_ok());
     }
 
     /// Check this device for completed commands.
