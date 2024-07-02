@@ -280,7 +280,7 @@ impl Global {
                 .trackers
                 .lock()
                 .buffers
-                .insert_single(resource, buffer_use);
+                .insert_single(&resource, buffer_use);
 
             return (id, None);
         };
@@ -593,7 +593,7 @@ impl Global {
                 .trackers
                 .lock()
                 .textures
-                .insert_single(resource, hal::TextureUses::UNINITIALIZED);
+                .insert_single(&resource, hal::TextureUses::UNINITIALIZED);
 
             return (id, None);
         };
@@ -666,7 +666,7 @@ impl Global {
                 .trackers
                 .lock()
                 .textures
-                .insert_single(resource, hal::TextureUses::UNINITIALIZED);
+                .insert_single(&resource, hal::TextureUses::UNINITIALIZED);
 
             return (id, None);
         };
@@ -716,7 +716,7 @@ impl Global {
                 .trackers
                 .lock()
                 .buffers
-                .insert_single(buffer, hal::BufferUses::empty());
+                .insert_single(&buffer, hal::BufferUses::empty());
 
             return (id, None);
         };

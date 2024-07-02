@@ -244,7 +244,7 @@ impl Global {
                     let mut trackers = device.trackers.lock();
                     trackers
                         .textures
-                        .insert_single(resource, hal::TextureUses::UNINITIALIZED);
+                        .insert_single(&resource, hal::TextureUses::UNINITIALIZED);
                 }
 
                 if present.acquired_texture.is_some() {

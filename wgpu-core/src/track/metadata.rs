@@ -1,7 +1,7 @@
 //! The `ResourceMetadata` type.
 
 use bit_vec::BitVec;
-use std::{borrow::Cow, mem, sync::Arc};
+use std::{mem, sync::Arc};
 use wgt::strict_assert;
 
 /// A set of resources, holding a `Arc<T>` and epoch for each member.
@@ -176,7 +176,7 @@ impl<T> ResourceMetadata<T> {
 /// trackers can get new resource metadata from.
 pub(super) enum ResourceMetadataProvider<'a, T> {
     /// Comes directly from explicit values.
-    Direct { resource: Cow<'a, Arc<T>> },
+    Direct { resource: &'a Arc<T> },
     /// Comes from another metadata tracker.
     Indirect { metadata: &'a ResourceMetadata<T> },
 }
