@@ -171,22 +171,6 @@ impl<T: Trackable> StatelessTracker<T> {
         unsafe { self.metadata.insert(index, resource) }
     }
 
-    /// Adds the given resource to the tracker.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single(&mut self, resource: &Arc<T>) {
-        let index = resource.tracker_index().as_usize();
-
-        self.allow_index(index);
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            self.metadata.insert(index, resource.clone());
-        }
-    }
-
     /// Adds the given resources from the given tracker.
     ///
     /// If the ID is higher than the length of internal vectors,

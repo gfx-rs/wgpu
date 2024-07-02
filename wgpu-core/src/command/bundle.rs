@@ -618,10 +618,8 @@ fn set_bind_group<A: HalApi>(
     bind_group_id: id::Id<id::markers::BindGroup>,
 ) -> Result<(), RenderBundleErrorInner> {
     let bind_group = bind_group_guard
-        .get(bind_group_id)
+        .get_owned(bind_group_id)
         .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))?;
-
-    state.trackers.bind_groups.write().add_single(bind_group);
 
     bind_group.same_device(&state.device)?;
 
@@ -655,6 +653,7 @@ fn set_bind_group<A: HalApi>(
         offsets_range,
     );
     unsafe { state.trackers.merge_bind_group(&bind_group.used)? };
+    state.trackers.bind_groups.write().insert_single(bind_group);
     // Note: stateless trackers are not merged: the lifetime reference
     // is held to the bind group itself.
     Ok(())
@@ -669,10 +668,8 @@ fn set_pipeline<A: HalApi>(
     pipeline_id: id::Id<id::markers::RenderPipeline>,
 ) -> Result<(), RenderBundleErrorInner> {
     let pipeline = pipeline_guard
-        .get(pipeline_id)
+        .get_owned(pipeline_id)
         .map_err(|_| RenderCommandError::InvalidPipelineId(pipeline_id))?;
-
-    state.trackers.render_pipelines.write().add_single(pipeline);
 
     pipeline.same_device(&state.device)?;
 
@@ -687,7 +684,7 @@ fn set_pipeline<A: HalApi>(
         return Err(RenderCommandError::IncompatibleStencilAccess(pipeline.error_ident()).into());
     }
 
-    let pipeline_state = PipelineState::new(pipeline);
+    let pipeline_state = PipelineState::new(&pipeline);
 
     state
         .commands
@@ -700,6 +697,12 @@ fn set_pipeline<A: HalApi>(
 
     state.invalidate_bind_groups(&pipeline_state, &pipeline.layout);
     state.pipeline = Some(pipeline_state);
+
+    state
+        .trackers
+        .render_pipelines
+        .write()
+        .insert_single(pipeline);
     Ok(())
 }
 
