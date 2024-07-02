@@ -180,11 +180,6 @@ impl Global {
                 trace.add(trace::Action::CreateBuffer(fid.id(), desc));
             }
 
-            if desc.usage.is_empty() {
-                // Per spec, `usage` must not be zero.
-                break 'error CreateBufferError::InvalidUsage(desc.usage);
-            }
-
             let buffer = match device.create_buffer(desc, false) {
                 Ok(buffer) => buffer,
                 Err(e) => {
