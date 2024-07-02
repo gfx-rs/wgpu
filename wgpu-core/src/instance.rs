@@ -156,11 +156,17 @@ impl Surface {
         &self,
         adapter: &Adapter<A>,
     ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
+        self.get_capabilities_with_raw(&adapter.raw)
+    }
+
+    pub fn get_capabilities_with_raw<A: HalApi>(
+        &self,
+        adapter: &hal::ExposedAdapter<A>,
+    ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
         let suf = A::surface_as_hal(self).ok_or(GetSurfaceSupportError::Unsupported)?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe {
             adapter
-                .raw
                 .adapter
                 .surface_capabilities(suf)
                 .ok_or(GetSurfaceSupportError::Unsupported)?
@@ -192,16 +198,11 @@ impl<A: HalApi> Adapter<A> {
     }
 
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
-        let suf = A::surface_as_hal(surface);
-
-        // If get_surface returns None, then the API does not advertise support for the surface.
+        // If get_capabilities returns Err, then the API does not advertise support for the surface.
         //
         // This could occur if the user is running their app on Wayland but Vulkan does not support
         // VK_KHR_wayland_surface.
-        match suf {
-            Some(suf) => unsafe { self.raw.adapter.surface_capabilities(suf) }.is_some(),
-            None => false,
-        }
+        surface.get_capabilities(self).is_ok()
     }
 
     pub(crate) fn get_texture_format_features(
@@ -800,16 +801,8 @@ impl Global {
                         adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
                     }
                     if let Some(surface) = compatible_surface {
-                        let surface = &A::surface_as_hal(surface);
-                        adapters.retain(|exposed| unsafe {
-                            // If the surface does not exist for this backend,
-                            // then the surface is not supported.
-                            surface.is_some()
-                                && exposed
-                                    .adapter
-                                    .surface_capabilities(surface.unwrap())
-                                    .is_some()
-                        });
+                        adapters
+                            .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
                     }
                     device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
                     (id, adapters)

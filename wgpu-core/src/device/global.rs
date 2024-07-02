@@ -1989,7 +1989,7 @@ impl Global {
         device_id: DeviceId,
         config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
     ) -> Option<present::ConfigureSurfaceError> {
-        use hal::{Adapter as _, Surface as _};
+        use hal::Surface as _;
         use present::ConfigureSurfaceError as E;
         profiling::scope!("surface_configure");
 
@@ -2130,13 +2130,9 @@ impl Global {
                     Err(_) => break 'error E::InvalidSurface,
                 };
 
-                let caps = unsafe {
-                    let suf = A::surface_as_hal(surface);
-                    let adapter = &device.adapter;
-                    match adapter.raw.adapter.surface_capabilities(suf.unwrap()) {
-                        Some(caps) => caps,
-                        None => break 'error E::UnsupportedQueueFamily,
-                    }
+                let caps = match surface.get_capabilities(&device.adapter) {
+                    Ok(caps) => caps,
+                    Err(_) => break 'error E::UnsupportedQueueFamily,
                 };
 
                 let mut hal_view_formats = vec![];
