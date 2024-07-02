@@ -482,7 +482,7 @@ impl Global {
                 trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
             }
 
-            let texture = match device.create_texture(&device.adapter, desc) {
+            let texture = match device.create_texture(desc) {
                 Ok(texture) => texture,
                 Err(error) => break 'error error,
             };
@@ -1603,7 +1603,7 @@ impl Global {
                 cache,
             };
 
-            let pipeline = match device.create_render_pipeline(&device.adapter, desc) {
+            let pipeline = match device.create_render_pipeline(desc) {
                 Ok(pair) => pair,
                 Err(e) => break 'error e,
             };
