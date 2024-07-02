@@ -1043,16 +1043,7 @@ impl Global {
         api_log!("Adapter::drop {adapter_id:?}");
 
         let hub = A::hub(self);
-        let mut adapters_locked = hub.adapters.write();
-
-        let free = match adapters_locked.get(adapter_id) {
-            Ok(adapter) => Arc::strong_count(adapter) == 1,
-            Err(_) => true,
-        };
-        if free {
-            hub.adapters
-                .unregister_locked(adapter_id, &mut *adapters_locked);
-        }
+        hub.adapters.unregister(adapter_id);
     }
 }
 
