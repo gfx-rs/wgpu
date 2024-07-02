@@ -218,16 +218,16 @@ impl Global {
                     true,
                 );
 
-                let (id, resource) = fid.assign(Arc::new(texture));
-                log::debug!("Created CURRENT Surface Texture {:?}", id);
+                let texture = Arc::new(texture);
 
-                {
-                    // register it in the device tracker as uninitialized
-                    let mut trackers = device.trackers.lock();
-                    trackers
-                        .textures
-                        .insert_single(&resource, hal::TextureUses::UNINITIALIZED);
-                }
+                device
+                    .trackers
+                    .lock()
+                    .textures
+                    .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+
+                let id = fid.assign(texture);
+                log::debug!("Created CURRENT Surface Texture {:?}", id);
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
