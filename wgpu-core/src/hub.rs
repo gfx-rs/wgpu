@@ -214,10 +214,7 @@ impl<A: HalApi> Hub<A> {
         }
     }
 
-    //TODO: instead of having a hacky `with_adapters` parameter,
-    // we should have `clear_device(device_id)` that specifically destroys
-    // everything related to a logical device.
-    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>, with_adapters: bool) {
+    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>) {
         use hal::Surface;
 
         let mut devices = self.devices.write();
@@ -257,10 +254,8 @@ impl<A: HalApi> Hub<A> {
         self.queues.write().map.clear();
         devices.map.clear();
 
-        if with_adapters {
-            drop(devices);
-            self.adapters.write().map.clear();
-        }
+        drop(devices);
+        self.adapters.write().map.clear();
     }
 
     pub fn generate_report(&self) -> HubReport {
