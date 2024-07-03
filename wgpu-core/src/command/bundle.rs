@@ -102,6 +102,7 @@ use crate::{
     Label, LabelHelpers,
 };
 use arrayvec::ArrayVec;
+use wgt::SampleCount;
 
 use std::{borrow::Cow, mem::size_of, num::NonZeroU32, ops::Range, sync::Arc};
 use thiserror::Error;
@@ -219,7 +220,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// Sample count this render bundle is capable of rendering to.
     ///
     /// This must match the pipelines and the renderpasses it is used in.
-    pub sample_count: u32,
+    pub sample_count: SampleCount,
     /// If this render bundle will rendering to multiple array layers in the
     /// attachments at the same time.
     pub multiview: Option<NonZeroU32>,
@@ -286,7 +287,7 @@ impl RenderBundleEncoder {
                 },
                 sample_count: {
                     let sc = desc.sample_count;
-                    if sc == 0 || sc > 32 || !sc.is_power_of_two() {
+                    if sc == 0 || sc > 32 || !sc.get().is_power_of_two() {
                         return Err(CreateRenderBundleError::InvalidSampleCount(sc));
                     }
                     sc
@@ -311,7 +312,7 @@ impl RenderBundleEncoder {
                     resolves: ArrayVec::new(),
                     depth_stencil: None,
                 },
-                sample_count: 0,
+                sample_count: SampleCount::no_multisampling(),
                 multiview: None,
             },
             is_depth_read_only: false,
@@ -903,7 +904,7 @@ pub enum CreateRenderBundleError {
     #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
     #[error("Invalid number of samples {0}")]
-    InvalidSampleCount(u32),
+    InvalidSampleCount(SampleCount),
 }
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.

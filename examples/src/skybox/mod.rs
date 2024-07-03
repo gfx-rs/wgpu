@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use std::{f32::consts, mem::size_of};
-use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
+use wgpu::{util::DeviceExt, AstcBlock, AstcChannel, SampleCount};
 
 const IMAGE_SIZE: u32 = 256;
 
@@ -77,7 +77,7 @@ impl Example {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: SampleCount::new(1),
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -329,7 +329,7 @@ impl crate::framework::Example for Example {
             &wgpu::TextureDescriptor {
                 size,
                 mip_level_count: header.level_count,
-                sample_count: 1,
+                sample_count: SampleCount::new(1),
                 dimension: wgpu::TextureDimension::D2,
                 format: skybox_format,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,

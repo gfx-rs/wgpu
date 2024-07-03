@@ -313,7 +313,7 @@ impl<A: hal::Api> Example<A> {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgt::SampleCount::new(1),
             dimension: wgt::TextureDimension::D2,
             format: wgt::TextureFormat::Rgba8UnormSrgb,
             usage: hal::TextureUses::COPY_DST | hal::TextureUses::RESOURCE,
@@ -690,7 +690,7 @@ impl<A: hal::Api> Example<A> {
                 height: self.extent[1],
                 depth_or_array_layers: 1,
             },
-            sample_count: 1,
+            sample_count: wgt::SampleCount::new(1),
             color_attachments: &[Some(hal::ColorAttachment {
                 target: hal::Attachment {
                     view: &surface_tex_view,

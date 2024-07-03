@@ -97,7 +97,7 @@ const TEXTURE_DESCRIPTOR: wgpu::TextureDescriptor = wgpu::TextureDescriptor {
     label: Some("CopyOrigin"),
     size: TEXTURE_SIZE,
     mip_level_count: 1,
-    sample_count: 1,
+    sample_count: wgpu::SampleCount::new(1),
     dimension: wgpu::TextureDimension::D2,
     format: wgpu::TextureFormat::Rgba8UnormSrgb,
     usage: wgpu::TextureUsages::COPY_DST.union(wgpu::TextureUsages::COPY_SRC),

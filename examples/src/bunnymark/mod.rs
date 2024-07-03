@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use nanorand::{Rng, WyRand};
 use std::{borrow::Cow, mem::size_of};
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, SampleCount};
 use winit::{
     event::{ElementState, KeyEvent},
     keyboard::{Key, NamedKey},
@@ -253,7 +253,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 size,
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count: SampleCount::new(1),
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,

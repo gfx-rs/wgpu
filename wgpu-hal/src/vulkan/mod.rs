@@ -42,7 +42,7 @@ use std::{
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::{Mutex, RwLock};
-use wgt::InternalCounter;
+use wgt::{InternalCounter, SampleCount};
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -604,7 +604,7 @@ struct DepthStencilAttachmentKey {
 struct RenderPassKey {
     colors: ArrayVec<Option<ColorAttachmentKey>, { crate::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil: Option<DepthStencilAttachmentKey>,
-    sample_count: u32,
+    sample_count: SampleCount,
     multiview: Option<NonZeroU32>,
 }
 
@@ -622,7 +622,7 @@ struct FramebufferAttachment {
 struct FramebufferKey {
     attachments: ArrayVec<FramebufferAttachment, { MAX_TOTAL_ATTACHMENTS }>,
     extent: wgt::Extent3d,
-    sample_count: u32,
+    sample_count: SampleCount,
 }
 
 struct DeviceShared {
