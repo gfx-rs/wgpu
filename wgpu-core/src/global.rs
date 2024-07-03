@@ -87,13 +87,6 @@ impl Global {
         }
     }
 
-    pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
-        let hub = A::hub(self);
-        let surfaces_locked = self.surfaces.read();
-        // this is used for tests, which keep the adapter
-        hub.clear(&surfaces_locked, false);
-    }
-
     pub fn generate_report(&self) -> GlobalReport {
         GlobalReport {
             surfaces: self.surfaces.generate_report(),
@@ -134,19 +127,19 @@ impl Drop for Global {
         // destroy hubs before the instance gets dropped
         #[cfg(vulkan)]
         {
-            self.hubs.vulkan.clear(&surfaces_locked, true);
+            self.hubs.vulkan.clear(&surfaces_locked);
         }
         #[cfg(metal)]
         {
-            self.hubs.metal.clear(&surfaces_locked, true);
+            self.hubs.metal.clear(&surfaces_locked);
         }
         #[cfg(dx12)]
         {
-            self.hubs.dx12.clear(&surfaces_locked, true);
+            self.hubs.dx12.clear(&surfaces_locked);
         }
         #[cfg(gles)]
         {
-            self.hubs.gl.clear(&surfaces_locked, true);
+            self.hubs.gl.clear(&surfaces_locked);
         }
 
         surfaces_locked.map.clear();
