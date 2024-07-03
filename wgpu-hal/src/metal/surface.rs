@@ -70,12 +70,6 @@ impl super::Surface {
         }
     }
 
-    pub unsafe fn dispose(self) {
-        if let Some(view) = self.view {
-            let () = msg_send![view.as_ptr(), release];
-        }
-    }
-
     /// If not called on the main thread, this will panic.
     #[allow(clippy::transmute_ptr_to_ref)]
     pub unsafe fn from_view(
@@ -174,6 +168,16 @@ impl super::Surface {
             width: (size.width * scale) as u32,
             height: (size.height * scale) as u32,
             depth_or_array_layers: 1,
+        }
+    }
+}
+
+impl Drop for super::Surface {
+    fn drop(&mut self) {
+        if let Some(view) = self.view {
+            unsafe {
+                let () = msg_send![view.as_ptr(), release];
+            }
         }
     }
 }

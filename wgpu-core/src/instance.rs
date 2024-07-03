@@ -112,24 +112,6 @@ impl Instance {
             flags: instance_desc.flags,
         }
     }
-
-    pub(crate) fn destroy_surface(&self, surface: Surface) {
-        fn destroy<A: HalApi>(instance: &Option<A::Instance>, mut surface: Option<HalSurface<A>>) {
-            if let Some(surface) = surface.take() {
-                unsafe {
-                    instance.as_ref().unwrap().destroy_surface(surface);
-                }
-            }
-        }
-        #[cfg(vulkan)]
-        destroy::<hal::api::Vulkan>(&self.vulkan, surface.vulkan);
-        #[cfg(metal)]
-        destroy::<hal::api::Metal>(&self.metal, surface.metal);
-        #[cfg(dx12)]
-        destroy::<hal::api::Dx12>(&self.dx12, surface.dx12);
-        #[cfg(gles)]
-        destroy::<hal::api::Gles>(&self.gl, surface.gl);
-    }
 }
 
 pub struct Surface {
@@ -707,7 +689,7 @@ impl Global {
             #[cfg(gles)]
             unconfigure::<hal::api::Gles>(self, &surface.gl, &present);
         }
-        self.instance.destroy_surface(surface);
+        drop(surface)
     }
 
     fn enumerate<A: HalApi>(

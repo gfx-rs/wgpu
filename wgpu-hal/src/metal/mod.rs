@@ -117,10 +117,6 @@ impl crate::Instance for Instance {
         }
     }
 
-    unsafe fn destroy_surface(&self, surface: Surface) {
-        unsafe { surface.dispose() };
-    }
-
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Surface>,

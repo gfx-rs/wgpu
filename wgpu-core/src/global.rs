@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use wgt::Backend;
 
 use crate::{
@@ -8,7 +6,6 @@ use crate::{
     instance::{Instance, Surface},
     registry::{Registry, RegistryReport},
     resource_log,
-    storage::Element,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -152,14 +149,7 @@ impl Drop for Global {
             self.hubs.gl.clear(&surfaces_locked, true);
         }
 
-        // destroy surfaces
-        for element in surfaces_locked.map.drain(..) {
-            if let Element::Occupied(arc_surface, _) = element {
-                let surface = Arc::into_inner(arc_surface)
-                    .expect("Surface cannot be destroyed because is still in use");
-                self.instance.destroy_surface(surface);
-            }
-        }
+        surfaces_locked.map.clear();
     }
 }
 
