@@ -263,13 +263,6 @@ impl<A: HalApi> Hub<A> {
         }
     }
 
-    pub(crate) fn surface_unconfigure(&self, device: &Device<A>, surface: &A::Surface) {
-        unsafe {
-            use hal::Surface;
-            surface.unconfigure(device.raw());
-        }
-    }
-
     pub fn generate_report(&self) -> HubReport {
         HubReport {
             adapters: self.adapters.generate_report(),
