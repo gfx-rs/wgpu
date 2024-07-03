@@ -530,7 +530,7 @@ impl Global {
             let tlas = tlas_guard
                 .get(entry.tlas_id)
                 .map_err(|_| BuildAccelerationStructureError::InvalidTlas(entry.tlas_id))?;
-            cmd_buf_data.trackers.tlas_s.add_single(&tlas);
+            cmd_buf_data.trackers.tlas_s.add_single(tlas);
 
             if tlas.raw.is_none() {
                 return Err(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id));
@@ -842,7 +842,7 @@ impl Global {
             let blas = blas_guard
                 .get(entry.blas_id)
                 .map_err(|_| BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
-            cmd_buf_data.trackers.blas_s.add_single(&blas);
+            cmd_buf_data.trackers.blas_s.add_single(blas);
 
             if blas.raw.is_none() {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));

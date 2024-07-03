@@ -172,13 +172,13 @@ impl Global {
         let fid = hub.blas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
-        let error = loop {
+        let error = 'error: {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::InvalidDeviceId.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
-                break DeviceError::Lost.into();
+                break 'error DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -192,7 +192,7 @@ impl Global {
 
             let blas = match device.create_blas(device_id, desc, sizes) {
                 Ok(blas) => blas,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
             let handle = blas.handle;
 
@@ -220,10 +220,10 @@ impl Global {
         let fid = hub.tlas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
-        let error = loop {
+        let error = 'error: {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::InvalidDeviceId.into(),
+                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
             };
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
@@ -235,7 +235,7 @@ impl Global {
 
             let tlas = match device.create_tlas(device_id, desc) {
                 Ok(tlas) => tlas,
-                Err(e) => break e,
+                Err(e) => break 'error e,
             };
 
             let (id, resource) = fid.assign(Arc::new(tlas));
