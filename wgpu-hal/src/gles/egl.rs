@@ -1001,7 +1001,10 @@ impl crate::Instance for Instance {
 
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&Surface>,
+    ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let inner = self.inner.lock();
         inner.egl.make_current();
 

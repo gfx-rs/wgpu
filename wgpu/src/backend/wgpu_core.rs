@@ -61,6 +61,7 @@ impl ContextWgpuCore {
         Self(unsafe { wgc::global::Global::from_instance(core_instance) })
     }
 
+    #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| None))
