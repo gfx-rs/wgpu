@@ -662,15 +662,11 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        fn unconfigure<A: HalApi>(
-            global: &Global,
-            surface: &Option<HalSurface<A>>,
-            present: &Presentation,
-        ) {
+        fn unconfigure<A: HalApi>(surface: &Option<HalSurface<A>>, present: &Presentation) {
             if let Some(surface) = surface {
-                let hub = HalApi::hub(global);
                 if let Some(device) = present.device.downcast_ref::<A>() {
-                    hub.surface_unconfigure(device, surface);
+                    use hal::Surface;
+                    unsafe { surface.unconfigure(device.raw()) };
                 }
             }
         }
@@ -681,13 +677,13 @@ impl Global {
 
         if let Some(present) = surface.presentation.lock().take() {
             #[cfg(vulkan)]
-            unconfigure::<hal::api::Vulkan>(self, &surface.vulkan, &present);
+            unconfigure::<hal::api::Vulkan>(&surface.vulkan, &present);
             #[cfg(metal)]
-            unconfigure::<hal::api::Metal>(self, &surface.metal, &present);
+            unconfigure::<hal::api::Metal>(&surface.metal, &present);
             #[cfg(dx12)]
-            unconfigure::<hal::api::Dx12>(self, &surface.dx12, &present);
+            unconfigure::<hal::api::Dx12>(&surface.dx12, &present);
             #[cfg(gles)]
-            unconfigure::<hal::api::Gles>(self, &surface.gl, &present);
+            unconfigure::<hal::api::Gles>(&surface.gl, &present);
         }
         drop(surface)
     }
