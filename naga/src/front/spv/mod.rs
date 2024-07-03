@@ -4335,7 +4335,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         if !self.upgrade_atomics.is_empty() {
             log::info!("Upgrading atomic pointers...");
-            module.upgrade_atomics(std::mem::take(&mut self.upgrade_atomics))?;
+            module.upgrade_atomics(mem::take(&mut self.upgrade_atomics))?;
         }
 
         // Do entry point specific processing after all functions are parsed so that we can
