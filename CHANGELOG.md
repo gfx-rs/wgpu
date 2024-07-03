@@ -137,6 +137,11 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 #### General
 
 - Added `as_hal` for `Buffer` to access wgpu created buffers form wgpu-hal. By @JasondeWolff in [#5724](https://github.com/gfx-rs/wgpu/pull/5724)
+- Added memory allocation hints to `DeviceDescriptor` by @nical in [#5875](https://github.com/gfx-rs/wgpu/pull/5875)
+    - `MemoryHints::Performance`, the default, favors performance over memory usage and will likely cause large amounts of VRAM to be allocated up-front. This hint is typically good for games.
+    - `MemoryHints::MemoryUsage` favors memory usage over performance. This hint is typically useful for smaller applications or UI libraries.
+    - `MemoryHints::Manual` allows the user to specify parameters tofor the underlying GPU memory allocator. These parameters are subject to change.
+    - These hints may be ignored by some backends. Currently only the vulkan and d3d12 backends take them into account.
 
 #### Naga
 
