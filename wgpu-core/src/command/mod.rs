@@ -30,7 +30,6 @@ pub use timestamp_writes::PassTimestampWrites;
 use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::device::{Device, DeviceError};
-use crate::hub::Hub;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
@@ -425,65 +424,41 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
-    fn get_encoder_impl(
-        hub: &Hub<A>,
-        id: id::CommandEncoderId,
-        lock_on_acquire: bool,
-    ) -> Result<Arc<Self>, CommandEncoderError> {
-        match hub.command_buffers.get(id.into_command_buffer_id()) {
-            Ok(cmd_buf) => {
-                let mut cmd_buf_data_guard = cmd_buf.data.lock();
-                let cmd_buf_data = cmd_buf_data_guard.as_mut().unwrap();
-                match cmd_buf_data.status {
-                    CommandEncoderStatus::Recording => {
-                        if lock_on_acquire {
-                            cmd_buf_data.status = CommandEncoderStatus::Locked;
-                        }
-                        drop(cmd_buf_data_guard);
-                        Ok(cmd_buf)
-                    }
-                    CommandEncoderStatus::Locked => {
-                        // Any operation on a locked encoder is required to put it into the invalid/error state.
-                        // See https://www.w3.org/TR/webgpu/#encoder-state-locked
-                        cmd_buf_data.encoder.discard();
-                        cmd_buf_data.status = CommandEncoderStatus::Error;
-                        Err(CommandEncoderError::Locked)
-                    }
-                    CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
-                    CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
+    fn lock_encoder_impl(&self, lock: bool) -> Result<(), CommandEncoderError> {
+        let mut cmd_buf_data_guard = self.data.lock();
+        let cmd_buf_data = cmd_buf_data_guard.as_mut().unwrap();
+        match cmd_buf_data.status {
+            CommandEncoderStatus::Recording => {
+                if lock {
+                    cmd_buf_data.status = CommandEncoderStatus::Locked;
                 }
+                Ok(())
             }
-            Err(_) => Err(CommandEncoderError::Invalid),
+            CommandEncoderStatus::Locked => {
+                // Any operation on a locked encoder is required to put it into the invalid/error state.
+                // See https://www.w3.org/TR/webgpu/#encoder-state-locked
+                cmd_buf_data.encoder.discard();
+                cmd_buf_data.status = CommandEncoderStatus::Error;
+                Err(CommandEncoderError::Locked)
+            }
+            CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
+            CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
         }
     }
 
-    /// Return the [`CommandBuffer`] for `id`, for recording new commands.
-    ///
-    /// In `wgpu_core`, the [`CommandBuffer`] type serves both as encoder and
-    /// buffer, which is why this function takes an [`id::CommandEncoderId`] but
-    /// returns a [`CommandBuffer`]. The returned command buffer must be in the
-    /// "recording" state. Otherwise, an error is returned.
-    fn get_encoder(
-        hub: &Hub<A>,
-        id: id::CommandEncoderId,
-    ) -> Result<Arc<Self>, CommandEncoderError> {
-        let lock_on_acquire = false;
-        Self::get_encoder_impl(hub, id, lock_on_acquire)
+    /// Checks that the encoder is in the [`CommandEncoderStatus::Recording`] state.
+    fn check_recording(&self) -> Result<(), CommandEncoderError> {
+        self.lock_encoder_impl(false)
     }
 
-    /// Return the [`CommandBuffer`] for `id` and if successful puts it into the [`CommandEncoderStatus::Locked`] state.
+    /// Locks the encoder by putting it in the [`CommandEncoderStatus::Locked`] state.
     ///
-    /// See [`CommandBuffer::get_encoder`].
     /// Call [`CommandBuffer::unlock_encoder`] to put the [`CommandBuffer`] back into the [`CommandEncoderStatus::Recording`] state.
-    fn lock_encoder(
-        hub: &Hub<A>,
-        id: id::CommandEncoderId,
-    ) -> Result<Arc<Self>, CommandEncoderError> {
-        let lock_on_acquire = true;
-        Self::get_encoder_impl(hub, id, lock_on_acquire)
+    fn lock_encoder(&self) -> Result<(), CommandEncoderError> {
+        self.lock_encoder_impl(true)
     }
 
-    /// Unlocks the [`CommandBuffer`] for `id` and puts it back into the [`CommandEncoderStatus::Recording`] state.
+    /// Unlocks the [`CommandBuffer`] and puts it back into the [`CommandEncoderStatus::Recording`] state.
     ///
     /// This function is the counterpart to [`CommandBuffer::lock_encoder`].
     /// It is only valid to call this function if the encoder is in the [`CommandEncoderStatus::Locked`] state.
@@ -661,7 +636,12 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id)?;
+        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         #[cfg(feature = "trace")]
@@ -692,7 +672,12 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id)?;
+        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -723,7 +708,12 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id)?;
+        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

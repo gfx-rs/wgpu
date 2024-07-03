@@ -2,7 +2,7 @@
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
-    command::{clear_texture, CommandBuffer, CommandEncoderError},
+    command::{clear_texture, CommandEncoderError},
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags},
     global::Global,
@@ -544,7 +544,15 @@ impl Global {
         }
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -702,7 +710,15 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let device = &cmd_buf.device;
         device.check_is_valid()?;
 
@@ -858,7 +874,15 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let device = &cmd_buf.device;
         device.check_is_valid()?;
 
@@ -1026,7 +1050,15 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let device = &cmd_buf.device;
         device.check_is_valid()?;
 

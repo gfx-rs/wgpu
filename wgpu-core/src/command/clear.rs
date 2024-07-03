@@ -4,7 +4,7 @@ use std::{ops::Range, sync::Arc};
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
-    command::CommandBuffer,
+    command::CommandEncoderError,
     device::DeviceError,
     get_lowest_common_denom,
     global::Global,
@@ -76,7 +76,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    CommandEncoderError(#[from] super::CommandEncoderError),
+    CommandEncoderError(#[from] CommandEncoderError),
 }
 
 impl Global {
@@ -92,7 +92,15 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -176,7 +184,15 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

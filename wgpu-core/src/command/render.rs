@@ -1432,9 +1432,16 @@ impl Global {
             occlusion_query_set: None,
         };
 
-        let cmd_buf = match CommandBuffer::lock_encoder(hub, encoder_id) {
+        let make_err = |e, arc_desc| (RenderPass::new(None, arc_desc), Some(e));
+
+        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => cmd_buf,
-            Err(e) => return (RenderPass::new(None, arc_desc), Some(e)),
+            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
+        };
+
+        match cmd_buf.lock_encoder() {
+            Ok(_) => {}
+            Err(e) => return make_err(e, arc_desc),
         };
 
         let err = fill_arc_desc(hub, &cmd_buf.device, desc, &mut arc_desc).err();
@@ -1471,8 +1478,11 @@ impl Global {
         #[cfg(feature = "trace")]
         {
             let hub = A::hub(self);
-            let cmd_buf: Arc<CommandBuffer<A>> =
-                CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(pass_scope)?;
+
+            let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
+                Ok(cmd_buf) => cmd_buf,
+                Err(_) => return Err(CommandEncoderError::Invalid).map_pass_err(pass_scope)?,
+            };
 
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
