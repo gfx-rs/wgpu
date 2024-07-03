@@ -712,7 +712,7 @@ impl Global {
         profiling::scope!("enumerating", &*format!("{:?}", A::VARIANT));
         let hub = HalApi::hub(self);
 
-        let hal_adapters = unsafe { inst.enumerate_adapters() };
+        let hal_adapters = unsafe { inst.enumerate_adapters(None) };
         for raw in hal_adapters {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
@@ -791,7 +791,9 @@ impl Global {
             let id = inputs.find(A::VARIANT);
             match (id, instance) {
                 (Some(id), Some(inst)) => {
-                    let mut adapters = unsafe { inst.enumerate_adapters() };
+                    let compatible_hal_surface =
+                        compatible_surface.and_then(|surface| A::surface_as_hal(surface));
+                    let mut adapters = unsafe { inst.enumerate_adapters(compatible_hal_surface) };
                     if force_software {
                         adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
                     }
