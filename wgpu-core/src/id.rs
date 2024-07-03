@@ -323,6 +323,9 @@ ids! {
     pub type QuerySetId QuerySet;
 }
 
+// The CommandBuffer type serves both as encoder and
+// buffer, which is why the 2 functions below exist.
+
 impl CommandEncoderId {
     pub fn into_command_buffer_id(self) -> CommandBufferId {
         Id(self.0, PhantomData)

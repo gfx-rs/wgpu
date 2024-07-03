@@ -301,35 +301,40 @@ impl Global {
             timestamp_writes: None, // Handle only once we resolved the encoder.
         };
 
-        match CommandBuffer::lock_encoder(hub, encoder_id) {
-            Ok(cmd_buf) => {
-                arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                    let Ok(query_set) = hub.query_sets.get(tw.query_set) else {
-                        return (
-                            ComputePass::new(None, arc_desc),
-                            Some(CommandEncoderError::InvalidTimestampWritesQuerySetId(
-                                tw.query_set,
-                            )),
-                        );
-                    };
+        let make_err = |e, arc_desc| (ComputePass::new(None, arc_desc), Some(e));
 
-                    if let Err(e) = query_set.same_device_as(cmd_buf.as_ref()) {
-                        return (ComputePass::new(None, arc_desc), Some(e.into()));
-                    }
+        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
+        };
 
-                    Some(ArcPassTimestampWrites {
-                        query_set,
-                        beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                        end_of_pass_write_index: tw.end_of_pass_write_index,
-                    })
-                } else {
-                    None
-                };
+        match cmd_buf.lock_encoder() {
+            Ok(_) => {}
+            Err(e) => return make_err(e, arc_desc),
+        };
 
-                (ComputePass::new(Some(cmd_buf), arc_desc), None)
+        arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
+            let Ok(query_set) = hub.query_sets.get(tw.query_set) else {
+                return make_err(
+                    CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set),
+                    arc_desc,
+                );
+            };
+
+            if let Err(e) = query_set.same_device_as(cmd_buf.as_ref()) {
+                return make_err(e.into(), arc_desc);
             }
-            Err(err) => (ComputePass::new(None, arc_desc), Some(err)),
-        }
+
+            Some(ArcPassTimestampWrites {
+                query_set,
+                beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                end_of_pass_write_index: tw.end_of_pass_write_index,
+            })
+        } else {
+            None
+        };
+
+        (ComputePass::new(Some(cmd_buf), arc_desc), None)
     }
 
     /// Creates a type erased compute pass.
@@ -378,7 +383,11 @@ impl Global {
         let hub = A::hub(self);
         let scope = PassErrorScope::Pass;
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(scope)?;
+        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid).map_pass_err(scope),
+        };
+        cmd_buf.check_recording().map_pass_err(scope)?;
 
         #[cfg(feature = "trace")]
         {
