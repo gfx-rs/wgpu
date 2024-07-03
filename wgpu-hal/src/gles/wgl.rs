@@ -535,7 +535,6 @@ impl crate::Instance for Instance {
             srgb_capable: self.srgb_capable,
         })
     }
-    unsafe fn destroy_surface(&self, _surface: Surface) {}
 
     unsafe fn enumerate_adapters(
         &self,

@@ -248,7 +248,6 @@ impl<A: HalApi> Hub<A> {
                         let suf = A::surface_as_hal(surface);
                         unsafe {
                             suf.unwrap().unconfigure(device.raw());
-                            //TODO: we could destroy the surface here
                         }
                     }
                 }
