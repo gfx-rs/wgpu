@@ -175,7 +175,7 @@ impl Global {
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break DeviceError::InvalidDeviceId.into(),
             };
             if !device.is_valid() {
                 break DeviceError::Lost.into();
@@ -223,7 +223,7 @@ impl Global {
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
+                Err(_) => break DeviceError::InvalidDeviceId.into(),
             };
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {

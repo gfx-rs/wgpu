@@ -2271,10 +2271,8 @@ impl<A: HalApi> Device<A> {
                     (res_index, num_bindings)
                 }
                 Br::AccelerationStructure(id) => {
-                    let tlas = used
-                        .acceleration_structures
-                        .add_single(&tlas_guard, id)
-                        .ok_or(Error::InvalidTlas(id))?;
+                    let tlas = tlas_guard.get(id).map_err(|_| Error::InvalidTlas(id))?;
+                    used.acceleration_structures.add_single(tlas);
 
                     let raw = tlas.raw.as_ref().ok_or(Error::InvalidTlas(id))?;
 

@@ -145,11 +145,12 @@ impl Global {
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         for entry in blas_iter {
-            let blas = cmd_buf_data
-                .trackers
-                .blas_s
-                .add_single(&blas_guard, entry.blas_id)
-                .ok_or(BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
+            let blas = cmd_buf_data.trackers.blas_s.insert_single(
+                blas_guard
+                    .get(entry.blas_id)
+                    .map_err(|_| BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?
+                    .clone(),
+            );
 
             if blas.raw.is_none() {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
@@ -198,23 +199,18 @@ impl Global {
                                 entry.blas_id,
                             ));
                         }
-                        let (vertex_buffer, vertex_pending) = cmd_buf_data
-                            .trackers
-                            .buffers
-                            .set_single(
-                                match buffer_guard.get(mesh.vertex_buffer) {
-                                    Ok(buffer) => buffer,
-                                    Err(_) => {
-                                        return Err(BuildAccelerationStructureError::InvalidBuffer(
-                                            mesh.vertex_buffer,
-                                        ))
-                                    }
-                                },
-                                BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                            )
-                            .ok_or(BuildAccelerationStructureError::InvalidBuffer(
-                                mesh.vertex_buffer,
-                            ))?;
+                        let vertex_buffer = match buffer_guard.get(mesh.vertex_buffer) {
+                            Ok(buffer) => buffer,
+                            Err(_) => {
+                                return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                    mesh.vertex_buffer,
+                                ))
+                            }
+                        };
+                        let vertex_pending = cmd_buf_data.trackers.buffers.set_single(
+                            vertex_buffer,
+                            BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        );
                         let index_data = if let Some(index_id) = mesh.index_buffer {
                             if mesh.index_buffer_offset.is_none()
                                 || mesh.size.index_count.is_none()
@@ -226,24 +222,19 @@ impl Global {
                                     ),
                                 );
                             }
-                            let data = cmd_buf_data
-                                .trackers
-                                .buffers
-                                .set_single(
-                                    match buffer_guard.get(index_id) {
-                                        Ok(buffer) => buffer,
-                                        Err(_) => {
-                                            return Err(
-                                                BuildAccelerationStructureError::InvalidBuffer(
-                                                    index_id,
-                                                ),
-                                            )
-                                        }
-                                    },
-                                    hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                                )
-                                .ok_or(BuildAccelerationStructureError::InvalidBuffer(index_id))?;
-                            Some(data)
+                            let index_buffer = match buffer_guard.get(index_id) {
+                                Ok(buffer) => buffer,
+                                Err(_) => {
+                                    return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                        index_id,
+                                    ))
+                                }
+                            };
+                            let data = cmd_buf_data.trackers.buffers.set_single(
+                                index_buffer,
+                                hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                            );
+                            Some((index_buffer.clone(), data))
                         } else {
                             None
                         };
@@ -255,32 +246,32 @@ impl Global {
                                     ),
                                 );
                             }
-                            let data = cmd_buf_data
-                                .trackers
-                                .buffers
-                                .set_single(
-                                    match buffer_guard.get(transform_id) {
-                                        Ok(buffer) => buffer,
-                                        Err(_) => {
-                                            return Err(
-                                                BuildAccelerationStructureError::InvalidBuffer(
-                                                    transform_id,
-                                                ),
-                                            )
-                                        }
-                                    },
-                                    BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                                )
-                                .ok_or(BuildAccelerationStructureError::InvalidBuffer(
-                                    transform_id,
-                                ))?;
-                            Some(data)
+                            let transform_buffer = match buffer_guard.get(transform_id) {
+                                Ok(buffer) => buffer,
+                                Err(_) => {
+                                    return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                        transform_id,
+                                    ))
+                                }
+                            };
+                            let data = cmd_buf_data.trackers.buffers.set_single(
+                                match buffer_guard.get(transform_id) {
+                                    Ok(buffer) => buffer,
+                                    Err(_) => {
+                                        return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                            transform_id,
+                                        ))
+                                    }
+                                },
+                                BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                            );
+                            Some((transform_buffer.clone(), data))
                         } else {
                             None
                         };
 
                         buf_storage.push((
-                            vertex_buffer,
+                            vertex_buffer.clone(),
                             vertex_pending,
                             index_data,
                             transform_data,
@@ -500,24 +491,19 @@ impl Global {
         )>::new();
 
         for entry in tlas_iter {
-            let data = cmd_buf_data
-                .trackers
-                .buffers
-                .set_single(
-                    match buffer_guard.get(entry.instance_buffer_id) {
-                        Ok(buffer) => buffer,
-                        Err(_) => {
-                            return Err(BuildAccelerationStructureError::InvalidBuffer(
-                                entry.instance_buffer_id,
-                            ));
-                        }
-                    },
-                    BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                )
-                .ok_or(BuildAccelerationStructureError::InvalidBuffer(
-                    entry.instance_buffer_id,
-                ))?;
-            tlas_buf_storage.push((data.0, data.1, entry.clone()));
+            let instance_buffer = match buffer_guard.get(entry.instance_buffer_id) {
+                Ok(buffer) => buffer,
+                Err(_) => {
+                    return Err(BuildAccelerationStructureError::InvalidBuffer(
+                        entry.instance_buffer_id,
+                    ));
+                }
+            };
+            let data = cmd_buf_data.trackers.buffers.set_single(
+                instance_buffer,
+                BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+            );
+            tlas_buf_storage.push((instance_buffer.clone(), data, entry.clone()));
         }
 
         for tlas_buf in &mut tlas_buf_storage {
@@ -541,11 +527,10 @@ impl Global {
                 instance_raw
             };
 
-            let tlas = cmd_buf_data
-                .trackers
-                .tlas_s
-                .add_single(&tlas_guard, entry.tlas_id)
-                .ok_or(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id))?;
+            let tlas = tlas_guard
+                .get(entry.tlas_id)
+                .map_err(|_| BuildAccelerationStructureError::InvalidTlas(entry.tlas_id))?;
+            cmd_buf_data.trackers.tlas_s.add_single(&tlas);
 
             if tlas.raw.is_none() {
                 return Err(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id));
@@ -698,8 +683,7 @@ impl Global {
             .lock()
             .as_mut()
             .unwrap()
-            .temp_resources
-            .push(TempResource::StagingBuffer(Arc::new(StagingBuffer {
+            .consume_temp(TempResource::StagingBuffer(Arc::new(StagingBuffer {
                 raw: Mutex::new(rank::BLAS, Some(scratch_buffer)),
                 device: device.clone(),
                 size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
@@ -855,11 +839,10 @@ impl Global {
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         for entry in blas_iter {
-            let blas = cmd_buf_data
-                .trackers
-                .blas_s
-                .add_single(&blas_guard, entry.blas_id)
-                .ok_or(BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
+            let blas = blas_guard
+                .get(entry.blas_id)
+                .map_err(|_| BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
+            cmd_buf_data.trackers.blas_s.add_single(&blas);
 
             if blas.raw.is_none() {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
@@ -908,23 +891,18 @@ impl Global {
                                 entry.blas_id,
                             ));
                         }
-                        let (vertex_buffer, vertex_pending) = cmd_buf_data
-                            .trackers
-                            .buffers
-                            .set_single(
-                                match buffer_guard.get(mesh.vertex_buffer) {
-                                    Ok(buffer) => buffer,
-                                    Err(_) => {
-                                        return Err(BuildAccelerationStructureError::InvalidBuffer(
-                                            mesh.vertex_buffer,
-                                        ))
-                                    }
-                                },
-                                BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                            )
-                            .ok_or(BuildAccelerationStructureError::InvalidBuffer(
-                                mesh.vertex_buffer,
-                            ))?;
+                        let vertex_buffer = match buffer_guard.get(mesh.vertex_buffer) {
+                            Ok(buffer) => buffer,
+                            Err(_) => {
+                                return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                    mesh.vertex_buffer,
+                                ))
+                            }
+                        };
+                        let vertex_pending = cmd_buf_data.trackers.buffers.set_single(
+                            vertex_buffer,
+                            BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        );
                         let index_data = if let Some(index_id) = mesh.index_buffer {
                             if mesh.index_buffer_offset.is_none()
                                 || mesh.size.index_count.is_none()
@@ -936,24 +914,19 @@ impl Global {
                                     ),
                                 );
                             }
-                            let data = cmd_buf_data
-                                .trackers
-                                .buffers
-                                .set_single(
-                                    match buffer_guard.get(index_id) {
-                                        Ok(buffer) => buffer,
-                                        Err(_) => {
-                                            return Err(
-                                                BuildAccelerationStructureError::InvalidBuffer(
-                                                    index_id,
-                                                ),
-                                            )
-                                        }
-                                    },
-                                    hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                                )
-                                .ok_or(BuildAccelerationStructureError::InvalidBuffer(index_id))?;
-                            Some(data)
+                            let index_buffer = match buffer_guard.get(index_id) {
+                                Ok(buffer) => buffer,
+                                Err(_) => {
+                                    return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                        index_id,
+                                    ))
+                                }
+                            };
+                            let data = cmd_buf_data.trackers.buffers.set_single(
+                                index_buffer,
+                                hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                            );
+                            Some((index_buffer.clone(), data))
                         } else {
                             None
                         };
@@ -965,32 +938,25 @@ impl Global {
                                     ),
                                 );
                             }
-                            let data = cmd_buf_data
-                                .trackers
-                                .buffers
-                                .set_single(
-                                    match buffer_guard.get(transform_id) {
-                                        Ok(buffer) => buffer,
-                                        Err(_) => {
-                                            return Err(
-                                                BuildAccelerationStructureError::InvalidBuffer(
-                                                    transform_id,
-                                                ),
-                                            )
-                                        }
-                                    },
-                                    BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                                )
-                                .ok_or(BuildAccelerationStructureError::InvalidBuffer(
-                                    transform_id,
-                                ))?;
-                            Some(data)
+                            let transform_buffer = match buffer_guard.get(transform_id) {
+                                Ok(buffer) => buffer,
+                                Err(_) => {
+                                    return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                        transform_id,
+                                    ))
+                                }
+                            };
+                            let data = cmd_buf_data.trackers.buffers.set_single(
+                                transform_buffer,
+                                BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                            );
+                            Some((transform_buffer.clone(), data))
                         } else {
                             None
                         };
 
                         buf_storage.push((
-                            vertex_buffer,
+                            vertex_buffer.clone(),
                             vertex_pending,
                             index_data,
                             transform_data,
@@ -1209,13 +1175,11 @@ impl Global {
         )>::new();
 
         for package in tlas_iter {
-            let tlas = cmd_buf_data
-                .trackers
-                .tlas_s
-                .add_single(&tlas_guard, package.tlas_id)
-                .ok_or(BuildAccelerationStructureError::InvalidTlas(
-                    package.tlas_id,
-                ))?;
+            let tlas = tlas_guard
+                .get(package.tlas_id)
+                .map_err(|_| BuildAccelerationStructureError::InvalidTlas(package.tlas_id))?;
+
+            cmd_buf_data.trackers.tlas_s.add_single(tlas);
             tlas_lock_store.push((tlas.instance_buffer.read(), Some(package), tlas.clone()))
         }
 
@@ -1254,13 +1218,11 @@ impl Global {
                         package.tlas_id,
                     ));
                 }
-                let blas = cmd_buf_data
-                    .trackers
-                    .blas_s
-                    .add_single(&blas_guard, instance.blas_id)
-                    .ok_or(BuildAccelerationStructureError::InvalidBlasForInstance(
-                        instance.blas_id,
-                    ))?;
+                let blas = blas_guard.get(instance.blas_id).map_err(|_| {
+                    BuildAccelerationStructureError::InvalidBlasForInstance(instance.blas_id)
+                })?;
+
+                cmd_buf_data.trackers.blas_s.add_single(blas);
 
                 instance_buffer_staging_source
                     .extend(tlas_instance_into_bytes::<A>(&instance, blas.handle));
@@ -1527,8 +1489,7 @@ impl Global {
                     .lock()
                     .as_mut()
                     .unwrap()
-                    .temp_resources
-                    .push(TempResource::StagingBuffer(staging_buffer));
+                    .consume_temp(TempResource::StagingBuffer(staging_buffer));
             }
         }
         let scratch_mapping = unsafe {
@@ -1559,8 +1520,7 @@ impl Global {
             .lock()
             .as_mut()
             .unwrap()
-            .temp_resources
-            .push(TempResource::StagingBuffer(stage_buf));
+            .consume_temp(TempResource::StagingBuffer(stage_buf));
 
         Ok(())
     }
