@@ -1152,6 +1152,11 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        #[cfg(webgl)]
+        if self.shared.context.webgl2_context != surface.webgl2_context {
+            return None;
+        }
+
         if surface.presentable {
             let mut formats = vec![
                 wgt::TextureFormat::Rgba8Unorm,

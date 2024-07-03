@@ -8,6 +8,7 @@ use super::TextureFormatDesc;
 /// with the `AdapterContext` API from the EGL implementation.
 pub struct AdapterContext {
     pub glow_context: glow::Context,
+    pub webgl2_context: web_sys::WebGl2RenderingContext,
 }
 
 impl AdapterContext {
@@ -124,9 +125,14 @@ impl crate::Instance for Instance {
         if let Some(surface_hint) = surface_hint {
             let gl = glow::Context::from_webgl2_context(surface_hint.webgl2_context.clone());
 
-            unsafe { super::Adapter::expose(AdapterContext { glow_context: gl }) }
-                .into_iter()
-                .collect()
+            unsafe {
+                super::Adapter::expose(AdapterContext {
+                    glow_context: gl,
+                    webgl2_context: surface_hint.webgl2_context.clone(),
+                })
+            }
+            .into_iter()
+            .collect()
         } else {
             Vec::new()
         }
@@ -172,7 +178,7 @@ impl crate::Instance for Instance {
 #[derive(Debug)]
 pub struct Surface {
     canvas: Canvas,
-    webgl2_context: web_sys::WebGl2RenderingContext,
+    pub(super) webgl2_context: web_sys::WebGl2RenderingContext,
     pub(super) swapchain: RwLock<Option<Swapchain>>,
     texture: Mutex<Option<glow::Texture>>,
     pub(super) presentable: bool,
