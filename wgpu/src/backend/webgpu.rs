@@ -1888,7 +1888,7 @@ impl crate::context::Context for ContextWebGpu {
         }
 
         let mut mapped_multisample = webgpu_sys::GpuMultisampleState::new();
-        mapped_multisample.count(desc.multisample.count);
+        mapped_multisample.count(desc.multisample.count.get());
         mapped_multisample.mask(desc.multisample.mask as u32);
         mapped_multisample.alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
         mapped_desc.multisample(&mapped_multisample);
@@ -1971,7 +1971,7 @@ impl crate::context::Context for ContextWebGpu {
         }
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
         mapped_desc.mip_level_count(desc.mip_level_count);
-        mapped_desc.sample_count(desc.sample_count);
+        mapped_desc.sample_count(desc.sample_count.get());
         let mapped_view_formats = desc
             .view_formats
             .iter()
@@ -2062,7 +2062,7 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.depth_read_only(ds.depth_read_only);
             mapped_desc.stencil_read_only(ds.stencil_read_only);
         }
-        mapped_desc.sample_count(desc.sample_count);
+        mapped_desc.sample_count(desc.sample_count.get());
         Sendable(device_data.0.create_render_bundle_encoder(&mapped_desc))
     }
 

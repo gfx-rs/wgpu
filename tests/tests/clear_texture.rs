@@ -232,7 +232,7 @@ async fn single_texture_clear_test(
             // arbitrary value between 2 and max
             3
         },
-        sample_count: 1, // multisampling is not supported for clear
+        sample_count: wgpu::SampleCount::new(1), // multisampling is not supported for clear
         dimension,
         format,
         usage: wgpu::TextureUsages::COPY_SRC | extra_usages,

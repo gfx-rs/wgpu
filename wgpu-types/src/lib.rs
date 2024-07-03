@@ -2319,7 +2319,7 @@ pub struct PrimitiveState {
 pub struct MultisampleState {
     /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
     /// this should be `1`
-    pub count: u32,
+    pub count: SampleCount,
     /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
     /// can be enabled using the value `!0`
     pub mask: u64,
@@ -2335,7 +2335,7 @@ pub struct MultisampleState {
 impl Default for MultisampleState {
     fn default() -> Self {
         MultisampleState {
-            count: 1,
+            count: SampleCount::default(),
             mask: !0,
             alpha_to_coverage_enabled: false,
         }
@@ -2374,10 +2374,10 @@ impl TextureFormatFeatureFlags {
     ///
     /// returns `true` if `count` is a supported sample count.
     #[must_use]
-    pub fn sample_count_supported(&self, count: u32) -> bool {
+    pub fn sample_count_supported(&self, count: SampleCount) -> bool {
         use TextureFormatFeatureFlags as tfsc;
 
-        match count {
+        match count.get() {
             1 => true,
             2 => self.contains(tfsc::MULTISAMPLE_X2),
             4 => self.contains(tfsc::MULTISAMPLE_X4),
@@ -2389,8 +2389,8 @@ impl TextureFormatFeatureFlags {
 
     /// A `Vec` of supported sample counts.
     #[must_use]
-    pub fn supported_sample_counts(&self) -> Vec<u32> {
-        let all_possible_sample_counts: [u32; 5] = [1, 2, 4, 8, 16];
+    pub fn supported_sample_counts(&self) -> Vec<SampleCount> {
+        let all_possible_sample_counts = [1, 2, 4, 8, 16].map(SampleCount::new);
         all_possible_sample_counts
             .into_iter()
             .filter(|&sc| self.sample_count_supported(sc))
@@ -6046,7 +6046,7 @@ pub struct TextureDescriptor<L, V> {
     /// Mip count of texture. For a texture with no extra mips, this must be 1.
     pub mip_level_count: u32,
     /// Sample count of texture. If this is not 1, texture must have [`BindingType::Texture::multisampled`] set to true.
-    pub sample_count: u32,
+    pub sample_count: SampleCount,
     /// Dimensions of the texture.
     pub dimension: TextureDimension,
     /// Format of the texture.
@@ -6116,7 +6116,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
     ///   mip_level_count: 7,
-    ///   sample_count: 1,
+    ///   sample_count: wgpu::SampleCount::new(1),
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
@@ -6162,6 +6162,61 @@ impl<L, V> TextureDescriptor<L, V> {
             TextureDimension::D1 | TextureDimension::D3 => 1,
             TextureDimension::D2 => self.size.depth_or_array_layers,
         }
+    }
+}
+
+/// A sample count, represented as `u32` internally. Must be 1 or more.
+#[repr(transparent)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct SampleCount(NonZeroU32);
+
+impl SampleCount {
+    /// # Panics
+    ///
+    /// Panics if `n == 0`.
+    #[track_caller]
+    pub const fn new(n: u32) -> Self {
+        match NonZeroU32::new(n) {
+            Some(some) => Self(some),
+            None => panic!("0 is not a valid multisample count"),
+        }
+    }
+
+    /// Retrieves the inner `u32` value of this count.
+    pub const fn get(&self) -> u32 {
+        self.0.get()
+    }
+}
+
+impl std::fmt::Debug for SampleCount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0.get(), f)
+    }
+}
+
+impl std::fmt::Display for SampleCount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0.get(), f)
+    }
+}
+
+impl Default for SampleCount {
+    fn default() -> Self {
+        Self::new(1)
+    }
+}
+
+impl PartialEq<u32> for SampleCount {
+    fn eq(&self, other: &u32) -> bool {
+        self.0.get() == *other
+    }
+}
+
+impl PartialOrd<u32> for SampleCount {
+    fn partial_cmp(&self, other: &u32) -> Option<std::cmp::Ordering> {
+        Some(self.0.get().cmp(other))
     }
 }
 

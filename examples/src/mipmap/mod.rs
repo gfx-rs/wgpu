@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use std::{f32::consts, mem::size_of};
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, SampleCount};
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const MIP_LEVEL_COUNT: u32 = 10;
@@ -228,7 +228,7 @@ impl crate::framework::Example for Example {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: texture_extent,
             mip_level_count: MIP_LEVEL_COUNT,
-            sample_count: 1,
+            sample_count: SampleCount::new(1),
             dimension: wgpu::TextureDimension::D2,
             format: TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING

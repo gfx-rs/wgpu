@@ -312,7 +312,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
             height,
             depth_or_array_layers: 1,
         },
-        sample_count: 1,
+        sample_count: wgt::SampleCount::new(1),
         color_attachments: &[Some(hal::ColorAttachment {
             target: hal::Attachment {
                 view: &view,

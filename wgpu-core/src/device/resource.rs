@@ -3097,7 +3097,7 @@ impl Device {
 
         let samples = {
             let sc = desc.multisample.count;
-            if sc == 0 || sc > 32 || !sc.is_power_of_two() {
+            if sc == 0 || sc > 32 || !sc.get().is_power_of_two() {
                 return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
             }
             sc

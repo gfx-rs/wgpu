@@ -18,8 +18,7 @@
 //! in order to get comparable results.
 
 use std::mem::size_of;
-
-use wgpu::util::DeviceExt;
+use wgpu::SampleCount;
 
 struct Queries {
     set: wgpu::QuerySet,
@@ -377,7 +376,7 @@ fn render_pass(
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count: SampleCount::new(1),
         dimension: wgpu::TextureDimension::D2,
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

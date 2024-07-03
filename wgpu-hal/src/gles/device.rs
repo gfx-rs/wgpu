@@ -749,7 +749,7 @@ impl crate::Device for super::Device {
                 unsafe {
                     gl.renderbuffer_storage_multisample(
                         glow::RENDERBUFFER,
-                        desc.sample_count as i32,
+                        desc.sample_count.get() as i32,
                         format_desc.internal,
                         desc.size.width as i32,
                         desc.size.height as i32,
@@ -864,7 +864,7 @@ impl crate::Device for super::Device {
                 unsafe {
                     gl.tex_storage_2d_multisample(
                         target,
-                        desc.sample_count as i32,
+                        desc.sample_count.get() as i32,
                         format_desc.internal,
                         desc.size.width as i32,
                         desc.size.height as i32,

@@ -11,6 +11,7 @@ use arrayvec::ArrayVec;
 use naga::error::ShaderError;
 use std::{borrow::Cow, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32, sync::Arc};
 use thiserror::Error;
+use wgt::SampleCount;
 
 /// Information about buffer bindings, which
 /// is validated against the shader (and pipeline)
@@ -433,7 +434,12 @@ pub enum ColorStateError {
     #[error("Format {0:?} does not have a color aspect")]
     FormatNotColor(wgt::TextureFormat),
     #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
-    InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
+    InvalidSampleCount(
+        SampleCount,
+        wgt::TextureFormat,
+        Vec<SampleCount>,
+        Vec<SampleCount>,
+    ),
     #[error("Output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
         pipeline: validation::NumericType,
@@ -455,7 +461,12 @@ pub enum DepthStencilStateError {
     #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
     FormatNotStencil(wgt::TextureFormat),
     #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
-    InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
+    InvalidSampleCount(
+        SampleCount,
+        wgt::TextureFormat,
+        Vec<SampleCount>,
+        Vec<SampleCount>,
+    ),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -472,7 +483,7 @@ pub enum CreateRenderPipelineError {
     #[error("Depth/stencil state is invalid")]
     DepthStencilState(#[from] DepthStencilStateError),
     #[error("Invalid sample count {0}")]
-    InvalidSampleCount(u32),
+    InvalidSampleCount(SampleCount),
     #[error("The number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
     #[error("The total number of vertex attributes {given} exceeds the limit {limit}")]

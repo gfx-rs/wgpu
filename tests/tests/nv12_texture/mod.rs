@@ -51,7 +51,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             format: wgpu::TextureFormat::NV12,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgpu::SampleCount::new(1),
             view_formats: &[],
         });
         let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
@@ -92,7 +92,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             label: None,
             size,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgpu::SampleCount::new(1),
             dimension: wgpu::TextureDimension::D2,
             format: target_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -138,7 +138,7 @@ static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
                 format: wgpu::TextureFormat::R8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count: wgpu::SampleCount::new(1),
                 view_formats: &[],
             });
             fail(
@@ -169,7 +169,7 @@ static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConf
             format: wgpu::TextureFormat::NV12,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgpu::SampleCount::new(1),
             view_formats: &[],
         });
         fail(
@@ -201,7 +201,7 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
             format: wgpu::TextureFormat::NV12,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgpu::SampleCount::new(1),
             view_formats: &[],
         });
         fail(
@@ -237,7 +237,7 @@ static NV12_TEXTURE_BAD_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
                     format: wgpu::TextureFormat::NV12,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     mip_level_count: 1,
-                    sample_count: 1,
+                    sample_count: wgpu::SampleCount::new(1),
                     view_formats: &[],
                 });
             },

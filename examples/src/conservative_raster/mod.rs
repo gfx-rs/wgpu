@@ -1,3 +1,5 @@
+use wgpu::SampleCount;
+
 const RENDER_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 struct Example {
@@ -26,7 +28,7 @@ impl Example {
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count: SampleCount::new(1),
                 dimension: wgpu::TextureDimension::D2,
                 format: RENDER_TARGET_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING

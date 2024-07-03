@@ -357,7 +357,7 @@ impl super::Device {
         dimension: wgt::TextureDimension,
         size: wgt::Extent3d,
         mip_level_count: u32,
-        sample_count: u32,
+        sample_count: wgt::SampleCount,
     ) -> super::Texture {
         super::Texture {
             resource,
@@ -491,7 +491,7 @@ impl crate::Device for super::Device {
                 self.private_caps.casting_fully_typed_format_supported,
             ),
             SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                Count: desc.sample_count,
+                Count: desc.sample_count.get(),
                 Quality: 0,
             },
             Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
@@ -1519,7 +1519,7 @@ impl crate::Device for super::Device {
                     auxil::dxgi::conv::map_texture_format(ds.format)
                 }),
             SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                Count: desc.multisample.count,
+                Count: desc.multisample.count.get(),
                 Quality: 0,
             },
             NodeMask: 0,

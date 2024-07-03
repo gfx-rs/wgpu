@@ -36,8 +36,8 @@ use crate::{
 use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
-    TextureUsages, TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, SampleCount,
+    ShaderStages, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 #[cfg(feature = "serde")]
@@ -606,15 +606,15 @@ pub enum RenderPassErrorInner {
     #[error("Attachments have differing sample counts: the {expected_location} has count {expected_samples:?} but is followed by the {actual_location} which has count {actual_samples:?}")]
     AttachmentSampleCountMismatch {
         expected_location: AttachmentErrorLocation,
-        expected_samples: u32,
+        expected_samples: SampleCount,
         actual_location: AttachmentErrorLocation,
-        actual_samples: u32,
+        actual_samples: SampleCount,
     },
     #[error("The resolve source, {location}, must be multi-sampled (has {src} samples) while the resolve destination must not be multisampled (has {dst} samples)")]
     InvalidResolveSampleCounts {
         location: AttachmentErrorLocation,
-        src: u32,
-        dst: u32,
+        src: SampleCount,
+        dst: SampleCount,
     },
     #[error(
         "Resource source, {location}, format ({src:?}) must match the resolve destination format ({dst:?})"
@@ -843,7 +843,7 @@ impl<'d> RenderPassInfo<'d> {
             resolve: false,
         };
         let mut extent = None;
-        let mut sample_count = 0;
+        let mut sample_count = None;
 
         let mut detected_multiview: Option<Option<NonZeroU32>> = None;
 
@@ -894,15 +894,19 @@ impl<'d> RenderPassInfo<'d> {
             } else {
                 extent = Some(render_extent);
             }
-            if sample_count == 0 {
-                sample_count = view.samples;
-            } else if sample_count != view.samples {
-                return Err(RenderPassErrorInner::AttachmentSampleCountMismatch {
-                    expected_location: attachment_location,
-                    expected_samples: sample_count,
-                    actual_location: location,
-                    actual_samples: view.samples,
-                });
+            match sample_count {
+                None => {
+                    sample_count.replace(view.samples);
+                }
+                Some(sc) if sc != view.samples => {
+                    return Err(RenderPassErrorInner::AttachmentSampleCountMismatch {
+                        expected_location: attachment_location,
+                        expected_samples: sc,
+                        actual_location: location,
+                        actual_samples: view.samples,
+                    })
+                }
+                _ => (),
             }
             attachment_location = location;
             Ok(())
@@ -1167,6 +1171,8 @@ impl<'d> RenderPassInfo<'d> {
                 .as_ref()
                 .map(|at| at.view.desc.format),
         };
+
+        let sample_count = sample_count.expect("no attachments specified");
 
         let context = RenderPassContext {
             attachments: attachment_formats,

@@ -43,7 +43,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     pub depth_stencil: Option<RenderBundleDepthStencil>,
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the render passes it is used in.
-    pub sample_count: u32,
+    pub sample_count: SampleCount,
     /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
     pub multiview: Option<NonZeroU32>,
 }

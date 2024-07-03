@@ -18,7 +18,7 @@ static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count: wgpu::SampleCount::new(1),
                 dimension: TextureDimension::D2,
                 format,
                 usage: TextureUsages::COPY_DST
@@ -49,7 +49,7 @@ static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration =
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count: wgpu::SampleCount::new(1),
                 dimension: TextureDimension::D2,
                 format,
                 usage: TextureUsages::COPY_DST

@@ -22,7 +22,7 @@ use crate::{
 };
 
 use thiserror::Error;
-use wgt::SurfaceStatus as Status;
+use wgt::{SampleCount, SurfaceStatus as Status};
 
 const FRAME_TIMEOUT_MS: u32 = 1000;
 
@@ -160,7 +160,7 @@ impl Global {
                         height: config.height,
                         depth_or_array_layers: 1,
                     },
-                    sample_count: 1,
+                    sample_count: SampleCount::no_multisampling(),
                     mip_level_count: 1,
                     format: config.format,
                     dimension: wgt::TextureDimension::D2,

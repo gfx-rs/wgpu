@@ -16,6 +16,8 @@
 
 use std::mem::size_of_val;
 
+use wgpu::SampleCount;
+
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::output_image_native;
 #[cfg(target_arch = "wasm32")]
@@ -54,7 +56,7 @@ async fn run(_path: Option<String>) {
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count: SampleCount::new(1),
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,

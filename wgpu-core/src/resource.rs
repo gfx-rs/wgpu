@@ -19,6 +19,7 @@ use crate::{
 
 use smallvec::SmallVec;
 use thiserror::Error;
+use wgt::SampleCount;
 
 use std::{
     borrow::{Borrow, Cow},
@@ -1454,7 +1455,7 @@ pub enum TextureDimensionError {
         limit: u32,
     },
     #[error("Sample count {0} is invalid")]
-    InvalidSampleCount(u32),
+    InvalidSampleCount(SampleCount),
     #[error("Width {width} is not a multiple of {format:?}'s block width ({block_width})")]
     NotMultipleOfBlockWidth {
         width: u32,
@@ -1518,7 +1519,12 @@ pub enum CreateTextureError {
     #[error("Format {0:?} does not support multisampling")]
     InvalidMultisampledFormat(wgt::TextureFormat),
     #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
-    InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
+    InvalidSampleCount(
+        SampleCount,
+        wgt::TextureFormat,
+        Vec<SampleCount>,
+        Vec<SampleCount>,
+    ),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
     #[error("Texture format {0:?} can't be used due to missing features")]
@@ -1603,7 +1609,7 @@ pub struct TextureView {
     pub(crate) format_features: wgt::TextureFormatFeatures,
     /// This is `Err` only if the texture view is not renderable
     pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
-    pub(crate) samples: u32,
+    pub(crate) samples: SampleCount,
     pub(crate) selector: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
