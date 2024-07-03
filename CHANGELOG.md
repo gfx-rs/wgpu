@@ -134,6 +134,9 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 When targeting WebGL2, it has always been the case that a surface had to be created before calling `request_adapter()`.
 We now make this requirement explicit.
 
+Validation was also added to prevent configuring the surface with a device that doesn't share the same underlying
+WebGL2 context since this has never worked.
+
 Calling `enumerate_adapters()` when targeting WebGPU used to return an empty `Vec` and since we now require users
 to pass a compatible surface when targeting WebGL2, having `enumerate_adapters()` doesn't make sense.
 
