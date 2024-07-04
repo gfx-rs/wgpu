@@ -260,9 +260,8 @@ pub enum BufferMapAsyncStatus {
 pub(crate) enum BufferMapState<A: HalApi> {
     /// Mapped at creation.
     Init {
+        staging_buffer: Arc<StagingBuffer<A>>,
         ptr: NonNull<u8>,
-        stage_buffer: Arc<Buffer<A>>,
-        needs_flush: bool,
     },
     /// Waiting for GPU to be done before mapping
     Waiting(BufferPendingMapping<A>),
@@ -657,9 +656,8 @@ impl<A: HalApi> Buffer<A> {
         log::debug!("{} map state -> Idle", self.error_ident());
         match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
             BufferMapState::Init {
+                staging_buffer,
                 ptr,
-                stage_buffer,
-                needs_flush,
             } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
@@ -674,12 +672,14 @@ impl<A: HalApi> Buffer<A> {
                     });
                 }
                 let _ = ptr;
-                if needs_flush {
+
+                let raw_staging_buffer_guard = staging_buffer.raw.lock();
+                let raw_staging_buffer = raw_staging_buffer_guard.as_ref().unwrap();
+                if !staging_buffer.is_coherent {
                     unsafe {
-                        device.raw().flush_mapped_ranges(
-                            stage_buffer.raw(&snatch_guard).unwrap(),
-                            iter::once(0..self.size),
-                        );
+                        device
+                            .raw()
+                            .flush_mapped_ranges(raw_staging_buffer, iter::once(0..self.size));
                     }
                 }
 
@@ -690,7 +690,7 @@ impl<A: HalApi> Buffer<A> {
                     size,
                 });
                 let transition_src = hal::BufferBarrier {
-                    buffer: stage_buffer.raw(&snatch_guard).unwrap(),
+                    buffer: raw_staging_buffer,
                     usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
@@ -706,13 +706,14 @@ impl<A: HalApi> Buffer<A> {
                     );
                     if self.size > 0 {
                         encoder.copy_buffer_to_buffer(
-                            stage_buffer.raw(&snatch_guard).unwrap(),
+                            raw_staging_buffer,
                             raw_buf,
                             region.into_iter(),
                         );
                     }
                 }
-                pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
+                drop(raw_staging_buffer_guard);
+                pending_writes.consume_temp(queue::TempResource::StagingBuffer(staging_buffer));
                 pending_writes.insert_buffer(self);
             }
             BufferMapState::Idle => {

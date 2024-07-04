@@ -317,7 +317,7 @@ impl<A: HalApi> PendingWrites<A> {
     }
 }
 
-fn prepare_staging_buffer<A: HalApi>(
+pub(crate) fn prepare_staging_buffer<A: HalApi>(
     device: &Arc<Device<A>>,
     size: wgt::BufferAddress,
     instance_flags: wgt::InstanceFlags,
