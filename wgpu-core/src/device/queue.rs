@@ -21,7 +21,7 @@ use crate::{
         TextureInner, Trackable,
     },
     resource_log,
-    track::{self, TrackerIndex},
+    track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
 
@@ -155,6 +155,7 @@ pub enum TempResource<A: HalApi> {
 pub(crate) struct EncoderInFlight<A: HalApi> {
     raw: A::CommandEncoder,
     cmd_buffers: Vec<A::CommandBuffer>,
+    trackers: Tracker<A>,
 }
 
 impl<A: HalApi> EncoderInFlight<A> {
@@ -164,6 +165,12 @@ impl<A: HalApi> EncoderInFlight<A> {
     /// reused.
     pub(crate) unsafe fn land(mut self) -> A::CommandEncoder {
         unsafe { self.raw.reset_all(self.cmd_buffers.into_iter()) };
+        {
+            // This involves actually decrementing the ref count of all command buffer
+            // resources, so can be _very_ expensive.
+            profiling::scope!("drop command buffer trackers");
+            drop(self.trackers);
+        }
         self.raw
     }
 }
@@ -285,6 +292,7 @@ impl<A: HalApi> PendingWrites<A> {
             Some(EncoderInFlight {
                 raw: mem::replace(&mut self.command_encoder, new_encoder),
                 cmd_buffers: mem::take(&mut self.executing_command_buffers),
+                trackers: Tracker::new(),
             })
         } else {
             None
@@ -1365,14 +1373,8 @@ impl Global {
                         active_executions.push(EncoderInFlight {
                             raw: baked.encoder,
                             cmd_buffers: baked.list,
+                            trackers: baked.trackers,
                         });
-
-                        {
-                            // This involves actually decrementing the ref count of all command buffer
-                            // resources, so can be _very_ expensive.
-                            profiling::scope!("drop command buffer trackers");
-                            drop(baked.trackers);
-                        }
                     }
 
                     log::trace!("Device after submission {}", submit_index);
