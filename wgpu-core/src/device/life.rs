@@ -710,7 +710,6 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub(crate) fn handle_mapping(
         &mut self,
         raw: &A::Device,
-        trackers: &Mutex<Tracker<A>>,
         snatch_guard: &SnatchGuard,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
@@ -721,69 +720,60 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         for buffer in self.ready_to_map.drain(..) {
             let tracker_index = buffer.tracker_index();
-            let is_removed = {
-                let mut trackers = trackers.lock();
-                trackers.buffers.remove_abandoned(tracker_index)
+
+            // This _cannot_ be inlined into the match. If it is, the lock will be held
+            // open through the whole match, resulting in a deadlock when we try to re-lock
+            // the buffer back to active.
+            let mapping = std::mem::replace(
+                &mut *buffer.map_state.lock(),
+                resource::BufferMapState::Idle,
+            );
+            let pending_mapping = match mapping {
+                resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
+                // Mapping cancelled
+                resource::BufferMapState::Idle => continue,
+                // Mapping queued at least twice by map -> unmap -> map
+                // and was already successfully mapped below
+                resource::BufferMapState::Active { .. } => {
+                    *buffer.map_state.lock() = mapping;
+                    continue;
+                }
+                _ => panic!("No pending mapping."),
             };
-            if is_removed {
-                *buffer.map_state.lock() = resource::BufferMapState::Idle;
-                log::trace!("Buffer ready to map {tracker_index:?} is not tracked anymore");
+            let status = if pending_mapping.range.start != pending_mapping.range.end {
+                log::debug!("Buffer {tracker_index:?} map state -> Active");
+                let host = pending_mapping.op.host;
+                let size = pending_mapping.range.end - pending_mapping.range.start;
+                match super::map_buffer(
+                    raw,
+                    &buffer,
+                    pending_mapping.range.start,
+                    size,
+                    host,
+                    snatch_guard,
+                ) {
+                    Ok(ptr) => {
+                        *buffer.map_state.lock() = resource::BufferMapState::Active {
+                            ptr,
+                            range: pending_mapping.range.start..pending_mapping.range.start + size,
+                            host,
+                        };
+                        Ok(())
+                    }
+                    Err(e) => {
+                        log::error!("Mapping failed: {e}");
+                        Err(e)
+                    }
+                }
             } else {
-                // This _cannot_ be inlined into the match. If it is, the lock will be held
-                // open through the whole match, resulting in a deadlock when we try to re-lock
-                // the buffer back to active.
-                let mapping = std::mem::replace(
-                    &mut *buffer.map_state.lock(),
-                    resource::BufferMapState::Idle,
-                );
-                let pending_mapping = match mapping {
-                    resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
-                    // Mapping cancelled
-                    resource::BufferMapState::Idle => continue,
-                    // Mapping queued at least twice by map -> unmap -> map
-                    // and was already successfully mapped below
-                    resource::BufferMapState::Active { .. } => {
-                        *buffer.map_state.lock() = mapping;
-                        continue;
-                    }
-                    _ => panic!("No pending mapping."),
+                *buffer.map_state.lock() = resource::BufferMapState::Active {
+                    ptr: std::ptr::NonNull::dangling(),
+                    range: pending_mapping.range,
+                    host: pending_mapping.op.host,
                 };
-                let status = if pending_mapping.range.start != pending_mapping.range.end {
-                    log::debug!("Buffer {tracker_index:?} map state -> Active");
-                    let host = pending_mapping.op.host;
-                    let size = pending_mapping.range.end - pending_mapping.range.start;
-                    match super::map_buffer(
-                        raw,
-                        &buffer,
-                        pending_mapping.range.start,
-                        size,
-                        host,
-                        snatch_guard,
-                    ) {
-                        Ok(ptr) => {
-                            *buffer.map_state.lock() = resource::BufferMapState::Active {
-                                ptr,
-                                range: pending_mapping.range.start
-                                    ..pending_mapping.range.start + size,
-                                host,
-                            };
-                            Ok(())
-                        }
-                        Err(e) => {
-                            log::error!("Mapping failed: {e}");
-                            Err(e)
-                        }
-                    }
-                } else {
-                    *buffer.map_state.lock() = resource::BufferMapState::Active {
-                        ptr: std::ptr::NonNull::dangling(),
-                        range: pending_mapping.range,
-                        host: pending_mapping.op.host,
-                    };
-                    Ok(())
-                };
-                pending_callbacks.push((pending_mapping.op, status));
-            }
+                Ok(())
+            };
+            pending_callbacks.push((pending_mapping.op, status));
         }
         pending_callbacks
     }
