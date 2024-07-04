@@ -50,7 +50,7 @@ impl<T: Trackable> StatelessBindGroupState<T> {
 /// Stores all resource state within a command buffer or device.
 #[derive(Debug)]
 pub(crate) struct StatelessTracker<T: Trackable> {
-    metadata: ResourceMetadata<T>,
+    metadata: ResourceMetadata<Arc<T>>,
 }
 
 impl<T: Trackable> StatelessTracker<T> {

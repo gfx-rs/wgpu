@@ -220,7 +220,7 @@ impl TextureStateSet {
 #[derive(Debug)]
 pub(crate) struct TextureUsageScope<A: HalApi> {
     set: TextureStateSet,
-    metadata: ResourceMetadata<Texture<A>>,
+    metadata: ResourceMetadata<Arc<Texture<A>>>,
 }
 
 impl<A: HalApi> Default for TextureUsageScope<A> {
@@ -375,7 +375,7 @@ pub(crate) struct TextureTracker<A: HalApi> {
     start_set: TextureStateSet,
     end_set: TextureStateSet,
 
-    metadata: ResourceMetadata<Texture<A>>,
+    metadata: ResourceMetadata<Arc<Texture<A>>>,
 
     temp: Vec<PendingTransition<TextureUses>>,
 
@@ -806,10 +806,10 @@ impl<'a> TextureStateProvider<'a> {
 unsafe fn insert_or_merge<A: HalApi>(
     texture_selector: &TextureSelector,
     current_state_set: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<Texture<A>>,
+    resource_metadata: &mut ResourceMetadata<Arc<Texture<A>>>,
     index: usize,
     state_provider: TextureStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Texture<A>>>,
 ) -> Result<(), ResourceUsageCompatibilityError> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
@@ -862,11 +862,11 @@ unsafe fn insert_or_barrier_update<A: HalApi>(
     texture_selector: &TextureSelector,
     start_state: Option<&mut TextureStateSet>,
     current_state_set: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<Texture<A>>,
+    resource_metadata: &mut ResourceMetadata<Arc<Texture<A>>>,
     index: usize,
     start_state_provider: TextureStateProvider<'_>,
     end_state_provider: Option<TextureStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Texture<A>>>,
     barriers: &mut Vec<PendingTransition<TextureUses>>,
 ) {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
@@ -915,11 +915,11 @@ unsafe fn insert<A: HalApi>(
     texture_selector: Option<&TextureSelector>,
     start_state: Option<&mut TextureStateSet>,
     end_state: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<Texture<A>>,
+    resource_metadata: &mut ResourceMetadata<Arc<Texture<A>>>,
     index: usize,
     start_state_provider: TextureStateProvider<'_>,
     end_state_provider: Option<TextureStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Texture<A>>>,
 ) {
     let start_layers = unsafe { start_state_provider.get_state(texture_selector, index) };
     match start_layers {
@@ -1002,7 +1002,7 @@ unsafe fn merge<A: HalApi>(
     current_state_set: &mut TextureStateSet,
     index: usize,
     state_provider: TextureStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, Texture<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Texture<A>>>,
 ) -> Result<(), ResourceUsageCompatibilityError> {
     let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
     let current_state = if *current_simple == TextureUses::COMPLEX {
