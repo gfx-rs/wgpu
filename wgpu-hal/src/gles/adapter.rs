@@ -471,7 +471,6 @@ impl super::Adapter {
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
-        features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);

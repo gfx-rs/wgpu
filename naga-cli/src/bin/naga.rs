@@ -811,7 +811,7 @@ fn write_output(
 
             let mut buffer = String::new();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-            writer.write(&module, &info).unwrap_pretty();
+            writer.write(&module, &info, None).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {

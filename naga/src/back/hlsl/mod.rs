@@ -287,6 +287,35 @@ impl Wrapped {
     }
 }
 
+/// A fragment entry point to be considered when generating HLSL for the output interface of vertex
+/// entry points.
+///
+/// This is provided as an optional parameter to [`Writer::write`].
+///
+/// If this is provided, vertex outputs will be removed if they are not inputs of this fragment
+/// entry point. This is necessary for generating correct HLSL when some of the vertex shader
+/// outputs are not consumed by the fragment shader.
+pub struct FragmentEntryPoint<'a> {
+    module: &'a crate::Module,
+    func: &'a crate::Function,
+}
+
+impl<'a> FragmentEntryPoint<'a> {
+    /// Returns `None` if the entry point with the provided name can't be found or isn't a fragment
+    /// entry point.
+    pub fn new(module: &'a crate::Module, ep_name: &'a str) -> Option<Self> {
+        module
+            .entry_points
+            .iter()
+            .find(|ep| ep.name == ep_name)
+            .filter(|ep| ep.stage == crate::ShaderStage::Fragment)
+            .map(|ep| Self {
+                module,
+                func: &ep.function,
+            })
+    }
+}
+
 pub struct Writer<'a, W> {
     out: W,
     names: crate::FastHashMap<proc::NameKey, String>,
