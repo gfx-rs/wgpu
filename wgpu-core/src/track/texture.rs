@@ -37,7 +37,7 @@ use naga::FastHashMap;
 
 use wgt::{strict_assert, strict_assert_eq};
 
-use std::{iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
+use std::{iter, ops::Range, sync::Arc, vec::Drain};
 
 /// Specifies a particular set of subresources in a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -378,8 +378,6 @@ pub(crate) struct TextureTracker<A: HalApi> {
     metadata: ResourceMetadata<Arc<Texture<A>>>,
 
     temp: Vec<PendingTransition<TextureUses>>,
-
-    _phantom: PhantomData<A>,
 }
 
 impl<A: HalApi> TextureTracker<A> {
@@ -391,8 +389,6 @@ impl<A: HalApi> TextureTracker<A> {
             metadata: ResourceMetadata::new(),
 
             temp: Vec::new(),
-
-            _phantom: PhantomData,
         }
     }
 
