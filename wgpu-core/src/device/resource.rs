@@ -3554,7 +3554,9 @@ impl<A: HalApi> Device<A> {
             }
         }
         for texture in trackers.textures.used_resources() {
-            let _ = texture.destroy();
+            if let Some(texture) = Weak::upgrade(&texture) {
+                let _ = texture.destroy();
+            }
         }
     }
 

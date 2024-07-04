@@ -119,7 +119,8 @@ pub(crate) use buffer::{
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
 pub(crate) use stateless::{StatelessBindGroupState, StatelessTracker};
 pub(crate) use texture::{
-    TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
+    DeviceTextureTracker, TextureBindGroupState, TextureSelector, TextureTracker,
+    TextureTrackerSetSingle, TextureUsageScope,
 };
 use wgt::strict_assert_ne;
 
@@ -603,14 +604,14 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
 /// A tracker used by Device.
 pub(crate) struct DeviceTracker<A: HalApi> {
     pub buffers: DeviceBufferTracker<A>,
-    pub textures: TextureTracker<A>,
+    pub textures: DeviceTextureTracker<A>,
 }
 
 impl<A: HalApi> DeviceTracker<A> {
     pub fn new() -> Self {
         Self {
             buffers: DeviceBufferTracker::new(),
-            textures: TextureTracker::new(),
+            textures: DeviceTextureTracker::new(),
         }
     }
 }
