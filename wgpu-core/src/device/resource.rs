@@ -430,8 +430,7 @@ impl<A: HalApi> Device<A> {
 
         life_tracker.triage_mapped();
 
-        let mapping_closures =
-            life_tracker.handle_mapping(self.raw(), &self.trackers, &snatch_guard);
+        let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
 
         let queue_empty = life_tracker.queue_empty();
 
