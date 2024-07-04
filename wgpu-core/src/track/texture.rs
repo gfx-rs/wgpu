@@ -19,14 +19,11 @@
  *   will treat the contents as junk.
 !*/
 
-use super::{
-    range::RangedStates, PendingTransition, PendingTransitionList, ResourceTracker, TrackerIndex,
-};
+use super::{range::RangedStates, PendingTransition, PendingTransitionList, TrackerIndex};
 use crate::{
     hal_api::HalApi,
     lock::{rank, Mutex},
-    resource::{Labeled, Texture, TextureInner, Trackable},
-    resource_log,
+    resource::{Texture, TextureInner, Trackable},
     snatch::SnatchGuard,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
@@ -178,16 +175,6 @@ impl<A: HalApi> TextureBindGroupState<A> {
         textures.sort_unstable_by_key(|v| v.texture.tracker_index());
     }
 
-    /// Returns a list of all textures tracked. May contain duplicates.
-    pub fn drain_resources(&self) -> impl Iterator<Item = Arc<Texture<A>>> + '_ {
-        let mut textures = self.textures.lock();
-        textures
-            .drain(..)
-            .map(|v| v.texture)
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-
     /// Adds the given resource with the given state.
     pub fn add_single(
         &self,
@@ -272,13 +259,6 @@ impl<A: HalApi> TextureUsageScope<A> {
     pub fn set_size(&mut self, size: usize) {
         self.set.set_size(size);
         self.metadata.set_size(size);
-    }
-
-    /// Drains all textures tracked.
-    pub(crate) fn drain_resources(&mut self) -> impl Iterator<Item = Arc<Texture<A>>> + '_ {
-        let resources = self.metadata.drain_resources();
-        self.set.clear();
-        resources.into_iter()
     }
 
     /// Returns true if the tracker owns no resources.
@@ -400,56 +380,6 @@ pub(crate) struct TextureTracker<A: HalApi> {
     temp: Vec<PendingTransition<TextureUses>>,
 
     _phantom: PhantomData<A>,
-}
-
-impl<A: HalApi> ResourceTracker for TextureTracker<A> {
-    /// Try to remove the given resource from the tracker iff we have the last reference to the
-    /// resource and the epoch matches.
-    ///
-    /// Returns true if the resource was removed or if not existing in metadata.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// false will be returned.
-    fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
-        let index = index.as_usize();
-
-        if index >= self.metadata.size() {
-            return false;
-        }
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
-                //so it's already been released from user and so it's not inside Registry\Storage
-                if existing_ref_count <= 2 {
-                    resource_log!(
-                        "TextureTracker::remove_abandoned: removing {}",
-                        self.metadata.get_resource_unchecked(index).error_ident()
-                    );
-
-                    self.start_set.complex.remove(&index);
-                    self.end_set.complex.remove(&index);
-                    self.metadata.remove(index);
-                    return true;
-                }
-
-                resource_log!(
-                    "TextureTracker::remove_abandoned: not removing {}, ref count {}",
-                    self.metadata.get_resource_unchecked(index).error_ident(),
-                    existing_ref_count
-                );
-
-                return false;
-            }
-        }
-
-        resource_log!("TextureTracker::remove_abandoned: does not contain index {index:?}",);
-
-        true
-    }
 }
 
 impl<A: HalApi> TextureTracker<A> {
