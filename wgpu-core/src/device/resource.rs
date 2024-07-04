@@ -560,61 +560,6 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
     ) -> Result<Arc<Buffer<A>>, resource::CreateBufferError> {
-        let buffer = self.create_buffer_impl(desc, false)?;
-
-        let buffer_use = if !desc.mapped_at_creation {
-            hal::BufferUses::empty()
-        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-            // buffer is mappable, so we are just doing that at start
-            let map_size = buffer.size;
-            let ptr = if map_size == 0 {
-                std::ptr::NonNull::dangling()
-            } else {
-                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
-                map_buffer(
-                    self.raw(),
-                    &buffer,
-                    0,
-                    map_size,
-                    HostMap::Write,
-                    &snatch_guard,
-                )?
-            };
-            *buffer.map_state.lock() = resource::BufferMapState::Active {
-                ptr,
-                range: 0..map_size,
-                host: HostMap::Write,
-            };
-            hal::BufferUses::MAP_WRITE
-        } else {
-            let (staging_buffer, staging_buffer_ptr) =
-                queue::prepare_staging_buffer(self, desc.size, self.instance_flags)?;
-
-            // Zero initialize memory and then mark the buffer as initialized
-            // (it's guaranteed that this is the case by the time the buffer is usable)
-            unsafe { std::ptr::write_bytes(staging_buffer_ptr.as_ptr(), 0, buffer.size as usize) };
-            buffer.initialization_status.write().drain(0..buffer.size);
-
-            *buffer.map_state.lock() = resource::BufferMapState::Init {
-                staging_buffer: Arc::new(staging_buffer),
-                ptr: staging_buffer_ptr,
-            };
-            hal::BufferUses::COPY_DST
-        };
-
-        self.trackers
-            .lock()
-            .buffers
-            .insert_single(&buffer, buffer_use);
-
-        Ok(buffer)
-    }
-
-    fn create_buffer_impl(
-        self: &Arc<Self>,
-        desc: &resource::BufferDescriptor,
-        transient: bool,
-    ) -> Result<Arc<Buffer<A>>, resource::CreateBufferError> {
         self.check_is_valid()?;
 
         if desc.size > self.limits.max_buffer_size {
@@ -685,14 +630,11 @@ impl<A: HalApi> Device<A> {
             actual_size
         };
 
-        let mut memory_flags = hal::MemoryFlags::empty();
-        memory_flags.set(hal::MemoryFlags::TRANSIENT, transient);
-
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             size: aligned_size,
             usage,
-            memory_flags,
+            memory_flags: hal::MemoryFlags::empty(),
         };
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
@@ -711,7 +653,54 @@ impl<A: HalApi> Device<A> {
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
         };
+
         let buffer = Arc::new(buffer);
+
+        let buffer_use = if !desc.mapped_at_creation {
+            hal::BufferUses::empty()
+        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+            // buffer is mappable, so we are just doing that at start
+            let map_size = buffer.size;
+            let ptr = if map_size == 0 {
+                std::ptr::NonNull::dangling()
+            } else {
+                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
+                map_buffer(
+                    self.raw(),
+                    &buffer,
+                    0,
+                    map_size,
+                    HostMap::Write,
+                    &snatch_guard,
+                )?
+            };
+            *buffer.map_state.lock() = resource::BufferMapState::Active {
+                ptr,
+                range: 0..map_size,
+                host: HostMap::Write,
+            };
+            hal::BufferUses::MAP_WRITE
+        } else {
+            let (staging_buffer, staging_buffer_ptr) =
+                queue::prepare_staging_buffer(self, desc.size, self.instance_flags)?;
+
+            // Zero initialize memory and then mark the buffer as initialized
+            // (it's guaranteed that this is the case by the time the buffer is usable)
+            unsafe { std::ptr::write_bytes(staging_buffer_ptr.as_ptr(), 0, buffer.size as usize) };
+            buffer.initialization_status.write().drain(0..buffer.size);
+
+            *buffer.map_state.lock() = resource::BufferMapState::Init {
+                staging_buffer: Arc::new(staging_buffer),
+                ptr: staging_buffer_ptr,
+            };
+            hal::BufferUses::COPY_DST
+        };
+
+        self.trackers
+            .lock()
+            .buffers
+            .insert_single(&buffer, buffer_use);
+
         Ok(buffer)
     }
 
