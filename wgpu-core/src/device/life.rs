@@ -313,9 +313,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         let mut last_resources = ResourceMaps::new();
         for res in temp_resources {
             match res {
-                TempResource::Buffer(raw) => {
-                    last_resources.buffers.insert(raw.tracker_index(), raw);
-                }
                 TempResource::StagingBuffer(raw) => {
                     last_resources
                         .staging_buffers
@@ -419,9 +416,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             .map(|a| &mut a.last_resources);
         if let Some(resources) = resources {
             match temp_resource {
-                TempResource::Buffer(raw) => {
-                    resources.buffers.insert(raw.tracker_index(), raw);
-                }
                 TempResource::StagingBuffer(raw) => {
                     resources.staging_buffers.insert(raw.tracker_index(), raw);
                 }
