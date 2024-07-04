@@ -609,14 +609,13 @@ impl<A: HalApi> Buffer<A> {
             };
         }
 
-        let snatch_guard = device.snatchable_lock.read();
-        {
-            let mut trackers = device.as_ref().trackers.lock();
-            trackers.buffers.set_single(self, internal_use);
-            //TODO: Check if draining ALL buffers is correct!
-            let _ = trackers.buffers.drain_transitions(&snatch_guard);
-        }
-        drop(snatch_guard);
+        // TODO: we are ignoring the transition here, I think we need to add a barrier
+        // at the end of the submission
+        device
+            .trackers
+            .lock()
+            .buffers
+            .set_single(self, internal_use);
 
         device.lock_life().map(self);
 
