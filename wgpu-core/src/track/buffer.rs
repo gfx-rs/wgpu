@@ -5,7 +5,7 @@
  * one subresource, they have no selector.
 !*/
 
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 use super::{PendingTransition, TrackerIndex};
 use crate::{
@@ -43,15 +43,11 @@ impl ResourceUses for BufferUses {
 #[derive(Debug)]
 pub(crate) struct BufferBindGroupState<A: HalApi> {
     buffers: Mutex<Vec<(Arc<Buffer<A>>, BufferUses)>>,
-
-    _phantom: PhantomData<A>,
 }
 impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
             buffers: Mutex::new(rank::BUFFER_BIND_GROUP_STATE_BUFFERS, Vec::new()),
-
-            _phantom: PhantomData,
         }
     }
 
