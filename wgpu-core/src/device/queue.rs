@@ -60,13 +60,6 @@ impl<A: HalApi> Drop for Queue<A> {
     }
 }
 
-/// Number of command buffers that we generate from the same pool
-/// for the write_xxx commands, before the pool is recycled.
-///
-/// If we don't stop at some point, the pool will grow forever,
-/// without a concrete moment of when it can be cleared.
-const WRITE_COMMAND_BUFFERS_PER_POOL: usize = 64;
-
 #[repr(C)]
 pub struct SubmittedWorkDoneClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8),
@@ -209,9 +202,6 @@ pub(crate) struct PendingWrites<A: HalApi> {
     temp_resources: Vec<TempResource<A>>,
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture<A>>>,
-
-    /// All command buffers allocated from `command_encoder`.
-    pub executing_command_buffers: Vec<A::CommandBuffer>,
 }
 
 impl<A: HalApi> PendingWrites<A> {
@@ -222,7 +212,6 @@ impl<A: HalApi> PendingWrites<A> {
             temp_resources: Vec::new(),
             dst_buffers: FastHashMap::default(),
             dst_textures: FastHashMap::default(),
-            executing_command_buffers: Vec::new(),
         }
     }
 
@@ -231,8 +220,6 @@ impl<A: HalApi> PendingWrites<A> {
             if self.is_recording {
                 self.command_encoder.discard_encoding();
             }
-            self.command_encoder
-                .reset_all(self.executing_command_buffers.into_iter());
             device.destroy_command_encoder(self.command_encoder);
         }
 
@@ -266,36 +253,27 @@ impl<A: HalApi> PendingWrites<A> {
             .push(TempResource::StagingBuffer(buffer));
     }
 
-    fn pre_submit(&mut self) -> Result<Option<&A::CommandBuffer>, DeviceError> {
+    fn pre_submit(
+        &mut self,
+        command_allocator: &CommandAllocator<A>,
+        device: &A::Device,
+        queue: &A::Queue,
+    ) -> Result<Option<EncoderInFlight<A>>, DeviceError> {
         self.dst_buffers.clear();
         self.dst_textures.clear();
         if self.is_recording {
             let cmd_buf = unsafe { self.command_encoder.end_encoding()? };
             self.is_recording = false;
-            self.executing_command_buffers.push(cmd_buf);
 
-            return Ok(self.executing_command_buffers.last());
-        }
+            let new_encoder = command_allocator.acquire_encoder(device, queue)?;
 
-        Ok(None)
-    }
-
-    #[must_use]
-    fn post_submit(
-        &mut self,
-        command_allocator: &CommandAllocator<A>,
-        device: &A::Device,
-        queue: &A::Queue,
-    ) -> Option<EncoderInFlight<A>> {
-        if self.executing_command_buffers.len() >= WRITE_COMMAND_BUFFERS_PER_POOL {
-            let new_encoder = command_allocator.acquire_encoder(device, queue).unwrap();
-            Some(EncoderInFlight {
+            Ok(Some(EncoderInFlight {
                 raw: mem::replace(&mut self.command_encoder, new_encoder),
-                cmd_buffers: mem::take(&mut self.executing_command_buffers),
+                cmd_buffers: vec![cmd_buf],
                 trackers: Tracker::new(),
-            })
+            }))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -1425,14 +1403,17 @@ impl Global {
                 }
             }
 
-            let refs = pending_writes
-                .pre_submit()?
-                .into_iter()
-                .chain(
-                    active_executions
-                        .iter()
-                        .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
-                )
+            if let Some(pending_execution) = pending_writes.pre_submit(
+                &device.command_allocator,
+                device.raw(),
+                queue.raw.as_ref().unwrap(),
+            )? {
+                active_executions.insert(0, pending_execution);
+            }
+
+            let hal_command_buffers = active_executions
+                .iter()
+                .flat_map(|e| e.cmd_buffers.iter())
                 .collect::<Vec<_>>();
 
             {
@@ -1451,19 +1432,16 @@ impl Global {
                         .raw
                         .as_ref()
                         .unwrap()
-                        .submit(&refs, &submit_surface_textures, (fence, submit_index))
+                        .submit(
+                            &hal_command_buffers,
+                            &submit_surface_textures,
+                            (fence, submit_index),
+                        )
                         .map_err(DeviceError::from)?;
                 }
             }
 
             profiling::scope!("cleanup");
-            if let Some(pending_execution) = pending_writes.post_submit(
-                &device.command_allocator,
-                device.raw(),
-                queue.raw.as_ref().unwrap(),
-            ) {
-                active_executions.push(pending_execution);
-            }
 
             // this will register the new submission to the life time tracker
             let mut pending_write_resources = mem::take(&mut pending_writes.temp_resources);
