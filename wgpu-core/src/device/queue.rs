@@ -145,7 +145,6 @@ pub struct WrappedSubmissionIndex {
 ///   `maintain` call, no longer used anywhere
 #[derive(Debug)]
 pub enum TempResource<A: HalApi> {
-    Buffer(Arc<Buffer<A>>),
     StagingBuffer(Arc<StagingBuffer<A>>),
     DestroyedBuffer(Arc<DestroyedBuffer<A>>),
     DestroyedTexture(Arc<DestroyedTexture<A>>),
