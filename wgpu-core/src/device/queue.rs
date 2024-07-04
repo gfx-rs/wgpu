@@ -29,7 +29,8 @@ use hal::{CommandEncoder as _, Device as _, Queue as _};
 use smallvec::SmallVec;
 
 use std::{
-    iter, mem, ptr,
+    iter, mem,
+    ptr::{self, NonNull},
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
@@ -320,7 +321,7 @@ fn prepare_staging_buffer<A: HalApi>(
     device: &Arc<Device<A>>,
     size: wgt::BufferAddress,
     instance_flags: wgt::InstanceFlags,
-) -> Result<(StagingBuffer<A>, *mut u8), DeviceError> {
+) -> Result<(StagingBuffer<A>, NonNull<u8>), DeviceError> {
     profiling::scope!("prepare_staging_buffer");
     let stage_desc = hal::BufferDescriptor {
         label: hal_label(Some("(wgpu internal) Staging"), instance_flags),
@@ -340,7 +341,7 @@ fn prepare_staging_buffer<A: HalApi>(
         is_coherent: mapping.is_coherent,
     };
 
-    Ok((staging_buffer, mapping.ptr.as_ptr()))
+    Ok((staging_buffer, mapping.ptr))
 }
 
 impl<A: HalApi> StagingBuffer<A> {
@@ -457,7 +458,7 @@ impl Global {
 
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
-            ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
+            ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr.as_ptr(), data.len());
             staging_buffer.flush(device.raw())
         } {
             pending_writes.consume(staging_buffer);
@@ -482,7 +483,7 @@ impl Global {
         queue_id: QueueId,
         buffer_size: wgt::BufferSize,
         id_in: Option<id::StagingBufferId>,
-    ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
+    ) -> Result<(id::StagingBufferId, NonNull<u8>), QueueWriteError> {
         profiling::scope!("Queue::create_staging_buffer");
         let hub = A::hub(self);
 
@@ -845,7 +846,7 @@ impl Global {
             unsafe {
                 ptr::copy_nonoverlapping(
                     data.as_ptr().offset(data_layout.offset as isize),
-                    staging_buffer_ptr,
+                    staging_buffer_ptr.as_ptr(),
                     stage_size as usize,
                 );
             }
@@ -862,7 +863,7 @@ impl Global {
                                 data_layout.offset as isize
                                     + (rows_offset + row) as isize * bytes_per_row as isize,
                             ),
-                            staging_buffer_ptr.offset(
+                            staging_buffer_ptr.as_ptr().offset(
                                 (rows_offset + row) as isize * stage_bytes_per_row as isize,
                             ),
                             copy_bytes_per_row,

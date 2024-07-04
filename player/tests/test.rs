@@ -154,7 +154,7 @@ impl Test<'_> {
             let (ptr, size) =
                 wgc::gfx_select!(device_id => global.buffer_get_mapped_range(buffer, expect.offset, Some(expect.data.len() as wgt::BufferAddress)))
                     .unwrap();
-            let contents = unsafe { slice::from_raw_parts(ptr, size as usize) };
+            let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };
             let expected_data = match expect.data {
                 ExpectedData::Raw(vec) => vec,
                 ExpectedData::File(name, size) => {
