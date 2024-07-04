@@ -149,6 +149,11 @@ pub(crate) struct EncoderInFlight<A: HalApi> {
     raw: A::CommandEncoder,
     cmd_buffers: Vec<A::CommandBuffer>,
     trackers: Tracker<A>,
+
+    /// These are the buffers that have been tracked by `PendingWrites`.
+    pending_buffers: Vec<Arc<Buffer<A>>>,
+    /// These are the textures that have been tracked by `PendingWrites`.
+    pending_textures: Vec<Arc<Texture<A>>>,
 }
 
 impl<A: HalApi> EncoderInFlight<A> {
@@ -163,6 +168,8 @@ impl<A: HalApi> EncoderInFlight<A> {
             // resources, so can be _very_ expensive.
             profiling::scope!("drop command buffer trackers");
             drop(self.trackers);
+            drop(self.pending_buffers);
+            drop(self.pending_textures);
         }
         self.raw
     }
@@ -259,20 +266,26 @@ impl<A: HalApi> PendingWrites<A> {
         device: &A::Device,
         queue: &A::Queue,
     ) -> Result<Option<EncoderInFlight<A>>, DeviceError> {
-        self.dst_buffers.clear();
-        self.dst_textures.clear();
         if self.is_recording {
+            let pending_buffers = self.dst_buffers.drain().map(|(_, b)| b).collect();
+            let pending_textures = self.dst_textures.drain().map(|(_, t)| t).collect();
+
             let cmd_buf = unsafe { self.command_encoder.end_encoding()? };
             self.is_recording = false;
 
             let new_encoder = command_allocator.acquire_encoder(device, queue)?;
 
-            Ok(Some(EncoderInFlight {
+            let encoder = EncoderInFlight {
                 raw: mem::replace(&mut self.command_encoder, new_encoder),
                 cmd_buffers: vec![cmd_buf],
                 trackers: Tracker::new(),
-            }))
+                pending_buffers,
+                pending_textures,
+            };
+            Ok(Some(encoder))
         } else {
+            self.dst_buffers.clear();
+            self.dst_textures.clear();
             Ok(None)
         }
     }
@@ -1352,6 +1365,8 @@ impl Global {
                             raw: baked.encoder,
                             cmd_buffers: baked.list,
                             trackers: baked.trackers,
+                            pending_buffers: Vec::new(),
+                            pending_textures: Vec::new(),
                         });
                     }
 
@@ -1466,8 +1481,6 @@ impl Global {
                     Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
                     Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
                 };
-
-            device.lock_life().post_submit();
 
             (submit_index, closures)
         };

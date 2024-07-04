@@ -433,21 +433,11 @@ impl Global {
 
         let device = buffer.device.clone();
 
-        if device
-            .pending_writes
-            .lock()
-            .as_ref()
-            .unwrap()
-            .contains_buffer(&buffer)
-        {
-            device.lock_life().future_suspected_buffers.push(buffer);
-        } else {
-            device
-                .lock_life()
-                .suspected_resources
-                .buffers
-                .insert(buffer.tracker_index(), buffer);
-        }
+        device
+            .lock_life()
+            .suspected_resources
+            .buffers
+            .insert(buffer.tracker_index(), buffer);
 
         if wait {
             match device.wait_for_submit(last_submit_index) {
@@ -626,26 +616,12 @@ impl Global {
             let last_submit_index = texture.submission_index();
 
             let device = &texture.device;
-            {
-                if device
-                    .pending_writes
-                    .lock()
-                    .as_ref()
-                    .unwrap()
-                    .contains_texture(&texture)
-                {
-                    device
-                        .lock_life()
-                        .future_suspected_textures
-                        .push(texture.clone());
-                } else {
-                    device
-                        .lock_life()
-                        .suspected_resources
-                        .textures
-                        .insert(texture.tracker_index(), texture.clone());
-                }
-            }
+
+            device
+                .lock_life()
+                .suspected_resources
+                .textures
+                .insert(texture.tracker_index(), texture.clone());
 
             if wait {
                 match device.wait_for_submit(last_submit_index) {

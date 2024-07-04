@@ -230,13 +230,6 @@ pub(crate) struct LifetimeTracker<A: HalApi> {
     /// queue submissions still in flight.
     mapped: Vec<Arc<Buffer<A>>>,
 
-    /// Buffers can be used in a submission that is yet to be made, by the
-    /// means of `write_buffer()`, so we have a special place for them.
-    pub future_suspected_buffers: Vec<Arc<Buffer<A>>>,
-
-    /// Textures can be used in the upcoming submission by `write_texture`.
-    pub future_suspected_textures: Vec<Arc<Texture<A>>>,
-
     /// Resources whose user handle has died (i.e. drop/destroy has been called)
     /// and will likely be ready for destruction soon.
     pub suspected_resources: ResourceMaps<A>,
@@ -269,8 +262,6 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub fn new() -> Self {
         Self {
             mapped: Vec::new(),
-            future_suspected_buffers: Vec::new(),
-            future_suspected_textures: Vec::new(),
             suspected_resources: ResourceMaps::new(),
             active: Vec::new(),
             ready_to_map: Vec::new(),
@@ -299,19 +290,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             encoders,
             work_done_closures: SmallVec::new(),
         });
-    }
-
-    pub fn post_submit(&mut self) {
-        for v in self.future_suspected_buffers.drain(..) {
-            self.suspected_resources
-                .buffers
-                .insert(v.tracker_index(), v);
-        }
-        for v in self.future_suspected_textures.drain(..) {
-            self.suspected_resources
-                .textures
-                .insert(v.tracker_index(), v);
-        }
     }
 
     pub(crate) fn map(&mut self, value: &Arc<Buffer<A>>) {
