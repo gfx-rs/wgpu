@@ -31,7 +31,8 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{
     borrow::Cow,
-    iter, ptr,
+    iter,
+    ptr::{self, NonNull},
     sync::{atomic::Ordering, Arc},
 };
 
@@ -2611,7 +2612,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(*mut u8, u64), BufferAccessError> {
+    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
         api_log!("Buffer::get_mapped_range {buffer_id:?} offset {offset:?} size {size:?}");
 
@@ -2651,7 +2652,12 @@ impl Global {
                         max: buffer.size,
                     });
                 }
-                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+                unsafe {
+                    Ok((
+                        NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)),
+                        range_size,
+                    ))
+                }
             }
             resource::BufferMapState::Active {
                 ref ptr, ref range, ..
@@ -2671,7 +2677,12 @@ impl Global {
                 // ptr points to the beginning of the range we mapped in map_async
                 // rather than the beginning of the buffer.
                 let relative_offset = (offset - range.start) as isize;
-                unsafe { Ok((ptr.as_ptr().offset(relative_offset), range_size)) }
+                unsafe {
+                    Ok((
+                        NonNull::new_unchecked(ptr.as_ptr().offset(relative_offset)),
+                        range_size,
+                    ))
+                }
             }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(BufferAccessError::NotMapped)
