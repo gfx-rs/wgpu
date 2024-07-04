@@ -102,7 +102,7 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv,
+    binding_model, command,
     hal_api::HalApi,
     lock::{rank, Mutex, RwLock},
     pipeline,
@@ -323,7 +323,7 @@ pub(crate) trait ResourceUses:
 fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
     // Is power of two also means "is one bit set". We check for this as if
     // we're in any exclusive state, we must only be in a single state.
-    state.any_exclusive() && !conv::is_power_of_two_u16(state.bits())
+    state.any_exclusive() && !state.bits().is_power_of_two()
 }
 
 /// Returns true if the transition from one state to another does not require
