@@ -690,7 +690,7 @@ impl<A: HalApi> Device<A> {
             buffer.initialization_status.write().drain(0..buffer.size);
 
             *buffer.map_state.lock() = resource::BufferMapState::Init {
-                staging_buffer: Arc::new(staging_buffer),
+                staging_buffer,
                 ptr: staging_buffer_ptr,
             };
             hal::BufferUses::COPY_DST

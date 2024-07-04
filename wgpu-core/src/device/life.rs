@@ -316,17 +316,17 @@ impl<A: HalApi> LifetimeTracker<A> {
                 TempResource::StagingBuffer(raw) => {
                     last_resources
                         .staging_buffers
-                        .insert(raw.tracker_index(), raw);
+                        .insert(raw.tracker_index(), Arc::new(raw));
                 }
                 TempResource::DestroyedBuffer(destroyed) => {
                     last_resources
                         .destroyed_buffers
-                        .insert(destroyed.tracker_index, destroyed);
+                        .insert(destroyed.tracker_index, Arc::new(destroyed));
                 }
                 TempResource::DestroyedTexture(destroyed) => {
                     last_resources
                         .destroyed_textures
-                        .insert(destroyed.tracker_index, destroyed);
+                        .insert(destroyed.tracker_index, Arc::new(destroyed));
                 }
             }
         }
@@ -417,17 +417,19 @@ impl<A: HalApi> LifetimeTracker<A> {
         if let Some(resources) = resources {
             match temp_resource {
                 TempResource::StagingBuffer(raw) => {
-                    resources.staging_buffers.insert(raw.tracker_index(), raw);
+                    resources
+                        .staging_buffers
+                        .insert(raw.tracker_index(), Arc::new(raw));
                 }
                 TempResource::DestroyedBuffer(destroyed) => {
                     resources
                         .destroyed_buffers
-                        .insert(destroyed.tracker_index, destroyed);
+                        .insert(destroyed.tracker_index, Arc::new(destroyed));
                 }
                 TempResource::DestroyedTexture(destroyed) => {
                     resources
                         .destroyed_textures
-                        .insert(destroyed.tracker_index, destroyed);
+                        .insert(destroyed.tracker_index, Arc::new(destroyed));
                 }
             }
         }
