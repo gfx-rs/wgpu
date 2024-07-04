@@ -587,33 +587,17 @@ impl<A: HalApi> Device<A> {
             };
             hal::BufferUses::MAP_WRITE
         } else {
-            // buffer needs staging area for initialization only
-            let stage_desc = wgt::BufferDescriptor {
-                label: Some(Cow::Borrowed(
-                    "(wgpu internal) initializing unmappable buffer",
-                )),
-                size: desc.size,
-                usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            };
-            let stage = self.create_buffer_impl(&stage_desc, true)?;
+            let (staging_buffer, staging_buffer_ptr) =
+                queue::prepare_staging_buffer(self, desc.size, self.instance_flags)?;
 
-            let snatch_guard = self.snatchable_lock.read();
-            let stage_raw = stage.raw(&snatch_guard).unwrap();
-            let mapping = unsafe { self.raw().map_buffer(stage_raw, 0..stage.size) }
-                .map_err(DeviceError::from)?;
-
-            assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
-            // Zero initialize memory and then mark both staging and buffer as initialized
+            // Zero initialize memory and then mark the buffer as initialized
             // (it's guaranteed that this is the case by the time the buffer is usable)
-            unsafe { std::ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
+            unsafe { std::ptr::write_bytes(staging_buffer_ptr.as_ptr(), 0, buffer.size as usize) };
             buffer.initialization_status.write().drain(0..buffer.size);
-            stage.initialization_status.write().drain(0..buffer.size);
 
             *buffer.map_state.lock() = resource::BufferMapState::Init {
-                ptr: mapping.ptr,
-                needs_flush: !mapping.is_coherent,
-                stage_buffer: stage,
+                staging_buffer: Arc::new(staging_buffer),
+                ptr: staging_buffer_ptr,
             };
             hal::BufferUses::COPY_DST
         };
