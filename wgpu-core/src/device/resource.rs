@@ -3549,7 +3549,9 @@ impl<A: HalApi> Device<A> {
         // During these iterations, we discard all errors. We don't care!
         let trackers = self.trackers.lock();
         for buffer in trackers.buffers.used_resources() {
-            let _ = buffer.destroy();
+            if let Some(buffer) = Weak::upgrade(&buffer) {
+                let _ = buffer.destroy();
+            }
         }
         for texture in trackers.textures.used_resources() {
             let _ = texture.destroy();
