@@ -113,7 +113,9 @@ use crate::{
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
-pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
+pub(crate) use buffer::{
+    BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
+};
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
 pub(crate) use stateless::{StatelessBindGroupState, StatelessTracker};
 pub(crate) use texture::{
@@ -600,14 +602,14 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
 
 /// A tracker used by Device.
 pub(crate) struct DeviceTracker<A: HalApi> {
-    pub buffers: BufferTracker<A>,
+    pub buffers: DeviceBufferTracker<A>,
     pub textures: TextureTracker<A>,
 }
 
 impl<A: HalApi> DeviceTracker<A> {
     pub fn new() -> Self {
         Self {
-            buffers: BufferTracker::new(),
+            buffers: DeviceBufferTracker::new(),
             textures: TextureTracker::new(),
         }
     }
