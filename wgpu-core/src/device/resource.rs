@@ -1603,8 +1603,7 @@ impl<A: HalApi> Device<A> {
             })
         })?;
 
-        let interface =
-            validation::Interface::new(&module, &info, self.limits.clone(), self.features);
+        let interface = validation::Interface::new(&module, &info, self.limits.clone());
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
             module,
             info,

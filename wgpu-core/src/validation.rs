@@ -128,7 +128,6 @@ struct EntryPoint {
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
-    features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -232,8 +231,6 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
-    #[error("Location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
-    InputNotConsumed { location: wgt::ShaderLocation },
     #[error(
         "Unable to select an entry point: no entry point was found in the provided shader module"
     )]
@@ -838,12 +835,7 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(
-        module: &naga::Module,
-        info: &naga::valid::ModuleInfo,
-        limits: wgt::Limits,
-        features: wgt::Features,
-    ) -> Self {
+    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -921,7 +913,6 @@ impl Interface {
 
         Self {
             limits,
-            features,
             resources,
             entry_points,
         }
@@ -1169,27 +1160,6 @@ impl Interface {
                     }
                 }
                 Varying::BuiltIn(_) => {}
-            }
-        }
-
-        // Check all vertex outputs and make sure the fragment shader consumes them.
-        // This requirement is removed if the `SHADER_UNUSED_VERTEX_OUTPUT` feature is enabled.
-        if shader_stage == naga::ShaderStage::Fragment
-            && !self
-                .features
-                .contains(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT)
-        {
-            for &index in inputs.keys() {
-                // This is a linear scan, but the count should be low enough
-                // that this should be fine.
-                let found = entry_point.inputs.iter().any(|v| match *v {
-                    Varying::Local { location, .. } => location == index,
-                    Varying::BuiltIn(_) => false,
-                });
-
-                if !found {
-                    return Err(StageError::InputNotConsumed { location: index });
-                }
             }
         }
 
