@@ -23,7 +23,7 @@ use crate::{
     pool::ResourcePool,
     resource::{
         self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, Texture, TextureView,
-        TextureViewNotRenderableReason, Trackable, TrackingData,
+        TextureViewNotRenderableReason, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -54,7 +54,6 @@ use std::{
 };
 
 use super::{
-    life::ResourceMaps,
     queue::{self, Queue},
     DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
@@ -129,10 +128,6 @@ pub struct Device<A: HalApi> {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool<A>,
-
-    /// Temporary storage, cleared at the start of every call,
-    /// retained only to save allocations.
-    temp_suspected: Mutex<Option<ResourceMaps<A>>>,
 }
 
 pub(crate) enum DeferredDestroy<A: HalApi> {
@@ -269,7 +264,6 @@ impl<A: HalApi> Device<A> {
             trackers: Mutex::new(rank::DEVICE_TRACKERS, Tracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
             life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
-            temp_suspected: Mutex::new(rank::DEVICE_TEMP_SUSPECTED, Some(ResourceMaps::new())),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(
@@ -426,8 +420,6 @@ impl<A: HalApi> Device<A> {
         let submission_closures =
             life_tracker.triage_submissions(last_done_index, &self.command_allocator);
 
-        life_tracker.triage_suspected(&self.trackers);
-
         life_tracker.triage_mapped();
 
         let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
@@ -472,82 +464,6 @@ impl<A: HalApi> Device<A> {
             device_lost_invocations,
         };
         Ok((closures, queue_empty))
-    }
-
-    pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
-        // If we have a previously allocated `ResourceMap`, just use that.
-        let mut temp_suspected = self
-            .temp_suspected
-            .lock()
-            .take()
-            .unwrap_or_else(|| ResourceMaps::new());
-        temp_suspected.clear();
-
-        // As the tracker is cleared/dropped, we need to consider all the resources
-        // that it references for destruction in the next GC pass.
-        {
-            for resource in trackers.buffers.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .buffers
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.textures.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .textures
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.views.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .texture_views
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.bind_groups.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .bind_groups
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.samplers.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .samplers
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.compute_pipelines.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .compute_pipelines
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.render_pipelines.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .render_pipelines
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.query_sets.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .query_sets
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-        }
-        self.lock_life()
-            .suspected_resources
-            .extend(&mut temp_suspected);
-        // Save this resource map for later reuse.
-        *self.temp_suspected.lock() = Some(temp_suspected);
     }
 
     pub(crate) fn create_buffer(

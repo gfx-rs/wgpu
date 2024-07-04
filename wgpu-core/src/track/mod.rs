@@ -598,10 +598,6 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     }
 }
 
-pub(crate) trait ResourceTracker {
-    fn remove_abandoned(&mut self, index: TrackerIndex) -> bool;
-}
-
 /// A full double sided tracker used by CommandBuffers and the Device.
 pub(crate) struct Tracker<A: HalApi> {
     pub buffers: BufferTracker<A>,

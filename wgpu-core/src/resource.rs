@@ -200,10 +200,6 @@ pub(crate) trait Trackable: Labeled {
     /// given index.
     fn use_at(&self, submit_index: SubmissionIndex);
     fn submission_index(&self) -> SubmissionIndex;
-
-    fn is_unique(self: &Arc<Self>) -> bool {
-        Arc::strong_count(self) == 1
-    }
 }
 
 #[macro_export]

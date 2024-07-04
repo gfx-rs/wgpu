@@ -7,15 +7,14 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-use super::{PendingTransition, ResourceTracker, TrackerIndex};
+use super::{PendingTransition, TrackerIndex};
 use crate::{
     hal_api::HalApi,
     lock::{rank, Mutex},
     resource::{Buffer, Trackable},
-    resource_log,
     snatch::SnatchGuard,
     track::{
-        invalid_resource_state, skip_barrier, Labeled, ResourceMetadata, ResourceMetadataProvider,
+        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUsageCompatibilityError, ResourceUses,
     },
 };
@@ -77,16 +76,6 @@ impl<A: HalApi> BufferBindGroupState<A> {
             .into_iter()
     }
 
-    /// Returns a list of all buffers tracked. May contain duplicates.
-    pub fn drain_resources(&self) -> impl Iterator<Item = Arc<Buffer<A>>> + '_ {
-        let mut buffers = self.buffers.lock();
-        buffers
-            .drain(..)
-            .map(|(buffer, _u)| buffer)
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-
     /// Adds the given resource with the given state.
     pub fn add_single(&self, buffer: &Arc<Buffer<A>>, state: BufferUses) {
         let mut buffers = self.buffers.lock();
@@ -134,13 +123,6 @@ impl<A: HalApi> BufferUsageScope<A> {
         if index >= self.state.len() {
             self.set_size(index + 1);
         }
-    }
-
-    /// Drains all buffers tracked.
-    pub fn drain_resources(&mut self) -> impl Iterator<Item = Arc<Buffer<A>>> + '_ {
-        let resources = self.metadata.drain_resources();
-        self.state.clear();
-        resources.into_iter()
     }
 
     /// Merge the list of buffer states in the given bind group into this usage scope.
@@ -261,67 +243,6 @@ pub(crate) struct BufferTracker<A: HalApi> {
     metadata: ResourceMetadata<Buffer<A>>,
 
     temp: Vec<PendingTransition<BufferUses>>,
-}
-
-impl<A: HalApi> ResourceTracker for BufferTracker<A> {
-    /// Try to remove the buffer `id` from this tracker if it is otherwise unused.
-    ///
-    /// A buffer is 'otherwise unused' when the only references to it are:
-    ///
-    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_resources`, is
-    ///    considering draining from `LifetimeTracker::suspected_resources`,
-    ///
-    /// 2) its `Arc` in [`self.metadata`] (owned by [`Device::trackers`]), and
-    ///
-    /// 3) its `Arc` in the [`Hub::buffers`] registry.
-    ///
-    /// If the buffer is indeed unused, this function removes 2), and
-    /// `triage_suspected` will remove 3), leaving 1) as the sole
-    /// remaining reference.
-    ///
-    /// Returns true if the resource was removed or if not existing in metadata.
-    ///
-    /// [`Device::trackers`]: crate::device::Device
-    /// [`self.metadata`]: BufferTracker::metadata
-    /// [`Hub::buffers`]: crate::hub::Hub::buffers
-    fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
-        let index = index.as_usize();
-
-        if index > self.metadata.size() {
-            return false;
-        }
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
-                //so it's already been released from user and so it's not inside Registry\Storage
-                if existing_ref_count <= 2 {
-                    resource_log!(
-                        "BufferTracker::remove_abandoned: removing {}",
-                        self.metadata.get_resource_unchecked(index).error_ident()
-                    );
-
-                    self.metadata.remove(index);
-                    return true;
-                }
-
-                resource_log!(
-                    "BufferTracker::remove_abandoned: not removing {}, ref count {}",
-                    self.metadata.get_resource_unchecked(index).error_ident(),
-                    existing_ref_count
-                );
-
-                return false;
-            }
-        }
-
-        resource_log!("BufferTracker::remove_abandoned: does not contain index {index:?}",);
-
-        true
-    }
 }
 
 impl<A: HalApi> BufferTracker<A> {
