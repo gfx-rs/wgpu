@@ -87,7 +87,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
 #[derive(Debug)]
 pub(crate) struct BufferUsageScope<A: HalApi> {
     state: Vec<BufferUses>,
-    metadata: ResourceMetadata<Buffer<A>>,
+    metadata: ResourceMetadata<Arc<Buffer<A>>>,
 }
 
 impl<A: HalApi> Default for BufferUsageScope<A> {
@@ -240,7 +240,7 @@ pub(crate) struct BufferTracker<A: HalApi> {
     start: Vec<BufferUses>,
     end: Vec<BufferUses>,
 
-    metadata: ResourceMetadata<Buffer<A>>,
+    metadata: ResourceMetadata<Arc<Buffer<A>>>,
 
     temp: Vec<PendingTransition<BufferUses>>,
 }
@@ -552,11 +552,11 @@ impl BufferStateProvider<'_> {
 unsafe fn insert_or_merge<A: HalApi>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
-    resource_metadata: &mut ResourceMetadata<Buffer<A>>,
+    resource_metadata: &mut ResourceMetadata<Arc<Buffer<A>>>,
     index32: u32,
     index: usize,
     state_provider: BufferStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Buffer<A>>>,
 ) -> Result<(), ResourceUsageCompatibilityError> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
@@ -607,11 +607,11 @@ unsafe fn insert_or_merge<A: HalApi>(
 unsafe fn insert_or_barrier_update<A: HalApi>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
-    resource_metadata: &mut ResourceMetadata<Buffer<A>>,
+    resource_metadata: &mut ResourceMetadata<Arc<Buffer<A>>>,
     index: usize,
     start_state_provider: BufferStateProvider<'_>,
     end_state_provider: Option<BufferStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Buffer<A>>>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
 ) {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
@@ -641,11 +641,11 @@ unsafe fn insert_or_barrier_update<A: HalApi>(
 unsafe fn insert<A: HalApi>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
-    resource_metadata: &mut ResourceMetadata<Buffer<A>>,
+    resource_metadata: &mut ResourceMetadata<Arc<Buffer<A>>>,
     index: usize,
     start_state_provider: BufferStateProvider<'_>,
     end_state_provider: Option<BufferStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Buffer<A>>>,
 ) {
     let new_start_state = unsafe { start_state_provider.get_state(index) };
     let new_end_state =
@@ -675,7 +675,7 @@ unsafe fn merge<A: HalApi>(
     index32: u32,
     index: usize,
     state_provider: BufferStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, Buffer<A>>,
+    metadata_provider: ResourceMetadataProvider<'_, Arc<Buffer<A>>>,
 ) -> Result<(), ResourceUsageCompatibilityError> {
     let current_state = unsafe { current_states.get_unchecked_mut(index) };
     let new_state = unsafe { state_provider.get_state(index) };
