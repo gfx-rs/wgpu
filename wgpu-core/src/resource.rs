@@ -260,7 +260,7 @@ pub enum BufferMapAsyncStatus {
 pub(crate) enum BufferMapState<A: HalApi> {
     /// Mapped at creation.
     Init {
-        staging_buffer: Arc<StagingBuffer<A>>,
+        staging_buffer: StagingBuffer<A>,
         ptr: NonNull<u8>,
     },
     /// Waiting for GPU to be done before mapping
@@ -767,14 +767,14 @@ impl<A: HalApi> Buffer<A> {
                 mem::take(&mut *guard)
             };
 
-            queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
+            queue::TempResource::DestroyedBuffer(DestroyedBuffer {
                 raw: Some(raw),
                 device: Arc::clone(&self.device),
                 submission_index: self.submission_index(),
                 tracker_index: self.tracker_index(),
                 label: self.label().to_owned(),
                 bind_groups,
-            }))
+            })
         };
 
         let mut pending_writes = device.pending_writes.lock();
@@ -1136,7 +1136,7 @@ impl<A: HalApi> Texture<A> {
                 mem::take(&mut *guard)
             };
 
-            queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {
+            queue::TempResource::DestroyedTexture(DestroyedTexture {
                 raw: Some(raw),
                 views,
                 bind_groups,
@@ -1144,7 +1144,7 @@ impl<A: HalApi> Texture<A> {
                 tracker_index: self.tracker_index(),
                 submission_index: self.submission_index(),
                 label: self.label().to_owned(),
-            }))
+            })
         };
 
         let mut pending_writes = device.pending_writes.lock();

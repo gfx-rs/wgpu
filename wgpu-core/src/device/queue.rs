@@ -145,9 +145,9 @@ pub struct WrappedSubmissionIndex {
 ///   `maintain` call, no longer used anywhere
 #[derive(Debug)]
 pub enum TempResource<A: HalApi> {
-    StagingBuffer(Arc<StagingBuffer<A>>),
-    DestroyedBuffer(Arc<DestroyedBuffer<A>>),
-    DestroyedTexture(Arc<DestroyedTexture<A>>),
+    StagingBuffer(StagingBuffer<A>),
+    DestroyedBuffer(DestroyedBuffer<A>),
+    DestroyedTexture(DestroyedTexture<A>),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -257,7 +257,7 @@ impl<A: HalApi> PendingWrites<A> {
         self.temp_resources.push(resource);
     }
 
-    fn consume(&mut self, buffer: Arc<StagingBuffer<A>>) {
+    fn consume(&mut self, buffer: StagingBuffer<A>) {
         self.temp_resources
             .push(TempResource::StagingBuffer(buffer));
     }
@@ -453,8 +453,6 @@ impl Global {
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
-        let staging_buffer = Arc::new(staging_buffer);
-
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
             ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr.as_ptr(), data.len());
@@ -520,13 +518,12 @@ impl Global {
 
         let device = &queue.device;
 
-        let staging_buffer = hub.staging_buffers.unregister(staging_buffer_id);
-        if staging_buffer.is_none() {
-            return Err(QueueWriteError::Transfer(TransferError::InvalidBufferId(
-                buffer_id,
-            )));
-        }
-        let staging_buffer = staging_buffer.unwrap();
+        let staging_buffer = hub
+            .staging_buffers
+            .unregister(staging_buffer_id)
+            .and_then(Arc::into_inner)
+            .ok_or_else(|| QueueWriteError::Transfer(TransferError::InvalidBufferId(buffer_id)))?;
+
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
@@ -836,8 +833,6 @@ impl Global {
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(device, stage_size, device.instance_flags)?;
-
-        let staging_buffer = Arc::new(staging_buffer);
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
