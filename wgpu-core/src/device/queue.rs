@@ -18,7 +18,7 @@ use crate::{
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
         DestroyedTexture, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
-        TextureInner, Trackable, TrackingData,
+        TextureInner, Trackable,
     },
     resource_log,
     track::{self, TrackerIndex},
@@ -138,11 +138,8 @@ pub struct WrappedSubmissionIndex {
 /// - `PendingWrites::temp_resources`: resources used by queue writes and
 ///   unmaps, waiting to be folded in with the next queue submission
 ///
-/// - `ActiveSubmission::last_resources`: temporary resources used by a queue
+/// - `ActiveSubmission::temp_resources`: temporary resources used by a queue
 ///   submission, to be freed when it completes
-///
-/// - `LifetimeTracker::free_resources`: resources to be freed in the next
-///   `maintain` call, no longer used anywhere
 #[derive(Debug)]
 pub enum TempResource<A: HalApi> {
     StagingBuffer(StagingBuffer<A>),
@@ -336,7 +333,6 @@ pub(crate) fn prepare_staging_buffer<A: HalApi>(
         raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(buffer)),
         device: device.clone(),
         size,
-        tracking_data: TrackingData::new(device.tracker_indices.staging_buffers.clone()),
         is_coherent: mapping.is_coherent,
     };
 

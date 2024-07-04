@@ -770,8 +770,6 @@ impl<A: HalApi> Buffer<A> {
             queue::TempResource::DestroyedBuffer(DestroyedBuffer {
                 raw: Some(raw),
                 device: Arc::clone(&self.device),
-                submission_index: self.submission_index(),
-                tracker_index: self.tracker_index(),
                 label: self.label().to_owned(),
                 bind_groups,
             })
@@ -823,8 +821,6 @@ pub struct DestroyedBuffer<A: HalApi> {
     raw: Option<A::Buffer>,
     device: Arc<Device<A>>,
     label: String,
-    pub(crate) tracker_index: TrackerIndex,
-    pub(crate) submission_index: u64,
     bind_groups: Vec<Weak<BindGroup<A>>>,
 }
 
@@ -878,7 +874,6 @@ pub struct StagingBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
-    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for StagingBuffer<A> {
@@ -902,7 +897,6 @@ impl<A: HalApi> Labeled for StagingBuffer<A> {
 }
 crate::impl_parent_device!(StagingBuffer);
 crate::impl_storage_item!(StagingBuffer);
-crate::impl_trackable!(StagingBuffer);
 
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
@@ -1141,8 +1135,6 @@ impl<A: HalApi> Texture<A> {
                 views,
                 bind_groups,
                 device: Arc::clone(&self.device),
-                tracker_index: self.tracker_index(),
-                submission_index: self.submission_index(),
                 label: self.label().to_owned(),
             })
         };
@@ -1333,8 +1325,6 @@ pub struct DestroyedTexture<A: HalApi> {
     bind_groups: Vec<Weak<BindGroup<A>>>,
     device: Arc<Device<A>>,
     label: String,
-    pub(crate) tracker_index: TrackerIndex,
-    pub(crate) submission_index: u64,
 }
 
 impl<A: HalApi> DestroyedTexture<A> {

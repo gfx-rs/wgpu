@@ -9,10 +9,7 @@ use crate::{
     id,
     lock::Mutex,
     pipeline::{ComputePipeline, RenderPipeline},
-    resource::{
-        self, Buffer, DestroyedBuffer, DestroyedTexture, Labeled, QuerySet, Sampler, StagingBuffer,
-        Texture, TextureView, Trackable,
-    },
+    resource::{self, Buffer, Labeled, QuerySet, Sampler, Texture, TextureView, Trackable},
     snatch::SnatchGuard,
     track::{ResourceTracker, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
@@ -25,7 +22,6 @@ use thiserror::Error;
 /// A struct that keeps lists of resources that are no longer needed by the user.
 pub(crate) struct ResourceMaps<A: HalApi> {
     pub buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
-    pub staging_buffers: FastHashMap<TrackerIndex, Arc<StagingBuffer<A>>>,
     pub textures: FastHashMap<TrackerIndex, Arc<Texture<A>>>,
     pub texture_views: FastHashMap<TrackerIndex, Arc<TextureView<A>>>,
     pub samplers: FastHashMap<TrackerIndex, Arc<Sampler<A>>>,
@@ -36,15 +32,12 @@ pub(crate) struct ResourceMaps<A: HalApi> {
     pub pipeline_layouts: FastHashMap<TrackerIndex, Arc<PipelineLayout<A>>>,
     pub render_bundles: FastHashMap<TrackerIndex, Arc<RenderBundle<A>>>,
     pub query_sets: FastHashMap<TrackerIndex, Arc<QuerySet<A>>>,
-    pub destroyed_buffers: FastHashMap<TrackerIndex, Arc<DestroyedBuffer<A>>>,
-    pub destroyed_textures: FastHashMap<TrackerIndex, Arc<DestroyedTexture<A>>>,
 }
 
 impl<A: HalApi> ResourceMaps<A> {
     pub(crate) fn new() -> Self {
         ResourceMaps {
             buffers: FastHashMap::default(),
-            staging_buffers: FastHashMap::default(),
             textures: FastHashMap::default(),
             texture_views: FastHashMap::default(),
             samplers: FastHashMap::default(),
@@ -55,15 +48,12 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts: FastHashMap::default(),
             render_bundles: FastHashMap::default(),
             query_sets: FastHashMap::default(),
-            destroyed_buffers: FastHashMap::default(),
-            destroyed_textures: FastHashMap::default(),
         }
     }
 
     pub(crate) fn clear(&mut self) {
         let ResourceMaps {
             buffers,
-            staging_buffers,
             textures,
             texture_views,
             samplers,
@@ -74,11 +64,8 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts,
             render_bundles,
             query_sets,
-            destroyed_buffers,
-            destroyed_textures,
         } = self;
         buffers.clear();
-        staging_buffers.clear();
         textures.clear();
         texture_views.clear();
         samplers.clear();
@@ -89,14 +76,11 @@ impl<A: HalApi> ResourceMaps<A> {
         pipeline_layouts.clear();
         render_bundles.clear();
         query_sets.clear();
-        destroyed_buffers.clear();
-        destroyed_textures.clear();
     }
 
     pub(crate) fn extend(&mut self, other: &mut Self) {
         let ResourceMaps {
             buffers,
-            staging_buffers,
             textures,
             texture_views,
             samplers,
@@ -107,11 +91,8 @@ impl<A: HalApi> ResourceMaps<A> {
             pipeline_layouts,
             render_bundles,
             query_sets,
-            destroyed_buffers,
-            destroyed_textures,
         } = self;
         buffers.extend(other.buffers.drain());
-        staging_buffers.extend(other.staging_buffers.drain());
         textures.extend(other.textures.drain());
         texture_views.extend(other.texture_views.drain());
         samplers.extend(other.samplers.drain());
@@ -122,8 +103,6 @@ impl<A: HalApi> ResourceMaps<A> {
         pipeline_layouts.extend(other.pipeline_layouts.drain());
         render_bundles.extend(other.render_bundles.drain());
         query_sets.extend(other.query_sets.drain());
-        destroyed_buffers.extend(other.destroyed_buffers.drain());
-        destroyed_textures.extend(other.destroyed_textures.drain());
     }
 }
 
@@ -171,10 +150,12 @@ struct ActiveSubmission<A: HalApi> {
     /// `triage_submissions` removes resources that don't need to be held alive any longer
     /// from there.
     ///
-    /// This includes things like temporary resources and resources that are
-    /// used by submitted commands but have been dropped by the user (meaning that
-    /// this submission is their last reference.)
+    /// This includes resources that are used by submitted commands but have been
+    /// dropped by the user (meaning that this submission is their last reference.)
     last_resources: ResourceMaps<A>,
+
+    /// Temporary resources to be freed once this queue submission has completed.
+    temp_resources: Vec<TempResource<A>>,
 
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer<A>>>,
@@ -310,30 +291,10 @@ impl<A: HalApi> LifetimeTracker<A> {
         temp_resources: impl Iterator<Item = TempResource<A>>,
         encoders: Vec<EncoderInFlight<A>>,
     ) {
-        let mut last_resources = ResourceMaps::new();
-        for res in temp_resources {
-            match res {
-                TempResource::StagingBuffer(raw) => {
-                    last_resources
-                        .staging_buffers
-                        .insert(raw.tracker_index(), Arc::new(raw));
-                }
-                TempResource::DestroyedBuffer(destroyed) => {
-                    last_resources
-                        .destroyed_buffers
-                        .insert(destroyed.tracker_index, Arc::new(destroyed));
-                }
-                TempResource::DestroyedTexture(destroyed) => {
-                    last_resources
-                        .destroyed_textures
-                        .insert(destroyed.tracker_index, Arc::new(destroyed));
-                }
-            }
-        }
-
         self.active.push(ActiveSubmission {
             index,
-            last_resources,
+            last_resources: ResourceMaps::new(),
+            temp_resources: temp_resources.collect(),
             mapped: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
@@ -399,6 +360,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 let raw = unsafe { encoder.land() };
                 command_allocator.release_encoder(raw);
             }
+            drop(a.temp_resources);
             work_done_closures.extend(a.work_done_closures);
         }
         work_done_closures
@@ -413,25 +375,9 @@ impl<A: HalApi> LifetimeTracker<A> {
             .active
             .iter_mut()
             .find(|a| a.index == last_submit_index)
-            .map(|a| &mut a.last_resources);
+            .map(|a| &mut a.temp_resources);
         if let Some(resources) = resources {
-            match temp_resource {
-                TempResource::StagingBuffer(raw) => {
-                    resources
-                        .staging_buffers
-                        .insert(raw.tracker_index(), Arc::new(raw));
-                }
-                TempResource::DestroyedBuffer(destroyed) => {
-                    resources
-                        .destroyed_buffers
-                        .insert(destroyed.tracker_index, Arc::new(destroyed));
-                }
-                TempResource::DestroyedTexture(destroyed) => {
-                    resources
-                        .destroyed_textures
-                        .insert(destroyed.tracker_index, Arc::new(destroyed));
-                }
-            }
+            resources.push(temp_resource);
         }
     }
 
@@ -627,30 +573,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
-    fn triage_suspected_destroyed_buffers(&mut self) {
-        for (id, buffer) in self.suspected_resources.destroyed_buffers.drain() {
-            let submit_index = buffer.submission_index;
-            if let Some(resources) = self.active.iter_mut().find(|a| a.index == submit_index) {
-                resources
-                    .last_resources
-                    .destroyed_buffers
-                    .insert(id, buffer);
-            }
-        }
-    }
-
-    fn triage_suspected_destroyed_textures(&mut self) {
-        for (id, texture) in self.suspected_resources.destroyed_textures.drain() {
-            let submit_index = texture.submission_index;
-            if let Some(resources) = self.active.iter_mut().find(|a| a.index == submit_index) {
-                resources
-                    .last_resources
-                    .destroyed_textures
-                    .insert(id, texture);
-            }
-        }
-    }
-
     fn triage_suspected_compute_pipelines(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let suspected_compute_pipelines = &mut self.suspected_resources.compute_pipelines;
@@ -726,12 +648,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
-    fn triage_suspected_staging_buffers(&mut self) -> &mut Self {
-        self.suspected_resources.staging_buffers.clear();
-
-        self
-    }
-
     /// Identify resources to free, according to `trackers` and `self.suspected_resources`.
     ///
     /// Remove from `trackers`, the [`Tracker`] belonging to same [`Device`] as
@@ -776,12 +692,9 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.triage_suspected_bind_group_layouts();
         self.triage_suspected_query_sets(trackers);
         self.triage_suspected_samplers(trackers);
-        self.triage_suspected_staging_buffers();
         self.triage_suspected_texture_views(trackers);
         self.triage_suspected_textures(trackers);
         self.triage_suspected_buffers(trackers);
-        self.triage_suspected_destroyed_buffers();
-        self.triage_suspected_destroyed_textures();
     }
 
     /// Determine which buffers are ready to map, and which must wait for the
