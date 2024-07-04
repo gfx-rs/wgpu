@@ -88,7 +88,7 @@ static TEXTURE_DESTROY: GpuTestConfiguration =
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: wgpu::SampleCount::new(1), // multisampling is not supported for clear
+            sample_count: wgpu::SampleCount::no_multisampling(), // multisampling is not supported for clear
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Snorm,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,

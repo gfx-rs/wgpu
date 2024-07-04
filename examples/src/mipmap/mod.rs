@@ -228,7 +228,7 @@ impl crate::framework::Example for Example {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: texture_extent,
             mip_level_count: MIP_LEVEL_COUNT,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING

@@ -173,7 +173,7 @@ impl crate::framework::Example for Example {
             label: None,
             size: texture_extent,
             mip_level_count: 1,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R8Uint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,

@@ -188,7 +188,7 @@ impl Example {
             label: Some("Reflection Render Texture"),
             size: texture_extent,
             mip_level_count: 1,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: config.view_formats[0],
             usage: wgpu::TextureUsages::TEXTURE_BINDING
@@ -201,7 +201,7 @@ impl Example {
             label: Some("Depth Buffer"),
             size: texture_extent,
             mip_level_count: 1,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
@@ -620,7 +620,7 @@ impl crate::framework::Example for Example {
                         depth_read_only: false,
                         stencil_read_only: true,
                     }),
-                    sample_count: SampleCount::new(1),
+                    sample_count: SampleCount::no_multisampling(),
                     multiview: None,
                 });
             encoder.set_pipeline(&terrain_pipeline);

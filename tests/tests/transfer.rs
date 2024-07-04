@@ -17,7 +17,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         format: wgpu::TextureFormat::Rgba8Uint,
         usage: wgpu::TextureUsages::COPY_DST,
         mip_level_count: 1,
-        sample_count: wgpu::SampleCount::new(1),
+        sample_count: wgpu::SampleCount::no_multisampling(),
         view_formats: &[],
     });
     let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -31,7 +31,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         format: wgpu::TextureFormat::Rgba8Uint,
         usage: wgpu::TextureUsages::COPY_DST,
         mip_level_count: 1,
-        sample_count: wgpu::SampleCount::new(1),
+        sample_count: wgpu::SampleCount::no_multisampling(),
         view_formats: &[],
     });
 

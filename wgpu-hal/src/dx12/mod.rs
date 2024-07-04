@@ -1248,7 +1248,7 @@ impl crate::Surface for Surface {
             dimension: wgt::TextureDimension::D2,
             size: sc.size,
             mip_level_count: 1,
-            sample_count: wgt::SampleCount::new(1),
+            sample_count: wgt::SampleCount::no_multisampling(),
             allocation: None,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {

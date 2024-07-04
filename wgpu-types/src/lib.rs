@@ -6116,7 +6116,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
     ///   mip_level_count: 7,
-    ///   sample_count: wgpu::SampleCount::new(1),
+    ///   sample_count: wgpu::SampleCount::no_multisampling(),
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
@@ -6182,6 +6182,11 @@ impl SampleCount {
             Some(some) => Self(some),
             None => panic!("0 is not a valid multisample count"),
         }
+    }
+
+    /// Initializes with a count of 1. Implies no multisampling.
+    pub const fn no_multisampling() -> Self {
+        Self::new(1)
     }
 
     /// Retrieves the inner `u32` value of this count.
