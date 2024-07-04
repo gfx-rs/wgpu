@@ -326,9 +326,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .destroyed_buffers
                         .insert(destroyed.tracker_index, destroyed);
                 }
-                TempResource::Texture(raw) => {
-                    last_resources.textures.insert(raw.tracker_index(), raw);
-                }
                 TempResource::DestroyedTexture(destroyed) => {
                     last_resources
                         .destroyed_textures
@@ -432,9 +429,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                     resources
                         .destroyed_buffers
                         .insert(destroyed.tracker_index, destroyed);
-                }
-                TempResource::Texture(raw) => {
-                    resources.textures.insert(raw.tracker_index(), raw);
                 }
                 TempResource::DestroyedTexture(destroyed) => {
                     resources
