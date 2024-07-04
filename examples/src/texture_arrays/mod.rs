@@ -159,7 +159,7 @@ impl crate::framework::Example for Example {
         let texture_descriptor = wgpu::TextureDescriptor {
             size: wgpu::Extent3d::default(),
             mip_level_count: 1,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,

@@ -192,7 +192,7 @@ impl Example {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -381,7 +381,7 @@ impl crate::framework::Example for Example {
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: Self::SHADOW_SIZE,
             mip_level_count: 1,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: Self::SHADOW_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,

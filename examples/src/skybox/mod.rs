@@ -77,7 +77,7 @@ impl Example {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: SampleCount::new(1),
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -329,7 +329,7 @@ impl crate::framework::Example for Example {
             &wgpu::TextureDescriptor {
                 size,
                 mip_level_count: header.level_count,
-                sample_count: SampleCount::new(1),
+                sample_count: SampleCount::no_multisampling(),
                 dimension: wgpu::TextureDimension::D2,
                 format: skybox_format,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,

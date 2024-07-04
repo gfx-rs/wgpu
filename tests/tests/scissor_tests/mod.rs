@@ -24,7 +24,7 @@ async fn scissor_test_impl(
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
-        sample_count: wgpu::SampleCount::new(1),
+        sample_count: wgpu::SampleCount::no_multisampling(),
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,

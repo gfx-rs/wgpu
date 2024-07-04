@@ -145,7 +145,7 @@ async fn draw_test_with_reports(
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: wgpu::SampleCount::new(1),
+            sample_count: wgpu::SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,

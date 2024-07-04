@@ -468,7 +468,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let target_tex = ctx.device.create_texture(&target_desc);
     let target_tex_resolve = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("target_resolve"),
-        sample_count: wgpu::SampleCount::new(1),
+        sample_count: wgpu::SampleCount::no_multisampling(),
         ..target_desc
     });
 

@@ -33,7 +33,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: wgpu::SampleCount::new(1),
+            sample_count: wgpu::SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Bgra8Unorm,
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,

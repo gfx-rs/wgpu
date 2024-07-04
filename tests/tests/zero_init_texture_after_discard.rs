@@ -125,7 +125,7 @@ impl<'ctx> TestCase<'ctx> {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: wgpu::SampleCount::new(1),
+            sample_count: wgpu::SampleCount::no_multisampling(),
             dimension: TextureDimension::D2,
             format,
             usage: TextureUsages::COPY_DST

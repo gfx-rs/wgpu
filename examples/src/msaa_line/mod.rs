@@ -230,7 +230,7 @@ impl crate::framework::Example for Example {
                 //       supported sample counts to the user.
                 Key::Named(NamedKey::ArrowLeft) => {
                     if self.sample_count == self.max_sample_count {
-                        self.sample_count = SampleCount::new(1);
+                        self.sample_count = SampleCount::no_multisampling();
                         self.rebuild_bundle = true;
                     }
                 }
