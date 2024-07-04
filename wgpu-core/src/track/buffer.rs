@@ -492,21 +492,6 @@ impl<A: HalApi> BufferTracker<A> {
             unsafe { scope.metadata.remove(index) };
         }
     }
-
-    #[allow(dead_code)]
-    pub fn get(&self, index: TrackerIndex) -> Option<&Arc<Buffer<A>>> {
-        let index = index.as_usize();
-        if index > self.metadata.size() {
-            return None;
-        }
-        self.tracker_assert_in_bounds(index);
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                return Some(self.metadata.get_resource_unchecked(index));
-            }
-        }
-        None
-    }
 }
 
 /// Source of Buffer State.
