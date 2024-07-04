@@ -28,7 +28,7 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     track::{
-        BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope,
+        BindGroupStates, DeviceTracker, TextureSelector, TrackerIndexAllocators, UsageScope,
         UsageScopePool,
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
@@ -112,7 +112,7 @@ pub struct Device<A: HalApi> {
     ///
     /// Has to be locked temporarily only (locked last)
     /// and never before pending_writes
-    pub(crate) trackers: Mutex<Tracker<A>>,
+    pub(crate) trackers: Mutex<DeviceTracker<A>>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<LifetimeTracker<A>>,
@@ -261,7 +261,7 @@ impl<A: HalApi> Device<A> {
             fence: RwLock::new(rank::DEVICE_FENCE, Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
-            trackers: Mutex::new(rank::DEVICE_TRACKERS, Tracker::new()),
+            trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
             life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
             bgl_pool: ResourcePool::new(),
@@ -1273,8 +1273,6 @@ impl<A: HalApi> Device<A> {
             views.push(Arc::downgrade(&view));
         }
 
-        self.trackers.lock().views.insert_single(view.clone());
-
         Ok(view)
     }
 
@@ -1389,8 +1387,6 @@ impl<A: HalApi> Device<A> {
         };
 
         let sampler = Arc::new(sampler);
-
-        self.trackers.lock().samplers.insert_single(sampler.clone());
 
         Ok(sampler)
     }
@@ -2286,11 +2282,6 @@ impl<A: HalApi> Device<A> {
             bind_groups.push(weak_ref.clone());
         }
 
-        self.trackers
-            .lock()
-            .bind_groups
-            .insert_single(bind_group.clone());
-
         Ok(bind_group)
     }
 
@@ -2710,11 +2701,6 @@ impl<A: HalApi> Device<A> {
         };
 
         let pipeline = Arc::new(pipeline);
-
-        self.trackers
-            .lock()
-            .compute_pipelines
-            .insert_single(pipeline.clone());
 
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
@@ -3342,11 +3328,6 @@ impl<A: HalApi> Device<A> {
 
         let pipeline = Arc::new(pipeline);
 
-        self.trackers
-            .lock()
-            .render_pipelines
-            .insert_single(pipeline.clone());
-
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
                 bgl.exclusive_pipeline
@@ -3522,11 +3503,6 @@ impl<A: HalApi> Device<A> {
         };
 
         let query_set = Arc::new(query_set);
-
-        self.trackers
-            .lock()
-            .query_sets
-            .insert_single(query_set.clone());
 
         Ok(query_set)
     }

@@ -35,7 +35,7 @@ use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::Labeled;
-use crate::track::{Tracker, UsageScope};
+use crate::track::{DeviceTracker, Tracker, UsageScope};
 use crate::LabelHelpers;
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
@@ -408,6 +408,30 @@ impl<A: HalApi> CommandBuffer<A> {
         snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("drain_barriers");
+
+        let buffer_barriers = base.buffers.drain_transitions(snatch_guard);
+        let (transitions, textures) = base.textures.drain_transitions(snatch_guard);
+        let texture_barriers = transitions
+            .into_iter()
+            .enumerate()
+            .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
+
+        unsafe {
+            raw.transition_buffers(buffer_barriers);
+            raw.transition_textures(texture_barriers);
+        }
+    }
+
+    pub(crate) fn insert_barriers_from_device_tracker(
+        raw: &mut A::CommandEncoder,
+        base: &mut DeviceTracker<A>,
+        head: &Tracker<A>,
+        snatch_guard: &SnatchGuard,
+    ) {
+        profiling::scope!("insert_barriers_from_device_tracker");
+
+        base.buffers.set_from_tracker(&head.buffers);
+        base.textures.set_from_tracker(&head.textures);
 
         let buffer_barriers = base.buffers.drain_transitions(snatch_guard);
         let (transitions, textures) = base.textures.drain_transitions(snatch_guard);

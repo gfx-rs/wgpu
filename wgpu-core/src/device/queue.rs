@@ -1320,7 +1320,7 @@ impl Global {
                         baked.initialize_texture_memory(&mut *trackers, device, &snatch_guard)?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
-                        CommandBuffer::insert_barriers_from_tracker(
+                        CommandBuffer::insert_barriers_from_device_tracker(
                             &mut baked.encoder,
                             &mut *trackers,
                             &baked.trackers,

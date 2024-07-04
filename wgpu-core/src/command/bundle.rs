@@ -583,12 +583,6 @@ impl RenderBundleEncoder {
 
         let render_bundle = Arc::new(render_bundle);
 
-        device
-            .trackers
-            .lock()
-            .bundles
-            .insert_single(render_bundle.clone());
-
         Ok(render_bundle)
     }
 

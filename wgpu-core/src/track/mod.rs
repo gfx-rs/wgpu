@@ -598,12 +598,26 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     }
 }
 
-/// A full double sided tracker used by CommandBuffers and the Device.
+/// A tracker used by Device.
+pub(crate) struct DeviceTracker<A: HalApi> {
+    pub buffers: BufferTracker<A>,
+    pub textures: TextureTracker<A>,
+}
+
+impl<A: HalApi> DeviceTracker<A> {
+    pub fn new() -> Self {
+        Self {
+            buffers: BufferTracker::new(),
+            textures: TextureTracker::new(),
+        }
+    }
+}
+
+/// A full double sided tracker used by CommandBuffers.
 pub(crate) struct Tracker<A: HalApi> {
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
     pub views: StatelessTracker<resource::TextureView<A>>,
-    pub samplers: StatelessTracker<resource::Sampler<A>>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline<A>>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
@@ -617,7 +631,6 @@ impl<A: HalApi> Tracker<A> {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
             views: StatelessTracker::new(),
-            samplers: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),
             compute_pipelines: StatelessTracker::new(),
             render_pipelines: StatelessTracker::new(),
