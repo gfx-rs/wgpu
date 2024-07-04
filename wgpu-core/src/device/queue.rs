@@ -1343,15 +1343,12 @@ impl Global {
                                     ))
                                     .map_err(DeviceError::from)?
                             };
-                            trackers
+                            let texture_barriers = trackers
                                 .textures
-                                .set_from_usage_scope(&used_surface_textures);
-                            let (transitions, textures) =
-                                trackers.textures.drain_transitions(&snatch_guard);
-                            let texture_barriers = transitions
-                                .into_iter()
-                                .enumerate()
-                                .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
+                                .set_from_usage_scope_and_drain_transitions(
+                                    &used_surface_textures,
+                                    &snatch_guard,
+                                );
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
@@ -1401,15 +1398,12 @@ impl Global {
                 if !used_surface_textures.is_empty() {
                     let mut trackers = device.trackers.lock();
 
-                    trackers
+                    let texture_barriers = trackers
                         .textures
-                        .set_from_usage_scope(&used_surface_textures);
-                    let (transitions, textures) =
-                        trackers.textures.drain_transitions(&snatch_guard);
-                    let texture_barriers = transitions
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
+                        .set_from_usage_scope_and_drain_transitions(
+                            &used_surface_textures,
+                            &snatch_guard,
+                        );
                     unsafe {
                         pending_writes
                             .command_encoder

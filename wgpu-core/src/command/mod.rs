@@ -434,12 +434,9 @@ impl<A: HalApi> CommandBuffer<A> {
             .buffers
             .set_from_tracker_and_drain_transitions(&head.buffers, snatch_guard);
 
-        base.textures.set_from_tracker(&head.textures);
-        let (transitions, textures) = base.textures.drain_transitions(snatch_guard);
-        let texture_barriers = transitions
-            .into_iter()
-            .enumerate()
-            .map(|(i, p)| p.into_hal(textures[i].unwrap().raw().unwrap()));
+        let texture_barriers = base
+            .textures
+            .set_from_tracker_and_drain_transitions(&head.textures, snatch_guard);
 
         unsafe {
             raw.transition_buffers(buffer_barriers);
