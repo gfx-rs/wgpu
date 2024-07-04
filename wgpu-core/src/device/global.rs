@@ -2247,23 +2247,6 @@ impl Global {
         Some(error)
     }
 
-    #[cfg(feature = "replay")]
-    /// Only triage suspected resource IDs. This helps us to avoid ID collisions
-    /// upon creating new resources when re-playing a trace.
-    pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), DeviceError> {
-        let hub = A::hub(self);
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        device.check_is_valid()?;
-
-        device.lock_life().triage_suspected(&device.trackers);
-        Ok(())
-    }
-
     /// Check `device_id` for freeable resources and completed buffer mappings.
     ///
     /// Return `queue_empty` indicating whether there are more queue submissions still in flight.

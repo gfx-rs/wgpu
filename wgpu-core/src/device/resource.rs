@@ -76,11 +76,6 @@ use super::{
 /// This means that you must inspect function calls made while a lock is held
 /// to see what locks the callee may try to acquire.
 ///
-/// As far as this point:
-/// device_maintain_ids locks Device::lifetime_tracker, and calls...
-/// triage_suspected locks Device::trackers, and calls...
-/// Registry::unregister locks Registry::storage
-///
 /// Important:
 /// When locking pending_writes please check that trackers is not locked
 /// trackers should be locked only when needed for the shortest time possible

@@ -1,9 +1,5 @@
 /*! This is a player library for WebGPU traces.
  *
- * # Notes
- * - we call device_maintain_ids() before creating any refcounted resource,
- *   which is basically everything except for BGL and shader modules,
- *   so that we don't accidentally try to use the same ID.
 !*/
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
@@ -153,7 +149,6 @@ impl GlobalPlay for wgc::global::Global {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_buffer::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
@@ -166,7 +161,6 @@ impl GlobalPlay for wgc::global::Global {
                 self.buffer_drop::<A>(id, true);
             }
             Action::CreateTexture(id, desc) => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_texture::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
@@ -183,7 +177,6 @@ impl GlobalPlay for wgc::global::Global {
                 parent_id,
                 desc,
             } => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.texture_create_view::<A>(parent_id, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
@@ -193,7 +186,6 @@ impl GlobalPlay for wgc::global::Global {
                 self.texture_view_drop::<A>(id, true).unwrap();
             }
             Action::CreateSampler(id, desc) => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_sampler::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
@@ -203,7 +195,6 @@ impl GlobalPlay for wgc::global::Global {
                 self.sampler_drop::<A>(id);
             }
             Action::GetSurfaceTexture { id, parent_id } => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 self.surface_get_current_texture::<A>(parent_id, Some(id))
                     .unwrap()
                     .texture_id
@@ -219,7 +210,6 @@ impl GlobalPlay for wgc::global::Global {
                 self.bind_group_layout_drop::<A>(id);
             }
             Action::CreatePipelineLayout(id, desc) => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_pipeline_layout::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
@@ -229,7 +219,6 @@ impl GlobalPlay for wgc::global::Global {
                 self.pipeline_layout_drop::<A>(id);
             }
             Action::CreateBindGroup(id, desc) => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_bind_group::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
@@ -263,7 +252,6 @@ impl GlobalPlay for wgc::global::Global {
                 desc,
                 implicit_context,
             } => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let implicit_ids =
                     implicit_context
                         .as_ref()
@@ -285,7 +273,6 @@ impl GlobalPlay for wgc::global::Global {
                 desc,
                 implicit_context,
             } => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let implicit_ids =
                     implicit_context
                         .as_ref()
@@ -324,7 +311,6 @@ impl GlobalPlay for wgc::global::Global {
                 self.render_bundle_drop::<A>(id);
             }
             Action::CreateQuerySet { id, desc } => {
-                self.device_maintain_ids::<A>(device).unwrap();
                 let (_, error) = self.device_create_query_set::<A>(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
