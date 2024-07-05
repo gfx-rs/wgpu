@@ -3,7 +3,6 @@ use crate::arena::{Arena, Handle};
 
 pub struct ExpressionTracer<'tracer> {
     pub constants: &'tracer Arena<crate::Constant>,
-    pub overrides: &'tracer Arena<crate::Override>,
 
     /// The arena in which we are currently tracing expressions.
     pub expressions: &'tracer Arena<crate::Expression>,
