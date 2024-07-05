@@ -4,7 +4,6 @@ use super::{FunctionMap, ModuleMap};
 pub struct FunctionTracer<'a> {
     pub function: &'a crate::Function,
     pub constants: &'a crate::Arena<crate::Constant>,
-    pub overrides: &'a crate::Arena<crate::Override>,
 
     pub types_used: &'a mut HandleSet<crate::Type>,
     pub constants_used: &'a mut HandleSet<crate::Constant>,
