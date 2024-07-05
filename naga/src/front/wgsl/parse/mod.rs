@@ -37,9 +37,30 @@ struct ExpressionContext<'input, 'temp, 'out> {
     /// [`Function::locals`]: ast::Function::locals
     local_table: &'temp mut SymbolTable<&'input str, Handle<ast::Local>>,
 
-    /// The [`Function::locals`] arena for the function we're building.
+    /// Local variable and function argument arena for the function we're building.
     ///
-    /// [`Function::locals`]: ast::Function::locals
+    /// Note that the `Local` here is actually a zero-sized type. The AST keeps
+    /// all the detailed information about locals - names, types, etc. - in
+    /// [`LocalDecl`] statements. For arguments, that information is kept in
+    /// [`arguments`]. This `Arena`'s only role is to assign a unique `Handle`
+    /// to each of them, and track their definitions' spans for use in
+    /// diagnostics.
+    ///
+    /// In the AST, when an [`Ident`] expression refers to a local variable or
+    /// argument, its [`IdentExpr`] holds the referent's `Handle<Local>` in this
+    /// arena.
+    ///
+    /// During lowering, [`LocalDecl`] statements add entries to a per-function
+    /// table that maps `Handle<Local>` values to their Naga representations,
+    /// accessed via [`StatementContext::local_table`] and
+    /// [`RuntimeExpressionContext::local_table`]. This table is then consulted when
+    /// lowering subsequent [`Ident`] expressions.
+    ///
+    /// [`LocalDecl`]: StatementKind::LocalDecl
+    /// [`arguments`]: Function::arguments
+    /// [`Ident`]: Expression::Ident
+    /// [`StatementContext::local_table`]: StatementContext::local_table
+    /// [`RuntimeExpressionContext::local_table`]: RuntimeExpressionContext::local_table
     locals: &'out mut Arena<ast::Local>,
 
     /// Identifiers used by the current global declaration that have no local definition.
@@ -2158,7 +2179,6 @@ impl Parser {
             arguments,
             result,
             body,
-            locals,
         };
 
         // done
