@@ -267,7 +267,6 @@ impl<'module> ModuleTracer<'module> {
         FunctionTracer {
             function,
             constants: &self.module.constants,
-            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             global_expressions_used: &mut self.global_expressions_used,
