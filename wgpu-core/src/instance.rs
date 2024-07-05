@@ -577,9 +577,20 @@ impl Global {
             metal: Some(self.instance.metal.as_ref().map_or(
                 Err(CreateSurfaceError::BackendNotEnabled(Backend::Metal)),
                 |inst| {
-                    // we don't want to link to metal-rs for this
-                    #[allow(clippy::transmute_ptr_to_ref)]
-                    Ok(inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) }))
+                    let layer = layer.cast();
+                    // SAFETY: We do this cast and deref. (rather than using `metal` to get the
+                    // object we want) to avoid direct coupling on the `metal` crate.
+                    //
+                    // To wit, this pointer…
+                    //
+                    // - …is properly aligned.
+                    // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+                    //   field.
+                    // - …points to an _initialized_ `MetalLayerRef`.
+                    // - …is only ever aliased via an immutable reference that lives within this
+                    //   lexical scope.
+                    let layer = unsafe { &*layer };
+                    Ok(inst.create_surface_from_layer(layer))
                 },
             )?),
             #[cfg(dx12)]
