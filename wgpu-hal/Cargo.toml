@@ -63,8 +63,12 @@ gles = [
     "dep:ndk-sys",
     "winapi/libloaderapi",
 ]
+## Enables the DX12 backend when targeting Windows.
+##
+## Has no effect if not targeting Windows.
 dx12 = [
-    "naga/hlsl-out",
+    # DX12 is only available on Windows, therefore request HLSL output also only if we target Windows.
+    "naga/hlsl-out-if-target-windows",
     "dep:d3d12",
     "dep:bit-set",
     "dep:libloading",
