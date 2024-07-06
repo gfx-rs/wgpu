@@ -56,6 +56,9 @@ hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
 arrayvec.workspace = true
 
+[build-dependencies]
+cfg_aliases.workspace = true
+
 [dev-dependencies]
 diff = "0.1"
 env_logger = "0.11"
