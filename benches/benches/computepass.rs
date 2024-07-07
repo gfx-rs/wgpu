@@ -56,7 +56,9 @@ impl ComputepassState {
                 | wgpu::Features::TEXTURE_BINDING_ARRAY
                 | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
                 | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        );
+        )
+        // TODO: as of writing llvmpipe segfaults the bindless benchmark on ci
+        && device_state.adapter_info.driver != "llvmpipe";
 
         // Performance gets considerably worse if the resources are shuffled.
         //
