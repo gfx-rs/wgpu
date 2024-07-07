@@ -146,7 +146,6 @@ pub fn op_webgpu_create_compute_pipeline(
 #[serde(rename_all = "camelCase")]
 pub struct PipelineLayout {
     rid: ResourceId,
-    label: String,
     err: Option<WebGpuError>,
 }
 
@@ -165,9 +164,6 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
 
     let (bind_group_layout, maybe_err) = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, None));
 
-    let label =
-        gfx_select!(bind_group_layout => instance.bind_group_layout_label(bind_group_layout));
-
     let rid = state
         .resource_table
         .add(super::binding::WebGpuBindGroupLayout(
@@ -177,7 +173,6 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
 
     Ok(PipelineLayout {
         rid,
-        label,
         err: maybe_err.map(WebGpuError::from),
     })
 }
@@ -441,9 +436,6 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
 
     let (bind_group_layout, maybe_err) = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, index, None));
 
-    let label =
-        gfx_select!(bind_group_layout => instance.bind_group_layout_label(bind_group_layout));
-
     let rid = state
         .resource_table
         .add(super::binding::WebGpuBindGroupLayout(
@@ -453,7 +445,6 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
 
     Ok(PipelineLayout {
         rid,
-        label,
         err: maybe_err.map(WebGpuError::from),
     })
 }

@@ -471,7 +471,6 @@ impl super::Adapter {
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
-        features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);
@@ -1152,6 +1151,11 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        #[cfg(webgl)]
+        if self.shared.context.webgl2_context != surface.webgl2_context {
+            return None;
+        }
+
         if surface.presentable {
             let mut formats = vec![
                 wgt::TextureFormat::Rgba8Unorm,

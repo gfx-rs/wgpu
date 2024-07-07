@@ -97,14 +97,10 @@ pub type RawString = *const c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
 
 trait LabelHelpers<'a> {
-    fn borrow_option(&'a self) -> Option<&'a str>;
     fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str>;
-    fn borrow_or_default(&'a self) -> &'a str;
+    fn to_string(&self) -> String;
 }
 impl<'a> LabelHelpers<'a> for Label<'a> {
-    fn borrow_option(&'a self) -> Option<&'a str> {
-        self.as_ref().map(|cow| cow.as_ref())
-    }
     fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str> {
         if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
             return None;
@@ -112,8 +108,8 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
 
         self.as_ref().map(|cow| cow.as_ref())
     }
-    fn borrow_or_default(&'a self) -> &'a str {
-        self.borrow_option().unwrap_or_default()
+    fn to_string(&self) -> String {
+        self.as_ref().map(|cow| cow.to_string()).unwrap_or_default()
     }
 }
 

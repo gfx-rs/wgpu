@@ -7,11 +7,13 @@ use crate::{
     device::{DeviceError, MissingFeatures},
     global::Global,
     hal_api::HalApi,
-    id::{self, Id},
+    id,
     init_tracker::MemoryInitKind,
-    resource::{DestroyedResourceError, ParentDevice, QuerySet},
-    storage::Storage,
-    Epoch, FastHashMap, Index,
+    resource::{
+        DestroyedResourceError, MissingBufferUsageError, ParentDevice, QuerySet, Trackable,
+    },
+    track::{StatelessTracker, TrackerIndex},
+    FastHashMap,
 };
 use std::{iter, marker::PhantomData, sync::Arc};
 use thiserror::Error;
@@ -19,7 +21,7 @@ use wgt::BufferAddress;
 
 #[derive(Debug)]
 pub(crate) struct QueryResetMap<A: HalApi> {
-    map: FastHashMap<Index, (Vec<bool>, Epoch)>,
+    map: FastHashMap<TrackerIndex, (Vec<bool>, Arc<QuerySet<A>>)>,
     _phantom: PhantomData<A>,
 }
 impl<A: HalApi> QueryResetMap<A> {
@@ -30,30 +32,22 @@ impl<A: HalApi> QueryResetMap<A> {
         }
     }
 
-    pub fn use_query_set(
-        &mut self,
-        id: id::QuerySetId,
-        query_set: &QuerySet<A>,
-        query: u32,
-    ) -> bool {
-        let (index, epoch, _) = id.unzip();
+    pub fn use_query_set(&mut self, query_set: &Arc<QuerySet<A>>, query: u32) -> bool {
         let vec_pair = self
             .map
-            .entry(index)
-            .or_insert_with(|| (vec![false; query_set.desc.count as usize], epoch));
+            .entry(query_set.tracker_index())
+            .or_insert_with(|| {
+                (
+                    vec![false; query_set.desc.count as usize],
+                    query_set.clone(),
+                )
+            });
 
         std::mem::replace(&mut vec_pair.0[query as usize], true)
     }
 
-    pub fn reset_queries(
-        &mut self,
-        raw_encoder: &mut A::CommandEncoder,
-        query_set_storage: &Storage<QuerySet<A>>,
-    ) -> Result<(), id::QuerySetId> {
-        for (query_set_id, (state, epoch)) in self.map.drain() {
-            let id = Id::zip(query_set_id, epoch, A::VARIANT);
-            let query_set = query_set_storage.get(id).map_err(|_| id)?;
-
+    pub fn reset_queries(&mut self, raw_encoder: &mut A::CommandEncoder) {
+        for (_, (state, query_set)) in self.map.drain() {
             debug_assert_eq!(state.len(), query_set.desc.count as usize);
 
             // Need to find all "runs" of values which need resets. If the state vector is:
@@ -78,8 +72,6 @@ impl<A: HalApi> QueryResetMap<A> {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -117,23 +109,16 @@ pub enum QueryError {
     InvalidBufferId(id::BufferId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("QuerySet {0:?} is invalid or destroyed")]
-    InvalidQuerySet(id::QuerySetId),
-}
-
-impl crate::error::PrettyError for QueryError {
-    fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
-        fmt.error(self);
-        if let Self::InvalidQuerySet(id) = *self {
-            fmt.query_set_label(&id)
-        }
-    }
+    #[error("QuerySetId {0:?} is invalid or destroyed")]
+    InvalidQuerySetId(id::QuerySetId),
 }
 
 /// Error encountered while trying to use queries
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueryUseError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error("Query {query_index} is out of bounds for a query set of size {query_set_size}")]
     OutOfBounds {
         query_index: u32,
@@ -159,8 +144,8 @@ pub enum QueryUseError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ResolveError {
-    #[error("Queries can only be resolved to buffers that contain the QUERY_RESOLVE usage")]
-    MissingBufferUsage,
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("Resolve buffer offset has to be aligned to `QUERY_RESOLVE_BUFFER_ALIGNMENT")]
     BufferOffsetAlignment,
     #[error("Resolving queries {start_query}..{end_query} would overrun the query set of size {query_set_size}")]
@@ -182,7 +167,7 @@ pub enum ResolveError {
 
 impl<A: HalApi> QuerySet<A> {
     fn validate_query(
-        &self,
+        self: &Arc<Self>,
         query_type: SimplifiedQueryType,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
@@ -190,7 +175,7 @@ impl<A: HalApi> QuerySet<A> {
         // We need to defer our resets because we are in a renderpass,
         // add the usage to the reset map.
         if let Some(reset) = reset_state {
-            let used = reset.use_query_set(self.info.id(), self, query_index);
+            let used = reset.use_query_set(self, query_index);
             if used {
                 return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index });
             }
@@ -215,7 +200,7 @@ impl<A: HalApi> QuerySet<A> {
     }
 
     pub(super) fn validate_and_write_timestamp(
-        &self,
+        self: &Arc<Self>,
         raw_encoder: &mut A::CommandEncoder,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
@@ -238,12 +223,15 @@ impl<A: HalApi> QuerySet<A> {
 pub(super) fn validate_and_begin_occlusion_query<A: HalApi>(
     query_set: Arc<QuerySet<A>>,
     raw_encoder: &mut A::CommandEncoder,
+    tracker: &mut StatelessTracker<QuerySet<A>>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap<A>>,
     active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
     let needs_reset = reset_state.is_none();
     query_set.validate_query(SimplifiedQueryType::Occlusion, query_index, reset_state)?;
+
+    tracker.insert_single(query_set.clone());
 
     if let Some((_old, old_idx)) = active_query.take() {
         return Err(QueryUseError::AlreadyStarted {
@@ -279,16 +267,22 @@ pub(super) fn end_occlusion_query<A: HalApi>(
 pub(super) fn validate_and_begin_pipeline_statistics_query<A: HalApi>(
     query_set: Arc<QuerySet<A>>,
     raw_encoder: &mut A::CommandEncoder,
+    tracker: &mut StatelessTracker<QuerySet<A>>,
+    cmd_buf: &CommandBuffer<A>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap<A>>,
     active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
+    query_set.same_device_as(cmd_buf)?;
+
     let needs_reset = reset_state.is_none();
     query_set.validate_query(
         SimplifiedQueryType::PipelineStatistics,
         query_index,
         reset_state,
     )?;
+
+    tracker.insert_single(query_set.clone());
 
     if let Some((_old, old_idx)) = active_query.take() {
         return Err(QueryUseError::AlreadyStarted {
@@ -330,7 +324,14 @@ impl Global {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
 
         cmd_buf
             .device
@@ -352,12 +353,12 @@ impl Global {
 
         let raw_encoder = encoder.open()?;
 
-        let query_set_guard = hub.query_sets.read();
-        let query_set = query_set_guard
+        let query_set = hub
+            .query_sets
             .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
+            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
 
-        tracker.query_sets.add_single(query_set);
+        let query_set = tracker.query_sets.insert_single(query_set);
 
         query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
@@ -375,7 +376,15 @@ impl Global {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -399,12 +408,12 @@ impl Global {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
-        let query_set_guard = hub.query_sets.read();
-        let query_set = query_set_guard
+        let query_set = hub
+            .query_sets
             .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?;
+            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
 
-        tracker.query_sets.add_single(query_set);
+        let query_set = tracker.query_sets.insert_single(query_set);
 
         query_set.same_device_as(cmd_buf.as_ref())?;
 
@@ -423,9 +432,9 @@ impl Global {
 
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
-        if !dst_buffer.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
-            return Err(ResolveError::MissingBufferUsage.into());
-        }
+        dst_buffer
+            .check_usage(wgt::BufferUsages::QUERY_RESOLVE)
+            .map_err(ResolveError::MissingBufferUsage)?;
 
         let end_query = start_query + query_count;
         if end_query > query_set.desc.count {

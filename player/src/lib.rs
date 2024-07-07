@@ -113,9 +113,9 @@ impl GlobalPlay for wgc::global::Global {
                     timestamp_writes,
                     occlusion_query_set_id,
                 } => {
-                    self.render_pass_end_impl::<A>(
+                    self.render_pass_end_with_unresolved_commands::<A>(
                         encoder,
-                        base.as_ref(),
+                        base,
                         &target_colors,
                         target_depth_stencil.as_ref(),
                         timestamp_writes.as_ref(),

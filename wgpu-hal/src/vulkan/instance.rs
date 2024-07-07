@@ -884,7 +884,10 @@ impl crate::Instance for super::Instance {
         unsafe { surface.functor.destroy_surface(surface.raw, None) };
     }
 
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&super::Surface>,
+    ) -> Vec<crate::ExposedAdapter<super::Api>> {
         use crate::auxil::db;
 
         let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {

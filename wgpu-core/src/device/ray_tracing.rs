@@ -12,7 +12,7 @@ use crate::{
 use std::sync::Arc;
 
 use crate::lock::rank;
-use crate::resource::{ResourceInfo, StagingBuffer};
+use crate::resource::{StagingBuffer, Trackable, TrackingData};
 use hal::{AccelerationStructureTriangleIndices, Device as _};
 
 impl<A: HalApi> Device<A> {
@@ -21,7 +21,7 @@ impl<A: HalApi> Device<A> {
         self_id: id::DeviceId,
         blas_desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> Result<resource::Blas<A>, CreateBlasError> {
+    ) -> Result<Arc<resource::Blas<A>>, CreateBlasError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let size_info = match &sizes {
@@ -65,7 +65,7 @@ impl<A: HalApi> Device<A> {
         let raw = unsafe {
             self.raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: blas_desc.label.borrow_option(),
+                    label: blas_desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
                 })
@@ -74,30 +74,25 @@ impl<A: HalApi> Device<A> {
 
         let handle = unsafe { self.raw().get_acceleration_structure_device_address(&raw) };
 
-        Ok(resource::Blas {
+        Ok(Arc::new(resource::Blas {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(
-                blas_desc
-                    .label
-                    .to_hal(self.instance_flags)
-                    .unwrap_or("<BindGroupLayoyt>"),
-                Some(self.tracker_indices.blas_s.clone()),
-            ),
             size_info,
             sizes,
             flags: blas_desc.flags,
             update_mode: blas_desc.update_mode,
             handle,
+            label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
-        })
+            tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
+        }))
     }
 
     fn create_tlas(
         self: &Arc<Self>,
         self_id: id::DeviceId,
         desc: &resource::TlasDescriptor,
-    ) -> Result<resource::Tlas<A>, CreateTlasError> {
+    ) -> Result<Arc<resource::Tlas<A>>, CreateTlasError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let size_info = unsafe {
@@ -118,7 +113,7 @@ impl<A: HalApi> Device<A> {
         let raw = unsafe {
             self.raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: desc.label.borrow_option(),
+                    label: desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::TopLevel,
                 })
@@ -138,23 +133,19 @@ impl<A: HalApi> Device<A> {
         }
         .map_err(DeviceError::from)?;
 
-        Ok(resource::Tlas {
+        Ok(Arc::new(resource::Tlas {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(
-                desc.label
-                    .to_hal(self.instance_flags)
-                    .unwrap_or("<BindGroupLayoyt>"),
-                Some(self.tracker_indices.tlas_s.clone()),
-            ),
             size_info,
             flags: desc.flags,
             update_mode: desc.update_mode,
             built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
             dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
             instance_buffer: RwLock::new(rank::TLAS_INSTANCE_BUFFER, Some(instance_buffer)),
+            label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
-        })
+            tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
+        }))
     }
 }
 
@@ -196,15 +187,15 @@ impl Global {
             };
             let handle = blas.handle;
 
-            let (id, resource) = fid.assign(Arc::new(blas));
+            let id = fid.assign(blas.clone());
             log::info!("Created blas {:?} with {:?}", id, desc);
 
-            device.trackers.lock().blas_s.insert_single(resource);
+            device.trackers.lock().blas_s.insert_single(blas);
 
             return (id, Some(handle), None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, None, Some(error))
     }
 
@@ -238,15 +229,15 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let (id, resource) = fid.assign(Arc::new(tlas));
+            let id = fid.assign(tlas.clone());
             log::info!("Created tlas {:?} with {:?}", id, desc);
 
-            device.trackers.lock().tlas_s.insert_single(resource);
+            device.trackers.lock().tlas_s.insert_single(tlas);
 
             return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
+        let id = fid.assign_error();
         (id, Some(error))
     }
 
@@ -255,15 +246,14 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let device_guard = hub.devices.write();
-
         log::info!("Blas {:?} is destroyed", blas_id);
         let blas_guard = hub.blas_s.write();
         let blas = blas_guard
             .get(blas_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+            .map_err(|_| resource::DestroyError::Invalid)?
+            .clone();
 
-        let device = device_guard.get(blas.device.info.id()).unwrap();
+        let device = &blas.device;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = device.trace.lock().as_mut() {
@@ -272,7 +262,7 @@ impl Global {
 
         let temp = TempResource::Blas(blas.clone());
         {
-            let last_submit_index = blas.info.submission_index();
+            let last_submit_index = blas.submission_index();
             drop(blas_guard);
             device
                 .lock_life()
@@ -289,13 +279,13 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(blas) = hub.blas_s.unregister(blas_id) {
-            let last_submit_index = blas.info.submission_index();
+            let last_submit_index = blas.submission_index();
 
             blas.device
                 .lock_life()
                 .suspected_resources
                 .blas_s
-                .insert(blas.info.tracker_index(), blas.clone());
+                .insert(blas.tracker_index(), blas.clone());
 
             if wait {
                 match blas.device.wait_for_submit(last_submit_index) {
@@ -342,16 +332,13 @@ impl Global {
                     raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(e)),
                     device: device.clone(),
                     size,
-                    info: ResourceInfo::new(
-                        "Raytracing scratch buffer",
-                        Some(device.tracker_indices.staging_buffers.clone()),
-                    ),
                     is_coherent: mapping.is_coherent,
+                    tracking_data: TrackingData::new(device.tracker_indices.tlas_s.clone()),
                 })))
             }
         };
         {
-            let last_submit_index = tlas.info.submission_index();
+            let last_submit_index = tlas.submission_index();
             drop(tlas_guard);
             let guard = &mut device.lock_life();
 
@@ -371,13 +358,13 @@ impl Global {
         let hub = A::hub(self);
 
         if let Some(tlas) = hub.tlas_s.unregister(tlas_id) {
-            let last_submit_index = tlas.info.submission_index();
+            let last_submit_index = tlas.submission_index();
 
             tlas.device
                 .lock_life()
                 .suspected_resources
                 .tlas_s
-                .insert(tlas.info.tracker_index(), tlas.clone());
+                .insert(tlas.tracker_index(), tlas.clone());
 
             if wait {
                 match tlas.device.wait_for_submit(last_submit_index) {

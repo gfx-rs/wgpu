@@ -68,7 +68,7 @@ impl<T> Clone for Range<T> {
 
 impl<T> fmt::Debug for Range<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "[{}..{}]", self.inner.start, self.inner.end - 1)
+        write!(formatter, "[{}..{}]", self.inner.start, self.inner.end)
     }
 }
 
@@ -90,6 +90,14 @@ impl<T> Range<T> {
     pub fn new_from_bounds(first: Handle<T>, last: Handle<T>) -> Self {
         Self {
             inner: (first.index() as u32)..(last.index() as u32 + 1),
+            marker: Default::default(),
+        }
+    }
+
+    /// Return a range covering all handles with indices from `0` to `size`.
+    pub(super) fn full_range_from_size(size: usize) -> Self {
+        Self {
+            inner: 0..size as u32,
             marker: Default::default(),
         }
     }

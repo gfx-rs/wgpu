@@ -82,10 +82,10 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {
 }
 
 /// CPU accessible buffer used to download data back from the GPU.
-pub struct DownloadBuffer(
-    Arc<super::Buffer>,
-    Box<dyn crate::context::BufferMappedRange>,
-);
+pub struct DownloadBuffer {
+    _gpu_buffer: Arc<super::Buffer>,
+    mapped_range: Box<dyn crate::context::BufferMappedRange>,
+}
 
 impl DownloadBuffer {
     /// Asynchronously read the contents of a buffer.
@@ -129,7 +129,10 @@ impl DownloadBuffer {
                     download.data.as_ref(),
                     0..size,
                 );
-                callback(Ok(Self(download, mapped_range)));
+                callback(Ok(Self {
+                    _gpu_buffer: download,
+                    mapped_range,
+                }));
             });
     }
 }
@@ -137,7 +140,7 @@ impl DownloadBuffer {
 impl std::ops::Deref for DownloadBuffer {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        self.1.slice()
+        self.mapped_range.slice()
     }
 }
 

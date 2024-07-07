@@ -762,8 +762,8 @@ impl crate::Surface for Surface {
                 };
 
                 match &self.target {
-                    &SurfaceTarget::WndHandle(_) | &SurfaceTarget::SurfaceHandle(_) => {}
-                    &SurfaceTarget::Visual(ref visual) => {
+                    SurfaceTarget::WndHandle(_) | &SurfaceTarget::SurfaceHandle(_) => {}
+                    SurfaceTarget::Visual(visual) => {
                         if let Err(err) =
                             unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
                         {
@@ -773,7 +773,7 @@ impl crate::Surface for Surface {
                             ));
                         }
                     }
-                    &SurfaceTarget::SwapChainPanel(ref swap_chain_panel) => {
+                    SurfaceTarget::SwapChainPanel(swap_chain_panel) => {
                         if let Err(err) =
                             unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_ptr()) }
                                 .into_result()

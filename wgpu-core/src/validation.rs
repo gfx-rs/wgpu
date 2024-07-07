@@ -129,7 +129,6 @@ struct EntryPoint {
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
-    features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -148,8 +147,11 @@ pub enum BindingError {
         binding: naga::AddressSpace,
         shader: naga::AddressSpace,
     },
-    #[error("Buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
-    WrongBufferSize(wgt::BufferSize),
+    #[error("Buffer structure size {buffer_size}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`, which is {min_binding_size}")]
+    WrongBufferSize {
+        buffer_size: wgt::BufferSize,
+        min_binding_size: wgt::BufferSize,
+    },
     #[error("View dimension {dim:?} (is array: {is_array}) doesn't match the binding {binding:?}")]
     WrongTextureViewDimension {
         dim: naga::ImageDimension,
@@ -230,8 +232,6 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
-    #[error("Location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
-    InputNotConsumed { location: wgt::ShaderLocation },
     #[error(
         "Unable to select an entry point: no entry point was found in the provided shader module"
     )]
@@ -386,7 +386,10 @@ impl Resource {
                 };
                 match min_size {
                     Some(non_zero) if non_zero < size => {
-                        return Err(BindingError::WrongBufferSize(size))
+                        return Err(BindingError::WrongBufferSize {
+                            buffer_size: size,
+                            min_binding_size: non_zero,
+                        })
                     }
                     _ => (),
                 }
@@ -835,12 +838,7 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(
-        module: &naga::Module,
-        info: &naga::valid::ModuleInfo,
-        limits: wgt::Limits,
-        features: wgt::Features,
-    ) -> Self {
+    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -919,7 +917,6 @@ impl Interface {
 
         Self {
             limits,
-            features,
             resources,
             entry_points,
         }
@@ -1167,27 +1164,6 @@ impl Interface {
                     }
                 }
                 Varying::BuiltIn(_) => {}
-            }
-        }
-
-        // Check all vertex outputs and make sure the fragment shader consumes them.
-        // This requirement is removed if the `SHADER_UNUSED_VERTEX_OUTPUT` feature is enabled.
-        if shader_stage == naga::ShaderStage::Fragment
-            && !self
-                .features
-                .contains(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT)
-        {
-            for &index in inputs.keys() {
-                // This is a linear scan, but the count should be low enough
-                // that this should be fine.
-                let found = entry_point.inputs.iter().any(|v| match *v {
-                    Varying::Local { location, .. } => location == index,
-                    Varying::BuiltIn(_) => false,
-                });
-
-                if !found {
-                    return Err(StageError::InputNotConsumed { location: index });
-                }
             }
         }
 

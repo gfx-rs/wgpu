@@ -1,3 +1,11 @@
+use crate::{
+    command::CommandEncoderError,
+    device::DeviceError,
+    hal_api::HalApi,
+    id::{BlasId, BufferId, TlasId},
+    resource::CreateBufferError,
+};
+use std::sync::Arc;
 /// Ray tracing
 /// Major missing optimizations (no api surface changes needed):
 /// - use custom tracker to track build state
@@ -8,14 +16,7 @@
 /// - ([non performance] extract function in build (rust function extraction with guards is a pain))
 use std::{num::NonZeroU64, slice};
 
-use crate::{
-    command::CommandEncoderError,
-    device::DeviceError,
-    hal_api::HalApi,
-    id::{BlasId, BufferId, TlasId},
-    resource::CreateBufferError,
-};
-
+use crate::resource::{Blas, ResourceErrorIdent, Tlas};
 use thiserror::Error;
 use wgt::BufferAddress;
 
@@ -50,85 +51,97 @@ pub enum BuildAccelerationStructureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
 
+    #[error("BufferId is invalid or destroyed")]
+    InvalidBufferId,
+
     #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(BufferId),
+    InvalidBuffer(ResourceErrorIdent),
 
     #[error("Buffer {0:?} is missing `BLAS_INPUT` usage flag")]
-    MissingBlasInputUsageFlag(BufferId),
+    MissingBlasInputUsageFlag(ResourceErrorIdent),
 
     #[error(
         "Buffer {0:?} size is insufficient for provided size information (size: {1}, required: {2}"
     )]
-    InsufficientBufferSize(BufferId, u64, u64),
+    InsufficientBufferSize(ResourceErrorIdent, u64, u64),
 
     #[error("Buffer {0:?} associated offset doesn't align with the index type")]
-    UnalignedIndexBufferOffset(BufferId),
+    UnalignedIndexBufferOffset(ResourceErrorIdent),
 
     #[error("Buffer {0:?} associated offset is unaligned")]
-    UnalignedTransformBufferOffset(BufferId),
+    UnalignedTransformBufferOffset(ResourceErrorIdent),
 
     #[error("Buffer {0:?} associated index count not divisible by 3 (count: {1}")]
-    InvalidIndexCount(BufferId, u32),
+    InvalidIndexCount(ResourceErrorIdent, u32),
 
     #[error("Buffer {0:?} associated data contains None")]
-    MissingAssociatedData(BufferId),
+    MissingAssociatedData(ResourceErrorIdent),
 
     #[error(
         "Blas {0:?} build sizes to may be greater than the descriptor at build time specified"
     )]
-    IncompatibleBlasBuildSizes(BlasId),
+    IncompatibleBlasBuildSizes(ResourceErrorIdent),
 
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
-    MissingIndexBuffer(BlasId),
+    MissingIndexBuffer(ResourceErrorIdent),
 
-    #[error("Blas {0:?} is invalid or destroyed")]
-    InvalidBlas(BlasId),
+    #[error("BlasId is invalid")]
+    InvalidBlasId,
+
+    #[error("Blas {0:?} is destroyed")]
+    InvalidBlas(ResourceErrorIdent),
 
     #[error(
         "Tlas {0:?} an associated instances contains an invalid custom index (more than 24bits)"
     )]
-    TlasInvalidCustomIndex(TlasId),
+    TlasInvalidCustomIndex(ResourceErrorIdent),
 
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
-    TlasInstanceCountExceeded(TlasId, u32, u32),
+    TlasInstanceCountExceeded(ResourceErrorIdent, u32, u32),
+
+    #[error("BlasId is invalid or destroyed (for instance)")]
+    InvalidBlasIdForInstance,
 
     #[error("Blas {0:?} is invalid or destroyed (for instance)")]
-    InvalidBlasForInstance(BlasId),
+    InvalidBlasForInstance(ResourceErrorIdent),
+
+    #[error("TlasId is invalid or destroyed")]
+    InvalidTlasId,
 
     #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(TlasId),
+    InvalidTlas(ResourceErrorIdent),
 
     #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
-    MissingTlasInputUsageFlag(BufferId),
+    MissingTlasInputUsageFlag(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateBlasActionsError {
-    #[error("Blas {0:?} is invalid or destroyed")]
-    InvalidBlas(BlasId),
+    #[error("BlasId is invalid or destroyed")]
+    InvalidBlas,
 
     #[error("Blas {0:?} is used before it is build")]
-    UsedUnbuilt(BlasId),
+    UsedUnbuilt(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateTlasActionsError {
     #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(TlasId),
+    InvalidTlas(ResourceErrorIdent),
 
     #[error("Tlas {0:?} is used before it is build")]
-    UsedUnbuilt(TlasId),
+    UsedUnbuilt(ResourceErrorIdent),
 
     #[error("Blas {0:?} is used before it is build (in Tlas {1:?})")]
-    UsedUnbuiltBlas(BlasId, TlasId),
+    UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
 
-    #[error("Blas {0:?} is invalid or destroyed (in Tlas {1:?})")]
-    InvalidBlas(BlasId, TlasId),
+    #[error("BlasId is invalid or destroyed (in Tlas {0:?})")]
+    InvalidBlasId(ResourceErrorIdent),
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
-    BlasNewerThenTlas(BlasId, TlasId),
+    BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Debug)]
@@ -190,14 +203,14 @@ pub(crate) enum TlasActionKind {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct BlasAction {
-    pub id: BlasId,
+pub(crate) struct BlasAction<A: HalApi> {
+    pub blas: Arc<Blas<A>>,
     pub kind: BlasActionKind,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TlasAction {
-    pub id: TlasId,
+pub(crate) struct TlasAction<A: HalApi> {
+    pub tlas: Arc<Tlas<A>>,
     pub kind: TlasActionKind,
 }
 

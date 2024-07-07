@@ -186,7 +186,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
             .get::<WebGpuQuerySet>(timestamp_writes.query_set)?;
         let query_set = query_set_resource.1;
 
-        Some(wgpu_core::command::RenderPassTimestampWrites {
+        Some(wgpu_core::command::PassTimestampWrites {
             query_set,
             beginning_of_pass_write_index: timestamp_writes.beginning_of_pass_write_index,
             end_of_pass_write_index: timestamp_writes.end_of_pass_write_index,
@@ -200,6 +200,8 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
         .transpose()?
         .map(|query_set| query_set.1);
 
+    let instance = state.borrow::<super::Instance>();
+    let command_encoder = &command_encoder_resource.1;
     let descriptor = wgpu_core::command::RenderPassDescriptor {
         label: Some(label),
         color_attachments: Cow::from(color_attachments),
@@ -208,15 +210,14 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
         occlusion_query_set: occlusion_query_set_resource,
     };
 
-    let render_pass = wgpu_core::command::RenderPass::new(command_encoder_resource.1, &descriptor);
-
+    let (render_pass, error) = gfx_select!(command_encoder => instance.command_encoder_create_render_pass_dyn(*command_encoder, &descriptor));
     let rid = state
         .resource_table
         .add(super::render_pass::WebGpuRenderPass(RefCell::new(
             render_pass,
         )));
 
-    Ok(WebGpuResult::rid(rid))
+    Ok(WebGpuResult::rid_err(rid, error))
 }
 
 #[derive(Deserialize)]
@@ -245,7 +246,7 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
             .get::<WebGpuQuerySet>(timestamp_writes.query_set)?;
         let query_set = query_set_resource.1;
 
-        Some(wgpu_core::command::ComputePassTimestampWrites {
+        Some(wgpu_core::command::PassTimestampWrites {
             query_set,
             beginning_of_pass_write_index: timestamp_writes.beginning_of_pass_write_index,
             end_of_pass_write_index: timestamp_writes.end_of_pass_write_index,
