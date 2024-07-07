@@ -5,17 +5,17 @@
  * one subresource, they have no selector.
 !*/
 
-use std::{borrow::Cow, marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 use super::{PendingTransition, ResourceTracker, TrackerIndex};
 use crate::{
     hal_api::HalApi,
     lock::{rank, Mutex},
-    resource::{Buffer, Resource},
+    resource::{Buffer, Trackable},
     resource_log,
     snatch::SnatchGuard,
     track::{
-        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
+        invalid_resource_state, skip_barrier, Labeled, ResourceMetadata, ResourceMetadataProvider,
         ResourceUsageCompatibilityError, ResourceUses,
     },
 };
@@ -63,7 +63,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
     #[allow(clippy::pattern_type_mismatch)]
     pub(crate) fn optimize(&self) {
         let mut buffers = self.buffers.lock();
-        buffers.sort_unstable_by_key(|(b, _)| b.as_info().tracker_index());
+        buffers.sort_unstable_by_key(|(b, _)| b.tracker_index());
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
@@ -72,7 +72,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
         let buffers = self.buffers.lock();
         buffers
             .iter()
-            .map(|(ref b, _)| b.as_info().tracker_index())
+            .map(|(ref b, _)| b.tracker_index())
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -161,7 +161,7 @@ impl<A: HalApi> BufferUsageScope<A> {
     ) -> Result<(), ResourceUsageCompatibilityError> {
         let buffers = bind_group.buffers.lock();
         for &(ref resource, state) in &*buffers {
-            let index = resource.as_info().tracker_index().as_usize();
+            let index = resource.tracker_index().as_usize();
 
             unsafe {
                 insert_or_merge(
@@ -171,9 +171,7 @@ impl<A: HalApi> BufferUsageScope<A> {
                     index as _,
                     index,
                     BufferStateProvider::Direct { state },
-                    ResourceMetadataProvider::Direct {
-                        resource: Cow::Borrowed(resource),
-                    },
+                    ResourceMetadataProvider::Direct { resource },
                 )?
             };
         }
@@ -233,7 +231,7 @@ impl<A: HalApi> BufferUsageScope<A> {
         buffer: &Arc<Buffer<A>>,
         new_state: BufferUses,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        let index = buffer.info.tracker_index().as_usize();
+        let index = buffer.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -247,9 +245,7 @@ impl<A: HalApi> BufferUsageScope<A> {
                 index as _,
                 index,
                 BufferStateProvider::Direct { state: new_state },
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(buffer.clone()),
-                },
+                ResourceMetadataProvider::Direct { resource: buffer },
             )?;
         }
 
@@ -387,8 +383,8 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, resource: Arc<Buffer<A>>, state: BufferUses) {
-        let index = resource.info.tracker_index().as_usize();
+    pub fn insert_single(&mut self, resource: &Arc<Buffer<A>>, state: BufferUses) {
+        let index = resource.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -408,9 +404,7 @@ impl<A: HalApi> BufferTracker<A> {
                 index,
                 BufferStateProvider::Direct { state },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(resource),
-                },
+                ResourceMetadataProvider::Direct { resource },
             )
         }
     }
@@ -427,7 +421,7 @@ impl<A: HalApi> BufferTracker<A> {
         buffer: &Arc<Buffer<A>>,
         state: BufferUses,
     ) -> Option<PendingTransition<BufferUses>> {
-        let index: usize = buffer.as_info().tracker_index().as_usize();
+        let index: usize = buffer.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -441,9 +435,7 @@ impl<A: HalApi> BufferTracker<A> {
                 index,
                 BufferStateProvider::Direct { state },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(buffer.clone()),
-                },
+                ResourceMetadataProvider::Direct { resource: buffer },
                 &mut self.temp,
             )
         };

@@ -1,181 +1,62 @@
 use core::fmt;
-use std::error::Error;
+use std::{error::Error, sync::Arc};
 
-use crate::{gfx_select, global::Global};
+use thiserror::Error;
 
-pub struct ErrorFormatter<'a> {
-    writer: &'a mut dyn fmt::Write,
-    global: &'a Global,
-}
-
-impl<'a> ErrorFormatter<'a> {
-    pub fn error(&mut self, err: &dyn Error) {
-        writeln!(self.writer, "    {err}").expect("Error formatting error");
-    }
-
-    pub fn note(&mut self, note: &dyn fmt::Display) {
-        writeln!(self.writer, "      note: {note}").expect("Error formatting error");
-    }
-
-    pub fn label(&mut self, label_key: &str, label_value: &String) {
-        if !label_key.is_empty() && !label_value.is_empty() {
-            self.note(&format!("{label_key} = `{label_value}`"));
-        }
-    }
-
-    pub fn bind_group_label(&mut self, id: &crate::id::BindGroupId) {
-        let label: String = gfx_select!(id => self.global.bind_group_label(*id));
-        self.label("bind group", &label);
-    }
-
-    pub fn bind_group_layout_label(&mut self, id: &crate::id::BindGroupLayoutId) {
-        let label: String = gfx_select!(id => self.global.bind_group_layout_label(*id));
-        self.label("bind group layout", &label);
-    }
-
-    pub fn render_pipeline_label(&mut self, id: &crate::id::RenderPipelineId) {
-        let label: String = gfx_select!(id => self.global.render_pipeline_label(*id));
-        self.label("render pipeline", &label);
-    }
-
-    pub fn compute_pipeline_label(&mut self, id: &crate::id::ComputePipelineId) {
-        let label: String = gfx_select!(id => self.global.compute_pipeline_label(*id));
-        self.label("compute pipeline", &label);
-    }
-
-    pub fn buffer_label_with_key(&mut self, id: &crate::id::BufferId, key: &str) {
-        let label: String = gfx_select!(id => self.global.buffer_label(*id));
-        self.label(key, &label);
-    }
-
-    pub fn buffer_label(&mut self, id: &crate::id::BufferId) {
-        self.buffer_label_with_key(id, "buffer");
-    }
-
-    pub fn texture_label_with_key(&mut self, id: &crate::id::TextureId, key: &str) {
-        let label: String = gfx_select!(id => self.global.texture_label(*id));
-        self.label(key, &label);
-    }
-
-    pub fn texture_label(&mut self, id: &crate::id::TextureId) {
-        self.texture_label_with_key(id, "texture");
-    }
-
-    pub fn texture_view_label_with_key(&mut self, id: &crate::id::TextureViewId, key: &str) {
-        let label: String = gfx_select!(id => self.global.texture_view_label(*id));
-        self.label(key, &label);
-    }
-
-    pub fn texture_view_label(&mut self, id: &crate::id::TextureViewId) {
-        self.texture_view_label_with_key(id, "texture view");
-    }
-
-    pub fn sampler_label(&mut self, id: &crate::id::SamplerId) {
-        let label: String = gfx_select!(id => self.global.sampler_label(*id));
-        self.label("sampler", &label);
-    }
-
-    pub fn command_buffer_label(&mut self, id: &crate::id::CommandBufferId) {
-        let label: String = gfx_select!(id => self.global.command_buffer_label(*id));
-        self.label("command buffer", &label);
-    }
-
-    pub fn query_set_label(&mut self, id: &crate::id::QuerySetId) {
-        let label: String = gfx_select!(id => self.global.query_set_label(*id));
-        self.label("query set", &label);
-    }
-}
-
-pub trait PrettyError: Error + Sized {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-    }
-}
-
-pub fn format_pretty_any(
-    writer: &mut dyn fmt::Write,
-    global: &Global,
-    error: &(dyn Error + 'static),
-) {
-    let mut fmt = ErrorFormatter { writer, global };
-
-    if let Some(pretty_err) = error.downcast_ref::<ContextError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderCommandError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::binding_model::CreateBindGroupError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) =
-        error.downcast_ref::<crate::binding_model::CreatePipelineLayoutError>()
-    {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::ExecutionError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderPassErrorInner>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderPassError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::ComputePassErrorInner>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::ComputePassError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderBundleError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::TransferError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::PassErrorScope>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::track::ResourceUsageCompatibilityError>()
-    {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-    if let Some(pretty_err) = error.downcast_ref::<crate::command::QueryError>() {
-        return pretty_err.fmt_pretty(&mut fmt);
-    }
-
-    // default
-    fmt.error(error)
-}
-
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error(
+    "In {fn_ident}{}{}{}",
+    if self.label.is_empty() { "" } else { ", label = '" },
+    self.label,
+    if self.label.is_empty() { "" } else { "'" }
+)]
 pub struct ContextError {
-    pub string: &'static str,
+    pub fn_ident: &'static str,
+    #[source]
     #[cfg(send_sync)]
-    pub cause: Box<dyn Error + Send + Sync + 'static>,
+    pub source: Box<dyn Error + Send + Sync + 'static>,
     #[cfg(not(send_sync))]
-    pub cause: Box<dyn Error + 'static>,
-    pub label_key: &'static str,
+    pub source: Box<dyn Error + 'static>,
     pub label: String,
 }
 
-impl PrettyError for ContextError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        fmt.label(self.label_key, &self.label);
+/// Don't use this error type with thiserror's #[error(transparent)]
+#[derive(Clone)]
+pub struct MultiError {
+    inner: Vec<Arc<dyn Error + Send + Sync + 'static>>,
+}
+
+impl MultiError {
+    pub fn new<T: Error + Send + Sync + 'static>(
+        iter: impl ExactSizeIterator<Item = T>,
+    ) -> Option<Self> {
+        if iter.len() == 0 {
+            return None;
+        }
+        Some(Self {
+            inner: iter.map(Box::from).map(Arc::from).collect(),
+        })
+    }
+
+    pub fn errors(&self) -> Box<dyn Iterator<Item = &(dyn Error + Send + Sync + 'static)> + '_> {
+        Box::new(self.inner.iter().map(|e| e.as_ref()))
     }
 }
 
-impl fmt::Display for ContextError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "In {}", self.string)
+impl fmt::Debug for MultiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        fmt::Debug::fmt(&self.inner[0], f)
     }
 }
 
-impl Error for ContextError {
+impl fmt::Display for MultiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.inner[0], f)
+    }
+}
+
+impl Error for MultiError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(self.cause.as_ref())
+        self.inner[0].source()
     }
 }

@@ -1,10 +1,9 @@
-use std::ops;
 use std::sync::Arc;
 
 use wgt::Backend;
 
-use crate::id::Id;
-use crate::resource::Resource;
+use crate::id::{Id, Marker};
+use crate::resource::ResourceType;
 use crate::{Epoch, Index};
 
 /// An entry in a `Storage::map` table.
@@ -19,13 +18,24 @@ pub(crate) enum Element<T> {
 
     /// Like `Occupied`, but an error occurred when creating the
     /// resource.
-    ///
-    /// The given `String` is the resource's descriptor label.
-    Error(Epoch, String),
+    Error(Epoch),
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct InvalidId;
+
+pub(crate) trait StorageItem: ResourceType {
+    type Marker: Marker;
+}
+
+#[macro_export]
+macro_rules! impl_storage_item {
+    ($ty:ident) => {
+        impl<A: HalApi> $crate::storage::StorageItem for $ty<A> {
+            type Marker = $crate::id::markers::$ty;
+        }
+    };
+}
 
 /// A table of `T` values indexed by the id type `I`.
 ///
@@ -38,24 +48,15 @@ pub(crate) struct InvalidId;
 #[derive(Debug)]
 pub(crate) struct Storage<T>
 where
-    T: Resource,
+    T: StorageItem,
 {
     pub(crate) map: Vec<Element<T>>,
     kind: &'static str,
 }
 
-impl<T> ops::Index<Id<T::Marker>> for Storage<T>
-where
-    T: Resource,
-{
-    type Output = Arc<T>;
-    fn index(&self, id: Id<T::Marker>) -> &Arc<T> {
-        self.get(id).unwrap()
-    }
-}
 impl<T> Storage<T>
 where
-    T: Resource,
+    T: StorageItem,
 {
     pub(crate) fn new() -> Self {
         Self {
@@ -67,52 +68,16 @@ where
 
 impl<T> Storage<T>
 where
-    T: Resource,
+    T: StorageItem,
 {
-    #[allow(dead_code)]
-    pub(crate) fn contains(&self, id: Id<T::Marker>) -> bool {
-        let (index, epoch, _) = id.unzip();
-        match self.map.get(index as usize) {
-            Some(&Element::Vacant) => false,
-            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => {
-                storage_epoch == epoch
-            }
-            None => false,
-        }
-    }
-
-    /// Attempts to get a reference to an item behind a potentially invalid ID.
-    ///
-    /// Returns [`None`] if there is an epoch mismatch, or the entry is empty.
-    ///
-    /// This function is primarily intended for the `as_hal` family of functions
-    /// where you may need to fallibly get a object backed by an id that could
-    /// be in a different hub.
-    pub(crate) fn try_get(&self, id: Id<T::Marker>) -> Result<Option<&Arc<T>>, InvalidId> {
-        let (index, epoch, _) = id.unzip();
-        let (result, storage_epoch) = match self.map.get(index as usize) {
-            Some(&Element::Occupied(ref v, epoch)) => (Ok(Some(v)), epoch),
-            Some(&Element::Vacant) => return Ok(None),
-            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
-            None => return Err(InvalidId),
-        };
-        assert_eq!(
-            epoch, storage_epoch,
-            "{}[{:?}] is no longer alive",
-            self.kind, id
-        );
-        result
-    }
-
     /// Get a reference to an item behind a potentially invalid ID.
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<&Arc<T>, InvalidId> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
-            Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
-            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
-            None => return Err(InvalidId),
+            None | Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
+            Some(&Element::Error(epoch)) => (Err(InvalidId), epoch),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -126,14 +91,6 @@ where
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get_owned(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
         Ok(Arc::clone(self.get(id)?))
-    }
-
-    pub(crate) fn label_for_invalid_id(&self, id: Id<T::Marker>) -> &str {
-        let (index, _, _) = id.unzip();
-        match self.map.get(index as usize) {
-            Some(Element::Error(_, label)) => label,
-            _ => "",
-        }
     }
 
     fn insert_impl(&mut self, index: usize, epoch: Epoch, element: Element<T>) {
@@ -150,7 +107,7 @@ where
                     T::TYPE
                 );
             }
-            Element::Error(storage_epoch, _) => {
+            Element::Error(storage_epoch) => {
                 assert_ne!(
                     epoch,
                     storage_epoch,
@@ -167,22 +124,15 @@ where
         self.insert_impl(index as usize, epoch, Element::Occupied(value, epoch))
     }
 
-    pub(crate) fn insert_error(&mut self, id: Id<T::Marker>, label: &str) {
+    pub(crate) fn insert_error(&mut self, id: Id<T::Marker>) {
         log::trace!("User is inserting as error {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
-        self.insert_impl(
-            index as usize,
-            epoch,
-            Element::Error(epoch, label.to_string()),
-        )
+        self.insert_impl(index as usize, epoch, Element::Error(epoch))
     }
 
     pub(crate) fn replace_with_error(&mut self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        match std::mem::replace(
-            &mut self.map[index as usize],
-            Element::Error(epoch, String::new()),
-        ) {
+        match std::mem::replace(&mut self.map[index as usize], Element::Error(epoch)) {
             Element::Vacant => panic!("Cannot access vacant resource"),
             Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
@@ -190,12 +140,6 @@ where
             }
             _ => Err(InvalidId),
         }
-    }
-
-    pub(crate) fn force_replace(&mut self, id: Id<T::Marker>, value: T) {
-        log::trace!("User is replacing {}{:?}", T::TYPE, id);
-        let (index, epoch, _) = id.unzip();
-        self.map[index as usize] = Element::Occupied(Arc::new(value), epoch);
     }
 
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> Option<Arc<T>> {
@@ -206,7 +150,7 @@ where
                 assert_eq!(epoch, storage_epoch);
                 Some(value)
             }
-            Element::Error(..) => None,
+            Element::Error(_) => None,
             Element::Vacant => panic!("Cannot remove a vacant resource"),
         }
     }
@@ -221,10 +165,6 @@ where
                 }
                 _ => None,
             })
-    }
-
-    pub(crate) fn kind(&self) -> &str {
-        self.kind
     }
 
     pub(crate) fn len(&self) -> usize {

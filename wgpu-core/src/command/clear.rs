@@ -4,7 +4,7 @@ use std::{ops::Range, sync::Arc};
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
-    command::CommandBuffer,
+    command::CommandEncoderError,
     device::DeviceError,
     get_lowest_common_denom,
     global::Global,
@@ -12,8 +12,8 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        DestroyedResourceError, ParentDevice, Resource, ResourceErrorIdent, Texture,
-        TextureClearMode,
+        DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice, ResourceErrorIdent,
+        Texture, TextureClearMode,
     },
     snatch::SnatchGuard,
     track::{TextureSelector, TextureTracker},
@@ -52,8 +52,8 @@ pub enum ClearError {
         end_offset: BufferAddress,
         buffer_size: BufferAddress,
     },
-    #[error("Destination buffer is missing the `COPY_DST` usage flag")]
-    MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("Texture lacks the aspects that were specified in the image subresource range. Texture with format {texture_format:?}, specified was {subresource_range_aspects:?}")]
     MissingTextureAspect {
         texture_format: wgt::TextureFormat,
@@ -76,7 +76,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    CommandEncoderError(#[from] super::CommandEncoderError),
+    CommandEncoderError(#[from] CommandEncoderError),
 }
 
 impl Global {
@@ -92,7 +92,15 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -115,9 +123,7 @@ impl Global {
 
         let snatch_guard = dst_buffer.device.snatchable_lock.read();
         let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
-        if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
-            return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None));
-        }
+        dst_buffer.check_usage(BufferUsages::COPY_DST)?;
 
         // Check if offset & size are valid.
         if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -178,7 +184,15 @@ impl Global {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

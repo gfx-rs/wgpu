@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::{
     lock::{rank, Mutex},
-    resource::Resource,
+    resource::Trackable,
     resource_log,
     track::ResourceMetadata,
 };
@@ -17,11 +17,11 @@ use super::{ResourceTracker, TrackerIndex};
 
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
-pub(crate) struct StatelessBindGroupState<T: Resource> {
+pub(crate) struct StatelessBindGroupState<T: Trackable> {
     resources: Mutex<Vec<Arc<T>>>,
 }
 
-impl<T: Resource> StatelessBindGroupState<T> {
+impl<T: Trackable> StatelessBindGroupState<T> {
     pub fn new() -> Self {
         Self {
             resources: Mutex::new(rank::STATELESS_BIND_GROUP_STATE_RESOURCES, Vec::new()),
@@ -34,7 +34,7 @@ impl<T: Resource> StatelessBindGroupState<T> {
     /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&self) {
         let mut resources = self.resources.lock();
-        resources.sort_unstable_by_key(|resource| resource.as_info().tracker_index());
+        resources.sort_unstable_by_key(|resource| resource.tracker_index());
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.
@@ -58,11 +58,11 @@ impl<T: Resource> StatelessBindGroupState<T> {
 
 /// Stores all resource state within a command buffer or device.
 #[derive(Debug)]
-pub(crate) struct StatelessTracker<T: Resource> {
+pub(crate) struct StatelessTracker<T: Trackable> {
     metadata: ResourceMetadata<T>,
 }
 
-impl<T: Resource> ResourceTracker for StatelessTracker<T> {
+impl<T: Trackable> ResourceTracker for StatelessTracker<T> {
     /// Try to remove the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
@@ -115,7 +115,7 @@ impl<T: Resource> ResourceTracker for StatelessTracker<T> {
     }
 }
 
-impl<T: Resource> StatelessTracker<T> {
+impl<T: Trackable> StatelessTracker<T> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
@@ -162,29 +162,13 @@ impl<T: Resource> StatelessTracker<T> {
     /// Returns a reference to the newly inserted resource.
     /// (This allows avoiding a clone/reference count increase in many cases.)
     pub fn insert_single(&mut self, resource: Arc<T>) -> &Arc<T> {
-        let index = resource.as_info().tracker_index().as_usize();
+        let index = resource.tracker_index().as_usize();
 
         self.allow_index(index);
 
         self.tracker_assert_in_bounds(index);
 
         unsafe { self.metadata.insert(index, resource) }
-    }
-
-    /// Adds the given resource to the tracker.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single(&mut self, resource: &Arc<T>) {
-        let index = resource.as_info().tracker_index().as_usize();
-
-        self.allow_index(index);
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            self.metadata.insert(index, resource.clone());
-        }
     }
 
     /// Adds the given resources from the given tracker.

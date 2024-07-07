@@ -41,24 +41,38 @@ Bottom level categories:
 
 ### Major Changes
 
-#### Remove lifetime bounds on `wgpu::ComputePass`
+#### Lifetime bounds on `wgpu::RenderPass` & `wgpu::ComputePass`
 
-TODO(wumpf): This is still work in progress. Should write a bit more about it. Also will very likely extend to `wgpu::RenderPass` before release.
+`wgpu::RenderPass` & `wgpu::ComputePass` recording methods (e.g. `wgpu::RenderPass:set_render_pipeline`) no longer impose a lifetime constraint to objects passed to a pass (like pipelines/buffers/bindgroups/query-sets etc.).
 
-`wgpu::ComputePass` recording methods (e.g. `wgpu::ComputePass:set_render_pipeline`) no longer impose a lifetime constraint passed in resources.
+This means the following pattern works now as expected:
+```rust
+let mut pipelines: Vec<wgpu::RenderPipeline> = ...;
+// ...
+let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+cpass.set_pipeline(&pipelines[123]);
+// Change pipeline container - this requires mutable access to `pipelines` while one of the pipelines is in use.
+pipelines.push(/* ... */);
+// Continue pass recording.
+cpass.set_bindgroup(...);
+```
+Previously, a set pipeline (or other resource) had to outlive pass recording which often affected wider systems,
+meaning that users needed to prove to the borrow checker that `Vec<wgpu::RenderPipeline>` (or similar constructs)
+aren't accessed mutably for the duration of pass recording.
 
-Furthermore, you can now opt out of `wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::ComputePass::forget_lifetime`:
+
+Furthermore, you can now opt out of `wgpu::RenderPass`/`wgpu::ComputePass`'s lifetime dependency on its parent `wgpu::CommandEncoder` using `wgpu::RenderPass::forget_lifetime`/`wgpu::ComputePass::forget_lifetime`:
 ```rust
 fn independent_cpass<'enc>(encoder: &'enc mut wgpu::CommandEncoder) -> wgpu::ComputePass<'static> {
     let cpass: wgpu::ComputePass<'enc> = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
     cpass.forget_lifetime()
 }
 ```
-⚠️ As long as a `wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
-This is very useful for library authors, but opens up an easy way for incorrect use, so use with care.
-`forget_lifetime` is zero overhead and has no side effects on pass recording.
+⚠️ As long as a `wgpu::RenderPass`/`wgpu::ComputePass` is pending for a given `wgpu::CommandEncoder`, creation of a compute or render pass is an error and invalidates the `wgpu::CommandEncoder`.
+`forget_lifetime` can be very useful for library authors, but opens up an easy way for incorrect use, so use with care.
+This method doesn't add any additional overhead and has no side effects on pass recording.
 
-By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768) (together with @kpreid), [#5671](https://github.com/gfx-rs/wgpu/pull/5671).
+By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://github.com/gfx-rs/wgpu/pull/5575), [#5620](https://github.com/gfx-rs/wgpu/pull/5620), [#5768](https://github.com/gfx-rs/wgpu/pull/5768) (together with @kpreid), [#5671](https://github.com/gfx-rs/wgpu/pull/5671), [#5794](https://github.com/gfx-rs/wgpu/pull/5794), [#5884](https://github.com/gfx-rs/wgpu/pull/5884).
 
 #### Querying shader compilation errors
 
@@ -115,6 +129,19 @@ Platform support:
 
 By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 
+#### A compatible surface is now required for `request_adapter()` on WebGL2 + `enumerate_adapters()` is now native only.
+
+When targeting WebGL2, it has always been the case that a surface had to be created before calling `request_adapter()`.
+We now make this requirement explicit.
+
+Validation was also added to prevent configuring the surface with a device that doesn't share the same underlying
+WebGL2 context since this has never worked.
+
+Calling `enumerate_adapters()` when targeting WebGPU used to return an empty `Vec` and since we now require users
+to pass a compatible surface when targeting WebGL2, having `enumerate_adapters()` doesn't make sense.
+
+By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
+
 ### New features
 #### Vulkan
 
@@ -123,6 +150,7 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 #### General
 
 - Added `as_hal` for `Buffer` to access wgpu created buffers form wgpu-hal. By @JasondeWolff in [#5724](https://github.com/gfx-rs/wgpu/pull/5724)
+- Unconsumed vertex outputs are now always allowed. Removed `StageError::InputNotConsumed`, `Features::SHADER_UNUSED_VERTEX_OUTPUT`, and associated validation. By @Imberflur in [#5531](https://github.com/gfx-rs/wgpu/pull/5531)
 
 #### Naga
 
@@ -130,6 +158,13 @@ By @atlv24 in [#5383](https://github.com/gfx-rs/wgpu/pull/5383)
 - Added type upgrades to SPIR-V atomic support. Added related infrastructure. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5775](https://github.com/gfx-rs/wgpu/pull/5775).
 - Implement `WGSL`'s `unpack4xI8`,`unpack4xU8`,`pack4xI8` and `pack4xU8`. By @VlaDexa in [#5424](https://github.com/gfx-rs/wgpu/pull/5424)
 - Began work adding support for atomics to the SPIR-V frontend. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5702](https://github.com/gfx-rs/wgpu/pull/5702).
+- In hlsl-out, allow passing information about the fragment entry point to omit vertex outputs that are not in the fragment inputs. By @Imberflur in [#5531](https://github.com/gfx-rs/wgpu/pull/5531)
+
+  ```diff
+  let writer: naga::back::hlsl::Writer = /* ... */;
+  -writer.write(&module, &module_info);
+  +writer.write(&module, &module_info, None);
+  ```
 
 #### WebGPU
 

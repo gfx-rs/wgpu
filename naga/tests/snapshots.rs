@@ -260,13 +260,24 @@ impl Input {
     }
 }
 
+#[cfg(feature = "hlsl-out")]
+type FragmentEntryPoint<'a> = naga::back::hlsl::FragmentEntryPoint<'a>;
+#[cfg(not(feature = "hlsl-out"))]
+type FragmentEntryPoint<'a> = ();
+
 #[allow(unused_variables)]
 fn check_targets(
     input: &Input,
     module: &mut naga::Module,
     targets: Targets,
     source_code: Option<&str>,
+    // For testing hlsl generation when fragment shader doesn't consume all vertex outputs.
+    frag_ep: Option<FragmentEntryPoint>,
 ) {
+    if frag_ep.is_some() && !targets.contains(Targets::HLSL) {
+        panic!("Providing FragmentEntryPoint only makes sense when testing hlsl-out");
+    }
+
     let params = input.read_parameters();
     let name = &input.file_name;
 
@@ -416,6 +427,7 @@ fn check_targets(
                 &info,
                 &params.hlsl,
                 &params.pipeline_constants,
+                frag_ep,
             );
         }
     }
@@ -594,6 +606,7 @@ fn write_output_hlsl(
     info: &naga::valid::ModuleInfo,
     options: &naga::back::hlsl::Options,
     pipeline_constants: &naga::back::PipelineConstants,
+    frag_ep: Option<naga::back::hlsl::FragmentEntryPoint>,
 ) {
     use naga::back::hlsl;
     use std::fmt::Write as _;
@@ -606,7 +619,9 @@ fn write_output_hlsl(
 
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
-    let reflection_info = writer.write(&module, &info).expect("HLSL write failed");
+    let reflection_info = writer
+        .write(&module, &info, frag_ep.as_ref())
+        .expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer);
 
@@ -910,7 +925,7 @@ fn convert_wgsl() {
         let input = Input::new(None, name, "wgsl");
         let source = input.read_source();
         match naga::front::wgsl::parse_str(&source) {
-            Ok(mut module) => check_targets(&input, &mut module, targets, None),
+            Ok(mut module) => check_targets(&input, &mut module, targets, None, None),
             Err(e) => panic!(
                 "{}",
                 e.emit_to_string_with_path(&source, input.input_path())
@@ -932,7 +947,7 @@ fn convert_wgsl() {
             // crlf will make the large split output different on different platform
             let source = source.replace('\r', "");
             match naga::front::wgsl::parse_str(&source) {
-                Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source)),
+                Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source), None),
                 Err(e) => panic!(
                     "{}",
                     e.emit_to_string_with_path(&source, input.input_path())
@@ -940,6 +955,36 @@ fn convert_wgsl() {
             }
         }
     }
+}
+
+#[cfg(all(feature = "wgsl-in", feature = "hlsl-out"))]
+#[test]
+fn unconsumed_vertex_outputs_hlsl_out() {
+    let load_and_parse = |name| {
+        // WGSL shaders lives in root dir as a privileged.
+        let input = Input::new(None, name, "wgsl");
+        let source = input.read_source();
+        let module = match naga::front::wgsl::parse_str(&source) {
+            Ok(module) => module,
+            Err(e) => panic!(
+                "{}",
+                e.emit_to_string_with_path(&source, input.input_path())
+            ),
+        };
+        (input, module)
+    };
+
+    // Uses separate wgsl files to make sure the tested code doesn't accidentally rely on
+    // the fragment entry point being from the same parsed content (e.g. accidentally using the
+    // wrong `Module` when looking up info). We also don't just create a module from the same file
+    // twice since everything would probably be stored behind the same keys.
+    let (input, mut module) = load_and_parse("unconsumed_vertex_outputs_vert");
+    let (frag_input, mut frag_module) = load_and_parse("unconsumed_vertex_outputs_frag");
+    let frag_ep = naga::back::hlsl::FragmentEntryPoint::new(&frag_module, "fs_main")
+        .expect("fs_main not found");
+
+    check_targets(&input, &mut module, Targets::HLSL, None, Some(frag_ep));
+    check_targets(&frag_input, &mut frag_module, Targets::HLSL, None, None);
 }
 
 #[cfg(feature = "spv-in")]
@@ -956,7 +1001,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         },
     )
     .unwrap();
-    check_targets(&input, &mut module, targets, None);
+    check_targets(&input, &mut module, targets, None, None);
 }
 
 #[cfg(feature = "spv-in")]
@@ -1022,7 +1067,7 @@ fn convert_glsl_variations_check() {
             &source,
         )
         .unwrap();
-    check_targets(&input, &mut module, Targets::GLSL, None);
+    check_targets(&input, &mut module, Targets::GLSL, None, None);
 }
 
 #[cfg(feature = "glsl-in")]

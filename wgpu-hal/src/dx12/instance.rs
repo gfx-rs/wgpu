@@ -147,7 +147,10 @@ impl crate::Instance for super::Instance {
         // just drop
     }
 
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&super::Surface>,
+    ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory.clone());
 
         adapters

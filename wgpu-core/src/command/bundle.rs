@@ -79,29 +79,25 @@ index format changes.
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    binding_model::{BindError, BindGroup, BindGroupLayout, PipelineLayout},
+    binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
         BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
         PassErrorScope, RenderCommandError, StateChange,
     },
-    conv,
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
         SHADER_STAGE_COUNT,
     },
-    error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{
-        Buffer, DestroyedResourceError, ParentDevice, Resource, ResourceInfo, ResourceType,
-    },
+    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, TrackingData},
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
-    Label,
+    Label, LabelHelpers,
 };
 use arrayvec::ArrayVec;
 
@@ -290,7 +286,7 @@ impl RenderBundleEncoder {
                 },
                 sample_count: {
                     let sc = desc.sample_count;
-                    if sc == 0 || sc > 32 || !conv::is_power_of_two_u32(sc) {
+                    if sc == 0 || sc > 32 || !sc.is_power_of_two() {
                         return Err(CreateRenderBundleError::InvalidSampleCount(sc));
                     }
                     sc
@@ -350,7 +346,7 @@ impl RenderBundleEncoder {
         desc: &RenderBundleDescriptor,
         device: &Arc<Device<A>>,
         hub: &Hub<A>,
-    ) -> Result<RenderBundle<A>, RenderBundleError> {
+    ) -> Result<Arc<RenderBundle<A>>, RenderBundleError> {
         let scope = PassErrorScope::Bundle;
 
         device.check_is_valid().map_pass_err(scope)?;
@@ -565,7 +561,7 @@ impl RenderBundleEncoder {
             .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
 
-        Ok(RenderBundle {
+        let render_bundle = RenderBundle {
             base: BasePass {
                 label: desc.label.as_ref().map(|cow| cow.to_string()),
                 commands,
@@ -575,14 +571,25 @@ impl RenderBundleEncoder {
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
-            device,
+            device: device.clone(),
             used: trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
             context: self.context,
-            info: ResourceInfo::new(&desc.label, Some(tracker_indices)),
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(tracker_indices),
             discard_hal_labels,
-        })
+        };
+
+        let render_bundle = Arc::new(render_bundle);
+
+        device
+            .trackers
+            .lock()
+            .bundles
+            .insert_single(render_bundle.clone());
+
+        Ok(render_bundle)
     }
 
     pub fn set_index_buffer(
@@ -610,10 +617,8 @@ fn set_bind_group<A: HalApi>(
     bind_group_id: id::Id<id::markers::BindGroup>,
 ) -> Result<(), RenderBundleErrorInner> {
     let bind_group = bind_group_guard
-        .get(bind_group_id)
+        .get_owned(bind_group_id)
         .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))?;
-
-    state.trackers.bind_groups.write().add_single(bind_group);
 
     bind_group.same_device(&state.device)?;
 
@@ -640,13 +645,9 @@ fn set_bind_group<A: HalApi>(
         .texture_memory_init_actions
         .extend_from_slice(&bind_group.used_texture_ranges);
 
-    state.set_bind_group(
-        index,
-        bind_group_guard.get(bind_group_id).as_ref().unwrap(),
-        &bind_group.layout,
-        offsets_range,
-    );
+    state.set_bind_group(index, &bind_group, offsets_range);
     unsafe { state.trackers.merge_bind_group(&bind_group.used)? };
+    state.trackers.bind_groups.write().insert_single(bind_group);
     // Note: stateless trackers are not merged: the lifetime reference
     // is held to the bind group itself.
     Ok(())
@@ -661,10 +662,8 @@ fn set_pipeline<A: HalApi>(
     pipeline_id: id::Id<id::markers::RenderPipeline>,
 ) -> Result<(), RenderBundleErrorInner> {
     let pipeline = pipeline_guard
-        .get(pipeline_id)
-        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))?;
-
-    state.trackers.render_pipelines.write().add_single(pipeline);
+        .get_owned(pipeline_id)
+        .map_err(|_| RenderCommandError::InvalidPipelineId(pipeline_id))?;
 
     pipeline.same_device(&state.device)?;
 
@@ -679,7 +678,7 @@ fn set_pipeline<A: HalApi>(
         return Err(RenderCommandError::IncompatibleStencilAccess(pipeline.error_ident()).into());
     }
 
-    let pipeline_state = PipelineState::new(pipeline);
+    let pipeline_state = PipelineState::new(&pipeline);
 
     state
         .commands
@@ -692,6 +691,12 @@ fn set_pipeline<A: HalApi>(
 
     state.invalidate_bind_groups(&pipeline_state, &pipeline.layout);
     state.pipeline = Some(pipeline_state);
+
+    state
+        .trackers
+        .render_pipelines
+        .write()
+        .insert_single(pipeline);
     Ok(())
 }
 
@@ -704,14 +709,14 @@ fn set_index_buffer<A: HalApi>(
     size: Option<std::num::NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let buffer = buffer_guard
-        .get(buffer_id)
+        .get_owned(buffer_id)
         .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
 
     state
         .trackers
         .buffers
         .write()
-        .merge_single(buffer, hal::BufferUses::INDEX)?;
+        .merge_single(&buffer, hal::BufferUses::INDEX)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDEX)?;
@@ -723,11 +728,11 @@ fn set_index_buffer<A: HalApi>(
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
-            buffer,
+            &buffer,
             offset..end,
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.set_index_buffer(buffer.clone(), index_format, offset..end);
+    state.set_index_buffer(buffer, index_format, offset..end);
     Ok(())
 }
 
@@ -749,14 +754,14 @@ fn set_vertex_buffer<A: HalApi>(
     }
 
     let buffer = buffer_guard
-        .get(buffer_id)
+        .get_owned(buffer_id)
         .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
 
     state
         .trackers
         .buffers
         .write()
-        .merge_single(buffer, hal::BufferUses::VERTEX)?;
+        .merge_single(&buffer, hal::BufferUses::VERTEX)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::VERTEX)?;
@@ -768,11 +773,11 @@ fn set_vertex_buffer<A: HalApi>(
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
-            buffer,
+            &buffer,
             offset..end,
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.vertex[slot as usize] = Some(VertexState::new(buffer.clone(), offset..end));
+    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end));
     Ok(())
 }
 
@@ -891,14 +896,14 @@ fn multi_draw_indirect<A: HalApi>(
     let used_bind_groups = pipeline.used_bind_groups;
 
     let buffer = buffer_guard
-        .get(buffer_id)
+        .get_owned(buffer_id)
         .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
 
     state
         .trackers
         .buffers
         .write()
-        .merge_single(buffer, hal::BufferUses::INDIRECT)?;
+        .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
@@ -906,7 +911,7 @@ fn multi_draw_indirect<A: HalApi>(
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
-            buffer,
+            &buffer,
             offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
             MemoryInitKind::NeedsInitializedMemory,
         ));
@@ -922,7 +927,7 @@ fn multi_draw_indirect<A: HalApi>(
     state.flush_vertices();
     state.flush_binds(used_bind_groups, dynamic_offsets);
     state.commands.push(ArcRenderCommand::MultiDrawIndirect {
-        buffer: buffer.clone(),
+        buffer,
         offset,
         count: None,
         indexed,
@@ -949,11 +954,6 @@ pub enum ExecutionError {
     #[error("Using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
 }
-impl PrettyError for ExecutionError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-    }
-}
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 
@@ -972,7 +972,9 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction<A>>,
     pub(super) context: RenderPassContext,
-    pub(crate) info: ResourceInfo<RenderBundle<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    label: String,
+    pub(crate) tracking_data: TrackingData,
     discard_hal_labels: bool,
 }
 
@@ -1182,25 +1184,11 @@ impl<A: HalApi> RenderBundle<A> {
     }
 }
 
-impl<A: HalApi> Resource for RenderBundle<A> {
-    const TYPE: ResourceType = "RenderBundle";
-
-    type Marker = id::markers::RenderBundle;
-
-    fn as_info(&self) -> &ResourceInfo<Self> {
-        &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
-    }
-}
-
-impl<A: HalApi> ParentDevice<A> for RenderBundle<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
+crate::impl_resource_type!(RenderBundle);
+crate::impl_labeled!(RenderBundle);
+crate::impl_parent_device!(RenderBundle);
+crate::impl_storage_item!(RenderBundle);
+crate::impl_trackable!(RenderBundle);
 
 /// A render bundle's current index buffer state.
 ///
@@ -1293,9 +1281,6 @@ impl<A: HalApi> VertexState<A> {
 struct BindState<A: HalApi> {
     /// The id of the bind group set at this index.
     bind_group: Arc<BindGroup<A>>,
-
-    /// The layout of `group`.
-    layout: Arc<BindGroupLayout<A>>,
 
     /// The range of dynamic offsets for this bind group, in the original
     /// command stream's `BassPass::dynamic_offsets` array.
@@ -1422,7 +1407,6 @@ impl<A: HalApi> State<A> {
         &mut self,
         slot: u32,
         bind_group: &Arc<BindGroup<A>>,
-        layout: &Arc<BindGroupLayout<A>>,
         dynamic_offsets: Range<usize>,
     ) {
         // If this call wouldn't actually change this index's state, we can
@@ -1439,7 +1423,6 @@ impl<A: HalApi> State<A> {
         // Record the index's new state.
         self.bind[slot as usize] = Some(BindState {
             bind_group: bind_group.clone(),
-            layout: layout.clone(),
             dynamic_offsets,
             is_dirty: true,
         });
@@ -1481,7 +1464,7 @@ impl<A: HalApi> State<A> {
                 } else {
                     let first_changed = self.bind.iter().zip(&layout.bind_group_layouts).position(
                         |(entry, layout)| match *entry {
-                            Some(ref contents) => !contents.layout.is_equal(layout),
+                            Some(ref contents) => !contents.bind_group.layout.is_equal(layout),
                             None => false,
                         },
                     );
@@ -1608,14 +1591,6 @@ impl RenderBundleError {
             scope: PassErrorScope::Bundle,
             inner: e.into(),
         }
-    }
-}
-impl PrettyError for RenderBundleError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        // This error is wrapper for the inner error,
-        // but the scope has useful labels
-        fmt.error(self);
-        self.scope.fmt_pretty(fmt);
     }
 }
 

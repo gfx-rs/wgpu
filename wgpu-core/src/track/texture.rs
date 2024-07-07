@@ -25,7 +25,7 @@ use super::{
 use crate::{
     hal_api::HalApi,
     lock::{rank, Mutex},
-    resource::{Resource, Texture, TextureInner},
+    resource::{Labeled, Texture, TextureInner, Trackable},
     resource_log,
     snatch::SnatchGuard,
     track::{
@@ -40,7 +40,7 @@ use naga::FastHashMap;
 
 use wgt::{strict_assert, strict_assert_eq};
 
-use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
+use std::{iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
 
 /// Specifies a particular set of subresources in a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -175,7 +175,7 @@ impl<A: HalApi> TextureBindGroupState<A> {
     /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&self) {
         let mut textures = self.textures.lock();
-        textures.sort_unstable_by_key(|v| v.texture.as_info().tracker_index());
+        textures.sort_unstable_by_key(|v| v.texture.tracker_index());
     }
 
     /// Returns a list of all textures tracked. May contain duplicates.
@@ -370,7 +370,7 @@ impl<A: HalApi> TextureUsageScope<A> {
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        let index = texture.as_info().tracker_index().as_usize();
+        let index = texture.tracker_index().as_usize();
 
         self.tracker_assert_in_bounds(index);
 
@@ -382,9 +382,7 @@ impl<A: HalApi> TextureUsageScope<A> {
                 &mut self.metadata,
                 index,
                 TextureStateProvider::from_option(selector, new_state),
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Borrowed(texture),
-                },
+                ResourceMetadataProvider::Direct { resource: texture },
             )?
         };
 
@@ -537,8 +535,8 @@ impl<A: HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, resource: Arc<Texture<A>>, usage: TextureUses) {
-        let index = resource.info.tracker_index().as_usize();
+    pub fn insert_single(&mut self, resource: &Arc<Texture<A>>, usage: TextureUses) {
+        let index = resource.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -559,9 +557,7 @@ impl<A: HalApi> TextureTracker<A> {
                 index,
                 TextureStateProvider::KnownSingle { state: usage },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(resource),
-                },
+                ResourceMetadataProvider::Direct { resource },
             )
         };
     }
@@ -579,7 +575,7 @@ impl<A: HalApi> TextureTracker<A> {
         selector: TextureSelector,
         new_state: TextureUses,
     ) -> Drain<'_, PendingTransition<TextureUses>> {
-        let index = texture.as_info().tracker_index().as_usize();
+        let index = texture.tracker_index().as_usize();
 
         self.allow_index(index);
 
@@ -597,9 +593,7 @@ impl<A: HalApi> TextureTracker<A> {
                     state: new_state,
                 },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: Cow::Owned(texture.clone()),
-                },
+                ResourceMetadataProvider::Direct { resource: texture },
                 &mut self.temp,
             )
         }
@@ -713,7 +707,7 @@ impl<A: HalApi> TextureTracker<A> {
 
         let textures = bind_group_state.textures.lock();
         for t in textures.iter() {
-            let index = t.texture.as_info().tracker_index().as_usize();
+            let index = t.texture.tracker_index().as_usize();
             scope.tracker_assert_in_bounds(index);
 
             if unsafe { !scope.metadata.contains_unchecked(index) } {

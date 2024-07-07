@@ -9,10 +9,7 @@ use wgt::{BufferAddress, BufferSize, Color};
 
 use std::{num::NonZeroU32, sync::Arc};
 
-use super::{
-    DrawKind, PassErrorScope, Rect, RenderBundle, RenderCommandError, RenderPassError,
-    RenderPassErrorInner,
-};
+use super::{Rect, RenderBundle};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -128,17 +125,20 @@ pub enum RenderCommand {
 
 impl RenderCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
-    //
-    // TODO: Once resolving is done on-the-fly during recording, this function should be only needed with the replay feature:
-    // #[cfg(feature = "replay")]
+    #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn resolve_render_command_ids<A: HalApi>(
         hub: &crate::hub::Hub<A>,
         commands: &[RenderCommand],
-    ) -> Result<Vec<ArcRenderCommand<A>>, RenderPassError> {
+    ) -> Result<Vec<ArcRenderCommand<A>>, super::RenderPassError> {
+        use super::{
+            DrawKind, PassErrorScope, RenderCommandError, RenderPassError, RenderPassErrorInner,
+        };
+
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
         let query_set_guard = hub.query_sets.read();
         let pipelines_guard = hub.render_pipelines.read();
+        let render_bundles_guard = hub.render_bundles.read();
 
         let resolved_commands: Vec<ArcRenderCommand<A>> = commands
             .iter()
@@ -164,7 +164,7 @@ impl RenderCommand {
                             .get_owned(pipeline_id)
                             .map_err(|_| RenderPassError {
                                 scope: PassErrorScope::SetPipelineRender,
-                                inner: RenderCommandError::InvalidPipeline(pipeline_id).into(),
+                                inner: RenderCommandError::InvalidPipelineId(pipeline_id).into(),
                             })?,
                     ),
 
@@ -364,12 +364,12 @@ impl RenderCommand {
                     RenderCommand::EndOcclusionQuery => ArcRenderCommand::EndOcclusionQuery,
 
                     RenderCommand::ExecuteBundle(bundle) => ArcRenderCommand::ExecuteBundle(
-                        hub.render_bundles.read().get_owned(bundle).map_err(|_| {
-                            RenderPassError {
+                        render_bundles_guard
+                            .get_owned(bundle)
+                            .map_err(|_| RenderPassError {
                                 scope: PassErrorScope::ExecuteBundle,
                                 inner: RenderCommandError::InvalidRenderBundle(bundle).into(),
-                            }
-                        })?,
+                            })?,
                     ),
                 })
             })
@@ -487,180 +487,4 @@ pub enum ArcRenderCommand<A: HalApi> {
     },
     EndPipelineStatisticsQuery,
     ExecuteBundle(Arc<RenderBundle<A>>),
-}
-
-#[cfg(feature = "trace")]
-impl<A: HalApi> From<&ArcRenderCommand<A>> for RenderCommand {
-    fn from(value: &ArcRenderCommand<A>) -> Self {
-        use crate::resource::Resource as _;
-
-        match value {
-            ArcRenderCommand::SetBindGroup {
-                index,
-                num_dynamic_offsets,
-                bind_group,
-            } => RenderCommand::SetBindGroup {
-                index: *index,
-                num_dynamic_offsets: *num_dynamic_offsets,
-                bind_group_id: bind_group.as_info().id(),
-            },
-
-            ArcRenderCommand::SetPipeline(pipeline) => {
-                RenderCommand::SetPipeline(pipeline.as_info().id())
-            }
-
-            ArcRenderCommand::SetPushConstant {
-                offset,
-                size_bytes,
-                values_offset,
-                stages,
-            } => RenderCommand::SetPushConstant {
-                offset: *offset,
-                size_bytes: *size_bytes,
-                values_offset: *values_offset,
-                stages: *stages,
-            },
-
-            ArcRenderCommand::PushDebugGroup { color, len } => RenderCommand::PushDebugGroup {
-                color: *color,
-                len: *len,
-            },
-
-            ArcRenderCommand::PopDebugGroup => RenderCommand::PopDebugGroup,
-
-            ArcRenderCommand::InsertDebugMarker { color, len } => {
-                RenderCommand::InsertDebugMarker {
-                    color: *color,
-                    len: *len,
-                }
-            }
-
-            ArcRenderCommand::WriteTimestamp {
-                query_set,
-                query_index,
-            } => RenderCommand::WriteTimestamp {
-                query_set_id: query_set.as_info().id(),
-                query_index: *query_index,
-            },
-
-            ArcRenderCommand::BeginPipelineStatisticsQuery {
-                query_set,
-                query_index,
-            } => RenderCommand::BeginPipelineStatisticsQuery {
-                query_set_id: query_set.as_info().id(),
-                query_index: *query_index,
-            },
-
-            ArcRenderCommand::EndPipelineStatisticsQuery => {
-                RenderCommand::EndPipelineStatisticsQuery
-            }
-            ArcRenderCommand::SetIndexBuffer {
-                buffer,
-                index_format,
-                offset,
-                size,
-            } => RenderCommand::SetIndexBuffer {
-                buffer_id: buffer.as_info().id(),
-                index_format: *index_format,
-                offset: *offset,
-                size: *size,
-            },
-
-            ArcRenderCommand::SetVertexBuffer {
-                slot,
-                buffer,
-                offset,
-                size,
-            } => RenderCommand::SetVertexBuffer {
-                slot: *slot,
-                buffer_id: buffer.as_info().id(),
-                offset: *offset,
-                size: *size,
-            },
-
-            ArcRenderCommand::SetBlendConstant(color) => RenderCommand::SetBlendConstant(*color),
-
-            ArcRenderCommand::SetStencilReference(reference) => {
-                RenderCommand::SetStencilReference(*reference)
-            }
-
-            ArcRenderCommand::SetViewport {
-                rect,
-                depth_min,
-                depth_max,
-            } => RenderCommand::SetViewport {
-                rect: *rect,
-                depth_min: *depth_min,
-                depth_max: *depth_max,
-            },
-
-            ArcRenderCommand::SetScissor(scissor) => RenderCommand::SetScissor(*scissor),
-
-            ArcRenderCommand::Draw {
-                vertex_count,
-                instance_count,
-                first_vertex,
-                first_instance,
-            } => RenderCommand::Draw {
-                vertex_count: *vertex_count,
-                instance_count: *instance_count,
-                first_vertex: *first_vertex,
-                first_instance: *first_instance,
-            },
-
-            ArcRenderCommand::DrawIndexed {
-                index_count,
-                instance_count,
-                first_index,
-                base_vertex,
-                first_instance,
-            } => RenderCommand::DrawIndexed {
-                index_count: *index_count,
-                instance_count: *instance_count,
-                first_index: *first_index,
-                base_vertex: *base_vertex,
-                first_instance: *first_instance,
-            },
-
-            ArcRenderCommand::MultiDrawIndirect {
-                buffer,
-                offset,
-                count,
-                indexed,
-            } => RenderCommand::MultiDrawIndirect {
-                buffer_id: buffer.as_info().id(),
-                offset: *offset,
-                count: *count,
-                indexed: *indexed,
-            },
-
-            ArcRenderCommand::MultiDrawIndirectCount {
-                buffer,
-                offset,
-                count_buffer,
-                count_buffer_offset,
-                max_count,
-                indexed,
-            } => RenderCommand::MultiDrawIndirectCount {
-                buffer_id: buffer.as_info().id(),
-                offset: *offset,
-                count_buffer_id: count_buffer.as_info().id(),
-                count_buffer_offset: *count_buffer_offset,
-                max_count: *max_count,
-                indexed: *indexed,
-            },
-
-            ArcRenderCommand::BeginOcclusionQuery { query_index } => {
-                RenderCommand::BeginOcclusionQuery {
-                    query_index: *query_index,
-                }
-            }
-
-            ArcRenderCommand::EndOcclusionQuery => RenderCommand::EndOcclusionQuery,
-
-            ArcRenderCommand::ExecuteBundle(bundle) => {
-                RenderCommand::ExecuteBundle(bundle.as_info().id())
-            }
-        }
-    }
 }

@@ -21,7 +21,7 @@ pub trait DynComputePass: std::fmt::Debug + WasmNotSendSync {
         context: &global::Global,
         pipeline_id: id::ComputePipelineId,
     ) -> Result<(), ComputePassError>;
-    fn set_push_constant(
+    fn set_push_constants(
         &mut self,
         context: &global::Global,
         offset: u32,
@@ -93,13 +93,13 @@ impl<A: HalApi> DynComputePass for ComputePass<A> {
         context.compute_pass_set_pipeline(self, pipeline_id)
     }
 
-    fn set_push_constant(
+    fn set_push_constants(
         &mut self,
         context: &global::Global,
         offset: u32,
         data: &[u8],
     ) -> Result<(), ComputePassError> {
-        context.compute_pass_set_push_constant(self, offset, data)
+        context.compute_pass_set_push_constants(self, offset, data)
     }
 
     fn dispatch_workgroups(

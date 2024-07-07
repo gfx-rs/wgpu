@@ -22,7 +22,10 @@ async fn run() {
 pub fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        env_logger::init();
+        env_logger::builder()
+            .filter(Some(module_path!()), log::LevelFilter::Info)
+            .parse_default_env()
+            .init();
         pollster::block_on(run());
     }
     #[cfg(target_arch = "wasm32")]

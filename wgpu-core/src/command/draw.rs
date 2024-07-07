@@ -1,6 +1,5 @@
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
-    error::ErrorFormatter,
     id,
     resource::{
         DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError,
@@ -11,6 +10,8 @@ use crate::{
 use wgt::VertexStepMode;
 
 use thiserror::Error;
+
+use super::bind::BinderError;
 
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error)]
@@ -27,12 +28,8 @@ pub enum DrawError {
     },
     #[error("Index buffer must be set")]
     MissingIndexBuffer,
-    #[error("Bind group at index {index} is incompatible with the current set {pipeline}")]
-    IncompatibleBindGroup {
-        index: u32,
-        pipeline: ResourceErrorIdent,
-        diff: Vec<String>,
-    },
+    #[error(transparent)]
+    IncompatibleBindGroup(#[from] Box<BinderError>),
     #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {
         last_vertex: u64,
@@ -83,8 +80,8 @@ pub enum RenderCommandError {
     VertexBufferIndexOutOfRange { index: u32, max: u32 },
     #[error("Dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(u64, &'static str, u32),
-    #[error("Render pipeline {0:?} is invalid")]
-    InvalidPipeline(id::RenderPipelineId),
+    #[error("RenderPipelineId {0:?} is invalid")]
+    InvalidPipelineId(id::RenderPipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline targets are incompatible with render pass")]
@@ -111,20 +108,6 @@ pub enum RenderCommandError {
     InvalidScissorRect(Rect<u32>, wgt::Extent3d),
     #[error("Support for {0} is not implemented yet")]
     Unimplemented(&'static str),
-}
-impl crate::error::PrettyError for RenderCommandError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        match *self {
-            Self::InvalidBindGroupId(id) => {
-                fmt.bind_group_label(&id);
-            }
-            Self::InvalidPipeline(id) => {
-                fmt.render_pipeline_label(&id);
-            }
-            _ => {}
-        };
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

@@ -5,7 +5,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{ParentDevice, Resource, ResourceInfo, ResourceType},
+    resource::{Labeled, TrackingData},
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -50,7 +50,8 @@ pub struct ShaderModule<A: HalApi> {
     pub(crate) raw: Option<A::ShaderModule>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
-    pub(crate) info: ResourceInfo<ShaderModule<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
 }
 
 impl<A: HalApi> Drop for ShaderModule<A> {
@@ -65,25 +66,10 @@ impl<A: HalApi> Drop for ShaderModule<A> {
     }
 }
 
-impl<A: HalApi> Resource for ShaderModule<A> {
-    const TYPE: ResourceType = "ShaderModule";
-
-    type Marker = crate::id::markers::ShaderModule;
-
-    fn as_info(&self) -> &ResourceInfo<Self> {
-        &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
-    }
-}
-
-impl<A: HalApi> ParentDevice<A> for ShaderModule<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
+crate::impl_resource_type!(ShaderModule);
+crate::impl_labeled!(ShaderModule);
+crate::impl_parent_device!(ShaderModule);
+crate::impl_storage_item!(ShaderModule);
 
 impl<A: HalApi> ShaderModule<A> {
     pub(crate) fn raw(&self) -> &A::ShaderModule {
@@ -165,6 +151,35 @@ pub struct ProgrammableStageDescriptor<'a> {
     pub vertex_pulling_transform: bool,
 }
 
+/// Describes a programmable pipeline stage.
+#[derive(Clone, Debug)]
+pub struct ResolvedProgrammableStageDescriptor<'a, A: HalApi> {
+    /// The compiled shader module for this stage.
+    pub module: Arc<ShaderModule<A>>,
+    /// The name of the entry point in the compiled shader. The name is selected using the
+    /// following logic:
+    ///
+    /// * If `Some(name)` is specified, there must be a function with this name in the shader.
+    /// * If a single entry point associated with this stage must be in the shader, then proceed as
+    ///   if `Some(…)` was specified with that entry point's name.
+    pub entry_point: Option<Cow<'a, str>>,
+    /// Specifies the values of pipeline-overridable constants in the shader module.
+    ///
+    /// If an `@id` attribute was specified on the declaration,
+    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+    /// the key must be the constant's identifier name.
+    ///
+    /// The value may represent any of WGSL's concrete scalar types.
+    pub constants: Cow<'a, naga::back::PipelineConstants>,
+    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
+    ///
+    /// This is required by the WebGPU spec, but may have overhead which can be avoided
+    /// for cross-platform applications
+    pub zero_initialize_workgroup_memory: bool,
+    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
+    pub vertex_pulling_transform: bool,
+}
+
 /// Number of implicit bind groups derived at pipeline creation.
 pub type ImplicitBindGroupCount = u8;
 
@@ -194,6 +209,18 @@ pub struct ComputePipelineDescriptor<'a> {
     pub cache: Option<PipelineCacheId>,
 }
 
+/// Describes a compute pipeline.
+#[derive(Clone, Debug)]
+pub struct ResolvedComputePipelineDescriptor<'a, A: HalApi> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: Option<Arc<PipelineLayout<A>>>,
+    /// The compiled compute stage and its entry point.
+    pub stage: ResolvedProgrammableStageDescriptor<'a, A>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<Arc<PipelineCache<A>>>,
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateComputePipelineError {
@@ -201,6 +228,8 @@ pub enum CreateComputePipelineError {
     Device(#[from] DeviceError),
     #[error("Pipeline layout is invalid")]
     InvalidLayout,
+    #[error("Cache is invalid")]
+    InvalidCache,
     #[error("Unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
     #[error("Error matching shader requirements against the pipeline")]
@@ -218,7 +247,9 @@ pub struct ComputePipeline<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) _shader_module: Arc<ShaderModule<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) info: ResourceInfo<ComputePipeline<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for ComputePipeline<A> {
@@ -233,25 +264,11 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
     }
 }
 
-impl<A: HalApi> Resource for ComputePipeline<A> {
-    const TYPE: ResourceType = "ComputePipeline";
-
-    type Marker = crate::id::markers::ComputePipeline;
-
-    fn as_info(&self) -> &ResourceInfo<Self> {
-        &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
-    }
-}
-
-impl<A: HalApi> ParentDevice<A> for ComputePipeline<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
+crate::impl_resource_type!(ComputePipeline);
+crate::impl_labeled!(ComputePipeline);
+crate::impl_parent_device!(ComputePipeline);
+crate::impl_storage_item!(ComputePipeline);
+crate::impl_trackable!(ComputePipeline);
 
 impl<A: HalApi> ComputePipeline<A> {
     pub(crate) fn raw(&self) -> &A::ComputePipeline {
@@ -286,7 +303,9 @@ impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
 pub struct PipelineCache<A: HalApi> {
     pub(crate) raw: Option<A::PipelineCache>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) info: ResourceInfo<PipelineCache<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for PipelineCache<A> {
@@ -301,25 +320,11 @@ impl<A: HalApi> Drop for PipelineCache<A> {
     }
 }
 
-impl<A: HalApi> Resource for PipelineCache<A> {
-    const TYPE: ResourceType = "PipelineCache";
-
-    type Marker = crate::id::markers::PipelineCache;
-
-    fn as_info(&self) -> &ResourceInfo<Self> {
-        &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
-    }
-}
-
-impl<A: HalApi> ParentDevice<A> for PipelineCache<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
+crate::impl_resource_type!(PipelineCache);
+crate::impl_labeled!(PipelineCache);
+crate::impl_parent_device!(PipelineCache);
+crate::impl_storage_item!(PipelineCache);
+crate::impl_trackable!(PipelineCache);
 
 /// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug)]
@@ -344,12 +349,30 @@ pub struct VertexState<'a> {
     pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
 }
 
+/// Describes the vertex process in a render pipeline.
+#[derive(Clone, Debug)]
+pub struct ResolvedVertexState<'a, A: HalApi> {
+    /// The compiled vertex stage and its entry point.
+    pub stage: ResolvedProgrammableStageDescriptor<'a, A>,
+    /// The format of any vertex buffers used with this pipeline.
+    pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
+}
+
 /// Describes fragment processing in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FragmentState<'a> {
     /// The compiled fragment stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
+    /// The effect of draw calls on the color aspect of the output target.
+    pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
+}
+
+/// Describes fragment processing in a render pipeline.
+#[derive(Clone, Debug)]
+pub struct ResolvedFragmentState<'a, A: HalApi> {
+    /// The compiled fragment stage and its entry point.
+    pub stage: ResolvedProgrammableStageDescriptor<'a, A>,
     /// The effect of draw calls on the color aspect of the output target.
     pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
@@ -379,6 +402,29 @@ pub struct RenderPipelineDescriptor<'a> {
     pub multiview: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PipelineCacheId>,
+}
+
+/// Describes a render (graphics) pipeline.
+#[derive(Clone, Debug)]
+pub struct ResolvedRenderPipelineDescriptor<'a, A: HalApi> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: Option<Arc<PipelineLayout<A>>>,
+    /// The vertex processing state for this pipeline.
+    pub vertex: ResolvedVertexState<'a, A>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    pub primitive: wgt::PrimitiveState,
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    pub depth_stencil: Option<wgt::DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    pub multisample: wgt::MultisampleState,
+    /// The fragment processing state for this pipeline.
+    pub fragment: Option<ResolvedFragmentState<'a, A>>,
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<Arc<PipelineCache<A>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -433,6 +479,8 @@ pub enum CreateRenderPipelineError {
     Device(#[from] DeviceError),
     #[error("Pipeline layout is invalid")]
     InvalidLayout,
+    #[error("Pipeline cache is invalid")]
+    InvalidCache,
     #[error("Unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
     #[error("Color state [{0}] is invalid")]
@@ -545,7 +593,9 @@ pub struct RenderPipeline<A: HalApi> {
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
     pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) info: ResourceInfo<RenderPipeline<A>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for RenderPipeline<A> {
@@ -560,25 +610,11 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
     }
 }
 
-impl<A: HalApi> Resource for RenderPipeline<A> {
-    const TYPE: ResourceType = "RenderPipeline";
-
-    type Marker = crate::id::markers::RenderPipeline;
-
-    fn as_info(&self) -> &ResourceInfo<Self> {
-        &self.info
-    }
-
-    fn as_info_mut(&mut self) -> &mut ResourceInfo<Self> {
-        &mut self.info
-    }
-}
-
-impl<A: HalApi> ParentDevice<A> for RenderPipeline<A> {
-    fn device(&self) -> &Arc<Device<A>> {
-        &self.device
-    }
-}
+crate::impl_resource_type!(RenderPipeline);
+crate::impl_labeled!(RenderPipeline);
+crate::impl_parent_device!(RenderPipeline);
+crate::impl_storage_item!(RenderPipeline);
+crate::impl_trackable!(RenderPipeline);
 
 impl<A: HalApi> RenderPipeline<A> {
     pub(crate) fn raw(&self) -> &A::RenderPipeline {

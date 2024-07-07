@@ -6,7 +6,7 @@ use crate::{
     device::Device,
     hal_api::HalApi,
     init_tracker::*,
-    resource::{DestroyedResourceError, Resource, Texture},
+    resource::{DestroyedResourceError, ParentDevice, Texture, Trackable},
     snatch::SnatchGuard,
     track::{TextureTracker, Tracker},
     FastHashMap,
@@ -191,9 +191,7 @@ impl<A: HalApi> BakedCommands<A> {
             match buffer_use.kind {
                 MemoryInitKind::ImplicitlyInitialized => {}
                 MemoryInitKind::NeedsInitializedMemory => {
-                    match uninitialized_ranges_per_buffer
-                        .entry(buffer_use.buffer.as_info().tracker_index())
-                    {
+                    match uninitialized_ranges_per_buffer.entry(buffer_use.buffer.tracker_index()) {
                         Entry::Vacant(e) => {
                             e.insert((
                                 buffer_use.buffer.clone(),

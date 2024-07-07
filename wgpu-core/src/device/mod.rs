@@ -4,7 +4,7 @@ use crate::{
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
     resource::{
-        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Resource,
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
         ResourceErrorIdent,
     },
     snatch::SnatchGuard,
@@ -39,7 +39,6 @@ pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 // See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
 const CLEANUP_WAIT_MS: u32 = 60000;
 
-const IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL: &str = "Implicit BindGroupLayout in the Error State";
 const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
@@ -60,15 +59,6 @@ pub(crate) struct AttachmentData<T> {
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
-impl<T> AttachmentData<T> {
-    pub(crate) fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> AttachmentData<U> {
-        AttachmentData {
-            colors: self.colors.iter().map(|c| c.as_ref().map(&fun)).collect(),
-            resolves: self.resolves.iter().map(&fun).collect(),
-            depth_stencil: self.depth_stencil.as_ref().map(&fun),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -115,7 +105,7 @@ pub enum RenderPassCompatibilityError {
 
 impl RenderPassContext {
     // Assumes the renderpass only contains one subpass
-    pub(crate) fn check_compatible<T: Resource>(
+    pub(crate) fn check_compatible<T: Labeled>(
         &self,
         other: &Self,
         res: &T,
