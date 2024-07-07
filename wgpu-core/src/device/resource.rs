@@ -3043,6 +3043,17 @@ impl<A: HalApi> Device<A> {
                         break 'error Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                     }
 
+                    if !format_features
+                        .flags
+                        .supported_sample_counts()
+                        .into_iter()
+                        .any(|count: u32| format_features.flags.sample_count_supported(count))
+                    {
+                        break 'error Some(pipeline::ColorStateError::UnsupportedSampleCount(
+                            desc.multisample.count,
+                        ));
+                    }
+
                     if desc.multisample.count > 1
                         && !format_features
                             .flags
