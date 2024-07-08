@@ -1349,9 +1349,8 @@ impl Global {
                         let mut trackers = device.trackers.lock();
                         baked.initialize_buffer_memory(&mut *trackers, &snatch_guard)?;
                         baked.initialize_texture_memory(&mut *trackers, device, &snatch_guard)?;
-                        let blas_guard = hub.blas_s.write();
                         baked.validate_blas_actions()?;
-                        baked.validate_tlas_actions(&blas_guard)?;
+                        baked.validate_tlas_actions()?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_tracker(

@@ -11,7 +11,6 @@ use crate::{
         ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
-    storage::Storage,
     FastHashSet,
 };
 
@@ -1210,7 +1209,8 @@ impl Global {
                 }
                 let blas = blas_guard
                     .get(instance.blas_id)
-                    .map_err(|_| BuildAccelerationStructureError::InvalidBlasIdForInstance)?;
+                    .map_err(|_| BuildAccelerationStructureError::InvalidBlasIdForInstance)?
+                    .clone();
 
                 cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
 
@@ -1219,7 +1219,7 @@ impl Global {
 
                 instance_count += 1;
 
-                dependencies.push(instance.blas_id);
+                dependencies.push(blas.clone());
 
                 cmd_buf_data.blas_actions.push(BlasAction {
                     blas: blas.clone(),
@@ -1540,7 +1540,6 @@ impl<A: HalApi> BakedCommands<A> {
     // makes sure a tlas is build before it is used
     pub(crate) fn validate_tlas_actions(
         &mut self,
-        blas_guard: &Storage<Blas<A>>,
     ) -> Result<(), ValidateTlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
         for action in self.tlas_actions.drain(..) {
@@ -1561,10 +1560,7 @@ impl<A: HalApi> BakedCommands<A> {
                             action.tlas.error_ident(),
                         ));
                     }
-                    for dependency in dependencies.deref() {
-                        let blas = blas_guard.get(*dependency).map_err(|_| {
-                            ValidateTlasActionsError::InvalidBlasId(action.tlas.error_ident())
-                        })?;
+                    for blas in dependencies.deref() {
                         let blas_build_index = *blas.built_index.read();
                         if blas_build_index.is_none() {
                             return Err(ValidateTlasActionsError::UsedUnbuilt(

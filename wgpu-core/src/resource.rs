@@ -33,7 +33,6 @@ use std::{
     },
 };
 
-use crate::id::BlasId;
 use std::num::NonZeroU64;
 
 /// Information about the wgpu-core resource.
@@ -1843,7 +1842,7 @@ pub struct Tlas<A: HalApi> {
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
-    pub(crate) dependencies: RwLock<Vec<BlasId>>,
+    pub(crate) dependencies: RwLock<Vec<Arc<Blas<A>>>>,
     pub(crate) instance_buffer: RwLock<Option<A::Buffer>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,

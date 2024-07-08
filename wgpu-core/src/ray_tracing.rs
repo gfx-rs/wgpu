@@ -194,10 +194,10 @@ pub(crate) enum BlasActionKind {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum TlasActionKind {
+pub(crate) enum TlasActionKind<A: HalApi> {
     Build {
         build_index: NonZeroU64,
-        dependencies: Vec<BlasId>,
+        dependencies: Vec<Arc<Blas<A>>>,
     },
     Use,
 }
@@ -211,7 +211,7 @@ pub(crate) struct BlasAction<A: HalApi> {
 #[derive(Debug, Clone)]
 pub(crate) struct TlasAction<A: HalApi> {
     pub tlas: Arc<Tlas<A>>,
-    pub kind: TlasActionKind,
+    pub kind: TlasActionKind<A>,
 }
 
 #[derive(Debug, Clone)]
