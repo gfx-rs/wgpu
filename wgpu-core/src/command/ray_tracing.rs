@@ -1538,9 +1538,7 @@ impl<A: HalApi> BakedCommands<A> {
     }
 
     // makes sure a tlas is build before it is used
-    pub(crate) fn validate_tlas_actions(
-        &mut self,
-    ) -> Result<(), ValidateTlasActionsError> {
+    pub(crate) fn validate_tlas_actions(&mut self) -> Result<(), ValidateTlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
         for action in self.tlas_actions.drain(..) {
             match action.kind {
