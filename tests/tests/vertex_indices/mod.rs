@@ -5,8 +5,9 @@
 
 use std::{num::NonZeroU64, ops::Range};
 
+use itertools::Itertools;
+use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
-
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 use wgt::RenderBundleDescriptor;
 
@@ -79,7 +80,7 @@ impl Draw {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum TestCase {
     /// A single draw call with 6 vertices
     Draw,
@@ -94,14 +95,6 @@ enum TestCase {
 }
 
 impl TestCase {
-    const ARRAY: [Self; 5] = [
-        Self::Draw,
-        Self::DrawNonZeroFirstVertex,
-        Self::DrawBaseVertex,
-        Self::DrawInstanced,
-        Self::DrawNonZeroFirstInstance,
-    ];
-
     // Get the draw calls for this test case
     fn draws(&self) -> &'static [Draw] {
         match self {
@@ -148,7 +141,7 @@ impl TestCase {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum IdSource {
     /// Use buffers to load the vertex and instance index
     Buffers,
@@ -156,28 +149,16 @@ enum IdSource {
     Builtins,
 }
 
-impl IdSource {
-    const ARRAY: [Self; 2] = [Self::Buffers, Self::Builtins];
-}
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum DrawCallKind {
     Direct,
     Indirect,
 }
 
-impl DrawCallKind {
-    const ARRAY: [Self; 2] = [Self::Direct, Self::Indirect];
-}
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum EncoderKind {
     RenderPass,
     RenderBundle,
-}
-
-impl EncoderKind {
-    const ARRAY: [Self; 2] = [Self::RenderPass, Self::RenderBundle];
 }
 
 struct Test {
@@ -356,24 +337,23 @@ async fn vertex_index_common(ctx: TestingContext) {
         )
         .create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut tests = Vec::with_capacity(5 * 2 * 2 * 2);
-    for case in TestCase::ARRAY {
-        for id_source in IdSource::ARRAY {
-            for draw_call_kind in DrawCallKind::ARRAY {
-                for encoder_kind in EncoderKind::ARRAY {
-                    for vertex_pulling_transform in [false, true] {
-                        tests.push(Test {
-                            case,
-                            id_source,
-                            draw_call_kind,
-                            encoder_kind,
-                            vertex_pulling_transform,
-                        })
-                    }
+    let tests = TestCase::iter()
+        .cartesian_product(IdSource::iter())
+        .cartesian_product(DrawCallKind::iter())
+        .cartesian_product(EncoderKind::iter())
+        .cartesian_product([false, true])
+        .map(
+            |((((case, id_source), draw_call_kind), encoder_kind), vertex_pulling_transform)| {
+                Test {
+                    case,
+                    id_source,
+                    draw_call_kind,
+                    encoder_kind,
+                    vertex_pulling_transform,
                 }
-            }
-        }
-    }
+            },
+        )
+        .collect::<Vec<_>>();
 
     let features = ctx.adapter.features();
 
@@ -398,7 +378,7 @@ async fn vertex_index_common(ctx: TestingContext) {
 
         let expected = test.expectation(&ctx);
 
-        let buffer_size = 4 * expected.len() as u64;
+        let buffer_size = (std::mem::size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size,

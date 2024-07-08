@@ -802,14 +802,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 45;
-        /// Allows vertex shaders to have outputs which are not consumed
-        /// by the fragment shader.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL
-        const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 46;
         /// Allows for creation of textures of format [`TextureFormat::NV12`]
         ///
         /// Supported platforms:

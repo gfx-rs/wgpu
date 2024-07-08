@@ -2369,13 +2369,10 @@ impl Instance {
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
-    /// Always returns an empty vector if the instance decided upon creation to
-    /// target WebGPU since adapter creation is always async on WebGPU.
-    ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(wgpu_core)]
+    #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let context = Arc::clone(&self.context);
         self.context
@@ -2391,7 +2388,7 @@ impl Instance {
                     })
                     .collect()
             })
-            .unwrap_or_default()
+            .unwrap()
     }
 
     /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].
@@ -2399,6 +2396,8 @@ impl Instance {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
+    ///
+    /// A `compatible_surface` is required when targeting WebGL2.
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_, '_>,

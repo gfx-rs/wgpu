@@ -237,7 +237,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         let (adapter, features) = unsafe {
-            let mut adapters = instance.enumerate_adapters();
+            let mut adapters = instance.enumerate_adapters(Some(&surface));
             if adapters.is_empty() {
                 panic!("No adapters found");
             }

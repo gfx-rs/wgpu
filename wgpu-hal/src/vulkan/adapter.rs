@@ -735,7 +735,6 @@ impl PhysicalDeviceFeatures {
                 | vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND,
         );
         features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
-        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         features.set(
             F::BGRA8UNORM_STORAGE,

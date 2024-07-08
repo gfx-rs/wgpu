@@ -41,15 +41,17 @@ pub fn initialize_instance() -> Instance {
 pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     #[allow(unused_variables)]
-    let _surface: wgpu::Surface;
+    let surface: Option<wgpu::Surface>;
     let surface_guard: Option<SurfaceGuard>;
 
-    // Create a canvas iff we need a WebGL2RenderingContext to have a working device.
+    #[allow(unused_assignments)]
+    // Create a canvas if we need a WebGL2RenderingContext to have a working device.
     #[cfg(not(all(
         target_arch = "wasm32",
         any(target_os = "emscripten", feature = "webgl")
     )))]
     {
+        surface = None;
         surface_guard = None;
     }
     #[cfg(all(
@@ -60,15 +62,17 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Opt
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = initialize_html_canvas();
 
-        _surface = instance
-            .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
-            .expect("could not create surface from canvas");
+        surface = Some(
+            instance
+                .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
+                .expect("could not create surface from canvas"),
+        );
 
         surface_guard = Some(SurfaceGuard { canvas });
     }
 
     cfg_if::cfg_if! {
-        if #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))] {
+        if #[cfg(not(target_arch = "wasm32"))] {
             let adapter_iter = instance.enumerate_adapters(wgpu::Backends::all());
             let adapter_count = adapter_iter.len();
             let adapter = adapter_iter.into_iter()
@@ -76,7 +80,10 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Opt
                 .unwrap_or_else(|| panic!("Tried to get index {adapter_index} adapter, but adapter list was only {adapter_count} long. Is .gpuconfig out of date?"));
         } else {
             assert_eq!(adapter_index, 0);
-            let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions::default()).await.unwrap();
+            let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+                compatible_surface: surface.as_ref(),
+                ..Default::default()
+            }).await.unwrap();
         }
     }
 
