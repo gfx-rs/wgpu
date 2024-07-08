@@ -1583,6 +1583,7 @@ impl super::Adapter {
         handle_is_owned: bool,
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
+        memory_hints: &wgt::MemoryHints,
         family_index: u32,
         queue_index: u32,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
@@ -1833,7 +1834,54 @@ impl super::Adapter {
 
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
-            let config = gpu_alloc::Config::i_am_prototyping(); //TODO
+
+            // Note: the parameters here are not set in stone nor where they picked with
+            // strong confidence.
+            // `final_free_list_chunk` should be bigger than starting_free_list_chunk if
+            // we want the behavior of starting with smaller block sizes and using larger
+            // ones only after we observe that the small ones aren't enough, which I think
+            // is a good "I don't know what the workload is going to be like" approach.
+            //
+            // For reference, `VMA`, and `gpu_allocator` both start with 256 MB blocks
+            // (then VMA doubles the block size each time it needs a new block).
+            // At some point it would be good to experiment with real workloads
+            //
+            // TODO(#5925): The plan is to switch the Vulkan backend from `gpu_alloc` to
+            // `gpu_allocator` which has a different (simpler) set of configuration options.
+            //
+            // TODO: These parameters should take hardware capabilities into account.
+            let mb = 1024 * 1024;
+            let perf_cfg = gpu_alloc::Config {
+                starting_free_list_chunk: 128 * mb,
+                final_free_list_chunk: 512 * mb,
+                minimal_buddy_size: 1,
+                initial_buddy_dedicated_size: 8 * mb,
+                dedicated_threshold: 32 * mb,
+                preferred_dedicated_threshold: mb,
+                transient_dedicated_threshold: 128 * mb,
+            };
+            let mem_usage_cfg = gpu_alloc::Config {
+                starting_free_list_chunk: 8 * mb,
+                final_free_list_chunk: 64 * mb,
+                minimal_buddy_size: 1,
+                initial_buddy_dedicated_size: 8 * mb,
+                dedicated_threshold: 8 * mb,
+                preferred_dedicated_threshold: mb,
+                transient_dedicated_threshold: 16 * mb,
+            };
+            let config = match memory_hints {
+                wgt::MemoryHints::Performance => perf_cfg,
+                wgt::MemoryHints::MemoryUsage => mem_usage_cfg,
+                wgt::MemoryHints::Manual {
+                    suballocated_device_memory_block_size,
+                } => gpu_alloc::Config {
+                    starting_free_list_chunk: suballocated_device_memory_block_size.start,
+                    final_free_list_chunk: suballocated_device_memory_block_size.end,
+                    initial_buddy_dedicated_size: suballocated_device_memory_block_size.start,
+                    ..perf_cfg
+                },
+            };
+
             let max_memory_allocation_size =
                 if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
                     maintenance_3.max_memory_allocation_size
@@ -1895,6 +1943,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
@@ -1928,6 +1977,7 @@ impl crate::Adapter for super::Adapter {
                 true,
                 &enabled_extensions,
                 features,
+                memory_hints,
                 family_info.queue_family_index,
                 0,
             )

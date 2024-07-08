@@ -319,6 +319,7 @@ impl ExampleContext {
                     label: None,
                     required_features: (optional_features & adapter_features) | required_features,
                     required_limits: needed_limits,
+                    memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),
             )

@@ -1769,11 +1769,43 @@ pub struct AdapterInfo {
     pub backend: Backend,
 }
 
+/// Hints to the device about the memory allocation strategy.
+///
+/// Some backends may ignore these hints.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum MemoryHints {
+    /// Favor performance over memory usage (the default value).
+    #[default]
+    Performance,
+    /// Favor memory usage over performance.
+    MemoryUsage,
+    /// Applications that have control over the content that is rendered
+    /// (typically games) may find an optimal compromise between memory
+    /// usage and performance by specifying the allocation configuration.
+    Manual {
+        /// Defines the range of allowed memory block sizes for sub-allocated
+        /// resources.
+        ///
+        /// The backend may attempt to group multiple resources into fewer
+        /// device memory blocks (sub-allocation) for performance reasons.
+        /// The start of the provided range specifies the initial memory
+        /// block size for sub-allocated resources. After running out of
+        /// space in existing memory blocks, the backend may chose to
+        /// progressively increase the block size of subsequent allocations
+        /// up to a limit specified by the end of the range.
+        ///
+        /// This does not limit resource sizes. If a resource does not fit
+        /// in the specified range, it will typically be placed in a dedicated
+        /// memory block.
+        suballocated_device_memory_block_size: Range<u64>,
+    },
+}
+
 /// Describes a [`Device`](../wgpu/struct.Device.html).
 ///
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#gpudevicedescriptor).
-#[repr(C)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor<L> {
@@ -1791,6 +1823,8 @@ pub struct DeviceDescriptor<L> {
     /// Exactly the specified limits, and no better or worse,
     /// will be allowed in validation of API calls on the resulting device.
     pub required_limits: Limits,
+    /// Hints for memory allocation strategies.
+    pub memory_hints: MemoryHints,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1800,6 +1834,7 @@ impl<L> DeviceDescriptor<L> {
             label: fun(&self.label),
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
+            memory_hints: self.memory_hints.clone(),
         }
     }
 }

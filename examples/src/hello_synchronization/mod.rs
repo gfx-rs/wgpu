@@ -19,6 +19,7 @@ async fn run() {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::Performance,
             },
             None,
         )

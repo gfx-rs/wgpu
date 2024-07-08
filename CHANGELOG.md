@@ -151,6 +151,11 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
 
 - Added `as_hal` for `Buffer` to access wgpu created buffers form wgpu-hal. By @JasondeWolff in [#5724](https://github.com/gfx-rs/wgpu/pull/5724)
 - Unconsumed vertex outputs are now always allowed. Removed `StageError::InputNotConsumed`, `Features::SHADER_UNUSED_VERTEX_OUTPUT`, and associated validation. By @Imberflur in [#5531](https://github.com/gfx-rs/wgpu/pull/5531)
+- Added memory allocation hints to `DeviceDescriptor` by @nical in [#5875](https://github.com/gfx-rs/wgpu/pull/5875)
+    - `MemoryHints::Performance`, the default, favors performance over memory usage and will likely cause large amounts of VRAM to be allocated up-front. This hint is typically good for games.
+    - `MemoryHints::MemoryUsage` favors memory usage over performance. This hint is typically useful for smaller applications or UI libraries.
+    - `MemoryHints::Manual` allows the user to specify parameters for the underlying GPU memory allocator. These parameters are subject to change.
+    - These hints may be ignored by some backends. Currently only the Vulkan and D3D12 backends take them into account.
 
 #### Naga
 
