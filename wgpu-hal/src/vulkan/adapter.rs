@@ -1834,8 +1834,22 @@ impl super::Adapter {
 
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
-            // TODO: These configuration options should take hardware capabilities
-            // into consideration.
+
+            // Note: the parameters here are not set in stone nor where they picked with
+            // strong confidence.
+            // `final_free_list_chunk` should be bigger than starting_free_list_chunk if
+            // we want the behavior of starting with smaller block sizes and using larger
+            // ones only after we observe that the small ones aren't enough, which I think
+            // is a good "I don't know what the workload is going to be like" approach.
+            //
+            // For reference, `VMA`, and `gpu_allocator` both start with 256 MB blocks
+            // (then VMA doubles the block size each time it needs a new block).
+            // At some point it would be good to experiment with real workloads
+            //
+            // TODO(#5925): The plan is to switch the Vulkan backend from `gpu_alloc` to
+            // `gpu_allocator` which has a different (simpler) set of configuration options.
+            //
+            // TODO: These parameters should take hardware capabilities into account.
             let mb = 1024 * 1024;
             let perf_cfg = gpu_alloc::Config {
                 starting_free_list_chunk: 128 * mb,
