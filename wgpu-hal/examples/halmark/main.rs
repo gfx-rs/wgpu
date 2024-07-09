@@ -125,7 +125,11 @@ impl<A: hal::Api> Example<A> {
 
         let hal::OpenDevice { device, queue } = unsafe {
             adapter
-                .open(wgt::Features::empty(), &wgt::Limits::default())
+                .open(
+                    wgt::Features::empty(),
+                    &wgt::Limits::default(),
+                    &wgt::MemoryHints::default(),
+                )
                 .unwrap()
         };
 

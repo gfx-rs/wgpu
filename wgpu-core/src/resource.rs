@@ -202,10 +202,6 @@ pub(crate) trait Trackable: Labeled {
     /// given index.
     fn use_at(&self, submit_index: SubmissionIndex);
     fn submission_index(&self) -> SubmissionIndex;
-
-    fn is_unique(self: &Arc<Self>) -> bool {
-        Arc::strong_count(self) == 1
-    }
 }
 
 #[macro_export]
@@ -262,9 +258,8 @@ pub enum BufferMapAsyncStatus {
 pub(crate) enum BufferMapState<A: HalApi> {
     /// Mapped at creation.
     Init {
+        staging_buffer: StagingBuffer<A>,
         ptr: NonNull<u8>,
-        stage_buffer: Arc<Buffer<A>>,
-        needs_flush: bool,
     },
     /// Waiting for GPU to be done before mapping
     Waiting(BufferPendingMapping<A>),
@@ -616,14 +611,13 @@ impl<A: HalApi> Buffer<A> {
             };
         }
 
-        let snatch_guard = device.snatchable_lock.read();
-        {
-            let mut trackers = device.as_ref().trackers.lock();
-            trackers.buffers.set_single(self, internal_use);
-            //TODO: Check if draining ALL buffers is correct!
-            let _ = trackers.buffers.drain_transitions(&snatch_guard);
-        }
-        drop(snatch_guard);
+        // TODO: we are ignoring the transition here, I think we need to add a barrier
+        // at the end of the submission
+        device
+            .trackers
+            .lock()
+            .buffers
+            .set_single(self, internal_use);
 
         device.lock_life().map(self);
 
@@ -659,9 +653,8 @@ impl<A: HalApi> Buffer<A> {
         log::debug!("{} map state -> Idle", self.error_ident());
         match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
             BufferMapState::Init {
+                staging_buffer,
                 ptr,
-                stage_buffer,
-                needs_flush,
             } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
@@ -676,12 +669,14 @@ impl<A: HalApi> Buffer<A> {
                     });
                 }
                 let _ = ptr;
-                if needs_flush {
+
+                let raw_staging_buffer_guard = staging_buffer.raw.lock();
+                let raw_staging_buffer = raw_staging_buffer_guard.as_ref().unwrap();
+                if !staging_buffer.is_coherent {
                     unsafe {
-                        device.raw().flush_mapped_ranges(
-                            stage_buffer.raw(&snatch_guard).unwrap(),
-                            iter::once(0..self.size),
-                        );
+                        device
+                            .raw()
+                            .flush_mapped_ranges(raw_staging_buffer, iter::once(0..self.size));
                     }
                 }
 
@@ -692,7 +687,7 @@ impl<A: HalApi> Buffer<A> {
                     size,
                 });
                 let transition_src = hal::BufferBarrier {
-                    buffer: stage_buffer.raw(&snatch_guard).unwrap(),
+                    buffer: raw_staging_buffer,
                     usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
@@ -708,13 +703,14 @@ impl<A: HalApi> Buffer<A> {
                     );
                     if self.size > 0 {
                         encoder.copy_buffer_to_buffer(
-                            stage_buffer.raw(&snatch_guard).unwrap(),
+                            raw_staging_buffer,
                             raw_buf,
                             region.into_iter(),
                         );
                     }
                 }
-                pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
+                drop(raw_staging_buffer_guard);
+                pending_writes.consume_temp(queue::TempResource::StagingBuffer(staging_buffer));
                 pending_writes.insert_buffer(self);
             }
             BufferMapState::Idle => {
@@ -768,14 +764,12 @@ impl<A: HalApi> Buffer<A> {
                 mem::take(&mut *guard)
             };
 
-            queue::TempResource::DestroyedBuffer(Arc::new(DestroyedBuffer {
+            queue::TempResource::DestroyedBuffer(DestroyedBuffer {
                 raw: Some(raw),
                 device: Arc::clone(&self.device),
-                submission_index: self.submission_index(),
-                tracker_index: self.tracker_index(),
                 label: self.label().to_owned(),
                 bind_groups,
-            }))
+            })
         };
 
         let mut pending_writes = device.pending_writes.lock();
@@ -824,8 +818,6 @@ pub struct DestroyedBuffer<A: HalApi> {
     raw: Option<A::Buffer>,
     device: Arc<Device<A>>,
     label: String,
-    pub(crate) tracker_index: TrackerIndex,
-    pub(crate) submission_index: u64,
     bind_groups: Vec<Weak<BindGroup<A>>>,
 }
 
@@ -879,7 +871,6 @@ pub struct StagingBuffer<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
-    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for StagingBuffer<A> {
@@ -903,7 +894,6 @@ impl<A: HalApi> Labeled for StagingBuffer<A> {
 }
 crate::impl_parent_device!(StagingBuffer);
 crate::impl_storage_item!(StagingBuffer);
-crate::impl_trackable!(StagingBuffer);
 
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
@@ -1137,15 +1127,13 @@ impl<A: HalApi> Texture<A> {
                 mem::take(&mut *guard)
             };
 
-            queue::TempResource::DestroyedTexture(Arc::new(DestroyedTexture {
+            queue::TempResource::DestroyedTexture(DestroyedTexture {
                 raw: Some(raw),
                 views,
                 bind_groups,
                 device: Arc::clone(&self.device),
-                tracker_index: self.tracker_index(),
-                submission_index: self.submission_index(),
                 label: self.label().to_owned(),
-            }))
+            })
         };
 
         let mut pending_writes = device.pending_writes.lock();
@@ -1334,8 +1322,6 @@ pub struct DestroyedTexture<A: HalApi> {
     bind_groups: Vec<Weak<BindGroup<A>>>,
     device: Arc<Device<A>>,
     label: String,
-    pub(crate) tracker_index: TrackerIndex,
-    pub(crate) submission_index: u64,
 }
 
 impl<A: HalApi> DestroyedTexture<A> {

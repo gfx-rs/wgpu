@@ -37,7 +37,14 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-metal = ["naga/msl-out", "dep:block"]
+## Enables the Metal backend when targeting Apple platforms.
+##
+## Has no effect on non-Apple platforms.
+metal = [
+    # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
+    "naga/msl-out-if-target-apple",
+    "dep:block",
+]
 vulkan = [
     "naga/spv-out",
     "dep:ash",
@@ -56,8 +63,12 @@ gles = [
     "dep:ndk-sys",
     "winapi/libloaderapi",
 ]
+## Enables the DX12 backend when targeting Windows.
+##
+## Has no effect if not targeting Windows.
 dx12 = [
-    "naga/hlsl-out",
+    # DX12 is only available on Windows, therefore request HLSL output also only if we target Windows.
+    "naga/hlsl-out-if-target-windows",
     "dep:d3d12",
     "dep:bit-set",
     "dep:libloading",

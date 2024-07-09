@@ -16,7 +16,7 @@ use crate::{
         Texture, TextureClearMode,
     },
     snatch::SnatchGuard,
-    track::{TextureSelector, TextureTracker},
+    track::{TextureSelector, TextureTrackerSetSingle},
 };
 
 use hal::CommandEncoder as _;
@@ -269,11 +269,11 @@ impl Global {
     }
 }
 
-pub(crate) fn clear_texture<A: HalApi>(
+pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
     dst_texture: &Arc<Texture<A>>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut TextureTracker<A>,
+    texture_tracker: &mut T,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
     snatch_guard: &SnatchGuard<'_>,

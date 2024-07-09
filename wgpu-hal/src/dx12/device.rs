@@ -28,12 +28,13 @@ impl super::Device {
         raw: d3d12::Device,
         present_queue: d3d12::CommandQueue,
         limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
         library: &Arc<d3d12::D3D12Lib>,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, DeviceError> {
         let mem_allocator = if private_caps.suballocation_supported {
-            super::suballocation::create_allocator_wrapper(&raw)?
+            super::suballocation::create_allocator_wrapper(&raw, memory_hints)?
         } else {
             None
         };
