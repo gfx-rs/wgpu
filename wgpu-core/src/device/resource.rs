@@ -32,7 +32,7 @@ use crate::{
         UsageScopePool,
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
-    FastHashMap, LabelHelpers as _, PreHashedKey, PreHashedMap, SubmissionIndex,
+    FastHashMap, LabelHelpers as _, PreHashedKey, PreHashedMap,
 };
 
 use arrayvec::ArrayVec;
@@ -3474,9 +3474,10 @@ impl<A: HalApi> Device<A> {
         }
     }
 
+    #[cfg(feature = "replay")]
     pub(crate) fn wait_for_submit(
         &self,
-        submission_index: SubmissionIndex,
+        submission_index: crate::SubmissionIndex,
     ) -> Result<(), WaitIdleError> {
         let guard = self.fence.read();
         let fence = guard.as_ref().unwrap();

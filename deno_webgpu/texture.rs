@@ -24,7 +24,7 @@ impl Resource for WebGpuTexture {
     fn close(self: Rc<Self>) {
         if self.owned {
             let instance = &self.instance;
-            gfx_select!(self.id => instance.texture_drop(self.id, true));
+            gfx_select!(self.id => instance.texture_drop(self.id));
         }
     }
 }
@@ -39,7 +39,7 @@ impl Resource for WebGpuTextureView {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.texture_view_drop(self.1, true)).unwrap();
+        gfx_select!(self.1 => self.0.texture_view_drop(self.1)).unwrap();
     }
 }
 
