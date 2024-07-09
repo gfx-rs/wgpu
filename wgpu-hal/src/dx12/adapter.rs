@@ -132,7 +132,7 @@ impl super::Adapter {
                 wgt::DeviceType::DiscreteGpu
             },
             driver: {
-                let mut i = winnt::LARGE_INTEGER::default();
+                let mut i: winnt::LARGE_INTEGER = unsafe { mem::zeroed() };
                 if 0 == unsafe {
                     adapter.CheckInterfaceSupport(&dxgi::IDXGIDevice::uuidof(), &mut i)
                 } {
