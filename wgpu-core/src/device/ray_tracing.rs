@@ -5,14 +5,14 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{self, BlasId, TlasId},
-    lock::{Mutex, RwLock},
+    lock::RwLock,
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
 use std::sync::Arc;
 
 use crate::lock::rank;
-use crate::resource::{StagingBuffer, Trackable, TrackingData};
+use crate::resource::{Trackable, TrackingData};
 use hal::{AccelerationStructureTriangleIndices, Device as _};
 
 impl<A: HalApi> Device<A> {
@@ -190,8 +190,6 @@ impl Global {
             let id = fid.assign(blas.clone());
             log::info!("Created blas {:?} with {:?}", id, desc);
 
-            device.trackers.lock().blas_s.insert_single(blas);
-
             return (id, Some(handle), None);
         };
 
@@ -231,8 +229,6 @@ impl Global {
 
             let id = fid.assign(tlas.clone());
             log::info!("Created tlas {:?} with {:?}", id, desc);
-
-            device.trackers.lock().tlas_s.insert_single(tlas);
 
             return (id, None);
         };
@@ -281,11 +277,10 @@ impl Global {
         if let Some(blas) = hub.blas_s.unregister(blas_id) {
             let last_submit_index = blas.submission_index();
 
-            blas.device
-                .lock_life()
-                .suspected_resources
-                .blas_s
-                .insert(blas.tracker_index(), blas.clone());
+            #[cfg(feature = "trace")]
+            if let Some(t) = blas.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBlas(blas_id));
+            }
 
             if wait {
                 match blas.device.wait_for_submit(last_submit_index) {
@@ -315,37 +310,12 @@ impl Global {
         }
 
         let temp = TempResource::Tlas(tlas.clone());
-
-        let raw_instance_buffer = tlas.instance_buffer.write().take();
-        let temp_instance_buffer = match raw_instance_buffer {
-            None => None,
-            Some(e) => {
-                let size = get_raw_tlas_instance_size::<A>() as u64
-                    * std::cmp::max(tlas.max_instance_count, 1) as u64;
-                let mapping = unsafe {
-                    device
-                        .raw()
-                        .map_buffer(&e, 0..size)
-                        .map_err(|_| resource::DestroyError::Invalid)?
-                };
-                Some(TempResource::StagingBuffer(Arc::new(StagingBuffer {
-                    raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(e)),
-                    device: device.clone(),
-                    size,
-                    is_coherent: mapping.is_coherent,
-                    tracking_data: TrackingData::new(device.tracker_indices.tlas_s.clone()),
-                })))
-            }
-        };
         {
             let last_submit_index = tlas.submission_index();
             drop(tlas_guard);
             let guard = &mut device.lock_life();
 
             guard.schedule_resource_destruction(temp, last_submit_index);
-            if let Some(temp_instance_buffer) = temp_instance_buffer {
-                guard.schedule_resource_destruction(temp_instance_buffer, last_submit_index);
-            }
         }
 
         Ok(())
@@ -360,11 +330,10 @@ impl Global {
         if let Some(tlas) = hub.tlas_s.unregister(tlas_id) {
             let last_submit_index = tlas.submission_index();
 
-            tlas.device
-                .lock_life()
-                .suspected_resources
-                .tlas_s
-                .insert(tlas.tracker_index(), tlas.clone());
+            #[cfg(feature = "trace")]
+            if let Some(t) = tlas.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyTlas(tlas_id));
+            }
 
             if wait {
                 match tlas.device.wait_for_submit(last_submit_index) {

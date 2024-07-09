@@ -18,7 +18,7 @@ use wgt::{math::align_to, BufferUsages};
 
 use crate::lock::rank;
 use crate::ray_tracing::BlasTriangleGeometry;
-use crate::resource::{Buffer, Labeled, StagingBuffer, Trackable, TrackingData};
+use crate::resource::{Buffer, Labeled, StagingBuffer, Trackable};
 use crate::track::PendingTransition;
 use hal::{BufferUses, CommandEncoder, Device};
 use std::ops::Deref;
@@ -680,13 +680,12 @@ impl Global {
             .lock()
             .as_mut()
             .unwrap()
-            .consume_temp(TempResource::StagingBuffer(Arc::new(StagingBuffer {
+            .consume_temp(TempResource::StagingBuffer(StagingBuffer {
                 raw: Mutex::new(rank::BLAS, Some(scratch_buffer)),
                 device: device.clone(),
                 size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
                 is_coherent: scratch_mapping.is_coherent,
-                tracking_data: TrackingData::new(device.tracker_indices.staging_buffers.clone()),
-            })));
+            }));
 
         Ok(())
     }
@@ -1298,18 +1297,12 @@ impl Global {
                     .unmap_buffer(&staging_buffer)
                     .map_err(crate::device::DeviceError::from)?;
                 assert!(mapping.is_coherent);
-                let buf = Arc::new(StagingBuffer {
+                Some(StagingBuffer {
                     raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(staging_buffer)),
                     device: device.clone(),
                     size: instance_buffer_staging_source.len() as u64,
                     is_coherent: mapping.is_coherent,
-                    tracking_data: TrackingData::new(
-                        device.tracker_indices.staging_buffers.clone(),
-                    ),
-                });
-                let staging_fid = hub.staging_buffers.prepare(None);
-                staging_fid.assign(buf.clone());
-                Some(buf)
+                })
             }
         } else {
             None
@@ -1491,15 +1484,12 @@ impl Global {
                 .map_err(crate::device::DeviceError::from)?
         };
 
-        let buf = Arc::new(StagingBuffer {
+        let buf = StagingBuffer {
             raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(scratch_buffer)),
             device: device.clone(),
             size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
             is_coherent: scratch_mapping.is_coherent,
-            tracking_data: TrackingData::new(device.tracker_indices.staging_buffers.clone()),
-        });
-        let staging_fid = hub.staging_buffers.prepare(None);
-        staging_fid.assign(buf.clone());
+        };
 
         device
             .pending_writes

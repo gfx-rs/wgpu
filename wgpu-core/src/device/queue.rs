@@ -139,6 +139,8 @@ pub enum TempResource<A: HalApi> {
     StagingBuffer(StagingBuffer<A>),
     DestroyedBuffer(DestroyedBuffer<A>),
     DestroyedTexture(DestroyedTexture<A>),
+    Blas(Arc<Blas<A>>),
+    Tlas(Arc<Tlas<A>>),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a

@@ -44,7 +44,6 @@ use thiserror::Error;
 use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension};
 
 use super::{
-    life::ResourceMaps,
     queue::{self, Queue},
     DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
@@ -57,11 +56,6 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Weak,
     },
-};
-
-use super::{
-    queue::{self, Queue},
-    DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,

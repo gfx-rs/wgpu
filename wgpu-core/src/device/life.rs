@@ -11,7 +11,6 @@ use crate::{
 };
 use smallvec::SmallVec;
 
-use crate::resource::{Blas, Tlas};
 use std::sync::Arc;
 use thiserror::Error;
 
