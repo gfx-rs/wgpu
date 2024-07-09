@@ -4,6 +4,7 @@ use xshell::Shell;
 
 pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
+    let nocapture = args.contains("--nocapture");
     let list = args.contains("--list");
     let retries = args
         .opt_value_from_str("--retries")?
@@ -70,6 +71,12 @@ pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     }
     log::info!("Running cargo tests");
 
+    let nocapture_flags: &[_] = if nocapture {
+        &["--nocapture"]
+    } else {
+        &[]
+    };
+
     shell
         .cmd("cargo")
         .args(llvm_cov_nextest_flags)
@@ -81,8 +88,8 @@ pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
             "--retries",
             &retries,
         ])
+        .args(nocapture_flags)
         .args(args.finish())
-        .quiet()
         .run()
         .context("Tests failed")?;
 
