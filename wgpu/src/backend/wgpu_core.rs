@@ -1651,7 +1651,7 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn buffer_drop(&self, buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
-        wgc::gfx_select!(buffer => self.0.buffer_drop(*buffer, false))
+        wgc::gfx_select!(buffer => self.0.buffer_drop(*buffer))
     }
 
     fn texture_destroy(&self, texture: &Self::TextureId, _texture_data: &Self::TextureData) {
@@ -1660,7 +1660,7 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn texture_drop(&self, texture: &Self::TextureId, _texture_data: &Self::TextureData) {
-        wgc::gfx_select!(texture => self.0.texture_drop(*texture, false))
+        wgc::gfx_select!(texture => self.0.texture_drop(*texture))
     }
 
     fn texture_view_drop(
@@ -1668,7 +1668,7 @@ impl crate::Context for ContextWgpuCore {
         texture_view: &Self::TextureViewId,
         __texture_view_data: &Self::TextureViewData,
     ) {
-        let _ = wgc::gfx_select!(*texture_view => self.0.texture_view_drop(*texture_view, false));
+        let _ = wgc::gfx_select!(*texture_view => self.0.texture_view_drop(*texture_view));
     }
 
     fn sampler_drop(&self, sampler: &Self::SamplerId, _sampler_data: &Self::SamplerData) {

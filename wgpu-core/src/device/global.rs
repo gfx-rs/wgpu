@@ -409,7 +409,7 @@ impl Global {
         buffer.destroy()
     }
 
-    pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
+    pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId) {
         profiling::scope!("Buffer::drop");
         api_log!("Buffer::drop {buffer_id:?}");
 
@@ -431,20 +431,6 @@ impl Global {
             #[cfg(feature = "trace")]
             buffer_id,
         );
-
-        if wait {
-            let Some(last_submit_index) = buffer
-                .device
-                .lock_life()
-                .get_buffer_latest_submission_index(&buffer)
-            else {
-                return;
-            };
-            match buffer.device.wait_for_submit(last_submit_index) {
-                Ok(()) => (),
-                Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
-            }
-        }
     }
 
     pub fn device_create_texture<A: HalApi>(
@@ -601,30 +587,16 @@ impl Global {
         texture.destroy()
     }
 
-    pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
+    pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId) {
         profiling::scope!("Texture::drop");
         api_log!("Texture::drop {texture_id:?}");
 
         let hub = A::hub(self);
 
-        if let Some(texture) = hub.textures.unregister(texture_id) {
+        if let Some(_texture) = hub.textures.unregister(texture_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = texture.device.trace.lock().as_mut() {
+            if let Some(t) = _texture.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTexture(texture_id));
-            }
-
-            if wait {
-                let Some(last_submit_index) = texture
-                    .device
-                    .lock_life()
-                    .get_texture_latest_submission_index(&texture)
-                else {
-                    return;
-                };
-                match texture.device.wait_for_submit(last_submit_index) {
-                    Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for texture {texture_id:?}: {e}"),
-                }
             }
         }
     }
@@ -679,33 +651,16 @@ impl Global {
     pub fn texture_view_drop<A: HalApi>(
         &self,
         texture_view_id: id::TextureViewId,
-        wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
         profiling::scope!("TextureView::drop");
         api_log!("TextureView::drop {texture_view_id:?}");
 
         let hub = A::hub(self);
 
-        if let Some(view) = hub.texture_views.unregister(texture_view_id) {
+        if let Some(_view) = hub.texture_views.unregister(texture_view_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = view.device.trace.lock().as_mut() {
+            if let Some(t) = _view.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTextureView(texture_view_id));
-            }
-
-            if wait {
-                let Some(last_submit_index) = view
-                    .device
-                    .lock_life()
-                    .get_texture_latest_submission_index(&view.parent)
-                else {
-                    return Ok(());
-                };
-                match view.device.wait_for_submit(last_submit_index) {
-                    Ok(()) => (),
-                    Err(e) => {
-                        log::error!("Failed to wait for texture view {texture_view_id:?}: {e}")
-                    }
-                }
             }
         }
         Ok(())
