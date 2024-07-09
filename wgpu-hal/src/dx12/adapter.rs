@@ -134,7 +134,7 @@ impl super::Adapter {
             driver: {
                 let mut i = winnt::LARGE_INTEGER::default();
                 if 0 == unsafe {
-                    adapter.CheckInterfaceSupport(dxgi::IDXGIDevice::uuidof(), &mut i)
+                    adapter.CheckInterfaceSupport(&dxgi::IDXGIDevice::uuidof(), &mut i)
                 } {
                     let quad_part = unsafe { *i.QuadPart() };
                     const MASK: i64 = 0xFFFF;
