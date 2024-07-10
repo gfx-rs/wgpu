@@ -16,10 +16,10 @@ impl super::Validator {
     /// Validates that all handles within `module` are:
     ///
     /// * Valid, in the sense that they contain indices within each arena structure inside the
-    /// [`crate::Module`] type.
+    ///   [`crate::Module`] type.
     /// * No arena contents contain any items that have forward dependencies; that is, the value
-    ///     associated with a handle only may contain references to handles in the same arena that
-    ///     were constructed before it.
+    ///   associated with a handle only may contain references to handles in the same arena that
+    ///   were constructed before it.
     ///
     /// By validating the above conditions, we free up subsequent logic to assume that handle
     /// accesses are infallible.
