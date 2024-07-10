@@ -426,7 +426,7 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Buffer<A: HalApi> {
-    pub(crate) raw: Snatchable<A::Buffer>,
+    pub(crate) raw: Snatchable<Box<dyn hal::DynBuffer>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
@@ -441,11 +441,11 @@ pub struct Buffer<A: HalApi> {
 
 impl<A: HalApi> Drop for Buffer<A> {
     fn drop(&mut self) {
-        if let Some(mut raw) = self.raw.take() {
+        if let Some(raw) = self.raw.take() {
+            use hal::DynDevice as _;
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
-                self.device.raw().destroy_buffer(&mut raw);
+                self.device.raw().destroy_buffer(raw);
             }
         }
     }
@@ -453,7 +453,9 @@ impl<A: HalApi> Drop for Buffer<A> {
 
 impl<A: HalApi> Buffer<A> {
     pub(crate) fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a A::Buffer> {
-        self.raw.get(guard)
+        self.raw
+            .get(guard)
+            .and_then(|raw| raw.as_any().downcast_ref())
     }
 
     pub(crate) fn try_raw<'a>(
@@ -462,6 +464,7 @@ impl<A: HalApi> Buffer<A> {
     ) -> Result<&A::Buffer, DestroyedResourceError> {
         self.raw
             .get(guard)
+            .and_then(|raw| raw.as_any().downcast_ref())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
@@ -760,7 +763,7 @@ crate::impl_trackable!(Buffer);
 /// A buffer that has been marked as destroyed and is staged for actual deletion soon.
 #[derive(Debug)]
 pub struct DestroyedBuffer<A: HalApi> {
-    raw: ManuallyDrop<A::Buffer>,
+    raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     device: Arc<Device<A>>,
     label: String,
     bind_groups: Vec<Weak<BindGroup<A>>>,
@@ -782,10 +785,9 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
 
         resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let mut raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         unsafe {
-            use hal::Device;
-            self.device.raw().destroy_buffer(&mut raw);
+            hal::DynDevice::destroy_buffer(self.device.raw(), raw);
         }
     }
 }

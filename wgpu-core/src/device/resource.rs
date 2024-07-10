@@ -589,7 +589,7 @@ impl<A: HalApi> Device<A> {
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
         let buffer = Buffer {
-            raw: Snatchable::new(buffer),
+            raw: Snatchable::new(Box::new(buffer)),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -686,7 +686,7 @@ impl<A: HalApi> Device<A> {
         desc: &resource::BufferDescriptor,
     ) -> Arc<Buffer<A>> {
         let buffer = Buffer {
-            raw: Snatchable::new(hal_buffer),
+            raw: Snatchable::new(Box::new(hal_buffer)),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
