@@ -78,6 +78,25 @@ impl crate::Api for Api {
     type ComputePipeline = ComputePipeline;
 }
 
+crate::impl_dyn_resource!(
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Fence,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
+
 struct DebugUtils {
     extension: ext::debug_utils::Instance,
     messenger: vk::DebugUtilsMessengerEXT,
@@ -630,6 +649,8 @@ pub struct Buffer {
     raw: vk::Buffer,
     block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
+
+impl crate::DynBuffer for Buffer {}
 
 #[derive(Debug)]
 pub struct AccelerationStructure {

@@ -87,6 +87,25 @@ impl crate::Api for Api {
     type AccelerationStructure = AccelerationStructure;
 }
 
+crate::impl_dyn_resource!(
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Fence,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
+
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
 const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
@@ -406,6 +425,8 @@ pub struct Buffer {
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
+
+impl crate::DynBuffer for Buffer {}
 
 impl crate::BufferBinding<'_, Api> {
     fn resolve_size(&self) -> wgt::BufferAddress {

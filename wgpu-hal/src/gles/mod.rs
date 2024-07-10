@@ -164,6 +164,24 @@ impl crate::Api for Api {
     type ComputePipeline = ComputePipeline;
 }
 
+crate::impl_dyn_resource!(
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Fence,
+    PipelineLayout,
+    QuerySet,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
+
 bitflags::bitflags! {
     /// Flags that affect internal code paths but do not
     /// change the exposed feature set.
@@ -306,6 +324,8 @@ pub struct Buffer {
 unsafe impl Sync for Buffer {}
 #[cfg(send_sync)]
 unsafe impl Send for Buffer {}
+
+impl crate::DynBuffer for Buffer {}
 
 #[derive(Clone, Debug)]
 pub enum TextureInner {

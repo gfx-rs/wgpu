@@ -71,6 +71,24 @@ impl crate::Api for Api {
     type AccelerationStructure = AccelerationStructure;
 }
 
+crate::impl_dyn_resource!(
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Fence,
+    PipelineLayout,
+    QuerySet,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
+
 pub struct Instance {
     managed_metal_layer_delegate: surface::HalManagedMetalLayerDelegate,
 }
@@ -459,6 +477,8 @@ pub struct Buffer {
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
+
+impl crate::DynBuffer for Buffer {}
 
 impl Buffer {
     fn as_raw(&self) -> BufferPtr {

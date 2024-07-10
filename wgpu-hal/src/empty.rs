@@ -40,6 +40,10 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
+crate::impl_dyn_resource!(Context, Encoder, Resource);
+
+impl crate::DynBuffer for Resource {}
+
 impl crate::Instance for Context {
     type A = Api;
 
