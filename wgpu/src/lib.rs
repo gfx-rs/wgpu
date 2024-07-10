@@ -293,6 +293,14 @@ impl MapContext {
 ///
 /// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
 ///
+/// A `Buffer`'s bytes have "interior mutability": functions like
+/// [`Queue::write_buffer`] or [mapping] a buffer for writing only require a
+/// `&Buffer`, not a `&mut Buffer`, even though they modify its contents. `wgpu`
+/// prevents simultaneous reads and writes of buffer contents using run-time
+/// checks.
+///
+/// [mapping]: Buffer#mapping-buffers
+///
 /// # Mapping buffers
 ///
 /// If a `Buffer` is created with the appropriate [`usage`], it can be *mapped*:
@@ -337,43 +345,83 @@ impl MapContext {
 /// attempt to access overlapping ranges, even for shared access only, these
 /// methods panic.
 ///
-/// For example:
-///
-/// ```no_run
-/// # let buffer: wgpu::Buffer = todo!();
-/// let slice = buffer.slice(10..20);
-/// slice.map_async(wgpu::MapMode::Read, |result| {
-///     match result {
-///         Ok(()) => {
-///             let view = slice.get_mapped_range();
-///             // read data from `view`, which dereferences to `&[u8]`
-///         }
-///         Err(e) => {
-///             // handle mapping error
-///         }
-///     }
-/// });
-/// ```
-///
-/// This example calls `Buffer::slice` to obtain a [`BufferSlice`] referring to
-/// the second ten bytes of `buffer`. (To obtain access to the entire buffer,
-/// you could call `buffer.slice(..)`.) The code then calls `map_async` to wait
-/// for the buffer to be available, and finally calls `get_mapped_range` on the
-/// slice to actually get at the bytes.
-///
-/// If using `map_async` directly is awkward, you may find it more convenient to
-/// use [`Queue::write_buffer`] and [`util::DownloadBuffer::read_buffer`].
-/// However, those each have their own tradeoffs; the asynchronous nature of GPU
-/// execution makes it hard to avoid friction altogether.
-///
-/// While a buffer is mapped, you must not submit any commands to the GPU that
-/// access it. You may record command buffers that use the buffer, but you must
-/// not submit such command buffers.
+/// While a buffer is mapped, you may not submit any commands to the GPU that
+/// access it. You may record command buffers that use the buffer, but if you
+/// submit them while the buffer is mapped, submission will panic.
 ///
 /// When you are done using the buffer on the CPU, you must call
 /// [`Buffer::unmap`] to make it available for use by the GPU again. All
 /// [`BufferView`] and [`BufferViewMut`] views referring to the buffer must be
 /// dropped before you unmap it; otherwise, [`Buffer::unmap`] will panic.
+///
+/// # Example
+///
+/// If `buffer` was created with [`BufferUsages::MAP_WRITE`], we could fill it
+/// with `f32` values like this:
+///
+/// ```no_run
+/// # mod bytemuck {
+/// #     pub fn cast_slice_mut(bytes: &mut [u8]) -> &mut [f32] { todo!() }
+/// # }
+/// # let device: wgpu::Device = todo!();
+/// # let buffer: wgpu::Buffer = todo!();
+/// let buffer = std::sync::Arc::new(buffer);
+/// let capturable = buffer.clone();
+/// buffer.slice(..).map_async(wgpu::MapMode::Write, move |result| {
+///     if result.is_ok() {
+///         let mut view = capturable.slice(..).get_mapped_range_mut();
+///         let floats: &mut [f32] = bytemuck::cast_slice_mut(&mut view);
+///         floats.fill(42.0);
+///         drop(view);
+///         capturable.unmap();
+///     }
+/// });
+/// ```
+///
+/// This code takes the following steps:
+///
+/// - First, it moves `buffer` into an [`Arc`], and makes a clone for capture by
+///   the callback passed to [`map_async`]. Since a [`map_async`] callback may be
+///   invoked from another thread, interaction between the callback and the
+///   thread calling [`map_async`] generally requires some sort of shared heap
+///   data like this. In real code, the [`Arc`] would probably own some larger
+///   structure that itself owns `buffer`.
+///
+/// - Then, it calls [`Buffer::slice`] to make a [`BufferSlice`] referring to
+///   the buffer's entire contents.
+///
+/// - Next, it calls [`BufferSlice::map_async`] to request that the bytes to
+///   which the slice refers be made accessible to the CPU ("mapped"). This may
+///   entail waiting for previously enqueued operations on `buffer` to finish.
+///   Although [`map_async`] itself always returns immediately, it saves the
+///   callback function to be invoked later.
+///
+/// - When some later call to [`Device::poll`] or [`Instance::poll_all`] (not
+///   shown in this example) determines that the buffer is mapped and ready for
+///   the CPU to use, it invokes the callback function.
+///
+/// - The callback function calls [`Buffer::slice`] and then
+///   [`BufferSlice::get_mapped_range_mut`] to obtain a [`BufferViewMut`], which
+///   dereferences to a `&mut [u8]` slice referring to the buffer's bytes.
+///
+/// - It then uses the [`bytemuck`] crate to turn the `&mut [u8]` into a `&mut
+///   [f32]`, and calls the slice [`fill`] method to fill the buffer with a
+///   useful value.
+///
+/// - Finally, the callback drops the view and calls [`Buffer::unmap`] to unmap
+///   the buffer. In real code, the callback would also need to do some sort of
+///   synchronization to let the rest of the program know that it has completed
+///   its work.
+///
+/// If using [`map_async`] directly is awkward, you may find it more convenient to
+/// use [`Queue::write_buffer`] and [`util::DownloadBuffer::read_buffer`].
+/// However, those each have their own tradeoffs; the asynchronous nature of GPU
+/// execution makes it hard to avoid friction altogether.
+///
+/// [`Arc`]: std::sync::Arc
+/// [`map_async`]: BufferSlice::map_async
+/// [`bytemuck`]: https://crates.io/crates/bytemuck
+/// [`fill`]: slice::fill
 ///
 /// ## Mapping buffers on the web
 ///
@@ -428,15 +476,22 @@ static_assertions::assert_impl_all!(Buffer: Send, Sync);
 /// let whole_buffer_slice = buffer.slice(..);
 /// ```
 ///
-/// A [`BufferSlice`] is nothing more than a reference to the `Buffer` and a
-/// starting and ending position. To access the slice's contents on the CPU, you
-/// must first [map] the buffer, and then call [`BufferSlice::get_mapped_range`]
-/// or [`BufferSlice::get_mapped_range_mut`] to obtain a view of the slice's
-/// contents, which dereferences to a `&[u8]` or `&mut [u8]`.
+/// You can pass buffer slices to methods like [`RenderPass::set_vertex_buffer`]
+/// and [`RenderPass::set_index_buffer`] to indicate which portion of the buffer
+/// a draw call should consult.
 ///
-/// You can also pass buffer slices to methods like
-/// [`RenderPass::set_vertex_buffer`] and [`RenderPass::set_index_buffer`] to
-/// indicate which data a draw call should consume.
+/// To access the slice's contents on the CPU, you must first [map] the buffer,
+/// and then call [`BufferSlice::get_mapped_range`] or
+/// [`BufferSlice::get_mapped_range_mut`] to obtain a view of the slice's
+/// contents. See the documentation on [mapping][map] for more details,
+/// including example code.
+///
+/// Unlike a Rust shared slice `&[T]`, whose existence guarantees that
+/// nobody else is modifying the `T` values to which it refers, a
+/// [`BufferSlice`] doesn't guarantee that the buffer's contents aren't
+/// changing. You can still record and submit commands operating on the
+/// buffer while holding a [`BufferSlice`]. A [`BufferSlice`] simply
+/// represents a certain range of the buffer's bytes.
 ///
 /// The `BufferSlice` type is unique to the Rust API of `wgpu`. In the WebGPU
 /// specification, an offset and size are specified as arguments to each call
@@ -3466,7 +3521,7 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     (offset, size)
 }
 
-/// Read only view into a mapped buffer.
+/// A read-only view of a mapped buffer's bytes.
 ///
 /// To get a `BufferView`, first [map] the buffer, and then
 /// call `buffer.slice(range).get_mapped_range()`.
@@ -3475,17 +3530,20 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 /// slice methods to access the buffer's contents. It also implements
 /// `AsRef<[u8]>`, if that's more convenient.
 ///
-/// If you try to create overlapping views of a buffer, mutable or
-/// otherwise, `get_mapped_range` will panic.
+/// Before the buffer can be unmapped, all `BufferView`s observing it
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+///
+/// For example code, see the documentation on [mapping buffers][map].
 ///
 /// [map]: Buffer#mapping-buffers
+/// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
     data: Box<dyn crate::context::BufferMappedRange>,
 }
 
-/// Write only view into mapped buffer.
+/// A write-only view of a mapped buffer's bytes.
 ///
 /// To get a `BufferViewMut`, first [map] the buffer, and then
 /// call `buffer.slice(range).get_mapped_range_mut()`.
@@ -3497,8 +3555,10 @@ pub struct BufferView<'a> {
 /// It is possible to read the buffer using this view, but doing so is not
 /// recommended, as it is likely to be slow.
 ///
-/// If you try to create overlapping views of a buffer, mutable or
-/// otherwise, `get_mapped_range_mut` will panic.
+/// Before the buffer can be unmapped, all `BufferViewMut`s observing it
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+///
+/// For example code, see the documentation on [mapping buffers][map].
 ///
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
@@ -3608,8 +3668,20 @@ impl Buffer {
         }
     }
 
-    /// Use only a portion of this Buffer for a given operation. Choosing a range with no end
-    /// will use the rest of the buffer. Using a totally unbounded range will use the entire buffer.
+    /// Return a slice of a [`Buffer`]'s bytes.
+    ///
+    /// Return a [`BufferSlice`] referring to the portion of `self`'s contents
+    /// indicated by `bounds`. Regardless of what sort of data `self` stores,
+    /// `bounds` start and end are given in bytes.
+    ///
+    /// A [`BufferSlice`] can be used to supply vertex and index data, or to map
+    /// buffer contents for access from the CPU. See the [`BufferSlice`]
+    /// documentation for details.
+    ///
+    /// The `range` argument can be half or fully unbounded: for example,
+    /// `buffer.slice(..)` refers to the entire buffer, and `buffer.slice(n..)`
+    /// refers to the portion starting at the `n`th byte and extending to the
+    /// end of the buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds);
         BufferSlice {
@@ -3683,8 +3755,20 @@ impl<'a> BufferSlice<'a> {
         )
     }
 
-    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    /// Gain read-only access to the bytes of a [mapped] [`Buffer`].
+    ///
+    /// Return a [`BufferView`] referring to the buffer range represented by
+    /// `self`. See the documentation for [`BufferView`] for details.
+    ///
+    /// # Panics
+    ///
+    /// - This panics if the buffer to which `self` refers is not currently
+    ///   [mapped].
+    ///
+    /// - If you try to create overlapping views of a buffer, mutable or
+    ///   otherwise, `get_mapped_range` will panic.
+    ///
+    /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range(&self) -> BufferView<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = DynContext::buffer_get_mapped_range(
@@ -3717,8 +3801,20 @@ impl<'a> BufferSlice<'a> {
             })
     }
 
-    /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    /// Gain write access to the bytes of a [mapped] [`Buffer`].
+    ///
+    /// Return a [`BufferViewMut`] referring to the buffer range represented by
+    /// `self`. See the documentation for [`BufferViewMut`] for more details.
+    ///
+    /// # Panics
+    ///
+    /// - This panics if the buffer to which `self` refers is not currently
+    ///   [mapped].
+    ///
+    /// - If you try to create overlapping views of a buffer, mutable or
+    ///   otherwise, `get_mapped_range_mut` will panic.
+    ///
+    /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = DynContext::buffer_get_mapped_range(
