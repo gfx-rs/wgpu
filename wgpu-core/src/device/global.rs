@@ -1532,8 +1532,17 @@ impl Global {
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
                 pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
-                let group_ids = &mut ids.group_ids.iter();
-                for (bgl_id, bgl) in group_ids.zip(pipeline.layout.bind_group_layouts.iter()) {
+                let mut group_ids = ids.group_ids.iter();
+                // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
+                // the first iterator before realizing that the second iterator has finished.
+                // The `pipeline.layout.bind_group_layouts` iterator will always be shorter than `ids.group_ids`,
+                // so using it as the first iterator for `.zip()` will work properly.
+                for (bgl, bgl_id) in pipeline
+                    .layout
+                    .bind_group_layouts
+                    .iter()
+                    .zip(&mut group_ids)
+                {
                     bgl_guard.insert(*bgl_id, bgl.clone());
                 }
                 for bgl_id in group_ids {
@@ -1721,8 +1730,17 @@ impl Global {
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
                 pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
-                let group_ids = &mut ids.group_ids.iter();
-                for (bgl_id, bgl) in group_ids.zip(pipeline.layout.bind_group_layouts.iter()) {
+                let mut group_ids = ids.group_ids.iter();
+                // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
+                // the first iterator before realizing that the second iterator has finished.
+                // The `pipeline.layout.bind_group_layouts` iterator will always be shorter than `ids.group_ids`,
+                // so using it as the first iterator for `.zip()` will work properly.
+                for (bgl, bgl_id) in pipeline
+                    .layout
+                    .bind_group_layouts
+                    .iter()
+                    .zip(&mut group_ids)
+                {
                     bgl_guard.insert(*bgl_id, bgl.clone());
                 }
                 for bgl_id in group_ids {
