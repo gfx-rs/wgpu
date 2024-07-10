@@ -306,6 +306,18 @@ unsafe impl Sync for Buffer {}
 #[cfg(send_sync)]
 unsafe impl Send for Buffer {}
 
+impl crate::DynResource for Buffer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynBuffer for Buffer {}
+
 #[derive(Clone, Debug)]
 pub enum TextureInner {
     Renderbuffer {

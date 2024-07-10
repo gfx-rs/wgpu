@@ -460,6 +460,18 @@ pub struct Buffer {
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
+impl crate::DynResource for Buffer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynBuffer for Buffer {}
+
 impl Buffer {
     fn as_raw(&self) -> BufferPtr {
         unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }

@@ -631,6 +631,18 @@ pub struct Buffer {
     block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
+impl crate::DynResource for Buffer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynBuffer for Buffer {}
+
 #[derive(Debug)]
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,

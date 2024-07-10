@@ -262,6 +262,11 @@ pub mod api {
     pub use super::vulkan::Api as Vulkan;
 }
 
+mod dynamic;
+
+pub use dynamic::DynBuffer;
+pub(crate) use dynamic::DynResource;
+
 use std::{
     borrow::{Borrow, Cow},
     fmt,
@@ -397,7 +402,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     /// [`CommandEncoder`]: Api::CommandEncoder
     type CommandBuffer: WasmNotSendSync + fmt::Debug;
 
-    type Buffer: fmt::Debug + WasmNotSendSync + 'static;
+    type Buffer: DynBuffer;
     type Texture: fmt::Debug + WasmNotSendSync + 'static;
     type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
     type TextureView: fmt::Debug + WasmNotSendSync;

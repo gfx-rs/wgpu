@@ -407,6 +407,18 @@ pub struct Buffer {
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
+impl crate::DynResource for Buffer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynBuffer for Buffer {}
+
 impl crate::BufferBinding<'_, Api> {
     fn resolve_size(&self) -> wgt::BufferAddress {
         match self.size {
