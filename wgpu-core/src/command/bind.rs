@@ -144,7 +144,10 @@ mod compat {
 
                         let mut expected_bgl_entries = expected_bgl.entries.iter();
                         let mut assigned_bgl_entries = assigned_bgl.entries.iter();
-                        let zipped = (&mut expected_bgl_entries).zip(&mut assigned_bgl_entries);
+                        let zipped = crate::utils::ZipWithProperAdvance::new(
+                            &mut expected_bgl_entries,
+                            &mut assigned_bgl_entries,
+                        );
 
                         for ((&binding, expected_entry), (_, assigned_entry)) in zipped {
                             if assigned_entry.visibility != expected_entry.visibility {
