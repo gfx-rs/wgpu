@@ -1023,11 +1023,11 @@ impl<A: hal::Api> Example<A> {
             }
 
             self.device.destroy_bind_group(self.bind_group);
-            self.device.destroy_buffer(self.scratch_buffer);
-            self.device.destroy_buffer(self.instances_buffer);
-            self.device.destroy_buffer(self.indices_buffer);
-            self.device.destroy_buffer(self.vertices_buffer);
-            self.device.destroy_buffer(self.uniform_buffer);
+            self.device.destroy_buffer(&mut self.scratch_buffer);
+            self.device.destroy_buffer(&mut self.instances_buffer);
+            self.device.destroy_buffer(&mut self.indices_buffer);
+            self.device.destroy_buffer(&mut self.vertices_buffer);
+            self.device.destroy_buffer(&mut self.uniform_buffer);
             self.device.destroy_acceleration_structure(self.tlas);
             self.device.destroy_acceleration_structure(self.blas);
             self.device.destroy_texture_view(self.texture_view);

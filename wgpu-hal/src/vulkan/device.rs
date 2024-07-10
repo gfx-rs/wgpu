@@ -922,9 +922,9 @@ impl crate::Device for super::Device {
             block: Some(Mutex::new(block)),
         })
     }
-    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+    unsafe fn destroy_buffer(&self, buffer: &mut super::Buffer) {
         unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
-        if let Some(block) = buffer.block {
+        if let Some(block) = buffer.block.take() {
             let block = block.into_inner();
             self.counters.buffer_memory.sub(block.size() as isize);
             unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };

@@ -400,11 +400,11 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
+    unsafe fn destroy_buffer(&self, buffer: &mut super::Buffer) {
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
             // Resource should be dropped before free suballocation
-            drop(buffer);
+            buffer.resource = ComPtr::null();
 
             super::suballocation::free_buffer_allocation(
                 self,

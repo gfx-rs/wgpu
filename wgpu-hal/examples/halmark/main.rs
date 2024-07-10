@@ -289,7 +289,7 @@ impl<A: hal::Api> Example<A> {
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
         };
-        let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
+        let mut staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
             let mapping = device
                 .map_buffer(&staging_buffer, 0..staging_buffer_desc.size)
@@ -502,7 +502,7 @@ impl<A: hal::Api> Example<A> {
                 .submit(&[&init_cmd], &[], (&mut fence, init_fence_value))
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
-            device.destroy_buffer(staging_buffer);
+            device.destroy_buffer(&mut staging_buffer);
             cmd_encoder.reset_all(iter::once(init_cmd));
             fence
         };
@@ -563,8 +563,8 @@ impl<A: hal::Api> Example<A> {
 
             self.device.destroy_bind_group(self.local_group);
             self.device.destroy_bind_group(self.global_group);
-            self.device.destroy_buffer(self.local_buffer);
-            self.device.destroy_buffer(self.global_buffer);
+            self.device.destroy_buffer(&mut self.local_buffer);
+            self.device.destroy_buffer(&mut self.global_buffer);
             self.device.destroy_texture_view(self.texture_view);
             self.device.destroy_texture(self.texture);
             self.device.destroy_sampler(self.sampler);

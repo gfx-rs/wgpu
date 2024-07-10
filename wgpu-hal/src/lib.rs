@@ -264,8 +264,8 @@ pub mod api {
 
 mod dynamic;
 
-pub use dynamic::DynBuffer;
 pub(crate) use dynamic::DynResource;
+pub use dynamic::{DynBuffer, DynDevice};
 
 use std::{
     borrow::{Borrow, Cow},
@@ -672,7 +672,8 @@ pub trait Device: WasmNotSendSync {
     /// # Safety
     ///
     /// - The given `buffer` must not currently be mapped.
-    unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer);
+    /// - The `buffer` musn't be used afterwards.
+    unsafe fn destroy_buffer(&self, buffer: &mut <Self::A as Api>::Buffer);
 
     /// Return a pointer to CPU memory mapping the contents of `buffer`.
     ///

@@ -352,7 +352,7 @@ impl crate::Device for super::Device {
             })
         })
     }
-    unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
+    unsafe fn destroy_buffer(&self, _buffer: &mut super::Buffer) {
         self.counters.buffers.sub(1);
     }
 

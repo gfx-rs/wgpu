@@ -175,7 +175,7 @@ impl<A: HalApi> Drop for Device<A> {
         pending_writes.dispose(&raw);
         self.command_allocator.dispose(&raw);
         unsafe {
-            raw.destroy_buffer(self.zero_buffer.take().unwrap());
+            raw.destroy_buffer(&mut self.zero_buffer.take().unwrap());
             raw.destroy_fence(self.fence.write().take().unwrap());
             let queue = self.queue_to_drop.take().unwrap();
             raw.exit(queue);
