@@ -188,6 +188,7 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
   [target.'cfg(target_vendor = "apple")']
   rustflags = ["-C", "link-args=-weak_framework Metal -weak_framework QuartzCore -weak_framework CoreGraphics"]
   ```
+  By @madsmtm in [#5752](https://github.com/gfx-rs/wgpu/pull/5752)
 
 ### Bug Fixes
 
