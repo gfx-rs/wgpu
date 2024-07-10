@@ -36,7 +36,6 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{CommandEncoder as _, Device as _};
 use once_cell::sync::OnceCell;
 
 use smallvec::SmallVec;
@@ -45,7 +44,6 @@ use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimensi
 
 use std::{
     borrow::Cow,
-    iter,
     mem::ManuallyDrop,
     num::NonZeroU32,
     sync::{
@@ -80,15 +78,15 @@ use super::{
 /// When locking pending_writes please check that trackers is not locked
 /// trackers should be locked only when needed for the shortest time possible
 pub struct Device<A: HalApi> {
-    raw: ManuallyDrop<A::Device>,
+    raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
     pub(crate) adapter: Arc<Adapter<A>>,
     pub(crate) queue: OnceCell<Weak<Queue<A>>>,
-    queue_to_drop: OnceCell<A::Queue>,
-    pub(crate) zero_buffer: ManuallyDrop<A::Buffer>,
+    queue_to_drop: OnceCell<Box<dyn hal::DynQueue>>,
+    pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
 
-    pub(crate) command_allocator: command::CommandAllocator<A>,
+    pub(crate) command_allocator: command::CommandAllocator,
 
     /// The index of the last command submission that was attempted.
     ///
@@ -112,7 +110,7 @@ pub struct Device<A: HalApi> {
 
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
     // `fence` lock to avoid deadlocks.
-    pub(crate) fence: RwLock<ManuallyDrop<A::Fence>>,
+    pub(crate) fence: RwLock<ManuallyDrop<Box<dyn hal::DynFence>>>,
     pub(crate) snatchable_lock: SnatchLock,
 
     /// Is this device valid? Valid is closely associated with "lose the device",
@@ -177,8 +175,8 @@ impl<A: HalApi> Drop for Device<A> {
         let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        pending_writes.dispose(&raw);
-        self.command_allocator.dispose(&raw);
+        pending_writes.dispose(raw.as_ref());
+        self.command_allocator.dispose(raw.as_ref());
         unsafe {
             raw.destroy_buffer(zero_buffer);
             raw.destroy_fence(fence);
@@ -197,8 +195,8 @@ pub enum CreateDeviceError {
 }
 
 impl<A: HalApi> Device<A> {
-    pub(crate) fn raw(&self) -> &A::Device {
-        &self.raw
+    pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
+        self.raw.as_ref()
     }
     pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
         if self.features.contains(feature) {
@@ -222,8 +220,8 @@ impl<A: HalApi> Device<A> {
 
 impl<A: HalApi> Device<A> {
     pub(crate) fn new(
-        raw_device: A::Device,
-        raw_queue: &A::Queue,
+        raw_device: Box<dyn hal::DynDevice>,
+        raw_queue: &dyn hal::DynQueue,
         adapter: &Arc<Adapter<A>>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
@@ -238,7 +236,7 @@ impl<A: HalApi> Device<A> {
 
         let command_allocator = command::CommandAllocator::new();
         let pending_encoder = command_allocator
-            .acquire_encoder(&raw_device, raw_queue)
+            .acquire_encoder(raw_device.as_ref(), raw_queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
         let mut pending_writes = PendingWrites::<A>::new(pending_encoder);
 
@@ -257,19 +255,19 @@ impl<A: HalApi> Device<A> {
         unsafe {
             pending_writes
                 .command_encoder
-                .transition_buffers(iter::once(hal::BufferBarrier {
-                    buffer: &zero_buffer,
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: zero_buffer.as_ref(),
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                }));
+                }]);
             pending_writes
                 .command_encoder
-                .clear_buffer(&zero_buffer, 0..ZERO_BUFFER_SIZE);
+                .clear_buffer(zero_buffer.as_ref(), 0..ZERO_BUFFER_SIZE);
             pending_writes
                 .command_encoder
-                .transition_buffers(iter::once(hal::BufferBarrier {
-                    buffer: &zero_buffer,
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: zero_buffer.as_ref(),
                     usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
-                }));
+                }]);
         }
 
         let alignments = adapter.raw.capabilities.alignments.clone();
@@ -335,7 +333,7 @@ impl<A: HalApi> Device<A> {
         }
     }
 
-    pub(crate) fn release_queue(&self, queue: A::Queue) {
+    pub(crate) fn release_queue(&self, queue: Box<dyn hal::DynQueue>) {
         assert!(self.queue_to_drop.set(queue).is_ok());
     }
 
@@ -364,7 +362,6 @@ impl<A: HalApi> Device<A> {
                     resource_log!("Destroy raw {}", view.error_ident());
 
                     unsafe {
-                        use hal::Device;
                         self.raw().destroy_texture_view(raw_view);
                     }
                 }
@@ -380,7 +377,6 @@ impl<A: HalApi> Device<A> {
                     resource_log!("Destroy raw {}", bind_group.error_ident());
 
                     unsafe {
-                        use hal::Device;
                         self.raw().destroy_bind_group(raw_bind_group);
                     }
                 }
@@ -411,7 +407,7 @@ impl<A: HalApi> Device<A> {
     ///   return it to our callers.)
     pub(crate) fn maintain<'this>(
         &'this self,
-        fence: crate::lock::RwLockReadGuard<ManuallyDrop<A::Fence>>,
+        fence: crate::lock::RwLockReadGuard<ManuallyDrop<Box<dyn hal::DynFence>>>,
         maintain: wgt::Maintain<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
@@ -440,7 +436,7 @@ impl<A: HalApi> Device<A> {
                 .load(Ordering::Acquire),
             wgt::Maintain::Poll => unsafe {
                 self.raw()
-                    .get_fence_value(&fence)
+                    .get_fence_value(fence.as_ref())
                     .map_err(DeviceError::from)?
             },
         };
@@ -449,7 +445,7 @@ impl<A: HalApi> Device<A> {
         if maintain.is_wait() {
             unsafe {
                 self.raw()
-                    .wait(&fence, submission_index, CLEANUP_WAIT_MS)
+                    .wait(fence.as_ref(), submission_index, CLEANUP_WAIT_MS)
                     .map_err(DeviceError::from)?
             };
         }
@@ -654,7 +650,7 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_texture_from_hal(
         self: &Arc<Self>,
-        hal_texture: A::Texture,
+        hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture<A>>, resource::CreateTextureError> {
         let format_features = self
@@ -687,7 +683,7 @@ impl<A: HalApi> Device<A> {
         desc: &resource::BufferDescriptor,
     ) -> Arc<Buffer<A>> {
         let buffer = Buffer {
-            raw: Snatchable::new(hal_buffer),
+            raw: Snatchable::new(Box::new(hal_buffer)),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -972,8 +968,10 @@ impl<A: HalApi> Device<A> {
                                 },
                             };
                             clear_views.push(ManuallyDrop::new(
-                                unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
-                                    .map_err(DeviceError::from)?,
+                                unsafe {
+                                    self.raw().create_texture_view(raw_texture.as_ref(), &desc)
+                                }
+                                .map_err(DeviceError::from)?,
                             ));
                         };
                     }
@@ -1889,7 +1887,8 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         limits: &wgt::Limits,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<hal::BufferBinding<'a, A::Buffer>, binding_model::CreateBindGroupError> {
+    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, binding_model::CreateBindGroupError>
+    {
         use crate::binding_model::CreateBindGroupError as Error;
 
         let (binding_ty, dynamic, min_size) = match decl.ty {
@@ -2021,7 +2020,7 @@ impl<A: HalApi> Device<A> {
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         sampler: &'a Arc<Sampler<A>>,
-    ) -> Result<&'a A::Sampler, binding_model::CreateBindGroupError> {
+    ) -> Result<&'a dyn hal::DynSampler, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
         used.samplers.insert_single(sampler.clone());
@@ -2072,7 +2071,8 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<hal::TextureBinding<'a, A::TextureView>, binding_model::CreateBindGroupError> {
+    ) -> Result<hal::TextureBinding<'a, dyn hal::DynTextureView>, binding_model::CreateBindGroupError>
+    {
         view.same_device(self)?;
 
         let (pub_usage, internal_use) = self.texture_use_parameters(
@@ -2389,14 +2389,14 @@ impl<A: HalApi> Device<A> {
                     .unwrap();
                 match (sample_type, compat_sample_type) {
                     (Tst::Uint, Tst::Uint) |
-                    (Tst::Sint, Tst::Sint) |
-                    (Tst::Depth, Tst::Depth) |
-                    // if we expect non-filterable, accept anything float
-                    (Tst::Float { filterable: false }, Tst::Float { .. }) |
-                    // if we expect filterable, require it
-                    (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
-                    // if we expect non-filterable, also accept depth
-                    (Tst::Float { filterable: false }, Tst::Depth) => {}
+                        (Tst::Sint, Tst::Sint) |
+                        (Tst::Depth, Tst::Depth) |
+                        // if we expect non-filterable, accept anything float
+                        (Tst::Float { filterable: false }, Tst::Float { .. }) |
+                        // if we expect filterable, require it
+                        (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
+                        // if we expect non-filterable, also accept depth
+                        (Tst::Float { filterable: false }, Tst::Depth) => {}
                     // if we expect filterable, also accept Float that is defined as
                     // unfilterable if filterable feature is explicitly enabled (only hit
                     // if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is
@@ -2999,7 +2999,7 @@ impl<A: HalApi> Device<A> {
                                     break;
                                 } else {
                                     return Err(pipeline::CreateRenderPipelineError
-                            ::BlendFactorOnUnsupportedTarget { factor, target: i as u32 });
+                                        ::BlendFactorOnUnsupportedTarget { factor, target: i as u32 });
                                 }
                             }
                         }
@@ -3491,9 +3491,9 @@ impl<A: HalApi> Device<A> {
         submission_index: crate::SubmissionIndex,
     ) -> Result<(), DeviceError> {
         let fence = self.fence.read();
-        let last_done_index = unsafe { self.raw().get_fence_value(&fence)? };
+        let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref())? };
         if last_done_index < submission_index {
-            unsafe { self.raw().wait(&fence, submission_index, !0)? };
+            unsafe { self.raw().wait(fence.as_ref(), submission_index, !0)? };
             drop(fence);
             let closures = self
                 .lock_life()
@@ -3622,7 +3622,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer<A>) {
         let mut baked = cmd_buf.extract_baked_commands();
         unsafe {
-            baked.encoder.reset_all(baked.list.into_iter());
+            baked.encoder.reset_all(baked.list);
         }
         unsafe {
             self.raw().destroy_command_encoder(baked.encoder);
@@ -3637,7 +3637,8 @@ impl<A: HalApi> Device<A> {
             .load(Ordering::Acquire);
         if let Err(error) = unsafe {
             let fence = self.fence.read();
-            self.raw().wait(&fence, current_index, CLEANUP_WAIT_MS)
+            self.raw()
+                .wait(fence.as_ref(), current_index, CLEANUP_WAIT_MS)
         } {
             log::error!("failed to wait for the device: {error}");
         }

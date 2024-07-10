@@ -34,7 +34,6 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
@@ -461,7 +460,7 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi> {
 
     device: &'cmd_buf Arc<Device<A>>,
 
-    raw_encoder: &'raw_encoder mut A::CommandEncoder,
+    raw_encoder: &'raw_encoder mut dyn hal::DynCommandEncoder,
 
     tracker: &'cmd_buf mut Tracker<A>,
     buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction<A>>,
@@ -826,7 +825,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
         mut depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment<A>>,
         mut timestamp_writes: Option<ArcPassTimestampWrites<A>>,
         mut occlusion_query_set: Option<Arc<QuerySet<A>>>,
-        encoder: &mut CommandEncoder<A>,
+        encoder: &mut CommandEncoder,
         trackers: &mut Tracker<A>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         pending_query_resets: &mut QueryResetMap<A>,
@@ -1255,7 +1254,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
 
     fn finish(
         mut self,
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
     ) -> Result<(UsageScope<'d, A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
@@ -1298,7 +1297,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
                     hal::AttachmentOps::STORE,                            // clear depth
                 )
             };
-            let desc = hal::RenderPassDescriptor {
+            let desc = hal::RenderPassDescriptor::<'_, _, dyn hal::DynTextureView> {
                 label: Some("(wgpu internal) Zero init discarded depth/stencil aspect"),
                 extent: view.render_extent.unwrap(),
                 sample_count: view.samples,
@@ -1632,8 +1631,6 @@ impl Global {
             tracker.buffers.set_size(indices.buffers.size());
             tracker.textures.set_size(indices.textures.size());
 
-            let raw = &mut encoder.raw;
-
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
                 binder: Binder::new(),
@@ -1649,7 +1646,7 @@ impl Global {
                 snatch_guard,
 
                 device,
-                raw_encoder: raw,
+                raw_encoder: encoder.raw.as_mut(),
                 tracker,
                 buffer_memory_init_actions,
                 texture_memory_actions,
@@ -2179,7 +2176,7 @@ fn set_index_buffer<A: HalApi>(
         size,
     };
     unsafe {
-        state.raw_encoder.set_index_buffer(bb, index_format);
+        hal::DynCommandEncoder::set_index_buffer(state.raw_encoder, bb, index_format);
     }
     Ok(())
 }
@@ -2244,7 +2241,7 @@ fn set_vertex_buffer<A: HalApi>(
         size,
     };
     unsafe {
-        state.raw_encoder.set_vertex_buffer(slot, bb);
+        hal::DynCommandEncoder::set_vertex_buffer(state.raw_encoder, slot, bb);
     }
     state.vertex.update_limits();
     Ok(())

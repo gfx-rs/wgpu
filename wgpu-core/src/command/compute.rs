@@ -26,8 +26,6 @@ use crate::{
     Label,
 };
 
-use hal::CommandEncoder as _;
-
 use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
 
@@ -212,7 +210,7 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi> {
 
     device: &'cmd_buf Arc<Device<A>>,
 
-    raw_encoder: &'raw_encoder mut A::CommandEncoder,
+    raw_encoder: &'raw_encoder mut dyn hal::DynCommandEncoder,
 
     tracker: &'cmd_buf mut Tracker<A>,
     buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction<A>>,
@@ -485,40 +483,41 @@ impl Global {
         state.tracker.buffers.set_size(indices.buffers.size());
         state.tracker.textures.set_size(indices.textures.size());
 
-        let timestamp_writes = if let Some(tw) = timestamp_writes.take() {
-            tw.query_set
-                .same_device_as(cmd_buf)
-                .map_pass_err(pass_scope)?;
+        let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
+            if let Some(tw) = timestamp_writes.take() {
+                tw.query_set
+                    .same_device_as(cmd_buf)
+                    .map_pass_err(pass_scope)?;
 
-            let query_set = state.tracker.query_sets.insert_single(tw.query_set);
+                let query_set = state.tracker.query_sets.insert_single(tw.query_set);
 
-            // Unlike in render passes we can't delay resetting the query sets since
-            // there is no auxiliary pass.
-            let range = if let (Some(index_a), Some(index_b)) =
-                (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
-            {
-                Some(index_a.min(index_b)..index_a.max(index_b) + 1)
-            } else {
-                tw.beginning_of_pass_write_index
-                    .or(tw.end_of_pass_write_index)
-                    .map(|i| i..i + 1)
-            };
-            // Range should always be Some, both values being None should lead to a validation error.
-            // But no point in erroring over that nuance here!
-            if let Some(range) = range {
-                unsafe {
-                    state.raw_encoder.reset_queries(query_set.raw(), range);
+                // Unlike in render passes we can't delay resetting the query sets since
+                // there is no auxiliary pass.
+                let range = if let (Some(index_a), Some(index_b)) =
+                    (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
+                {
+                    Some(index_a.min(index_b)..index_a.max(index_b) + 1)
+                } else {
+                    tw.beginning_of_pass_write_index
+                        .or(tw.end_of_pass_write_index)
+                        .map(|i| i..i + 1)
+                };
+                // Range should always be Some, both values being None should lead to a validation error.
+                // But no point in erroring over that nuance here!
+                if let Some(range) = range {
+                    unsafe {
+                        state.raw_encoder.reset_queries(query_set.raw(), range);
+                    }
                 }
-            }
 
-            Some(hal::PassTimestampWrites {
-                query_set: query_set.raw(),
-                beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                end_of_pass_write_index: tw.end_of_pass_write_index,
-            })
-        } else {
-            None
-        };
+                Some(hal::PassTimestampWrites {
+                    query_set: query_set.raw(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                })
+            } else {
+                None
+            };
 
         let hal_desc = hal::ComputePassDescriptor {
             label: hal_label(base.label.as_deref(), self.instance.flags),

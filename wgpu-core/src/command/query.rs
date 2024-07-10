@@ -1,5 +1,3 @@
-use hal::CommandEncoder as _;
-
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
@@ -44,7 +42,7 @@ impl<A: HalApi> QueryResetMap<A> {
         std::mem::replace(&mut vec_pair.0[query as usize], true)
     }
 
-    pub fn reset_queries(&mut self, raw_encoder: &mut A::CommandEncoder) {
+    pub fn reset_queries(&mut self, raw_encoder: &mut dyn hal::DynCommandEncoder) {
         for (_, (state, query_set)) in self.map.drain() {
             debug_assert_eq!(state.len(), query_set.desc.count as usize);
 
@@ -199,7 +197,7 @@ impl<A: HalApi> QuerySet<A> {
 
     pub(super) fn validate_and_write_timestamp(
         self: &Arc<Self>,
-        raw_encoder: &mut A::CommandEncoder,
+        raw_encoder: &mut dyn hal::DynCommandEncoder,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
     ) -> Result<(), QueryUseError> {
@@ -220,7 +218,7 @@ impl<A: HalApi> QuerySet<A> {
 
 pub(super) fn validate_and_begin_occlusion_query<A: HalApi>(
     query_set: Arc<QuerySet<A>>,
-    raw_encoder: &mut A::CommandEncoder,
+    raw_encoder: &mut dyn hal::DynCommandEncoder,
     tracker: &mut StatelessTracker<QuerySet<A>>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap<A>>,
@@ -251,7 +249,7 @@ pub(super) fn validate_and_begin_occlusion_query<A: HalApi>(
 }
 
 pub(super) fn end_occlusion_query<A: HalApi>(
-    raw_encoder: &mut A::CommandEncoder,
+    raw_encoder: &mut dyn hal::DynCommandEncoder,
     active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set, query_index)) = active_query.take() {
@@ -264,7 +262,7 @@ pub(super) fn end_occlusion_query<A: HalApi>(
 
 pub(super) fn validate_and_begin_pipeline_statistics_query<A: HalApi>(
     query_set: Arc<QuerySet<A>>,
-    raw_encoder: &mut A::CommandEncoder,
+    raw_encoder: &mut dyn hal::DynCommandEncoder,
     tracker: &mut StatelessTracker<QuerySet<A>>,
     cmd_buf: &CommandBuffer<A>,
     query_index: u32,
@@ -302,7 +300,7 @@ pub(super) fn validate_and_begin_pipeline_statistics_query<A: HalApi>(
 }
 
 pub(super) fn end_pipeline_statistics_query<A: HalApi>(
-    raw_encoder: &mut A::CommandEncoder,
+    raw_encoder: &mut dyn hal::DynCommandEncoder,
     active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set, query_index)) = active_query.take() {
@@ -477,7 +475,7 @@ impl Global {
         let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
 
         unsafe {
-            raw_encoder.transition_buffers(dst_barrier.into_iter());
+            raw_encoder.transition_buffers(dst_barrier.as_slice());
             raw_encoder.copy_query_results(
                 query_set.raw(),
                 start_query..end_query,

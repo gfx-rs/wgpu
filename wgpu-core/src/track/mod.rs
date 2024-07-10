@@ -261,7 +261,7 @@ impl PendingTransition<hal::BufferUses> {
         self,
         buf: &'a resource::Buffer<A>,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> hal::BufferBarrier<'a, A::Buffer> {
+    ) -> hal::BufferBarrier<'a, dyn hal::DynBuffer> {
         let buffer = buf.raw(snatch_guard).expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
@@ -272,10 +272,10 @@ impl PendingTransition<hal::BufferUses> {
 
 impl PendingTransition<hal::TextureUses> {
     /// Produce the hal barrier corresponding to the transition.
-    pub fn into_hal<'a, T: hal::DynTexture + ?Sized>(
+    pub fn into_hal(
         self,
-        texture: &'a T,
-    ) -> hal::TextureBarrier<'a, T> {
+        texture: &dyn hal::DynTexture,
+    ) -> hal::TextureBarrier<'_, dyn hal::DynTexture> {
         // These showing up in a barrier is always a bug
         strict_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
         strict_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
