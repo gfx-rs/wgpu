@@ -170,6 +170,7 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
   -writer.write(&module, &module_info);
   +writer.write(&module, &module_info, None);
   ```
+- HLSL & MSL output can now be added conditionally on the target via the `msl-out-if-target-apple` and `hlsl-out-if-target-windows` features. This is used in wgpu-hal to no longer compile with MSL output when `metal` is enabled & MacOS isn't targeted and no longer compile with HLSL output when `dx12` is enabled & Windows isn't targeted. By @wumpf in [#5919](https://github.com/gfx-rs/wgpu/pull/5919)
 
 #### WebGPU
 
