@@ -39,7 +39,6 @@ use crate::track::{DeviceTracker, Tracker, UsageScope};
 use crate::LabelHelpers;
 use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
 
-use hal::CommandEncoder as _;
 use thiserror::Error;
 
 #[cfg(feature = "trace")]
@@ -115,7 +114,7 @@ pub(crate) enum CommandEncoderStatus {
 /// [rce]: hal::Api::CommandEncoder
 /// [rcb]: hal::Api::CommandBuffer
 /// [`CommandEncoderId`]: crate::id::CommandEncoderId
-pub(crate) struct CommandEncoder<A: HalApi> {
+pub(crate) struct CommandEncoder {
     /// The underlying `wgpu_hal` [`CommandEncoder`].
     ///
     /// Successfully executed command buffers' encoders are saved in a
@@ -123,7 +122,7 @@ pub(crate) struct CommandEncoder<A: HalApi> {
     ///
     /// [`CommandEncoder`]: hal::Api::CommandEncoder
     /// [`CommandAllocator`]: crate::command::CommandAllocator
-    raw: A::CommandEncoder,
+    raw: Box<dyn hal::DynCommandEncoder>,
 
     /// All the raw command buffers for our owning [`CommandBuffer`], in
     /// submission order.
@@ -136,7 +135,7 @@ pub(crate) struct CommandEncoder<A: HalApi> {
     ///
     /// [CE::ra]: hal::CommandEncoder::reset_all
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
-    list: Vec<A::CommandBuffer>,
+    list: Vec<Box<dyn hal::DynCommandBuffer>>,
 
     /// True if `raw` is in the "recording" state.
     ///
@@ -150,7 +149,7 @@ pub(crate) struct CommandEncoder<A: HalApi> {
 }
 
 //TODO: handle errors better
-impl<A: HalApi> CommandEncoder<A> {
+impl CommandEncoder {
     /// Finish the current command buffer, if any, and place it
     /// at the second-to-last position in our list.
     ///
@@ -219,14 +218,14 @@ impl<A: HalApi> CommandEncoder<A> {
     /// Begin recording a new command buffer, if we haven't already.
     ///
     /// The underlying hal encoder is put in the "recording" state.
-    pub(crate) fn open(&mut self) -> Result<&mut A::CommandEncoder, DeviceError> {
+    pub(crate) fn open(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
             let hal_label = self.hal_label.as_deref();
             unsafe { self.raw.begin_encoding(hal_label)? };
         }
 
-        Ok(&mut self.raw)
+        Ok(self.raw.as_mut())
     }
 
     /// Begin recording a new command buffer for a render pass, with
@@ -242,8 +241,8 @@ impl<A: HalApi> CommandEncoder<A> {
 }
 
 pub(crate) struct BakedCommands<A: HalApi> {
-    pub(crate) encoder: A::CommandEncoder,
-    pub(crate) list: Vec<A::CommandBuffer>,
+    pub(crate) encoder: Box<dyn hal::DynCommandEncoder>,
+    pub(crate) list: Vec<Box<dyn hal::DynCommandBuffer>>,
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
@@ -255,7 +254,7 @@ pub struct CommandBufferMutable<A: HalApi> {
     /// they belong to.
     ///
     /// [`wgpu_hal::Api::CommandBuffer`]: hal::Api::CommandBuffer
-    pub(crate) encoder: CommandEncoder<A>,
+    pub(crate) encoder: CommandEncoder,
 
     /// The current state of this command buffer's encoder.
     status: CommandEncoderStatus,
@@ -280,7 +279,7 @@ pub struct CommandBufferMutable<A: HalApi> {
 impl<A: HalApi> CommandBufferMutable<A> {
     pub(crate) fn open_encoder_and_tracker(
         &mut self,
-    ) -> Result<(&mut A::CommandEncoder, &mut Tracker<A>), DeviceError> {
+    ) -> Result<(&mut dyn hal::DynCommandEncoder, &mut Tracker<A>), DeviceError> {
         let encoder = self.encoder.open()?;
         let tracker = &mut self.trackers;
 
@@ -329,17 +328,20 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
         }
         let mut baked = self.extract_baked_commands();
         unsafe {
-            baked.encoder.reset_all(baked.list.into_iter());
+            baked.encoder.reset_all(baked.list);
         }
         unsafe {
-            use hal::Device;
             self.device.raw().destroy_command_encoder(baked.encoder);
         }
     }
 }
 
 impl<A: HalApi> CommandBuffer<A> {
-    pub(crate) fn new(encoder: A::CommandEncoder, device: &Arc<Device<A>>, label: &Label) -> Self {
+    pub(crate) fn new(
+        encoder: Box<dyn hal::DynCommandEncoder>,
+        device: &Arc<Device<A>>,
+        label: &Label,
+    ) -> Self {
         CommandBuffer {
             device: device.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
@@ -370,7 +372,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn insert_barriers_from_tracker(
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         base: &mut Tracker<A>,
         head: &Tracker<A>,
         snatch_guard: &SnatchGuard,
@@ -384,7 +386,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn insert_barriers_from_scope(
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         base: &mut Tracker<A>,
         head: &UsageScope<A>,
         snatch_guard: &SnatchGuard,
@@ -398,27 +400,31 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn drain_barriers(
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         base: &mut Tracker<A>,
         snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("drain_barriers");
 
-        let buffer_barriers = base.buffers.drain_transitions(snatch_guard);
+        let buffer_barriers = base
+            .buffers
+            .drain_transitions(snatch_guard)
+            .collect::<Vec<_>>();
         let (transitions, textures) = base.textures.drain_transitions(snatch_guard);
         let texture_barriers = transitions
             .into_iter()
             .enumerate()
-            .map(|(i, p)| p.into_hal(textures[i].unwrap().raw()));
+            .map(|(i, p)| p.into_hal(textures[i].unwrap().raw()))
+            .collect::<Vec<_>>();
 
         unsafe {
-            raw.transition_buffers(buffer_barriers);
-            raw.transition_textures(texture_barriers);
+            raw.transition_buffers(&buffer_barriers);
+            raw.transition_textures(&texture_barriers);
         }
     }
 
     pub(crate) fn insert_barriers_from_device_tracker(
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         base: &mut DeviceTracker<A>,
         head: &Tracker<A>,
         snatch_guard: &SnatchGuard,
@@ -427,15 +433,17 @@ impl<A: HalApi> CommandBuffer<A> {
 
         let buffer_barriers = base
             .buffers
-            .set_from_tracker_and_drain_transitions(&head.buffers, snatch_guard);
+            .set_from_tracker_and_drain_transitions(&head.buffers, snatch_guard)
+            .collect::<Vec<_>>();
 
         let texture_barriers = base
             .textures
-            .set_from_tracker_and_drain_transitions(&head.textures, snatch_guard);
+            .set_from_tracker_and_drain_transitions(&head.textures, snatch_guard)
+            .collect::<Vec<_>>();
 
         unsafe {
-            raw.transition_buffers(buffer_barriers);
-            raw.transition_textures(texture_barriers);
+            raw.transition_buffers(&buffer_barriers);
+            raw.transition_textures(&texture_barriers);
         }
     }
 }

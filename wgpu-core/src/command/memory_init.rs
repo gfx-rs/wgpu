@@ -1,7 +1,5 @@
 use std::{collections::hash_map::Entry, ops::Range, sync::Arc, vec::Drain};
 
-use hal::CommandEncoder;
-
 use crate::{
     device::Device,
     hal_api::HalApi,
@@ -140,7 +138,7 @@ pub(crate) fn fixup_discarded_surfaces<
     InitIter: Iterator<Item = TextureSurfaceDiscard<A>>,
 >(
     inits: InitIter,
-    encoder: &mut A::CommandEncoder,
+    encoder: &mut dyn hal::DynCommandEncoder,
     texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
     snatch_guard: &SnatchGuard<'_>,
@@ -155,7 +153,7 @@ pub(crate) fn fixup_discarded_surfaces<
             encoder,
             texture_tracker,
             &device.alignments,
-            &device.zero_buffer,
+            device.zero_buffer.as_ref(),
             snatch_guard,
         )
         .unwrap();
@@ -233,7 +231,7 @@ impl<A: HalApi> BakedCommands<A> {
                 self.encoder.transition_buffers(
                     transition
                         .map(|pending| pending.into_hal(&buffer, snatch_guard))
-                        .into_iter(),
+                        .as_slice(),
                 );
             }
 
@@ -307,10 +305,10 @@ impl<A: HalApi> BakedCommands<A> {
                 let clear_result = clear_texture(
                     &texture_use.texture,
                     range,
-                    &mut self.encoder,
+                    self.encoder.as_mut(),
                     &mut device_tracker.textures,
                     &device.alignments,
-                    &device.zero_buffer,
+                    device.zero_buffer.as_ref(),
                     snatch_guard,
                 );
 

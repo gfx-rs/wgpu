@@ -268,7 +268,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub fn triage_submissions(
         &mut self,
         last_done: SubmissionIndex,
-        command_allocator: &crate::command::CommandAllocator<A>,
+        command_allocator: &crate::command::CommandAllocator,
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         profiling::scope!("triage_submissions");
 
@@ -351,7 +351,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     #[must_use]
     pub(crate) fn handle_mapping(
         &mut self,
-        raw: &A::Device,
+        raw: &dyn hal::DynDevice,
         snatch_guard: &SnatchGuard,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {

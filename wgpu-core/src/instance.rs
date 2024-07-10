@@ -267,7 +267,7 @@ impl<A: HalApi> Adapter<A> {
         api_log!("Adapter::create_device");
 
         if let Ok(device) = Device::new(
-            hal_device.device,
+            Box::new(hal_device.device),
             &hal_device.queue,
             self,
             desc,
@@ -275,7 +275,7 @@ impl<A: HalApi> Adapter<A> {
             instance_flags,
         ) {
             let device = Arc::new(device);
-            let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
+            let queue = Arc::new(Queue::new(device.clone(), Box::new(hal_device.queue)));
             device.set_queue(&queue);
             return Ok((device, queue));
         }
@@ -662,7 +662,7 @@ impl Global {
             if let Some(surface) = surface {
                 if let Some(device) = present.device.downcast_ref::<A>() {
                     use hal::Surface;
-                    unsafe { surface.unconfigure(device.raw()) };
+                    unsafe { surface.unconfigure(device.raw().as_any().downcast_ref().unwrap()) };
                 }
             }
         }

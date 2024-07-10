@@ -438,7 +438,7 @@ impl<A: HalApi> TextureTracker<A> {
     pub fn drain_transitions<'a>(
         &'a mut self,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> (PendingTransitionList, Vec<Option<&'a TextureInner<A>>>) {
+    ) -> (PendingTransitionList, Vec<Option<&'a TextureInner>>) {
         let mut textures = Vec::new();
         let transitions = self
             .temp
@@ -754,7 +754,7 @@ impl<A: HalApi> DeviceTextureTracker<A> {
         &'a mut self,
         tracker: &'a TextureTracker<A>,
         snatch_guard: &'b SnatchGuard<'b>,
-    ) -> impl Iterator<Item = TextureBarrier<'a, A::Texture>> {
+    ) -> impl Iterator<Item = TextureBarrier<'a, dyn hal::DynTexture>> {
         for index in tracker.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
 
@@ -798,7 +798,7 @@ impl<A: HalApi> DeviceTextureTracker<A> {
         &'a mut self,
         scope: &'a TextureUsageScope<A>,
         snatch_guard: &'b SnatchGuard<'b>,
-    ) -> impl Iterator<Item = TextureBarrier<'a, A::Texture>> {
+    ) -> impl Iterator<Item = TextureBarrier<'a, dyn hal::DynTexture>> {
         for index in scope.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
 

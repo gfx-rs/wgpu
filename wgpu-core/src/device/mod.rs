@@ -12,13 +12,12 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::Device as _;
 use smallvec::SmallVec;
 use std::os::raw::c_char;
 use thiserror::Error;
 use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
-use std::{iter, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 pub mod any_device;
 pub(crate) mod bgl;
@@ -301,7 +300,7 @@ impl DeviceLostClosure {
 }
 
 fn map_buffer<A: HalApi>(
-    raw: &A::Device,
+    raw: &dyn hal::DynDevice,
     buffer: &Buffer<A>,
     offset: BufferAddress,
     size: BufferAddress,
@@ -315,8 +314,9 @@ fn map_buffer<A: HalApi>(
     };
 
     if !mapping.is_coherent && kind == HostMap::Read {
+        #[allow(clippy::single_range_in_vec_init)]
         unsafe {
-            raw.invalidate_mapped_ranges(raw_buffer, iter::once(offset..offset + size));
+            raw.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
         }
     }
 
@@ -350,7 +350,7 @@ fn map_buffer<A: HalApi>(
         mapped[fill_range].fill(0);
 
         if !mapping.is_coherent && kind == HostMap::Read {
-            unsafe { raw.flush_mapped_ranges(raw_buffer, iter::once(uninitialized)) };
+            unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
         }
     }
 
