@@ -1155,7 +1155,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
         let attachment_formats = AttachmentData {
             colors: color_attachments
                 .iter()
-                .map(|at| at.as_ref().map(|at| at.view.desc.texture_format))
+                .map(|at| at.as_ref().map(|at| at.view.desc.format))
                 .collect(),
             resolves: color_attachments
                 .iter()
