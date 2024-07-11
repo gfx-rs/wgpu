@@ -143,7 +143,6 @@ define_lock_ranks! {
     rank RENDER_BUNDLE_SCOPE_QUERY_SETS "RenderBundleScope::query_sets" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
-    rank STAGING_BUFFER_RAW "StagingBuffer::raw" followed by { }
     rank STATELESS_BIND_GROUP_STATE_RESOURCES "StatelessBindGroupState::resources" followed by { }
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }

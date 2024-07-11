@@ -24,7 +24,8 @@ use thiserror::Error;
 use std::{
     borrow::Borrow,
     fmt::Debug,
-    iter, mem,
+    iter,
+    mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
     sync::{
@@ -668,13 +669,11 @@ impl<A: HalApi> Buffer<A> {
                 }
                 let _ = ptr;
 
-                let raw_staging_buffer_guard = staging_buffer.raw.lock();
-                let raw_staging_buffer = raw_staging_buffer_guard.as_ref().unwrap();
                 if !staging_buffer.is_coherent {
                     unsafe {
                         device
                             .raw()
-                            .flush_mapped_ranges(raw_staging_buffer, iter::once(0..self.size));
+                            .flush_mapped_ranges(staging_buffer.raw(), iter::once(0..self.size));
                     }
                 }
 
@@ -685,7 +684,7 @@ impl<A: HalApi> Buffer<A> {
                     size,
                 });
                 let transition_src = hal::BufferBarrier {
-                    buffer: raw_staging_buffer,
+                    buffer: staging_buffer.raw(),
                     usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
@@ -701,13 +700,12 @@ impl<A: HalApi> Buffer<A> {
                     );
                     if self.size > 0 {
                         encoder.copy_buffer_to_buffer(
-                            raw_staging_buffer,
+                            staging_buffer.raw(),
                             raw_buf,
                             region.into_iter(),
                         );
                     }
                 }
-                drop(raw_staging_buffer_guard);
                 pending_writes.consume_temp(queue::TempResource::StagingBuffer(staging_buffer));
                 pending_writes.insert_buffer(self);
             }
@@ -865,21 +863,25 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer<A: HalApi> {
-    pub(crate) raw: Mutex<Option<A::Buffer>>,
+    pub(crate) raw: ManuallyDrop<A::Buffer>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferSize,
     pub(crate) is_coherent: bool,
 }
 
+impl<A: HalApi> StagingBuffer<A> {
+    pub(crate) fn raw(&self) -> &A::Buffer {
+        &self.raw
+    }
+}
+
 impl<A: HalApi> Drop for StagingBuffer<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.lock().take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_buffer(raw);
-            }
-        }
+        use hal::Device;
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe { self.device.raw().destroy_buffer(raw) };
     }
 }
 
