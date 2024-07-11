@@ -669,12 +669,12 @@ impl<A: HalApi> Buffer<A> {
                 }
                 let _ = ptr;
 
-                if !staging_buffer.is_coherent {
-                    unsafe {
-                        device
-                            .raw()
-                            .flush_mapped_ranges(staging_buffer.raw(), iter::once(0..self.size));
-                    }
+                let mut pending_writes = device.pending_writes.lock();
+                let pending_writes = pending_writes.as_mut().unwrap();
+
+                if let Err(e) = unsafe { staging_buffer.flush() } {
+                    pending_writes.consume(staging_buffer);
+                    return Err(e.into());
                 }
 
                 self.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
@@ -691,8 +691,6 @@ impl<A: HalApi> Buffer<A> {
                     buffer: raw_buf,
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 };
-                let mut pending_writes = device.pending_writes.lock();
-                let pending_writes = pending_writes.as_mut().unwrap();
                 let encoder = pending_writes.activate();
                 unsafe {
                     encoder.transition_buffers(
@@ -706,7 +704,7 @@ impl<A: HalApi> Buffer<A> {
                         );
                     }
                 }
-                pending_writes.consume_temp(queue::TempResource::StagingBuffer(staging_buffer));
+                pending_writes.consume(staging_buffer);
                 pending_writes.insert_buffer(self);
             }
             BufferMapState::Idle => {
@@ -866,7 +864,7 @@ pub struct StagingBuffer<A: HalApi> {
     raw: ManuallyDrop<A::Buffer>,
     device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferSize,
-    pub(crate) is_coherent: bool,
+    is_coherent: bool,
 }
 
 impl<A: HalApi> StagingBuffer<A> {
