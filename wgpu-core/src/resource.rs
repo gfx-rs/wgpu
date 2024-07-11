@@ -867,7 +867,7 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
 pub struct StagingBuffer<A: HalApi> {
     pub(crate) raw: Mutex<Option<A::Buffer>>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) size: wgt::BufferAddress,
+    pub(crate) size: wgt::BufferSize,
     pub(crate) is_coherent: bool,
 }
 

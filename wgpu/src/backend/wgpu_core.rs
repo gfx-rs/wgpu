@@ -2203,7 +2203,7 @@ impl crate::Context for ContextWgpuCore {
         size: wgt::BufferSize,
     ) -> Option<()> {
         match wgc::gfx_select!(
-            *queue => self.0.queue_validate_write_buffer(*queue, *buffer, offset, size.get())
+            *queue => self.0.queue_validate_write_buffer(*queue, *buffer, offset, size)
         ) {
             Ok(()) => Some(()),
             Err(err) => {

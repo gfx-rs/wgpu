@@ -591,13 +591,16 @@ impl<A: HalApi> Device<A> {
             };
             hal::BufferUses::MAP_WRITE
         } else {
-            let (staging_buffer, staging_buffer_ptr) =
-                queue::prepare_staging_buffer(self, desc.size, self.instance_flags)?;
+            let (staging_buffer, staging_buffer_ptr) = queue::prepare_staging_buffer(
+                self,
+                wgt::BufferSize::new(aligned_size).unwrap(),
+                self.instance_flags,
+            )?;
 
             // Zero initialize memory and then mark the buffer as initialized
             // (it's guaranteed that this is the case by the time the buffer is usable)
-            unsafe { std::ptr::write_bytes(staging_buffer_ptr.as_ptr(), 0, buffer.size as usize) };
-            buffer.initialization_status.write().drain(0..buffer.size);
+            unsafe { std::ptr::write_bytes(staging_buffer_ptr.as_ptr(), 0, aligned_size as usize) };
+            buffer.initialization_status.write().drain(0..aligned_size);
 
             *buffer.map_state.lock() = resource::BufferMapState::Init {
                 staging_buffer,

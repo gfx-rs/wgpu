@@ -314,19 +314,19 @@ impl<A: HalApi> PendingWrites<A> {
 
 pub(crate) fn prepare_staging_buffer<A: HalApi>(
     device: &Arc<Device<A>>,
-    size: wgt::BufferAddress,
+    size: wgt::BufferSize,
     instance_flags: wgt::InstanceFlags,
 ) -> Result<(StagingBuffer<A>, NonNull<u8>), DeviceError> {
     profiling::scope!("prepare_staging_buffer");
     let stage_desc = hal::BufferDescriptor {
         label: hal_label(Some("(wgpu internal) Staging"), instance_flags),
-        size,
+        size: size.get(),
         usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
         memory_flags: hal::MemoryFlags::TRANSIENT,
     };
 
     let buffer = unsafe { device.raw().create_buffer(&stage_desc)? };
-    let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size) }?;
+    let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size.get()) }?;
 
     let staging_buffer = StagingBuffer {
         raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(buffer)),
@@ -344,7 +344,7 @@ impl<A: HalApi> StagingBuffer<A> {
             unsafe {
                 device.flush_mapped_ranges(
                     self.raw.lock().as_ref().unwrap(),
-                    iter::once(0..self.size),
+                    iter::once(0..self.size.get()),
                 )
             };
         }
@@ -435,10 +435,12 @@ impl Global {
 
         buffer.same_device_as(queue.as_ref())?;
 
-        if data_size == 0 {
+        let data_size = if let Some(data_size) = wgt::BufferSize::new(data_size) {
+            data_size
+        } else {
             log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
-        }
+        };
 
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
@@ -450,7 +452,11 @@ impl Global {
 
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
-            ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr.as_ptr(), data.len());
+            ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                staging_buffer_ptr.as_ptr(),
+                data_size.get() as usize,
+            );
             staging_buffer.flush(device.raw())
         } {
             pending_writes.consume(staging_buffer);
@@ -487,7 +493,7 @@ impl Global {
         let device = &queue.device;
 
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device, buffer_size.get(), device.instance_flags)?;
+            prepare_staging_buffer(device, buffer_size, device.instance_flags)?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(Arc::new(staging_buffer));
@@ -549,7 +555,7 @@ impl Global {
         _queue_id: QueueId,
         buffer_id: id::BufferId,
         buffer_offset: u64,
-        buffer_size: u64,
+        buffer_size: wgt::BufferSize,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::validate_write_buffer");
         let hub = A::hub(self);
@@ -568,19 +574,19 @@ impl Global {
         &self,
         buffer: &Buffer<A>,
         buffer_offset: u64,
-        buffer_size: u64,
+        buffer_size: wgt::BufferSize,
     ) -> Result<(), TransferError> {
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
-        if buffer_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedCopySize(buffer_size));
+        if buffer_size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedCopySize(buffer_size.get()));
         }
         if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
         }
-        if buffer_offset + buffer_size > buffer.size {
+        if buffer_offset + buffer_size.get() > buffer.size {
             return Err(TransferError::BufferOverrun {
                 start_offset: buffer_offset,
-                end_offset: buffer_offset + buffer_size,
+                end_offset: buffer_offset + buffer_size.get(),
                 buffer_size: buffer.size,
                 side: CopySide::Destination,
             });
@@ -615,16 +621,15 @@ impl Global {
 
         dst.same_device_as(queue.as_ref())?;
 
-        let src_buffer_size = staging_buffer.size;
-        self.queue_validate_write_buffer_impl(&dst, buffer_offset, src_buffer_size)?;
+        self.queue_validate_write_buffer_impl(&dst, buffer_offset, staging_buffer.size)?;
 
         dst.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let region = wgt::BufferSize::new(src_buffer_size).map(|size| hal::BufferCopy {
+        let region = hal::BufferCopy {
             src_offset: 0,
             dst_offset: buffer_offset,
-            size,
-        });
+            size: staging_buffer.size,
+        };
         let inner_buffer = staging_buffer.raw.lock();
         let barriers = iter::once(hal::BufferBarrier {
             buffer: inner_buffer.as_ref().unwrap(),
@@ -637,7 +642,7 @@ impl Global {
             encoder.copy_buffer_to_buffer(
                 inner_buffer.as_ref().unwrap(),
                 dst_raw,
-                region.into_iter(),
+                iter::once(region),
             );
         }
 
@@ -648,7 +653,7 @@ impl Global {
         {
             dst.initialization_status
                 .write()
-                .drain(buffer_offset..(buffer_offset + src_buffer_size));
+                .drain(buffer_offset..(buffer_offset + staging_buffer.size.get()));
         }
 
         Ok(())
@@ -760,7 +765,8 @@ impl Global {
 
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
-        let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
+        let stage_size =
+            wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64).unwrap();
 
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
@@ -836,7 +842,7 @@ impl Global {
                 ptr::copy_nonoverlapping(
                     data.as_ptr().offset(data_layout.offset as isize),
                     staging_buffer_ptr.as_ptr(),
-                    stage_size as usize,
+                    stage_size.get() as usize,
                 );
             }
         } else {
