@@ -691,7 +691,7 @@ impl crate::Device for super::Device {
             is_coherent,
         })
     }
-    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         if let Some(raw) = buffer.raw {
             if buffer.data.is_none() {
                 let gl = &self.shared.context.lock();
@@ -700,7 +700,6 @@ impl crate::Device for super::Device {
                 unsafe { gl.bind_buffer(buffer.target, None) };
             }
         }
-        Ok(())
     }
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where

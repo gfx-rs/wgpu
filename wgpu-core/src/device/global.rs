@@ -321,10 +321,7 @@ impl Global {
                     .raw()
                     .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
             }
-            device
-                .raw()
-                .unmap_buffer(raw_buf)
-                .map_err(DeviceError::from)?;
+            device.raw().unmap_buffer(raw_buf);
         }
 
         Ok(())
@@ -370,10 +367,7 @@ impl Global {
                 );
             }
             ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());
-            device
-                .raw()
-                .unmap_buffer(raw_buf)
-                .map_err(DeviceError::from)?;
+            device.raw().unmap_buffer(raw_buf);
         }
 
         Ok(())

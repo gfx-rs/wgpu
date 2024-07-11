@@ -410,17 +410,14 @@ impl Global {
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
-        if let Err(flush_error) = unsafe {
+        unsafe {
             profiling::scope!("copy");
             ptr::copy_nonoverlapping(
                 data.as_ptr(),
                 staging_buffer_ptr.as_ptr(),
                 data_size.get() as usize,
             );
-            staging_buffer.flush()
-        } {
-            pending_writes.consume(staging_buffer);
-            return Err(flush_error.into());
+            staging_buffer.flush();
         }
 
         let result = self.queue_write_staging_buffer_impl(
@@ -492,10 +489,7 @@ impl Global {
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        if let Err(flush_error) = unsafe { staging_buffer.flush() } {
-            pending_writes.consume(staging_buffer);
-            return Err(flush_error.into());
-        }
+        unsafe { staging_buffer.flush() };
 
         let result = self.queue_write_staging_buffer_impl(
             &queue,
@@ -823,10 +817,7 @@ impl Global {
             }
         }
 
-        if let Err(e) = unsafe { staging_buffer.flush() } {
-            pending_writes.consume(staging_buffer);
-            return Err(e.into());
-        }
+        unsafe { staging_buffer.flush() };
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
