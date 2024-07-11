@@ -437,9 +437,8 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), DeviceError> {
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
-        Ok(())
     }
 
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}

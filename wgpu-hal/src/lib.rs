@@ -728,7 +728,7 @@ pub trait Device: WasmNotSendSync {
     /// # Safety
     ///
     /// - The given `buffer` must be currently mapped.
-    unsafe fn unmap_buffer(&self, buffer: &<Self::A as Api>::Buffer) -> Result<(), DeviceError>;
+    unsafe fn unmap_buffer(&self, buffer: &<Self::A as Api>::Buffer);
 
     /// Indicate that CPU writes to mapped buffer memory should be made visible to the GPU.
     ///

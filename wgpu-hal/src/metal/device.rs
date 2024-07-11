@@ -370,9 +370,7 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn unmap_buffer(&self, _buffer: &super::Buffer) -> DeviceResult<()> {
-        Ok(())
-    }
+    unsafe fn unmap_buffer(&self, _buffer: &super::Buffer) {}
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
     unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
 

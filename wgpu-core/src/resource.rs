@@ -672,10 +672,7 @@ impl<A: HalApi> Buffer<A> {
                 let mut pending_writes = device.pending_writes.lock();
                 let pending_writes = pending_writes.as_mut().unwrap();
 
-                if let Err(e) = unsafe { staging_buffer.flush() } {
-                    pending_writes.consume(staging_buffer);
-                    return Err(e.into());
-                }
+                unsafe { staging_buffer.flush() };
 
                 self.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
                 let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
@@ -730,12 +727,7 @@ impl<A: HalApi> Buffer<A> {
                     }
                     let _ = (ptr, range);
                 }
-                unsafe {
-                    device
-                        .raw()
-                        .unmap_buffer(raw_buf)
-                        .map_err(DeviceError::from)?
-                };
+                unsafe { device.raw().unmap_buffer(raw_buf) };
             }
         }
         Ok(None)
@@ -899,14 +891,13 @@ impl<A: HalApi> StagingBuffer<A> {
         &self.raw
     }
 
-    pub(crate) unsafe fn flush(&self) -> Result<(), DeviceError> {
+    pub(crate) unsafe fn flush(&self) {
         use hal::Device;
         let device = self.device.raw();
         if !self.is_coherent {
             unsafe { device.flush_mapped_ranges(self.raw(), iter::once(0..self.size.get())) };
         }
-        unsafe { device.unmap_buffer(self.raw())? };
-        Ok(())
+        unsafe { device.unmap_buffer(self.raw()) };
     }
 }
 
