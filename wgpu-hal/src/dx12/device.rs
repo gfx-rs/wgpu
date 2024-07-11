@@ -404,6 +404,9 @@ impl crate::Device for super::Device {
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
+            // Resource should be dropped before free suballocation
+            drop(buffer);
+
             super::suballocation::free_buffer_allocation(
                 self,
                 alloc,
@@ -494,6 +497,9 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         if let Some(alloc) = texture.allocation.take() {
+            // Resource should be dropped before free suballocation
+            drop(texture);
+
             super::suballocation::free_texture_allocation(
                 self,
                 alloc,
