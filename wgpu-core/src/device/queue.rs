@@ -14,7 +14,7 @@ use crate::{
     hal_label,
     id::{self, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
-    lock::{rank, Mutex, RwLockWriteGuard},
+    lock::RwLockWriteGuard,
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
         DestroyedTexture, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
@@ -29,7 +29,8 @@ use hal::{CommandEncoder as _, Device as _, Queue as _};
 use smallvec::SmallVec;
 
 use std::{
-    iter, mem,
+    iter,
+    mem::{self, ManuallyDrop},
     ptr::{self, NonNull},
     sync::{atomic::Ordering, Arc},
 };
@@ -329,7 +330,7 @@ pub(crate) fn prepare_staging_buffer<A: HalApi>(
     let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size.get()) }?;
 
     let staging_buffer = StagingBuffer {
-        raw: Mutex::new(rank::STAGING_BUFFER_RAW, Some(buffer)),
+        raw: ManuallyDrop::new(buffer),
         device: device.clone(),
         size,
         is_coherent: mapping.is_coherent,
@@ -341,14 +342,9 @@ pub(crate) fn prepare_staging_buffer<A: HalApi>(
 impl<A: HalApi> StagingBuffer<A> {
     unsafe fn flush(&self, device: &A::Device) -> Result<(), DeviceError> {
         if !self.is_coherent {
-            unsafe {
-                device.flush_mapped_ranges(
-                    self.raw.lock().as_ref().unwrap(),
-                    iter::once(0..self.size.get()),
-                )
-            };
+            unsafe { device.flush_mapped_ranges(self.raw(), iter::once(0..self.size.get())) };
         }
-        unsafe { device.unmap_buffer(self.raw.lock().as_ref().unwrap())? };
+        unsafe { device.unmap_buffer(self.raw())? };
         Ok(())
     }
 }
@@ -630,20 +626,15 @@ impl Global {
             dst_offset: buffer_offset,
             size: staging_buffer.size,
         };
-        let inner_buffer = staging_buffer.raw.lock();
         let barriers = iter::once(hal::BufferBarrier {
-            buffer: inner_buffer.as_ref().unwrap(),
+            buffer: staging_buffer.raw(),
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(&dst, &snatch_guard)));
         let encoder = pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
-            encoder.copy_buffer_to_buffer(
-                inner_buffer.as_ref().unwrap(),
-                dst_raw,
-                iter::once(region),
-            );
+            encoder.copy_buffer_to_buffer(staging_buffer.raw(), dst_raw, iter::once(region));
         }
 
         pending_writes.insert_buffer(&dst);
@@ -890,9 +881,8 @@ impl Global {
         });
 
         {
-            let inner_buffer = staging_buffer.raw.lock();
             let barrier = hal::BufferBarrier {
-                buffer: inner_buffer.as_ref().unwrap(),
+                buffer: staging_buffer.raw(),
                 usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
             };
 
@@ -904,7 +894,7 @@ impl Global {
             unsafe {
                 encoder.transition_textures(transition.map(|pending| pending.into_hal(dst_raw)));
                 encoder.transition_buffers(iter::once(barrier));
-                encoder.copy_buffer_to_texture(inner_buffer.as_ref().unwrap(), dst_raw, regions);
+                encoder.copy_buffer_to_texture(staging_buffer.raw(), dst_raw, regions);
             }
         }
 
