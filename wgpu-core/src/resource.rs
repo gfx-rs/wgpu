@@ -863,12 +863,11 @@ impl<A: HalApi> StagingBuffer<A> {
     pub(crate) fn new(
         device: &Arc<Device<A>>,
         size: wgt::BufferSize,
-        instance_flags: wgt::InstanceFlags,
     ) -> Result<(Self, NonNull<u8>), DeviceError> {
         use hal::Device;
         profiling::scope!("StagingBuffer::new");
         let stage_desc = hal::BufferDescriptor {
-            label: crate::hal_label(Some("(wgpu internal) Staging"), instance_flags),
+            label: crate::hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
             size: size.get(),
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,

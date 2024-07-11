@@ -405,8 +405,7 @@ impl Global {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) =
-            StagingBuffer::new(device, data_size, device.instance_flags)?;
+        let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(device, data_size)?;
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
@@ -449,8 +448,7 @@ impl Global {
 
         let device = &queue.device;
 
-        let (staging_buffer, staging_buffer_ptr) =
-            StagingBuffer::new(device, buffer_size, device.instance_flags)?;
+        let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(device, buffer_size)?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(Arc::new(staging_buffer));
@@ -781,8 +779,7 @@ impl Global {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) =
-            StagingBuffer::new(device, stage_size, device.instance_flags)?;
+        let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(device, stage_size)?;
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");

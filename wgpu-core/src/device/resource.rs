@@ -591,11 +591,8 @@ impl<A: HalApi> Device<A> {
             };
             hal::BufferUses::MAP_WRITE
         } else {
-            let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(
-                self,
-                wgt::BufferSize::new(aligned_size).unwrap(),
-                self.instance_flags,
-            )?;
+            let (staging_buffer, staging_buffer_ptr) =
+                StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
 
             // Zero initialize memory and then mark the buffer as initialized
             // (it's guaranteed that this is the case by the time the buffer is usable)
