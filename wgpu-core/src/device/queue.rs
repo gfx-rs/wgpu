@@ -340,7 +340,8 @@ pub(crate) fn prepare_staging_buffer<A: HalApi>(
 }
 
 impl<A: HalApi> StagingBuffer<A> {
-    unsafe fn flush(&self, device: &A::Device) -> Result<(), DeviceError> {
+    unsafe fn flush(&self) -> Result<(), DeviceError> {
+        let device = self.device.raw();
         if !self.is_coherent {
             unsafe { device.flush_mapped_ranges(self.raw(), iter::once(0..self.size.get())) };
         }
@@ -453,7 +454,7 @@ impl Global {
                 staging_buffer_ptr.as_ptr(),
                 data_size.get() as usize,
             );
-            staging_buffer.flush(device.raw())
+            staging_buffer.flush()
         } {
             pending_writes.consume(staging_buffer);
             return Err(flush_error.into());
@@ -528,7 +529,7 @@ impl Global {
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        if let Err(flush_error) = unsafe { staging_buffer.flush(device.raw()) } {
+        if let Err(flush_error) = unsafe { staging_buffer.flush() } {
             pending_writes.consume(staging_buffer);
             return Err(flush_error.into());
         }
@@ -859,7 +860,7 @@ impl Global {
             }
         }
 
-        if let Err(e) = unsafe { staging_buffer.flush(device.raw()) } {
+        if let Err(e) = unsafe { staging_buffer.flush() } {
             pending_writes.consume(staging_buffer);
             return Err(e.into());
         }
