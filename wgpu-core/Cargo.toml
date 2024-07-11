@@ -60,6 +60,9 @@ trace = ["dep:ron", "serde", "naga/serialize"]
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
 
+## Enable creating instances using raw-window-handle
+raw-window-handle = ["dep:raw-window-handle"]
+
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
