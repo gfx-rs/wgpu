@@ -256,7 +256,7 @@ impl<A: HalApi> PendingWrites<A> {
         self.temp_resources.push(resource);
     }
 
-    fn consume(&mut self, buffer: StagingBuffer<A>) {
+    pub fn consume(&mut self, buffer: StagingBuffer<A>) {
         self.temp_resources
             .push(TempResource::StagingBuffer(buffer));
     }
