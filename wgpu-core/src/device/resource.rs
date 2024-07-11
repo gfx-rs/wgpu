@@ -22,8 +22,8 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, Texture, TextureView,
-        TextureViewNotRenderableReason, TrackingData,
+        self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, StagingBuffer, Texture,
+        TextureView, TextureViewNotRenderableReason, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -591,7 +591,7 @@ impl<A: HalApi> Device<A> {
             };
             hal::BufferUses::MAP_WRITE
         } else {
-            let (staging_buffer, staging_buffer_ptr) = queue::prepare_staging_buffer(
+            let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(
                 self,
                 wgt::BufferSize::new(aligned_size).unwrap(),
                 self.instance_flags,
