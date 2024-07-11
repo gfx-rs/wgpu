@@ -30,7 +30,7 @@ use smallvec::SmallVec;
 
 use std::{
     iter,
-    mem::{self, ManuallyDrop},
+    mem::{self},
     ptr::{self, NonNull},
     sync::{atomic::Ordering, Arc},
 };
@@ -313,43 +313,6 @@ impl<A: HalApi> PendingWrites<A> {
     }
 }
 
-pub(crate) fn prepare_staging_buffer<A: HalApi>(
-    device: &Arc<Device<A>>,
-    size: wgt::BufferSize,
-    instance_flags: wgt::InstanceFlags,
-) -> Result<(StagingBuffer<A>, NonNull<u8>), DeviceError> {
-    profiling::scope!("prepare_staging_buffer");
-    let stage_desc = hal::BufferDescriptor {
-        label: hal_label(Some("(wgpu internal) Staging"), instance_flags),
-        size: size.get(),
-        usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
-        memory_flags: hal::MemoryFlags::TRANSIENT,
-    };
-
-    let buffer = unsafe { device.raw().create_buffer(&stage_desc)? };
-    let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size.get()) }?;
-
-    let staging_buffer = StagingBuffer {
-        raw: ManuallyDrop::new(buffer),
-        device: device.clone(),
-        size,
-        is_coherent: mapping.is_coherent,
-    };
-
-    Ok((staging_buffer, mapping.ptr))
-}
-
-impl<A: HalApi> StagingBuffer<A> {
-    unsafe fn flush(&self) -> Result<(), DeviceError> {
-        let device = self.device.raw();
-        if !self.is_coherent {
-            unsafe { device.flush_mapped_ranges(self.raw(), iter::once(0..self.size.get())) };
-        }
-        unsafe { device.unmap_buffer(self.raw())? };
-        Ok(())
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 #[error("Queue is invalid")]
 pub struct InvalidQueue;
@@ -443,7 +406,7 @@ impl Global {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device, data_size, device.instance_flags)?;
+            StagingBuffer::new(device, data_size, device.instance_flags)?;
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
@@ -490,7 +453,7 @@ impl Global {
         let device = &queue.device;
 
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device, buffer_size, device.instance_flags)?;
+            StagingBuffer::new(device, buffer_size, device.instance_flags)?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(Arc::new(staging_buffer));
@@ -825,7 +788,7 @@ impl Global {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device, stage_size, device.instance_flags)?;
+            StagingBuffer::new(device, stage_size, device.instance_flags)?;
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");

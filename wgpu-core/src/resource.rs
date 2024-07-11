@@ -863,15 +863,52 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer<A: HalApi> {
-    pub(crate) raw: ManuallyDrop<A::Buffer>,
-    pub(crate) device: Arc<Device<A>>,
+    raw: ManuallyDrop<A::Buffer>,
+    device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferSize,
     pub(crate) is_coherent: bool,
 }
 
 impl<A: HalApi> StagingBuffer<A> {
+    pub(crate) fn new(
+        device: &Arc<Device<A>>,
+        size: wgt::BufferSize,
+        instance_flags: wgt::InstanceFlags,
+    ) -> Result<(Self, NonNull<u8>), DeviceError> {
+        use hal::Device;
+        profiling::scope!("StagingBuffer::new");
+        let stage_desc = hal::BufferDescriptor {
+            label: crate::hal_label(Some("(wgpu internal) Staging"), instance_flags),
+            size: size.get(),
+            usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
+            memory_flags: hal::MemoryFlags::TRANSIENT,
+        };
+
+        let buffer = unsafe { device.raw().create_buffer(&stage_desc)? };
+        let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size.get()) }?;
+
+        let staging_buffer = StagingBuffer {
+            raw: ManuallyDrop::new(buffer),
+            device: device.clone(),
+            size,
+            is_coherent: mapping.is_coherent,
+        };
+
+        Ok((staging_buffer, mapping.ptr))
+    }
+
     pub(crate) fn raw(&self) -> &A::Buffer {
         &self.raw
+    }
+
+    pub(crate) unsafe fn flush(&self) -> Result<(), DeviceError> {
+        use hal::Device;
+        let device = self.device.raw();
+        if !self.is_coherent {
+            unsafe { device.flush_mapped_ranges(self.raw(), iter::once(0..self.size.get())) };
+        }
+        unsafe { device.unmap_buffer(self.raw())? };
+        Ok(())
     }
 }
 
