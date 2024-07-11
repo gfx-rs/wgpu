@@ -1,10 +1,9 @@
-/*! Module analyzer.
-
-Figures out the following properties:
-  - control flow uniformity
-  - texture/sampler pairs
-  - expression reference counts
-!*/
+//! Module analyzer.
+//!
+//! Figures out the following properties:
+//! - control flow uniformity
+//! - texture/sampler pairs
+//! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
 use crate::span::{AddSpan as _, WithSpan};

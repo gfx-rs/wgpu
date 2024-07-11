@@ -1038,6 +1038,7 @@ unsafe fn insert_or_merge<A: HalApi>(
 /// - Uses the `start_state_provider` to populate `start_states`
 /// - Uses either `end_state_provider` or `start_state_provider`
 ///   to populate `current_states`.
+///
 /// If the resource is tracked
 /// - Inserts barriers from the state in `current_states`
 ///   to the state provided by `start_state_provider`.

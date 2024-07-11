@@ -2195,7 +2195,7 @@ pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
 /// - All buffers, buffer addresses and offsets will be ignored.
 /// - The build mode will be ignored.
 /// - Reducing the amount of Instances, Triangle groups or AABB groups (or the number of Triangles/AABBs in corresponding groups),
-/// may result in reduced size requirements.
+///   may result in reduced size requirements.
 /// - Any other change may result in a bigger or smaller size requirement.
 #[derive(Clone, Debug)]
 pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {

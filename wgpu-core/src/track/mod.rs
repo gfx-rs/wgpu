@@ -141,6 +141,7 @@ impl TrackerIndex {
 /// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
 /// - The plan is to remove IDs in the long run
 ///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).
+///
 /// In order to produce these tracker indices, there is a shared TrackerIndexAllocator
 /// per resource type. Indices have the same lifetime as the internal resource they
 /// are associated to (alloc happens when creating the resource and free is called when
