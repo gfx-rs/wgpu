@@ -336,52 +336,6 @@ impl Global {
         Ok(())
     }
 
-    #[doc(hidden)]
-    pub fn device_get_buffer_sub_data<A: HalApi>(
-        &self,
-        device_id: DeviceId,
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        data: &mut [u8],
-    ) -> BufferAccessResult {
-        profiling::scope!("Device::get_buffer_sub_data");
-
-        let hub = A::hub(self);
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-        device.check_is_valid()?;
-
-        let snatch_guard = device.snatchable_lock.read();
-
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
-        buffer.check_usage(wgt::BufferUsages::MAP_READ)?;
-        //assert!(buffer isn't used by the GPU);
-
-        let raw_buf = buffer.try_raw(&snatch_guard)?;
-        unsafe {
-            let mapping = device
-                .raw()
-                .map_buffer(raw_buf, offset..offset + data.len() as u64)
-                .map_err(DeviceError::from)?;
-            if !mapping.is_coherent {
-                device.raw().invalidate_mapped_ranges(
-                    raw_buf,
-                    iter::once(offset..offset + data.len() as u64),
-                );
-            }
-            ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());
-            device.raw().unmap_buffer(raw_buf);
-        }
-
-        Ok(())
-    }
-
     pub fn buffer_destroy<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
