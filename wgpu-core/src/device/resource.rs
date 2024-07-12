@@ -3478,24 +3478,17 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn wait_for_submit(
         &self,
         submission_index: crate::SubmissionIndex,
-    ) -> Result<(), WaitIdleError> {
+    ) -> Result<(), DeviceError> {
         let guard = self.fence.read();
         let fence = guard.as_ref().unwrap();
-        let last_done_index = unsafe {
-            self.raw
-                .as_ref()
-                .unwrap()
-                .get_fence_value(fence)
-                .map_err(DeviceError::from)?
-        };
+        let last_done_index = unsafe { self.raw.as_ref().unwrap().get_fence_value(fence)? };
         if last_done_index < submission_index {
             log::info!("Waiting for submission {:?}", submission_index);
             unsafe {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .wait(fence, submission_index, !0)
-                    .map_err(DeviceError::from)?
+                    .wait(fence, submission_index, !0)?
             };
             drop(guard);
             let closures = self

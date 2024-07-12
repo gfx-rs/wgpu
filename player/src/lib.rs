@@ -330,8 +330,7 @@ impl GlobalPlay for wgc::global::Global {
                     self.queue_write_buffer::<A>(device.into_queue_id(), id, range.start, &bin)
                         .unwrap();
                 } else {
-                    self.device_wait_for_buffer::<A>(device, id).unwrap();
-                    self.device_set_buffer_sub_data::<A>(device, id, range.start, &bin[..size])
+                    self.device_set_buffer_data::<A>(id, range.start, &bin[..size])
                         .unwrap();
                 }
             }
