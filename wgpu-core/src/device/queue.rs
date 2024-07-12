@@ -17,8 +17,8 @@ use crate::{
     lock::RwLockWriteGuard,
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
-        TextureInner, Trackable,
+        DestroyedTexture, FlushedStagingBuffer, Labeled, ParentDevice, ResourceErrorIdent,
+        StagingBuffer, Texture, TextureInner, Trackable,
     },
     resource_log,
     track::{self, Tracker, TrackerIndex},
@@ -136,7 +136,7 @@ pub struct WrappedSubmissionIndex {
 ///   submission, to be freed when it completes
 #[derive(Debug)]
 pub enum TempResource<A: HalApi> {
-    StagingBuffer(StagingBuffer<A>),
+    StagingBuffer(FlushedStagingBuffer<A>),
     DestroyedBuffer(DestroyedBuffer<A>),
     DestroyedTexture(DestroyedTexture<A>),
 }
@@ -256,7 +256,7 @@ impl<A: HalApi> PendingWrites<A> {
         self.temp_resources.push(resource);
     }
 
-    pub fn consume(&mut self, buffer: StagingBuffer<A>) {
+    pub fn consume(&mut self, buffer: FlushedStagingBuffer<A>) {
         self.temp_resources
             .push(TempResource::StagingBuffer(buffer));
     }
@@ -409,15 +409,15 @@ impl Global {
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
-        unsafe {
+        let staging_buffer = unsafe {
             profiling::scope!("copy");
             ptr::copy_nonoverlapping(
                 data.as_ptr(),
                 staging_buffer_ptr.as_ptr(),
                 data_size.get() as usize,
             );
-            staging_buffer.flush();
-        }
+            staging_buffer.flush()
+        };
 
         let result = self.queue_write_staging_buffer_impl(
             &queue,
@@ -487,7 +487,7 @@ impl Global {
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        unsafe { staging_buffer.flush() };
+        let staging_buffer = unsafe { staging_buffer.flush() };
 
         let result = self.queue_write_staging_buffer_impl(
             &queue,
@@ -552,7 +552,7 @@ impl Global {
         queue: &Arc<Queue<A>>,
         device: &Arc<Device<A>>,
         pending_writes: &mut PendingWrites<A>,
-        staging_buffer: &StagingBuffer<A>,
+        staging_buffer: &FlushedStagingBuffer<A>,
         buffer_id: id::BufferId,
         buffer_offset: u64,
     ) -> Result<(), QueueWriteError> {
@@ -814,7 +814,7 @@ impl Global {
             }
         }
 
-        unsafe { staging_buffer.flush() };
+        let staging_buffer = unsafe { staging_buffer.flush() };
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
