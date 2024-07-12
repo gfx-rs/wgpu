@@ -672,7 +672,7 @@ impl<A: HalApi> Buffer<A> {
                 let mut pending_writes = device.pending_writes.lock();
                 let pending_writes = pending_writes.as_mut().unwrap();
 
-                unsafe { staging_buffer.flush() };
+                let staging_buffer = unsafe { staging_buffer.flush() };
 
                 self.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
                 let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
@@ -853,7 +853,7 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer<A: HalApi> {
-    raw: ManuallyDrop<A::Buffer>,
+    raw: A::Buffer,
     device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferSize,
     is_coherent: bool,
@@ -873,11 +873,11 @@ impl<A: HalApi> StagingBuffer<A> {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let buffer = unsafe { device.raw().create_buffer(&stage_desc)? };
-        let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size.get()) }?;
+        let raw = unsafe { device.raw().create_buffer(&stage_desc)? };
+        let mapping = unsafe { device.raw().map_buffer(&raw, 0..size.get()) }?;
 
         let staging_buffer = StagingBuffer {
-            raw: ManuallyDrop::new(buffer),
+            raw,
             device: device.clone(),
             size,
             is_coherent: mapping.is_coherent,
@@ -886,39 +886,51 @@ impl<A: HalApi> StagingBuffer<A> {
         Ok((staging_buffer, mapping.ptr))
     }
 
-    pub(crate) fn raw(&self) -> &A::Buffer {
-        &self.raw
-    }
-
-    pub(crate) unsafe fn flush(&self) {
+    pub(crate) fn flush(self) -> FlushedStagingBuffer<A> {
         use hal::Device;
         let device = self.device.raw();
         if !self.is_coherent {
-            unsafe { device.flush_mapped_ranges(self.raw(), iter::once(0..self.size.get())) };
+            unsafe { device.flush_mapped_ranges(&self.raw, iter::once(0..self.size.get())) };
         }
-        unsafe { device.unmap_buffer(self.raw()) };
+        unsafe { device.unmap_buffer(&self.raw) };
+
+        let StagingBuffer {
+            raw, device, size, ..
+        } = self;
+
+        FlushedStagingBuffer {
+            raw: ManuallyDrop::new(raw),
+            device,
+            size,
+        }
     }
 }
 
-impl<A: HalApi> Drop for StagingBuffer<A> {
+crate::impl_resource_type!(StagingBuffer);
+crate::impl_storage_item!(StagingBuffer);
+
+#[derive(Debug)]
+pub struct FlushedStagingBuffer<A: HalApi> {
+    raw: ManuallyDrop<A::Buffer>,
+    device: Arc<Device<A>>,
+    pub(crate) size: wgt::BufferSize,
+}
+
+impl<A: HalApi> FlushedStagingBuffer<A> {
+    pub(crate) fn raw(&self) -> &A::Buffer {
+        &self.raw
+    }
+}
+
+impl<A: HalApi> Drop for FlushedStagingBuffer<A> {
     fn drop(&mut self) {
         use hal::Device;
-        resource_log!("Destroy raw {}", self.error_ident());
+        resource_log!("Destroy raw StagingBuffer");
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         unsafe { self.device.raw().destroy_buffer(raw) };
     }
 }
-
-crate::impl_resource_type!(StagingBuffer);
-// TODO: add label
-impl<A: HalApi> Labeled for StagingBuffer<A> {
-    fn label(&self) -> &str {
-        ""
-    }
-}
-crate::impl_parent_device!(StagingBuffer);
-crate::impl_storage_item!(StagingBuffer);
 
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
