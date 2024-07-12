@@ -714,9 +714,13 @@ pub trait Device: WasmNotSendSync {
     ///   be ordered, so it is meaningful to talk about what must occur
     ///   "between" them.
     ///
+    /// - Zero-sized mappings are not allowed.
+    ///
+    /// - The returned [`BufferMapping::ptr`] must not be used after a call to
+    /// [`Device::unmap_buffer`].
+    ///
     /// [`MAP_READ`]: BufferUses::MAP_READ
     /// [`MAP_WRITE`]: BufferUses::MAP_WRITE
-    //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
         &self,
         buffer: &<Self::A as Api>::Buffer,

@@ -256,10 +256,7 @@ pub enum BufferMapAsyncStatus {
 #[derive(Debug)]
 pub(crate) enum BufferMapState<A: HalApi> {
     /// Mapped at creation.
-    Init {
-        staging_buffer: StagingBuffer<A>,
-        ptr: NonNull<u8>,
-    },
+    Init { staging_buffer: StagingBuffer<A> },
     /// Waiting for GPU to be done before mapping
     Waiting(BufferPendingMapping<A>),
     /// Mapped
@@ -651,15 +648,10 @@ impl<A: HalApi> Buffer<A> {
         let raw_buf = self.try_raw(&snatch_guard)?;
         log::debug!("{} map state -> Idle", self.error_ident());
         match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
-            BufferMapState::Init {
-                staging_buffer,
-                ptr,
-            } => {
+            BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
-                    let data = trace.make_binary("bin", unsafe {
-                        std::slice::from_raw_parts(ptr.as_ptr(), self.size as usize)
-                    });
+                    let data = trace.make_binary("bin", staging_buffer.get_data());
                     trace.add(trace::Action::WriteBuffer {
                         id: buffer_id,
                         data,
@@ -667,12 +659,11 @@ impl<A: HalApi> Buffer<A> {
                         queued: true,
                     });
                 }
-                let _ = ptr;
 
                 let mut pending_writes = device.pending_writes.lock();
                 let pending_writes = pending_writes.as_mut().unwrap();
 
-                let staging_buffer = unsafe { staging_buffer.flush() };
+                let staging_buffer = staging_buffer.flush();
 
                 self.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
                 let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
@@ -832,6 +823,11 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
     }
 }
 
+#[cfg(send_sync)]
+unsafe impl<A: HalApi> Send for StagingBuffer<A> {}
+#[cfg(send_sync)]
+unsafe impl<A: HalApi> Sync for StagingBuffer<A> {}
+
 /// A temporary buffer, consumed by the command that uses it.
 ///
 /// A [`StagingBuffer`] is designed for one-shot uploads of data to the GPU. It
@@ -857,13 +853,11 @@ pub struct StagingBuffer<A: HalApi> {
     device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferSize,
     is_coherent: bool,
+    ptr: NonNull<u8>,
 }
 
 impl<A: HalApi> StagingBuffer<A> {
-    pub(crate) fn new(
-        device: &Arc<Device<A>>,
-        size: wgt::BufferSize,
-    ) -> Result<(Self, NonNull<u8>), DeviceError> {
+    pub(crate) fn new(device: &Arc<Device<A>>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
         use hal::Device;
         profiling::scope!("StagingBuffer::new");
         let stage_desc = hal::BufferDescriptor {
@@ -881,9 +875,55 @@ impl<A: HalApi> StagingBuffer<A> {
             device: device.clone(),
             size,
             is_coherent: mapping.is_coherent,
+            ptr: mapping.ptr,
         };
 
-        Ok((staging_buffer, mapping.ptr))
+        Ok(staging_buffer)
+    }
+
+    /// SAFETY: You must not call any functions of `self`
+    /// until you stopped using the returned pointer.
+    pub(crate) unsafe fn ptr(&self) -> NonNull<u8> {
+        self.ptr
+    }
+
+    #[cfg(feature = "trace")]
+    pub(crate) fn get_data(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.size.get() as usize) }
+    }
+
+    pub(crate) fn write_zeros(&mut self) {
+        unsafe { core::ptr::write_bytes(self.ptr.as_ptr(), 0, self.size.get() as usize) };
+    }
+
+    pub(crate) fn write(&mut self, data: &[u8]) {
+        assert!(data.len() >= self.size.get() as usize);
+        // SAFETY: With the assert above, all of `copy_nonoverlapping`'s
+        // requirements are satisfied.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                self.ptr.as_ptr(),
+                self.size.get() as usize,
+            );
+        }
+    }
+
+    /// SAFETY: The offsets and size must be in-bounds.
+    pub(crate) unsafe fn write_with_offset(
+        &mut self,
+        data: &[u8],
+        src_offset: isize,
+        dst_offset: isize,
+        size: usize,
+    ) {
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                data.as_ptr().offset(src_offset),
+                self.ptr.as_ptr().offset(dst_offset),
+                size,
+            );
+        }
     }
 
     pub(crate) fn flush(self) -> FlushedStagingBuffer<A> {

@@ -591,18 +591,15 @@ impl<A: HalApi> Device<A> {
             };
             hal::BufferUses::MAP_WRITE
         } else {
-            let (staging_buffer, staging_buffer_ptr) =
+            let mut staging_buffer =
                 StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
 
             // Zero initialize memory and then mark the buffer as initialized
             // (it's guaranteed that this is the case by the time the buffer is usable)
-            unsafe { std::ptr::write_bytes(staging_buffer_ptr.as_ptr(), 0, aligned_size as usize) };
+            staging_buffer.write_zeros();
             buffer.initialization_status.write().drain(0..aligned_size);
 
-            *buffer.map_state.lock() = resource::BufferMapState::Init {
-                staging_buffer,
-                ptr: staging_buffer_ptr,
-            };
+            *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
             hal::BufferUses::COPY_DST
         };
 

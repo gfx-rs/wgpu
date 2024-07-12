@@ -31,7 +31,7 @@ use smallvec::SmallVec;
 use std::{
     iter,
     mem::{self},
-    ptr::{self, NonNull},
+    ptr::NonNull,
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
@@ -405,17 +405,13 @@ impl Global {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(device, data_size)?;
+        let mut staging_buffer = StagingBuffer::new(device, data_size)?;
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
-        let staging_buffer = unsafe {
+        let staging_buffer = {
             profiling::scope!("copy");
-            ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                staging_buffer_ptr.as_ptr(),
-                data_size.get() as usize,
-            );
+            staging_buffer.write(data);
             staging_buffer.flush()
         };
 
@@ -448,13 +444,14 @@ impl Global {
 
         let device = &queue.device;
 
-        let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(device, buffer_size)?;
+        let staging_buffer = StagingBuffer::new(device, buffer_size)?;
+        let ptr = unsafe { staging_buffer.ptr() };
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(Arc::new(staging_buffer));
         resource_log!("Queue::create_staging_buffer {id:?}");
 
-        Ok((id, staging_buffer_ptr))
+        Ok((id, ptr))
     }
 
     pub fn queue_write_staging_buffer<A: HalApi>(
@@ -487,7 +484,7 @@ impl Global {
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let staging_buffer = unsafe { staging_buffer.flush() };
+        let staging_buffer = staging_buffer.flush();
 
         let result = self.queue_write_staging_buffer_impl(
             &queue,
@@ -779,42 +776,34 @@ impl Global {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) = StagingBuffer::new(device, stage_size)?;
+        let mut staging_buffer = StagingBuffer::new(device, stage_size)?;
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
             // Fast path if the data is already being aligned optimally.
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    data.as_ptr().offset(data_layout.offset as isize),
-                    staging_buffer_ptr.as_ptr(),
-                    stage_size.get() as usize,
-                );
-            }
+            staging_buffer.write(&data[data_layout.offset as usize..]);
         } else {
             profiling::scope!("copy chunked");
             // Copy row by row into the optimal alignment.
             let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
             for layer in 0..size.depth_or_array_layers {
                 let rows_offset = layer * block_rows_per_image;
-                for row in 0..height_blocks {
+                for row in rows_offset..rows_offset + height_blocks {
+                    let src_offset = data_layout.offset as u32 + row * bytes_per_row;
+                    let dst_offset = row * stage_bytes_per_row;
                     unsafe {
-                        ptr::copy_nonoverlapping(
-                            data.as_ptr().offset(
-                                data_layout.offset as isize
-                                    + (rows_offset + row) as isize * bytes_per_row as isize,
-                            ),
-                            staging_buffer_ptr.as_ptr().offset(
-                                (rows_offset + row) as isize * stage_bytes_per_row as isize,
-                            ),
+                        staging_buffer.write_with_offset(
+                            data,
+                            src_offset as isize,
+                            dst_offset as isize,
                             copy_bytes_per_row,
-                        );
+                        )
                     }
                 }
             }
         }
 
-        let staging_buffer = unsafe { staging_buffer.flush() };
+        let staging_buffer = staging_buffer.flush();
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
