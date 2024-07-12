@@ -30,8 +30,7 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{
     borrow::Cow,
-    iter,
-    ptr::{self, NonNull},
+    ptr::NonNull,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -252,70 +251,31 @@ impl Global {
     }
 
     #[cfg(feature = "replay")]
-    pub fn device_wait_for_buffer<A: HalApi>(
+    pub fn device_set_buffer_data<A: HalApi>(
         &self,
-        device_id: DeviceId,
-        buffer_id: id::BufferId,
-    ) -> Result<(), WaitIdleError> {
-        let hub = A::hub(self);
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        let buffer = match hub.buffers.get(buffer_id) {
-            Ok(buffer) => buffer,
-            Err(_) => return Ok(()),
-        };
-
-        let last_submission = device
-            .lock_life()
-            .get_buffer_latest_submission_index(&buffer);
-
-        if let Some(last_submission) = last_submission {
-            device.wait_for_submit(last_submission)
-        } else {
-            Ok(())
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn device_set_buffer_sub_data<A: HalApi>(
-        &self,
-        device_id: DeviceId,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
     ) -> BufferAccessResult {
-        profiling::scope!("Device::set_buffer_sub_data");
-
         let hub = A::hub(self);
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
 
         let buffer = hub
             .buffers
             .get(buffer_id)
             .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            let data_path = trace.make_binary("bin", data);
-            trace.add(trace::Action::WriteBuffer {
-                id: buffer_id,
-                data: data_path,
-                range: offset..offset + data.len() as BufferAddress,
-                queued: false,
-            });
-        }
+        let device = &buffer.device;
 
         device.check_is_valid()?;
         buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
-        //assert!(buffer isn't used by the GPU);
+
+        let last_submission = device
+            .lock_life()
+            .get_buffer_latest_submission_index(&buffer);
+
+        if let Some(last_submission) = last_submission {
+            device.wait_for_submit(last_submission)?;
+        }
 
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = buffer.try_raw(&snatch_guard)?;
@@ -324,11 +284,12 @@ impl Global {
                 .raw()
                 .map_buffer(raw_buf, offset..offset + data.len() as u64)
                 .map_err(DeviceError::from)?;
-            ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
+            std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
             if !mapping.is_coherent {
-                device
-                    .raw()
-                    .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
+                device.raw().flush_mapped_ranges(
+                    raw_buf,
+                    std::iter::once(offset..offset + data.len() as u64),
+                );
             }
             device.raw().unmap_buffer(raw_buf);
         }
