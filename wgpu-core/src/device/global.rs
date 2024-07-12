@@ -2519,7 +2519,7 @@ impl Global {
         }
         let map_state = &*buffer.map_state.lock();
         match *map_state {
-            resource::BufferMapState::Init { ref ptr, .. } => {
+            resource::BufferMapState::Init { ref staging_buffer } => {
                 // offset (u64) can not be < 0, so no need to validate the lower bound
                 if offset + range_size > buffer.size {
                     return Err(BufferAccessError::OutOfBoundsOverrun {
@@ -2527,12 +2527,9 @@ impl Global {
                         max: buffer.size,
                     });
                 }
-                unsafe {
-                    Ok((
-                        NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)),
-                        range_size,
-                    ))
-                }
+                let ptr = unsafe { staging_buffer.ptr() };
+                let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
+                Ok((ptr, range_size))
             }
             resource::BufferMapState::Active {
                 ref ptr, ref range, ..
