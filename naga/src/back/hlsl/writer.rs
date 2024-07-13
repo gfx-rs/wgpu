@@ -2014,7 +2014,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         let chain = mem::take(&mut self.temp_access_chain);
                         let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
                         let width = match func_ctx.resolve_type(value, &module.types) {
-                            TypeInner::Scalar(Scalar { width: 8, .. }) => "64",
+                            &TypeInner::Scalar(Scalar { width: 8, .. }) => "64",
                             _ => "",
                         };
                         write!(self.out, "{var_name}.Interlocked{fun_str}{width}(")?;
