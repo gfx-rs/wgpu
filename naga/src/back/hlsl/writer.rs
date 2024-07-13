@@ -2856,7 +2856,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let inner = func_ctx.resolve_type(expr, &module.types);
                 let close_paren = match convert {
                     Some(dst_width) => {
-                        let scalar = crate::Scalar {
+                        let scalar = Scalar {
                             kind,
                             width: dst_width,
                         };
@@ -3217,7 +3217,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntOverload(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(crate::Scalar {
+                        if let Some(Scalar {
                             kind: ScalarKind::Sint,
                             width: 4,
                         }) = scalar_kind
@@ -3235,7 +3235,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntReturnType(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(crate::Scalar {
+                        if let Some(Scalar {
                             kind: ScalarKind::Sint,
                             width: 4,
                         }) = scalar_kind
