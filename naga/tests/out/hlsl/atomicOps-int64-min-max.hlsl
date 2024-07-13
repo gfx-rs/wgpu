@@ -17,14 +17,14 @@ RWByteAddressBuffer storage_struct : register(u2);
 [numthreads(2, 1, 1)]
 void cs_main(uint3 id : SV_GroupThreadID)
 {
-    storage_atomic_scalar.InterlockedMax(0, 1uL);
-    storage_atomic_arr.InterlockedMax(8, 1uL);
-    storage_struct.InterlockedMax(0, 1uL);
-    storage_struct.InterlockedMax(8+8, 1uL);
+    storage_atomic_scalar.InterlockedMax64(0, 1uL);
+    storage_atomic_arr.InterlockedMax64(8, 1uL);
+    storage_struct.InterlockedMax64(0, 1uL);
+    storage_struct.InterlockedMax64(8+8, 1uL);
     GroupMemoryBarrierWithGroupSync();
-    storage_atomic_scalar.InterlockedMin(0, 1uL);
-    storage_atomic_arr.InterlockedMin(8, 1uL);
-    storage_struct.InterlockedMin(0, 1uL);
-    storage_struct.InterlockedMin(8+8, 1uL);
+    storage_atomic_scalar.InterlockedMin64(0, 1uL);
+    storage_atomic_arr.InterlockedMin64(8, 1uL);
+    storage_struct.InterlockedMin64(0, 1uL);
+    storage_struct.InterlockedMin64(8+8, 1uL);
     return;
 }
