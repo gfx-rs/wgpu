@@ -1907,7 +1907,7 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         limits: &wgt::Limits,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
+    ) -> Result<hal::BufferBinding<'a, A::Buffer>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
         let (binding_ty, dynamic, min_size) = match decl.ty {

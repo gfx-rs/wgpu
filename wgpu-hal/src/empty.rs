@@ -399,11 +399,15 @@ impl crate::CommandEncoder for Encoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, Api>,
+        binding: crate::BufferBinding<'a, Resource>,
         format: wgt::IndexFormat,
     ) {
     }
-    unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: crate::BufferBinding<'a, Api>) {
+    unsafe fn set_vertex_buffer<'a>(
+        &mut self,
+        index: u32,
+        binding: crate::BufferBinding<'a, Resource>,
+    ) {
     }
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}
