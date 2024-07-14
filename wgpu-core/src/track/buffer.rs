@@ -284,7 +284,7 @@ impl<A: HalApi> BufferTracker<A> {
     pub fn drain_transitions<'a, 'b: 'a>(
         &'b mut self,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> impl Iterator<Item = BufferBarrier<'a, A>> {
+    ) -> impl Iterator<Item = BufferBarrier<'a, A::Buffer>> {
         let buffer_barriers = self.temp.drain(..).map(|pending| {
             let buf = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
             pending.into_hal(buf, snatch_guard)
@@ -557,7 +557,7 @@ impl<A: HalApi> DeviceBufferTracker<A> {
         &'a mut self,
         tracker: &'a BufferTracker<A>,
         snatch_guard: &'b SnatchGuard<'b>,
-    ) -> impl Iterator<Item = BufferBarrier<'a, A>> {
+    ) -> impl Iterator<Item = BufferBarrier<'a, A::Buffer>> {
         for index in tracker.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
 

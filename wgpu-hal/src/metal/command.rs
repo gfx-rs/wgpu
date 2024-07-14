@@ -241,7 +241,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
     where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>,
     {
     }
 

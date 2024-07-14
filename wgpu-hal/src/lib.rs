@@ -1103,7 +1103,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = BufferBarrier<'a, Self::A>>;
+        T: Iterator<Item = BufferBarrier<'a, <Self::A as Api>::Buffer>>;
 
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
@@ -1975,8 +1975,8 @@ pub struct Rect<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct BufferBarrier<'a, A: Api> {
-    pub buffer: &'a A::Buffer,
+pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
+    pub buffer: &'a B,
     pub usage: Range<BufferUses>,
 }
 
