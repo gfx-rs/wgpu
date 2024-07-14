@@ -183,6 +183,7 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
 - Unconsumed vertex outputs are now always allowed. Removed `StageError::InputNotConsumed`, `Features::SHADER_UNUSED_VERTEX_OUTPUT`, and associated validation. By @Imberflur in [#5531](https://github.com/gfx-rs/wgpu/pull/5531)
 - Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
 - `wgpu::Error` is now `Sync`, making it possible to be wrapped in `anyhow::Error` or `eyre::Report`. By @nolanderc in [#5820](https://github.com/gfx-rs/wgpu/pull/5820)
+- Added benchmark suite. By @cwfitzgerald in [#5694](https://github.com/gfx-rs/wgpu/pull/5694), compute passes by @wumpf in [#5767](https://github.com/gfx-rs/wgpu/pull/5767)
 
 #### Metal
 - Removed the `link` Cargo feature.
