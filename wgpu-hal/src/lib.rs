@@ -1235,10 +1235,14 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, Self::A>,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer>,
         format: wgt::IndexFormat,
     );
-    unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: BufferBinding<'a, Self::A>);
+    unsafe fn set_vertex_buffer<'a>(
+        &mut self,
+        index: u32,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer>,
+    );
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
     unsafe fn set_stencil_reference(&mut self, value: u32);
@@ -1736,9 +1740,9 @@ pub struct PipelineLayoutDescriptor<'a, A: Api> {
 }
 
 #[derive(Debug)]
-pub struct BufferBinding<'a, A: Api> {
+pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     /// The buffer being bound.
-    pub buffer: &'a A::Buffer,
+    pub buffer: &'a B,
 
     /// The offset at which the bound region starts.
     ///
@@ -1762,7 +1766,7 @@ pub struct BufferBinding<'a, A: Api> {
 }
 
 // Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for BufferBinding<'_, A> {
+impl<B: DynBuffer> Clone for BufferBinding<'_, B> {
     fn clone(&self) -> Self {
         Self {
             buffer: self.buffer,
@@ -1808,7 +1812,7 @@ pub struct BindGroupEntry {
 pub struct BindGroupDescriptor<'a, A: Api> {
     pub label: Label<'a>,
     pub layout: &'a A::BindGroupLayout,
-    pub buffers: &'a [BufferBinding<'a, A>],
+    pub buffers: &'a [BufferBinding<'a, A::Buffer>],
     pub samplers: &'a [&'a A::Sampler],
     pub textures: &'a [TextureBinding<'a, A>],
     pub entries: &'a [BindGroupEntry],
