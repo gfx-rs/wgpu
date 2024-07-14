@@ -95,15 +95,14 @@ pub enum WaitIdleError {
 ///         submission index.
 ///
 ///     3)  `handle_mapping` drains `self.ready_to_map` and actually maps the
-///         buffers, collecting a list of notification closures to call. But any
-///         buffers that were dropped by the user get moved to
-///         `self.free_resources`.
+///         buffers, collecting a list of notification closures to call.
 ///
 /// Only calling `Global::buffer_map_async` clones a new `Arc` for the
 /// buffer. This new `Arc` is only dropped by `handle_mapping`.
 pub(crate) struct LifetimeTracker<A: HalApi> {
-    /// Resources that the user has requested be mapped, but which are used by
-    /// queue submissions still in flight.
+    /// Buffers for which a call to [`Buffer::map_async`] has succeeded, but
+    /// which haven't been examined by `triage_mapped` yet to decide when they
+    /// can be mapped.
     mapped: Vec<Arc<Buffer<A>>>,
 
     /// Resources used by queue submissions still in flight. One entry per
