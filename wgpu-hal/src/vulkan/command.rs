@@ -116,7 +116,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>,
     {
         //Note: this is done so that we never end up with empty stage flags
         let mut src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
