@@ -264,8 +264,8 @@ pub mod api {
 
 mod dynamic;
 
-pub use dynamic::DynBuffer;
 pub(crate) use dynamic::{impl_dyn_resource, DynResource};
+pub use dynamic::{DynBuffer, DynCommandEncoder};
 
 use std::{
     borrow::{Borrow, Cow},
@@ -392,7 +392,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type Device: Device<A = Self>;
 
     type Queue: Queue<A = Self>;
-    type CommandEncoder: CommandEncoder<A = Self>;
+    type CommandEncoder: DynCommandEncoder + CommandEncoder<A = Self>;
 
     /// This API's command buffer type.
     ///
