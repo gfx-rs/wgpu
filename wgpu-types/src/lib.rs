@@ -1769,11 +1769,43 @@ pub struct AdapterInfo {
     pub backend: Backend,
 }
 
+/// Hints to the device about the memory allocation strategy.
+///
+/// Some backends may ignore these hints.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum MemoryHints {
+    /// Favor performance over memory usage (the default value).
+    #[default]
+    Performance,
+    /// Favor memory usage over performance.
+    MemoryUsage,
+    /// Applications that have control over the content that is rendered
+    /// (typically games) may find an optimal compromise between memory
+    /// usage and performance by specifying the allocation configuration.
+    Manual {
+        /// Defines the range of allowed memory block sizes for sub-allocated
+        /// resources.
+        ///
+        /// The backend may attempt to group multiple resources into fewer
+        /// device memory blocks (sub-allocation) for performance reasons.
+        /// The start of the provided range specifies the initial memory
+        /// block size for sub-allocated resources. After running out of
+        /// space in existing memory blocks, the backend may chose to
+        /// progressively increase the block size of subsequent allocations
+        /// up to a limit specified by the end of the range.
+        ///
+        /// This does not limit resource sizes. If a resource does not fit
+        /// in the specified range, it will typically be placed in a dedicated
+        /// memory block.
+        suballocated_device_memory_block_size: Range<u64>,
+    },
+}
+
 /// Describes a [`Device`](../wgpu/struct.Device.html).
 ///
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#gpudevicedescriptor).
-#[repr(C)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor<L> {
@@ -1791,6 +1823,8 @@ pub struct DeviceDescriptor<L> {
     /// Exactly the specified limits, and no better or worse,
     /// will be allowed in validation of API calls on the resulting device.
     pub required_limits: Limits,
+    /// Hints for memory allocation strategies.
+    pub memory_hints: MemoryHints,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1800,6 +1834,7 @@ impl<L> DeviceDescriptor<L> {
             label: fun(&self.label),
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
+            memory_hints: self.memory_hints.clone(),
         }
     }
 }
@@ -3620,27 +3655,35 @@ impl TextureFormat {
     /// <https://gpuweb.github.io/gpuweb/#render-target-pixel-byte-cost>
     pub fn target_pixel_byte_cost(&self) -> Option<u32> {
         match *self {
-            Self::R8Unorm | Self::R8Uint | Self::R8Sint => Some(1),
+            Self::R8Unorm | Self::R8Snorm | Self::R8Uint | Self::R8Sint => Some(1),
             Self::Rg8Unorm
+            | Self::Rg8Snorm
             | Self::Rg8Uint
             | Self::Rg8Sint
             | Self::R16Uint
             | Self::R16Sint
+            | Self::R16Unorm
+            | Self::R16Snorm
             | Self::R16Float => Some(2),
             Self::Rgba8Uint
             | Self::Rgba8Sint
             | Self::Rg16Uint
             | Self::Rg16Sint
+            | Self::Rg16Unorm
+            | Self::Rg16Snorm
             | Self::Rg16Float
             | Self::R32Uint
             | Self::R32Sint
             | Self::R32Float => Some(4),
             Self::Rgba8Unorm
             | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
             | Self::Bgra8Unorm
             | Self::Bgra8UnormSrgb
             | Self::Rgba16Uint
             | Self::Rgba16Sint
+            | Self::Rgba16Unorm
+            | Self::Rgba16Snorm
             | Self::Rgba16Float
             | Self::Rg32Uint
             | Self::Rg32Sint
@@ -3649,14 +3692,45 @@ impl TextureFormat {
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float => Some(8),
             Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
-            Self::Rgba8Snorm | Self::Rg8Snorm | Self::R8Snorm => None,
-            _ => None,
+            Self::Stencil8
+            | Self::Depth16Unorm
+            | Self::Depth24Plus
+            | Self::Depth24PlusStencil8
+            | Self::Depth32Float
+            | Self::Depth32FloatStencil8
+            | Self::NV12
+            | Self::Rgb9e5Ufloat
+            | Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc4RUnorm
+            | Self::Bc4RSnorm
+            | Self::Bc5RgUnorm
+            | Self::Bc5RgSnorm
+            | Self::Bc6hRgbUfloat
+            | Self::Bc6hRgbFloat
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb
+            | Self::Etc2Rgb8Unorm
+            | Self::Etc2Rgb8UnormSrgb
+            | Self::Etc2Rgb8A1Unorm
+            | Self::Etc2Rgb8A1UnormSrgb
+            | Self::Etc2Rgba8Unorm
+            | Self::Etc2Rgba8UnormSrgb
+            | Self::EacR11Unorm
+            | Self::EacR11Snorm
+            | Self::EacRg11Unorm
+            | Self::EacRg11Snorm
+            | Self::Astc { .. } => None,
         }
     }
 
     /// See <https://gpuweb.github.io/gpuweb/#render-target-component-alignment>
     pub fn target_component_alignment(&self) -> Option<u32> {
-        match self {
+        match *self {
             Self::R8Unorm
             | Self::R8Snorm
             | Self::R8Uint
@@ -3674,12 +3748,18 @@ impl TextureFormat {
             | Self::Bgra8UnormSrgb => Some(1),
             Self::R16Uint
             | Self::R16Sint
+            | Self::R16Unorm
+            | Self::R16Snorm
             | Self::R16Float
             | Self::Rg16Uint
             | Self::Rg16Sint
+            | Self::Rg16Unorm
+            | Self::Rg16Snorm
             | Self::Rg16Float
             | Self::Rgba16Uint
             | Self::Rgba16Sint
+            | Self::Rgba16Unorm
+            | Self::Rgba16Snorm
             | Self::Rgba16Float => Some(2),
             Self::R32Uint
             | Self::R32Sint
@@ -3693,7 +3773,39 @@ impl TextureFormat {
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float => Some(4),
-            _ => None,
+            Self::Stencil8
+            | Self::Depth16Unorm
+            | Self::Depth24Plus
+            | Self::Depth24PlusStencil8
+            | Self::Depth32Float
+            | Self::Depth32FloatStencil8
+            | Self::NV12
+            | Self::Rgb9e5Ufloat
+            | Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc4RUnorm
+            | Self::Bc4RSnorm
+            | Self::Bc5RgUnorm
+            | Self::Bc5RgSnorm
+            | Self::Bc6hRgbUfloat
+            | Self::Bc6hRgbFloat
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb
+            | Self::Etc2Rgb8Unorm
+            | Self::Etc2Rgb8UnormSrgb
+            | Self::Etc2Rgb8A1Unorm
+            | Self::Etc2Rgb8A1UnormSrgb
+            | Self::Etc2Rgba8Unorm
+            | Self::Etc2Rgba8UnormSrgb
+            | Self::EacR11Unorm
+            | Self::EacR11Snorm
+            | Self::EacRg11Unorm
+            | Self::EacRg11Snorm
+            | Self::Astc { .. } => None,
         }
     }
 
@@ -5334,13 +5446,13 @@ pub struct SurfaceConfiguration<V> {
     ///
     /// Typical values range from 3 to 1, but higher values are possible:
     /// * Choose 2 or higher for potentially smoother frame display, as it allows to be at least one frame
-    /// to be queued up. This typically avoids starving the GPU's work queue.
-    /// Higher values are useful for achieving a constant flow of frames to the display under varying load.
+    ///   to be queued up. This typically avoids starving the GPU's work queue.
+    ///   Higher values are useful for achieving a constant flow of frames to the display under varying load.
     /// * Choose 1 for low latency from frame recording to frame display.
-    /// ⚠️ If the backend does not support waiting on present, this will cause the CPU to wait for the GPU
-    /// to finish all work related to the previous frame when calling `wgpu::Surface::get_current_texture`,
-    /// causing CPU-GPU serialization (i.e. when `wgpu::Surface::get_current_texture` returns, the GPU might be idle).
-    /// It is currently not possible to query this. See <https://github.com/gfx-rs/wgpu/issues/2869>.
+    ///   ⚠️ If the backend does not support waiting on present, this will cause the CPU to wait for the GPU
+    ///   to finish all work related to the previous frame when calling `wgpu::Surface::get_current_texture`,
+    ///   causing CPU-GPU serialization (i.e. when `wgpu::Surface::get_current_texture` returns, the GPU might be idle).
+    ///   It is currently not possible to query this. See <https://github.com/gfx-rs/wgpu/issues/2869>.
     /// * A value of 0 is generally not supported and always clamped to a higher value.
     pub desired_maximum_frame_latency: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.

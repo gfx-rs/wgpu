@@ -104,6 +104,7 @@ pub async fn initialize_device(
                 label: None,
                 required_features: features,
                 required_limits: limits,
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )

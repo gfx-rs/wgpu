@@ -71,6 +71,7 @@ pub mod resource;
 mod snatch;
 pub mod storage;
 mod track;
+mod utils;
 // This is public for users who pre-compile shaders while still wanting to
 // preserve all run-time checks that `wgpu-core` does.
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be

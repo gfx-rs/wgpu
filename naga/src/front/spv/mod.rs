@@ -4335,7 +4335,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         if !self.upgrade_atomics.is_empty() {
             log::info!("Upgrading atomic pointers...");
-            module.upgrade_atomics(std::mem::take(&mut self.upgrade_atomics))?;
+            module.upgrade_atomics(mem::take(&mut self.upgrade_atomics))?;
         }
 
         // Do entry point specific processing after all functions are parsed so that we can
@@ -5710,7 +5710,7 @@ mod test {
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
     }
 
-    #[cfg(all(feature = "wgsl-in", feature = "wgsl-out"))]
+    #[cfg(all(feature = "wgsl-in", wgsl_out))]
     #[test]
     fn atomic_i_inc() {
         let _ = env_logger::builder().is_test(true).try_init();

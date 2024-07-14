@@ -20,6 +20,7 @@ use std::{
     fmt,
     future::{ready, Ready},
     ops::Range,
+    ptr::NonNull,
     slice,
     sync::Arc,
 };
@@ -2202,7 +2203,7 @@ impl crate::Context for ContextWgpuCore {
         size: wgt::BufferSize,
     ) -> Option<()> {
         match wgc::gfx_select!(
-            *queue => self.0.queue_validate_write_buffer(*queue, *buffer, offset, size.get())
+            *queue => self.0.queue_validate_write_buffer(*queue, *buffer, offset, size)
         ) {
             Ok(()) => Some(()),
             Err(err) => {
@@ -3471,7 +3472,7 @@ impl crate::context::QueueWriteBuffer for QueueWriteBuffer {
 
 #[derive(Debug)]
 pub struct BufferMappedRange {
-    ptr: *mut u8,
+    ptr: NonNull<u8>,
     size: usize,
 }
 
@@ -3483,12 +3484,12 @@ unsafe impl Sync for BufferMappedRange {}
 impl crate::context::BufferMappedRange for BufferMappedRange {
     #[inline]
     fn slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr, self.size) }
+        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
     }
 
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.ptr, self.size) }
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
     }
 }
 

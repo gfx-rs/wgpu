@@ -8,7 +8,8 @@ use winapi::{
     shared::{
         dxgi, dxgi1_2, dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM, minwindef::DWORD, windef, winerror,
     },
-    um::{d3d12 as d3d12_ty, d3d12sdklayers, winuser},
+    um::{d3d12 as d3d12_ty, d3d12sdklayers, winnt, winuser},
+    Interface,
 };
 
 impl Drop for super::Adapter {
@@ -130,7 +131,24 @@ impl super::Adapter {
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
-            driver: String::new(),
+            driver: {
+                let mut i: winnt::LARGE_INTEGER = unsafe { mem::zeroed() };
+                if 0 == unsafe {
+                    adapter.CheckInterfaceSupport(&dxgi::IDXGIDevice::uuidof(), &mut i)
+                } {
+                    let quad_part = unsafe { *i.QuadPart() };
+                    const MASK: i64 = 0xFFFF;
+                    format!(
+                        "{}.{}.{}.{}",
+                        quad_part >> 48,
+                        (quad_part >> 32) & MASK,
+                        (quad_part >> 16) & MASK,
+                        quad_part & MASK
+                    )
+                } else {
+                    String::new()
+                }
+            },
             driver_info: String::new(),
         };
 
@@ -503,6 +521,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         _features: wgt::Features,
         limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = {
             profiling::scope!("ID3D12Device::CreateCommandQueue");
@@ -520,6 +539,7 @@ impl crate::Adapter for super::Adapter {
             self.device.clone(),
             queue.clone(),
             limits,
+            memory_hints,
             self.private_caps,
             &self.library,
             self.dxc_container.clone(),

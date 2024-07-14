@@ -31,7 +31,8 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{
     borrow::Cow,
-    iter, ptr,
+    iter,
+    ptr::{self, NonNull},
     sync::{atomic::Ordering, Arc},
 };
 
@@ -320,10 +321,7 @@ impl Global {
                     .raw()
                     .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
             }
-            device
-                .raw()
-                .unmap_buffer(raw_buf)
-                .map_err(DeviceError::from)?;
+            device.raw().unmap_buffer(raw_buf);
         }
 
         Ok(())
@@ -369,10 +367,7 @@ impl Global {
                 );
             }
             ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());
-            device
-                .raw()
-                .unmap_buffer(raw_buf)
-                .map_err(DeviceError::from)?;
+            device.raw().unmap_buffer(raw_buf);
         }
 
         Ok(())
@@ -428,28 +423,9 @@ impl Global {
             buffer_id,
         );
 
-        let last_submit_index = buffer.submission_index();
-
-        let device = buffer.device.clone();
-
-        if device
-            .pending_writes
-            .lock()
-            .as_ref()
-            .unwrap()
-            .contains_buffer(&buffer)
-        {
-            device.lock_life().future_suspected_buffers.push(buffer);
-        } else {
-            device
-                .lock_life()
-                .suspected_resources
-                .buffers
-                .insert(buffer.tracker_index(), buffer);
-        }
-
         if wait {
-            match device.wait_for_submit(last_submit_index) {
+            let last_submit_index = buffer.submission_index();
+            match buffer.device.wait_for_submit(last_submit_index) {
                 Ok(()) => (),
                 Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
             }
@@ -622,32 +598,9 @@ impl Global {
                 t.add(trace::Action::DestroyTexture(texture_id));
             }
 
-            let last_submit_index = texture.submission_index();
-
-            let device = &texture.device;
-            {
-                if device
-                    .pending_writes
-                    .lock()
-                    .as_ref()
-                    .unwrap()
-                    .contains_texture(&texture)
-                {
-                    device
-                        .lock_life()
-                        .future_suspected_textures
-                        .push(texture.clone());
-                } else {
-                    device
-                        .lock_life()
-                        .suspected_resources
-                        .textures
-                        .insert(texture.tracker_index(), texture.clone());
-                }
-            }
-
             if wait {
-                match device.wait_for_submit(last_submit_index) {
+                let last_submit_index = texture.submission_index();
+                match texture.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
                     Err(e) => log::error!("Failed to wait for texture {texture_id:?}: {e}"),
                 }
@@ -718,15 +671,8 @@ impl Global {
                 t.add(trace::Action::DestroyTextureView(texture_view_id));
             }
 
-            let last_submit_index = view.submission_index();
-
-            view.device
-                .lock_life()
-                .suspected_resources
-                .texture_views
-                .insert(view.tracker_index(), view.clone());
-
             if wait {
+                let last_submit_index = view.submission_index();
                 match view.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
                     Err(e) => {
@@ -781,18 +727,11 @@ impl Global {
 
         let hub = A::hub(self);
 
-        if let Some(sampler) = hub.samplers.unregister(sampler_id) {
+        if let Some(_sampler) = hub.samplers.unregister(sampler_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = sampler.device.trace.lock().as_mut() {
+            if let Some(t) = _sampler.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroySampler(sampler_id));
             }
-
-            sampler
-                .device
-                .lock_life()
-                .suspected_resources
-                .samplers
-                .insert(sampler.tracker_index(), sampler.clone());
         }
     }
 
@@ -865,18 +804,11 @@ impl Global {
 
         let hub = A::hub(self);
 
-        if let Some(layout) = hub.bind_group_layouts.unregister(bind_group_layout_id) {
+        if let Some(_layout) = hub.bind_group_layouts.unregister(bind_group_layout_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = layout.device.trace.lock().as_mut() {
+            if let Some(t) = _layout.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyBindGroupLayout(bind_group_layout_id));
             }
-
-            layout
-                .device
-                .lock_life()
-                .suspected_resources
-                .bind_group_layouts
-                .insert(layout.tracker_index(), layout.clone());
         }
     }
 
@@ -949,18 +881,11 @@ impl Global {
         api_log!("PipelineLayout::drop {pipeline_layout_id:?}");
 
         let hub = A::hub(self);
-        if let Some(layout) = hub.pipeline_layouts.unregister(pipeline_layout_id) {
+        if let Some(_layout) = hub.pipeline_layouts.unregister(pipeline_layout_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = layout.device.trace.lock().as_mut() {
+            if let Some(t) = _layout.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyPipelineLayout(pipeline_layout_id));
             }
-
-            layout
-                .device
-                .lock_life()
-                .suspected_resources
-                .pipeline_layouts
-                .insert(layout.tracker_index(), layout.clone());
         }
     }
 
@@ -1097,18 +1022,11 @@ impl Global {
 
         let hub = A::hub(self);
 
-        if let Some(bind_group) = hub.bind_groups.unregister(bind_group_id) {
+        if let Some(_bind_group) = hub.bind_groups.unregister(bind_group_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = bind_group.device.trace.lock().as_mut() {
+            if let Some(t) = _bind_group.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyBindGroup(bind_group_id));
             }
-
-            bind_group
-                .device
-                .lock_life()
-                .suspected_resources
-                .bind_groups
-                .insert(bind_group.tracker_index(), bind_group.clone());
         }
     }
 
@@ -1308,9 +1226,6 @@ impl Global {
             .unregister(command_encoder_id.into_command_buffer_id())
         {
             cmd_buf.data.lock().as_mut().unwrap().encoder.discard();
-            cmd_buf
-                .device
-                .untrack(&cmd_buf.data.lock().as_ref().unwrap().trackers);
         }
     }
 
@@ -1394,18 +1309,11 @@ impl Global {
 
         let hub = A::hub(self);
 
-        if let Some(bundle) = hub.render_bundles.unregister(render_bundle_id) {
+        if let Some(_bundle) = hub.render_bundles.unregister(render_bundle_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = bundle.device.trace.lock().as_mut() {
+            if let Some(t) = _bundle.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyRenderBundle(render_bundle_id));
             }
-
-            bundle
-                .device
-                .lock_life()
-                .suspected_resources
-                .render_bundles
-                .insert(bundle.tracker_index(), bundle.clone());
         }
     }
 
@@ -1455,19 +1363,11 @@ impl Global {
 
         let hub = A::hub(self);
 
-        if let Some(query_set) = hub.query_sets.unregister(query_set_id) {
-            let device = &query_set.device;
-
+        if let Some(_query_set) = hub.query_sets.unregister(query_set_id) {
             #[cfg(feature = "trace")]
-            if let Some(trace) = device.trace.lock().as_mut() {
+            if let Some(trace) = _query_set.device.trace.lock().as_mut() {
                 trace.add(trace::Action::DestroyQuerySet(query_set_id));
             }
-
-            device
-                .lock_life()
-                .suspected_resources
-                .query_sets
-                .insert(query_set.tracker_index(), query_set.clone());
         }
     }
 
@@ -1626,8 +1526,17 @@ impl Global {
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
                 pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
-                let group_ids = &mut ids.group_ids.iter();
-                for (bgl_id, bgl) in group_ids.zip(pipeline.layout.bind_group_layouts.iter()) {
+                let mut group_ids = ids.group_ids.iter();
+                // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
+                // the first iterator before realizing that the second iterator has finished.
+                // The `pipeline.layout.bind_group_layouts` iterator will always be shorter than `ids.group_ids`,
+                // so using it as the first iterator for `.zip()` will work properly.
+                for (bgl, bgl_id) in pipeline
+                    .layout
+                    .bind_group_layouts
+                    .iter()
+                    .zip(&mut group_ids)
+                {
                     bgl_guard.insert(*bgl_id, bgl.clone());
                 }
                 for bgl_id in group_ids {
@@ -1698,24 +1607,11 @@ impl Global {
 
         let hub = A::hub(self);
 
-        if let Some(pipeline) = hub.render_pipelines.unregister(render_pipeline_id) {
-            let device = &pipeline.device;
-
+        if let Some(_pipeline) = hub.render_pipelines.unregister(render_pipeline_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = pipeline.device.trace.lock().as_mut() {
+            if let Some(t) = _pipeline.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyRenderPipeline(render_pipeline_id));
             }
-
-            let mut life_lock = device.lock_life();
-            life_lock
-                .suspected_resources
-                .render_pipelines
-                .insert(pipeline.tracker_index(), pipeline.clone());
-
-            life_lock
-                .suspected_resources
-                .pipeline_layouts
-                .insert(pipeline.layout.tracker_index(), pipeline.layout.clone());
         }
     }
 
@@ -1828,8 +1724,17 @@ impl Global {
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
                 pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
-                let group_ids = &mut ids.group_ids.iter();
-                for (bgl_id, bgl) in group_ids.zip(pipeline.layout.bind_group_layouts.iter()) {
+                let mut group_ids = ids.group_ids.iter();
+                // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
+                // the first iterator before realizing that the second iterator has finished.
+                // The `pipeline.layout.bind_group_layouts` iterator will always be shorter than `ids.group_ids`,
+                // so using it as the first iterator for `.zip()` will work properly.
+                for (bgl, bgl_id) in pipeline
+                    .layout
+                    .bind_group_layouts
+                    .iter()
+                    .zip(&mut group_ids)
+                {
                     bgl_guard.insert(*bgl_id, bgl.clone());
                 }
                 for bgl_id in group_ids {
@@ -1900,23 +1805,11 @@ impl Global {
 
         let hub = A::hub(self);
 
-        if let Some(pipeline) = hub.compute_pipelines.unregister(compute_pipeline_id) {
-            let device = &pipeline.device;
-
+        if let Some(_pipeline) = hub.compute_pipelines.unregister(compute_pipeline_id) {
             #[cfg(feature = "trace")]
-            if let Some(t) = device.trace.lock().as_mut() {
+            if let Some(t) = _pipeline.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyComputePipeline(compute_pipeline_id));
             }
-
-            let mut life_lock = device.lock_life();
-            life_lock
-                .suspected_resources
-                .compute_pipelines
-                .insert(pipeline.tracker_index(), pipeline.clone());
-            life_lock
-                .suspected_resources
-                .pipeline_layouts
-                .insert(pipeline.layout.tracker_index(), pipeline.layout.clone());
         }
     }
 
@@ -2244,23 +2137,6 @@ impl Global {
         };
 
         Some(error)
-    }
-
-    #[cfg(feature = "replay")]
-    /// Only triage suspected resource IDs. This helps us to avoid ID collisions
-    /// upon creating new resources when re-playing a trace.
-    pub fn device_maintain_ids<A: HalApi>(&self, device_id: DeviceId) -> Result<(), DeviceError> {
-        let hub = A::hub(self);
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        device.check_is_valid()?;
-
-        device.lock_life().triage_suspected(&device.trackers);
-        Ok(())
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
@@ -2611,7 +2487,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(*mut u8, u64), BufferAccessError> {
+    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
         api_log!("Buffer::get_mapped_range {buffer_id:?} offset {offset:?} size {size:?}");
 
@@ -2643,7 +2519,7 @@ impl Global {
         }
         let map_state = &*buffer.map_state.lock();
         match *map_state {
-            resource::BufferMapState::Init { ref ptr, .. } => {
+            resource::BufferMapState::Init { ref staging_buffer } => {
                 // offset (u64) can not be < 0, so no need to validate the lower bound
                 if offset + range_size > buffer.size {
                     return Err(BufferAccessError::OutOfBoundsOverrun {
@@ -2651,7 +2527,9 @@ impl Global {
                         max: buffer.size,
                     });
                 }
-                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+                let ptr = unsafe { staging_buffer.ptr() };
+                let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
+                Ok((ptr, range_size))
             }
             resource::BufferMapState::Active {
                 ref ptr, ref range, ..
@@ -2671,7 +2549,12 @@ impl Global {
                 // ptr points to the beginning of the range we mapped in map_async
                 // rather than the beginning of the buffer.
                 let relative_offset = (offset - range.start) as isize;
-                unsafe { Ok((ptr.as_ptr().offset(relative_offset), range_size)) }
+                unsafe {
+                    Ok((
+                        NonNull::new_unchecked(ptr.as_ptr().offset(relative_offset)),
+                        range_size,
+                    ))
+                }
             }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(BufferAccessError::NotMapped)

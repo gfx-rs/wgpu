@@ -24,7 +24,18 @@ default = []
 dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
+
+## Enables outputting to the Metal Shading Language (MSL).
+##
+## This enables MSL output regardless of the target platform.
+## If you want to enable it only when targeting iOS/tvOS/watchOS/macOS, use `naga/msl-out-if-target-apple`.
 msl-out = []
+
+## Enables outputting to the Metal Shading Language (MSL) only if the target platform is iOS/tvOS/watchOS/macOS.
+##
+## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
+msl-out-if-target-apple = []
+
 serialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
 deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
@@ -32,7 +43,18 @@ spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
 wgsl-in = ["dep:hexf-parse", "dep:unicode-xid", "compact"]
 wgsl-out = []
+
+## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
+##
+## This enables HLSL output regardless of the target platform.
+## If you want to enable it only when targeting Windows, use `hlsl-out-if-target-windows`.
 hlsl-out = []
+
+## Enables outputting to HLSL (Microsoft's High-Level Shader Language) only if the target platform is Windows.
+##
+## If you want to enable HLSL output it regardless of the target platform, use `naga/hlsl-out`.
+hlsl-out-if-target-windows = []
+
 compact = []
 
 [dependencies]
@@ -55,6 +77,9 @@ pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
 arrayvec.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true
 
 [dev-dependencies]
 diff = "0.1"

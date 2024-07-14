@@ -1,131 +1,18 @@
 use crate::{
-    binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::RenderBundle,
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError, DeviceLostClosure,
     },
     hal_api::HalApi,
     id,
-    lock::Mutex,
-    pipeline::{ComputePipeline, RenderPipeline},
-    resource::{
-        self, Buffer, DestroyedBuffer, DestroyedTexture, Labeled, QuerySet, Sampler, StagingBuffer,
-        Texture, TextureView, Trackable,
-    },
+    resource::{self, Buffer, Labeled, Trackable},
     snatch::SnatchGuard,
-    track::{ResourceTracker, Tracker, TrackerIndex},
-    FastHashMap, SubmissionIndex,
+    SubmissionIndex,
 };
 use smallvec::SmallVec;
 
 use std::sync::Arc;
 use thiserror::Error;
-
-/// A struct that keeps lists of resources that are no longer needed by the user.
-pub(crate) struct ResourceMaps<A: HalApi> {
-    pub buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
-    pub staging_buffers: FastHashMap<TrackerIndex, Arc<StagingBuffer<A>>>,
-    pub textures: FastHashMap<TrackerIndex, Arc<Texture<A>>>,
-    pub texture_views: FastHashMap<TrackerIndex, Arc<TextureView<A>>>,
-    pub samplers: FastHashMap<TrackerIndex, Arc<Sampler<A>>>,
-    pub bind_groups: FastHashMap<TrackerIndex, Arc<BindGroup<A>>>,
-    pub bind_group_layouts: FastHashMap<TrackerIndex, Arc<BindGroupLayout<A>>>,
-    pub render_pipelines: FastHashMap<TrackerIndex, Arc<RenderPipeline<A>>>,
-    pub compute_pipelines: FastHashMap<TrackerIndex, Arc<ComputePipeline<A>>>,
-    pub pipeline_layouts: FastHashMap<TrackerIndex, Arc<PipelineLayout<A>>>,
-    pub render_bundles: FastHashMap<TrackerIndex, Arc<RenderBundle<A>>>,
-    pub query_sets: FastHashMap<TrackerIndex, Arc<QuerySet<A>>>,
-    pub destroyed_buffers: FastHashMap<TrackerIndex, Arc<DestroyedBuffer<A>>>,
-    pub destroyed_textures: FastHashMap<TrackerIndex, Arc<DestroyedTexture<A>>>,
-}
-
-impl<A: HalApi> ResourceMaps<A> {
-    pub(crate) fn new() -> Self {
-        ResourceMaps {
-            buffers: FastHashMap::default(),
-            staging_buffers: FastHashMap::default(),
-            textures: FastHashMap::default(),
-            texture_views: FastHashMap::default(),
-            samplers: FastHashMap::default(),
-            bind_groups: FastHashMap::default(),
-            bind_group_layouts: FastHashMap::default(),
-            render_pipelines: FastHashMap::default(),
-            compute_pipelines: FastHashMap::default(),
-            pipeline_layouts: FastHashMap::default(),
-            render_bundles: FastHashMap::default(),
-            query_sets: FastHashMap::default(),
-            destroyed_buffers: FastHashMap::default(),
-            destroyed_textures: FastHashMap::default(),
-        }
-    }
-
-    pub(crate) fn clear(&mut self) {
-        let ResourceMaps {
-            buffers,
-            staging_buffers,
-            textures,
-            texture_views,
-            samplers,
-            bind_groups,
-            bind_group_layouts,
-            render_pipelines,
-            compute_pipelines,
-            pipeline_layouts,
-            render_bundles,
-            query_sets,
-            destroyed_buffers,
-            destroyed_textures,
-        } = self;
-        buffers.clear();
-        staging_buffers.clear();
-        textures.clear();
-        texture_views.clear();
-        samplers.clear();
-        bind_groups.clear();
-        bind_group_layouts.clear();
-        render_pipelines.clear();
-        compute_pipelines.clear();
-        pipeline_layouts.clear();
-        render_bundles.clear();
-        query_sets.clear();
-        destroyed_buffers.clear();
-        destroyed_textures.clear();
-    }
-
-    pub(crate) fn extend(&mut self, other: &mut Self) {
-        let ResourceMaps {
-            buffers,
-            staging_buffers,
-            textures,
-            texture_views,
-            samplers,
-            bind_groups,
-            bind_group_layouts,
-            render_pipelines,
-            compute_pipelines,
-            pipeline_layouts,
-            render_bundles,
-            query_sets,
-            destroyed_buffers,
-            destroyed_textures,
-        } = self;
-        buffers.extend(other.buffers.drain());
-        staging_buffers.extend(other.staging_buffers.drain());
-        textures.extend(other.textures.drain());
-        texture_views.extend(other.texture_views.drain());
-        samplers.extend(other.samplers.drain());
-        bind_groups.extend(other.bind_groups.drain());
-        bind_group_layouts.extend(other.bind_group_layouts.drain());
-        render_pipelines.extend(other.render_pipelines.drain());
-        compute_pipelines.extend(other.compute_pipelines.drain());
-        pipeline_layouts.extend(other.pipeline_layouts.drain());
-        render_bundles.extend(other.render_bundles.drain());
-        query_sets.extend(other.query_sets.drain());
-        destroyed_buffers.extend(other.destroyed_buffers.drain());
-        destroyed_textures.extend(other.destroyed_textures.drain());
-    }
-}
 
 /// A command submitted to the GPU for execution.
 ///
@@ -134,30 +21,8 @@ impl<A: HalApi> ResourceMaps<A> {
 /// [`wgpu_hal`] requires that, when a command is submitted to a queue, all the
 /// resources it uses must remain alive until it has finished executing.
 ///
-/// The natural way to satisfy this would be for `ActiveSubmission` to hold
-/// strong references to all the resources used by its commands. However, that
-/// would entail dropping those strong references every time a queue submission
-/// finishes, adjusting the reference counts of all the resources it used. This
-/// is usually needless work: it's rare for the active submission queue to be
-/// the final reference to an object. Usually the user is still holding on to
-/// it.
-///
-/// To avoid this, an `ActiveSubmission` does not initially hold any strong
-/// references to its commands' resources. Instead, each resource tracks the
-/// most recent submission index at which it has been used in
-/// [`ResourceInfo::submission_index`]. When the user drops a resource, if the
-/// submission in which it was last used is still present in the device's queue,
-/// we add the resource to [`ActiveSubmission::last_resources`]. Finally, when
-/// this `ActiveSubmission` is dequeued and dropped in
-/// [`LifetimeTracker::triage_submissions`], we drop `last_resources` along with
-/// it. Thus, unless a resource is dropped by the user, it doesn't need to be
-/// touched at all when processing completed work.
-///
-/// However, it's not clear that this is effective. See [#5560].
-///
 /// [`wgpu_hal`]: hal
 /// [`ResourceInfo::submission_index`]: crate::resource::ResourceInfo
-/// [#5560]: https://github.com/gfx-rs/wgpu/issues/5560
 struct ActiveSubmission<A: HalApi> {
     /// The index of the submission we track.
     ///
@@ -165,16 +30,8 @@ struct ActiveSubmission<A: HalApi> {
     /// submission has completed.
     index: SubmissionIndex,
 
-    /// Resources to be freed once this queue submission has completed.
-    ///
-    /// When the device is polled, for completed submissions,
-    /// `triage_submissions` removes resources that don't need to be held alive any longer
-    /// from there.
-    ///
-    /// This includes things like temporary resources and resources that are
-    /// used by submitted commands but have been dropped by the user (meaning that
-    /// this submission is their last reference.)
-    last_resources: ResourceMaps<A>,
+    /// Temporary resources to be freed once this queue submission has completed.
+    temp_resources: Vec<TempResource<A>>,
 
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer<A>>>,
@@ -249,17 +106,6 @@ pub(crate) struct LifetimeTracker<A: HalApi> {
     /// queue submissions still in flight.
     mapped: Vec<Arc<Buffer<A>>>,
 
-    /// Buffers can be used in a submission that is yet to be made, by the
-    /// means of `write_buffer()`, so we have a special place for them.
-    pub future_suspected_buffers: Vec<Arc<Buffer<A>>>,
-
-    /// Textures can be used in the upcoming submission by `write_texture`.
-    pub future_suspected_textures: Vec<Arc<Texture<A>>>,
-
-    /// Resources whose user handle has died (i.e. drop/destroy has been called)
-    /// and will likely be ready for destruction soon.
-    pub suspected_resources: ResourceMaps<A>,
-
     /// Resources used by queue submissions still in flight. One entry per
     /// submission, with older submissions appearing before younger.
     ///
@@ -288,9 +134,6 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub fn new() -> Self {
         Self {
             mapped: Vec::new(),
-            future_suspected_buffers: Vec::new(),
-            future_suspected_textures: Vec::new(),
-            suspected_resources: ResourceMaps::new(),
             active: Vec::new(),
             ready_to_map: Vec::new(),
             work_done_closures: SmallVec::new(),
@@ -310,53 +153,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         temp_resources: impl Iterator<Item = TempResource<A>>,
         encoders: Vec<EncoderInFlight<A>>,
     ) {
-        let mut last_resources = ResourceMaps::new();
-        for res in temp_resources {
-            match res {
-                TempResource::Buffer(raw) => {
-                    last_resources.buffers.insert(raw.tracker_index(), raw);
-                }
-                TempResource::StagingBuffer(raw) => {
-                    last_resources
-                        .staging_buffers
-                        .insert(raw.tracker_index(), raw);
-                }
-                TempResource::DestroyedBuffer(destroyed) => {
-                    last_resources
-                        .destroyed_buffers
-                        .insert(destroyed.tracker_index, destroyed);
-                }
-                TempResource::Texture(raw) => {
-                    last_resources.textures.insert(raw.tracker_index(), raw);
-                }
-                TempResource::DestroyedTexture(destroyed) => {
-                    last_resources
-                        .destroyed_textures
-                        .insert(destroyed.tracker_index, destroyed);
-                }
-            }
-        }
-
         self.active.push(ActiveSubmission {
             index,
-            last_resources,
+            temp_resources: temp_resources.collect(),
             mapped: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
         });
-    }
-
-    pub fn post_submit(&mut self) {
-        for v in self.future_suspected_buffers.drain(..) {
-            self.suspected_resources
-                .buffers
-                .insert(v.tracker_index(), v);
-        }
-        for v in self.future_suspected_textures.drain(..) {
-            self.suspected_resources
-                .textures
-                .insert(v.tracker_index(), v);
-        }
     }
 
     pub(crate) fn map(&mut self, value: &Arc<Buffer<A>>) {
@@ -372,14 +175,10 @@ impl<A: HalApi> LifetimeTracker<A> {
     ///     [`self.ready_to_map`], where [`LifetimeTracker::handle_mapping`]
     ///     will find them.
     ///
-    /// -   Resources whose final use was in those submissions are now ready to
-    ///     free. Dropping the submission's [`last_resources`] table does so.
-    ///
     /// Return a list of [`SubmittedWorkDoneClosure`]s to run.
     ///
     /// [`mapped`]: ActiveSubmission::mapped
     /// [`self.ready_to_map`]: LifetimeTracker::ready_to_map
-    /// [`last_resources`]: ActiveSubmission::last_resources
     /// [`SubmittedWorkDoneClosure`]: crate::device::queue::SubmittedWorkDoneClosure
     #[must_use]
     pub fn triage_submissions(
@@ -405,6 +204,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 let raw = unsafe { encoder.land() };
                 command_allocator.release_encoder(raw);
             }
+            drop(a.temp_resources);
             work_done_closures.extend(a.work_done_closures);
         }
         work_done_closures
@@ -419,29 +219,9 @@ impl<A: HalApi> LifetimeTracker<A> {
             .active
             .iter_mut()
             .find(|a| a.index == last_submit_index)
-            .map(|a| &mut a.last_resources);
+            .map(|a| &mut a.temp_resources);
         if let Some(resources) = resources {
-            match temp_resource {
-                TempResource::Buffer(raw) => {
-                    resources.buffers.insert(raw.tracker_index(), raw);
-                }
-                TempResource::StagingBuffer(raw) => {
-                    resources.staging_buffers.insert(raw.tracker_index(), raw);
-                }
-                TempResource::DestroyedBuffer(destroyed) => {
-                    resources
-                        .destroyed_buffers
-                        .insert(destroyed.tracker_index, destroyed);
-                }
-                TempResource::Texture(raw) => {
-                    resources.textures.insert(raw.tracker_index(), raw);
-                }
-                TempResource::DestroyedTexture(destroyed) => {
-                    resources
-                        .destroyed_textures
-                        .insert(destroyed.tracker_index, destroyed);
-                }
-            }
+            resources.push(temp_resource);
         }
     }
 
@@ -460,340 +240,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
-    /// Remove abandoned resources from `suspected_resources` and return them.
-    ///
-    /// Consult `trackers` to see which resources in `suspected_resources` are
-    /// abandoned (that is, referenced only by `suspected_resources` and
-    /// `trackers` itself) and remove them from `suspected_resources`.
-    ///
-    /// If the abandoned resources are in use by a command submission still in
-    /// flight, as listed in `active`, add them to that submission's
-    /// `ActiveSubmission::last_resources` map.
-    ///
-    /// Use `get_resource_map` to find the appropriate member of
-    /// `ActiveSubmission::last_resources` to hold resources of type `R`.
-    ///
-    /// Return a vector of all the abandoned resources that were removed.
-    fn triage_resources<R>(
-        suspected_resources: &mut FastHashMap<TrackerIndex, Arc<R>>,
-        active: &mut [ActiveSubmission<A>],
-        trackers: &mut impl ResourceTracker,
-        get_resource_map: impl Fn(&mut ResourceMaps<A>) -> &mut FastHashMap<TrackerIndex, Arc<R>>,
-    ) -> Vec<Arc<R>>
-    where
-        R: Trackable,
-    {
-        let mut removed_resources = Vec::new();
-        suspected_resources.retain(|&index, resource| {
-            if !trackers.remove_abandoned(index) {
-                return true;
-            }
-
-            // If this resource is used by commands in flight, save
-            // it in that submission's `last_resources` list.
-            let submit_index = resource.submission_index();
-            let last_resources = active
-                .iter_mut()
-                .find(|a| a.index == submit_index)
-                .map(|a| &mut a.last_resources);
-            if let Some(last_resources) = last_resources {
-                get_resource_map(last_resources).insert(index, resource.clone());
-            }
-
-            removed_resources.push(resource.clone());
-            false
-        });
-        removed_resources
-    }
-
-    fn triage_suspected_render_bundles(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_render_bundles = &mut self.suspected_resources.render_bundles;
-        let removed_resources = Self::triage_resources(
-            suspected_render_bundles,
-            self.active.as_mut_slice(),
-            &mut trackers.bundles,
-            |maps| &mut maps.render_bundles,
-        );
-        for bundle in removed_resources {
-            for v in bundle.used.buffers.write().drain_resources() {
-                self.suspected_resources
-                    .buffers
-                    .insert(v.tracker_index(), v);
-            }
-            for v in bundle.used.textures.write().drain_resources() {
-                self.suspected_resources
-                    .textures
-                    .insert(v.tracker_index(), v);
-            }
-            for v in bundle.used.bind_groups.write().drain_resources() {
-                self.suspected_resources
-                    .bind_groups
-                    .insert(v.tracker_index(), v);
-            }
-            for v in bundle.used.render_pipelines.write().drain_resources() {
-                self.suspected_resources
-                    .render_pipelines
-                    .insert(v.tracker_index(), v);
-            }
-            for v in bundle.used.query_sets.write().drain_resources() {
-                self.suspected_resources
-                    .query_sets
-                    .insert(v.tracker_index(), v);
-            }
-        }
-        self
-    }
-
-    fn triage_suspected_bind_groups(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_bind_groups = &mut self.suspected_resources.bind_groups;
-        let removed_resources = Self::triage_resources(
-            suspected_bind_groups,
-            self.active.as_mut_slice(),
-            &mut trackers.bind_groups,
-            |maps| &mut maps.bind_groups,
-        );
-        for bind_group in removed_resources {
-            for v in bind_group.used.buffers.drain_resources() {
-                self.suspected_resources
-                    .buffers
-                    .insert(v.tracker_index(), v);
-            }
-            for v in bind_group.used.textures.drain_resources() {
-                self.suspected_resources
-                    .textures
-                    .insert(v.tracker_index(), v);
-            }
-            for v in bind_group.used.views.drain_resources() {
-                self.suspected_resources
-                    .texture_views
-                    .insert(v.tracker_index(), v);
-            }
-            for v in bind_group.used.samplers.drain_resources() {
-                self.suspected_resources
-                    .samplers
-                    .insert(v.tracker_index(), v);
-            }
-
-            self.suspected_resources
-                .bind_group_layouts
-                .insert(bind_group.layout.tracker_index(), bind_group.layout.clone());
-        }
-        self
-    }
-
-    fn triage_suspected_texture_views(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_texture_views = &mut self.suspected_resources.texture_views;
-        Self::triage_resources(
-            suspected_texture_views,
-            self.active.as_mut_slice(),
-            &mut trackers.views,
-            |maps| &mut maps.texture_views,
-        );
-        // You might be tempted to add the view's parent texture to
-        // suspected_resources here, but don't. Texture views get dropped all
-        // the time, and once a texture is added to
-        // `LifetimeTracker::suspected_resources` it remains there until it's
-        // actually dropped, which for long-lived textures could be at the end
-        // of execution.
-        self
-    }
-
-    fn triage_suspected_textures(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_textures = &mut self.suspected_resources.textures;
-        Self::triage_resources(
-            suspected_textures,
-            self.active.as_mut_slice(),
-            &mut trackers.textures,
-            |maps| &mut maps.textures,
-        );
-        self
-    }
-
-    fn triage_suspected_samplers(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_samplers = &mut self.suspected_resources.samplers;
-        Self::triage_resources(
-            suspected_samplers,
-            self.active.as_mut_slice(),
-            &mut trackers.samplers,
-            |maps| &mut maps.samplers,
-        );
-        self
-    }
-
-    fn triage_suspected_buffers(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_buffers = &mut self.suspected_resources.buffers;
-        Self::triage_resources(
-            suspected_buffers,
-            self.active.as_mut_slice(),
-            &mut trackers.buffers,
-            |maps| &mut maps.buffers,
-        );
-        self
-    }
-
-    fn triage_suspected_destroyed_buffers(&mut self) {
-        for (id, buffer) in self.suspected_resources.destroyed_buffers.drain() {
-            let submit_index = buffer.submission_index;
-            if let Some(resources) = self.active.iter_mut().find(|a| a.index == submit_index) {
-                resources
-                    .last_resources
-                    .destroyed_buffers
-                    .insert(id, buffer);
-            }
-        }
-    }
-
-    fn triage_suspected_destroyed_textures(&mut self) {
-        for (id, texture) in self.suspected_resources.destroyed_textures.drain() {
-            let submit_index = texture.submission_index;
-            if let Some(resources) = self.active.iter_mut().find(|a| a.index == submit_index) {
-                resources
-                    .last_resources
-                    .destroyed_textures
-                    .insert(id, texture);
-            }
-        }
-    }
-
-    fn triage_suspected_compute_pipelines(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_compute_pipelines = &mut self.suspected_resources.compute_pipelines;
-        let removed_resources = Self::triage_resources(
-            suspected_compute_pipelines,
-            self.active.as_mut_slice(),
-            &mut trackers.compute_pipelines,
-            |maps| &mut maps.compute_pipelines,
-        );
-        for compute_pipeline in removed_resources {
-            self.suspected_resources.pipeline_layouts.insert(
-                compute_pipeline.layout.tracker_index(),
-                compute_pipeline.layout.clone(),
-            );
-        }
-        self
-    }
-
-    fn triage_suspected_render_pipelines(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_render_pipelines = &mut self.suspected_resources.render_pipelines;
-        let removed_resources = Self::triage_resources(
-            suspected_render_pipelines,
-            self.active.as_mut_slice(),
-            &mut trackers.render_pipelines,
-            |maps| &mut maps.render_pipelines,
-        );
-        for render_pipeline in removed_resources {
-            self.suspected_resources.pipeline_layouts.insert(
-                render_pipeline.layout.tracker_index(),
-                render_pipeline.layout.clone(),
-            );
-        }
-        self
-    }
-
-    fn triage_suspected_pipeline_layouts(&mut self) -> &mut Self {
-        let mut removed_resources = Vec::new();
-        self.suspected_resources
-            .pipeline_layouts
-            .retain(|_pipeline_layout_id, pipeline_layout| {
-                removed_resources.push(pipeline_layout.clone());
-                false
-            });
-        removed_resources.drain(..).for_each(|pipeline_layout| {
-            for bgl in &pipeline_layout.bind_group_layouts {
-                self.suspected_resources
-                    .bind_group_layouts
-                    .insert(bgl.tracker_index(), bgl.clone());
-            }
-        });
-        self
-    }
-
-    fn triage_suspected_bind_group_layouts(&mut self) -> &mut Self {
-        //Note: this has to happen after all the suspected pipelines are destroyed
-        //Note: nothing else can bump the refcount since the guard is locked exclusively
-        //Note: same BGL can appear multiple times in the list, but only the last
-        self.suspected_resources.bind_group_layouts.clear();
-
-        self
-    }
-
-    fn triage_suspected_query_sets(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
-        let mut trackers = trackers.lock();
-        let suspected_query_sets = &mut self.suspected_resources.query_sets;
-        Self::triage_resources(
-            suspected_query_sets,
-            self.active.as_mut_slice(),
-            &mut trackers.query_sets,
-            |maps| &mut maps.query_sets,
-        );
-        self
-    }
-
-    fn triage_suspected_staging_buffers(&mut self) -> &mut Self {
-        self.suspected_resources.staging_buffers.clear();
-
-        self
-    }
-
-    /// Identify resources to free, according to `trackers` and `self.suspected_resources`.
-    ///
-    /// Remove from `trackers`, the [`Tracker`] belonging to same [`Device`] as
-    /// `self`, each resource mentioned in [`self.suspected_resources`]. If
-    /// `trackers` held the final reference to that resource, add it to the
-    /// appropriate free list, to be destroyed by the hal:
-    ///
-    /// -   Add resources used by queue submissions still in flight to the
-    ///     [`last_resources`] table of the last such submission's entry in
-    ///     [`self.active`]. When that submission has finished execution. the
-    ///     [`triage_submissions`] method will remove from the tracker and the
-    ///     resource reference count will be responsible carrying out deallocation.
-    ///
-    /// ## Entrained resources
-    ///
-    /// This function finds resources that are used only by other resources
-    /// ready to be freed, and adds those to the free lists as well. For
-    /// example, if there's some texture `T` used only by some texture view
-    /// `TV`, then if `TV` can be freed, `T` gets added to the free lists too.
-    ///
-    /// Since `wgpu-core` resource ownership patterns are acyclic, we can visit
-    /// each type that can be owned after all types that could possibly own
-    /// it. This way, we can detect all free-able objects in a single pass,
-    /// simply by starting with types that are roots of the ownership DAG (like
-    /// render bundles) and working our way towards leaf types (like buffers).
-    ///
-    /// [`Device`]: super::Device
-    /// [`self.suspected_resources`]: LifetimeTracker::suspected_resources
-    /// [`last_resources`]: ActiveSubmission::last_resources
-    /// [`self.active`]: LifetimeTracker::active
-    /// [`triage_submissions`]: LifetimeTracker::triage_submissions
-    pub(crate) fn triage_suspected(&mut self, trackers: &Mutex<Tracker<A>>) {
-        profiling::scope!("triage_suspected");
-
-        // NOTE: The order in which resource types are processed here is
-        // crucial. See "Entrained resources" in this function's doc comment.
-        self.triage_suspected_render_bundles(trackers);
-        self.triage_suspected_compute_pipelines(trackers);
-        self.triage_suspected_render_pipelines(trackers);
-        self.triage_suspected_bind_groups(trackers);
-        self.triage_suspected_pipeline_layouts();
-        self.triage_suspected_bind_group_layouts();
-        self.triage_suspected_query_sets(trackers);
-        self.triage_suspected_samplers(trackers);
-        self.triage_suspected_staging_buffers();
-        self.triage_suspected_texture_views(trackers);
-        self.triage_suspected_textures(trackers);
-        self.triage_suspected_buffers(trackers);
-        self.triage_suspected_destroyed_buffers();
-        self.triage_suspected_destroyed_textures();
-    }
-
     /// Determine which buffers are ready to map, and which must wait for the
     /// GPU.
     ///
@@ -829,7 +275,6 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub(crate) fn handle_mapping(
         &mut self,
         raw: &A::Device,
-        trackers: &Mutex<Tracker<A>>,
         snatch_guard: &SnatchGuard,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
@@ -840,69 +285,60 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         for buffer in self.ready_to_map.drain(..) {
             let tracker_index = buffer.tracker_index();
-            let is_removed = {
-                let mut trackers = trackers.lock();
-                trackers.buffers.remove_abandoned(tracker_index)
+
+            // This _cannot_ be inlined into the match. If it is, the lock will be held
+            // open through the whole match, resulting in a deadlock when we try to re-lock
+            // the buffer back to active.
+            let mapping = std::mem::replace(
+                &mut *buffer.map_state.lock(),
+                resource::BufferMapState::Idle,
+            );
+            let pending_mapping = match mapping {
+                resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
+                // Mapping cancelled
+                resource::BufferMapState::Idle => continue,
+                // Mapping queued at least twice by map -> unmap -> map
+                // and was already successfully mapped below
+                resource::BufferMapState::Active { .. } => {
+                    *buffer.map_state.lock() = mapping;
+                    continue;
+                }
+                _ => panic!("No pending mapping."),
             };
-            if is_removed {
-                *buffer.map_state.lock() = resource::BufferMapState::Idle;
-                log::trace!("Buffer ready to map {tracker_index:?} is not tracked anymore");
+            let status = if pending_mapping.range.start != pending_mapping.range.end {
+                log::debug!("Buffer {tracker_index:?} map state -> Active");
+                let host = pending_mapping.op.host;
+                let size = pending_mapping.range.end - pending_mapping.range.start;
+                match super::map_buffer(
+                    raw,
+                    &buffer,
+                    pending_mapping.range.start,
+                    size,
+                    host,
+                    snatch_guard,
+                ) {
+                    Ok(ptr) => {
+                        *buffer.map_state.lock() = resource::BufferMapState::Active {
+                            ptr,
+                            range: pending_mapping.range.start..pending_mapping.range.start + size,
+                            host,
+                        };
+                        Ok(())
+                    }
+                    Err(e) => {
+                        log::error!("Mapping failed: {e}");
+                        Err(e)
+                    }
+                }
             } else {
-                // This _cannot_ be inlined into the match. If it is, the lock will be held
-                // open through the whole match, resulting in a deadlock when we try to re-lock
-                // the buffer back to active.
-                let mapping = std::mem::replace(
-                    &mut *buffer.map_state.lock(),
-                    resource::BufferMapState::Idle,
-                );
-                let pending_mapping = match mapping {
-                    resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
-                    // Mapping cancelled
-                    resource::BufferMapState::Idle => continue,
-                    // Mapping queued at least twice by map -> unmap -> map
-                    // and was already successfully mapped below
-                    resource::BufferMapState::Active { .. } => {
-                        *buffer.map_state.lock() = mapping;
-                        continue;
-                    }
-                    _ => panic!("No pending mapping."),
+                *buffer.map_state.lock() = resource::BufferMapState::Active {
+                    ptr: std::ptr::NonNull::dangling(),
+                    range: pending_mapping.range,
+                    host: pending_mapping.op.host,
                 };
-                let status = if pending_mapping.range.start != pending_mapping.range.end {
-                    log::debug!("Buffer {tracker_index:?} map state -> Active");
-                    let host = pending_mapping.op.host;
-                    let size = pending_mapping.range.end - pending_mapping.range.start;
-                    match super::map_buffer(
-                        raw,
-                        &buffer,
-                        pending_mapping.range.start,
-                        size,
-                        host,
-                        snatch_guard,
-                    ) {
-                        Ok(ptr) => {
-                            *buffer.map_state.lock() = resource::BufferMapState::Active {
-                                ptr,
-                                range: pending_mapping.range.start
-                                    ..pending_mapping.range.start + size,
-                                host,
-                            };
-                            Ok(())
-                        }
-                        Err(e) => {
-                            log::error!("Mapping failed: {e}");
-                            Err(e)
-                        }
-                    }
-                } else {
-                    *buffer.map_state.lock() = resource::BufferMapState::Active {
-                        ptr: std::ptr::NonNull::dangling(),
-                        range: pending_mapping.range,
-                        host: pending_mapping.op.host,
-                    };
-                    Ok(())
-                };
-                pending_callbacks.push((pending_mapping.op, status));
-            }
+                Ok(())
+            };
+            pending_callbacks.push((pending_mapping.op, status));
         }
         pending_callbacks
     }

@@ -22,13 +22,13 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, Texture, TextureView,
-        TextureViewNotRenderableReason, Trackable, TrackingData,
+        self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, StagingBuffer, Texture,
+        TextureView, TextureViewNotRenderableReason, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     track::{
-        BindGroupStates, TextureSelector, Tracker, TrackerIndexAllocators, UsageScope,
+        BindGroupStates, DeviceTracker, TextureSelector, TrackerIndexAllocators, UsageScope,
         UsageScopePool,
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
@@ -54,7 +54,6 @@ use std::{
 };
 
 use super::{
-    life::ResourceMaps,
     queue::{self, Queue},
     DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
@@ -75,11 +74,6 @@ use super::{
 /// Unless otherwise specified, no lock may be acquired while holding another lock.
 /// This means that you must inspect function calls made while a lock is held
 /// to see what locks the callee may try to acquire.
-///
-/// As far as this point:
-/// device_maintain_ids locks Device::lifetime_tracker, and calls...
-/// triage_suspected locks Device::trackers, and calls...
-/// Registry::unregister locks Registry::storage
 ///
 /// Important:
 /// When locking pending_writes please check that trackers is not locked
@@ -118,7 +112,7 @@ pub struct Device<A: HalApi> {
     ///
     /// Has to be locked temporarily only (locked last)
     /// and never before pending_writes
-    pub(crate) trackers: Mutex<Tracker<A>>,
+    pub(crate) trackers: Mutex<DeviceTracker<A>>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<LifetimeTracker<A>>,
@@ -134,10 +128,6 @@ pub struct Device<A: HalApi> {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool<A>,
-
-    /// Temporary storage, cleared at the start of every call,
-    /// retained only to save allocations.
-    temp_suspected: Mutex<Option<ResourceMaps<A>>>,
 }
 
 pub(crate) enum DeferredDestroy<A: HalApi> {
@@ -271,10 +261,9 @@ impl<A: HalApi> Device<A> {
             fence: RwLock::new(rank::DEVICE_FENCE, Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
-            trackers: Mutex::new(rank::DEVICE_TRACKERS, Tracker::new()),
+            trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
             life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
-            temp_suspected: Mutex::new(rank::DEVICE_TEMP_SUSPECTED, Some(ResourceMaps::new())),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(
@@ -431,12 +420,9 @@ impl<A: HalApi> Device<A> {
         let submission_closures =
             life_tracker.triage_submissions(last_done_index, &self.command_allocator);
 
-        life_tracker.triage_suspected(&self.trackers);
-
         life_tracker.triage_mapped();
 
-        let mapping_closures =
-            life_tracker.handle_mapping(self.raw(), &self.trackers, &snatch_guard);
+        let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
 
         let queue_empty = life_tracker.queue_empty();
 
@@ -480,156 +466,9 @@ impl<A: HalApi> Device<A> {
         Ok((closures, queue_empty))
     }
 
-    pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
-        // If we have a previously allocated `ResourceMap`, just use that.
-        let mut temp_suspected = self
-            .temp_suspected
-            .lock()
-            .take()
-            .unwrap_or_else(|| ResourceMaps::new());
-        temp_suspected.clear();
-
-        // As the tracker is cleared/dropped, we need to consider all the resources
-        // that it references for destruction in the next GC pass.
-        {
-            for resource in trackers.buffers.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .buffers
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.textures.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .textures
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.views.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .texture_views
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.bind_groups.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .bind_groups
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.samplers.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .samplers
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.compute_pipelines.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .compute_pipelines
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.render_pipelines.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .render_pipelines
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-            for resource in trackers.query_sets.used_resources() {
-                if resource.is_unique() {
-                    temp_suspected
-                        .query_sets
-                        .insert(resource.tracker_index(), resource.clone());
-                }
-            }
-        }
-        self.lock_life()
-            .suspected_resources
-            .extend(&mut temp_suspected);
-        // Save this resource map for later reuse.
-        *self.temp_suspected.lock() = Some(temp_suspected);
-    }
-
     pub(crate) fn create_buffer(
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
-    ) -> Result<Arc<Buffer<A>>, resource::CreateBufferError> {
-        let buffer = self.create_buffer_impl(desc, false)?;
-
-        let buffer_use = if !desc.mapped_at_creation {
-            hal::BufferUses::empty()
-        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-            // buffer is mappable, so we are just doing that at start
-            let map_size = buffer.size;
-            let ptr = if map_size == 0 {
-                std::ptr::NonNull::dangling()
-            } else {
-                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
-                map_buffer(
-                    self.raw(),
-                    &buffer,
-                    0,
-                    map_size,
-                    HostMap::Write,
-                    &snatch_guard,
-                )?
-            };
-            *buffer.map_state.lock() = resource::BufferMapState::Active {
-                ptr,
-                range: 0..map_size,
-                host: HostMap::Write,
-            };
-            hal::BufferUses::MAP_WRITE
-        } else {
-            // buffer needs staging area for initialization only
-            let stage_desc = wgt::BufferDescriptor {
-                label: Some(Cow::Borrowed(
-                    "(wgpu internal) initializing unmappable buffer",
-                )),
-                size: desc.size,
-                usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            };
-            let stage = self.create_buffer_impl(&stage_desc, true)?;
-
-            let snatch_guard = self.snatchable_lock.read();
-            let stage_raw = stage.raw(&snatch_guard).unwrap();
-            let mapping = unsafe { self.raw().map_buffer(stage_raw, 0..stage.size) }
-                .map_err(DeviceError::from)?;
-
-            assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
-            // Zero initialize memory and then mark both staging and buffer as initialized
-            // (it's guaranteed that this is the case by the time the buffer is usable)
-            unsafe { std::ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
-            buffer.initialization_status.write().drain(0..buffer.size);
-            stage.initialization_status.write().drain(0..buffer.size);
-
-            *buffer.map_state.lock() = resource::BufferMapState::Init {
-                ptr: mapping.ptr,
-                needs_flush: !mapping.is_coherent,
-                stage_buffer: stage,
-            };
-            hal::BufferUses::COPY_DST
-        };
-
-        self.trackers
-            .lock()
-            .buffers
-            .insert_single(&buffer, buffer_use);
-
-        Ok(buffer)
-    }
-
-    fn create_buffer_impl(
-        self: &Arc<Self>,
-        desc: &resource::BufferDescriptor,
-        transient: bool,
     ) -> Result<Arc<Buffer<A>>, resource::CreateBufferError> {
         self.check_is_valid()?;
 
@@ -701,14 +540,11 @@ impl<A: HalApi> Device<A> {
             actual_size
         };
 
-        let mut memory_flags = hal::MemoryFlags::empty();
-        memory_flags.set(hal::MemoryFlags::TRANSIENT, transient);
-
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             size: aligned_size,
             usage,
-            memory_flags,
+            memory_flags: hal::MemoryFlags::empty(),
         };
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
@@ -727,7 +563,51 @@ impl<A: HalApi> Device<A> {
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
         };
+
         let buffer = Arc::new(buffer);
+
+        let buffer_use = if !desc.mapped_at_creation {
+            hal::BufferUses::empty()
+        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+            // buffer is mappable, so we are just doing that at start
+            let map_size = buffer.size;
+            let ptr = if map_size == 0 {
+                std::ptr::NonNull::dangling()
+            } else {
+                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
+                map_buffer(
+                    self.raw(),
+                    &buffer,
+                    0,
+                    map_size,
+                    HostMap::Write,
+                    &snatch_guard,
+                )?
+            };
+            *buffer.map_state.lock() = resource::BufferMapState::Active {
+                ptr,
+                range: 0..map_size,
+                host: HostMap::Write,
+            };
+            hal::BufferUses::MAP_WRITE
+        } else {
+            let mut staging_buffer =
+                StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
+
+            // Zero initialize memory and then mark the buffer as initialized
+            // (it's guaranteed that this is the case by the time the buffer is usable)
+            staging_buffer.write_zeros();
+            buffer.initialization_status.write().drain(0..aligned_size);
+
+            *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
+            hal::BufferUses::COPY_DST
+        };
+
+        self.trackers
+            .lock()
+            .buffers
+            .insert_single(&buffer, buffer_use);
+
         Ok(buffer)
     }
 
@@ -1390,8 +1270,6 @@ impl<A: HalApi> Device<A> {
             views.push(Arc::downgrade(&view));
         }
 
-        self.trackers.lock().views.insert_single(view.clone());
-
         Ok(view)
     }
 
@@ -1506,8 +1384,6 @@ impl<A: HalApi> Device<A> {
         };
 
         let sampler = Arc::new(sampler);
-
-        self.trackers.lock().samplers.insert_single(sampler.clone());
 
         Ok(sampler)
     }
@@ -2403,11 +2279,6 @@ impl<A: HalApi> Device<A> {
             bind_groups.push(weak_ref.clone());
         }
 
-        self.trackers
-            .lock()
-            .bind_groups
-            .insert_single(bind_group.clone());
-
         Ok(bind_group)
     }
 
@@ -2827,11 +2698,6 @@ impl<A: HalApi> Device<A> {
         };
 
         let pipeline = Arc::new(pipeline);
-
-        self.trackers
-            .lock()
-            .compute_pipelines
-            .insert_single(pipeline.clone());
 
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
@@ -3459,11 +3325,6 @@ impl<A: HalApi> Device<A> {
 
         let pipeline = Arc::new(pipeline);
 
-        self.trackers
-            .lock()
-            .render_pipelines
-            .insert_single(pipeline.clone());
-
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
                 bgl.exclusive_pipeline
@@ -3640,11 +3501,6 @@ impl<A: HalApi> Device<A> {
 
         let query_set = Arc::new(query_set);
 
-        self.trackers
-            .lock()
-            .query_sets
-            .insert_single(query_set.clone());
-
         Ok(query_set)
     }
 
@@ -3690,10 +3546,14 @@ impl<A: HalApi> Device<A> {
         // During these iterations, we discard all errors. We don't care!
         let trackers = self.trackers.lock();
         for buffer in trackers.buffers.used_resources() {
-            let _ = buffer.destroy();
+            if let Some(buffer) = Weak::upgrade(&buffer) {
+                let _ = buffer.destroy();
+            }
         }
         for texture in trackers.textures.used_resources() {
-            let _ = texture.destroy();
+            if let Some(texture) = Weak::upgrade(&texture) {
+                let _ = texture.destroy();
+            }
         }
     }
 

@@ -45,6 +45,7 @@ impl DeviceState {
             &wgpu::DeviceDescriptor {
                 required_features: adapter.features(),
                 required_limits: adapter.limits(),
+                memory_hints: wgpu::MemoryHints::Performance,
                 label: Some("Compute/RenderPass Device"),
             },
             None,

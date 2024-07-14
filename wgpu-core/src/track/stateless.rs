@@ -9,11 +9,8 @@ use std::sync::Arc;
 use crate::{
     lock::{rank, Mutex},
     resource::Trackable,
-    resource_log,
     track::ResourceMetadata,
 };
-
-use super::{ResourceTracker, TrackerIndex};
 
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
@@ -43,12 +40,6 @@ impl<T: Trackable> StatelessBindGroupState<T> {
         resources.iter().cloned().collect::<Vec<_>>().into_iter()
     }
 
-    /// Returns a list of all resources tracked. May contain duplicates.
-    pub fn drain_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
-        let mut resources = self.resources.lock();
-        resources.drain(..).collect::<Vec<_>>().into_iter()
-    }
-
     /// Adds the given resource.
     pub fn add_single(&self, resource: &Arc<T>) {
         let mut resources = self.resources.lock();
@@ -59,60 +50,7 @@ impl<T: Trackable> StatelessBindGroupState<T> {
 /// Stores all resource state within a command buffer or device.
 #[derive(Debug)]
 pub(crate) struct StatelessTracker<T: Trackable> {
-    metadata: ResourceMetadata<T>,
-}
-
-impl<T: Trackable> ResourceTracker for StatelessTracker<T> {
-    /// Try to remove the given resource from the tracker iff we have the last reference to the
-    /// resource and the epoch matches.
-    ///
-    /// Returns true if the resource was removed or if not existing in metadata.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// false will be returned.
-    fn remove_abandoned(&mut self, index: TrackerIndex) -> bool {
-        let index = index.as_usize();
-
-        if index >= self.metadata.size() {
-            return false;
-        }
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
-                //so it's already been released from user and so it's not inside Registry\Storage
-                if existing_ref_count <= 2 {
-                    resource_log!(
-                        "StatelessTracker<{}>::remove_abandoned: removing {}",
-                        T::TYPE,
-                        self.metadata.get_resource_unchecked(index).error_ident()
-                    );
-
-                    self.metadata.remove(index);
-                    return true;
-                }
-
-                resource_log!(
-                    "StatelessTracker<{}>::remove_abandoned: not removing {}, ref count {}",
-                    T::TYPE,
-                    self.metadata.get_resource_unchecked(index).error_ident(),
-                    existing_ref_count
-                );
-
-                return false;
-            }
-        }
-
-        resource_log!(
-            "StatelessTracker<{}>::remove_abandoned: does not contain index {index:?}",
-            T::TYPE,
-        );
-
-        true
-    }
+    metadata: ResourceMetadata<Arc<T>>,
 }
 
 impl<T: Trackable> StatelessTracker<T> {
@@ -144,12 +82,6 @@ impl<T: Trackable> StatelessTracker<T> {
     /// Returns a list of all resources tracked.
     pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
         self.metadata.owned_resources()
-    }
-
-    /// Returns a list of all resources tracked.
-    pub fn drain_resources(&mut self) -> impl Iterator<Item = Arc<T>> + '_ {
-        let resources = self.metadata.drain_resources();
-        resources.into_iter()
     }
 
     /// Inserts a single resource into the resource tracker.

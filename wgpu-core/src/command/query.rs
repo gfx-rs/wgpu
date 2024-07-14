@@ -15,20 +15,18 @@ use crate::{
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
 };
-use std::{iter, marker::PhantomData, sync::Arc};
+use std::{iter, sync::Arc};
 use thiserror::Error;
 use wgt::BufferAddress;
 
 #[derive(Debug)]
 pub(crate) struct QueryResetMap<A: HalApi> {
     map: FastHashMap<TrackerIndex, (Vec<bool>, Arc<QuerySet<A>>)>,
-    _phantom: PhantomData<A>,
 }
 impl<A: HalApi> QueryResetMap<A> {
     pub fn new() -> Self {
         Self {
             map: FastHashMap::default(),
-            _phantom: PhantomData,
         }
     }
 

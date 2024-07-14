@@ -28,12 +28,13 @@ impl super::Device {
         raw: d3d12::Device,
         present_queue: d3d12::CommandQueue,
         limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
         library: &Arc<d3d12::D3D12Lib>,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, DeviceError> {
         let mem_allocator = if private_caps.suballocation_supported {
-            super::suballocation::create_allocator_wrapper(&raw)?
+            super::suballocation::create_allocator_wrapper(&raw, memory_hints)?
         } else {
             None
         };
@@ -403,6 +404,9 @@ impl crate::Device for super::Device {
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
+            // Resource should be dropped before free suballocation
+            drop(buffer);
+
             super::suballocation::free_buffer_allocation(
                 self,
                 alloc,
@@ -433,9 +437,8 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), DeviceError> {
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
-        Ok(())
     }
 
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
@@ -493,6 +496,9 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         if let Some(alloc) = texture.allocation.take() {
+            // Resource should be dropped before free suballocation
+            drop(texture);
+
             super::suballocation::free_texture_allocation(
                 self,
                 alloc,

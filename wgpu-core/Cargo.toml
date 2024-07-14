@@ -60,6 +60,9 @@ trace = ["dep:ron", "serde", "naga/serialize"]
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
 
+## Enable creating instances using raw-window-handle
+raw-window-handle = ["dep:raw-window-handle"]
+
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
@@ -114,7 +117,7 @@ profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", optional = true }
 ron = { version = "0.8", optional = true }
 rustc-hash = "1.1"
-serde = { version = "1", features = ["serde_derive"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
 

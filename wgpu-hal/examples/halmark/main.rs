@@ -125,7 +125,11 @@ impl<A: hal::Api> Example<A> {
 
         let hal::OpenDevice { device, queue } = unsafe {
             adapter
-                .open(wgt::Features::empty(), &wgt::Limits::default())
+                .open(
+                    wgt::Features::empty(),
+                    &wgt::Limits::default(),
+                    &wgt::MemoryHints::default(),
+                )
                 .unwrap()
         };
 
@@ -297,7 +301,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 texture_data.len(),
             );
-            device.unmap_buffer(&staging_buffer).unwrap();
+            device.unmap_buffer(&staging_buffer);
             assert!(mapping.is_coherent);
         }
 
@@ -406,7 +410,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 mem::size_of::<Globals>(),
             );
-            device.unmap_buffer(&buffer).unwrap();
+            device.unmap_buffer(&buffer);
             assert!(mapping.is_coherent);
             buffer
         };
@@ -643,7 +647,7 @@ impl<A: hal::Api> Example<A> {
                     size,
                 );
                 assert!(mapping.is_coherent);
-                self.device.unmap_buffer(&self.local_buffer).unwrap();
+                self.device.unmap_buffer(&self.local_buffer);
             }
         }
 

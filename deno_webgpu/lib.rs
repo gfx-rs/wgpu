@@ -668,6 +668,7 @@ pub fn op_webgpu_request_device(
         label: Some(Cow::Owned(label)),
         required_features: required_features.into(),
         required_limits: required_limits.unwrap_or_default(),
+        memory_hints: wgpu_types::MemoryHints::default(),
     };
 
     let (device, queue, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
