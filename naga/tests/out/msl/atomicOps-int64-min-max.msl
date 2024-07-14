@@ -19,15 +19,20 @@ kernel void cs_main(
 , device metal::atomic_ulong& storage_atomic_scalar [[user(fake0)]]
 , device type_1& storage_atomic_arr [[user(fake0)]]
 , device Struct& storage_struct [[user(fake0)]]
+, constant ulong& input [[user(fake0)]]
 ) {
-    metal::atomic_max_explicit(&storage_atomic_scalar, 1uL, metal::memory_order_relaxed);
-    metal::atomic_max_explicit(&storage_atomic_arr.inner[1], 1uL, metal::memory_order_relaxed);
+    ulong _e3 = input;
+    metal::atomic_max_explicit(&storage_atomic_scalar, _e3, metal::memory_order_relaxed);
+    ulong _e7 = input;
+    metal::atomic_max_explicit(&storage_atomic_arr.inner[1], 1uL + _e7, metal::memory_order_relaxed);
     metal::atomic_max_explicit(&storage_struct.atomic_scalar, 1uL, metal::memory_order_relaxed);
-    metal::atomic_max_explicit(&storage_struct.atomic_arr.inner[1], 1uL, metal::memory_order_relaxed);
+    metal::atomic_max_explicit(&storage_struct.atomic_arr.inner[1], static_cast<ulong>(id.x), metal::memory_order_relaxed);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    metal::atomic_min_explicit(&storage_atomic_scalar, 1uL, metal::memory_order_relaxed);
-    metal::atomic_min_explicit(&storage_atomic_arr.inner[1], 1uL, metal::memory_order_relaxed);
+    ulong _e20 = input;
+    metal::atomic_min_explicit(&storage_atomic_scalar, _e20, metal::memory_order_relaxed);
+    ulong _e24 = input;
+    metal::atomic_min_explicit(&storage_atomic_arr.inner[1], 1uL + _e24, metal::memory_order_relaxed);
     metal::atomic_min_explicit(&storage_struct.atomic_scalar, 1uL, metal::memory_order_relaxed);
-    metal::atomic_min_explicit(&storage_struct.atomic_arr.inner[1], 1uL, metal::memory_order_relaxed);
+    metal::atomic_min_explicit(&storage_struct.atomic_arr.inner[1], static_cast<ulong>(id.x), metal::memory_order_relaxed);
     return;
 }
