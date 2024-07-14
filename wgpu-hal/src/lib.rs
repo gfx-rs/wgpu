@@ -265,7 +265,7 @@ pub mod api {
 mod dynamic;
 
 pub(crate) use dynamic::DynResource;
-pub use dynamic::{DynBuffer, DynDevice};
+pub use dynamic::{DynBuffer, DynCommandEncoder, DynDevice};
 
 use std::{
     borrow::{Borrow, Cow},

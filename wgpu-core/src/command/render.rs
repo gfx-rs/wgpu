@@ -2157,7 +2157,7 @@ fn set_index_buffer<A: HalApi>(
     buffer.same_device_as(cmd_buf.as_ref())?;
 
     buffer.check_usage(BufferUsages::INDEX)?;
-    let buf_raw = buffer.try_raw(state.snatch_guard)?;
+    let buf_raw = buffer.try_raw_dyn(state.snatch_guard)?;
 
     let end = match size {
         Some(s) => offset + s.get(),
@@ -2179,7 +2179,7 @@ fn set_index_buffer<A: HalApi>(
         size,
     };
     unsafe {
-        state.raw_encoder.set_index_buffer(bb, index_format);
+        hal::DynCommandEncoder::set_index_buffer(state.raw_encoder, bb, index_format);
     }
     Ok(())
 }
@@ -2215,7 +2215,7 @@ fn set_vertex_buffer<A: HalApi>(
     }
 
     buffer.check_usage(BufferUsages::VERTEX)?;
-    let buf_raw = buffer.try_raw(state.snatch_guard)?;
+    let buf_raw = buffer.try_raw_dyn(state.snatch_guard)?;
 
     let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
     state
@@ -2244,7 +2244,7 @@ fn set_vertex_buffer<A: HalApi>(
         size,
     };
     unsafe {
-        state.raw_encoder.set_vertex_buffer(slot, bb);
+        hal::DynCommandEncoder::set_vertex_buffer(state.raw_encoder, slot, bb);
     }
     state.vertex.update_limits();
     Ok(())

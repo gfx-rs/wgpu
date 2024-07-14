@@ -1,6 +1,6 @@
 use wgt::WasmNotSendSync;
 
-use crate::Device;
+use crate::{BufferBinding, CommandEncoder, Device};
 
 // TODO: docs
 pub trait DynResource: WasmNotSendSync + std::fmt::Debug + 'static {
@@ -29,5 +29,53 @@ impl<D: Device> DynDevice for D {
             .downcast_mut()
             .expect("Passed resource is not a buffer of the expected backend type.");
         unsafe { self.destroy_buffer(buffer) };
+    }
+}
+
+pub trait DynCommandEncoder: std::fmt::Debug {
+    unsafe fn set_index_buffer<'a>(
+        &mut self,
+        binding: BufferBinding<'a, dyn DynBuffer>,
+        format: wgt::IndexFormat,
+    );
+
+    unsafe fn set_vertex_buffer<'a>(
+        &mut self,
+        index: u32,
+        binding: BufferBinding<'a, dyn DynBuffer>,
+    );
+}
+
+impl<C: CommandEncoder> DynCommandEncoder for C {
+    unsafe fn set_index_buffer<'a>(
+        &mut self,
+        binding: BufferBinding<'a, dyn DynBuffer>,
+        format: wgt::IndexFormat,
+    ) {
+        let binding = binding
+            .downcast()
+            .expect("BufferBinding is not of the expected backend type.");
+        unsafe { self.set_index_buffer(binding, format) };
+    }
+
+    unsafe fn set_vertex_buffer<'a>(
+        &mut self,
+        index: u32,
+        binding: BufferBinding<'a, dyn DynBuffer>,
+    ) {
+        let binding = binding
+            .downcast()
+            .expect("BufferBinding is not of the expected backend type.");
+        unsafe { self.set_vertex_buffer(index, binding) };
+    }
+}
+
+impl<'a> BufferBinding<'a, dyn DynBuffer> {
+    pub fn downcast<B: DynBuffer>(self) -> Option<BufferBinding<'a, B>> {
+        Some(BufferBinding {
+            buffer: self.buffer.as_any().downcast_ref()?,
+            offset: self.offset,
+            size: self.size,
+        })
     }
 }

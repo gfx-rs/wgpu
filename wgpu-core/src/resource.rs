@@ -468,6 +468,19 @@ impl<A: HalApi> Buffer<A> {
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
+    pub(crate) fn try_raw_dyn<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&dyn hal::DynBuffer, DestroyedResourceError> {
+        // Transitional, all invocations of `try_raw` should be replaced with `try_raw_dyn`
+        // at which point this function will be renamed.
+        // (part of https://github.com/gfx-rs/wgpu/issues/5124)
+        self.raw
+            .get(guard)
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
+
     pub(crate) fn check_destroyed<'a>(
         &'a self,
         guard: &'a SnatchGuard,
