@@ -8,6 +8,7 @@ mod regression {
 
 mod bgra8unorm_storage;
 mod bind_group_layout_dedup;
+mod bind_groups;
 mod buffer;
 mod buffer_copy;
 mod buffer_usages;

@@ -1380,7 +1380,8 @@ impl<A: HalApi> Device<A> {
             tracking_data: TrackingData::new(self.tracker_indices.samplers.clone()),
             comparison: desc.compare.is_some(),
             filtering: desc.min_filter == wgt::FilterMode::Linear
-                || desc.mag_filter == wgt::FilterMode::Linear,
+                || desc.mag_filter == wgt::FilterMode::Linear
+                || desc.mipmap_filter == wgt::FilterMode::Linear,
         };
 
         let sampler = Arc::new(sampler);
