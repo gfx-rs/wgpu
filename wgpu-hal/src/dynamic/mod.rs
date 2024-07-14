@@ -1,6 +1,12 @@
+mod command;
+
+pub use self::command::DynCommandEncoder;
+
 use std::any::Any;
 
 use wgt::WasmNotSendSync;
+
+use crate::BufferBinding;
 
 /// Base trait for all resources, allows downcasting via [`Any`].
 pub trait DynResource: Any + WasmNotSendSync + 'static {
@@ -81,3 +87,13 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
 }
 
 pub trait DynBuffer: DynResource + std::fmt::Debug {}
+
+impl<'a> BufferBinding<'a, dyn DynBuffer> {
+    pub fn expect_downcast<B: DynBuffer>(self) -> BufferBinding<'a, B> {
+        BufferBinding {
+            buffer: self.buffer.expect_downcast_ref(),
+            offset: self.offset,
+            size: self.size,
+        }
+    }
+}
