@@ -261,7 +261,7 @@ impl PendingTransition<hal::BufferUses> {
         self,
         buf: &'a resource::Buffer<A>,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> hal::BufferBarrier<'a, A> {
+    ) -> hal::BufferBarrier<'a, A::Buffer> {
         let buffer = buf.raw(snatch_guard).expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
