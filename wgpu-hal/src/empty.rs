@@ -42,7 +42,9 @@ impl crate::Api for Api {
 
 crate::impl_dyn_resource!(Context, Encoder, Resource);
 
+impl crate::DynBindGroup for Resource {}
 impl crate::DynBuffer for Resource {}
+impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
 
 impl crate::Instance for Context {

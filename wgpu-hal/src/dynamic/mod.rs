@@ -86,7 +86,9 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
     }
 }
 
+pub trait DynBindGroup: DynResource + std::fmt::Debug {}
 pub trait DynBuffer: DynResource + std::fmt::Debug {}
+pub trait DynPipelineLayout: DynResource + std::fmt::Debug {}
 pub trait DynQuerySet: DynResource + std::fmt::Debug {}
 
 impl<'a> BufferBinding<'a, dyn DynBuffer> {

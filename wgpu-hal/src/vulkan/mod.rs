@@ -716,10 +716,14 @@ pub struct PipelineLayout {
     binding_arrays: naga::back::spv::BindingMap,
 }
 
+impl crate::DynPipelineLayout for PipelineLayout {}
+
 #[derive(Debug)]
 pub struct BindGroup {
     set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
+
+impl crate::DynBindGroup for BindGroup {}
 
 /// Miscellaneous allocation recycling pool for `CommandAllocator`.
 #[derive(Default)]
