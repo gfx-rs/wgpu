@@ -8,6 +8,25 @@ pub trait DynResource: WasmNotSendSync + std::fmt::Debug + 'static {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
+trait DynResourceExt {
+    fn expect_downcast_ref<T: DynResource>(&self) -> &T;
+    fn expect_downcast_mut<T: DynResource>(&mut self) -> &mut T;
+}
+
+impl<R: DynResource + ?Sized> DynResourceExt for R {
+    fn expect_downcast_ref<'a, T: DynResource>(&'a self) -> &'a T {
+        self.as_any()
+            .downcast_ref()
+            .expect("Resource doesn't have the expected backend type.")
+    }
+
+    fn expect_downcast_mut<'a, T: DynResource>(&'a mut self) -> &'a mut T {
+        self.as_any_mut()
+            .downcast_mut()
+            .expect("Resource doesn't have the expected backend type.")
+    }
+}
+
 // TODO: actually use this one
 pub trait DynBuffer: DynResource {}
 
@@ -24,10 +43,7 @@ impl<D: Device> DynDevice for D {
         // However, that would require casting the box first to `Box<dyn Any>` for which we need
         // super trait casting (https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html)
         // which as of writing is still being stabilized.
-        let buffer = buffer
-            .as_any_mut()
-            .downcast_mut()
-            .expect("Passed resource is not a buffer of the expected backend type.");
+        let buffer = buffer.expect_downcast_mut();
         unsafe { self.destroy_buffer(buffer) };
     }
 }
@@ -52,9 +68,7 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         binding: BufferBinding<'a, dyn DynBuffer>,
         format: wgt::IndexFormat,
     ) {
-        let binding = binding
-            .downcast()
-            .expect("BufferBinding is not of the expected backend type.");
+        let binding = binding.expect_downcast();
         unsafe { self.set_index_buffer(binding, format) };
     }
 
@@ -63,19 +77,17 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         index: u32,
         binding: BufferBinding<'a, dyn DynBuffer>,
     ) {
-        let binding = binding
-            .downcast()
-            .expect("BufferBinding is not of the expected backend type.");
+        let binding = binding.expect_downcast();
         unsafe { self.set_vertex_buffer(index, binding) };
     }
 }
 
 impl<'a> BufferBinding<'a, dyn DynBuffer> {
-    pub fn downcast<B: DynBuffer>(self) -> Option<BufferBinding<'a, B>> {
-        Some(BufferBinding {
-            buffer: self.buffer.as_any().downcast_ref()?,
+    pub fn expect_downcast<B: DynBuffer>(self) -> BufferBinding<'a, B> {
+        BufferBinding {
+            buffer: self.buffer.expect_downcast_ref(),
             offset: self.offset,
             size: self.size,
-        })
+        }
     }
 }
