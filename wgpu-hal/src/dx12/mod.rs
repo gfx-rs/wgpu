@@ -629,6 +629,8 @@ pub struct RenderPipeline {
     vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
 }
 
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
@@ -637,6 +639,8 @@ pub struct ComputePipeline {
     raw: d3d12::PipelineState,
     layout: PipelineLayoutShared,
 }
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
