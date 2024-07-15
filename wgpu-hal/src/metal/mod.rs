@@ -776,6 +776,18 @@ pub struct RenderPipeline {
     depth_stencil: Option<(metal::DepthStencilState, wgt::DepthBiasState)>,
 }
 
+impl crate::DynResource for RenderPipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
@@ -788,6 +800,18 @@ pub struct ComputePipeline {
     work_group_size: metal::MTLSize,
     work_group_memory_sizes: Vec<u32>,
 }
+
+impl crate::DynResource for ComputePipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}

@@ -31,6 +31,8 @@ pub trait DynBindGroup: DynResource {}
 pub trait DynBuffer: DynResource {}
 pub trait DynPipelineLayout: DynResource {}
 pub trait DynQuerySet: DynResource {}
+pub trait DynRenderPipeline: DynResource {}
+pub trait DynComputePipeline: DynResource {}
 
 pub trait DynDevice {
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>);

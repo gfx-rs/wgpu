@@ -664,6 +664,18 @@ pub struct RenderPipeline {
     alpha_to_coverage_enabled: bool,
 }
 
+impl crate::DynResource for RenderPipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 #[cfg(send_sync)]
 unsafe impl Sync for RenderPipeline {}
 #[cfg(send_sync)]
@@ -673,6 +685,18 @@ unsafe impl Send for RenderPipeline {}
 pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
+
+impl crate::DynResource for ComputePipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 #[cfg(send_sync)]
 unsafe impl Sync for ComputePipeline {}

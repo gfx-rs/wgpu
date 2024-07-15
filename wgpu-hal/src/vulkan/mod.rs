@@ -833,10 +833,34 @@ pub struct RenderPipeline {
     raw: vk::Pipeline,
 }
 
+impl crate::DynResource for RenderPipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: vk::Pipeline,
 }
+
+impl crate::DynResource for ComputePipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 #[derive(Debug)]
 pub struct PipelineCache {

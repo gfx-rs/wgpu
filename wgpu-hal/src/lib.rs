@@ -266,7 +266,8 @@ mod dynamic;
 
 pub(crate) use dynamic::DynResource;
 pub use dynamic::{
-    DynBindGroup, DynBuffer, DynCommandEncoder, DynDevice, DynPipelineLayout, DynQuerySet,
+    DynBindGroup, DynBuffer, DynCommandEncoder, DynComputePipeline, DynDevice, DynPipelineLayout,
+    DynQuerySet, DynRenderPipeline,
 };
 
 use std::{
@@ -434,8 +435,8 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type BindGroup: DynBindGroup;
     type PipelineLayout: DynPipelineLayout;
     type ShaderModule: fmt::Debug + WasmNotSendSync;
-    type RenderPipeline: fmt::Debug + WasmNotSendSync;
-    type ComputePipeline: fmt::Debug + WasmNotSendSync;
+    type RenderPipeline: DynRenderPipeline;
+    type ComputePipeline: DynComputePipeline;
     type PipelineCache: fmt::Debug + WasmNotSendSync;
 
     type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;

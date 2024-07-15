@@ -2,7 +2,8 @@ use std::ops::Range;
 
 use crate::{
     BufferBarrier, BufferBinding, BufferCopy, CommandEncoder, DeviceError, DynBindGroup, DynBuffer,
-    DynPipelineLayout, DynQuerySet, Label, MemoryRange, Rect,
+    DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline, Label, MemoryRange,
+    Rect,
 };
 
 use super::DynResourceExt as _;
@@ -105,7 +106,7 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     // unsafe fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<Self::A>);
     // unsafe fn end_render_pass(&mut self);
 
-    //unsafe fn set_render_pipeline(&mut self, pipeline: &dyn DynRenderPipeline);
+    unsafe fn set_render_pipeline(&mut self, pipeline: &dyn DynRenderPipeline);
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
@@ -169,7 +170,7 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     // unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<Self::A>);
     // unsafe fn end_compute_pass(&mut self);
 
-    //unsafe fn set_compute_pipeline(&mut self, pipeline: &dyn DynComputePipeline);
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &dyn DynComputePipeline);
 
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &dyn DynBuffer, offset: wgt::BufferAddress);
@@ -414,6 +415,11 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         };
     }
 
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &dyn DynComputePipeline) {
+        let pipeline = pipeline.expect_downcast_ref();
+        unsafe { C::set_compute_pipeline(self, pipeline) };
+    }
+
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
         unsafe { C::dispatch(self, count) };
     }
@@ -421,6 +427,11 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
     unsafe fn dispatch_indirect(&mut self, buffer: &dyn DynBuffer, offset: wgt::BufferAddress) {
         let buffer = buffer.expect_downcast_ref();
         unsafe { C::dispatch_indirect(self, buffer, offset) };
+    }
+
+    unsafe fn set_render_pipeline(&mut self, pipeline: &dyn DynRenderPipeline) {
+        let pipeline = pipeline.expect_downcast_ref();
+        unsafe { C::set_render_pipeline(self, pipeline) };
     }
 
     unsafe fn set_index_buffer<'a>(

@@ -650,6 +650,18 @@ pub struct RenderPipeline {
     vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
 }
 
+impl crate::DynResource for RenderPipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
@@ -658,6 +670,18 @@ pub struct ComputePipeline {
     raw: d3d12::PipelineState,
     layout: PipelineLayoutShared,
 }
+
+impl crate::DynResource for ComputePipeline {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
