@@ -43,6 +43,7 @@ impl crate::Api for Api {
 crate::impl_dyn_resource!(Context, Encoder, Resource);
 
 impl crate::DynBuffer for Resource {}
+impl crate::DynQuerySet for Resource {}
 
 impl crate::Instance for Context {
     type A = Api;

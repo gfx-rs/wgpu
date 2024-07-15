@@ -670,6 +670,8 @@ pub struct QuerySet {
     target: BindTarget,
 }
 
+impl crate::DynQuerySet for QuerySet {}
+
 #[derive(Debug)]
 pub struct Fence {
     last_completed: crate::FenceValue,
