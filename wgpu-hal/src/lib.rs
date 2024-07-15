@@ -2074,22 +2074,11 @@ pub struct DepthStencilAttachment<'a, A: Api> {
     pub clear_value: (f32, u32),
 }
 
-#[derive(Debug)]
-pub struct RenderPassTimestampWrites<'a, A: Api> {
-    pub query_set: &'a A::QuerySet,
+#[derive(Clone, Debug)]
+pub struct PassTimestampWrites<'a, Q: DynQuerySet + ?Sized> {
+    pub query_set: &'a Q,
     pub beginning_of_pass_write_index: Option<u32>,
     pub end_of_pass_write_index: Option<u32>,
-}
-
-// Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for RenderPassTimestampWrites<'_, A> {
-    fn clone(&self) -> Self {
-        Self {
-            query_set: self.query_set,
-            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
-            end_of_pass_write_index: self.end_of_pass_write_index,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -2100,32 +2089,14 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub color_attachments: &'a [Option<ColorAttachment<'a, A>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
     pub multiview: Option<NonZeroU32>,
-    pub timestamp_writes: Option<RenderPassTimestampWrites<'a, A>>,
+    pub timestamp_writes: Option<PassTimestampWrites<'a, A::QuerySet>>,
     pub occlusion_query_set: Option<&'a A::QuerySet>,
-}
-
-#[derive(Debug)]
-pub struct ComputePassTimestampWrites<'a, A: Api> {
-    pub query_set: &'a A::QuerySet,
-    pub beginning_of_pass_write_index: Option<u32>,
-    pub end_of_pass_write_index: Option<u32>,
-}
-
-// Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for ComputePassTimestampWrites<'_, A> {
-    fn clone(&self) -> Self {
-        Self {
-            query_set: self.query_set,
-            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
-            end_of_pass_write_index: self.end_of_pass_write_index,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
 pub struct ComputePassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
-    pub timestamp_writes: Option<ComputePassTimestampWrites<'a, A>>,
+    pub timestamp_writes: Option<PassTimestampWrites<'a, A::QuerySet>>,
 }
 
 /// Stores the text of any validation errors that have occurred since
