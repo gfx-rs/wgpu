@@ -48,7 +48,7 @@ impl<D: Device> DynDevice for D {
     }
 }
 
-pub trait DynCommandEncoder: std::fmt::Debug {
+pub trait DynCommandEncoder {
     unsafe fn set_index_buffer<'a>(
         &mut self,
         binding: BufferBinding<'a, dyn DynBuffer>,

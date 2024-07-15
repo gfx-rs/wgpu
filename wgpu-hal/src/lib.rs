@@ -390,7 +390,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type Device: Device<A = Self>;
 
     type Queue: Queue<A = Self>;
-    type CommandEncoder: CommandEncoder<A = Self>;
+    type CommandEncoder: DynCommandEncoder + CommandEncoder<A = Self>;
 
     /// This API's command buffer type.
     ///
