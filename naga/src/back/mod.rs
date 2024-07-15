@@ -254,7 +254,9 @@ impl crate::TypeInner {
     /// Returns true if this is a handle to a type rather than the type directly.
     pub const fn is_handle(&self) -> bool {
         match *self {
-            crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => true,
+            crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure { .. } => true,
             _ => false,
         }
     }
