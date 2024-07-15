@@ -265,7 +265,10 @@ pub mod api {
 mod dynamic;
 
 pub(crate) use dynamic::{impl_dyn_resource, DynResource};
-pub use dynamic::{DynBindGroup, DynBuffer, DynCommandEncoder, DynPipelineLayout, DynQuerySet};
+pub use dynamic::{
+    DynBindGroup, DynBuffer, DynCommandEncoder, DynComputePipeline, DynPipelineLayout, DynQuerySet,
+    DynRenderPipeline,
+};
 
 use std::{
     borrow::{Borrow, Cow},
@@ -434,8 +437,8 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type BindGroup: DynBindGroup;
     type PipelineLayout: DynPipelineLayout;
     type ShaderModule: fmt::Debug + WasmNotSendSync;
-    type RenderPipeline: fmt::Debug + WasmNotSendSync;
-    type ComputePipeline: fmt::Debug + WasmNotSendSync;
+    type RenderPipeline: DynRenderPipeline;
+    type ComputePipeline: DynComputePipeline;
     type PipelineCache: fmt::Debug + WasmNotSendSync;
 
     type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;

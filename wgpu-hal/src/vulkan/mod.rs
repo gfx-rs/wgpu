@@ -822,10 +822,14 @@ pub struct RenderPipeline {
     raw: vk::Pipeline,
 }
 
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: vk::Pipeline,
 }
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 #[derive(Debug)]
 pub struct PipelineCache {

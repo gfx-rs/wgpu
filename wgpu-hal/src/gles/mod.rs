@@ -653,6 +653,8 @@ pub struct RenderPipeline {
     alpha_to_coverage_enabled: bool,
 }
 
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 #[cfg(send_sync)]
 unsafe impl Sync for RenderPipeline {}
 #[cfg(send_sync)]
@@ -662,6 +664,8 @@ unsafe impl Send for RenderPipeline {}
 pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 #[cfg(send_sync)]
 unsafe impl Sync for ComputePipeline {}

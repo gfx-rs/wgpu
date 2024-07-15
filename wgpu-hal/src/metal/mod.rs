@@ -767,6 +767,8 @@ pub struct RenderPipeline {
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: metal::ComputePipelineState,
@@ -779,6 +781,8 @@ pub struct ComputePipeline {
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
+
+impl crate::DynComputePipeline for ComputePipeline {}
 
 #[derive(Debug, Clone)]
 pub struct QuerySet {
