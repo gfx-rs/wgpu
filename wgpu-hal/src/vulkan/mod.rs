@@ -824,6 +824,18 @@ pub struct QuerySet {
     raw: vk::QueryPool,
 }
 
+impl crate::DynResource for QuerySet {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynQuerySet for QuerySet {}
+
 /// The [`Api::Fence`] type for [`vulkan::Api`].
 ///
 /// This is an `enum` because there are two possible implementations of

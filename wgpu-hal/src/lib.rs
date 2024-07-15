@@ -265,7 +265,7 @@ pub mod api {
 mod dynamic;
 
 pub(crate) use dynamic::DynResource;
-pub use dynamic::{DynBuffer, DynCommandEncoder, DynDevice};
+pub use dynamic::{DynBuffer, DynCommandEncoder, DynDevice, DynQuerySet};
 
 use std::{
     borrow::{Borrow, Cow},
@@ -407,7 +407,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
     type TextureView: fmt::Debug + WasmNotSendSync;
     type Sampler: fmt::Debug + WasmNotSendSync;
-    type QuerySet: fmt::Debug + WasmNotSendSync;
+    type QuerySet: DynQuerySet;
 
     /// A value you can block on to wait for something to finish.
     ///

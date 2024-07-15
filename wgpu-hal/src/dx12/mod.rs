@@ -499,6 +499,18 @@ pub struct QuerySet {
     raw_ty: d3d12_ty::D3D12_QUERY_TYPE,
 }
 
+impl crate::DynResource for QuerySet {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynQuerySet for QuerySet {}
+
 unsafe impl Send for QuerySet {}
 unsafe impl Sync for QuerySet {}
 

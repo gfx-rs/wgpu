@@ -1,8 +1,8 @@
 use std::ops::Range;
 
 use crate::{
-    BufferBarrier, BufferBinding, BufferCopy, CommandEncoder, DeviceError, DynBuffer, Label,
-    MemoryRange, Rect,
+    BufferBarrier, BufferBinding, BufferCopy, CommandEncoder, DeviceError, DynBuffer, DynQuerySet,
+    Label, MemoryRange, Rect,
 };
 
 use super::DynResourceExt as _;
@@ -89,18 +89,18 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     unsafe fn begin_debug_marker(&mut self, group_label: &str);
     unsafe fn end_debug_marker(&mut self);
 
-    // unsafe fn begin_query(&mut self, set: &dyn DynQuerySet, index: u32);
-    // unsafe fn end_query(&mut self, set: &dyn DynQuerySet, index: u32);
-    // unsafe fn write_timestamp(&mut self, set: &dyn DynQuerySet, index: u32);
-    // unsafe fn reset_queries(&mut self, set: &dyn DynQuerySet, range: Range<u32>);
-    // unsafe fn copy_query_results(
-    //     &mut self,
-    //     set: &dyn DynQuerySet,
-    //     range: Range<u32>,
-    //     buffer: &dyn DynBuffer,
-    //     offset: wgt::BufferAddress,
-    //     stride: wgt::BufferSize,
-    // );
+    unsafe fn begin_query(&mut self, set: &dyn DynQuerySet, index: u32);
+    unsafe fn end_query(&mut self, set: &dyn DynQuerySet, index: u32);
+    unsafe fn write_timestamp(&mut self, set: &dyn DynQuerySet, index: u32);
+    unsafe fn reset_queries(&mut self, set: &dyn DynQuerySet, range: Range<u32>);
+    unsafe fn copy_query_results(
+        &mut self,
+        set: &dyn DynQuerySet,
+        range: Range<u32>,
+        buffer: &dyn DynBuffer,
+        offset: wgt::BufferAddress,
+        stride: wgt::BufferSize,
+    );
 
     // unsafe fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<Self::A>);
     // unsafe fn end_render_pass(&mut self);
@@ -239,6 +239,39 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         unsafe {
             C::end_debug_marker(self);
         }
+    }
+
+    unsafe fn begin_query(&mut self, set: &dyn DynQuerySet, index: u32) {
+        let set = set.expect_downcast_ref();
+        unsafe { C::begin_query(self, set, index) };
+    }
+
+    unsafe fn end_query(&mut self, set: &dyn DynQuerySet, index: u32) {
+        let set = set.expect_downcast_ref();
+        unsafe { C::end_query(self, set, index) };
+    }
+
+    unsafe fn write_timestamp(&mut self, set: &dyn DynQuerySet, index: u32) {
+        let set = set.expect_downcast_ref();
+        unsafe { C::write_timestamp(self, set, index) };
+    }
+
+    unsafe fn reset_queries(&mut self, set: &dyn DynQuerySet, range: Range<u32>) {
+        let set = set.expect_downcast_ref();
+        unsafe { C::reset_queries(self, set, range) };
+    }
+
+    unsafe fn copy_query_results(
+        &mut self,
+        set: &dyn DynQuerySet,
+        range: Range<u32>,
+        buffer: &dyn DynBuffer,
+        offset: wgt::BufferAddress,
+        stride: wgt::BufferSize,
+    ) {
+        let set = set.expect_downcast_ref();
+        let buffer = buffer.expect_downcast_ref();
+        unsafe { C::copy_query_results(self, set, range, buffer, offset, stride) };
     }
 
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>) {

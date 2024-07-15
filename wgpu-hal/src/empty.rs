@@ -51,6 +51,7 @@ impl crate::DynResource for Resource {
 }
 
 impl crate::DynBuffer for Resource {}
+impl crate::DynQuerySet for Resource {}
 
 impl crate::Instance for Context {
     type A = Api;

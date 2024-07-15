@@ -661,6 +661,18 @@ pub struct QuerySet {
     target: BindTarget,
 }
 
+impl crate::DynResource for QuerySet {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynQuerySet for QuerySet {}
+
 #[derive(Debug)]
 pub struct Fence {
     last_completed: crate::FenceValue,
