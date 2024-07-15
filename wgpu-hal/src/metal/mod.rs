@@ -616,6 +616,18 @@ pub struct PipelineLayout {
     per_stage_map: MultiStageResources,
 }
 
+impl crate::DynResource for PipelineLayout {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynPipelineLayout for PipelineLayout {}
+
 trait AsNative {
     type Native;
     fn from(native: &Self::Native) -> Self;
@@ -688,6 +700,18 @@ pub struct BindGroup {
     samplers: Vec<SamplerPtr>,
     textures: Vec<TexturePtr>,
 }
+
+impl crate::DynResource for BindGroup {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynBindGroup for BindGroup {}
 
 unsafe impl Send for BindGroup {}
 unsafe impl Sync for BindGroup {}

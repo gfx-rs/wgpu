@@ -551,6 +551,18 @@ pub struct BindGroup {
     dynamic_buffers: Vec<d3d12::GpuAddress>,
 }
 
+impl crate::DynResource for BindGroup {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynBindGroup for BindGroup {}
+
 bitflags::bitflags! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct TableTypes: u8 {
@@ -594,6 +606,18 @@ pub struct PipelineLayout {
     bind_group_infos: ArrayVec<BindGroupInfo, { crate::MAX_BIND_GROUPS }>,
     naga_options: naga::back::hlsl::Options,
 }
+
+impl crate::DynResource for PipelineLayout {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct ShaderModule {

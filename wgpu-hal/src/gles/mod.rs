@@ -478,6 +478,18 @@ pub struct PipelineLayout {
     naga_options: naga::back::glsl::Options,
 }
 
+impl crate::DynResource for PipelineLayout {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynPipelineLayout for PipelineLayout {}
+
 impl PipelineLayout {
     fn get_slot(&self, br: &naga::ResourceBinding) -> u8 {
         let group_info = &self.group_infos[br.group as usize];
@@ -515,6 +527,18 @@ enum RawBinding {
 pub struct BindGroup {
     contents: Box<[RawBinding]>,
 }
+
+impl crate::DynResource for BindGroup {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl crate::DynBindGroup for BindGroup {}
 
 type ShaderId = u32;
 

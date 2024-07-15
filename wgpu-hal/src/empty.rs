@@ -50,7 +50,9 @@ impl crate::DynResource for Resource {
     }
 }
 
+impl crate::DynBindGroup for Resource {}
 impl crate::DynBuffer for Resource {}
+impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
 
 impl crate::Instance for Context {

@@ -27,7 +27,9 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
     }
 }
 
+pub trait DynBindGroup: DynResource {}
 pub trait DynBuffer: DynResource {}
+pub trait DynPipelineLayout: DynResource {}
 pub trait DynQuerySet: DynResource {}
 
 pub trait DynDevice {

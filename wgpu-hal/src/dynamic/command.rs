@@ -1,8 +1,8 @@
 use std::ops::Range;
 
 use crate::{
-    BufferBarrier, BufferBinding, BufferCopy, CommandEncoder, DeviceError, DynBuffer, DynQuerySet,
-    Label, MemoryRange, Rect,
+    BufferBarrier, BufferBinding, BufferCopy, CommandEncoder, DeviceError, DynBindGroup, DynBuffer,
+    DynPipelineLayout, DynQuerySet, Label, MemoryRange, Rect,
 };
 
 use super::DynResourceExt as _;
@@ -69,21 +69,21 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     // ) where
     //     T: Iterator<Item = BufferTextureCopy>;
 
-    // unsafe fn set_bind_group(
-    //     &mut self,
-    //     layout: &dyn DynPipelineLayout,
-    //     index: u32,
-    //     group: &dyn DynBindGroup,
-    //     dynamic_offsets: &[wgt::DynamicOffset],
-    // );
+    unsafe fn set_bind_group(
+        &mut self,
+        layout: &dyn DynPipelineLayout,
+        index: u32,
+        group: &dyn DynBindGroup,
+        dynamic_offsets: &[wgt::DynamicOffset],
+    );
 
-    // unsafe fn set_push_constants(
-    //     &mut self,
-    //     layout: &dyn DynPipelineLayout,
-    //     stages: wgt::ShaderStages,
-    //     offset_bytes: u32,
-    //     data: &[u32],
-    // );
+    unsafe fn set_push_constants(
+        &mut self,
+        layout: &dyn DynPipelineLayout,
+        stages: wgt::ShaderStages,
+        offset_bytes: u32,
+        data: &[u32],
+    );
 
     unsafe fn insert_debug_marker(&mut self, label: &str);
     unsafe fn begin_debug_marker(&mut self, group_label: &str);
@@ -221,6 +221,29 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         unsafe {
             C::copy_buffer_to_buffer(self, src, dst, regions.iter().copied());
         }
+    }
+
+    unsafe fn set_bind_group(
+        &mut self,
+        layout: &dyn DynPipelineLayout,
+        index: u32,
+        group: &dyn DynBindGroup,
+        dynamic_offsets: &[wgt::DynamicOffset],
+    ) {
+        let layout = layout.expect_downcast_ref();
+        let group = group.expect_downcast_ref();
+        unsafe { C::set_bind_group(self, layout, index, group, dynamic_offsets) };
+    }
+
+    unsafe fn set_push_constants(
+        &mut self,
+        layout: &dyn DynPipelineLayout,
+        stages: wgt::ShaderStages,
+        offset_bytes: u32,
+        data: &[u32],
+    ) {
+        let layout = layout.expect_downcast_ref();
+        unsafe { C::set_push_constants(self, layout, stages, offset_bytes, data) };
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
