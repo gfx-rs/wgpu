@@ -513,7 +513,7 @@ impl Global {
                 }
             }
 
-            Some(hal::ComputePassTimestampWrites {
+            Some(hal::PassTimestampWrites {
                 query_set: query_set.raw.as_ref().unwrap(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
