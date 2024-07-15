@@ -160,6 +160,7 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
 - Implement `WGSL`'s `unpack4xI8`,`unpack4xU8`,`pack4xI8` and `pack4xU8`. By @VlaDexa in [#5424](https://github.com/gfx-rs/wgpu/pull/5424)
 - Began work adding support for atomics to the SPIR-V frontend. Tracking issue is [here](https://github.com/gfx-rs/wgpu/issues/4489). By @schell in [#5702](https://github.com/gfx-rs/wgpu/pull/5702).
 - In hlsl-out, allow passing information about the fragment entry point to omit vertex outputs that are not in the fragment inputs. By @Imberflur in [#5531](https://github.com/gfx-rs/wgpu/pull/5531)
+- In spv-out, allow passing `acceleration_structure` as a function argument. By @kvark in [#5961](https://github.com/gfx-rs/wgpu/pull/5961)
 
   ```diff
   let writer: naga::back::hlsl::Writer = /* ... */;
