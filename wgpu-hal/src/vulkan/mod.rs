@@ -833,6 +833,8 @@ pub struct QuerySet {
     raw: vk::QueryPool,
 }
 
+impl crate::DynQuerySet for QuerySet {}
+
 /// The [`Api::Fence`] type for [`vulkan::Api`].
 ///
 /// This is an `enum` because there are two possible implementations of

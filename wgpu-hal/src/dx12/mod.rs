@@ -508,6 +508,8 @@ pub struct QuerySet {
     raw_ty: d3d12_ty::D3D12_QUERY_TYPE,
 }
 
+impl crate::DynQuerySet for QuerySet {}
+
 unsafe impl Send for QuerySet {}
 unsafe impl Sync for QuerySet {}
 

@@ -784,6 +784,8 @@ pub struct QuerySet {
     ty: wgt::QueryType,
 }
 
+impl crate::DynQuerySet for QuerySet {}
+
 unsafe impl Send for QuerySet {}
 unsafe impl Sync for QuerySet {}
 

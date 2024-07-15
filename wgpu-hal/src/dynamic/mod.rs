@@ -87,6 +87,7 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
 }
 
 pub trait DynBuffer: DynResource + std::fmt::Debug {}
+pub trait DynQuerySet: DynResource + std::fmt::Debug {}
 
 impl<'a> BufferBinding<'a, dyn DynBuffer> {
     pub fn expect_downcast<B: DynBuffer>(self) -> BufferBinding<'a, B> {
