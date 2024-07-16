@@ -39,7 +39,7 @@ Bottom level categories:
 
 ## Unreleased
 
-## 0.19.5
+## 0.19.5 (2024-07-16)
 
 This release only releases `wgpu-hal` 0.19.5, which contains an important fix
 for DX12.
