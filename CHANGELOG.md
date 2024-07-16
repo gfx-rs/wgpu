@@ -39,6 +39,17 @@ Bottom level categories:
 
 ## Unreleased
 
+## 0.19.5
+
+This release only releases `wgpu-hal` 0.19.5, which contains an important fix
+for DX12.
+
+### Bug Fixes
+
+#### DX12
+
+- Do not feed `&""` to `D3DCompile`, by @workingjubilee in [#5812](https://github.com/gfx-rs/wgpu/issues/5812), backported by @Elabajaba in [#5833](https://github.com/gfx-rs/wgpu/pull/5833).
+
 ## v0.19.4 (2024-04-17)
 
 ### Bug Fixes
