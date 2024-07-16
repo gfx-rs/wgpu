@@ -3,10 +3,28 @@ use wgt::WasmNotSendSync;
 use crate::{BufferBinding, CommandEncoder, Device};
 
 // TODO: docs
-pub trait DynResource: WasmNotSendSync + std::fmt::Debug + 'static {
+pub trait DynResource: WasmNotSendSync + 'static {
     fn as_any(&self) -> &dyn std::any::Any;
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
+
+/// Utility macro for implementing `DynResource` for a list of types.
+macro_rules! impl_dyn_resource {
+    ($($type:ty),*) => {
+        $(
+            impl crate::DynResource for $type {
+                fn as_any(&self) -> &dyn std::any::Any {
+                    self
+                }
+
+                fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                    self
+                }
+            }
+        )*
+    };
+}
+pub(crate) use impl_dyn_resource;
 
 trait DynResourceExt {
     fn expect_downcast_ref<T: DynResource>(&self) -> &T;
@@ -27,12 +45,12 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
     }
 }
 
-pub trait DynBindGroup: DynResource {}
-pub trait DynBuffer: DynResource {}
-pub trait DynPipelineLayout: DynResource {}
-pub trait DynQuerySet: DynResource {}
-pub trait DynRenderPipeline: DynResource {}
-pub trait DynComputePipeline: DynResource {}
+pub trait DynBindGroup: DynResource + std::fmt::Debug {}
+pub trait DynBuffer: DynResource + std::fmt::Debug {}
+pub trait DynPipelineLayout: DynResource + std::fmt::Debug {}
+pub trait DynQuerySet: DynResource + std::fmt::Debug {}
+pub trait DynRenderPipeline: DynResource + std::fmt::Debug {}
+pub trait DynComputePipeline: DynResource + std::fmt::Debug {}
 
 pub trait DynDevice {
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>);

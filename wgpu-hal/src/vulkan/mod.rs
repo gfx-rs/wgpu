@@ -78,6 +78,25 @@ impl crate::Api for Api {
     type ComputePipeline = ComputePipeline;
 }
 
+crate::impl_dyn_resource!(
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Fence,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
+
 struct DebugUtils {
     extension: ext::debug_utils::Instance,
     messenger: vk::DebugUtilsMessengerEXT,
@@ -631,16 +650,6 @@ pub struct Buffer {
     block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
-impl crate::DynResource for Buffer {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynBuffer for Buffer {}
 
 #[derive(Debug)]
@@ -707,31 +716,11 @@ pub struct PipelineLayout {
     binding_arrays: naga::back::spv::BindingMap,
 }
 
-impl crate::DynResource for PipelineLayout {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct BindGroup {
     set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
-}
-
-impl crate::DynResource for BindGroup {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -833,31 +822,11 @@ pub struct RenderPipeline {
     raw: vk::Pipeline,
 }
 
-impl crate::DynResource for RenderPipeline {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynRenderPipeline for RenderPipeline {}
 
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: vk::Pipeline,
-}
-
-impl crate::DynResource for ComputePipeline {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl crate::DynComputePipeline for ComputePipeline {}
@@ -870,16 +839,6 @@ pub struct PipelineCache {
 #[derive(Debug)]
 pub struct QuerySet {
     raw: vk::QueryPool,
-}
-
-impl crate::DynResource for QuerySet {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl crate::DynQuerySet for QuerySet {}

@@ -40,15 +40,7 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-impl crate::DynResource for Resource {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
+crate::impl_dyn_resource!(Resource);
 
 impl crate::DynBindGroup for Resource {}
 impl crate::DynBuffer for Resource {}

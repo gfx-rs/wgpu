@@ -153,8 +153,8 @@ impl crate::Api for Api {
     type Sampler = Sampler;
     type QuerySet = QuerySet;
     type Fence = Fence;
-    type AccelerationStructure = ();
-    type PipelineCache = ();
+    type AccelerationStructure = AccelerationStructure;
+    type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -163,6 +163,25 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 }
+
+crate::impl_dyn_resource!(
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Fence,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
 
 bitflags::bitflags! {
     /// Flags that affect internal code paths but do not
@@ -305,16 +324,6 @@ pub struct Buffer {
 unsafe impl Sync for Buffer {}
 #[cfg(send_sync)]
 unsafe impl Send for Buffer {}
-
-impl crate::DynResource for Buffer {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
 
 impl crate::DynBuffer for Buffer {}
 
@@ -478,16 +487,6 @@ pub struct PipelineLayout {
     naga_options: naga::back::glsl::Options,
 }
 
-impl crate::DynResource for PipelineLayout {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 impl PipelineLayout {
@@ -526,16 +525,6 @@ enum RawBinding {
 #[derive(Debug)]
 pub struct BindGroup {
     contents: Box<[RawBinding]>,
-}
-
-impl crate::DynResource for BindGroup {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -664,16 +653,6 @@ pub struct RenderPipeline {
     alpha_to_coverage_enabled: bool,
 }
 
-impl crate::DynResource for RenderPipeline {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynRenderPipeline for RenderPipeline {}
 
 #[cfg(send_sync)]
@@ -684,16 +663,6 @@ unsafe impl Send for RenderPipeline {}
 #[derive(Debug)]
 pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
-}
-
-impl crate::DynResource for ComputePipeline {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl crate::DynComputePipeline for ComputePipeline {}
@@ -707,16 +676,6 @@ unsafe impl Send for ComputePipeline {}
 pub struct QuerySet {
     queries: Box<[glow::Query]>,
     target: BindTarget,
-}
-
-impl crate::DynResource for QuerySet {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl crate::DynQuerySet for QuerySet {}
@@ -769,6 +728,11 @@ impl Fence {
         self.last_completed = latest;
     }
 }
+
+#[derive(Debug)]
+pub struct AccelerationStructure;
+#[derive(Debug)]
+pub struct PipelineCache;
 
 #[derive(Clone, Debug, PartialEq)]
 struct StencilOps {

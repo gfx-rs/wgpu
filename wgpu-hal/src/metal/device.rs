@@ -1226,10 +1226,10 @@ impl crate::Device for super::Device {
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Result<(), crate::PipelineCacheError> {
-        Ok(())
+    ) -> Result<super::PipelineCache, crate::PipelineCacheError> {
+        Ok(super::PipelineCache)
     }
-    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
+    unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {}
 
     unsafe fn create_query_set(
         &self,

@@ -264,7 +264,7 @@ pub mod api {
 
 mod dynamic;
 
-pub(crate) use dynamic::DynResource;
+pub(crate) use dynamic::{impl_dyn_resource, DynResource};
 pub use dynamic::{
     DynBindGroup, DynBuffer, DynCommandEncoder, DynComputePipeline, DynDevice, DynPipelineLayout,
     DynQuerySet, DynRenderPipeline,

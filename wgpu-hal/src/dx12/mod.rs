@@ -82,10 +82,29 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
-    type PipelineCache = ();
+    type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
 }
+
+crate::impl_dyn_resource!(
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Fence,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
@@ -407,16 +426,6 @@ pub struct Buffer {
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
-impl crate::DynResource for Buffer {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynBuffer for Buffer {}
 
 impl crate::BufferBinding<'_, Buffer> {
@@ -499,16 +508,6 @@ pub struct QuerySet {
     raw_ty: d3d12_ty::D3D12_QUERY_TYPE,
 }
 
-impl crate::DynResource for QuerySet {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynQuerySet for QuerySet {}
 
 unsafe impl Send for QuerySet {}
@@ -549,16 +548,6 @@ pub struct BindGroup {
     handle_views: Option<descriptor::DualHandle>,
     handle_samplers: Option<descriptor::DualHandle>,
     dynamic_buffers: Vec<d3d12::GpuAddress>,
-}
-
-impl crate::DynResource for BindGroup {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -607,16 +596,6 @@ pub struct PipelineLayout {
     naga_options: naga::back::hlsl::Options,
 }
 
-impl crate::DynResource for PipelineLayout {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
@@ -650,16 +629,6 @@ pub struct RenderPipeline {
     vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
 }
 
-impl crate::DynResource for RenderPipeline {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynRenderPipeline for RenderPipeline {}
 
 unsafe impl Send for RenderPipeline {}
@@ -671,20 +640,13 @@ pub struct ComputePipeline {
     layout: PipelineLayoutShared,
 }
 
-impl crate::DynResource for ComputePipeline {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl crate::DynComputePipeline for ComputePipeline {}
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
+
+#[derive(Debug)]
+pub struct PipelineCache;
 
 #[derive(Debug)]
 pub struct AccelerationStructure {}

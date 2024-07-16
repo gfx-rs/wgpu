@@ -1455,12 +1455,12 @@ impl crate::Device for super::Device {
     unsafe fn create_pipeline_cache(
         &self,
         _: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Result<(), crate::PipelineCacheError> {
+    ) -> Result<super::PipelineCache, crate::PipelineCacheError> {
         // Even though the cache doesn't do anything, we still return something here
         // as the least bad option
-        Ok(())
+        Ok(super::PipelineCache)
     }
-    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
+    unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {}
 
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     unsafe fn create_query_set(
@@ -1581,7 +1581,7 @@ impl crate::Device for super::Device {
     unsafe fn create_acceleration_structure(
         &self,
         _desc: &crate::AccelerationStructureDescriptor,
-    ) -> Result<(), crate::DeviceError> {
+    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
         unimplemented!()
     }
     unsafe fn get_acceleration_structure_build_sizes<'a>(
@@ -1592,11 +1592,15 @@ impl crate::Device for super::Device {
     }
     unsafe fn get_acceleration_structure_device_address(
         &self,
-        _acceleration_structure: &(),
+        _acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
         unimplemented!()
     }
-    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: ()) {}
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        _acceleration_structure: super::AccelerationStructure,
+    ) {
+    }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         self.counters.clone()
