@@ -37,6 +37,8 @@ Bottom level categories:
 - Hal
 -->
 
+## Unreleased
+
 ## 0.19.5
 
 This release only releases `wgpu-hal` 0.19.5, which contains an important fix
