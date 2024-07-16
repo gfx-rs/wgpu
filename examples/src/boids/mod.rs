@@ -340,9 +340,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
         .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-        .limits(wgpu::Limits::downlevel_defaults())
-        // Lots of validation errors, maybe related to https://github.com/gfx-rs/wgpu/issues/3160
-        .expect_fail(wgpu_test::FailureCase::molten_vk()),
+        .limits(wgpu::Limits::downlevel_defaults()),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     _phantom: std::marker::PhantomData::<Example>,
 };
