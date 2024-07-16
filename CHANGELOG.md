@@ -437,6 +437,17 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Refactor tests to read feature flags by name instead of a hardcoded hexadecimal u64. By @atlv24 in [#5155](https://github.com/gfx-rs/wgpu/pull/5155).
 - Add test that verifies that we can drop the queue before using the device to create a command encoder. By @Davidster in [#5211](https://github.com/gfx-rs/wgpu/pull/5211)
 
+## 0.19.5 (2024-07-16)
+
+This release only releases `wgpu-hal` 0.19.5, which contains an important fix
+for DX12.
+
+### Bug Fixes
+
+#### DX12
+
+- Do not feed `&""` to `D3DCompile`, by @workingjubilee in [#5812](https://github.com/gfx-rs/wgpu/issues/5812), backported by @Elabajaba in [#5833](https://github.com/gfx-rs/wgpu/pull/5833).
+
 ## v0.19.4 (2024-04-17)
 
 ### Bug Fixes
