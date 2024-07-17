@@ -185,6 +185,7 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
 - Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
 - `wgpu::Error` is now `Sync`, making it possible to be wrapped in `anyhow::Error` or `eyre::Report`. By @nolanderc in [#5820](https://github.com/gfx-rs/wgpu/pull/5820)
 - Added benchmark suite. By @cwfitzgerald in [#5694](https://github.com/gfx-rs/wgpu/pull/5694), compute passes by @wumpf in [#5767](https://github.com/gfx-rs/wgpu/pull/5767)
+- The `trace` wgpu feature has been temporarily removed. By @teoxoy in [#5975](https://github.com/gfx-rs/wgpu/pull/5975)
 
 #### Metal
 - Removed the `link` Cargo feature.
