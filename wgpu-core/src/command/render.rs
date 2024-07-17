@@ -1041,7 +1041,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
         }
 
         let mut color_attachments_hal =
-            ArrayVec::<Option<hal::ColorAttachment<A>>, { hal::MAX_COLOR_ATTACHMENTS }>::new();
+            ArrayVec::<Option<hal::ColorAttachment<_>>, { hal::MAX_COLOR_ATTACHMENTS }>::new();
         for (index, attachment) in color_attachments.iter().enumerate() {
             let at = if let Some(attachment) = attachment.as_ref() {
                 attachment

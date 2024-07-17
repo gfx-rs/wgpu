@@ -644,7 +644,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
+    ) {
         let mut vk_clear_values =
             ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
         let mut vk_image_views = ArrayVec::<vk::ImageView, { super::MAX_TOTAL_ATTACHMENTS }>::new();
@@ -1067,7 +1070,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<'_, super::Api>) {
+    unsafe fn begin_compute_pass(
+        &mut self,
+        desc: &crate::ComputePassDescriptor<'_, super::QuerySet>,
+    ) {
         self.bind_point = vk::PipelineBindPoint::COMPUTE;
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };
