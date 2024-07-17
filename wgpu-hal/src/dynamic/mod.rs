@@ -88,10 +88,12 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
 
 pub trait DynBindGroup: DynResource + std::fmt::Debug {}
 pub trait DynBuffer: DynResource + std::fmt::Debug {}
+pub trait DynComputePipeline: DynResource + std::fmt::Debug {}
 pub trait DynPipelineLayout: DynResource + std::fmt::Debug {}
 pub trait DynQuerySet: DynResource + std::fmt::Debug {}
 pub trait DynRenderPipeline: DynResource + std::fmt::Debug {}
-pub trait DynComputePipeline: DynResource + std::fmt::Debug {}
+pub trait DynTexture: DynResource + std::fmt::Debug {}
+pub trait DynTextureView: DynResource + std::fmt::Debug {}
 
 impl<'a> BufferBinding<'a, dyn DynBuffer> {
     pub fn expect_downcast<B: DynBuffer>(self) -> BufferBinding<'a, B> {

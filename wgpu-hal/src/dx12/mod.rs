@@ -452,6 +452,8 @@ pub struct Texture {
     allocation: Option<suballocation::AllocationWrapper>,
 }
 
+impl crate::DynTexture for Texture {}
+
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
@@ -490,6 +492,8 @@ pub struct TextureView {
     handle_dsv_ro: Option<descriptor::Handle>,
     handle_dsv_rw: Option<descriptor::Handle>,
 }
+
+impl crate::DynTextureView for TextureView {}
 
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
