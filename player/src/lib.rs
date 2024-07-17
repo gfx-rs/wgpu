@@ -256,8 +256,8 @@ impl GlobalPlay for wgc::global::Global {
                     implicit_context
                         .as_ref()
                         .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: Some(ic.root_id),
-                            group_ids: wgc::id::as_option_slice(&ic.group_ids),
+                            root_id: ic.root_id,
+                            group_ids: &ic.group_ids,
                         });
                 let (_, error) =
                     self.device_create_compute_pipeline::<A>(device, &desc, Some(id), implicit_ids);
@@ -277,8 +277,8 @@ impl GlobalPlay for wgc::global::Global {
                     implicit_context
                         .as_ref()
                         .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: Some(ic.root_id),
-                            group_ids: wgc::id::as_option_slice(&ic.group_ids),
+                            root_id: ic.root_id,
+                            group_ids: &ic.group_ids,
                         });
                 let (_, error) =
                     self.device_create_render_pipeline::<A>(device, &desc, Some(id), implicit_ids);

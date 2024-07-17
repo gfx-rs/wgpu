@@ -1162,13 +1162,6 @@ impl crate::Context for ContextWgpuCore {
             })
             .collect();
 
-        let implicit_pipeline_ids = match desc.layout {
-            Some(_) => None,
-            None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: None,
-                group_ids: &[None; wgc::MAX_BIND_GROUPS],
-            }),
-        };
         let descriptor = pipe::RenderPipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|l| l.id.into()),
@@ -1211,7 +1204,7 @@ impl crate::Context for ContextWgpuCore {
             *device,
             &descriptor,
             None,
-            implicit_pipeline_ids
+            None,
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
@@ -1235,13 +1228,6 @@ impl crate::Context for ContextWgpuCore {
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         use wgc::pipeline as pipe;
 
-        let implicit_pipeline_ids = match desc.layout {
-            Some(_) => None,
-            None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: None,
-                group_ids: &[None; wgc::MAX_BIND_GROUPS],
-            }),
-        };
         let descriptor = pipe::ComputePipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|l| l.id.into()),
@@ -1261,7 +1247,7 @@ impl crate::Context for ContextWgpuCore {
             *device,
             &descriptor,
             None,
-            implicit_pipeline_ids
+            None,
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
