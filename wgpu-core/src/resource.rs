@@ -28,10 +28,7 @@ use std::{
     mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Weak,
-    },
+    sync::{atomic::Ordering, Arc, Weak},
 };
 
 /// Information about the wgpu-core resource.
@@ -64,7 +61,7 @@ pub(crate) struct TrackingData {
     /// sequentially. Thus, when a queue submission completes, we know any
     /// resources used in that submission and any lower-numbered submissions are
     /// no longer in use by the GPU.
-    submission_index: AtomicUsize,
+    submission_index: hal::AtomicFenceValue,
 }
 
 impl Drop for TrackingData {
@@ -78,7 +75,7 @@ impl TrackingData {
         Self {
             tracker_index: tracker_indices.alloc(),
             tracker_indices,
-            submission_index: AtomicUsize::new(0),
+            submission_index: hal::AtomicFenceValue::new(0),
         }
     }
 
@@ -89,12 +86,11 @@ impl TrackingData {
     /// Record that this resource will be used by the queue submission with the
     /// given index.
     pub(crate) fn use_at(&self, submit_index: SubmissionIndex) {
-        self.submission_index
-            .store(submit_index as _, Ordering::Release);
+        self.submission_index.store(submit_index, Ordering::Release);
     }
 
     pub(crate) fn submission_index(&self) -> SubmissionIndex {
-        self.submission_index.load(Ordering::Acquire) as _
+        self.submission_index.load(Ordering::Acquire)
     }
 }
 

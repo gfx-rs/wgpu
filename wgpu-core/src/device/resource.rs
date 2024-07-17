@@ -88,8 +88,7 @@ pub struct Device<A: HalApi> {
     label: String,
 
     pub(crate) command_allocator: command::CommandAllocator<A>,
-    //Note: The submission index here corresponds to the last submission that is done.
-    pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
+    pub(crate) active_submission_index: hal::AtomicFenceValue,
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
     // `fence` lock to avoid deadlocks.
     pub(crate) fence: RwLock<Option<A::Fence>>,

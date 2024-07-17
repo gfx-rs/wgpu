@@ -294,6 +294,7 @@ pub const QUERY_SIZE: wgt::BufferAddress = 8;
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
+pub type AtomicFenceValue = std::sync::atomic::AtomicU64;
 
 /// Drop guard to signal wgpu-hal is no longer using an externally created object.
 pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
