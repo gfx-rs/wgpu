@@ -373,6 +373,8 @@ pub struct Texture {
     pub copy_size: CopyExtent,
 }
 
+impl crate::DynTexture for Texture {}
+
 impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
         Self {
@@ -459,6 +461,8 @@ pub struct TextureView {
     array_layers: Range<u32>,
     format: wgt::TextureFormat,
 }
+
+impl crate::DynTextureView for TextureView {}
 
 #[derive(Debug)]
 pub struct Sampler {
