@@ -501,7 +501,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
+    ) {
         self.begin_pass();
         self.state.index = None;
 
@@ -1128,7 +1131,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::QuerySet>) {
         self.begin_pass();
 
         debug_assert!(self.state.blit.is_none());

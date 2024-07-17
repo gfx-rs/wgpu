@@ -178,7 +178,7 @@ pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFo
     })
 }
 
-impl crate::Attachment<'_, super::Api> {
+impl crate::Attachment<'_, super::TextureView> {
     pub(super) fn make_attachment_key(
         &self,
         ops: crate::AttachmentOps,
@@ -192,7 +192,7 @@ impl crate::Attachment<'_, super::Api> {
     }
 }
 
-impl crate::ColorAttachment<'_, super::Api> {
+impl crate::ColorAttachment<'_, super::TextureView> {
     pub(super) unsafe fn make_vk_clear_color(&self) -> vk::ClearColorValue {
         let cv = &self.clear_value;
         match self

@@ -1231,7 +1231,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     // render passes
 
     // Begins a render pass, clears all active bindings.
-    unsafe fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<Self::A>);
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
+    );
     unsafe fn end_render_pass(&mut self);
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &<Self::A as Api>::RenderPipeline);
@@ -1298,7 +1301,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     // compute passes
 
     // Begins a compute pass, clears all active bindings.
-    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<Self::A>);
+    unsafe fn begin_compute_pass(
+        &mut self,
+        desc: &ComputePassDescriptor<<Self::A as Api>::QuerySet>,
+    );
     unsafe fn end_compute_pass(&mut self);
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &<Self::A as Api>::ComputePipeline);
@@ -2028,47 +2034,25 @@ pub struct BufferTextureCopy {
     pub size: CopyExtent,
 }
 
-#[derive(Debug)]
-pub struct Attachment<'a, A: Api> {
-    pub view: &'a A::TextureView,
+#[derive(Clone, Debug)]
+pub struct Attachment<'a, T: DynTextureView + ?Sized> {
+    pub view: &'a T,
     /// Contains either a single mutating usage as a target,
     /// or a valid combination of read-only usages.
     pub usage: TextureUses,
 }
 
-// Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for Attachment<'_, A> {
-    fn clone(&self) -> Self {
-        Self {
-            view: self.view,
-            usage: self.usage,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ColorAttachment<'a, A: Api> {
-    pub target: Attachment<'a, A>,
-    pub resolve_target: Option<Attachment<'a, A>>,
+#[derive(Clone, Debug)]
+pub struct ColorAttachment<'a, T: DynTextureView + ?Sized> {
+    pub target: Attachment<'a, T>,
+    pub resolve_target: Option<Attachment<'a, T>>,
     pub ops: AttachmentOps,
     pub clear_value: wgt::Color,
 }
 
-// Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for ColorAttachment<'_, A> {
-    fn clone(&self) -> Self {
-        Self {
-            target: self.target.clone(),
-            resolve_target: self.resolve_target.clone(),
-            ops: self.ops,
-            clear_value: self.clear_value,
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
-pub struct DepthStencilAttachment<'a, A: Api> {
-    pub target: Attachment<'a, A>,
+pub struct DepthStencilAttachment<'a, T: DynTextureView + ?Sized> {
+    pub target: Attachment<'a, T>,
     pub depth_ops: AttachmentOps,
     pub stencil_ops: AttachmentOps,
     pub clear_value: (f32, u32),
@@ -2082,21 +2066,21 @@ pub struct PassTimestampWrites<'a, Q: DynQuerySet + ?Sized> {
 }
 
 #[derive(Clone, Debug)]
-pub struct RenderPassDescriptor<'a, A: Api> {
+pub struct RenderPassDescriptor<'a, Q: DynQuerySet + ?Sized, T: DynTextureView + ?Sized> {
     pub label: Label<'a>,
     pub extent: wgt::Extent3d,
     pub sample_count: u32,
-    pub color_attachments: &'a [Option<ColorAttachment<'a, A>>],
-    pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
+    pub color_attachments: &'a [Option<ColorAttachment<'a, T>>],
+    pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, T>>,
     pub multiview: Option<NonZeroU32>,
-    pub timestamp_writes: Option<PassTimestampWrites<'a, A::QuerySet>>,
-    pub occlusion_query_set: Option<&'a A::QuerySet>,
+    pub timestamp_writes: Option<PassTimestampWrites<'a, Q>>,
+    pub occlusion_query_set: Option<&'a Q>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ComputePassDescriptor<'a, A: Api> {
+pub struct ComputePassDescriptor<'a, Q: DynQuerySet + ?Sized> {
     pub label: Label<'a>,
-    pub timestamp_writes: Option<PassTimestampWrites<'a, A::QuerySet>>,
+    pub timestamp_writes: Option<PassTimestampWrites<'a, Q>>,
 }
 
 /// Stores the text of any validation errors that have occurred since

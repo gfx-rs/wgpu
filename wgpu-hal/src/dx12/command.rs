@@ -661,7 +661,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
+    ) {
         unsafe { self.begin_pass(super::PassKind::Render, desc.label) };
 
         // Start timestamp if any (before all other commands but after debug marker)
@@ -1130,7 +1133,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn begin_compute_pass<'a>(
         &mut self,
-        desc: &crate::ComputePassDescriptor<'a, super::Api>,
+        desc: &crate::ComputePassDescriptor<'a, super::QuerySet>,
     ) {
         unsafe { self.begin_pass(super::PassKind::Compute, desc.label) };
 
