@@ -955,6 +955,9 @@ pub trait Queue: WasmNotSendSync {
     /// - All calls to this function that include a given [`SurfaceTexture`][st]
     ///   in `surface_textures` must use the same [`Fence`].
     ///
+    /// - The [`Fence`] passed as `signal_fence.0` must remain alive until
+    ///   all submissions that will signal it have completed.
+    ///
     /// [`Fence`]: Api::Fence
     /// [cb]: Api::CommandBuffer
     /// [ce]: Api::CommandEncoder
