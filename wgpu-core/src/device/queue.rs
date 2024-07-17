@@ -781,7 +781,14 @@ impl Global {
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
             // Fast path if the data is already being aligned optimally.
-            staging_buffer.write(&data[data_layout.offset as usize..]);
+            unsafe {
+                staging_buffer.write_with_offset(
+                    data,
+                    data_layout.offset as isize,
+                    0,
+                    (data.len() as u64 - data_layout.offset) as usize,
+                );
+            }
         } else {
             profiling::scope!("copy chunked");
             // Copy row by row into the optimal alignment.
