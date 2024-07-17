@@ -814,6 +814,8 @@ fn main() {
     let example_result = Example::<Api>::init(&window);
     let mut example = Some(example_result.expect("Selected backend is not supported"));
 
+    println!("Press space to spawn bunnies.");
+
     let mut last_frame_inst = Instant::now();
     let (mut frame_count, mut accum_time) = (0, 0.0);
 
