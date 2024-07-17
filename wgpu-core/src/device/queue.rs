@@ -1007,7 +1007,6 @@ impl Global {
                     .drain(init_layer_range);
             }
         }
-        dst.use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let snatch_guard = device.snatchable_lock.read();
         let dst_raw = dst.try_raw(&snatch_guard)?;

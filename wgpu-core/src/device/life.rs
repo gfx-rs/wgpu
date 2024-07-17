@@ -57,7 +57,7 @@ struct ActiveSubmission<A: HalApi> {
 
 impl<A: HalApi> ActiveSubmission<A> {
     /// Returns true if this submission contains the given buffer.
-    /// 
+    ///
     /// This only uses constant-time operations.
     pub fn contains_buffer(&self, buffer: &Buffer<A>) -> bool {
         for encoder in &self.encoders {
@@ -82,7 +82,7 @@ impl<A: HalApi> ActiveSubmission<A> {
     }
 
     /// Returns true if this submission contains the given texture.
-    /// 
+    ///
     /// This only uses constant-time operations.
     pub fn contains_texture(&self, texture: &Texture<A>) -> bool {
         for encoder in &self.encoders {
