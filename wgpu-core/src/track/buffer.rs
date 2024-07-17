@@ -277,6 +277,11 @@ impl<A: HalApi> BufferTracker<A> {
         }
     }
 
+    /// Returns true if the given buffer is tracked.
+    pub fn contains(&self, buffer: &Buffer<A>) -> bool {
+        self.metadata.contains(buffer.tracker_index().as_usize())
+    }
+
     /// Returns a list of all buffers tracked.
     pub fn used_resources(&self) -> impl Iterator<Item = Arc<Buffer<A>>> + '_ {
         self.metadata.owned_resources()

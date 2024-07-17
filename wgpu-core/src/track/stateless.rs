@@ -34,12 +34,6 @@ impl<T: Trackable> StatelessBindGroupState<T> {
         resources.sort_unstable_by_key(|resource| resource.tracker_index());
     }
 
-    /// Returns a list of all resources tracked. May contain duplicates.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
-        let resources = self.resources.lock();
-        resources.iter().cloned().collect::<Vec<_>>().into_iter()
-    }
-
     /// Adds the given resource.
     pub fn add_single(&self, resource: &Arc<T>) {
         let mut resources = self.resources.lock();
@@ -77,11 +71,6 @@ impl<T: Trackable> StatelessTracker<T> {
         if index >= self.metadata.size() {
             self.set_size(index + 1);
         }
-    }
-
-    /// Returns a list of all resources tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
-        self.metadata.owned_resources()
     }
 
     /// Inserts a single resource into the resource tracker.
