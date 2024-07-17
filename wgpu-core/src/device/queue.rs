@@ -1069,7 +1069,7 @@ impl Global {
             let fence = fence_guard.as_mut().unwrap();
             let submit_index = device
                 .active_submission_index
-                .fetch_add(1, Ordering::Relaxed)
+                .fetch_add(1, Ordering::SeqCst)
                 + 1;
             let mut active_executions = Vec::new();
 
@@ -1392,6 +1392,11 @@ impl Global {
                         )
                         .map_err(DeviceError::from)?;
                 }
+
+                // Advance the successful submission index.
+                device
+                    .last_successful_submission_index
+                    .fetch_max(submit_index, Ordering::SeqCst);
             }
 
             profiling::scope!("cleanup");
