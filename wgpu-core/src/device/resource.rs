@@ -88,7 +88,27 @@ pub struct Device<A: HalApi> {
     label: String,
 
     pub(crate) command_allocator: command::CommandAllocator<A>,
+
+    /// The index of the last command submission that was attempted.
+    ///
+    /// Note that `fence` may never be signalled with this value, if the command
+    /// submission failed. If you need to wait for everything running on a
+    /// `Queue` to complete, wait for [`last_successful_submission_index`].
+    ///
+    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
     pub(crate) active_submission_index: hal::AtomicFenceValue,
+
+    /// The index of the last successful submission to this device's
+    /// [`hal::Queue`].
+    ///
+    /// Unlike [`active_submission_index`], which is incremented each time
+    /// submission is attempted, this is updated only when submission succeeds,
+    /// so waiting for this value won't hang waiting for work that was never
+    /// submitted.
+    ///
+    /// [`active_submission_index`]: Device::active_submission_index
+    pub(crate) last_successful_submission_index: hal::AtomicFenceValue,
+
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
     // `fence` lock to avoid deadlocks.
     pub(crate) fence: RwLock<Option<A::Fence>>,
@@ -257,6 +277,7 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_string(),
             command_allocator,
             active_submission_index: AtomicU64::new(0),
+            last_successful_submission_index: AtomicU64::new(0),
             fence: RwLock::new(rank::DEVICE_FENCE, Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
@@ -387,37 +408,41 @@ impl<A: HalApi> Device<A> {
         profiling::scope!("Device::maintain");
 
         let fence = fence_guard.as_ref().unwrap();
-        let last_done_index = if maintain.is_wait() {
-            let index_to_wait_for = match maintain {
-                wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
-                    // We don't need to check to see if the queue id matches
-                    // as we already checked this from inside the poll call.
-                    submission_index.index
-                }
-                _ => self.active_submission_index.load(Ordering::Relaxed),
-            };
-            unsafe {
-                self.raw
-                    .as_ref()
-                    .unwrap()
-                    .wait(fence, index_to_wait_for, CLEANUP_WAIT_MS)
-                    .map_err(DeviceError::from)?
-            };
-            index_to_wait_for
-        } else {
-            unsafe {
+
+        // Determine which submission index `maintain` represents.
+        let submission_index = match maintain {
+            wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
+                // We don't need to check to see if the queue id matches
+                // as we already checked this from inside the poll call.
+                submission_index.index
+            }
+            wgt::Maintain::Wait => self
+                .last_successful_submission_index
+                .load(Ordering::Acquire),
+            wgt::Maintain::Poll => unsafe {
                 self.raw
                     .as_ref()
                     .unwrap()
                     .get_fence_value(fence)
                     .map_err(DeviceError::from)?
-            }
+            },
         };
-        log::info!("Device::maintain: last done index {last_done_index}");
+
+        // If necessary, wait for that submission to complete.
+        if maintain.is_wait() {
+            unsafe {
+                self.raw
+                    .as_ref()
+                    .unwrap()
+                    .wait(fence, submission_index, CLEANUP_WAIT_MS)
+                    .map_err(DeviceError::from)?
+            };
+        }
+        log::info!("Device::maintain: waiting for submission index {submission_index}");
 
         let mut life_tracker = self.lock_life();
         let submission_closures =
-            life_tracker.triage_submissions(last_done_index, &self.command_allocator);
+            life_tracker.triage_submissions(submission_index, &self.command_allocator);
 
         life_tracker.triage_mapped();
 
@@ -3586,7 +3611,9 @@ impl<A: HalApi> Device<A> {
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
         self.pending_writes.lock().as_mut().unwrap().deactivate();
-        let current_index = self.active_submission_index.load(Ordering::Relaxed);
+        let current_index = self
+            .last_successful_submission_index
+            .load(Ordering::Acquire);
         if let Err(error) = unsafe {
             let fence = self.fence.read();
             let fence = fence.as_ref().unwrap();
