@@ -186,6 +186,8 @@ pub type ImplicitBindGroupCount = u8;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImplicitLayoutError {
+    #[error("The implicit_pipeline_ids arg is required")]
+    MissingImplicitPipelineIds,
     #[error("Missing IDs for deriving {0} bind groups")]
     MissingIds(ImplicitBindGroupCount),
     #[error("Unable to reflect the shader {0:?} interface")]

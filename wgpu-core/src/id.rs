@@ -77,18 +77,6 @@ impl RawId {
     }
 }
 
-/// Coerce a slice of identifiers into a slice of optional raw identifiers.
-///
-/// There's two reasons why we know this is correct:
-/// * `Option<T>` is guaranteed to be niche-filled to 0's.
-/// * The `T` in `Option<T>` can inhabit any representation except 0's, since
-///   its underlying representation is `NonZero*`.
-pub fn as_option_slice<T: Marker>(ids: &[Id<T>]) -> &[Option<Id<T>>] {
-    // SAFETY: Any Id<T> is repr(transparent) over `Option<RawId>`, since both
-    // are backed by non-zero types.
-    unsafe { std::slice::from_raw_parts(ids.as_ptr().cast(), ids.len()) }
-}
-
 /// An identifier for a wgpu object.
 ///
 /// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`].

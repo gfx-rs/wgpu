@@ -14,8 +14,6 @@ use std::rc::Rc;
 use super::error::WebGpuError;
 use super::error::WebGpuResult;
 
-const MAX_BIND_GROUPS: usize = 8;
-
 pub(crate) struct WebGpuPipelineLayout(
     pub(crate) crate::Instance,
     pub(crate) wgpu_core::id::PipelineLayoutId,
@@ -118,21 +116,12 @@ pub fn op_webgpu_create_compute_pipeline(
         },
         cache: None,
     };
-    let implicit_pipelines = match layout {
-        GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,
-        GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => {
-            Some(wgpu_core::device::ImplicitPipelineIds {
-                root_id: None,
-                group_ids: &[None; MAX_BIND_GROUPS],
-            })
-        }
-    };
 
     let (compute_pipeline, maybe_err) = gfx_select!(device => instance.device_create_compute_pipeline(
       device,
       &descriptor,
       None,
-      implicit_pipelines
+      None,
     ));
 
     let rid = state
@@ -397,21 +386,11 @@ pub fn op_webgpu_create_render_pipeline(
         cache: None,
     };
 
-    let implicit_pipelines = match args.layout {
-        GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,
-        GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => {
-            Some(wgpu_core::device::ImplicitPipelineIds {
-                root_id: None,
-                group_ids: &[None; MAX_BIND_GROUPS],
-            })
-        }
-    };
-
     let (render_pipeline, maybe_err) = gfx_select!(device => instance.device_create_render_pipeline(
       device,
       &descriptor,
       None,
-      implicit_pipelines
+      None,
     ));
 
     let rid = state

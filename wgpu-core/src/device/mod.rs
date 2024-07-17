@@ -433,18 +433,18 @@ pub struct ImplicitPipelineContext {
 }
 
 pub struct ImplicitPipelineIds<'a> {
-    pub root_id: Option<PipelineLayoutId>,
-    pub group_ids: &'a [Option<BindGroupLayoutId>],
+    pub root_id: PipelineLayoutId,
+    pub group_ids: &'a [BindGroupLayoutId],
 }
 
 impl ImplicitPipelineIds<'_> {
     fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(self.root_id).into_id(),
+            root_id: hub.pipeline_layouts.prepare(Some(self.root_id)).into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(*id_in).into_id())
+                .map(|id_in| hub.bind_group_layouts.prepare(Some(*id_in)).into_id())
                 .collect(),
         }
     }
