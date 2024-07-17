@@ -267,7 +267,7 @@ mod dynamic;
 pub(crate) use dynamic::{impl_dyn_resource, DynResource};
 pub use dynamic::{
     DynBindGroup, DynBuffer, DynCommandEncoder, DynComputePipeline, DynPipelineLayout, DynQuerySet,
-    DynRenderPipeline,
+    DynRenderPipeline, DynTexture, DynTextureView,
 };
 
 use std::{
@@ -408,9 +408,9 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type CommandBuffer: WasmNotSendSync + fmt::Debug;
 
     type Buffer: DynBuffer;
-    type Texture: fmt::Debug + WasmNotSendSync + 'static;
+    type Texture: DynTexture;
     type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + WasmNotSendSync;
+    type TextureView: DynTextureView;
     type Sampler: fmt::Debug + WasmNotSendSync;
     type QuerySet: DynQuerySet;
 
