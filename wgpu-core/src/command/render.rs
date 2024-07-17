@@ -1791,7 +1791,7 @@ impl Global {
                             },
                             indexed,
                         };
-                        multi_draw_indirect(&mut state, buffer, offset, count, indexed)
+                        multi_draw_indirect(&mut state, cmd_buf, buffer, offset, count, indexed)
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::MultiDrawIndirectCount {
@@ -1808,6 +1808,7 @@ impl Global {
                         };
                         multi_draw_indirect_count(
                             &mut state,
+                            cmd_buf,
                             buffer,
                             offset,
                             count_buffer,
@@ -1834,6 +1835,7 @@ impl Global {
                         let scope = PassErrorScope::WriteTimestamp;
                         write_timestamp(
                             &mut state,
+                            cmd_buf,
                             &mut cmd_buf_data.pending_query_resets,
                             query_set,
                             query_index,
@@ -2448,6 +2450,7 @@ fn draw_indexed<A: HalApi>(
 
 fn multi_draw_indirect<A: HalApi>(
     state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
     indirect_buffer: Arc<crate::resource::Buffer<A>>,
     offset: u64,
     count: Option<NonZeroU32>,
@@ -2473,6 +2476,8 @@ fn multi_draw_indirect<A: HalApi>(
     state
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+
+    indirect_buffer.same_device_as(cmd_buf.as_ref())?;
 
     state
         .info
@@ -2520,6 +2525,7 @@ fn multi_draw_indirect<A: HalApi>(
 
 fn multi_draw_indirect_count<A: HalApi>(
     state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
     indirect_buffer: Arc<crate::resource::Buffer<A>>,
     offset: u64,
     count_buffer: Arc<crate::resource::Buffer<A>>,
@@ -2546,6 +2552,9 @@ fn multi_draw_indirect_count<A: HalApi>(
     state
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+
+    indirect_buffer.same_device_as(cmd_buf.as_ref())?;
+    count_buffer.same_device_as(cmd_buf.as_ref())?;
 
     state
         .info
@@ -2677,6 +2686,7 @@ fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len:
 
 fn write_timestamp<A: HalApi>(
     state: &mut State<A>,
+    cmd_buf: &CommandBuffer<A>,
     pending_query_resets: &mut QueryResetMap<A>,
     query_set: Arc<QuerySet<A>>,
     query_index: u32,
@@ -2685,6 +2695,8 @@ fn write_timestamp<A: HalApi>(
         "RenderPass::write_timestamps {query_index} {}",
         query_set.error_ident()
     );
+
+    query_set.same_device_as(cmd_buf)?;
 
     state
         .device

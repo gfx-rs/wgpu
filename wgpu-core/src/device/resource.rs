@@ -3119,6 +3119,7 @@ impl<A: HalApi> Device<A> {
                 let stage = wgt::ShaderStages::FRAGMENT;
 
                 let shader_module = &fragment_state.stage.module;
+                shader_module.same_device(self)?;
 
                 let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
 
