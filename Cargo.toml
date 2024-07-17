@@ -127,7 +127,6 @@ tracy-client = "0.17"
 thiserror = "1"
 wgpu = { version = "22.0.0", path = "./wgpu", default-features = false }
 wgpu-core = { version = "22.0.0", path = "./wgpu-core" }
-wgpu-example = { version = "0.20.0", path = "./examples/common" }
 wgpu-macros = { version = "22.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "22.0.0", path = "./tests" }
 wgpu-types = { version = "22.0.0", path = "./wgpu-types" }
