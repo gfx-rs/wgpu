@@ -2069,8 +2069,6 @@ impl<A: HalApi> Device<A> {
         used.textures
             .add_single(texture, Some(view.selector.clone()), internal_use);
 
-        texture.same_device_as(view.as_ref())?;
-
         texture.check_usage(pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
