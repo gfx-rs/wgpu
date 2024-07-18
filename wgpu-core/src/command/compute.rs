@@ -136,6 +136,8 @@ pub enum ComputePassErrorInner {
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
+    UnalignedIndirectBufferOffset(BufferAddress),
     #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
     IndirectBufferOverrun {
         offset: u64,
@@ -844,6 +846,10 @@ fn dispatch_indirect(
         .buffers
         .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
+
+    if offset % 4 != 0 {
+        return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
+    }
 
     let end_offset = offset + size_of::<wgt::DispatchIndirectArgs>() as u64;
     if end_offset > buffer.size {
