@@ -446,6 +446,11 @@ impl<A: HalApi> TextureTracker<A> {
         }
     }
 
+    /// Returns true if the tracker owns the given texture.
+    pub fn contains(&self, texture: &Texture<A>) -> bool {
+        self.metadata.contains(texture.tracker_index().as_usize())
+    }
+
     /// Returns a list of all textures tracked.
     pub fn used_resources(&self) -> impl Iterator<Item = Arc<Texture<A>>> + '_ {
         self.metadata.owned_resources()

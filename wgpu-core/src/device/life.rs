@@ -5,7 +5,7 @@ use crate::{
     },
     hal_api::HalApi,
     id,
-    resource::{self, Buffer, Labeled, Trackable},
+    resource::{self, Buffer, Labeled, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -53,6 +53,58 @@ struct ActiveSubmission<A: HalApi> {
     /// List of queue "on_submitted_work_done" closures to be called once this
     /// submission has completed.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
+}
+
+impl<A: HalApi> ActiveSubmission<A> {
+    /// Returns true if this submission contains the given buffer.
+    ///
+    /// This only uses constant-time operations.
+    pub fn contains_buffer(&self, buffer: &Buffer<A>) -> bool {
+        for encoder in &self.encoders {
+            // The ownership location of buffers depends on where the command encoder
+            // came from. If it is the staging command encoder on the queue, it is
+            // in the pending buffer list. If it came from a user command encoder,
+            // it is in the tracker.
+
+            if encoder.trackers.buffers.contains(buffer) {
+                return true;
+            }
+
+            if encoder
+                .pending_buffers
+                .contains_key(&buffer.tracker_index())
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Returns true if this submission contains the given texture.
+    ///
+    /// This only uses constant-time operations.
+    pub fn contains_texture(&self, texture: &Texture<A>) -> bool {
+        for encoder in &self.encoders {
+            // The ownership location of textures depends on where the command encoder
+            // came from. If it is the staging command encoder on the queue, it is
+            // in the pending buffer list. If it came from a user command encoder,
+            // it is in the tracker.
+
+            if encoder.trackers.textures.contains(texture) {
+                return true;
+            }
+
+            if encoder
+                .pending_textures
+                .contains_key(&texture.tracker_index())
+            {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -165,6 +217,40 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.mapped.push(value.clone());
     }
 
+    /// Returns the submission index of the most recent submission that uses the
+    /// given buffer.
+    pub fn get_buffer_latest_submission_index(
+        &self,
+        buffer: &Buffer<A>,
+    ) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_buffer(buffer) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns the submission index of the most recent submission that uses the
+    /// given texture.
+    pub fn get_texture_latest_submission_index(
+        &self,
+        texture: &Texture<A>,
+    ) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_texture(texture) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Sort out the consequences of completed submissions.
     ///
     /// Assume that all submissions up through `last_done` have completed.
@@ -236,9 +322,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             }
         }
     }
-}
 
-impl<A: HalApi> LifetimeTracker<A> {
     /// Determine which buffers are ready to map, and which must wait for the
     /// GPU.
     ///
@@ -249,17 +333,19 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         for buffer in self.mapped.drain(..) {
-            let submit_index = buffer.submission_index();
+            let submission = self
+                .active
+                .iter_mut()
+                .rev()
+                .find(|a| a.contains_buffer(&buffer));
+
             log::trace!(
-                "Mapping of {} at submission {:?} gets assigned to active {:?}",
+                "Mapping of {} at submission {:?}",
                 buffer.error_ident(),
-                submit_index,
-                self.active.iter().position(|a| a.index == submit_index)
+                submission.as_deref().map(|s| s.index)
             );
 
-            self.active
-                .iter_mut()
-                .find(|a| a.index == submit_index)
+            submission
                 .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
                 .push(buffer);
         }

@@ -67,7 +67,7 @@ impl<T: Clone> ResourceMetadata<T> {
 
     /// Returns true if the set contains the resource with the given index.
     pub(super) fn contains(&self, index: usize) -> bool {
-        self.owned[index]
+        self.owned.get(index).unwrap_or(false)
     }
 
     /// Returns true if the set contains the resource with the given index.

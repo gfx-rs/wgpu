@@ -19,7 +19,6 @@ use crate::{
     present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
-        Trackable,
     },
     storage::Storage,
     Label,
@@ -260,15 +259,25 @@ impl Global {
     ) -> Result<(), WaitIdleError> {
         let hub = A::hub(self);
 
-        let last_submission = match hub.buffers.read().get(buffer_id) {
-            Ok(buffer) => buffer.submission_index(),
+        let device = hub
+            .devices
+            .get(device_id)
+            .map_err(|_| DeviceError::InvalidDeviceId)?;
+
+        let buffer = match hub.buffers.get(buffer_id) {
+            Ok(buffer) => buffer,
             Err(_) => return Ok(()),
         };
 
-        hub.devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?
-            .wait_for_submit(last_submission)
+        let last_submission = device
+            .lock_life()
+            .get_buffer_latest_submission_index(&buffer);
+
+        if let Some(last_submission) = last_submission {
+            device.wait_for_submit(last_submission)
+        } else {
+            Ok(())
+        }
     }
 
     #[doc(hidden)]
@@ -424,7 +433,13 @@ impl Global {
         );
 
         if wait {
-            let last_submit_index = buffer.submission_index();
+            let Some(last_submit_index) = buffer
+                .device
+                .lock_life()
+                .get_buffer_latest_submission_index(&buffer)
+            else {
+                return;
+            };
             match buffer.device.wait_for_submit(last_submit_index) {
                 Ok(()) => (),
                 Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
@@ -599,7 +614,13 @@ impl Global {
             }
 
             if wait {
-                let last_submit_index = texture.submission_index();
+                let Some(last_submit_index) = texture
+                    .device
+                    .lock_life()
+                    .get_texture_latest_submission_index(&texture)
+                else {
+                    return;
+                };
                 match texture.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
                     Err(e) => log::error!("Failed to wait for texture {texture_id:?}: {e}"),
@@ -672,7 +693,13 @@ impl Global {
             }
 
             if wait {
-                let last_submit_index = view.submission_index();
+                let Some(last_submit_index) = view
+                    .device
+                    .lock_life()
+                    .get_texture_latest_submission_index(&view.parent)
+                else {
+                    return Ok(());
+                };
                 match view.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
                     Err(e) => {
