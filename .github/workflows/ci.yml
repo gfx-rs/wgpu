@@ -568,6 +568,7 @@ jobs:
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   doctest:
     # runtime is normally 2 minutes
