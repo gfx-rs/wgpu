@@ -46,6 +46,7 @@ use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimensi
 use std::{
     borrow::Cow,
     iter,
+    mem::ManuallyDrop,
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -142,7 +143,7 @@ pub struct Device<A: HalApi> {
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
-    pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
+    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites<A>>>,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
@@ -169,7 +170,8 @@ impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
         let raw = self.raw.take().unwrap();
-        let pending_writes = self.pending_writes.lock().take().unwrap();
+        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
+        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         pending_writes.dispose(&raw);
         self.command_allocator.dispose(&raw);
         unsafe {
@@ -307,7 +309,10 @@ impl<A: HalApi> Device<A> {
             features: desc.required_features,
             downlevel,
             instance_flags,
-            pending_writes: Mutex::new(rank::DEVICE_PENDING_WRITES, Some(pending_writes)),
+            pending_writes: Mutex::new(
+                rank::DEVICE_PENDING_WRITES,
+                ManuallyDrop::new(pending_writes),
+            ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
         })
@@ -3611,7 +3616,7 @@ impl<A: HalApi> Device<A> {
 
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.lock().as_mut().unwrap().deactivate();
+        self.pending_writes.lock().deactivate();
         let current_index = self
             .last_successful_submission_index
             .load(Ordering::Acquire);
