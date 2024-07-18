@@ -407,7 +407,6 @@ impl Global {
         // `device.pending_writes.consume`.
         let mut staging_buffer = StagingBuffer::new(device, data_size)?;
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
 
         let staging_buffer = {
             profiling::scope!("copy");
@@ -418,7 +417,7 @@ impl Global {
         let result = self.queue_write_staging_buffer_impl(
             &queue,
             device,
-            pending_writes,
+            &mut pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
@@ -478,7 +477,6 @@ impl Global {
             .ok_or_else(|| QueueWriteError::Transfer(TransferError::InvalidBufferId(buffer_id)))?;
 
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
 
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
@@ -489,7 +487,7 @@ impl Global {
         let result = self.queue_write_staging_buffer_impl(
             &queue,
             device,
-            pending_writes,
+            &mut pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
@@ -713,7 +711,6 @@ impl Global {
             wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64).unwrap();
 
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
         let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
@@ -967,7 +964,7 @@ impl Global {
             extract_texture_selector(&destination.to_untagged(), &size, &dst)?;
 
         let mut pending_writes = device.pending_writes.lock();
-        let encoder = pending_writes.as_mut().unwrap().activate();
+        let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
         // zero *first* as we don't keep track of partial texture layer inits.
@@ -1315,8 +1312,7 @@ impl Global {
                 }
             }
 
-            let mut pending_writes_guard = device.pending_writes.lock();
-            let pending_writes = pending_writes_guard.as_mut().unwrap();
+            let mut pending_writes = device.pending_writes.lock();
 
             {
                 used_surface_textures.set_size(hub.textures.read().len());
@@ -1402,17 +1398,12 @@ impl Global {
             profiling::scope!("cleanup");
 
             // this will register the new submission to the life time tracker
-            let mut pending_write_resources = mem::take(&mut pending_writes.temp_resources);
             device.lock_life().track_submission(
                 submit_index,
-                pending_write_resources.drain(..),
+                pending_writes.temp_resources.drain(..),
                 active_executions,
             );
-
-            // pending_write_resources has been drained, so it's empty, but we
-            // want to retain its heap allocation.
-            pending_writes.temp_resources = pending_write_resources;
-            drop(pending_writes_guard);
+            drop(pending_writes);
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
