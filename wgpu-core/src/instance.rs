@@ -321,10 +321,6 @@ impl<A: HalApi> Adapter<A> {
             );
         }
 
-        if let Some(_) = desc.label {
-            //TODO
-        }
-
         if let Some(failed) = check_limits(&desc.required_limits, &caps.limits).pop() {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
