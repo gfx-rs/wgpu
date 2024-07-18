@@ -321,10 +321,6 @@ impl Global {
                 );
             };
 
-            if let Err(e) = query_set.same_device_as(cmd_buf.as_ref()) {
-                return make_err(e.into(), arc_desc);
-            }
-
             Some(ArcPassTimestampWrites {
                 query_set,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
@@ -501,6 +497,10 @@ impl Global {
         state.tracker.query_sets.set_size(indices.query_sets.size());
 
         let timestamp_writes = if let Some(tw) = timestamp_writes.take() {
+            tw.query_set
+                .same_device_as(cmd_buf)
+                .map_pass_err(pass_scope)?;
+
             let query_set = state.tracker.query_sets.insert_single(tw.query_set);
 
             // Unlike in render passes we can't delay resetting the query sets since

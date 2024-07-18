@@ -46,6 +46,7 @@ use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimensi
 use std::{
     borrow::Cow,
     iter,
+    mem::ManuallyDrop,
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -88,8 +89,27 @@ pub struct Device<A: HalApi> {
     label: String,
 
     pub(crate) command_allocator: command::CommandAllocator<A>,
-    //Note: The submission index here corresponds to the last submission that is done.
-    pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
+
+    /// The index of the last command submission that was attempted.
+    ///
+    /// Note that `fence` may never be signalled with this value, if the command
+    /// submission failed. If you need to wait for everything running on a
+    /// `Queue` to complete, wait for [`last_successful_submission_index`].
+    ///
+    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
+    pub(crate) active_submission_index: hal::AtomicFenceValue,
+
+    /// The index of the last successful submission to this device's
+    /// [`hal::Queue`].
+    ///
+    /// Unlike [`active_submission_index`], which is incremented each time
+    /// submission is attempted, this is updated only when submission succeeds,
+    /// so waiting for this value won't hang waiting for work that was never
+    /// submitted.
+    ///
+    /// [`active_submission_index`]: Device::active_submission_index
+    pub(crate) last_successful_submission_index: hal::AtomicFenceValue,
+
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
     // `fence` lock to avoid deadlocks.
     pub(crate) fence: RwLock<Option<A::Fence>>,
@@ -123,7 +143,7 @@ pub struct Device<A: HalApi> {
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
-    pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
+    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites<A>>>,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
@@ -150,7 +170,8 @@ impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
         let raw = self.raw.take().unwrap();
-        let pending_writes = self.pending_writes.lock().take().unwrap();
+        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
+        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         pending_writes.dispose(&raw);
         self.command_allocator.dispose(&raw);
         unsafe {
@@ -258,6 +279,7 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_string(),
             command_allocator,
             active_submission_index: AtomicU64::new(0),
+            last_successful_submission_index: AtomicU64::new(0),
             fence: RwLock::new(rank::DEVICE_FENCE, Some(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
@@ -287,7 +309,10 @@ impl<A: HalApi> Device<A> {
             features: desc.required_features,
             downlevel,
             instance_flags,
-            pending_writes: Mutex::new(rank::DEVICE_PENDING_WRITES, Some(pending_writes)),
+            pending_writes: Mutex::new(
+                rank::DEVICE_PENDING_WRITES,
+                ManuallyDrop::new(pending_writes),
+            ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
         })
@@ -388,37 +413,41 @@ impl<A: HalApi> Device<A> {
         profiling::scope!("Device::maintain");
 
         let fence = fence_guard.as_ref().unwrap();
-        let last_done_index = if maintain.is_wait() {
-            let index_to_wait_for = match maintain {
-                wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
-                    // We don't need to check to see if the queue id matches
-                    // as we already checked this from inside the poll call.
-                    submission_index.index
-                }
-                _ => self.active_submission_index.load(Ordering::Relaxed),
-            };
-            unsafe {
-                self.raw
-                    .as_ref()
-                    .unwrap()
-                    .wait(fence, index_to_wait_for, CLEANUP_WAIT_MS)
-                    .map_err(DeviceError::from)?
-            };
-            index_to_wait_for
-        } else {
-            unsafe {
+
+        // Determine which submission index `maintain` represents.
+        let submission_index = match maintain {
+            wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
+                // We don't need to check to see if the queue id matches
+                // as we already checked this from inside the poll call.
+                submission_index.index
+            }
+            wgt::Maintain::Wait => self
+                .last_successful_submission_index
+                .load(Ordering::Acquire),
+            wgt::Maintain::Poll => unsafe {
                 self.raw
                     .as_ref()
                     .unwrap()
                     .get_fence_value(fence)
                     .map_err(DeviceError::from)?
-            }
+            },
         };
-        log::info!("Device::maintain: last done index {last_done_index}");
+
+        // If necessary, wait for that submission to complete.
+        if maintain.is_wait() {
+            unsafe {
+                self.raw
+                    .as_ref()
+                    .unwrap()
+                    .wait(fence, submission_index, CLEANUP_WAIT_MS)
+                    .map_err(DeviceError::from)?
+            };
+        }
+        log::info!("Device::maintain: waiting for submission index {submission_index}");
 
         let mut life_tracker = self.lock_life();
         let submission_closures =
-            life_tracker.triage_submissions(last_done_index, &self.command_allocator);
+            life_tracker.triage_submissions(submission_index, &self.command_allocator);
 
         life_tracker.triage_mapped();
 
@@ -967,6 +996,8 @@ impl<A: HalApi> Device<A> {
         texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<Arc<TextureView<A>>, resource::CreateTextureViewError> {
+        self.check_is_valid()?;
+
         let snatch_guard = texture.device.snatchable_lock.read();
 
         let texture_raw = texture.try_raw(&snatch_guard)?;
@@ -2045,8 +2076,6 @@ impl<A: HalApi> Device<A> {
         used.textures
             .add_single(texture, Some(view.selector.clone()), internal_use);
 
-        texture.same_device_as(view.as_ref())?;
-
         texture.check_usage(pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
@@ -3095,6 +3124,7 @@ impl<A: HalApi> Device<A> {
                 let stage = wgt::ShaderStages::FRAGMENT;
 
                 let shader_module = &fragment_state.stage.module;
+                shader_module.same_device(self)?;
 
                 let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
 
@@ -3586,8 +3616,10 @@ impl<A: HalApi> Device<A> {
 
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.lock().as_mut().unwrap().deactivate();
-        let current_index = self.active_submission_index.load(Ordering::Relaxed);
+        self.pending_writes.lock().deactivate();
+        let current_index = self
+            .last_successful_submission_index
+            .load(Ordering::Acquire);
         if let Err(error) = unsafe {
             let fence = self.fence.read();
             let fence = fence.as_ref().unwrap();

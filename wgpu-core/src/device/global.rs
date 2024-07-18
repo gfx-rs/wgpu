@@ -2374,11 +2374,7 @@ impl Global {
             // need to wait for submissions or triage them. We know we were
             // just polled, so `life_tracker.free_resources` is empty.
             debug_assert!(device.lock_life().queue_empty());
-            {
-                let mut pending_writes = device.pending_writes.lock();
-                let pending_writes = pending_writes.as_mut().unwrap();
-                pending_writes.deactivate();
-            }
+            device.pending_writes.lock().deactivate();
 
             drop(device);
         }

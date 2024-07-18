@@ -39,6 +39,28 @@ Bottom level categories:
 
 ## Unreleased
 
+## 22.0.0 (2024-07-17)
+
+### Overview
+
+### Our first major version release!
+
+For the first time ever, WGPU is being released with a major version (i.e., 22.* instead of 0.22.*)! Maintainership has decided to fully adhere to [Semantic Versioning](https://semver.org/)'s recommendations for versioning production software. According to [SemVer 2.0.0's Q&A about when to use 1.0.0 versions (and beyond)](https://semver.org/spec/v2.0.0.html#how-do-i-know-when-to-release-100):
+
+> ### How do I know when to release 1.0.0?
+> 
+> If your software is being used in production, it should probably already be 1.0.0. If you have a stable API on which users have come to depend, you should be 1.0.0. If you’re worrying a lot about backward compatibility, you should probably already be 1.0.0.
+
+It is a well-known fact that WGPU has been used for applications and platforms already in production for years, at this point. We are often concerned with tracking breaking changes, and affecting these consumers' ability to ship. By releasing our first major version, we publicly acknowledge that this is the case. We encourage other projects in the Rust ecosystem to follow suit.
+
+Note that while we start to use the major version number, WGPU is _not_ "going stable", as many Rust projects do. We anticipate many breaking changes before we fully comply with the WebGPU spec., which we expect to take a small number of years.
+
+### Overview
+
+A major ([pun intended](#our-first-major-version-release)) theme of this release is incremental improvement. Among the typically large set of bug fixes, new features, and other adjustments to WGPU by the many contributors listed below, @wumpf and @teoxoy have merged a series of many simplifications to WGPU's internals and, in one case, to the render and compute pass recording APIs. Many of these change WGPU to use atomically reference-counted resource tracking (i.e., `Arc<…>`), rather than using IDs to manage the lifetimes of platform-specific graphics resources in a registry of separate reference counts. This has led us to diagnose and fix many long-standing bugs, and net some neat performance improvements on the order of 40% or more of some workloads.
+
+While the above is exciting, we acknowledge already finding and fixing some (easy-to-fix) regressions from the above work. If you migrate to WGPU 22 and encounter such bugs, please engage us in the issue tracker right away!
+
 ### Major Changes
 
 #### Lifetime bounds on `wgpu::RenderPass` & `wgpu::ComputePass`
@@ -46,6 +68,7 @@ Bottom level categories:
 `wgpu::RenderPass` & `wgpu::ComputePass` recording methods (e.g. `wgpu::RenderPass:set_render_pipeline`) no longer impose a lifetime constraint to objects passed to a pass (like pipelines/buffers/bindgroups/query-sets etc.).
 
 This means the following pattern works now as expected:
+
 ```rust
 let mut pipelines: Vec<wgpu::RenderPipeline> = ...;
 // ...
@@ -79,6 +102,7 @@ By @wumpf in [#5569](https://github.com/gfx-rs/wgpu/pull/5569), [#5575](https://
 Wgpu now supports querying [shader compilation info](https://www.w3.org/TR/webgpu/#dom-gpushadermodule-getcompilationinfo).
 
 This allows you to get more structured information about compilation errors, warnings and info:
+
 ```rust
 ...
 let lighting_shader = ctx.device.create_shader_module(include_wgsl!("lighting.wgsl"));
@@ -143,6 +167,7 @@ to pass a compatible surface when targeting WebGL2, having `enumerate_adapters()
 By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
 
 ### New features
+
 #### General
 
 - Added `as_hal` for `Buffer` to access wgpu created buffers form wgpu-hal. By @JasondeWolff in [#5724](https://github.com/gfx-rs/wgpu/pull/5724)
@@ -185,6 +210,8 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
 - Avoid introducing spurious features for optional dependencies. By @bjorn3 in [#5691](https://github.com/gfx-rs/wgpu/pull/5691)
 - `wgpu::Error` is now `Sync`, making it possible to be wrapped in `anyhow::Error` or `eyre::Report`. By @nolanderc in [#5820](https://github.com/gfx-rs/wgpu/pull/5820)
 - Added benchmark suite. By @cwfitzgerald in [#5694](https://github.com/gfx-rs/wgpu/pull/5694), compute passes by @wumpf in [#5767](https://github.com/gfx-rs/wgpu/pull/5767)
+- Improve performance of `.submit()` by 39-64% (`.submit()` + `.poll()` by 22-32%). By @teoxoy in [#5910](https://github.com/gfx-rs/wgpu/pull/5910)
+- The `trace` wgpu feature has been temporarily removed. By @teoxoy in [#5975](https://github.com/gfx-rs/wgpu/pull/5975)
 
 #### Metal
 - Removed the `link` Cargo feature.
@@ -203,6 +230,11 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
 - Ensure render pipelines have at least 1 target. By @ErichDonGubler in [#5715](https://github.com/gfx-rs/wgpu/pull/5715)
 - `wgpu::ComputePass` now internally takes ownership of `QuerySet` for both `wgpu::ComputePassTimestampWrites` as well as timestamp writes and statistics query, fixing crashes when destroying `QuerySet` before ending the pass. By @wumpf in [#5671](https://github.com/gfx-rs/wgpu/pull/5671)
 - Validate resources passed during compute pass recording for mismatching device. By @wumpf in [#5779](https://github.com/gfx-rs/wgpu/pull/5779)
+- Fix staging buffers being destroyed too early. By @teoxoy in [#5910](https://github.com/gfx-rs/wgpu/pull/5910)
+- Fix attachment byte cost validation panicking with native only formats. By @teoxoy in [#5934](https://github.com/gfx-rs/wgpu/pull/5934)
+- [wgpu] Fix leaks from auto layout pipelines. By @teoxoy in [#5971](https://github.com/gfx-rs/wgpu/pull/5971)
+- [wgpu-core] Fix length of copy in `queue_write_texture` (causing UB). By @teoxoy in [#5973](https://github.com/gfx-rs/wgpu/pull/5973)
+- Add missing same device checks. By @teoxoy in [#5980](https://github.com/gfx-rs/wgpu/pull/5980)
 
 #### GLES / OpenGL
 

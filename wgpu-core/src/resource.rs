@@ -628,7 +628,6 @@ impl<A: HalApi> Buffer<A> {
                 }
 
                 let mut pending_writes = device.pending_writes.lock();
-                let pending_writes = pending_writes.as_mut().unwrap();
 
                 let staging_buffer = staging_buffer.flush();
 
@@ -716,7 +715,6 @@ impl<A: HalApi> Buffer<A> {
         };
 
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
         if pending_writes.contains_buffer(self) {
             pending_writes.consume_temp(temp);
         } else {
@@ -1181,7 +1179,6 @@ impl<A: HalApi> Texture<A> {
         };
 
         let mut pending_writes = device.pending_writes.lock();
-        let pending_writes = pending_writes.as_mut().unwrap();
         if pending_writes.contains_texture(self) {
             pending_writes.consume_temp(temp);
         } else {
@@ -1604,6 +1601,8 @@ impl<A: HalApi> TextureView<A> {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateTextureViewError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error("TextureId {0:?} is invalid")]
     InvalidTextureId(TextureId),
     #[error(transparent)]

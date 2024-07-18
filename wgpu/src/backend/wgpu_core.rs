@@ -105,12 +105,15 @@ impl ContextWgpuCore {
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
+        if trace_dir.is_some() {
+            log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
+        }
         let (device_id, queue_id, error) = unsafe {
             self.0.create_device_from_hal(
                 *adapter,
                 hal_device,
                 &desc.map_label(|l| l.map(Borrowed)),
-                trace_dir,
+                None,
                 None,
                 None,
             )
@@ -640,10 +643,13 @@ impl crate::Context for ContextWgpuCore {
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
+        if trace_dir.is_some() {
+            log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
+        }
         let (device_id, queue_id, error) = wgc::gfx_select!(*adapter => self.0.adapter_request_device(
             *adapter,
             &desc.map_label(|l| l.map(Borrowed)),
-            trace_dir,
+            None,
             None,
             None
         ));

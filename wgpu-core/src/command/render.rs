@@ -817,7 +817,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
     }
 
     fn start(
-        device: &'d Device<A>,
+        device: &'d Arc<Device<A>>,
         hal_label: Option<&str>,
         color_attachments: ArrayVec<
             Option<ArcRenderPassColorAttachment<A>>,
@@ -919,6 +919,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
 
         if let Some(at) = depth_stencil_attachment.as_ref() {
             let view = &at.view;
+            view.same_device(device)?;
             check_multiview(view)?;
             add_view(view, AttachmentErrorLocation::Depth)?;
 
@@ -1049,6 +1050,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
                 continue;
             };
             let color_view: &TextureView<A> = &at.view;
+            color_view.same_device(device)?;
             check_multiview(color_view)?;
             add_view(
                 color_view,
@@ -1079,6 +1081,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
 
             let mut hal_resolve_target = None;
             if let Some(resolve_view) = &at.resolve_target {
+                resolve_view.same_device(device)?;
                 check_multiview(resolve_view)?;
 
                 let resolve_location = AttachmentErrorLocation::Color {
@@ -1178,8 +1181,9 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
             multiview,
         };
 
-        let timestamp_writes_hal = timestamp_writes.as_ref().map(|tw| {
+        let timestamp_writes_hal = if let Some(tw) = timestamp_writes.as_ref() {
             let query_set = &tw.query_set;
+            query_set.same_device(device)?;
 
             if let Some(index) = tw.beginning_of_pass_write_index {
                 pending_query_resets.use_query_set(query_set, index);
@@ -1188,16 +1192,21 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
                 pending_query_resets.use_query_set(query_set, index);
             }
 
-            hal::RenderPassTimestampWrites {
+            Some(hal::RenderPassTimestampWrites {
                 query_set: query_set.raw.as_ref().unwrap(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
-            }
-        });
+            })
+        } else {
+            None
+        };
 
-        let occlusion_query_set_hal = occlusion_query_set
-            .as_ref()
-            .map(|query_set| query_set.raw.as_ref().unwrap());
+        let occlusion_query_set_hal = if let Some(query_set) = occlusion_query_set.as_ref() {
+            query_set.same_device(device)?;
+            Some(query_set.raw.as_ref().unwrap())
+        } else {
+            None
+        };
 
         let hal_desc = hal::RenderPassDescriptor {
             label: hal_label,
@@ -1331,7 +1340,6 @@ impl Global {
     ) -> (RenderPass<A>, Option<CommandEncoderError>) {
         fn fill_arc_desc<A: HalApi>(
             hub: &crate::hub::Hub<A>,
-            device: &Arc<Device<A>>,
             desc: &RenderPassDescriptor<'_>,
             arc_desc: &mut ArcRenderPassDescriptor<A>,
         ) -> Result<(), CommandEncoderError> {
@@ -1348,13 +1356,11 @@ impl Global {
                     let view = texture_views
                         .get_owned(*view_id)
                         .map_err(|_| CommandEncoderError::InvalidAttachmentId(*view_id))?;
-                    view.same_device(device)?;
 
                     let resolve_target = if let Some(resolve_target_id) = resolve_target {
                         let rt_arc = texture_views.get_owned(*resolve_target_id).map_err(|_| {
                             CommandEncoderError::InvalidResolveTargetId(*resolve_target_id)
                         })?;
-                        rt_arc.same_device(device)?;
 
                         Some(rt_arc)
                     } else {
@@ -1382,7 +1388,6 @@ impl Global {
                                 depth_stencil_attachment.view,
                             )
                         })?;
-                    view.same_device(device)?;
 
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
@@ -1397,7 +1402,6 @@ impl Global {
                 let query_set = query_sets.get_owned(tw.query_set).map_err(|_| {
                     CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set)
                 })?;
-                query_set.same_device(device)?;
 
                 Some(ArcPassTimestampWrites {
                     query_set,
@@ -1413,7 +1417,6 @@ impl Global {
                     let query_set = query_sets.get_owned(occlusion_query_set).map_err(|_| {
                         CommandEncoderError::InvalidOcclusionQuerySetId(occlusion_query_set)
                     })?;
-                    query_set.same_device(device)?;
 
                     Some(query_set)
                 } else {
@@ -1444,7 +1447,7 @@ impl Global {
             Err(e) => return make_err(e, arc_desc),
         };
 
-        let err = fill_arc_desc(hub, &cmd_buf.device, desc, &mut arc_desc).err();
+        let err = fill_arc_desc(hub, desc, &mut arc_desc).err();
 
         (RenderPass::new(Some(cmd_buf), arc_desc), err)
     }
@@ -1788,7 +1791,7 @@ impl Global {
                             },
                             indexed,
                         };
-                        multi_draw_indirect(&mut state, buffer, offset, count, indexed)
+                        multi_draw_indirect(&mut state, cmd_buf, buffer, offset, count, indexed)
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::MultiDrawIndirectCount {
@@ -1805,6 +1808,7 @@ impl Global {
                         };
                         multi_draw_indirect_count(
                             &mut state,
+                            cmd_buf,
                             buffer,
                             offset,
                             count_buffer,
@@ -1831,6 +1835,7 @@ impl Global {
                         let scope = PassErrorScope::WriteTimestamp;
                         write_timestamp(
                             &mut state,
+                            cmd_buf,
                             &mut cmd_buf_data.pending_query_resets,
                             query_set,
                             query_index,
@@ -2445,6 +2450,7 @@ fn draw_indexed<A: HalApi>(
 
 fn multi_draw_indirect<A: HalApi>(
     state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
     indirect_buffer: Arc<crate::resource::Buffer<A>>,
     offset: u64,
     count: Option<NonZeroU32>,
@@ -2470,6 +2476,8 @@ fn multi_draw_indirect<A: HalApi>(
     state
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+
+    indirect_buffer.same_device_as(cmd_buf.as_ref())?;
 
     state
         .info
@@ -2517,6 +2525,7 @@ fn multi_draw_indirect<A: HalApi>(
 
 fn multi_draw_indirect_count<A: HalApi>(
     state: &mut State<A>,
+    cmd_buf: &Arc<CommandBuffer<A>>,
     indirect_buffer: Arc<crate::resource::Buffer<A>>,
     offset: u64,
     count_buffer: Arc<crate::resource::Buffer<A>>,
@@ -2543,6 +2552,9 @@ fn multi_draw_indirect_count<A: HalApi>(
     state
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+
+    indirect_buffer.same_device_as(cmd_buf.as_ref())?;
+    count_buffer.same_device_as(cmd_buf.as_ref())?;
 
     state
         .info
@@ -2674,6 +2686,7 @@ fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len:
 
 fn write_timestamp<A: HalApi>(
     state: &mut State<A>,
+    cmd_buf: &CommandBuffer<A>,
     pending_query_resets: &mut QueryResetMap<A>,
     query_set: Arc<QuerySet<A>>,
     query_index: u32,
@@ -2682,6 +2695,8 @@ fn write_timestamp<A: HalApi>(
         "RenderPass::write_timestamps {query_index} {}",
         query_set.error_ident()
     );
+
+    query_set.same_device_as(cmd_buf)?;
 
     state
         .device

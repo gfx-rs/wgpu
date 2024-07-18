@@ -917,7 +917,7 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
 name = "d3d12"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "bitflags 2.6.0",
  "libloading 0.8.4",
@@ -2179,7 +2179,7 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec 0.7.4",
@@ -2207,7 +2207,7 @@ dependencies = [
 
 [[package]]
 name = "naga-cli"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "anyhow",
  "argh",
@@ -2679,7 +2679,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
 name = "player"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "env_logger",
  "log",
@@ -4205,7 +4205,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "arrayvec 0.7.4",
  "cfg_aliases",
@@ -4229,7 +4229,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-benchmark"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -4246,7 +4246,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "arrayvec 0.7.4",
  "bit-vec",
@@ -4272,7 +4272,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -4303,7 +4303,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.4",
@@ -4327,7 +4327,7 @@ dependencies = [
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading 0.8.4",
+ "libloading 0.7.4",
  "log",
  "metal",
  "naga",
@@ -4351,7 +4351,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "anyhow",
  "bitflags 2.6.0",
@@ -4364,7 +4364,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "heck 0.5.0",
  "quote",
@@ -4373,7 +4373,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.4",
@@ -4408,7 +4408,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "0.20.0"
+version = "22.0.0"
 dependencies = [
  "bitflags 2.6.0",
  "js-sys",

@@ -47,27 +47,27 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.20.0"
+version = "22.0.0"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.20.0"
+version = "22.0.0"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.20.0"
+version = "22.0.0"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.20.0"
+version = "22.0.0"
 
 [workspace.dependencies.naga]
 path = "./naga"
-version = "0.20.0"
+version = "22.0.0"
 
 [workspace.dependencies]
 anyhow = "1.0.86"
@@ -125,12 +125,11 @@ static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
 tracy-client = "0.17"
 thiserror = "1"
-wgpu = { version = "0.20.0", path = "./wgpu", default-features = false }
-wgpu-core = { version = "0.20.0", path = "./wgpu-core" }
-wgpu-example = { version = "0.20.0", path = "./examples/common" }
-wgpu-macros = { version = "0.20.0", path = "./wgpu-macros" }
-wgpu-test = { version = "0.20.0", path = "./tests" }
-wgpu-types = { version = "0.20.0", path = "./wgpu-types" }
+wgpu = { version = "22.0.0", path = "./wgpu", default-features = false }
+wgpu-core = { version = "22.0.0", path = "./wgpu-core" }
+wgpu-macros = { version = "22.0.0", path = "./wgpu-macros" }
+wgpu-test = { version = "22.0.0", path = "./tests" }
+wgpu-types = { version = "22.0.0", path = "./wgpu-types" }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
@@ -151,7 +150,7 @@ gpu-allocator = { version = "0.26", default-features = false, features = [
     "d3d12",
     "public-winapi",
 ] }
-d3d12 = { version = "0.20.0", path = "./d3d12/" }
+d3d12 = { version = "22.0.0", path = "./d3d12/" }
 range-alloc = "0.1"
 winapi = "0.3"
 hassle-rs = "0.11.0"
