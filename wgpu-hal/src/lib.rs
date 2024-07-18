@@ -894,6 +894,10 @@ pub trait Device: WasmNotSendSync {
     );
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
+
+    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        None
+    }
 }
 
 pub trait Queue: WasmNotSendSync {

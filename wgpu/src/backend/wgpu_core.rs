@@ -2367,6 +2367,14 @@ impl crate::Context for ContextWgpuCore {
         wgc::gfx_select!(device => self.0.device_get_internal_counters(*device))
     }
 
+    fn device_generate_allocator_report(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport> {
+        wgc::gfx_select!(device => self.0.device_generate_allocator_report(*device))
+    }
+
     fn pipeline_cache_get_data(
         &self,
         cache: &Self::PipelineCacheId,

@@ -3238,6 +3238,15 @@ impl Device {
         DynContext::device_get_internal_counters(&*self.context, &self.id, self.data.as_ref())
     }
 
+    /// Generate an GPU memory allocation report if the underlying backend supports it.
+    ///
+    /// Backends that do not support producing these reports return `None`. A backend may
+    /// Support it and still return `None` if it is not using performing sub-allocation,
+    /// for example as a workaround for driver issues.
+    pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        DynContext::generate_allocator_report(&*self.context, &self.id, self.data.as_ref())
+    }
+
     /// Apply a callback to this `Device`'s underlying backend device.
     ///
     /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
