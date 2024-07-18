@@ -1632,6 +1632,8 @@ impl<A: HalApi> TextureView<A> {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateTextureViewError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error("TextureId {0:?} is invalid")]
     InvalidTextureId(TextureId),
     #[error(transparent)]
