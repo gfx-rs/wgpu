@@ -11,7 +11,7 @@ use crate::{
 };
 use smallvec::SmallVec;
 
-use std::{mem, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 
 /// A command submitted to the GPU for execution.
@@ -332,29 +332,23 @@ impl<A: HalApi> LifetimeTracker<A> {
             return;
         }
 
-        // To avoid a borrow checker conflict between the mutable borrow of `self.mapped`
-        // and get_buffer_latest_submission_index, we steal the vector, drain it, then put it back.
-        //
-        // This way we still re-use the memory allocation, without the conflict.
-        let mut mapped = mem::take(&mut self.mapped);
-        for buffer in mapped.drain(..) {
-            let submit_index = self.get_buffer_latest_submission_index(&buffer);
+        for buffer in self.mapped.drain(..) {
+            let submission = self
+                .active
+                .iter_mut()
+                .rev()
+                .find(|a| a.contains_buffer(&buffer));
+
             log::trace!(
-                "Mapping of {} at submission {:?} gets assigned to active {:?}",
+                "Mapping of {} at submission {:?}",
                 buffer.error_ident(),
-                submit_index,
-                self.active
-                    .iter()
-                    .position(|a| Some(a.index) == submit_index)
+                submission.as_deref().map(|s| s.index)
             );
 
-            self.active
-                .iter_mut()
-                .find(|a| Some(a.index) == submit_index)
+            submission
                 .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
                 .push(buffer);
         }
-        self.mapped = mapped;
     }
 
     /// Map the buffers in `self.ready_to_map`.
