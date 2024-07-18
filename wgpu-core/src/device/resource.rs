@@ -991,6 +991,8 @@ impl<A: HalApi> Device<A> {
         texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<Arc<TextureView<A>>, resource::CreateTextureViewError> {
+        self.check_is_valid()?;
+
         let snatch_guard = texture.device.snatchable_lock.read();
 
         let texture_raw = texture.try_raw(&snatch_guard)?;
