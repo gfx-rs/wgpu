@@ -2458,6 +2458,17 @@ impl Global {
         }
     }
 
+    pub fn device_generate_allocator_report<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+    ) -> Option<wgt::AllocatorReport> {
+        let hub = A::hub(self);
+        hub.devices
+            .get(device_id)
+            .ok()
+            .and_then(|device| device.generate_allocator_report())
+    }
+
     pub fn queue_drop<A: HalApi>(&self, queue_id: QueueId) {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {queue_id:?}");

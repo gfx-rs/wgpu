@@ -2986,6 +2986,14 @@ impl crate::context::Context for ContextWebGpu {
         Default::default()
     }
 
+    fn device_generate_allocator_report(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport> {
+        None
+    }
+
     fn pipeline_cache_get_data(
         &self,
         _: &Self::PipelineCacheId,

@@ -1801,4 +1801,41 @@ impl crate::Device for super::Device {
     fn get_internal_counters(&self) -> wgt::HalCounters {
         self.counters.clone()
     }
+
+    #[cfg(feature = "windows_rs")]
+    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        let mut upstream = {
+            self.mem_allocator
+                .as_ref()?
+                .lock()
+                .allocator
+                .generate_report()
+        };
+
+        let allocations = upstream
+            .allocations
+            .iter_mut()
+            .map(|alloc| wgt::AllocationReport {
+                name: std::mem::take(&mut alloc.name),
+                offset: alloc.offset,
+                size: alloc.size,
+            })
+            .collect();
+
+        let blocks = upstream
+            .blocks
+            .iter()
+            .map(|block| wgt::MemoryBlockReport {
+                size: block.size,
+                allocations: block.allocations.clone(),
+            })
+            .collect();
+
+        Some(wgt::AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes: upstream.total_allocated_bytes,
+            total_reserved_bytes: upstream.total_reserved_bytes,
+        })
+    }
 }

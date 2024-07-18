@@ -3598,6 +3598,13 @@ impl<A: HalApi> Device<A> {
             .map(|raw| raw.get_internal_counters())
             .unwrap_or_default()
     }
+
+    pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        self.raw
+            .as_ref()
+            .map(|raw| raw.generate_allocator_report())
+            .unwrap_or_default()
+    }
 }
 
 impl<A: HalApi> Device<A> {

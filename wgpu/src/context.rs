@@ -618,6 +618,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         _device_data: &Self::DeviceData,
     ) -> wgt::InternalCounters;
 
+    fn device_generate_allocator_report(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport>;
+
     fn pipeline_cache_get_data(
         &self,
         cache: &Self::PipelineCacheId,
@@ -1616,6 +1622,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device: &ObjectId,
         device_data: &crate::Data,
     ) -> wgt::InternalCounters;
+
+    fn generate_allocator_report(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> Option<wgt::AllocatorReport>;
 
     fn pipeline_cache_get_data(
         &self,
@@ -3099,6 +3111,16 @@ where
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_get_internal_counters(self, &device, device_data)
+    }
+
+    fn generate_allocator_report(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> Option<wgt::AllocatorReport> {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_generate_allocator_report(self, &device, device_data)
     }
 
     fn pipeline_cache_get_data(
