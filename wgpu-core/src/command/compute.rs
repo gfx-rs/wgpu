@@ -495,8 +495,6 @@ impl Global {
             state.raw_encoder.begin_compute_pass(&hal_desc);
         }
 
-        // TODO: We should be draining the commands here, avoiding extra copies in the process.
-        //       (A command encoder can't be executed twice!)
         for command in base.commands {
             match command {
                 ArcComputeCommand::SetBindGroup {
