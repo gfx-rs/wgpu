@@ -76,6 +76,7 @@ impl TrackingData {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ResourceErrorIdent {
     r#type: &'static str,
     label: String,
@@ -341,6 +342,8 @@ pub struct BufferMapOperation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[non_exhaustive]
 pub enum BufferAccessError {
     #[error(transparent)]
@@ -389,6 +392,8 @@ pub enum BufferAccessError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[error("Usage flags {actual:?} of {res} do not contain required usage flags {expected:?}")]
 pub struct MissingBufferUsageError {
     pub(crate) res: ResourceErrorIdent,
@@ -405,6 +410,8 @@ pub struct MissingTextureUsageError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[error("{0} has been destroyed")]
 pub struct DestroyedResourceError(pub ResourceErrorIdent);
 
