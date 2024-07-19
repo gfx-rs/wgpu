@@ -23,6 +23,7 @@ type HalInstance<A> = <A as hal::Api>::Instance;
 type HalSurface<A> = <A as hal::Api>::Surface;
 
 #[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
 pub struct FailedLimit {
     name: &'static str,
@@ -391,6 +392,8 @@ pub enum GetSurfaceSupportError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 /// Error when requesting a device from the adaptor
 #[non_exhaustive]
 pub enum RequestDeviceError {
