@@ -39,6 +39,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### General
+
+- Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988)
+
 ## 22.0.0 (2024-07-17)
 
 ### Overview
