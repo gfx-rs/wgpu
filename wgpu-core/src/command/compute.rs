@@ -780,7 +780,7 @@ fn set_push_constant(
         .binder
         .pipeline_layout
         .as_ref()
-        //TODO: don't error here, lazily update the push constants
+        // TODO: don't error here, lazily update the push constants using `state.push_constants`
         .ok_or(ComputePassErrorInner::Dispatch(
             DispatchError::MissingPipeline,
         ))?;
