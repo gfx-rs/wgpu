@@ -200,13 +200,17 @@ mod compat {
                 entries: (0..hal::MAX_BIND_GROUPS).map(|_| Entry::empty()).collect(),
             }
         }
-        fn make_range(&self, start_index: usize) -> Range<usize> {
+
+        pub fn num_valid_entries(&self) -> usize {
             // find first incompatible entry
-            let end = self
-                .entries
+            self.entries
                 .iter()
                 .position(|e| e.is_incompatible())
-                .unwrap_or(self.entries.len());
+                .unwrap_or(self.entries.len())
+        }
+
+        fn make_range(&self, start_index: usize) -> Range<usize> {
+            let end = self.num_valid_entries();
             start_index..end.max(start_index)
         }
 
