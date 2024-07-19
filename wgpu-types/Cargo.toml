@@ -30,6 +30,7 @@ targets = [
 [features]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
+serde = ["dep:serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 
