@@ -38,7 +38,7 @@ impl<T> Snatchable<T> {
     }
 
     /// Take the value. Requires a the snatchable lock's write guard.
-    pub fn snatch(&self, _guard: ExclusiveSnatchGuard) -> Option<T> {
+    pub fn snatch(&self, _guard: &mut ExclusiveSnatchGuard) -> Option<T> {
         unsafe { (*self.value.get()).take() }
     }
 
