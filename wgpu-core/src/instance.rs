@@ -438,6 +438,7 @@ impl<M: Marker> AdapterInputs<'_, M> {
 pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum RequestAdapterError {
     #[error("No suitable adapter found")]
