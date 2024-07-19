@@ -363,7 +363,7 @@ impl Device {
                     let Some(view) = view.upgrade() else {
                         continue;
                     };
-                    let Some(raw_view) = view.raw.snatch(self.snatchable_lock.write()) else {
+                    let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write()) else {
                         continue;
                     };
 
@@ -377,7 +377,8 @@ impl Device {
                     let Some(bind_group) = bind_group.upgrade() else {
                         continue;
                     };
-                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write())
+                    let Some(raw_bind_group) =
+                        bind_group.raw.snatch(&mut self.snatchable_lock.write())
                     else {
                         continue;
                     };
