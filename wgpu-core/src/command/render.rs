@@ -1566,7 +1566,7 @@ impl Global {
 
         profiling::scope!(
             "CommandEncoder::run_render_pass {}",
-            base.label.unwrap_or("")
+            base.label.as_deref().unwrap_or("")
         );
 
         let Some(cmd_buf) = pass.parent.as_ref() else {
