@@ -84,6 +84,9 @@ naga-ir = ["dep:naga"]
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
 
+## Enable wgpu-core's extensive api and resource level logging.
+enable_heavy_logs = ["wgc?/enable_heavy_logs"]
+
 ## Enables serialization via `serde` on common wgpu types.
 serde = ["dep:serde", "wgc/serde"]
 

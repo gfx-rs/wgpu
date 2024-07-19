@@ -72,6 +72,10 @@ glsl = ["naga/glsl-in"]
 ## Enable `ShaderModuleSource::SpirV`
 spirv = ["naga/spv-in", "dep:bytemuck"]
 
+## Enable wgpu-core's extensive api and resource level logging.
+## Disabled by default as it can have a noticeable performance impact.
+enable_heavy_logs = []
+
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
 ## WebGL/WebGPU objects can not be shared between threads.

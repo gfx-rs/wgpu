@@ -314,23 +314,31 @@ macro_rules! gfx_select {
     };
 }
 
-#[cfg(feature = "api_log_info")]
+#[cfg(all(feature = "api_log_info", feature = "enable_heavy_logs"))]
 macro_rules! api_log {
     ($($arg:tt)+) => (log::info!($($arg)+))
 }
-#[cfg(not(feature = "api_log_info"))]
+#[cfg(all(not(feature = "api_log_info"), feature = "enable_heavy_logs"))]
 macro_rules! api_log {
     ($($arg:tt)+) => (log::trace!($($arg)+))
+}
+#[cfg(not(feature = "enable_heavy_logs"))]
+macro_rules! api_log {
+    ($($arg:tt)+) => {};
 }
 pub(crate) use api_log;
 
-#[cfg(feature = "resource_log_info")]
+#[cfg(all(feature = "resource_log_info", feature = "enable_heavy_logs"))]
 macro_rules! resource_log {
     ($($arg:tt)+) => (log::info!($($arg)+))
 }
-#[cfg(not(feature = "resource_log_info"))]
+#[cfg(all(not(feature = "resource_log_info"), feature = "enable_heavy_logs"))]
 macro_rules! resource_log {
     ($($arg:tt)+) => (log::trace!($($arg)+))
+}
+#[cfg(not(feature = "enable_heavy_logs"))]
+macro_rules! resource_log {
+    ($($arg:tt)+) => {};
 }
 pub(crate) use resource_log;
 
