@@ -410,6 +410,14 @@ impl Binder {
             .map(move |index| payloads[index].group.as_ref().unwrap())
     }
 
+    #[cfg(feature = "indirect-validation")]
+    pub(super) fn list_valid<'a>(&'a self) -> impl Iterator<Item = (usize, &'a EntryPayload)> + '_ {
+        self.payloads
+            .iter()
+            .take(self.manager.num_valid_entries())
+            .enumerate()
+    }
+
     pub(super) fn check_compatibility<T: Labeled>(
         &self,
         pipeline: &T,
