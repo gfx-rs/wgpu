@@ -120,8 +120,8 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.74**.
-- The rest of the workspace has an MSRV of **1.76**.
+- `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
+- The rest of the workspace has an MSRV of **1.76** as well right now, but may be higher than above listed crates.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.
