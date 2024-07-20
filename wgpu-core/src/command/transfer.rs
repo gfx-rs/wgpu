@@ -21,11 +21,10 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
 
-use std::{iter, sync::Arc};
+use std::sync::Arc;
 
 use super::{memory_init::CommandBufferTextureMemoryActions, ClearError, CommandEncoder};
 
@@ -687,9 +686,13 @@ impl Global {
             size: wgt::BufferSize::new(size).unwrap(),
         };
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let barriers = src_barrier
+            .into_iter()
+            .chain(dst_barrier)
+            .collect::<Vec<_>>();
         unsafe {
-            cmd_buf_raw.transition_buffers(src_barrier.into_iter().chain(dst_barrier));
-            cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, iter::once(region));
+            cmd_buf_raw.transition_buffers(&barriers);
+            cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
         }
         Ok(())
     }
@@ -801,7 +804,9 @@ impl Global {
         dst_texture
             .check_usage(TextureUsages::COPY_DST)
             .map_err(TransferError::MissingTextureUsage)?;
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_raw));
+        let dst_barrier = dst_pending
+            .map(|pending| pending.into_hal(dst_raw))
+            .collect::<Vec<_>>();
 
         if !dst_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
@@ -837,23 +842,25 @@ impl Global {
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
-            let mut texture_base = dst_base.clone();
-            texture_base.array_layer += rel_array_layer;
-            let mut buffer_layout = source.layout;
-            buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
-            hal::BufferTextureCopy {
-                buffer_layout,
-                texture_base,
-                size: hal_copy_size,
-            }
-        });
+        let regions = (0..array_layer_count)
+            .map(|rel_array_layer| {
+                let mut texture_base = dst_base.clone();
+                texture_base.array_layer += rel_array_layer;
+                let mut buffer_layout = source.layout;
+                buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
+                hal::BufferTextureCopy {
+                    buffer_layout,
+                    texture_base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect::<Vec<_>>();
 
         let cmd_buf_raw = encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_textures(dst_barrier.into_iter());
-            cmd_buf_raw.transition_buffers(src_barrier.into_iter());
-            cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, regions);
+            cmd_buf_raw.transition_textures(&dst_barrier);
+            cmd_buf_raw.transition_buffers(src_barrier.as_slice());
+            cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, &regions);
         }
         Ok(())
     }
@@ -956,7 +963,9 @@ impl Global {
             }
             .into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_raw));
+        let src_barrier = src_pending
+            .map(|pending| pending.into_hal(src_raw))
+            .collect::<Vec<_>>();
 
         let dst_buffer = hub
             .buffers
@@ -1009,26 +1018,28 @@ impl Global {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
-            let mut texture_base = src_base.clone();
-            texture_base.array_layer += rel_array_layer;
-            let mut buffer_layout = destination.layout;
-            buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
-            hal::BufferTextureCopy {
-                buffer_layout,
-                texture_base,
-                size: hal_copy_size,
-            }
-        });
+        let regions = (0..array_layer_count)
+            .map(|rel_array_layer| {
+                let mut texture_base = src_base.clone();
+                texture_base.array_layer += rel_array_layer;
+                let mut buffer_layout = destination.layout;
+                buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
+                hal::BufferTextureCopy {
+                    buffer_layout,
+                    texture_base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect::<Vec<_>>();
         let cmd_buf_raw = encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
-            cmd_buf_raw.transition_textures(src_barrier.into_iter());
+            cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
+            cmd_buf_raw.transition_textures(&src_barrier);
             cmd_buf_raw.copy_texture_to_buffer(
                 src_raw,
                 hal::TextureUses::COPY_SRC,
                 dst_raw,
-                regions,
+                &regions,
             );
         }
         Ok(())
@@ -1186,25 +1197,27 @@ impl Global {
             height: src_copy_size.height.min(dst_copy_size.height),
             depth: src_copy_size.depth.min(dst_copy_size.depth),
         };
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
-            let mut src_base = src_tex_base.clone();
-            let mut dst_base = dst_tex_base.clone();
-            src_base.array_layer += rel_array_layer;
-            dst_base.array_layer += rel_array_layer;
-            hal::TextureCopy {
-                src_base,
-                dst_base,
-                size: hal_copy_size,
-            }
-        });
+        let regions = (0..array_layer_count)
+            .map(|rel_array_layer| {
+                let mut src_base = src_tex_base.clone();
+                let mut dst_base = dst_tex_base.clone();
+                src_base.array_layer += rel_array_layer;
+                dst_base.array_layer += rel_array_layer;
+                hal::TextureCopy {
+                    src_base,
+                    dst_base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect::<Vec<_>>();
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_textures(barriers.into_iter());
+            cmd_buf_raw.transition_textures(&barriers);
             cmd_buf_raw.copy_texture_to_texture(
                 src_raw,
                 hal::TextureUses::COPY_SRC,
                 dst_raw,
-                regions,
+                &regions,
             );
         }
 

@@ -1,5 +1,3 @@
-use hal::CommandEncoder as _;
-
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
@@ -477,7 +475,7 @@ impl Global {
         let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
 
         unsafe {
-            raw_encoder.transition_buffers(dst_barrier.into_iter());
+            raw_encoder.transition_buffers(dst_barrier.as_slice());
             raw_encoder.copy_query_results(
                 query_set.raw(),
                 start_query..end_query,

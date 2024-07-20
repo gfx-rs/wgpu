@@ -3,14 +3,14 @@ use std::ops::Range;
 use crate::{
     Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, BufferTextureCopy, ColorAttachment,
     CommandEncoder, ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynBindGroup,
-    DynBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline, DynTexture,
-    DynTextureView, Label, MemoryRange, PassTimestampWrites, Rect, RenderPassDescriptor,
-    TextureBarrier, TextureCopy, TextureUses,
+    DynBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline, DynResource,
+    DynTexture, DynTextureView, Label, MemoryRange, PassTimestampWrites, Rect,
+    RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
 };
 
 use super::DynResourceExt;
 
-pub trait DynCommandEncoder: std::fmt::Debug {
+pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
 
     unsafe fn discard_encoding(&mut self);
@@ -188,7 +188,7 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     // );
 }
 
-impl<C: CommandEncoder> DynCommandEncoder for C {
+impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError> {
         unsafe { C::begin_encoding(self, label) }
     }

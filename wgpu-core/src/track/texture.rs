@@ -754,7 +754,7 @@ impl<A: HalApi> DeviceTextureTracker<A> {
         &'a mut self,
         tracker: &'a TextureTracker<A>,
         snatch_guard: &'b SnatchGuard<'b>,
-    ) -> impl Iterator<Item = TextureBarrier<'a, A::Texture>> {
+    ) -> impl Iterator<Item = TextureBarrier<'a, dyn hal::DynTexture>> {
         for index in tracker.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
 
@@ -798,7 +798,7 @@ impl<A: HalApi> DeviceTextureTracker<A> {
         &'a mut self,
         scope: &'a TextureUsageScope<A>,
         snatch_guard: &'b SnatchGuard<'b>,
-    ) -> impl Iterator<Item = TextureBarrier<'a, A::Texture>> {
+    ) -> impl Iterator<Item = TextureBarrier<'a, dyn hal::DynTexture>> {
         for index in scope.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
 
