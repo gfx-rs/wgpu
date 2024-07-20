@@ -171,7 +171,6 @@ impl Test<'_> {
                     .collect::<Vec<u8>>(),
             };
 
-            #[allow(unknown_lints, clippy::if_then_panic)]
             if &expected_data[..] != contents {
                 panic!(
                     "Test expectation is not met!\nBuffer content was:\n{:?}\nbut expected:\n{:?}",

@@ -207,8 +207,6 @@
 #![allow(
     // this happens on the GL backend, where it is both thread safe and non-thread safe in the same code.
     clippy::arc_with_non_send_sync,
-    // for `if_then_panic` until it reaches stable
-    unknown_lints,
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
     // Redundant matching is more explicit.
@@ -221,8 +219,6 @@
     clippy::single_match,
     // Push commands are more regular than macros.
     clippy::vec_init_then_push,
-    // "if panic" is a good uniform construct.
-    clippy::if_then_panic,
     // We unsafe impl `Send` for a reason.
     clippy::non_send_fields_in_send_ty,
     // TODO!
