@@ -1,8 +1,7 @@
-/*! Stateless Trackers
- *
- * Stateless trackers don't have any state, so make no
- * distinction between a usage scope and a full tracker.
-!*/
+//! Stateless Trackers
+//!
+//! Stateless trackers don't have any state, so make no
+//! distinction between a usage scope and a full tracker.
 
 use std::sync::Arc;
 

@@ -1,13 +1,13 @@
-/*! Tester for WebGPU
- *  It enumerates the available backends on the system,
- *  and run the tests through them.
- *
- *  Test requirements:
- *    - all IDs have the backend `Empty`
- *    - all expected buffers have `MAP_READ` usage
- *    - last action is `Submit`
- *    - no swapchain use
-!*/
+//! Tester for WebGPU
+//!  It enumerates the available backends on the system,
+//!  and run the tests through them.
+//!
+//!  Test requirements:
+//!    - all IDs have the backend `Empty`
+//!    - all expected buffers have `MAP_READ` usage
+//!    - last action is `Submit`
+//!    - no swapchain use
+
 #![cfg(not(target_arch = "wasm32"))]
 
 use player::GlobalPlay;

@@ -1,9 +1,8 @@
-/*! Buffer Trackers
- *
- * Buffers are represented by a single state for the whole resource,
- * a 16 bit bitflag of buffer usages. Because there is only ever
- * one subresource, they have no selector.
-!*/
+//! Buffer Trackers
+//!
+//! Buffers are represented by a single state for the whole resource,
+//! a 16 bit bitflag of buffer usages. Because there is only ever
+//! one subresource, they have no selector.
 
 use std::sync::{Arc, Weak};
 

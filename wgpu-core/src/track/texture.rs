@@ -1,23 +1,22 @@
-/*! Texture Trackers
- *
- * Texture trackers are significantly more complicated than
- * the buffer trackers because textures can be in a "complex"
- * state where each individual subresource can potentially be
- * in a different state from every other subtresource. These
- * complex states are stored separately from the simple states
- * because they are signifignatly more difficult to track and
- * most resources spend the vast majority of their lives in
- * simple states.
- *
- * There are two special texture usages: `UNKNOWN` and `UNINITIALIZED`.
- * - `UNKNOWN` is only used in complex states and is used to signify
- *   that the complex state does not know anything about those subresources.
- *   It cannot leak into transitions, it is invalid to transition into UNKNOWN
- *   state.
- * - `UNINITIALIZED` is used in both simple and complex states to mean the texture
- *   is known to be in some undefined state. Any transition away from UNINITIALIZED
- *   will treat the contents as junk.
-!*/
+//! Texture Trackers
+//!
+//! Texture trackers are significantly more complicated than
+//! the buffer trackers because textures can be in a "complex"
+//! state where each individual subresource can potentially be
+//! in a different state from every other subtresource. These
+//! complex states are stored separately from the simple states
+//! because they are signifignatly more difficult to track and
+//! most resources spend the vast majority of their lives in
+//! simple states.
+//!
+//! There are two special texture usages: `UNKNOWN` and `UNINITIALIZED`.
+//! - `UNKNOWN` is only used in complex states and is used to signify
+//!   that the complex state does not know anything about those subresources.
+//!   It cannot leak into transitions, it is invalid to transition into UNKNOWN
+//!   state.
+//! - `UNINITIALIZED` is used in both simple and complex states to mean the texture
+//!   is known to be in some undefined state. Any transition away from UNINITIALIZED
+//!   will treat the contents as junk.
 
 use super::{range::RangedStates, PendingTransition, PendingTransitionList, TrackerIndex};
 use crate::{
