@@ -104,8 +104,6 @@ use arrayvec::ArrayVec;
 use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range, sync::Arc};
 use thiserror::Error;
 
-use hal::CommandEncoder as _;
-
 use super::{
     render_command::{ArcRenderCommand, RenderCommand},
     DrawKind,
@@ -965,7 +963,7 @@ impl<A: HalApi> RenderBundle<A> {
     /// The only failure condition is if some of the used buffers are destroyed.
     pub(super) unsafe fn execute(
         &self,
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
@@ -1006,7 +1004,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer: &A::Buffer = buffer.try_raw(snatch_guard)?;
+                    let buffer = buffer.try_raw_dyn(snatch_guard)?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset: *offset,
@@ -1020,7 +1018,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer.try_raw(snatch_guard)?;
+                    let buffer = buffer.try_raw_dyn(snatch_guard)?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset: *offset,
