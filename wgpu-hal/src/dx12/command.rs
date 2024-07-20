@@ -359,7 +359,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
         self.temp.barriers.clear();
 

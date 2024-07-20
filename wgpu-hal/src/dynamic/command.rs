@@ -3,12 +3,12 @@ use std::ops::Range;
 use crate::{
     Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, ColorAttachment, CommandEncoder,
     ComputePassDescriptor, DepthStencilAttachment, DeviceError, Label, MemoryRange,
-    PassTimestampWrites, Rect, RenderPassDescriptor,
+    PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier,
 };
 
 use super::{
     DynBindGroup, DynBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline,
-    DynResourceExt as _, DynTextureView,
+    DynResourceExt as _, DynTexture, DynTextureView,
 };
 
 pub trait DynCommandEncoder: std::fmt::Debug {
@@ -17,6 +17,7 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     unsafe fn discard_encoding(&mut self);
 
     unsafe fn transition_buffers(&mut self, barriers: &[BufferBarrier<'_, dyn DynBuffer>]);
+    unsafe fn transition_textures(&mut self, barriers: &[TextureBarrier<'_, dyn DynTexture>]);
 
     unsafe fn clear_buffer(&mut self, buffer: &dyn DynBuffer, range: MemoryRange);
 
@@ -165,6 +166,15 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
             usage: barrier.usage.clone(),
         });
         unsafe { self.transition_buffers(barriers) };
+    }
+
+    unsafe fn transition_textures(&mut self, barriers: &[TextureBarrier<'_, dyn DynTexture>]) {
+        let barriers = barriers.iter().map(|barrier| TextureBarrier {
+            texture: barrier.texture.expect_downcast_ref(),
+            usage: barrier.usage.clone(),
+            range: barrier.range,
+        });
+        unsafe { self.transition_textures(barriers) };
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &dyn DynBuffer, range: MemoryRange) {
