@@ -608,6 +608,8 @@ pub struct ShaderModule {
     raw_name: Option<ffi::CString>,
 }
 
+impl crate::DynShaderModule for ShaderModule {}
+
 pub(super) enum CompiledShader {
     #[allow(unused)]
     Dxc(Vec<u8>),

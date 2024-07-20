@@ -821,6 +821,8 @@ pub enum ShaderModule {
     },
 }
 
+impl crate::DynShaderModule for ShaderModule {}
+
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: vk::Pipeline,

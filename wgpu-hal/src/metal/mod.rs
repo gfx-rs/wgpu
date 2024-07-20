@@ -714,6 +714,8 @@ pub struct ShaderModule {
     runtime_checks: bool,
 }
 
+impl crate::DynShaderModule for ShaderModule {}
+
 #[derive(Debug, Default)]
 struct PipelineStageInfo {
     push_constants: Option<PushConstantsInfo>,

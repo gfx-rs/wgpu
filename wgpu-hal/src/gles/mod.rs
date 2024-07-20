@@ -542,6 +542,8 @@ pub struct ShaderModule {
     id: ShaderId,
 }
 
+impl crate::DynShaderModule for ShaderModule {}
+
 #[derive(Clone, Debug, Default)]
 struct VertexFormatDesc {
     element_count: i32,
