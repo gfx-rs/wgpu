@@ -1482,7 +1482,6 @@ impl Limits {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelLimits {}
 
-#[allow(unknown_lints)] // derivable_impls is nightly only currently
 #[allow(clippy::derivable_impls)]
 impl Default for DownlevelLimits {
     fn default() -> Self {
