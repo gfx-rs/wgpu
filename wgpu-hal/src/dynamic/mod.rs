@@ -1,6 +1,8 @@
 mod command;
+mod device;
 
 pub use self::command::DynCommandEncoder;
+pub use self::device::DynDevice;
 
 use std::any::Any;
 
