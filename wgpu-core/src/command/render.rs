@@ -461,7 +461,7 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi> {
 
     device: &'cmd_buf Arc<Device<A>>,
 
-    raw_encoder: &'raw_encoder mut A::CommandEncoder,
+    raw_encoder: &'raw_encoder mut dyn hal::DynCommandEncoder,
 
     tracker: &'cmd_buf mut Tracker<A>,
     buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction<A>>,
@@ -1255,7 +1255,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
 
     fn finish(
         mut self,
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
     ) -> Result<(UsageScope<'d, A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
@@ -1298,7 +1298,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
                     hal::AttachmentOps::STORE,                            // clear depth
                 )
             };
-            let desc = hal::RenderPassDescriptor {
+            let desc = hal::RenderPassDescriptor::<'_, _, dyn hal::DynTextureView> {
                 label: Some("(wgpu internal) Zero init discarded depth/stencil aspect"),
                 extent: view.render_extent.unwrap(),
                 sample_count: view.samples,
