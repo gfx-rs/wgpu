@@ -123,7 +123,7 @@ impl DownloadBuffer {
                     return;
                 }
 
-                let mapped_range = super::DynContext::buffer_get_mapped_range(
+                let mapped_range = crate::context::DynContext::buffer_get_mapped_range(
                     &*download.context,
                     &download.id,
                     download.data.as_ref(),
