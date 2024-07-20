@@ -8,10 +8,10 @@ use crate::{
 
 use super::{
     DynBindGroup, DynBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline,
-    DynResourceExt as _, DynTexture, DynTextureView,
+    DynResource, DynResourceExt as _, DynTexture, DynTextureView,
 };
 
-pub trait DynCommandEncoder: std::fmt::Debug {
+pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
 
     unsafe fn discard_encoding(&mut self);
@@ -174,7 +174,7 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     // );
 }
 
-impl<C: CommandEncoder> DynCommandEncoder for C {
+impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError> {
         unsafe { C::begin_encoding(self, label) }
     }
