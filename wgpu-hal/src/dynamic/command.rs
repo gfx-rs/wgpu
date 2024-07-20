@@ -1,12 +1,14 @@
 use std::ops::Range;
 
 use crate::{
-    BufferBarrier, BufferBinding, BufferCopy, CommandEncoder, DeviceError, Label, MemoryRange, Rect,
+    Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, ColorAttachment, CommandEncoder,
+    ComputePassDescriptor, DepthStencilAttachment, DeviceError, Label, MemoryRange,
+    PassTimestampWrites, Rect, RenderPassDescriptor,
 };
 
 use super::{
     DynBindGroup, DynBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline,
-    DynResourceExt as _,
+    DynResourceExt as _, DynTextureView,
 };
 
 pub trait DynCommandEncoder: std::fmt::Debug {
@@ -57,6 +59,12 @@ pub trait DynCommandEncoder: std::fmt::Debug {
         offset: wgt::BufferAddress,
         stride: wgt::BufferSize,
     );
+
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &RenderPassDescriptor<dyn DynQuerySet, dyn DynTextureView>,
+    );
+    unsafe fn end_render_pass(&mut self);
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &dyn DynRenderPipeline);
 
@@ -120,8 +128,8 @@ pub trait DynCommandEncoder: std::fmt::Debug {
         max_count: u32,
     );
 
-    // unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<Self::A>);
-    // unsafe fn end_compute_pass(&mut self);
+    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<dyn DynQuerySet>);
+    unsafe fn end_compute_pass(&mut self);
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &dyn DynComputePipeline);
 
@@ -251,6 +259,48 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         unsafe { C::copy_query_results(self, set, range, buffer, offset, stride) };
     }
 
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &RenderPassDescriptor<dyn DynQuerySet, dyn DynTextureView>,
+    ) {
+        let color_attachments = desc
+            .color_attachments
+            .iter()
+            .map(|attachment| {
+                attachment
+                    .as_ref()
+                    .map(|attachment| attachment.expect_downcast())
+            })
+            .collect::<Vec<_>>();
+
+        let desc: RenderPassDescriptor<<C::A as Api>::QuerySet, <C::A as Api>::TextureView> =
+            RenderPassDescriptor {
+                label: desc.label,
+                extent: desc.extent,
+                sample_count: desc.sample_count,
+                color_attachments: &color_attachments,
+                depth_stencil_attachment: desc
+                    .depth_stencil_attachment
+                    .as_ref()
+                    .map(|ds| ds.expect_downcast()),
+                multiview: desc.multiview,
+                timestamp_writes: desc
+                    .timestamp_writes
+                    .as_ref()
+                    .map(|writes| writes.expect_downcast()),
+                occlusion_query_set: desc
+                    .occlusion_query_set
+                    .map(|set| set.expect_downcast_ref()),
+            };
+        unsafe { C::begin_render_pass(self, &desc) };
+    }
+
+    unsafe fn end_render_pass(&mut self) {
+        unsafe {
+            C::end_render_pass(self);
+        }
+    }
+
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>) {
         unsafe {
             C::set_viewport(self, rect, depth_range);
@@ -368,6 +418,21 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         };
     }
 
+    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<dyn DynQuerySet>) {
+        let desc = ComputePassDescriptor {
+            label: desc.label,
+            timestamp_writes: desc
+                .timestamp_writes
+                .as_ref()
+                .map(|writes| writes.expect_downcast()),
+        };
+        unsafe { C::begin_compute_pass(self, &desc) };
+    }
+
+    unsafe fn end_compute_pass(&mut self) {
+        unsafe { C::end_compute_pass(self) };
+    }
+
     unsafe fn set_compute_pipeline(&mut self, pipeline: &dyn DynComputePipeline) {
         let pipeline = pipeline.expect_downcast_ref();
         unsafe { C::set_compute_pipeline(self, pipeline) };
@@ -403,5 +468,46 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
     ) {
         let binding = binding.expect_downcast();
         unsafe { self.set_vertex_buffer(index, binding) };
+    }
+}
+
+impl<'a> PassTimestampWrites<'a, dyn DynQuerySet> {
+    pub fn expect_downcast<B: DynQuerySet>(&self) -> PassTimestampWrites<'a, B> {
+        PassTimestampWrites {
+            query_set: self.query_set.expect_downcast_ref(),
+            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
+            end_of_pass_write_index: self.end_of_pass_write_index,
+        }
+    }
+}
+
+impl<'a> Attachment<'a, dyn DynTextureView> {
+    pub fn expect_downcast<B: DynTextureView>(&self) -> Attachment<'a, B> {
+        Attachment {
+            view: self.view.expect_downcast_ref(),
+            usage: self.usage,
+        }
+    }
+}
+
+impl<'a> ColorAttachment<'a, dyn DynTextureView> {
+    pub fn expect_downcast<B: DynTextureView>(&self) -> ColorAttachment<'a, B> {
+        ColorAttachment {
+            target: self.target.expect_downcast(),
+            resolve_target: self.resolve_target.as_ref().map(|rt| rt.expect_downcast()),
+            ops: self.ops,
+            clear_value: self.clear_value,
+        }
+    }
+}
+
+impl<'a> DepthStencilAttachment<'a, dyn DynTextureView> {
+    pub fn expect_downcast<B: DynTextureView>(&self) -> DepthStencilAttachment<'a, B> {
+        DepthStencilAttachment {
+            target: self.target.expect_downcast(),
+            depth_ops: self.depth_ops,
+            stencil_ops: self.stencil_ops,
+            clear_value: self.clear_value,
+        }
     }
 }
