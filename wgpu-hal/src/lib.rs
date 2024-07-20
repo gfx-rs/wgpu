@@ -266,8 +266,9 @@ mod dynamic;
 
 pub(crate) use dynamic::impl_dyn_resource;
 pub use dynamic::{
-    DynBindGroup, DynBuffer, DynCommandEncoder, DynComputePipeline, DynDevice, DynPipelineLayout,
-    DynQuerySet, DynRenderPipeline, DynResource, DynTexture, DynTextureView,
+    DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynBuffer, DynCommandEncoder,
+    DynComputePipeline, DynDevice, DynFence, DynPipelineCache, DynPipelineLayout, DynQuerySet,
+    DynRenderPipeline, DynResource, DynSampler, DynShaderModule, DynTexture, DynTextureView,
 };
 
 use std::{
