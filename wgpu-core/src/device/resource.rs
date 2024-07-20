@@ -719,19 +719,22 @@ impl<A: HalApi> Device<A> {
             &self.limits,
         )?;
 
+        // Renderable textures can only be 2D or 3D
+        if desc.dimension == wgt::TextureDimension::D1
+            && desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) 
+        {
+            return Err(CreateTextureError::InvalidDimensionUsages(
+                wgt::TextureUsages::RENDER_ATTACHMENT,
+                desc.dimension,
+            ));
+        }
+
         if desc.dimension != wgt::TextureDimension::D2 {
             // Depth textures can only be 2D
             if desc.format.is_depth_stencil_format() {
                 return Err(CreateTextureError::InvalidDepthDimension(
                     desc.dimension,
                     desc.format,
-                ));
-            }
-            // Renderable textures can only be 2D
-            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(CreateTextureError::InvalidDimensionUsages(
-                    wgt::TextureUsages::RENDER_ATTACHMENT,
-                    desc.dimension,
                 ));
             }
 
