@@ -45,6 +45,7 @@ Bottom level categories:
 
 - Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988)
 - As a workaround for [issue #4905](https://github.com/gfx-rs/wgpu/issues/4905), `wgpu-core` is undocumented unless `--cfg wgpu_core_doc` feature is enabled. By @kpreid in [#5987](https://github.com/gfx-rs/wgpu/pull/5987)
+- Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003)
 
 ## 22.0.0 (2024-07-17)
 
