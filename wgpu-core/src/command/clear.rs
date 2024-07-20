@@ -262,7 +262,7 @@ impl Global {
             encoder,
             &mut tracker.textures,
             &device.alignments,
-            device.zero_buffer.as_ref().unwrap(),
+            device.zero_buffer.as_ref().unwrap().as_ref(),
             &snatch_guard,
         )
     }
@@ -274,7 +274,7 @@ pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
     encoder: &mut dyn hal::DynCommandEncoder,
     texture_tracker: &mut T,
     alignments: &hal::Alignments,
-    zero_buffer: &A::Buffer,
+    zero_buffer: &dyn hal::DynBuffer,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
     let dst_raw = dst_texture.try_raw(snatch_guard)?;
@@ -462,7 +462,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
             let (color_attachments, depth_stencil_attachment) = if is_color {
                 color_attachments_tmp = [Some(hal::ColorAttachment {
                     target: hal::Attachment {
-                        view: Texture::get_clear_view(
+                        view: Texture::<A>::get_clear_view(
                             clear_mode,
                             &dst_texture.desc,
                             mip_level,
@@ -480,7 +480,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
                     &[][..],
                     Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
-                            view: Texture::get_clear_view(
+                            view: Texture::<A>::get_clear_view(
                                 clear_mode,
                                 &dst_texture.desc,
                                 mip_level,

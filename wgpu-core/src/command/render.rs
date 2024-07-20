@@ -34,7 +34,6 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
@@ -826,7 +825,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
         mut depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment<A>>,
         mut timestamp_writes: Option<ArcPassTimestampWrites<A>>,
         mut occlusion_query_set: Option<Arc<QuerySet<A>>>,
-        encoder: &mut CommandEncoder<A>,
+        encoder: &mut CommandEncoder,
         trackers: &mut Tracker<A>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         pending_query_resets: &mut QueryResetMap<A>,
@@ -1193,7 +1192,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
             }
 
             Some(hal::PassTimestampWrites {
-                query_set: query_set.raw.as_ref().unwrap(),
+                query_set: query_set.raw(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -1203,7 +1202,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
 
         let occlusion_query_set_hal = if let Some(query_set) = occlusion_query_set.as_ref() {
             query_set.same_device(device)?;
-            Some(query_set.raw.as_ref().unwrap())
+            Some(query_set.raw())
         } else {
             None
         };
@@ -1632,8 +1631,6 @@ impl Global {
             tracker.buffers.set_size(indices.buffers.size());
             tracker.textures.set_size(indices.textures.size());
 
-            let raw = &mut encoder.raw;
-
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
                 binder: Binder::new(),
@@ -1649,7 +1646,7 @@ impl Global {
                 snatch_guard,
 
                 device,
-                raw_encoder: raw,
+                raw_encoder: encoder.raw.as_mut(),
                 tracker,
                 buffer_memory_init_actions,
                 texture_memory_actions,

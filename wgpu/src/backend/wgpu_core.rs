@@ -143,7 +143,7 @@ impl ContextWgpuCore {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let (id, error) = unsafe {
             self.0
-                .create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, None)
+                .create_texture_from_hal::<A>(Box::new(hal_texture), device.id, &descriptor, None)
         };
         if let Some(cause) = error {
             self.handle_error(

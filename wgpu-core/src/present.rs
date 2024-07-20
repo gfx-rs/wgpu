@@ -9,7 +9,7 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{borrow::Borrow, sync::Arc};
+use std::sync::Arc;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -23,7 +23,6 @@ use crate::{
     resource::{self, Trackable},
 };
 
-use hal::{Queue as _, Surface as _};
 use thiserror::Error;
 use wgt::SurfaceStatus as Status;
 
@@ -157,9 +156,10 @@ impl Global {
 
         let suf = A::surface_as_hal(surface.as_ref());
         let (texture_id, status) = match unsafe {
+            use hal::DynSurface;
             suf.unwrap().acquire_texture(
                 Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
-                fence,
+                fence.as_ref(),
             )
         } {
             Ok(Some(ast)) => {
@@ -196,11 +196,9 @@ impl Global {
                     range: wgt::ImageSubresourceRange::default(),
                 };
                 let clear_view = unsafe {
-                    hal::Device::create_texture_view(
-                        device.raw(),
-                        ast.texture.borrow(),
-                        &clear_view_desc,
-                    )
+                    device
+                        .raw()
+                        .create_texture_view(ast.texture.as_ref().borrow(), &clear_view_desc)
                 }
                 .map_err(DeviceError::from)?;
 
@@ -393,6 +391,7 @@ impl Global {
                 match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
                     resource::TextureInner::Surface { mut raw, parent_id } => {
                         if surface_id == parent_id {
+                            use hal::DynSurface;
                             unsafe { suf.unwrap().discard_texture(raw.take().unwrap()) };
                         } else {
                             log::warn!("Surface texture is outdated");

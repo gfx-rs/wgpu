@@ -47,7 +47,7 @@ pub struct ShaderModuleDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct ShaderModule<A: HalApi> {
-    pub(crate) raw: Option<A::ShaderModule>,
+    pub(crate) raw: Option<Box<dyn hal::DynShaderModule>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
     /// The `label` from the descriptor used to create the resource.
@@ -59,7 +59,6 @@ impl<A: HalApi> Drop for ShaderModule<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
                 self.device.raw().destroy_shader_module(raw);
             }
         }
@@ -72,8 +71,8 @@ crate::impl_parent_device!(ShaderModule);
 crate::impl_storage_item!(ShaderModule);
 
 impl<A: HalApi> ShaderModule<A> {
-    pub(crate) fn raw(&self) -> &A::ShaderModule {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self) -> &dyn hal::DynShaderModule {
+        self.raw.as_ref().unwrap().as_ref()
     }
 
     pub(crate) fn finalize_entry_point_name(
@@ -240,7 +239,7 @@ pub enum CreateComputePipelineError {
 
 #[derive(Debug)]
 pub struct ComputePipeline<A: HalApi> {
-    pub(crate) raw: Option<A::ComputePipeline>,
+    pub(crate) raw: Option<Box<dyn hal::DynComputePipeline>>,
     pub(crate) layout: Arc<PipelineLayout<A>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) _shader_module: Arc<ShaderModule<A>>,
@@ -255,7 +254,6 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
                 self.device.raw().destroy_compute_pipeline(raw);
             }
         }
@@ -269,8 +267,8 @@ crate::impl_storage_item!(ComputePipeline);
 crate::impl_trackable!(ComputePipeline);
 
 impl<A: HalApi> ComputePipeline<A> {
-    pub(crate) fn raw(&self) -> &A::ComputePipeline {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self) -> &dyn hal::DynComputePipeline {
+        self.raw.as_ref().unwrap().as_ref()
     }
 }
 
@@ -299,7 +297,7 @@ impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
 
 #[derive(Debug)]
 pub struct PipelineCache<A: HalApi> {
-    pub(crate) raw: Option<A::PipelineCache>,
+    pub(crate) raw: Option<Box<dyn hal::DynPipelineCache>>,
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -310,10 +308,15 @@ impl<A: HalApi> Drop for PipelineCache<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
                 self.device.raw().destroy_pipeline_cache(raw);
             }
         }
+    }
+}
+
+impl<A: HalApi> PipelineCache<A> {
+    pub(crate) fn try_raw(&self) -> Option<&dyn hal::DynPipelineCache> {
+        self.raw.as_ref().map(|it| it.as_ref())
     }
 }
 
@@ -579,7 +582,7 @@ impl Default for VertexStep {
 
 #[derive(Debug)]
 pub struct RenderPipeline<A: HalApi> {
-    pub(crate) raw: Option<A::RenderPipeline>,
+    pub(crate) raw: Option<Box<dyn hal::DynRenderPipeline>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<PipelineLayout<A>>,
     pub(crate) _shader_modules:
@@ -599,7 +602,6 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
                 self.device.raw().destroy_render_pipeline(raw);
             }
         }
@@ -613,7 +615,7 @@ crate::impl_storage_item!(RenderPipeline);
 crate::impl_trackable!(RenderPipeline);
 
 impl<A: HalApi> RenderPipeline<A> {
-    pub(crate) fn raw(&self) -> &A::RenderPipeline {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self) -> &dyn hal::DynRenderPipeline {
+        self.raw.as_ref().unwrap().as_ref()
     }
 }

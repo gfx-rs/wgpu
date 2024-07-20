@@ -277,15 +277,15 @@ impl Global {
         let raw_buf = buffer.try_raw(&snatch_guard)?;
         unsafe {
             let mapping = device
-                .raw()
+                .raw_typed()
                 .map_buffer(raw_buf, offset..offset + data.len() as u64)
                 .map_err(DeviceError::from)?;
             std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
             if !mapping.is_coherent {
-                device.raw().flush_mapped_ranges(
-                    raw_buf,
-                    std::iter::once(offset..offset + data.len() as u64),
-                );
+                #[allow(clippy::single_range_in_vec_init)]
+                device
+                    .raw()
+                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64]);
             }
             device.raw().unmap_buffer(raw_buf);
         }
@@ -391,7 +391,7 @@ impl Global {
     /// - `hal_texture` must be initialized
     pub unsafe fn create_texture_from_hal<A: HalApi>(
         &self,
-        hal_texture: A::Texture,
+        hal_texture: Box<dyn hal::DynTexture>,
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Option<id::TextureId>,
@@ -1995,7 +1995,7 @@ impl Global {
                 match unsafe {
                     A::surface_as_hal(surface)
                         .unwrap()
-                        .configure(device.raw(), &hal_config)
+                        .configure(device.raw_typed(), &hal_config)
                 } {
                     Ok(()) => (),
                     Err(error) => {
@@ -2156,7 +2156,7 @@ impl Global {
             if !device.is_valid() {
                 return;
             }
-            unsafe { device.raw().start_capture() };
+            unsafe { device.raw_typed().start_capture() };
         }
     }
 
@@ -2169,7 +2169,7 @@ impl Global {
             if !device.is_valid() {
                 return;
             }
-            unsafe { device.raw().stop_capture() };
+            unsafe { device.raw_typed().stop_capture() };
         }
     }
 
@@ -2192,7 +2192,12 @@ impl Global {
                 return None;
             }
             if let Some(raw_cache) = cache.raw.as_ref() {
-                let mut vec = unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) }?;
+                let mut vec = unsafe {
+                    cache
+                        .device
+                        .raw()
+                        .pipeline_cache_get_data(raw_cache.as_ref())
+                }?;
                 let validation_key = cache.device.raw().pipeline_cache_validation_key()?;
 
                 let mut header_contents = [0; pipeline_cache::HEADER_LENGTH];

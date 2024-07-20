@@ -409,7 +409,7 @@ pub(crate) fn validate_texture_copy_range(
 
 fn handle_texture_init<A: HalApi>(
     init_kind: MemoryInitKind,
-    encoder: &mut CommandEncoder<A>,
+    encoder: &mut CommandEncoder,
     trackers: &mut Tracker<A>,
     texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
     device: &Device<A>,
@@ -444,7 +444,7 @@ fn handle_texture_init<A: HalApi>(
                 cmd_buf_raw,
                 &mut trackers.textures,
                 &device.alignments,
-                device.zero_buffer.as_ref().unwrap(),
+                device.zero_buffer.as_ref().unwrap().as_ref(),
                 snatch_guard,
             )?;
         }
@@ -458,7 +458,7 @@ fn handle_texture_init<A: HalApi>(
 /// Ensure the source texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
 fn handle_src_texture_init<A: HalApi>(
-    encoder: &mut CommandEncoder<A>,
+    encoder: &mut CommandEncoder,
     trackers: &mut Tracker<A>,
     texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
     device: &Device<A>,
@@ -486,7 +486,7 @@ fn handle_src_texture_init<A: HalApi>(
 /// Ensure the destination texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
 fn handle_dst_texture_init<A: HalApi>(
-    encoder: &mut CommandEncoder<A>,
+    encoder: &mut CommandEncoder,
     trackers: &mut Tracker<A>,
     texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
     device: &Device<A>,

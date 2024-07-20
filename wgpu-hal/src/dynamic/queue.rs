@@ -1,6 +1,6 @@
 use crate::{
     DeviceError, DynCommandBuffer, DynFence, DynResource, DynSurface, DynSurfaceTexture,
-    DynTextureView, FenceValue, Queue, SurfaceError,
+    FenceValue, Queue, SurfaceError,
 };
 
 use super::DynResourceExt as _;
@@ -15,7 +15,7 @@ pub trait DynQueue: DynResource {
     unsafe fn present(
         &self,
         surface: &dyn DynSurface,
-        texture: Box<dyn DynTextureView>,
+        texture: Box<dyn DynSurfaceTexture>,
     ) -> Result<(), SurfaceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
 }
@@ -42,7 +42,7 @@ impl<Q: Queue + DynResource> DynQueue for Q {
     unsafe fn present(
         &self,
         surface: &dyn DynSurface,
-        texture: Box<dyn DynTextureView>,
+        texture: Box<dyn DynSurfaceTexture>,
     ) -> Result<(), SurfaceError> {
         let surface = surface.expect_downcast_ref();
         unsafe { Q::present(self, surface, texture.unbox()) }

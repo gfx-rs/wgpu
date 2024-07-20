@@ -438,7 +438,7 @@ impl<A: HalApi> TextureTracker<A> {
     pub fn drain_transitions<'a>(
         &'a mut self,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> (PendingTransitionList, Vec<Option<&'a TextureInner<A>>>) {
+    ) -> (PendingTransitionList, Vec<Option<&'a TextureInner>>) {
         let mut textures = Vec::new();
         let transitions = self
             .temp

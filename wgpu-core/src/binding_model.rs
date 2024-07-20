@@ -498,7 +498,7 @@ impl<A: HalApi> std::fmt::Display for ExclusivePipeline<A> {
 /// Bind group layout.
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {
-    pub(crate) raw: Option<A::BindGroupLayout>,
+    pub(crate) raw: Option<Box<dyn hal::DynBindGroupLayout>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) entries: bgl::EntryMap,
     /// It is very important that we know if the bind group comes from the BGL pool.
@@ -523,7 +523,6 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
                 self.device.raw().destroy_bind_group_layout(raw);
             }
         }
@@ -536,8 +535,8 @@ crate::impl_parent_device!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
 
 impl<A: HalApi> BindGroupLayout<A> {
-    pub(crate) fn raw(&self) -> &A::BindGroupLayout {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self) -> &dyn hal::DynBindGroupLayout {
+        self.raw.as_ref().unwrap().as_ref()
     }
 }
 
@@ -651,7 +650,7 @@ pub struct ResolvedPipelineLayoutDescriptor<'a, A: HalApi> {
 
 #[derive(Debug)]
 pub struct PipelineLayout<A: HalApi> {
-    pub(crate) raw: Option<A::PipelineLayout>,
+    pub(crate) raw: Option<Box<dyn hal::DynPipelineLayout>>,
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -664,7 +663,6 @@ impl<A: HalApi> Drop for PipelineLayout<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
                 self.device.raw().destroy_pipeline_layout(raw);
             }
         }
@@ -672,8 +670,8 @@ impl<A: HalApi> Drop for PipelineLayout<A> {
 }
 
 impl<A: HalApi> PipelineLayout<A> {
-    pub(crate) fn raw(&self) -> &A::PipelineLayout {
-        self.raw.as_ref().unwrap()
+    pub(crate) fn raw(&self) -> &dyn hal::DynPipelineLayout {
+        self.raw.as_ref().unwrap().as_ref()
     }
 
     pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::EntryMap, { hal::MAX_BIND_GROUPS }> {
@@ -888,7 +886,7 @@ pub(crate) fn buffer_binding_type_alignment(
 
 #[derive(Debug)]
 pub struct BindGroup<A: HalApi> {
-    pub(crate) raw: Snatchable<A::BindGroup>,
+    pub(crate) raw: Snatchable<Box<dyn hal::DynBindGroup>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<BindGroupLayout<A>>,
     /// The `label` from the descriptor used to create the resource.
@@ -908,7 +906,6 @@ impl<A: HalApi> Drop for BindGroup<A> {
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
-                use hal::Device;
                 self.device.raw().destroy_bind_group(raw);
             }
         }
@@ -919,7 +916,7 @@ impl<A: HalApi> BindGroup<A> {
     pub(crate) fn try_raw<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&A::BindGroup, DestroyedResourceError> {
+    ) -> Result<&dyn hal::DynBindGroup, DestroyedResourceError> {
         // Clippy insist on writing it this way. The idea is to return None
         // if any of the raw buffer is not valid anymore.
         for buffer in &self.used_buffer_ranges {
@@ -931,6 +928,7 @@ impl<A: HalApi> BindGroup<A> {
 
         self.raw
             .get(guard)
+            .map(|raw| raw.as_ref())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 

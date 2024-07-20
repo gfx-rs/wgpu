@@ -25,7 +25,6 @@ use crate::{
     FastHashMap, SubmissionIndex,
 };
 
-use hal::{CommandEncoder as _, Device as _, Queue as _};
 use smallvec::SmallVec;
 
 use std::{
@@ -39,20 +38,20 @@ use thiserror::Error;
 use super::Device;
 
 pub struct Queue<A: HalApi> {
-    raw: ManuallyDrop<A::Queue>,
+    raw: ManuallyDrop<Box<dyn hal::DynQueue>>,
     pub(crate) device: Arc<Device<A>>,
 }
 
 impl<A: HalApi> Queue<A> {
-    pub(crate) fn new(device: Arc<Device<A>>, raw: A::Queue) -> Self {
+    pub(crate) fn new(device: Arc<Device<A>>, raw: Box<dyn hal::DynQueue>) -> Self {
         Queue {
             raw: ManuallyDrop::new(raw),
             device,
         }
     }
 
-    pub(crate) fn raw(&self) -> &A::Queue {
-        &self.raw
+    pub(crate) fn raw(&self) -> &dyn hal::DynQueue {
+        self.raw.as_ref()
     }
 }
 
@@ -154,8 +153,8 @@ pub enum TempResource<A: HalApi> {
 /// [`CommandBuffer`]: hal::Api::CommandBuffer
 /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
 pub(crate) struct EncoderInFlight<A: HalApi> {
-    raw: A::CommandEncoder,
-    cmd_buffers: Vec<A::CommandBuffer>,
+    raw: Box<dyn hal::DynCommandEncoder>,
+    cmd_buffers: Vec<Box<dyn hal::DynCommandBuffer>>,
     pub(crate) trackers: Tracker<A>,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
@@ -169,8 +168,8 @@ impl<A: HalApi> EncoderInFlight<A> {
     ///
     /// Return the command encoder, fully reset and ready to be
     /// reused.
-    pub(crate) unsafe fn land(mut self) -> A::CommandEncoder {
-        unsafe { self.raw.reset_all(self.cmd_buffers.into_iter()) };
+    pub(crate) unsafe fn land(mut self) -> Box<dyn hal::DynCommandEncoder> {
+        unsafe { self.raw.reset_all(self.cmd_buffers) };
         {
             // This involves actually decrementing the ref count of all command buffer
             // resources, so can be _very_ expensive.
@@ -205,7 +204,7 @@ impl<A: HalApi> EncoderInFlight<A> {
 /// All uses of [`StagingBuffer`]s end up here.
 #[derive(Debug)]
 pub(crate) struct PendingWrites<A: HalApi> {
-    pub command_encoder: A::CommandEncoder,
+    pub command_encoder: Box<dyn hal::DynCommandEncoder>,
 
     /// True if `command_encoder` is in the "recording" state, as
     /// described in the docs for the [`wgpu_hal::CommandEncoder`]
@@ -220,7 +219,7 @@ pub(crate) struct PendingWrites<A: HalApi> {
 }
 
 impl<A: HalApi> PendingWrites<A> {
-    pub fn new(command_encoder: A::CommandEncoder) -> Self {
+    pub fn new(command_encoder: Box<dyn hal::DynCommandEncoder>) -> Self {
         Self {
             command_encoder,
             is_recording: false,
@@ -230,7 +229,7 @@ impl<A: HalApi> PendingWrites<A> {
         }
     }
 
-    pub fn dispose(mut self, device: &A::Device) {
+    pub fn dispose(mut self, device: &dyn hal::DynDevice) {
         unsafe {
             if self.is_recording {
                 self.command_encoder.discard_encoding();
@@ -270,9 +269,9 @@ impl<A: HalApi> PendingWrites<A> {
 
     fn pre_submit(
         &mut self,
-        command_allocator: &CommandAllocator<A>,
+        command_allocator: &CommandAllocator,
         device: &A::Device,
-        queue: &A::Queue,
+        queue: &dyn hal::DynQueue,
     ) -> Result<Option<EncoderInFlight<A>>, DeviceError> {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
@@ -307,7 +306,7 @@ impl<A: HalApi> PendingWrites<A> {
             }
             self.is_recording = true;
         }
-        &mut self.command_encoder
+        self.command_encoder.as_mut()
     }
 
     pub fn deactivate(&mut self) {
@@ -724,7 +723,7 @@ impl Global {
                         encoder,
                         &mut trackers.textures,
                         &device.alignments,
-                        device.zero_buffer.as_ref().unwrap(),
+                        device.zero_buffer.as_ref().unwrap().as_ref(),
                         &device.snatchable_lock.read(),
                     )
                     .map_err(QueueWriteError::from)?;
@@ -1195,7 +1194,7 @@ impl Global {
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_device_tracker(
-                            &mut baked.encoder,
+                            baked.encoder.as_mut(),
                             &mut *trackers,
                             &baked.trackers,
                             &snatch_guard,
@@ -1224,10 +1223,8 @@ impl Global {
                                     &snatch_guard,
                                 )
                                 .collect::<Vec<_>>();
-                            let baked_encoder_dyn: &mut dyn hal::DynCommandEncoder =
-                                &mut baked.encoder; // TODO(#5124) temporary
                             let present = unsafe {
-                                baked_encoder_dyn.transition_textures(&texture_barriers);
+                                baked.encoder.transition_textures(&texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
                             };
                             baked.list.push(present);
@@ -1279,32 +1276,36 @@ impl Global {
                             &snatch_guard,
                         )
                         .collect::<Vec<_>>();
-                    let encoder: &mut dyn hal::DynCommandEncoder =
-                        &mut pending_writes.command_encoder; // TODO(#5124) temporary
                     unsafe {
-                        encoder.transition_textures(&texture_barriers);
+                        pending_writes
+                            .command_encoder
+                            .transition_textures(&texture_barriers);
                     };
                 }
             }
 
-            if let Some(pending_execution) =
-                pending_writes.pre_submit(&device.command_allocator, device.raw(), queue.raw())?
-            {
+            if let Some(pending_execution) = pending_writes.pre_submit(
+                &device.command_allocator,
+                device.raw_typed(),
+                queue.raw(),
+            )? {
                 active_executions.insert(0, pending_execution);
             }
 
             let hal_command_buffers = active_executions
                 .iter()
-                .flat_map(|e| e.cmd_buffers.iter())
+                .flat_map(|e| e.cmd_buffers.iter().map(|b| b.as_ref()))
                 .collect::<Vec<_>>();
 
             {
                 let mut submit_surface_textures =
-                    SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
+                    SmallVec::<[&dyn hal::DynSurfaceTexture; 2]>::with_capacity(
+                        submit_surface_textures_owned.len(),
+                    );
 
                 for texture in submit_surface_textures_owned.values() {
                     submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
-                        Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
+                        Some(TextureInner::Surface { raw, .. }) => raw.as_ref().map(|r| r.as_ref()),
                         _ => None,
                     });
                 }
@@ -1315,7 +1316,7 @@ impl Global {
                         .submit(
                             &hal_command_buffers,
                             &submit_surface_textures,
-                            (fence, submit_index),
+                            (fence.as_mut(), submit_index),
                         )
                         .map_err(DeviceError::from)?;
                 }

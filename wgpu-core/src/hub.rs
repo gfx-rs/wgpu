@@ -244,7 +244,7 @@ impl<A: HalApi> Hub<A> {
                     if let Some(device) = present.device.downcast_ref::<A>() {
                         let suf = A::surface_as_hal(surface);
                         unsafe {
-                            suf.unwrap().unconfigure(device.raw());
+                            suf.unwrap().unconfigure(device.raw_typed());
                         }
                     }
                 }

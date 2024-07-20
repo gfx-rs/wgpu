@@ -153,7 +153,7 @@ pub(crate) fn fixup_discarded_surfaces<
             encoder,
             texture_tracker,
             &device.alignments,
-            device.zero_buffer.as_ref().unwrap(),
+            device.zero_buffer.as_ref().unwrap().as_ref(),
             snatch_guard,
         )
         .unwrap();
@@ -226,10 +226,9 @@ impl<A: HalApi> BakedCommands<A> {
                 .set_single(&buffer, hal::BufferUses::COPY_DST);
 
             let raw_buf = buffer.try_raw_dyn(snatch_guard)?;
-            let encoder: &mut dyn hal::DynCommandEncoder = &mut self.encoder; // TODO(#5124): temporary
 
             unsafe {
-                encoder.transition_buffers(
+                self.encoder.transition_buffers(
                     transition
                         .map(|pending| pending.into_hal(&buffer, snatch_guard))
                         .as_slice(),
@@ -253,7 +252,7 @@ impl<A: HalApi> BakedCommands<A> {
                 );
 
                 unsafe {
-                    encoder.clear_buffer(raw_buf, range.clone());
+                    self.encoder.clear_buffer(raw_buf, range.clone());
                 }
             }
         }
@@ -306,10 +305,10 @@ impl<A: HalApi> BakedCommands<A> {
                 let clear_result = clear_texture(
                     &texture_use.texture,
                     range,
-                    &mut self.encoder,
+                    self.encoder.as_mut(),
                     &mut device_tracker.textures,
                     &device.alignments,
-                    device.zero_buffer.as_ref().unwrap(),
+                    device.zero_buffer.as_ref().unwrap().as_ref(),
                     snatch_guard,
                 );
 
