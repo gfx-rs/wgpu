@@ -1,8 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{
-    context::ObjectId, Data, Id, Label, TextureAspect, TextureFormat, TextureViewDimension, C,
-};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a texture view.
 ///

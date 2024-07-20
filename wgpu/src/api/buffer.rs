@@ -6,12 +6,9 @@ use std::{
 };
 
 use parking_lot::Mutex;
-use wgt::{BufferAddress, BufferSize, BufferUsages, WasmNotSend};
 
-use crate::{
-    context::{DynContext, ObjectId},
-    BindingResource, BufferBinding, Data, Id, Label, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 /// Handle to a GPU-accessible buffer.
 ///

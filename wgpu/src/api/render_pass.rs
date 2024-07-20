@@ -1,12 +1,7 @@
 use std::{marker::PhantomData, ops::Range, sync::Arc, thread};
 
-use wgt::{BufferAddress, DynamicOffset, IndexFormat, ShaderStages};
-
-use crate::{
-    context::{DynContext, ObjectId},
-    BindGroup, Buffer, BufferSlice, Color, Data, Label, QuerySet, RenderBundle, RenderPipeline,
-    TextureView, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 #[derive(Debug)]
 pub(crate) struct RenderPassInner {

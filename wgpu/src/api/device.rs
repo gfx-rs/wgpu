@@ -1,18 +1,9 @@
 use std::{error, fmt, future::Future, sync::Arc, thread};
 
 use parking_lot::Mutex;
-use wgt::{DeviceLostReason, WasmNotSend};
 
-use crate::{
-    context::{DynContext, ObjectId},
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, Buffer,
-    BufferDescriptor, CommandEncoder, CommandEncoderDescriptor, ComputePipeline,
-    ComputePipelineDescriptor, Data, Features, Id, Label, Limits, Maintain, MaintainResult,
-    MapContext, PipelineCache, PipelineCacheDescriptor, PipelineLayout, PipelineLayoutDescriptor,
-    QuerySet, QuerySetDescriptor, RenderBundleEncoder, RenderBundleEncoderDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderModule,
-    ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 /// Open connection to a graphics and/or compute device.
 ///

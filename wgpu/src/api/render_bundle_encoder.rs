@@ -1,12 +1,7 @@
 use std::{marker::PhantomData, num::NonZeroU32, ops::Range, sync::Arc};
 
-use wgt::{BufferAddress, DynamicOffset, IndexFormat, ShaderStages};
-
-use crate::{
-    context::{DynContext, ObjectId},
-    BindGroup, Buffer, BufferSlice, Data, Device, Label, RenderBundle, RenderBundleDepthStencil,
-    RenderBundleDescriptor, RenderPipeline, TextureFormat, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
 ///

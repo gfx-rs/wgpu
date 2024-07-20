@@ -505,7 +505,7 @@ pub struct CommandEncoder {
     open: bool,
 }
 
-impl crate::context::Context for ContextWgpuCore {
+impl crate::Context for ContextWgpuCore {
     type AdapterId = wgc::id::AdapterId;
     type AdapterData = ();
     type DeviceId = wgc::id::DeviceId;

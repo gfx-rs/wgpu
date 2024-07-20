@@ -2,14 +2,9 @@ use std::{error, fmt, sync::Arc, thread};
 
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use wgt::{
-    Extent3d, SurfaceCapabilities, SurfaceStatus, TextureDimension, TextureFormat, WasmNotSendSync,
-};
 
-use crate::{
-    context::{DynContext, ObjectId},
-    Adapter, Data, Device, Id, SurfaceError, SurfaceTexture, Texture, TextureDescriptor, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 /// Describes a [`Surface`].
 ///

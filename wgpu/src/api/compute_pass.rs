@@ -1,11 +1,7 @@
 use std::{marker::PhantomData, sync::Arc, thread};
 
-use wgt::{BufferAddress, DynamicOffset};
-
-use crate::{
-    context::{DynContext, ObjectId},
-    BindGroup, Buffer, ComputePipeline, Data, Label, QuerySet, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 /// In-progress recording of a compute pass.
 ///

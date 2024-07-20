@@ -1,6 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{context::ObjectId, Data, C};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a pipeline cache, which is used to accelerate
 /// creating [`RenderPipeline`]s and [`ComputePipeline`]s

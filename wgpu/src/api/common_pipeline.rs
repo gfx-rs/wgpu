@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::Label;
+use crate::*;
 
 #[derive(Clone, Debug)]
 /// Advanced options for use when a pipeline is compiled

@@ -1,10 +1,7 @@
 use std::{marker::PhantomData, ops::Range, sync::Arc, thread};
 
-use crate::{
-    context::{DynContext, ObjectId},
-    Buffer, CommandBuffer, ComputePass, ComputePassDescriptor, ComputePassInner, Data, Label,
-    QuerySet, RenderPass, RenderPassDescriptor, RenderPassInner, Texture, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 /// Encodes a series of GPU operations.
 ///
@@ -44,7 +41,6 @@ pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>
 static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
-use wgt::{BufferAddress, Extent3d, ImageSubresourceRange};
 /// View of a buffer which can be used to copy to/from a texture.
 ///
 /// Corresponds to [WebGPU `GPUImageCopyBuffer`](

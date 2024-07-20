@@ -1,11 +1,7 @@
 use std::{sync::Arc, thread};
 
-use wgt::{Extent3d, Origin3d, TextureAspect, TextureDimension, TextureUsages};
-
-use crate::{
-    context::{DynContext, ObjectId},
-    Data, Id, ImageCopyTexture, Label, TextureFormat, TextureView, TextureViewDescriptor, C,
-};
+use crate::context::{DynContext, ObjectId};
+use crate::*;
 
 /// Handle to a texture on the GPU.
 ///

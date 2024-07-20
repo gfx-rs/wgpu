@@ -1,6 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{context::ObjectId, Data, Id, Label, C};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Pre-prepared reusable bundle of GPU operations.
 ///

@@ -1,9 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{
-    context::ObjectId, BindGroupLayout, Data, Id, Label, PipelineCache, PipelineCompilationOptions,
-    PipelineLayout, ShaderModule, C,
-};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a compute pipeline.
 ///

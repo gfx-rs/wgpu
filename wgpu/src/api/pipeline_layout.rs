@@ -1,6 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{context::ObjectId, BindGroupLayout, Data, Id, Label, PushConstantRange, C};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a pipeline layout.
 ///

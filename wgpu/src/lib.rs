@@ -18,13 +18,40 @@
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
 
+//
+//
+// Modules
+//
+//
+
 mod api;
 mod backend;
 mod context;
 mod macros;
 mod send_sync;
 pub mod util;
+
+//
+//
+// Private re-exports
+//
+//
+
+#[allow(unused_imports)] // WebGPU needs this
+use context::Context;
 use send_sync::*;
+
+type C = dyn context::DynContext;
+#[cfg(send_sync)]
+type Data = dyn std::any::Any + Send + Sync;
+#[cfg(not(send_sync))]
+type Data = dyn std::any::Any;
+
+//
+//
+// Public re-exports
+//
+//
 
 pub use api::*;
 pub use wgt::{
@@ -51,6 +78,12 @@ pub use wgt::{
 // specific, but these need to depend on web-sys.
 #[cfg(any(webgpu, webgl))]
 pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
+
+//
+//
+// Re-exports of dependencies
+//
+//
 
 /// Re-export of our `wgpu-core` dependency.
 ///
@@ -84,9 +117,3 @@ pub use raw_window_handle as rwh;
 ///
 #[cfg(any(webgl, webgpu))]
 pub use web_sys;
-
-type C = dyn context::DynContext;
-#[cfg(send_sync)]
-type Data = dyn std::any::Any + Send + Sync;
-#[cfg(not(send_sync))]
-type Data = dyn std::any::Any;

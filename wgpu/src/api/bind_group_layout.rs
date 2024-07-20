@@ -1,6 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{context::ObjectId, BindGroupLayoutEntry, Data, Id, Label, C};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a binding group layout.
 ///

@@ -1,9 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{
-    context::ObjectId, AddressMode, CompareFunction, Data, FilterMode, Id, Label,
-    SamplerBorderColor, C,
-};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a sampler.
 ///

@@ -1,8 +1,7 @@
 use std::{borrow::Cow, future::Future, marker::PhantomData, sync::Arc, thread};
 
-use wgt::WasmNotSend;
-
-use crate::{context::ObjectId, Data, Id, Label, C};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a compiled shader module.
 ///

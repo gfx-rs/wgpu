@@ -1,11 +1,7 @@
 use std::{num::NonZeroU32, sync::Arc, thread};
 
-use wgt::{ColorTargetState, DepthStencilState, MultisampleState, PrimitiveState};
-
-use crate::{
-    context::ObjectId, BindGroupLayout, BufferAddress, Data, Id, Label, PipelineCache,
-    PipelineCompilationOptions, PipelineLayout, ShaderModule, VertexAttribute, VertexStepMode, C,
-};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a rendering (graphics) pipeline.
 ///

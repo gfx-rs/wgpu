@@ -10,6 +10,16 @@
 //! - `Drop` implementation for the type (if needed)
 //! - Descriptor types and their subtypes.
 //! - Any non-public helper types or functions.
+//!
+//! # Imports
+//!
+//! Because our public api is "flat" (i.e. all types are directly under the `wgpu` module),
+//! we use a single `crate::*` import at the top of each module to bring in all the types in
+//! the public api. This is done to:
+//! - Avoid having to write out a long list of imports for each module.
+//! - Allow docs to be written naturally, without needing to worry about needing dedicated doc imports.
+//! - Treat wgpu-types types and wgpu-core types as a single set.
+//!
 
 mod adapter;
 mod bind_group;

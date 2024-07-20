@@ -1,9 +1,7 @@
 use std::{sync::Arc, thread};
 
-use crate::{
-    context::ObjectId, BindGroupLayout, Buffer, BufferAddress, BufferSize, Data, Id, Label,
-    Sampler, TextureView, C,
-};
+use crate::context::ObjectId;
+use crate::*;
 
 /// Handle to a binding group.
 ///

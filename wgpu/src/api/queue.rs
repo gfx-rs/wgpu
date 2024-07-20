@@ -4,10 +4,8 @@ use std::{
     thread,
 };
 
-use crate::{
-    context::{DynContext, ObjectId, QueueWriteBuffer},
-    Buffer, CommandBuffer, Data, ImageCopyTexture, C,
-};
+use crate::context::{DynContext, ObjectId, QueueWriteBuffer};
+use crate::*;
 
 /// Handle to a command queue on a device.
 ///
@@ -45,7 +43,6 @@ pub struct SubmissionIndex(pub(crate) Arc<crate::Data>);
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
 pub use wgt::Maintain as MaintainBase;
-use wgt::{BufferAddress, BufferSize, Extent3d, ImageDataLayout};
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
 #[cfg(send_sync)]

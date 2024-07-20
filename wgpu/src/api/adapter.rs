@@ -1,11 +1,7 @@
 use std::{future::Future, sync::Arc, thread};
 
-use crate::{
-    context::{DeviceRequest, DynContext, ObjectId},
-    AdapterInfo, Data, Device, DeviceDescriptor, DownlevelCapabilities, Features, Id, Limits,
-    PresentationTimestamp, Queue, RequestDeviceError, Surface, TextureFormat,
-    TextureFormatFeatures, WasmNotSend, C,
-};
+use crate::context::{DeviceRequest, DynContext, ObjectId};
+use crate::*;
 
 /// Handle to a physical graphics and/or compute device.
 ///
@@ -17,9 +13,9 @@ use crate::{
 /// Corresponds to [WebGPU `GPUAdapter`](https://gpuweb.github.io/gpuweb/#gpu-adapter).
 #[derive(Debug)]
 pub struct Adapter {
-    pub(super) context: Arc<C>,
-    pub(super) id: ObjectId,
-    pub(super) data: Box<Data>,
+    pub(crate) context: Arc<C>,
+    pub(crate) id: ObjectId,
+    pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);

@@ -1,6 +1,7 @@
 use std::{error, fmt, thread};
 
-use crate::{context::DynContext, AnyWasmNotSendSync, Texture};
+use crate::context::DynContext;
+use crate::*;
 
 /// Surface texture that can be rendered to.
 /// Result of a successful call to [`Surface::get_current_texture`].
