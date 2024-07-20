@@ -1,6 +1,5 @@
-/*! This is a player library for WebGPU traces.
- *
-!*/
+//! This is a player library for WebGPU traces.
+
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
 
