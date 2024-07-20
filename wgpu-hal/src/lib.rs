@@ -1109,7 +1109,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = TextureBarrier<'a, Self::A>>;
+        T: Iterator<Item = TextureBarrier<'a, <Self::A as Api>::Texture>>;
 
     // copy operations
 
@@ -1989,8 +1989,8 @@ pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
 }
 
 #[derive(Debug, Clone)]
-pub struct TextureBarrier<'a, A: Api> {
-    pub texture: &'a A::Texture,
+pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
+    pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
     pub usage: Range<TextureUses>,
 }

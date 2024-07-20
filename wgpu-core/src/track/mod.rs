@@ -272,7 +272,10 @@ impl PendingTransition<hal::BufferUses> {
 
 impl PendingTransition<hal::TextureUses> {
     /// Produce the hal barrier corresponding to the transition.
-    pub fn into_hal<'a, A: HalApi>(self, texture: &'a A::Texture) -> hal::TextureBarrier<'a, A> {
+    pub fn into_hal<'a, T: hal::DynTexture + ?Sized>(
+        self,
+        texture: &'a T,
+    ) -> hal::TextureBarrier<'a, T> {
         // These showing up in a barrier is always a bug
         strict_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
         strict_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
