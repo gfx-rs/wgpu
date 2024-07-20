@@ -1,11 +1,11 @@
 use std::ops::Range;
 
 use crate::{
-    Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, ColorAttachment, CommandEncoder,
-    ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynBindGroup, DynBuffer,
-    DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline, DynTexture,
+    Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, BufferTextureCopy, ColorAttachment,
+    CommandEncoder, ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynBindGroup,
+    DynBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline, DynTexture,
     DynTextureView, Label, MemoryRange, PassTimestampWrites, Rect, RenderPassDescriptor,
-    TextureBarrier,
+    TextureBarrier, TextureCopy, TextureUses,
 };
 
 use super::DynResourceExt;
@@ -43,31 +43,28 @@ pub trait DynCommandEncoder: std::fmt::Debug {
     // ) where
     //     T: Iterator<Item = TextureCopy>;
 
-    // unsafe fn copy_texture_to_texture<T>(
-    //     &mut self,
-    //     src: &dyn DynTexture,
-    //     src_usage: TextureUses,
-    //     dst: &dyn DynTexture,
-    //     regions: T,
-    // ) where
-    //     T: Iterator<Item = TextureCopy>;
+    unsafe fn copy_texture_to_texture(
+        &mut self,
+        src: &dyn DynTexture,
+        src_usage: TextureUses,
+        dst: &dyn DynTexture,
+        regions: &[TextureCopy],
+    );
 
-    // unsafe fn copy_buffer_to_texture<T>(
-    //     &mut self,
-    //     src: &dyn DynBuffer,
-    //     dst: &dyn DynTexture,
-    //     regions: T,
-    // ) where
-    //     T: Iterator<Item = BufferTextureCopy>;
+    unsafe fn copy_buffer_to_texture(
+        &mut self,
+        src: &dyn DynBuffer,
+        dst: &dyn DynTexture,
+        regions: &[BufferTextureCopy],
+    );
 
-    // unsafe fn copy_texture_to_buffer<T>(
-    //     &mut self,
-    //     src: &dyn DynTexture,
-    //     src_usage: TextureUses,
-    //     dst: &dyn DynBuffer,
-    //     regions: T,
-    // ) where
-    //     T: Iterator<Item = BufferTextureCopy>;
+    unsafe fn copy_texture_to_buffer(
+        &mut self,
+        src: &dyn DynTexture,
+        src_usage: TextureUses,
+        dst: &dyn DynBuffer,
+        regions: &[BufferTextureCopy],
+    );
 
     unsafe fn set_bind_group(
         &mut self,
@@ -232,6 +229,47 @@ impl<C: CommandEncoder> DynCommandEncoder for C {
         let dst = dst.expect_downcast_ref();
         unsafe {
             C::copy_buffer_to_buffer(self, src, dst, regions.iter().copied());
+        }
+    }
+
+    unsafe fn copy_texture_to_texture(
+        &mut self,
+        src: &dyn DynTexture,
+        src_usage: TextureUses,
+        dst: &dyn DynTexture,
+        regions: &[TextureCopy],
+    ) {
+        let src = src.expect_downcast_ref();
+        let dst = dst.expect_downcast_ref();
+        unsafe {
+            C::copy_texture_to_texture(self, src, src_usage, dst, regions.iter().cloned());
+        }
+    }
+
+    unsafe fn copy_buffer_to_texture(
+        &mut self,
+        src: &dyn DynBuffer,
+        dst: &dyn DynTexture,
+        regions: &[BufferTextureCopy],
+    ) {
+        let src = src.expect_downcast_ref();
+        let dst = dst.expect_downcast_ref();
+        unsafe {
+            C::copy_buffer_to_texture(self, src, dst, regions.iter().cloned());
+        }
+    }
+
+    unsafe fn copy_texture_to_buffer(
+        &mut self,
+        src: &dyn DynTexture,
+        src_usage: TextureUses,
+        dst: &dyn DynBuffer,
+        regions: &[BufferTextureCopy],
+    ) {
+        let src = src.expect_downcast_ref();
+        let dst = dst.expect_downcast_ref();
+        unsafe {
+            C::copy_texture_to_buffer(self, src, src_usage, dst, regions.iter().cloned());
         }
     }
 
