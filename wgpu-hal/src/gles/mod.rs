@@ -375,6 +375,7 @@ pub struct Texture {
 }
 
 impl crate::DynTexture for Texture {}
+impl crate::DynSurfaceTexture for Texture {}
 
 impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
