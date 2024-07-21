@@ -160,6 +160,9 @@ khronos-egl = "6"
 glow = "0.14.0"
 glutin = "0.29.1"
 
+# DX and GLES dependencies
+windows = { version = "0.58", default-features = false }
+
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"

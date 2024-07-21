@@ -61,7 +61,10 @@ gles = [
     "dep:khronos-egl",
     "dep:libloading",
     "dep:ndk-sys",
-    "winapi/libloaderapi",
+    "windows/Win32_Graphics_OpenGL",
+    "windows/Win32_Graphics_Gdi",
+    "windows/Win32_System_LibraryLoader",
+    "windows/Win32_UI_WindowsAndMessaging",
 ]
 ## Enables the DX12 backend when targeting Windows.
 ##
@@ -144,6 +147,8 @@ khronos-egl = { version = "6", features = ["static", "no-pkg-config"] }
 libloading = { version = ">=0.7, <0.9", optional = true }
 
 [target.'cfg(windows)'.dependencies]
+# backend: Dx12 and Gles
+windows = { workspace = true, optional = true }
 # backend: Dx12
 bit-set = { version = "0.8", optional = true }
 range-alloc = { version = "0.1", optional = true }
