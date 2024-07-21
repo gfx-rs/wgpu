@@ -377,6 +377,12 @@ pub struct Texture {
 impl crate::DynTexture for Texture {}
 impl crate::DynSurfaceTexture for Texture {}
 
+impl std::borrow::Borrow<dyn crate::DynTexture> for Texture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
+        self
+    }
+}
+
 impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
         Self {

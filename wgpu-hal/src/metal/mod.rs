@@ -390,6 +390,12 @@ impl std::borrow::Borrow<Texture> for SurfaceTexture {
     }
 }
 
+impl std::borrow::Borrow<dyn crate::DynTexture> for SurfaceTexture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
+        &self.texture
+    }
+}
+
 unsafe impl Send for SurfaceTexture {}
 unsafe impl Sync for SurfaceTexture {}
 

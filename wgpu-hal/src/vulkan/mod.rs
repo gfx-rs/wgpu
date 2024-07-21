@@ -386,6 +386,12 @@ impl Borrow<Texture> for SurfaceTexture {
     }
 }
 
+impl Borrow<dyn crate::DynTexture> for SurfaceTexture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
+        &self.texture
+    }
+}
+
 pub struct Adapter {
     raw: vk::PhysicalDevice,
     instance: Arc<InstanceShared>,
